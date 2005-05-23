@@ -10,7 +10,6 @@ GHTUtils\HttpClientBase.cs
 GHTUtils\ObjectTester.cs
 GHTUtils\XmlUtils.cs
 ##### Disconnected mode tests
-# System.Data\ConstraintCollection\ConstraintCollectionTest.cs
 # System.Data\ConstraintCollection\ConstraintCollection_add_CollectionChanged_C.cs
 # System.Data\ConstraintCollection\ConstraintCollection_CanRemove_C.cs
 # System.Data\ConstraintCollection\ConstraintCollection_Clear.cs
