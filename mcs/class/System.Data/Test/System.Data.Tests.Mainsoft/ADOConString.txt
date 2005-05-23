@@ -1,0 +1,20 @@
+Provider=SQLOLEDB.1;Data Source=eyalt42p;Initial Catalog=GHTDB;User Id=sa;Password=TL^%#&&^#
+Provider=SQLOLEDB.1;Data Source=XP050;Initial Catalog=GHTDB;User Id=sa;Password=
+Provider=SQLOLEDB.1;Data Source=GH-SERVE;Initial Catalog=GHTDB;User Id=sa;Password=sa
+
+Provider=MSDAORA.1;hostname=xp050;port=1521;User ID=ghtdb;Password=ghtdb;ServiceName=xp050;Data Source=xp050
+Provider=MSDAORA.1;hostname=rafim-xp2;port=1521;User ID=ghtdb;Password=ghtdb;ServiceName=rafim;Data Source=rafim
+Provider=MSDAORA.1;hostname=yen;port=1521;User ID=ghtdb;Password=ghtdb;ServiceName=msoft;Data Source=msoft
+Provider=MSDAORA.1;hostname=gh-serve;port=1521;User ID=ghtdb;Password=ghtdb;ServiceName=ghserve;Data Source=ghserve
+
+Provider=IBMDADB2.1;Password=db2admin;User ID=db2admin;Data Source=GHTDB;HostName=xp050;Port=50000;Location=xp050:50000;retrieveMessagesFromServerOnGetMessage=true
+Provider=IBMDADB2.1;Password=db2admin;User ID=db2admin;Data Source=NW;HostName=POWERGH;Port=50000;Location=powergh:50000;retrieveMessagesFromServerOnGetMessage=true
+Provider=IBMDADB2.1;Password=db2admin;User ID=db2admin;Data Source=GHTDB;HostName=GH-SERVE;Port=50000;Location=GH-SERVE:50000;retrieveMessagesFromServerOnGetMessage=true
+
+Provider=Sybase ASE OLE DB Provider;hostname=KONGO;port=5000;User ID=sa;Password=;ServiceName=KONGO;Data Source=sybaseoledb;JdbcDriverClassName=com.sybase.jdbc2.jdbc.SybDriver;JdbcURL=jdbc:sybase:Tds:KONGO:5000/GHTDB;user=sa;DatabaseName=GHTDB
+Provider=Sybase ASE OLE DB Provider;hostname=KONGO;port=5000;User ID=sa;Password=;ServiceName=KONGO;Data Source=sybaseoledb;JdbcDriverClassName=com.sybase.jdbc3.jdbc.SybDriver;JdbcURL=jdbc:sybase:Tds:KONGO:5000/GHTDB;user=sa;DatabaseName=GHTDB
+
+Provider=Mainsoft.JDBC.OLEDB.1;Extended Properties='DSN=PostgreSQL;BoolsAsChar=0';JdbcDriverClassName=org.postgresql.Driver;JdbcURL=jdbc:postgresql://localhost/GHTDB;User=postgres;Password=postgres
+
+Warnings:
+Provider must be the first parameter.
