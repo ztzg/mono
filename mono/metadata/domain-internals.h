@@ -134,6 +134,17 @@ typedef struct  {
 	guint16 major, minor, build, revision;
 } AssemblyVersionSet;
 
+typedef struct _AssemblyDomainRec AssemblyDomainRec;
+
+struct _AssemblyDomainRec {
+	AssemblyDomainRec* next;
+	
+	MonoAssembly* a;
+	MonoDomain* d;
+};
+
+extern AssemblyDomainRec* first_assembly_domain;
+
 /* MonoRuntimeInfo: Contains information about versions supported by this runtime */
 typedef struct  {
 	const char runtime_version [12];
