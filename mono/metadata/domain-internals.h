@@ -140,10 +140,8 @@ typedef struct  {
 	const char framework_version [4];
 	const AssemblyVersionSet version_sets [2];
 } MonoRuntimeInfo;
-
-#define mono_domain_lock(domain)   EnterCriticalSection(&(domain)->lock)
-#define mono_domain_unlock(domain) LeaveCriticalSection(&(domain)->lock)
-
+void mono_domain_lock (MonoDomain* d);
+void mono_domain_unlock (MonoDomain* d);
 void
 mono_jit_info_table_add    (MonoDomain *domain, MonoJitInfo *ji);
 

@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <execinfo.h>
+#include <mono/utils/mono-compiler.h>
 #include <mono/metadata/metadata.h>
 #include <mono/metadata/image.h>
 #include <mono/metadata/assembly.h>
@@ -29,6 +31,7 @@
 #include <mono/metadata/cil-coff.h>
 #include <mono/metadata/tabledefs.h>
 #include <mono/metadata/metadata-internals.h>
+#include <mono/metadata/domain-internals.h>
 #include <mono/metadata/loader.h>
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/debug-helpers.h>
@@ -1334,15 +1337,84 @@ mono_method_get_last_managed (void)
 	return m;
 }
 
+static int last_hash = 0;
+
+static void
+print_trace (const char* msg)
+{
+	void *array[50];
+	size_t size;
+	char **strings;
+	size_t i;
+	
+	int h = 0;
+	
+	size = backtrace (array, 50);
+	
+	for (i = 0; i < size; i ++)
+		h ^= (int) array [i];
+	
+	if (last_hash == h)
+		// don't print dups
+		return;
+	
+	last_hash = h;
+	
+	g_warning (msg);
+	
+	strings = backtrace_symbols (array, size);
+	
+	printf ("Obtained %zd stack frames.\n", size);
+	
+	for (i = 0; i < size; i++)
+		printf ("%s\n", strings[i]);
+	
+	free (strings);
+}
+
+static __thread MonoDomain* current_locked_domain MONO_TLS_FAST;
+static __thread int domain_lock_level MONO_TLS_FAST;
+static __thread int loader_lock_level MONO_TLS_FAST;
+
+void
+mono_domain_lock (MonoDomain* d)
+{
+	if (current_locked_domain && current_locked_domain != d) {
+		print_trace ("You are trying to lock a domain inside a lock for another domain");
+	}
+	
+	if (loader_lock_level && !domain_lock_level) {
+		print_trace ("You are trying to lock a domain while you already have the loader lock");
+	}
+	
+	current_locked_domain = d;
+	domain_lock_level ++;
+	
+	EnterCriticalSection(&(d)->lock);
+}
+
+
+void
+mono_domain_unlock (MonoDomain* d)
+{
+	domain_lock_level --;
+	
+	if (!domain_lock_level)
+		current_locked_domain = NULL;
+	LeaveCriticalSection(&(d)->lock);
+}
+
 void
 mono_loader_lock (void)
 {
+	loader_lock_level ++;
 	EnterCriticalSection (&loader_mutex);
 }
 
 void
 mono_loader_unlock (void)
 {
+	loader_lock_level --;
 	LeaveCriticalSection (&loader_mutex);
 }
 
