@@ -827,6 +827,7 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		mono_assembly_close (ass);
 	}
 	g_slist_free (domain->domain_assemblies);
+	_mono_remove_domain_assemblies (domain);
 	domain->domain_assemblies = NULL;
 
 	mono_g_hash_table_destroy (domain->env);

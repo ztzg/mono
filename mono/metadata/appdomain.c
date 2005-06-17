@@ -542,6 +542,7 @@ add_assemblies_to_domain (MonoDomain *domain, MonoAssembly *ass, GHashTable *ht)
 		mono_assembly_addref (ass);
 		g_hash_table_insert (ht, ass, ass);
 		domain->domain_assemblies = g_slist_prepend (domain->domain_assemblies, ass);
+		_mono_register_assembly_in_domain (ass, domain);
 	}
 
 	if (ass->image->references) {
@@ -840,6 +841,58 @@ mono_domain_assembly_preload (MonoAssemblyName *aname,
 	return result;
 }
 
+typedef struct _AssemblyDomainRec AssemblyDomainRec;
+
+struct _AssemblyDomainRec {
+	AssemblyDomainRec* next;
+	
+	MonoAssembly* a;
+	MonoDomain* d;
+};
+
+static AssemblyDomainRec* first_assembly_domain = NULL;
+
+void
+_mono_register_assembly_in_domain (MonoAssembly* a, MonoDomain* d)
+{
+	
+	AssemblyDomainRec* r = g_new0 (AssemblyDomainRec, 1);
+	
+	mono_loader_lock ();
+	
+	r->a = a;
+	r->d = d;
+	
+	r->next = first_assembly_domain;
+	first_assembly_domain = r;
+	
+	mono_loader_unlock ();
+}
+
+void
+_mono_remove_domain_assemblies (MonoDomain* d)
+{
+	AssemblyDomainRec *r, *next;
+	AssemblyDomainRec *head = NULL;
+	
+	mono_loader_lock ();
+	
+	next = first_assembly_domain;
+	while (r = next) {
+		
+		next = r->next;
+		if (r->d == d)
+			continue;
+		
+		r->next = head;
+		head = r;
+	}
+	
+	first_assembly_domain = head;
+	
+	mono_loader_unlock ();
+}
+
 /*
  * Check whenever a given assembly was already loaded in the current appdomain.
  */
@@ -848,21 +901,21 @@ mono_domain_assembly_search (MonoAssemblyName *aname,
 							 gpointer user_data)
 {
 	MonoDomain *domain = mono_domain_get ();
-	GSList *tmp;
+	AssemblyDomainRec *tmp;
 	MonoAssembly *ass;
 	gboolean refonly = GPOINTER_TO_UINT (user_data);
 
-	mono_domain_lock (domain);
-	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
-		ass = tmp->data;
+	mono_loader_lock ();
+	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
+		ass = tmp->a;
 		/* Dynamic assemblies can't match here in MS.NET */
-		if (ass->dynamic || refonly != ass->ref_only || !mono_assembly_names_equal (aname, &ass->aname))
+		if (tmp->d != domain || ass->dynamic || refonly != ass->ref_only || !mono_assembly_names_equal (aname, &ass->aname))
 			continue;
 
-		mono_domain_unlock (domain);
+		mono_loader_unlock ();
 		return ass;
 	}
-	mono_domain_unlock (domain);
+	mono_loader_unlock ();
 
 	return NULL;
 }

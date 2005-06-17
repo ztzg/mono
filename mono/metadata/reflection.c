@@ -4350,6 +4350,7 @@ mono_image_basic_init (MonoReflectionAssemblyBuilder *assemblyb)
 
 	mono_domain_lock (domain);
 	domain->domain_assemblies = g_slist_prepend (domain->domain_assemblies, assembly);
+	_mono_register_assembly_in_domain (assembly, domain);
 	mono_domain_unlock (domain);
 
 	register_assembly (mono_object_domain (assemblyb), &assemblyb->assembly, &assembly->assembly);
