@@ -143,8 +143,9 @@ typedef struct  {
 	const AssemblyVersionSet version_sets [2];
 } MonoRuntimeInfo;
 
-#define mono_domain_lock(domain)   EnterCriticalSection(&(domain)->lock)
-#define mono_domain_unlock(domain) LeaveCriticalSection(&(domain)->lock)
+void mono_domain_lock (MonoDomain* d);
+void mono_domain_unlock (MonoDomain* d);
+
 #define mono_domain_assemblies_lock(domain)   EnterCriticalSection(&(domain)->assemblies_lock)
 #define mono_domain_assemblies_unlock(domain) LeaveCriticalSection(&(domain)->assemblies_lock)
 
