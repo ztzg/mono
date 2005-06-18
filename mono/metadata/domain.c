@@ -322,6 +322,7 @@ mono_domain_create (void)
 	domain->mp = mono_mempool_new ();
 	domain->code_mp = mono_code_manager_new ();
 	domain->env = mono_g_hash_table_new ((GHashFunc)mono_string_hash, (GCompareFunc)mono_string_equal);
+	domain->domain_assemblies = NULL;
 	domain->class_vtable_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
 	domain->proxy_vtable_hash = mono_g_hash_table_new ((GHashFunc)mono_ptrarray_hash, (GCompareFunc)mono_ptrarray_equal);
 	domain->static_data_hash = mono_g_hash_table_new (mono_aligned_addr_hash, NULL);
@@ -334,6 +335,7 @@ mono_domain_create (void)
 	domain->jit_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
 
 	InitializeCriticalSection (&domain->lock);
+	InitializeCriticalSection (&domain->assemblies_lock);
 
 	EnterCriticalSection (&appdomains_mutex);
 	domain_id_alloc (domain);
@@ -761,20 +763,17 @@ MonoAssembly *
 mono_domain_assembly_open (MonoDomain *domain, const char *name)
 {
 	MonoAssembly *ass;
-	AssemblyDomainRec *tmp;
+	GSList *tmp;
 
-	mono_loader_lock ();
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		if (tmp->d != domain)
-			continue;
-		
-		ass = tmp->a;
+	mono_domain_assemblies_lock (domain);
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		ass = tmp->data;
 		if (strcmp (name, ass->aname.name) == 0) {
-			mono_loader_unlock ();
+			mono_domain_assemblies_unlock (domain);
 			return ass;
 		}
 	}
-	mono_loader_unlock ();
+	mono_domain_assemblies_unlock (domain);
 
 	if (!(ass = mono_assembly_open (name, NULL)))
 		return NULL;
@@ -799,7 +798,7 @@ delete_jump_list (gpointer key, gpointer value, gpointer user_data)
 void
 mono_domain_free (MonoDomain *domain, gboolean force)
 {
-	AssemblyDomainRec *tmp;
+	GSList *tmp;
 	if ((domain == mono_root_domain) && !force) {
 		g_warning ("cant unload root domain");
 		return;
@@ -823,15 +822,13 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	domain->entry_assembly = NULL;
 	g_free (domain->friendly_name);
 	domain->friendly_name = NULL;
-	mono_loader_lock ();
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		if (tmp->d != domain)
-			continue;
-		
-		mono_assembly_close (tmp->a);
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		MonoAssembly *ass = tmp->data;
+		/*g_print ("Unloading domain %p, assembly %s, refcount: %d\n", domain, ass->aname.name, ass->ref_count);*/
+		mono_assembly_close (ass);
 	}
-	mono_loader_unlock ();
-	_mono_remove_domain_assemblies (domain);
+	g_slist_free (domain->domain_assemblies);
+	domain->domain_assemblies = NULL;
 
 	mono_g_hash_table_destroy (domain->env);
 	domain->env = NULL;
@@ -886,6 +883,7 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		g_hash_table_destroy (domain->special_static_fields);
 		domain->special_static_fields = NULL;
 	}
+	DeleteCriticalSection (&domain->assemblies_lock);
 	DeleteCriticalSection (&domain->lock);
 	domain->setup = NULL;
 

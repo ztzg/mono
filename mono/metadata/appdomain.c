@@ -415,7 +415,7 @@ ves_icall_System_AppDomain_createDomain (MonoString *friendly_name, MonoAppDomai
 	MonoClass *adclass;
 	MonoAppDomain *ad;
 	MonoDomain *data;
-	AssemblyDomainRec *tmp;
+	GSList *tmp;
 	
 	MONO_ARCH_SAVE_REGS;
 
@@ -440,13 +440,11 @@ ves_icall_System_AppDomain_createDomain (MonoString *friendly_name, MonoAppDomai
 	mono_context_init (data);
 
 	/* The new appdomain should have all assemblies loaded */
-	mono_loader_lock ();
+	mono_domain_assemblies_lock (domain);
 	/*g_print ("copy assemblies from domain %p (%s)\n", domain, domain->friendly_name);*/
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		if (tmp->d == domain)
-			add_assemblies_to_domain (data, tmp->a, NULL);
-	}
-	mono_loader_unlock ();
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next)
+		add_assemblies_to_domain (data, tmp->data, NULL);
+	mono_domain_assemblies_unlock (domain);
 
 	return ad;
 }
@@ -458,7 +456,7 @@ ves_icall_System_AppDomain_GetAssemblies (MonoAppDomain *ad, MonoBoolean refonly
 	MonoAssembly* ass;
 	static MonoClass *System_Reflection_Assembly;
 	MonoArray *res;
-	AssemblyDomainRec *tmp;
+	GSList *tmp;
 	int i, count;
 	
 	MONO_ARCH_SAVE_REGS;
@@ -469,12 +467,9 @@ ves_icall_System_AppDomain_GetAssemblies (MonoAppDomain *ad, MonoBoolean refonly
 
 	count = 0;
 	/* Need to skip internal assembly builders created by remoting */
-	mono_loader_lock ();
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		if (tmp->d != domain)
-			continue;
-		
-		ass = tmp->a;
+	mono_domain_assemblies_lock (domain);
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		ass = tmp->data;
 		if (refonly && !ass->ref_only)
 			continue;
 		if (!ass->corlib_internal)
@@ -482,11 +477,8 @@ ves_icall_System_AppDomain_GetAssemblies (MonoAppDomain *ad, MonoBoolean refonly
 	}
 	res = mono_array_new (domain, System_Reflection_Assembly, count);
 	i = 0;
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		if (tmp->d != domain)
-			continue;
-		
-		ass = tmp->a;
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		ass = tmp->data;
 		if (refonly && !ass->ref_only)
 			continue;
 		if (ass->corlib_internal)
@@ -494,7 +486,7 @@ ves_icall_System_AppDomain_GetAssemblies (MonoAppDomain *ad, MonoBoolean refonly
 		mono_array_set (res, gpointer, i, mono_assembly_get_object (domain, ass));
 		++i;
 	}
-	mono_loader_unlock ();
+	mono_domain_assemblies_unlock (domain);
 
 	return res;
 }
@@ -525,13 +517,13 @@ try_assembly_resolve (MonoDomain *domain, MonoString *fname, gboolean refonly)
 }
 
 /*
- * LOCKING: assumes loader is already locked.
+ * LOCKING: assumes assemblies_lock in the domain is already locked.
  */
 static void
 add_assemblies_to_domain (MonoDomain *domain, MonoAssembly *ass, GHashTable *ht)
 {
 	gint i;
-	AssemblyDomainRec *tmp;
+	GSList *tmp;
 	gboolean destroy_ht = FALSE;
 
 	if (!ass->aname.name)
@@ -543,15 +535,13 @@ add_assemblies_to_domain (MonoDomain *domain, MonoAssembly *ass, GHashTable *ht)
 	}
 
 	/* FIXME: handle lazy loaded assemblies */
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		if (tmp->d != domain)
-			continue;
-		g_hash_table_insert (ht, tmp->a, tmp->a);
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		g_hash_table_insert (ht, tmp->data, tmp->data);
 	}
 	if (!g_hash_table_lookup (ht, ass)) {
 		mono_assembly_addref (ass);
 		g_hash_table_insert (ht, ass, ass);
-		_mono_register_assembly_in_domain (ass, domain);
+		domain->domain_assemblies = g_slist_prepend (domain->domain_assemblies, ass);
 	}
 
 	if (ass->image->references) {
@@ -568,10 +558,12 @@ add_assemblies_to_domain (MonoDomain *domain, MonoAssembly *ass, GHashTable *ht)
 static void
 mono_domain_fire_assembly_load (MonoAssembly *assembly, gpointer user_data)
 {
+	static MonoClassField *assembly_load_field;
+	static MonoMethod *assembly_load_method;
 	MonoDomain *domain = mono_domain_get ();
 	MonoReflectionAssembly *ref_assembly;
 	MonoClass *klass;
-	MonoMethod *method;
+	gpointer load_value;
 	void *params [1];
 
 	if (!domain->domain)
@@ -580,21 +572,31 @@ mono_domain_fire_assembly_load (MonoAssembly *assembly, gpointer user_data)
 
 	klass = domain->domain->mbr.obj.vtable->klass;
 
-	method = mono_class_get_method_from_name (klass, "DoAssemblyLoad", -1);
-	if (method == NULL) {
-		g_warning ("Method AppDomain.DoAssemblyLoad not found.\n");
-		return;
+	mono_domain_assemblies_lock (domain);
+	add_assemblies_to_domain (domain, assembly, NULL);
+	mono_domain_assemblies_unlock (domain);
+
+	if (assembly_load_field == NULL) {
+		assembly_load_field = mono_class_get_field_from_name (klass, "AssemblyLoad");
+		g_assert (assembly_load_field);
 	}
 
-	mono_loader_lock ();
-	add_assemblies_to_domain (domain, assembly, NULL);
-	mono_loader_unlock ();
+	mono_field_get_value (domain->domain, assembly_load_field, &load_value);
+	if (load_value == NULL) {
+		/* No events waiting to be triggered */
+		return;
+	}
 
 	ref_assembly = mono_assembly_get_object (domain, assembly);
 	g_assert (ref_assembly);
 
+	if (assembly_load_method == NULL) {
+		assembly_load_method = mono_class_get_method_from_name (klass, "DoAssemblyLoad", -1);
+		g_assert (assembly_load_method);
+	}
+
 	*params = ref_assembly;
-	mono_runtime_invoke (method, domain->domain, params, NULL);
+	mono_runtime_invoke (assembly_load_method, domain->domain, params, NULL);
 }
 
 static gchar *
@@ -850,50 +852,6 @@ mono_domain_assembly_preload (MonoAssemblyName *aname,
 	return result;
 }
 
-
-AssemblyDomainRec* first_assembly_domain = NULL;
-
-void
-_mono_register_assembly_in_domain (MonoAssembly* a, MonoDomain* d)
-{
-	
-	AssemblyDomainRec* r = g_new0 (AssemblyDomainRec, 1);
-	
-	mono_loader_lock ();
-	
-	r->a = a;
-	r->d = d;
-	
-	r->next = first_assembly_domain;
-	first_assembly_domain = r;
-	
-	mono_loader_unlock ();
-}
-
-void
-_mono_remove_domain_assemblies (MonoDomain* d)
-{
-	AssemblyDomainRec *r, *next;
-	AssemblyDomainRec *head = NULL;
-	
-	mono_loader_lock ();
-	
-	next = first_assembly_domain;
-	while (r = next) {
-		
-		next = r->next;
-		if (r->d == d)
-			continue;
-		
-		r->next = head;
-		head = r;
-	}
-	
-	first_assembly_domain = head;
-	
-	mono_loader_unlock ();
-}
-
 /*
  * Check whenever a given assembly was already loaded in the current appdomain.
  */
@@ -902,21 +860,21 @@ mono_domain_assembly_search (MonoAssemblyName *aname,
 							 gpointer user_data)
 {
 	MonoDomain *domain = mono_domain_get ();
-	AssemblyDomainRec *tmp;
+	GSList *tmp;
 	MonoAssembly *ass;
 	gboolean refonly = GPOINTER_TO_UINT (user_data);
 
-	mono_loader_lock ();
-	for (tmp = first_assembly_domain; tmp; tmp = tmp->next) {
-		ass = tmp->a;
+	mono_domain_assemblies_lock (domain);
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		ass = tmp->data;
 		/* Dynamic assemblies can't match here in MS.NET */
-		if (tmp->d != domain || ass->dynamic || refonly != ass->ref_only || !mono_assembly_names_equal (aname, &ass->aname))
+		if (ass->dynamic || refonly != ass->ref_only || !mono_assembly_names_equal (aname, &ass->aname))
 			continue;
 
-		mono_loader_unlock ();
+		mono_domain_assemblies_unlock (domain);
 		return ass;
 	}
-	mono_loader_unlock ();
+	mono_domain_assemblies_unlock (domain);
 
 	return NULL;
 }

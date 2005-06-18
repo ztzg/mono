@@ -128,22 +128,13 @@ struct _MonoDomain {
 	 * if the hashtable contains a GC visible reference to them.
 	 */
 	GHashTable         *finalizable_objects_hash;
+	/* Used when accessing 'domain_assemblies' */
+	CRITICAL_SECTION    assemblies_lock;
 };
 
 typedef struct  {
 	guint16 major, minor, build, revision;
 } AssemblyVersionSet;
-
-typedef struct _AssemblyDomainRec AssemblyDomainRec;
-
-struct _AssemblyDomainRec {
-	AssemblyDomainRec* next;
-	
-	MonoAssembly* a;
-	MonoDomain* d;
-};
-
-extern AssemblyDomainRec* first_assembly_domain;
 
 /* MonoRuntimeInfo: Contains information about versions supported by this runtime */
 typedef struct  {
@@ -151,8 +142,12 @@ typedef struct  {
 	const char framework_version [4];
 	const AssemblyVersionSet version_sets [2];
 } MonoRuntimeInfo;
-void mono_domain_lock (MonoDomain* d);
-void mono_domain_unlock (MonoDomain* d);
+
+#define mono_domain_lock(domain)   EnterCriticalSection(&(domain)->lock)
+#define mono_domain_unlock(domain) LeaveCriticalSection(&(domain)->lock)
+#define mono_domain_assemblies_lock(domain)   EnterCriticalSection(&(domain)->assemblies_lock)
+#define mono_domain_assemblies_unlock(domain) LeaveCriticalSection(&(domain)->assemblies_lock)
+
 void
 mono_jit_info_table_add    (MonoDomain *domain, MonoJitInfo *ji);
 
