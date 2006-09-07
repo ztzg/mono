@@ -1,3 +1,8 @@
+2006-09-07  Vladimir Krasnov <vladimirk@mainsoft.com>
+
+	* XmlSchemaExporter.cs: fixed ExportDerivedSchema to avoid multiple
+	addition of char type declaration
+
 2006-09-05  Lluis Sanchez Gual  <lluis@novell.com> 
 
 	* XmlSchemaImporter.cs: In MS.NET 2.0, simple type arrays are mapped
