@@ -1,0 +1,43 @@
+<project name="System.Configuration20" default="all">
+<property name="ghroot"  value="${project::get-base-directory()}\..\..\..\..\.."/>
+  <!--Allways at the beginning-->
+  <include buildfile="${ghroot}\vsbuild\properties.xml" />
+  <property name="framework_assembly" value=""/>
+  <property name="override_config" value="${ghconfiguration_ver}"/>  
+    <property name="use_project_file" value=""/>
+  <property name="srcdir" value="${project::get-base-directory()}"/>
+
+  <!--MANDATORY SECTION-->
+
+  <!--Could be GH ANT .NET-->
+  <property name="projecttype" value=".NET2005"/>
+  <!--Could be RUNTIME TOOLS ... -->
+  <property name="rules" value="RUNTIME"/>
+
+  <!--Fileset describing project output files. Uset by copy/delete rules in framework-->
+  <fileset id="output" basedir="${project::get-base-directory()}\bin\${ghconfiguration_ver}">
+	<include name="System.Configuration.jar"/>
+	<include name="System.Configuration.dll"/>
+	<include name="System.Configuration.pdb"/>
+  </fileset>
+
+  <!--END MANDATORY SECTION-->
+
+ <!--OPTIONAL SECTION-->
+
+  <!--
+  <property name="customactionsfile"  value="Actions.xml"/>
+  <property name="cvnsrc" value="svn://svn.myrealbox.com/source/trunk/mcs/<cvn_folder>"/>
+  <target name="postbuild">
+  Put something there if you need
+  </target>
+  <target name="prebuild">
+  Put something there if you need
+  </target>
+  -->
+  <!--END OPTIONAL SECTION-->
+
+
+  <!--Allways at the end-->
+  <include buildfile="${ghroot}\vsbuild\framework.xml" />
+</project>
