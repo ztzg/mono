@@ -92,8 +92,22 @@ namespace System.Web {
 			}
 		}
 
+#if !TARGET_JVM
 		static SiteMapProvider provider;
 		static SiteMapProviderCollection providers;
+#else
+        static SiteMapProvider provider
+        {
+            get { return (SiteMapProvider)AppDomain.CurrentDomain.GetData("System.Web.SiteMap.provider"); }
+            set { AppDomain.CurrentDomain.SetData("System.Web.SiteMap.provider", value);  }
+        }
+
+        static SiteMapProviderCollection providers
+        {
+            get { return (SiteMapProviderCollection)AppDomain.CurrentDomain.GetData("System.Web.SiteMap.providers"); }
+            set { AppDomain.CurrentDomain.SetData("System.Web.SiteMap.providers", value); }
+        }
+#endif
 		static object locker = new object ();
 	}
 }

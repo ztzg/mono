@@ -1,3 +1,8 @@
+2006-09-11  Eyal Alaluf  <eyala@mainsoft.com>
+
+	* SiteMap.cs: Explicitly used AppDomain for static members.
+	  Patch by Roei Erez.
+
 2006-09-10  Vladimir Krasnov  <vladimirk@mainsoft.com>
 
 	* HttpWriter.cs: fixed WriteLine to work correctly in utf-16 encoding
