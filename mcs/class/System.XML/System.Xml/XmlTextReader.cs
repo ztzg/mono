@@ -250,6 +250,14 @@ namespace System.Xml
 			get { return cursorToken.IsEmptyElement; }
 		}
 
+		// When running on IBM JVM, access of some instance methods/properties cause AbstractMethodError (due to a JIT compiler bug).
+		// The workaround is to replace methods/properties access that cause the problem with indirect access via another refrerence to 'this'.
+		// The property is used for this purpose.
+		XmlTextReader This {
+			get { return this; }
+		}
+
+
 #if NET_2_0
 #else
 		public override string this [int i] {
@@ -1230,7 +1238,7 @@ namespace System.Xml
 					}
 				}
 			}
-			return this.ReadState != ReadState.EndOfFile;
+			return This.ReadState != ReadState.EndOfFile;
 		}
 
 		private void SetEntityReferenceProperties ()
@@ -1332,16 +1340,16 @@ namespace System.Xml
 				currentToken.NamespaceURI = parserContext.NamespaceManager.DefaultNamespace;
 
 			if (namespaces) {
-				if (NamespaceURI == null)
+				if (This.NamespaceURI == null)
 					throw NotWFError (String.Format ("'{0}' is undeclared namespace.", Prefix));
 				try {
 					for (int i = 0; i < attributeCount; i++) {
-						MoveToAttribute (i);
-						if (NamespaceURI == null)
+						This.MoveToAttribute (i);
+						if (This.NamespaceURI == null)
 							throw NotWFError (String.Format ("'{0}' is undeclared namespace.", Prefix));
 					}
 				} finally {
-					MoveToElement ();
+					This.MoveToElement ();
 				}
 			}
 
@@ -1384,7 +1392,7 @@ namespace System.Xml
 				}
 			}
 
-			if (IsEmptyElement)
+			if (This.IsEmptyElement)
 				CheckCurrentStateUpdate ();
 		}
 

@@ -1,3 +1,10 @@
+2006-10-03  Konstantin Triger <kostat@mainsoft.com>
+	* XmlTextReader.cs: When running on IBM JVM, access of some instance methods/properties
+		cause AbstractMethodError (due to a JIT compiler bug).
+		The workaround is to replace methods/properties access that cause the problem
+		with indirect access via another refrerence to 'this'.
+		The property is used for this purpose.
+
 2005-12-14  Konstantin Triger <kostat@mainsoft.com>
 
 	* XmlTextWriter.cs: allow null string in WriteCData.
