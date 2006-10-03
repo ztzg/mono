@@ -14,26 +14,26 @@ LIB_MCS_FLAGS +=				\
 	-r:System.Xml.dll			\
 	-r:rt.dll				\
 	-r:J2SE.Helpers.dll \
-	-res:Assembly\Application.ico \
-	-res:Assembly\Asterisk.ico \
-	-res:Assembly\Error.ico \
-	-res:Assembly\Exclamation.ico \
-	-res:Assembly\Hand.ico \
-	-res:Assembly\Information.ico \
-	-res:Assembly\Question.ico  \
-	-res:Assembly\Warning.ico \
-	-res:Assembly\WinLogo.ico
+	-res:Assembly\\Application.ico \
+	-res:Assembly\\Asterisk.ico \
+	-res:Assembly\\Error.ico \
+	-res:Assembly\\Exclamation.ico \
+	-res:Assembly\\Hand.ico \
+	-res:Assembly\\Information.ico \
+	-res:Assembly\\Question.ico  \
+	-res:Assembly\\Warning.ico \
+	-res:Assembly\\WinLogo.ico
 
 EXTRA_DISTFILES = 	\
-	Assembly\Application.ico \
-	Assembly\Asterisk.ico \
-	Assembly\Error.ico \
-	Assembly\Exclamation.ico \
-	Assembly\Hand.ico \
-	Assembly\Information.ico \
-	Assembly\Question.ico  \
-	Assembly\Warning.ico \
-	Assembly\WinLogo.ico
+	Assembly\\Application.ico \
+	Assembly\\Asterisk.ico \
+	Assembly\\Error.ico \
+	Assembly\\Exclamation.ico \
+	Assembly\\Hand.ico \
+	Assembly\\Information.ico \
+	Assembly\\Question.ico  \
+	Assembly\\Warning.ico \
+	Assembly\\WinLogo.ico
 endif
 
 include ../../build/library.make
