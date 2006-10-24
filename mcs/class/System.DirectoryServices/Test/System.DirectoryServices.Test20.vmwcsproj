@@ -1,4 +1,4 @@
-﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release_Java20|AnyCPU' ">
     <OutputPath>bin\Release_Java20\</OutputPath>
     <DefineConstants>TRACE;JAVA</DefineConstants>
@@ -9,7 +9,8 @@
     <ErrorReport>prompt</ErrorReport>
     <SkipValidation>false</SkipValidation>
     <KeepIntermediate>false</KeepIntermediate>
-    <GHProjectType>1</GHProjectType>
+    <GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
     <PreCompile>false</PreCompile>
     <AdditionalClassPath>
     </AdditionalClassPath>
@@ -30,7 +31,8 @@
     <RootNamespace>System.DirectoryServices.Test20</RootNamespace>
     <AssemblyName>System.DirectoryServices.Test20</AssemblyName>
     <JDKName>1.5.0_05</JDKName>
-    <GHProjectType>1</GHProjectType>
+    <GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
     <Version>2.0</Version>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Java|AnyCPU' ">
@@ -72,7 +74,8 @@
     <ErrorReport>prompt</ErrorReport>
     <SkipValidation>false</SkipValidation>
     <KeepIntermediate>false</KeepIntermediate>
-    <GHProjectType>1</GHProjectType>
+    <GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
     <PreCompile>false</PreCompile>
     <AdditionalClassPath>
     </AdditionalClassPath>
