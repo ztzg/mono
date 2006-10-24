@@ -10,7 +10,8 @@
 		<RootNamespace>System.Data.Test</RootNamespace>
 		<AssemblyName>System.Data.Test</AssemblyName>
 		<JDKName>1.5.0_05</JDKName>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<Version>2.0</Version>
 	</PropertyGroup>
 	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release_Java20|AnyCPU' ">
@@ -23,7 +24,8 @@
 		<ErrorReport>prompt</ErrorReport>
 		<SkipValidation>false</SkipValidation>
 		<KeepIntermediate>false</KeepIntermediate>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<PreCompile>false</PreCompile>
 		<AdditionalClassPath>
 		</AdditionalClassPath>
@@ -43,7 +45,8 @@
 		<ErrorReport>prompt</ErrorReport>
 		<SkipValidation>True</SkipValidation>
 		<KeepIntermediate>False</KeepIntermediate>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<PreCompile>false</PreCompile>
 		<AdditionalClassPath>
 		</AdditionalClassPath>
