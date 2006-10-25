@@ -10,6 +10,7 @@
 		<RootNamespace>System.Web</RootNamespace>
 		<AssemblyName>System.Web</AssemblyName>
 		<JDKName>1.5.0_05</JDKName>
+		<GHProjectKind>runtime</GHProjectKind>
 		<GHProjectType>1</GHProjectType>
 		<Version>2.0</Version>
 	</PropertyGroup>
@@ -24,7 +25,7 @@
 		<ErrorReport>prompt</ErrorReport>
 		<SkipValidation>true</SkipValidation>
 		<KeepIntermediate>false</KeepIntermediate>
-		<GHProjectType>1</GHProjectType>
+<GHProjectType>1</GHProjectType>
 		<PreCompile>false</PreCompile>
 		<AdditionalClassPath>
 		</AdditionalClassPath>
@@ -76,7 +77,8 @@
 		<ErrorReport>prompt</ErrorReport>
 		<SkipValidation>True</SkipValidation>
 		<KeepIntermediate>False</KeepIntermediate>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>runtime</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<PreCompile>false</PreCompile>
 		<AdditionalClassPath>
 		</AdditionalClassPath>
