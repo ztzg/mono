@@ -1,25 +1,4 @@
-﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Java20|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\Debug_Java20\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;TARGET_JVM;NET_2_0;NET_1_1</DefineConstants>
-    <BaseAddress>285212672</BaseAddress>
-    <DebugType>full</DebugType>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <ErrorReport>prompt</ErrorReport>
-    <SkipValidation>true</SkipValidation>
-    <KeepIntermediate>false</KeepIntermediate>
-    <GHProjectType>1</GHProjectType>
-    <PreCompile>false</PreCompile>
-    <AdditionalClassPath>
-    </AdditionalClassPath>
-    <ApplicationServerType>
-    </ApplicationServerType>
-    <Version>2.0</Version>
-    <JDKName>1.5.0_05</JDKName>
-    <jarserver>iap2</jarserver>
-    <TargetPlatform>0</TargetPlatform>
-  </PropertyGroup>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug_Java</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -31,11 +10,34 @@
     <RootNamespace>System.Runtime.Serialization.Formatters.Soap</RootNamespace>
     <AssemblyName>System.Runtime.Serialization.Formatters.Soap</AssemblyName>
     <JDKName>1.5.0_05</JDKName>
+    <GHProjectKind>framework</GHProjectKind>
     <GHProjectType>1</GHProjectType>
     <Version>2.0</Version>
     <jarserver>iap2</jarserver>
     <StartupObject>
     </StartupObject>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Java20|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug_Java20\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;TARGET_JVM;NET_2_0;NET_1_1</DefineConstants>
+    <BaseAddress>285212672</BaseAddress>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <SkipValidation>true</SkipValidation>
+    <KeepIntermediate>false</KeepIntermediate>
+    <GHProjectKind>framework</GHProjectKind>
+    <GHProjectType>1</GHProjectType>
+    <PreCompile>false</PreCompile>
+    <AdditionalClassPath>
+    </AdditionalClassPath>
+    <ApplicationServerType>
+    </ApplicationServerType>
+    <Version>2.0</Version>
+    <JDKName>1.5.0_05</JDKName>
+    <jarserver>iap2</jarserver>
+    <TargetPlatform>0</TargetPlatform>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Java|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
