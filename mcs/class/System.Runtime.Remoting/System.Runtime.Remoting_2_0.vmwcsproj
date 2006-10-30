@@ -10,7 +10,8 @@
 		<RootNamespace>System.Runtime.Remoting</RootNamespace>
 		<AssemblyName>System.Runtime.Remoting</AssemblyName>
 		<JDKName>1.5.0_05</JDKName>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<Version>2.0</Version>
 		<jarserver>ipa</jarserver>
 	</PropertyGroup>
@@ -25,7 +26,8 @@
 		<ErrorReport>prompt</ErrorReport>
 		<SkipValidation>True</SkipValidation>
 		<KeepIntermediate>false</KeepIntermediate>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<PreCompile>false</PreCompile>
 		<AdditionalClassPath>
 		</AdditionalClassPath>
@@ -75,7 +77,8 @@
 		<ErrorReport>prompt</ErrorReport>
 		<SkipValidation>true</SkipValidation>
 		<KeepIntermediate>false</KeepIntermediate>
-		<GHProjectType>1</GHProjectType>
+		<GHProjectKind>framework</GHProjectKind>
+<GHProjectType>1</GHProjectType>
 		<PreCompile>false</PreCompile>
 		<AdditionalClassPath>
 		</AdditionalClassPath>
