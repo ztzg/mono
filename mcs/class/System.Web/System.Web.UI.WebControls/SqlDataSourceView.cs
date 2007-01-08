@@ -393,13 +393,13 @@ namespace System.Web.UI.WebControls {
 
 			if (values != null) {
 				foreach (DictionaryEntry de in values)
-					if (!command.Parameters.Contains ((string) de.Key))
+					if (!command.Parameters.Contains (ParameterPrefix + (string) de.Key))
 						command.Parameters.Add (CreateDbParameter ((string) de.Key, de.Value));
 			}
 
 			if (oldValues != null) {
 				foreach (DictionaryEntry de in oldValues)
-					if (!command.Parameters.Contains (FormatOldParameter ((string) de.Key)))
+					if (!command.Parameters.Contains (ParameterPrefix + FormatOldParameter ((string) de.Key)))
 						command.Parameters.Add (CreateDbParameter (FormatOldParameter ((string) de.Key), de.Value));
 			}
 		}
@@ -413,7 +413,10 @@ namespace System.Web.UI.WebControls {
 		{
 			DbParameter dbp = factory.CreateParameter ();
 			dbp.ParameterName = ParameterPrefix + name;
-			dbp.Value = value;
+			if (value == null)
+				dbp.Value = DBNull.Value;
+			else
+				dbp.Value = value;
 			dbp.Direction = dir;
 			if (size != -1)
 				dbp.Size = size;
