@@ -45,7 +45,7 @@ namespace System.Web.UI.WebControls
 	[AspNetHostingPermission (SecurityAction.LinkDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	[AspNetHostingPermission (SecurityAction.InheritanceDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	// attributes
-	[SupportsEventValidation]
+	//[SupportsEventValidation]
 	[ControlValueProperty ("SelectedValue")]
 	[DefaultEvent ("SelectedNodeChanged")]
 	[Designer ("System.Web.UI.Design.WebControls.TreeViewDesigner, " + Consts.AssemblySystem_Design, "System.ComponentModel.Design.IDesigner")]
@@ -1744,7 +1744,7 @@ namespace System.Web.UI.WebControls
 		
 		string GetClientEvent (TreeNode node, string ev)
 		{
-			return Page.ClientScript.GetPostBackClientHyperlink (this, ev + "|" + node.Path, true);
+			return Page.ClientScript.GetPostBackClientHyperlink (this, ev + "|" + node.Path);
 		}
 		
 		string GetClientExpandEvent (TreeNode node)
