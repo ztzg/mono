@@ -365,7 +365,7 @@ set td=%25random%25
 echo %25td%25\ASP
 md %25td%25\ASP
 cd assemblies\A*
-copy dll.ghres ..\..\%25td%25
+copy *.ghres ..\..\%25td%25\dll.ghres
 copy ASP ..\..\%25td%25\ASP
 cd ..\..\%25td%25
 
