@@ -28,7 +28,7 @@
     <table>
         <tr>
             <td>
-                You can use the Web Site AspnetConfig Tool to manage all the security settings for your application. You can set up users and passwords (authentication), create roles (groups of users), and create permissions (rules for controlling access to parts of your application).
+                You can use the Web Site Administration Tool to manage all the security settings for your application. You can set up users and passwords (authentication), and create roles (groups of users). By default, user information is stored in a Cloudscape database in the Data folder of your Web project. If you want to store user information in a different database, you may configure a different provider in the web.config file.
                 <br /><br /><br />
             </td>
         </tr>
