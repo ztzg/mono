@@ -1,5 +1,16 @@
 2007-01-08  Vladimir Krasnov  <vladimirk@mainsoft.com>
 
+	* SqlDataSourceView.cs: fixed parameters init for ExecuteUpdate
+
+2007-01-08 Igor Zelmanovich <igorz@mainsoft.com>
+
+	* DataSourceCacheManager.cs:
+	* ObjectDataSource.cs:
+	* SqlDataSource.cs:
+	fixed: cache considers parameters values changes.				
+
+2007-01-08  Vladimir Krasnov  <vladimirk@mainsoft.com>
+
 	* DetailsView.cs: fixed DeleteItem, excluded keys for new values
 	* SqlDataSourceView.cs: fixed ExecuteDelete, check cancel in
 	OnDeleting event
