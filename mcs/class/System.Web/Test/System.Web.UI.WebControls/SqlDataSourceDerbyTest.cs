@@ -130,6 +130,7 @@ namespace MonoTests.System.Web.UI.WebControls
 		}
 
 		[Test]
+		[Ignore ("TD #7034")]
 		public void UpdateTest1 ()
 		{
 			SqlDataSource ds = CreateDataSource ();
