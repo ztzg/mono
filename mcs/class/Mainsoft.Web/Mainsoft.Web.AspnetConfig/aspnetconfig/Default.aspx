@@ -69,7 +69,7 @@
                     </tr>
                     <tr>
                         <td>
-                            Existing roles : <%= Roles_count %>
+                             <%= Roles_count %>
                         </td>
                     </tr>
                     <tr>
