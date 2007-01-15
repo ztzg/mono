@@ -1,3 +1,9 @@
+2007-01-15  Vladimir Krasnov  <vladimirk@mainsoft.com>
+
+	* SiteMapProvider.cs: fixed IsAccessibleToUser, true if
+	SecurityTrimmingEnabled not enabled, true if Roles exists on node and
+	rolename is '*'
+
 2007-01-04  Vladimir Krasnov  <vladimirk@mainsoft.com>
 
 	* HttpRequest.cs: fixed IsLocal, should check all ip addresses of host
