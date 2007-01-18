@@ -63,7 +63,7 @@ namespace Mainsoft.Web.AspnetConfig
 					return "Existing roles :" + list.Length.ToString ();
 				}
 				else
-					return @"In order to use the Web Site Administration Tool, the roleManger key must be enabled. To enable roleManager, please modify your Web.config file as follows: <br />
+					return @"In order to create or manage roles, the roleManger key must be enabled. To enable roleManager, please modify your Web.config file as follows: <br />
 							&nbsp; &lt;configuration xmlns=""http://schemas.microsoft.com/.NetConfiguration/v2.0""&gt; <br />
 							&nbsp;&nbsp;	&lt;system.web&gt; <br />
 							&nbsp;&nbsp;&nbsp;	&lt;roleManager enabled=""true"" /&gt; <br />
