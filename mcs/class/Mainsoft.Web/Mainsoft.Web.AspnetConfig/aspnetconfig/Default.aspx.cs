@@ -75,7 +75,7 @@ namespace Mainsoft.Web.AspnetConfig
 		protected void HyperLink1_Load (object sender, EventArgs e)
 		{
 			if (!Roles.Enabled)
-				((HyperLink) sender).Enabled = false;
+				((HyperLink) sender).Visible = false;
 		}
 	}
 }
