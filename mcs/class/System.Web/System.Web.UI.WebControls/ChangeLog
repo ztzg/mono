@@ -1,3 +1,8 @@
+2007-01-21  Konstantin Triger <kostat@mainsoft.com>
+
+	* TreeView.js, DetailsView.js, Menu.js, GridView.js:
+		suppress exception if eval() fails.
+
 2007-01-18  Vladimir Krasnov  <vladimirk@mainsoft.com>
 
 	* Menu.js, Menu.js: added null reference checking for every getTree or
