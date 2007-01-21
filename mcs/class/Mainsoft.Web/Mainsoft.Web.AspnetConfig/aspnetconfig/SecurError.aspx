@@ -23,7 +23,7 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. --%>
-<%@ Page Language="C#" AutoEventWireup="true" Theme="" CodeBehind="SecurError.aspx.cs" Inherits="Mainsoft.Web.AspnetConfig.SecurError" %>
+<%@ Page Language="C#" AutoEventWireup="true" Theme="" StylesheetTheme="" CodeBehind="SecurError.aspx.cs" Inherits="Mainsoft.Web.AspnetConfig.SecurError" %>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml" >
