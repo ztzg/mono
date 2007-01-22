@@ -981,6 +981,7 @@ public class Page : TemplateControl, IHttpHandler
 			RenderPostBackScript (writer, formUniqueID);
 			postBackScriptRendered = true;
 		}
+		scriptManager.RegisterWebFormClientScript ();
 		scriptManager.WriteClientScriptIncludes (writer);
 		scriptManager.WriteClientScriptBlocks (writer);
 	}
@@ -1749,7 +1750,6 @@ public class Page : TemplateControl, IHttpHandler
 		if (!String.IsNullOrEmpty (_focusedControlID) || Form.SubmitDisabledControls) {
 
 			RequiresPostBackScript ();
-			ClientScript.RegisterWebFormClientScript ();
 
 			if (!String.IsNullOrEmpty (_focusedControlID)) {
 				ClientScript.RegisterStartupScript ("HtmlForm-DefaultButton-StartupScript",
