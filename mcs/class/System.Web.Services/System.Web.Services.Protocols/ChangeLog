@@ -1,3 +1,9 @@
+2007-04-22  Konstantin Triger <kostat@mainsoft.com>
+
+	* WebServiceHelper.cs, HttpSoapWebServiceHandler.cs: add support for SOAP1.2
+		to pass action in ContentType HTTP header.
+		See http://www.w3.org/TR/soap12-part0/#L4697.
+
 2007-04-11  Konstantin Triger <kostat@mainsoft.com>
 
 	* WebServiceHandlerFactory.cs: Use HttpRequest.IsLocal to determine
