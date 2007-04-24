@@ -366,12 +366,12 @@ namespace System.Drawing
 		#region Clone
 		public object Clone ()
 		{
-			Pen clone = (Pen)MemberwiseClone();
-			if (clone._transform != null)
-				clone._transform = clone._transform.Clone();
-			if (clone._dashPattern != null)
-				clone._dashPattern = (float[])clone._dashPattern.Clone();
-			return clone;
+			Pen _clone = (Pen)MemberwiseClone();
+			if (_clone._transform != null)
+				_clone._transform = _clone._transform.Clone();
+			if (_clone._dashPattern != null)
+				_clone._dashPattern = (float[])_clone._dashPattern.Clone();
+			return _clone;
 		}
 		#endregion
 
@@ -557,7 +557,7 @@ namespace System.Drawing
 
 			geom.AffineTransform penT = _transform.NativeObject;
 			if (penTransform != null && !penTransform.isIdentity()) {
-				penT = (geom.AffineTransform) penT.MemberwiseClone();
+				penT = (geom.AffineTransform) penT.clone();
 				penT.concatenate(penTransform);
 			}
 
