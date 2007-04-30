@@ -30,6 +30,7 @@
 
 using System.Collections;
 using System.Security.Permissions;
+using System.Globalization;
 
 namespace System.Web.UI.HtmlControls
 {
