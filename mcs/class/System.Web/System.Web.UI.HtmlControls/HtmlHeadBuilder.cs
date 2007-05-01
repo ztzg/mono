@@ -31,7 +31,6 @@
 using System.Collections;
 using System.Globalization;
 using System.Security.Permissions;
-using System.Globalization;
 
 namespace System.Web.UI.HtmlControls
 {
