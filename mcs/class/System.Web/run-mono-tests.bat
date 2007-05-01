@@ -159,6 +159,12 @@ REM @echo on
 "%JAVA_HOME%\bin\java" -Xmx1024M -cp %CLASSPATH% NUnit.Console.ConsoleUi %TEST_ASSEMBLY% %NUNIT_OPTIONS% /xml=%GH_OUTPUT_XML% >>%RUN_LOG% 2<&1
 REM @echo off
 
+IF NOT DEFINED VMW_BUILDER GOTO DONT_STOP_TOMCAT
+echo Stopping tomcat
+set CATALINA_HOME=%VMW_HOME%\jakarta-tomcat
+call "%VMW_HOME%\jakarta-tomcat\bin\shutdown.bat"
+:DONT_STOP_TOMCAT
+
 REM ********************************************************
 @echo Build XmlTool
 REM ********************************************************
