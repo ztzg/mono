@@ -228,7 +228,8 @@ namespace System.Drawing
 				if (cached != null)
 					return cached;
 #if TARGET_JVM
-				Color [] colors = (Color []) KnownColors.Values.Clone ();
+				Color [] colors = new Color [KnownColors.Values.Length - 1];
+				Array.Copy (KnownColors.Values, 1, colors, 0, colors.Length);
 #else
 				// copy all colors except the first empty slot
 				Array colors = Array.CreateInstance (typeof (Color), KnownColors.Values.Length - 1);
