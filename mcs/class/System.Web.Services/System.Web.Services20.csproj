@@ -91,7 +91,7 @@
     <Reference Include="System.Configuration" />
     <Reference Include="System.Web" />
     <Reference Include="System.Xml" />
-   <Reference Include="J2EE.Helpers">
+    <Reference Include="J2EE.Helpers">
       <Private>False</Private>
       <HintPath>..\lib\J2EE.Helpers.dll</HintPath>
     </Reference>
@@ -358,7 +358,7 @@
   -->
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties REFS-JarPath-system-web="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Web.jar" REFS-JarPath-system-configuration="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Configuration.jar" REFS-JarPath-mscorlib="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mscorlib.jar" REFS-JarPath-system="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.jar" REFS-JarPath-system-xml="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Xml.jar" />
+      <UserProperties REFS-JarPath-system-xml="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Xml.jar" REFS-JarPath-system="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.jar" REFS-JarPath-mscorlib="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mscorlib.jar" REFS-JarPath-system-configuration="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Configuration.jar" REFS-JarPath-system-web="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Web.jar" />
     </VisualStudio>
   </ProjectExtensions>
   <PropertyGroup>
@@ -366,7 +366,7 @@
   
 copy ..\..\..\..\..\mono\data\net_2_0\DefaultWsdlHelpGenerator.jvm.aspx .
 
-"%25VMW_HOME%25\bin\aspxparser.exe" /reference:"$(FrameworkDir)\System.dll" /reference:"$(FrameworkDir)\System.Web.dll" /reference:"System.Web.Services.dll" /reference:"$(FrameworkDir)\System.Xml.dll" /reference:"..\..\..\lib\J2EE.Helpers.dll" /novalidator /appdir:$(ProjectDir)$(OutDir) /out:$(ProjectDir)\WEB-INF\lib\$(TargetName).jar /bindir:$(TargetDir)$(OutDir) /virtdir:/MonoSystemWeb /aspxfiles:DefaultWsdlHelpGenerator.jvm.aspx /precompileall /tempDir:$(ProjectDir)$(OutDir) /assembly:$(TargetPath)
+"%25VMW_HOME%25\bin\aspxparser.exe" /reference:"$(FrameworkDir)\System.dll" /reference:"$(FrameworkDir)\System.Web.dll" /reference:"System.Web.Services.dll" /reference:"$(FrameworkDir)\System.Xml.dll" /reference:"..\..\..\lib\J2EE.Helpers.dll" /novalidator /appdir:$(ProjectDir)$(OutDir) /out:$(ProjectDir)\WEB-INF\lib\$(TargetName).jar /bindir:$(TargetDir)$(OutDir) /virtdir:/MonoSystemWeb /aspxfiles:DefaultWsdlHelpGenerator.jvm.aspx /precompileall /tempDir:$(ProjectDir)$(OutDir) /assembly:$(TargetPath) /nomd5
 
 del DefaultWsdlHelpGenerator.jvm.aspx
 
