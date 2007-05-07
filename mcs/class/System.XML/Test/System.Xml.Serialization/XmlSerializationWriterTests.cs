@@ -1358,6 +1358,9 @@ namespace MonoTests.System.XmlSerialization
 
 		[Test]
 		[ExpectedException (typeof (InvalidOperationException))]
+#if TARGET_JVM
+		[Ignore ("reverted r72448")]
+#endif
 		public void TestWriteTypedPrimitive_NonPrimitive ()
 		{
 			// The type System.Version was not expected. Use the XmlInclude
@@ -1368,6 +1371,9 @@ namespace MonoTests.System.XmlSerialization
 
 		[Test]
 		[ExpectedException (typeof (InvalidOperationException))]
+#if TARGET_JVM
+                [Ignore ("reverted r72448")]
+#endif
 		public void TestWriteTypedPrimitive_XmlNode ()
 		{
 			WriteTypedPrimitive ("x", ANamespace, new XmlDocument ().CreateElement ("foo"), false);

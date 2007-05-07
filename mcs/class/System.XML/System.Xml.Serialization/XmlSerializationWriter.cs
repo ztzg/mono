@@ -840,8 +840,6 @@ namespace System.Xml.Serialization
 		{
 			string value;
 			TypeData td = TypeTranslator.GetTypeData (o.GetType ());
-			if (td.SchemaType != SchemaTypes.Primitive)
-				throw new InvalidOperationException ("The type of the argument object is not primitive.");
 
 			if (name == null) {
 				ns = td.IsXsdType ? XmlSchema.Namespace : XmlSerializer.WsdlTypesNamespace;
@@ -851,20 +849,25 @@ namespace System.Xml.Serialization
 				name = XmlCustomFormatter.FromXmlName (name);
 			Writer.WriteStartElement (name, ns);
 
-			if (o is XmlQualifiedName)
-				value = FromXmlQualifiedName ((XmlQualifiedName) o);
-			else
-				value = XmlCustomFormatter.ToXmlString (td, o);
-
-			if (xsiType)
-			{
-				if (td.SchemaType != SchemaTypes.Primitive)
-					throw new InvalidOperationException (string.Format (unexpectedTypeError, o.GetType().FullName));
-				WriteXsiType (td.XmlType, td.IsXsdType ? XmlSchema.Namespace : XmlSerializer.WsdlTypesNamespace);
+			if (o is XmlNode[]) {
+				foreach (XmlNode node in (XmlNode[])o)
+					node.WriteTo (Writer);
 			}
+			else {
+				if (o is XmlQualifiedName)
+					value = FromXmlQualifiedName ((XmlQualifiedName) o);
+				else
+					value = XmlCustomFormatter.ToXmlString (td, o);
 
-			WriteValue (value);
+				if (xsiType)
+				{
+					if (td.SchemaType != SchemaTypes.Primitive)
+						throw new InvalidOperationException (string.Format (unexpectedTypeError, o.GetType().FullName));
+					WriteXsiType (td.XmlType, td.IsXsdType ? XmlSchema.Namespace : XmlSerializer.WsdlTypesNamespace);
+				}
 
+				WriteValue (value);
+			}
 			Writer.WriteEndElement ();
 		}
 
