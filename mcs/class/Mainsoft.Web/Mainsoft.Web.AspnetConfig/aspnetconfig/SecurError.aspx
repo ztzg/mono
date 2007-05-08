@@ -38,7 +38,7 @@
         allowRemoteConfiguration to the appSettings section, and set its value to true: <br />
         <pre>
         &lt appSettings &gt 
-              &lt/ add key="allowRemoteConfiguration" value="True" /&gt 
+              &lt add key="allowRemoteConfiguration" value="True" /&gt 
         &lt/ appSettings &gt
         </pre>
     </div>
