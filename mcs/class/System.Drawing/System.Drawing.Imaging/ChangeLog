@@ -1,3 +1,8 @@
+2007-05-09 Igor Zelmanovich <igorz@mainsoft.com>
+
+	* EncoderParameter.jvm.cs: removed destructor, 
+	Dispose doesn't throw exception.
+
 2007-03-28  Sebastien Pouliot  <sebastien@ximian.com>  
 
 	* MetaHeader.cs: Make workaround (#81254) permanent and return correct
