@@ -145,14 +145,7 @@ namespace System.Web {
 			if (index < 0 || count < 0 || ((index + count > s.Length)))
 				throw new ArgumentOutOfRangeException ();
 			
-			int length;
-			if (index == 0 && count == s.Length) {
-				length = encoding.GetMaxByteCount (s.Length);
-			} else {
-				char [] chars = s.ToCharArray (index, count);
-				length = encoding.GetMaxByteCount (chars.Length);
-			}
-
+			int length = encoding.GetMaxByteCount (count);
 			byte [] bytebuffer = GetByteBuffer (length);
 			int realLength = encoding.GetBytes (s, index, count, bytebuffer, 0);
 			output_stream.Write (bytebuffer, 0, realLength);
