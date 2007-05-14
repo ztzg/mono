@@ -1,3 +1,8 @@
+2007-05-14  Vladimir Krasnov  <vladimirk@mainsoft.com>
+
+	* PropertyDescriptorCollection.cs: fixed Find method, compare using
+	invariant culture
+
 2007-05-09 Igor Zelmanovich <igorz@mainsoft.com>
 
 	* Win32Exception.cs:
