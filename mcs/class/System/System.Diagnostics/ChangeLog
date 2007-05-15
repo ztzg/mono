@@ -1,3 +1,27 @@
+2007-05-15 Adar Wesley <adarw@mainsoft.com>
+
+	* Trace.cs: added missing method Refresh.
+
+2007-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* EventTypeFilter.cs
+	  TraceFilter.cs
+	  SourceFilter.cs
+	  SwitchLevelAttribute.cs
+	  DelimitedListTraceListener.cs
+	  SwitchAttribute.cs : new files in 2.0.
+	* DiagnosticsConfigurationHandler.cs : partial support for named
+	  shared listeners.
+	* XmlWriterTraceListener.cs : cosmetic corcompare fixes. Added
+	  missing todos.
+	* TraceListener.cs : added missing 2.0 stuff. Implemented Filter.
+	* DefaultTraceListener.cs : trivial ComVisible fix.
+
+2007-05-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TextWriterTraceListener.cs : open log file in readwrite share mode.
+	  This fixes bug #81296.
+
 2007-05-08 Igor Zelmanovich <igorz@mainsoft.com>
 
 	* TraceImpl.cs:

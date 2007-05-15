@@ -119,6 +119,13 @@ namespace System.Diagnostics {
 		{
 		}
 
+#if NET_2_0
+		protected internal virtual string [] GetSupportedAttributes ()
+		{
+			return null;
+		}
+#endif
+
 		public virtual void Fail (string message)
 		{
 			Fail (message, "");
