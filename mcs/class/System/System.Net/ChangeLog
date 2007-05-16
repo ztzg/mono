@@ -1,3 +1,56 @@
+2007-05-16 Adar Wesley <adarw@mainsoft.com>
+
+	* CookieCollection.cs: added missing method strongly typed CopyTo.
+
+	* CredentialCache.cs: added missing methods Add, Remove, GetCredential
+
+	* HttpWebRequest.jvm.cs: added missing ClientCertificates getter.
+
+	* ServicePoint.cs: added missing method CloseConnectionGroup.
+
+	* WebClient.cs: added missing methods OnDownloadProgressChanged,
+	OnUploadProgressChanged, GetWebRequest, GetWebResponse
+
+	* WebHeaderCollection.cs: added missing methods IsRestricted, Add,
+	Remove, Set.
+
+	* WebProxy.cs: added missing method GetObjectData.
+
+2007-05-15  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpWebRequest.cs: fold all methods into GET for
+	redirect/moves. Fixes bug #81624
+
+2007-05-07  Miguel de Icaza  <miguel@novell.com>
+
+	Missing second part of the patch.
+	
+	* WebHeaderCollection.cs: To be compatible with older versions of
+	Mono that might have serialized this in a different format, catch
+	the potential exception, and try the old name.
+
+	This should become a practice whenever we fix serialization in the
+	future. 
+
+	This is for #81467
+
+2007-04-23  Marek Habersack  <mhabersack@novell.com>
+
+	* EndPointListener.cs: relax prefix matching to succeed in cases
+	when the prefix ends with / and the request path does not. Fixes
+	bug #80091.
+
+	* CookieCollection.cs: added a SortByPath method to sort the
+	collection on demand.
+
+	* Cookie.cs: do not return "/" for Path if it wasn't set
+	explicitly.
+
+	* CookieContainer.cs: set cookie path only if its version is
+	"Netscape" and is null or empty. Fixes #81420.
+	Sort the collection by the path relevance before returning from
+	the GetCookies method. Fixes bug #81421.
+
 2007-04-17  Joel Reed  <joelwreed@gmail.com>
 
 	* WebHeaderCollection.cs: www-authenticate should be multivalue.
