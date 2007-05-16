@@ -1,3 +1,7 @@
+2007-05-16  Konstantin Triger <kostat@mainsoft.com>
+
+	* HttpContext.cs: correctly check for request locality.
+
 2007-05-14  Vladimir Krasnov  <vladimirk@mainsoft.com>
 
 	* HttpWriter.cs: GetMaxByteCount was used in Write and WriteString
