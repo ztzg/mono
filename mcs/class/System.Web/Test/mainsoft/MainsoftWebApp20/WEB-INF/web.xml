@@ -10,10 +10,6 @@
         <param-name>EnableSessionPersistency</param-name>
         <param-value>False</param-value>
     </context-param>
-    <context-param>
-        <param-name>WebFileSystemAccess</param-name>
-        <param-value>Virtual</param-value>
-    </context-param>      
 
     <listener>
         <listener-class>system.Web.GH.SessionListener</listener-class>
