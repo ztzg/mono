@@ -1,3 +1,7 @@
+2007-05-20  Konstantin Triger <kostat@mainsoft.com>
+
+	* ProtocolReflector.cs: init context with current checker.
+
 2007-03-21  Konstantin Triger <kostat@mainsoft.com>
 
 	* ConformanceChecker.cs, BasicProfileChecker.cs: enable looking the
