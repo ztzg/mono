@@ -32,7 +32,7 @@ using System.Web.UI.HtmlControls;
 
 namespace Mainsoft.Web.AspnetConfig
 {
-	public partial class MenageRole : System.Web.UI.Page
+	public partial class ManageRole : System.Web.UI.Page
 	{
 		String role;
 		protected void Page_Load (object sender, EventArgs e)

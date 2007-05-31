@@ -10,7 +10,7 @@
 
 namespace Mainsoft.Web.AspnetConfig {
     
-    public partial class MenageRole {
+    public partial class ManageRole {
         protected System.Web.UI.WebControls.Label role_lbl;
         protected System.Web.UI.WebControls.DropDownList searchBy_dl;
         protected System.Web.UI.WebControls.TextBox user_txt;

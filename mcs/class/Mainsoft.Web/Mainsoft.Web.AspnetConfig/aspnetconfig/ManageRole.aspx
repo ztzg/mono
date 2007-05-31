@@ -23,7 +23,7 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. --%>
-<%@ Page Language="C#" AutoEventWireup="true" EnableTheming="false" MasterPageFile="~/aspnetconfig/Util.Master" CodeBehind="ManageRole.aspx.cs" Inherits="Mainsoft.Web.AspnetConfig.MenageRole" %>
+<%@ Page Language="C#" AutoEventWireup="true" EnableTheming="false" MasterPageFile="~/aspnetconfig/Util.Master" CodeBehind="ManageRole.aspx.cs" Inherits="Mainsoft.Web.AspnetConfig.ManageRole" %>
 <%@ Register tagprefix="custom" namespace="Mainsoft.Web.AspnetConfig" Assembly="Mainsoft.Web.AspnetConfig"  %>
 <asp:Content ID="Content1" ContentPlaceHolderID="SiteMapLinks" runat="server">
 <td><a class="SiteMap" href="Default.aspx" title="Home page" runat="server">Home</a></td>
