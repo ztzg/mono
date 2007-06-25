@@ -47,9 +47,14 @@ namespace System.Web.Profile
 		{
 			if (!ProfileCommonTypeExists)
 				return null;
-
-			Type profileBaseType = Type.GetType ("ProfileCommon");
-			if (profileBaseType == null) {
+			Type profileBaseType = null;
+			if (AppDomain.CurrentDomain.GetData ("ProfileCommon_GetType_Failed") == null)
+			{
+				profileBaseType = Type.GetType ("ProfileCommon");
+				if (profileBaseType == null)
+					AppDomain.CurrentDomain.SetData ("ProfileCommon_GetType_Failed", true);
+			}
+			if (profileBaseType == null) {				
 				//PageMapper call
 				string virtualPath = "~/App_Code/ProfileCommon";
 				string resolvedUrl = System.Web.Util.UrlUtils.ResolveVirtualPathFromAppAbsolute (virtualPath).TrimEnd ('/');
