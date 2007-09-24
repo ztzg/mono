@@ -1,0 +1,60 @@
+Index: System.Web.UI/HiddenFieldPageStatePersister.cs
+===================================================================
+--- System.Web.UI/HiddenFieldPageStatePersister.cs	(revision 84881)
++++ System.Web.UI/HiddenFieldPageStatePersister.cs	(working copy)
+@@ -27,7 +27,8 @@
+ // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ //
+-using System.Security.Permissions;
++using System.Security.Permissions;
++using System.Collections;
+ 
+ namespace System.Web.UI 
+ {
+@@ -40,7 +41,9 @@
+ 	internal
+ #endif
+ 	class HiddenFieldPageStatePersister : PageStatePersister
+-	{
++	{
++		static Hashtable viewStateTable = new Hashtable ();
++
+ 		public HiddenFieldPageStatePersister (Page page)
+ 			: base(page)
+ 		{
+@@ -48,18 +51,28 @@
+ 		
+ 		public override void Load ()
+ 		{
+-			IStateFormatter formatter = StateFormatter;
+-			Pair pair = formatter.Deserialize (Page.RawViewState) as Pair;
++			IStateFormatter formatter = StateFormatter;
++			string viewStateKey = Page.RawViewState;
++			string viewState = (string) viewStateTable [viewStateKey];
++			if (viewState == null)
++				return;
++
++			Pair pair = formatter.Deserialize (viewState) as Pair;
+ 			if (pair != null) {
+ 				ViewState = pair.First;
+ 				ControlState = pair.Second;
+-			}
++			}
++
++			viewStateTable.Remove (viewStateKey);
+ 		}
+ 
+ 		public override void Save ()
+-		{
+-			IStateFormatter formatter = StateFormatter;
+-			Page.RawViewState = formatter.Serialize (new Pair (ViewState, ControlState));
++		{
++			IStateFormatter formatter = StateFormatter;
++			string viewState = formatter.Serialize (new Pair (ViewState, ControlState));
++			string viewStateKey = viewState.GetHashCode ().ToString ();
++			viewStateTable [viewStateKey] = viewState;
++			Page.RawViewState = viewStateKey;
+ 		}
+ 	}
+ }
