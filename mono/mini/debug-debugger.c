@@ -68,6 +68,7 @@ static MonoDebuggerMetadataInfo debugger_metadata_info = {
 	G_STRUCT_OFFSET (MonoClass, byval_arg),
 	G_STRUCT_OFFSET (MonoClass, generic_class),
 	G_STRUCT_OFFSET (MonoClass, generic_container),
+	G_STRUCT_OFFSET (MonoClass, vtable),
 	sizeof (MonoClassField),
 	G_STRUCT_OFFSET (MonoClassField, type),
 	G_STRUCT_OFFSET (MonoClassField, offset),
@@ -96,7 +97,9 @@ static MonoDebuggerMetadataInfo debugger_metadata_info = {
 	G_STRUCT_OFFSET (MonoMethod, klass),
 	G_STRUCT_OFFSET (MonoMethod, token),
 	G_STRUCT_OFFSET (MonoMethod, name) + sizeof (void *),
-	G_STRUCT_OFFSET (MonoMethodInflated, declaring)
+	G_STRUCT_OFFSET (MonoMethodInflated, declaring),
+	G_STRUCT_OFFSET (MonoVTable, klass),
+	G_STRUCT_OFFSET (MonoVTable, vtable)
 };
 
 /*

@@ -82,6 +82,7 @@ struct _MonoDebuggerMetadataInfo {
 	int klass_byval_arg_offset;
 	int klass_generic_class_offset;
 	int klass_generic_container_offset;
+	int klass_vtable_offset;
 	int field_info_size;
 	int field_info_type_offset;
 	int field_info_offset_offset;
@@ -111,6 +112,8 @@ struct _MonoDebuggerMetadataInfo {
 	int mono_method_token_offset;
 	int mono_method_flags_offset;
 	int mono_method_inflated_offset;
+	int mono_vtable_klass_offset;
+	int mono_vtable_vtable_offset;
 };
 
 #endif

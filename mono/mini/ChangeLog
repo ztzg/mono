@@ -1,3 +1,8 @@
+2007-10-17  Martin Baulig  <martin@ximian.com>
+
+	(MonoDebuggerMetadataInfo): Added `klass_vtable_offset',
+	`mono_vtable_klass_offset' and `mono_vtable_vtable_offset'.
+
 2007-10-17  Zoltan Varga  <vargaz@gmail.com>
 
 	* mini-x86.c (mono_arch_emit_prolog): Increase the size allocated for the
