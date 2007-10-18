@@ -30,7 +30,7 @@ static guint64 debugger_compile_method (guint64 method_arg);
 static guint64 debugger_get_virtual_method (guint64 class_arg, guint64 method_arg);
 static guint64 debugger_get_boxed_object (guint64 klass_arg, guint64 val_arg);
 static guint64 debugger_class_get_static_field_data (guint64 klass);
-static guint64 debugger_do_trampoline (guint64 context_argument, guint64 *trampoline_argument);
+static guint64 debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument);
 
 static guint64 debugger_run_finally (guint64 argument1, guint64 argument2);
 static void debugger_attach (void);
@@ -139,23 +139,46 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	&debugger_do_trampoline
 };
 
+typedef struct {
+	guint64 original_call_site;
+	guint64 call_target;
+	/*
+	 * If non-zero, `copied_code' contains a copy of the callsite of
+	 * `copied_code_size' bytes.  `copied_code_offset' is the offset
+	 * withing this buffer which points to the `original_call_site'.
+	 */
+	guint32 copied_code_size;
+	guint32 copied_code_offset;
+	guint8 copied_code [MONO_ZERO_LEN_ARRAY];
+} DebuggerTrampolineInfo;
+
 static guint64
-debugger_do_trampoline (guint64 context_argument, guint64 *trampoline_argument)
+debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 {
+	DebuggerTrampolineInfo *info;
+	const guint8 *original_code;
+	const guint8 *call_target;
+	guint8 *regs;
 	gpointer addr;
-	MonoMethod *m;
 	guint8 *code;
-	gssize *regs;
 
 	g_message (G_STRLOC ": %Lx - %Lx", context_argument, trampoline_argument);
 
 	regs = GUINT_TO_POINTER ((gsize) context_argument);
-	code = GUINT_TO_POINTER ((gsize) trampoline_argument [0]);
-	m = GUINT_TO_POINTER ((gsize) trampoline_argument [1]);
+	info = GUINT_TO_POINTER ((gsize) trampoline_argument);
 
-	g_message (G_STRLOC ": %p - %p - %p", regs, code, m);
+	original_code = GUINT_TO_POINTER ((gsize) info->original_call_site);
+	call_target = GUINT_TO_POINTER ((gsize) info->call_target);
 
-	addr = mono_magic_trampoline (regs, code, m, NULL);
+	if (info->copied_code_size) {
+		code = &info->copied_code [info->copied_code_offset];
+	} else {
+		code = original_code;
+	}
+
+	g_message (G_STRLOC ": %p - %p - %p,%p", regs, call_target, original_code, code);
+
+	addr = mono_magic_trampoline (regs, code, (MonoMethod *) call_target, NULL);
 
 	g_message (G_STRLOC ": %p", addr);
 
