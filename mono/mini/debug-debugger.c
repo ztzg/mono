@@ -30,6 +30,7 @@ static guint64 debugger_compile_method (guint64 method_arg);
 static guint64 debugger_get_virtual_method (guint64 class_arg, guint64 method_arg);
 static guint64 debugger_get_boxed_object (guint64 klass_arg, guint64 val_arg);
 static guint64 debugger_class_get_static_field_data (guint64 klass);
+static guint64 debugger_do_trampoline (guint64 context_argument, guint64 *trampoline_argument);
 
 static guint64 debugger_run_finally (guint64 argument1, guint64 argument2);
 static void debugger_attach (void);
@@ -133,8 +134,33 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	&debugger_runtime_class_init,
 
 	&mono_debug_debugger_version,
-	&mono_debugger_thread_table
+	&mono_debugger_thread_table,
+
+	&debugger_do_trampoline
 };
+
+static guint64
+debugger_do_trampoline (guint64 context_argument, guint64 *trampoline_argument)
+{
+	gpointer addr;
+	MonoMethod *m;
+	guint8 *code;
+	gssize *regs;
+
+	g_message (G_STRLOC ": %Lx - %Lx", context_argument, trampoline_argument);
+
+	regs = GUINT_TO_POINTER ((gsize) context_argument);
+	code = GUINT_TO_POINTER ((gsize) trampoline_argument [0]);
+	m = GUINT_TO_POINTER ((gsize) trampoline_argument [1]);
+
+	g_message (G_STRLOC ": %p - %p - %p", regs, code, m);
+
+	addr = mono_magic_trampoline (regs, code, m, NULL);
+
+	g_message (G_STRLOC ": %p", addr);
+
+	return (guint64) (gsize) addr;
+}
 
 static guint64
 debugger_compile_method (guint64 method_arg)
