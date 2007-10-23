@@ -64,8 +64,6 @@ mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
 void
 mono_arch_patch_callsite (guint8 *code, guint8 *addr)
 {
-	if (mono_debug_using_mono_debugger ())
-		g_message (G_STRLOC ": %p - %p", code, addr);
 	if (((code [-13] == 0x49) && (code [-12] == 0xbb)) || (code [-5] == 0xe8)) {
 		if (code [-5] != 0xe8)
 			InterlockedExchangePointer ((gpointer*)(code - 11), addr);

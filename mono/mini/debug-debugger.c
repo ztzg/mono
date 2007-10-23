@@ -164,7 +164,9 @@ debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 	gpointer addr;
 	guint8 *code;
 
+#if 0
 	g_message (G_STRLOC ": %Lx - %Lx", context_argument, trampoline_argument);
+#endif
 
 	regs = GUINT_TO_POINTER ((gsize) context_argument);
 	info = GUINT_TO_POINTER ((gsize) trampoline_argument);
@@ -178,12 +180,16 @@ debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 		code = original_code;
 	}
 
+#if 0
 	g_message (G_STRLOC ": %p - %p - %p,%p", regs, call_target, original_code, code);
+#endif
 
 	addr = mono_debugger_magic_trampoline (regs, original_code, code, call_target, &method);
 	info->method = (guint64) (gsize) method;
 
+#if 0
 	g_message (G_STRLOC ": %p - %p", addr, method);
+#endif
 
 	return (guint64) (gsize) addr;
 }
