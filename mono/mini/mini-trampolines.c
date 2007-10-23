@@ -150,8 +150,100 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 			MonoJitInfo *target_ji = 
 				mono_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (addr));
 
+			if (mono_debug_using_mono_debugger ())
+				g_message (G_STRLOC ": %p - %p", ji, target_ji);
+
 			if (mono_method_same_domain (ji, target_ji))
 				mono_arch_patch_callsite (code, addr);
+		}
+	}
+
+	return addr;
+}
+
+gpointer
+mono_debugger_magic_trampoline (gssize *regs, const guint8 *orig_code, guint8 *code,
+				gconstpointer m, MonoMethod **method)
+{
+	gpointer addr;
+	gpointer *vtable_slot;
+
+#if MONO_ARCH_COMMON_VTABLE_TRAMPOLINE
+	if (m == MONO_FAKE_VTABLE_METHOD) {
+		int displacement;
+		MonoVTable *vt = mono_arch_get_vcall_slot (code, (gpointer*)regs, &displacement);
+		g_assert (vt);
+		if (displacement > 0) {
+			displacement -= G_STRUCT_OFFSET (MonoVTable, vtable);
+			g_assert (displacement >= 0);
+			displacement /= sizeof (gpointer);
+			mono_class_setup_vtable (vt->klass);
+			m = vt->klass->vtable [displacement];
+			/*g_print ("%s with disp %d: %s at %p\n", vt->klass->name, displacement, m->name, code);*/
+		} else {
+			/* We got here from an interface method: redirect to IMT handling */
+			m = MONO_FAKE_IMT_METHOD;
+			/*g_print ("vtable with disp %d at %p\n", displacement, code);*/
+		}
+	}
+#endif
+	/* this is the IMT trampoline */
+#ifdef MONO_ARCH_HAVE_IMT
+	if (m == MONO_FAKE_IMT_METHOD) {
+		MonoMethod *impl_method;
+		/* we get the interface method because mono_convert_imt_slot_to_vtable_slot ()
+		 * needs the signature to be able to find the this argument
+		 */
+		m = mono_arch_find_imt_method (regs, code);
+		vtable_slot = mono_arch_get_vcall_slot_addr (code, (gpointer*)regs);
+		g_assert (vtable_slot);
+		vtable_slot = mono_convert_imt_slot_to_vtable_slot (vtable_slot, (gpointer*)regs, code, m, &impl_method);
+		/* mono_convert_imt_slot_to_vtable_slot () also gives us the method that is supposed
+		 * to be called, so we compile it and go ahead as usual.
+		 */
+		/*g_print ("imt found method %p (%s) at %p\n", impl_method, impl_method->name, code);*/
+		m = impl_method;
+	}
+#endif
+
+	addr = mono_compile_method (m);
+	g_assert (addr);
+
+	*method = m;
+
+	/* the method was jumped to */
+	if (!code)
+		return addr;
+
+	vtable_slot = mono_arch_get_vcall_slot_addr (code, (gpointer*)regs);
+
+	if (vtable_slot) {
+		if ((*method)->klass->valuetype)
+			addr = mono_arch_get_unbox_trampoline ((*method), addr);
+
+		g_assert (*vtable_slot);
+
+		if (mono_aot_is_got_entry (code, (guint8*)vtable_slot) || mono_domain_owns_vtable_slot (mono_domain_get (), vtable_slot)) {
+#ifdef MONO_ARCH_HAVE_IMT
+			vtable_slot = mono_convert_imt_slot_to_vtable_slot (vtable_slot, (gpointer*)regs, code, m, NULL);
+#endif
+			*vtable_slot = mono_get_addr_from_ftnptr (addr);
+		}
+	}
+	else {
+		guint8 *plt_entry = mono_aot_get_plt_entry (code);
+
+		/* Patch calling code */
+		if (plt_entry) {
+			mono_arch_patch_plt_entry (plt_entry, addr);
+		} else {
+			MonoJitInfo *ji = 
+				mono_jit_info_table_find (mono_domain_get (), orig_code);
+			MonoJitInfo *target_ji = 
+				mono_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (addr));
+
+			if (mono_method_same_domain (ji, target_ji))
+				mono_debugger_arch_patch_callsite (orig_code, code, addr);
 		}
 	}
 

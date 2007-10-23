@@ -142,6 +142,7 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 typedef struct {
 	guint64 original_call_site;
 	guint64 call_target;
+	guint64 method;
 	/*
 	 * If non-zero, `copied_code' contains a copy of the callsite of
 	 * `copied_code_size' bytes.  `copied_code_offset' is the offset
@@ -158,6 +159,7 @@ debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 	DebuggerTrampolineInfo *info;
 	const guint8 *original_code;
 	const guint8 *call_target;
+	MonoMethod *method;
 	guint8 *regs;
 	gpointer addr;
 	guint8 *code;
@@ -178,9 +180,10 @@ debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 
 	g_message (G_STRLOC ": %p - %p - %p,%p", regs, call_target, original_code, code);
 
-	addr = mono_magic_trampoline (regs, code, (MonoMethod *) call_target, NULL);
+	addr = mono_debugger_magic_trampoline (regs, original_code, code, call_target, &method);
+	info->method = (guint64) (gsize) method;
 
-	g_message (G_STRLOC ": %p", addr);
+	g_message (G_STRLOC ": %p - %p", addr, method);
 
 	return (guint64) (gsize) addr;
 }
