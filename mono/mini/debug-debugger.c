@@ -30,7 +30,6 @@ static guint64 debugger_compile_method (guint64 method_arg);
 static guint64 debugger_get_virtual_method (guint64 class_arg, guint64 method_arg);
 static guint64 debugger_get_boxed_object (guint64 klass_arg, guint64 val_arg);
 static guint64 debugger_class_get_static_field_data (guint64 klass);
-static guint64 debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument);
 
 static guint64 debugger_run_finally (guint64 argument1, guint64 argument2);
 static void debugger_attach (void);
@@ -139,8 +138,6 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	&mono_debug_debugger_version,
 	&mono_debugger_thread_table,
 
-	&debugger_do_trampoline,
-
 	&debugger_executable_code_buffer,
 	&_mono_debugger_breakpoint_info_area,
 	&mono_debugger_breakpoint_table,
@@ -148,65 +145,6 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	EXECUTABLE_CODE_BUFFER_SIZE,
 	MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE,
 };
-
-typedef struct {
-	guint64 original_call_site;
-	guint64 call_target;
-	guint64 method;
-	/*
-	 * If non-zero, `copied_code' contains a copy of the callsite of
-	 * `copied_code_size' bytes.  `copied_code_offset' is the offset
-	 * withing this buffer which points to the `original_call_site'.
-	 */
-	guint32 copied_code_size;
-	guint32 copied_code_offset;
-	guint8 copied_code [MONO_ZERO_LEN_ARRAY];
-} DebuggerTrampolineInfo;
-
-static guint64
-debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
-{
-	DebuggerTrampolineInfo *info;
-	const guint8 *original_code;
-	const guint8 *call_target;
-	MonoMethod *method;
-	guint8 *regs;
-	gpointer addr;
-	guint8 *code;
-
-#if 0
-	g_message (G_STRLOC ": %Lx - %Lx", context_argument, trampoline_argument);
-#endif
-
-	regs = GUINT_TO_POINTER ((gsize) context_argument);
-	info = GUINT_TO_POINTER ((gsize) trampoline_argument);
-
-	original_code = GUINT_TO_POINTER ((gsize) info->original_call_site);
-	call_target = GUINT_TO_POINTER ((gsize) info->call_target);
-
-	if (info->copied_code_size) {
-		code = &info->copied_code [info->copied_code_offset];
-	} else {
-		code = original_code;
-	}
-
-#if 0
-	g_message (G_STRLOC ": %p - %p - %p,%p", regs, call_target, original_code, code);
-#endif
-
-#if 0
-	addr = mono_debugger_magic_trampoline (regs, original_code, code, call_target, &method);
-	info->method = (guint64) (gsize) method;
-#else
-	addr = mono_magic_trampoline (regs, code, call_target, NULL);
-#endif
-
-#if 0
-	g_message (G_STRLOC ": %p - %p", addr, method);
-#endif
-
-	return (guint64) (gsize) addr;
-}
 
 static guint64
 debugger_compile_method (guint64 method_arg)
@@ -408,6 +346,7 @@ static void
 debugger_attach (void)
 {
 	mono_debugger_init ();
+
 	mono_debugger_event_handler = debugger_event_handler;
 	debugger_initialize ();
 	debugger_init_threads ();

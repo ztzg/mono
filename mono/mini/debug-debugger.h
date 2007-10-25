@@ -59,8 +59,6 @@ struct _MonoDebuggerInfo {
 	gint32 *debugger_version;
 	MonoDebuggerThreadInfo **thread_table;
 
-	guint64 (*do_trampoline) (guint64 context_argument, guint64 trampoline_argument);
-
 	guint8 **executable_code_buffer;
 	volatile const MonoDebuggerBreakpointInfo **breakpoint_info_area;
 	volatile const MonoDebuggerBreakpointInfo ***breakpoint_table;
