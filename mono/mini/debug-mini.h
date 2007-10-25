@@ -25,18 +25,11 @@ mono_debugger_thread_cleanup (MonoJitTlsData *jit_tls);
  * Debugger breakpoint interface.
  */
 
-typedef struct {
-	/* This is intentionally a bitfield to allow the debugger to write
-	 * both `enabled' and `opcode' in one single atomic operation. */
-	guint64 enabled	  : 1;
-	guint64 opcode    : 8;
-	guint64 unused    : 55;
-	guint64 address;
-} MonoDebuggerBreakpointInfo;
+typedef struct _MonoDebuggerBreakpointInfo MonoDebuggerBreakpointInfo;
 
 #define MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE	256
-extern volatile const MonoDebuggerBreakpointInfo _mono_debugger_breakpoint_info_area [MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE];
-extern volatile const MonoDebuggerBreakpointInfo *mono_debugger_breakpoint_table [MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE];
+extern volatile const MonoDebuggerBreakpointInfo *_mono_debugger_breakpoint_info_area;
+extern volatile const MonoDebuggerBreakpointInfo **mono_debugger_breakpoint_table;
 
 gboolean
 mono_debugger_remove_breakpoints_from_code (const guint8 *orig_address, guint8 *code, int size);
