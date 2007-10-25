@@ -142,7 +142,8 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	&debugger_do_trampoline,
 
 	&debugger_executable_code_buffer,
-	&mono_debugger_breakpoint_table,
+	_mono_debugger_breakpoint_info_area,
+	mono_debugger_breakpoint_table,
 
 	EXECUTABLE_CODE_BUFFER_SIZE,
 	MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE,

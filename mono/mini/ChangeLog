@@ -1,5 +1,12 @@
 2007-10-25  Martin Baulig  <martin@ximian.com>
 
+	* debug-mini.c
+	(mono_debugger_breakpoint_table): Make this a table of pointers ...
+	(_mono_debugger_breakpoint_info_area): New public variable;
+	... pointing here.
+
+2007-10-25  Martin Baulig  <martin@ximian.com>
+
 	* debug-mini.h
 	(MonoDebuggerBreakpointInfo): New public typedef.
 

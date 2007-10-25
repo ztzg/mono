@@ -62,6 +62,7 @@ struct _MonoDebuggerInfo {
 	guint64 (*do_trampoline) (guint64 context_argument, guint64 trampoline_argument);
 
 	guint8 **executable_code_buffer;
+	MonoDebuggerBreakpointInfo *breakpoint_info_area;
 	MonoDebuggerBreakpointInfo **breakpoint_table;
 
 	guint32 executable_code_buffer_size;
