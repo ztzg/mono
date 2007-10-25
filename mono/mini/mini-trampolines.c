@@ -73,19 +73,10 @@ mono_convert_imt_slot_to_vtable_slot (gpointer* slot, gpointer *regs, guint8 *co
  *   This trampoline handles calls from JITted code.
  */
 gpointer
-mono_magic_trampoline (gssize *regs, const guint8 *orig_code, MonoMethod *m, guint8* tramp)
+mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 {
 	gpointer addr;
 	gpointer *vtable_slot;
-	char code_buffer [32];
-	guint8 *code = orig_code;
-
-	if (orig_code) {
-		/* FIXME: Use proper sizes */
-		memcpy (&code_buffer, orig_code-9, 14);
-		if (mono_debugger_remove_breakpoints_from_memory (orig_code-9, code_buffer, 14))
-			code = code_buffer + 12;
-	}
 
 #if MONO_ARCH_COMMON_VTABLE_TRAMPOLINE
 	if (m == MONO_FAKE_VTABLE_METHOD) {

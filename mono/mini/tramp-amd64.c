@@ -81,25 +81,6 @@ mono_arch_patch_callsite (guint8 *code, guint8 *addr)
 }
 
 void
-mono_debugger_arch_patch_callsite (const guint8 *orig_code, guint8 *code, guint8 *addr)
-{
-	if (((code [-13] == 0x49) && (code [-12] == 0xbb)) || (code [-5] == 0xe8)) {
-		if (code [-5] != 0xe8)
-			InterlockedExchangePointer ((gpointer*)(code - 11), addr);
-		else {
-			g_assert ((((guint64)(addr)) >> 32) == 0);
-			g_assert ((((guint64)(orig_code)) >> 32) == 0);
-			InterlockedExchange ((gint32*)(code - 4), ((gint64)addr - (gint64)orig_code));
-		}
-	}
-	else if ((code [-7] == 0x41) && (code [-6] == 0xff) && (code [-5] == 0x15)) {
-		/* call *<OFFSET>(%rip) */
-		gpointer *got_entry = (gpointer*)((guint8*)orig_code + (*(guint32*)(code - 4)));
-		InterlockedExchangePointer (got_entry, addr);
-	}
-}
-
-void
 mono_arch_patch_plt_entry (guint8 *code, guint8 *addr)
 {
 	gint32 disp;

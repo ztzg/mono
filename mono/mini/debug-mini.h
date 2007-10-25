@@ -39,7 +39,7 @@ extern volatile const MonoDebuggerBreakpointInfo _mono_debugger_breakpoint_info_
 extern volatile const MonoDebuggerBreakpointInfo *mono_debugger_breakpoint_table [MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE];
 
 gboolean
-mono_debugger_remove_breakpoints_from_memory (const guint8 *orig_address, guint8 *code, int size);
+mono_debugger_remove_breakpoints_from_code (const guint8 *orig_address, guint8 *code, int size);
 
 /*
  * This is the old breakpoint interface.

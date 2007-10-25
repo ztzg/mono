@@ -909,7 +909,7 @@ mono_debugger_thread_cleanup (MonoJitTlsData *jit_tls)
  * TRUE if there were any breakpoints in that area, FALSE if not.
  */
 gboolean
-mono_debugger_remove_breakpoints_from_memory (const guint8 *orig_address, guint8 *code, int size)
+mono_debugger_remove_breakpoints_from_code (const guint8 *orig_address, guint8 *code, int size)
 {
 	guint64 start_address = (guint64) (gsize) orig_address;
 	gboolean found_breakpoint = FALSE;
