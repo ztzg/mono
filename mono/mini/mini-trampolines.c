@@ -150,9 +150,6 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 			MonoJitInfo *target_ji = 
 				mono_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (addr));
 
-			if (mono_debug_using_mono_debugger ())
-				g_message (G_STRLOC ": %p - %p", ji, target_ji);
-
 			if (mono_method_same_domain (ji, target_ji))
 				mono_arch_patch_callsite (code, addr);
 		}

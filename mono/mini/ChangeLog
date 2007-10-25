@@ -1,3 +1,12 @@
+2007-10-25  Martin Baulig  <martin@ximian.com>
+
+	* debug-debugger.c
+	(debugger_executable_code_buffer): New static variable.
+
+	* debug-debugger.h
+	(MonoDebuggerInfo): Added `executable_code_buffer' and
+	`executable_code_buffer_size'.
+
 2007-10-17  Martin Baulig  <martin@ximian.com>
 
 	(MonoDebuggerMetadataInfo): Added `klass_vtable_offset',

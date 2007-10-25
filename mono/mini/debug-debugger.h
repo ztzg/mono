@@ -60,6 +60,9 @@ struct _MonoDebuggerInfo {
 	MonoDebuggerThreadInfo **thread_table;
 
 	guint64 (*do_trampoline) (guint64 context_argument, guint64 trampoline_argument);
+
+	guint8 **executable_code_buffer;
+	guint32 executable_code_buffer_size;
 };
 
 struct _MonoDebuggerMetadataInfo {

@@ -47,6 +47,9 @@ static void debugger_runtime_class_init (guint64 klass_arg);
 
 static void (*mono_debugger_notification_function) (guint64 command, guint64 data, guint64 data2);
 
+#define EXECUTABLE_CODE_BUFFER_SIZE 4096
+static guint8 *debugger_executable_code_buffer = NULL;
+
 static MonoDebuggerMetadataInfo debugger_metadata_info = {
 	sizeof (MonoDebuggerMetadataInfo),
 	sizeof (MonoDefaults),
@@ -136,7 +139,10 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	&mono_debug_debugger_version,
 	&mono_debugger_thread_table,
 
-	&debugger_do_trampoline
+	&debugger_do_trampoline,
+
+	&debugger_executable_code_buffer,
+	EXECUTABLE_CODE_BUFFER_SIZE
 };
 
 typedef struct {
@@ -394,8 +400,8 @@ static void
 debugger_attach (void)
 {
 	mono_debugger_init ();
-
 	mono_debugger_event_handler = debugger_event_handler;
+	debugger_initialize ();
 	debugger_init_threads ();
 }
 
@@ -412,6 +418,7 @@ extern MonoDebuggerInfo *MONO_DEBUGGER__debugger_info_ptr;
 static void
 debugger_initialize (void)
 {
+	debugger_executable_code_buffer = mono_global_codeman_reserve (EXECUTABLE_CODE_BUFFER_SIZE);
 }
 
 void
