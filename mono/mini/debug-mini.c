@@ -915,8 +915,6 @@ mono_debugger_remove_breakpoints_from_memory (const guint8 *orig_address, guint8
 	gboolean found_breakpoint = FALSE;
 	int i;
 
-	g_message (G_STRLOC ": %p - %p - %d", orig_address, code, size);
-
 	for (i = 0; i < MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE; i++) {
 		MonoDebuggerBreakpointInfo *info = mono_debugger_breakpoint_table [i];
 		int offset;

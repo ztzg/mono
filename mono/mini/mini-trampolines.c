@@ -77,13 +77,13 @@ mono_magic_trampoline (gssize *regs, const guint8 *orig_code, MonoMethod *m, gui
 {
 	gpointer addr;
 	gpointer *vtable_slot;
-	char code_buffer [24];
+	char code_buffer [32];
 	guint8 *code = orig_code;
 
 	if (orig_code) {
-		g_message (G_STRLOC ": %p - %p", code_buffer, orig_code);
-		memcpy (code_buffer, orig_code-12, 24);
-		if (mono_debugger_remove_breakpoints_from_memory (orig_code-12, code_buffer, 24))
+		/* FIXME: Use proper sizes */
+		memcpy (&code_buffer, orig_code-9, 14);
+		if (mono_debugger_remove_breakpoints_from_memory (orig_code-9, code_buffer, 14))
 			code = code_buffer + 12;
 	}
 

@@ -198,7 +198,6 @@ debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 	addr = mono_debugger_magic_trampoline (regs, original_code, code, call_target, &method);
 	info->method = (guint64) (gsize) method;
 #else
-	g_assert_not_reached ();
 	addr = mono_magic_trampoline (regs, code, call_target, NULL);
 #endif
 
