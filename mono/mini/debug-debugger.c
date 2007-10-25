@@ -194,8 +194,13 @@ debugger_do_trampoline (guint64 context_argument, guint64 trampoline_argument)
 	g_message (G_STRLOC ": %p - %p - %p,%p", regs, call_target, original_code, code);
 #endif
 
+#if 0
 	addr = mono_debugger_magic_trampoline (regs, original_code, code, call_target, &method);
 	info->method = (guint64) (gsize) method;
+#else
+	g_assert_not_reached ();
+	addr = mono_magic_trampoline (regs, code, call_target, NULL);
+#endif
 
 #if 0
 	g_message (G_STRLOC ": %p - %p", addr, method);

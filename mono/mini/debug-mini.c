@@ -895,3 +895,44 @@ mono_debugger_thread_cleanup (MonoJitTlsData *jit_tls)
 	}
 #endif
 }
+
+/*
+ * Removes breakpoints from target memory.
+ *
+ * @orig_address:
+ * The original memory address.
+ *
+ * @code:
+ * A copy of @size bytes from that memory area, which we can modify.
+ *
+ * Returns:
+ * TRUE if there were any breakpoints in that area, FALSE if not.
+ */
+gboolean
+mono_debugger_remove_breakpoints_from_memory (const guint8 *orig_address, guint8 *code, int size)
+{
+	guint64 start_address = (guint64) (gsize) orig_address;
+	gboolean found_breakpoint = FALSE;
+	int i;
+
+	g_message (G_STRLOC ": %p - %p - %d", orig_address, code, size);
+
+	for (i = 0; i < MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE; i++) {
+		MonoDebuggerBreakpointInfo *info = mono_debugger_breakpoint_table [i];
+		int offset;
+
+		if (!info)
+			continue;
+
+		if ((info->address < start_address) || (info->address > start_address + size))
+			continue;
+
+		g_message (G_STRLOC ": %d - %p,%d - %Lx", i, orig_address, size, info->address);
+
+		offset = (int) (info->address - start_address);
+		code [offset] = info->opcode;
+		found_breakpoint = TRUE;
+	}
+
+	return found_breakpoint;
+}
