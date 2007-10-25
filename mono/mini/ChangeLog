@@ -1,5 +1,17 @@
 2007-10-25  Martin Baulig  <martin@ximian.com>
 
+	* debug-mini.h
+	(MonoDebuggerBreakpointInfo): New public typedef.
+
+	* debug-mini.c
+	(mono_debugger_breakpoint_table): New public variable.
+
+	* debug-debugger.h
+	(MonoDebuggerInfo): Added `breakpoint_table' and
+	`breakpoint_table_size'.	
+
+2007-10-25  Martin Baulig  <martin@ximian.com>
+
 	* debug-debugger.c
 	(debugger_executable_code_buffer): New static variable.
 

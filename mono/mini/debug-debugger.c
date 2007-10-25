@@ -142,7 +142,10 @@ MonoDebuggerInfo MONO_DEBUGGER__debugger_info = {
 	&debugger_do_trampoline,
 
 	&debugger_executable_code_buffer,
-	EXECUTABLE_CODE_BUFFER_SIZE
+	&mono_debugger_breakpoint_table,
+
+	EXECUTABLE_CODE_BUFFER_SIZE,
+	MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE,
 };
 
 typedef struct {

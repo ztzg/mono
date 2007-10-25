@@ -72,6 +72,8 @@ struct _MonoDebuggerThreadInfo {
 
 MonoDebuggerThreadInfo *mono_debugger_thread_table = NULL;
 
+volatile const MonoDebuggerBreakpointInfo mono_debugger_breakpoint_table [MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE];
+
 static void
 mono_debugger_check_breakpoints (MonoMethod *method, MonoDebugMethodAddress *debug_info);
 

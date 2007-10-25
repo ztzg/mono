@@ -22,6 +22,22 @@ void
 mono_debugger_thread_cleanup (MonoJitTlsData *jit_tls);
 
 /*
+ * Debugger breakpoint interface.
+ */
+
+typedef struct {
+	/* This is intentionally a bitfield to allow the debugger to write
+	 * both `enabled' and `opcode' in one single atomic operation. */
+	guint64 enabled	  : 1;
+	guint64 opcode    : 8;
+	guint64 unused    : 55;
+	guint64 address;
+} MonoDebuggerBreakpointInfo;
+
+#define MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE	256
+extern volatile const MonoDebuggerBreakpointInfo mono_debugger_breakpoint_table [MONO_DEBUGGER_BREAKPOINT_TABLE_SIZE];
+
+/*
  * This is the old breakpoint interface.
  * It isn't used by the debugger anymore, but still when using the `--break' command
  * line argument.
