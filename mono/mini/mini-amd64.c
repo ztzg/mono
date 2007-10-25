@@ -5269,9 +5269,13 @@ mono_debugger_remove_breakpoints_from_code (const guint8 *orig_address, guint8 *
 gpointer
 mono_arch_get_vcall_slot (guint8 *code, gpointer *regs, int *displacement)
 {
+	guint8 buf [16];
 	guint32 reg;
 	gint32 disp;
 	guint8 rex = 0;
+
+	if (mono_debugger_remove_breakpoints_from_code (code - 9, buf, sizeof (buf)))
+		code = buf + 9;
 
 	*displacement = 0;
 
