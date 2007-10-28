@@ -40,7 +40,7 @@ namespace Mono.Cecil {
 	internal abstract class ReflectionReader : BaseReflectionReader {
 
 		ModuleDefinition m_module;
-		ImageReader m_reader;
+		protected ImageReader m_reader;
 		SecurityDeclarationReader m_secReader;
 		protected MetadataTableReader m_tableReader;
 		protected MetadataRoot m_root;
@@ -126,7 +126,7 @@ namespace Mono.Cecil {
 			return m_typeDefs [rid - 1];
 		}
 
-		public TypeReference GetTypeRefAt (uint rid)
+		public virtual TypeReference GetTypeRefAt (uint rid)
 		{
 			return m_typeRefs [rid - 1];
 		}
@@ -149,12 +149,12 @@ namespace Mono.Cecil {
 			return tspec;
 		}
 
-		public FieldDefinition GetFieldDefAt (uint rid)
+		public virtual FieldDefinition GetFieldDefAt (uint rid)
 		{
 			return m_fields [rid - 1];
 		}
 
-		public MethodDefinition GetMethodDefAt (uint rid)
+		public virtual MethodDefinition GetMethodDefAt (uint rid)
 		{
 			return m_meths [rid - 1];
 		}
@@ -274,22 +274,22 @@ namespace Mono.Cecil {
 			param.ParameterType = new SentinelType (param.ParameterType);
 		}
 
-		public PropertyDefinition GetPropertyDefAt (uint rid)
+		public virtual PropertyDefinition GetPropertyDefAt (uint rid)
 		{
 			return m_properties [rid - 1];
 		}
 
-		public EventDefinition GetEventDefAt (uint rid)
+		public virtual EventDefinition GetEventDefAt (uint rid)
 		{
 			return m_events [rid - 1];
 		}
 
-		public ParameterDefinition GetParamDefAt (uint rid)
+		public virtual ParameterDefinition GetParamDefAt (uint rid)
 		{
 			return m_parameters [rid - 1];
 		}
 
-		public GenericParameter GetGenericParameterAt (uint rid)
+		public virtual GenericParameter GetGenericParameterAt (uint rid)
 		{
 			return m_genericParameters [rid - 1];
 		}
@@ -479,7 +479,7 @@ namespace Mono.Cecil {
 			ReadMemberReferences ();
 		}
 
-		void AddTypeRef (TypeRefTable typesRef, int i)
+		protected void AddTypeRef (TypeRefTable typesRef, int i)
 		{
 			// Check if index has been already added.
 			if (m_typeRefs [i] != null)
