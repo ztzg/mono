@@ -348,7 +348,7 @@ debugger_attach (void)
 	mono_debugger_init ();
 
 	mono_debugger_event_handler = debugger_event_handler;
-	debugger_initialize ();
+	debugger_executable_code_buffer = mono_global_codeman_reserve (EXECUTABLE_CODE_BUFFER_SIZE);
 	debugger_init_threads ();
 }
 
@@ -365,13 +365,13 @@ extern MonoDebuggerInfo *MONO_DEBUGGER__debugger_info_ptr;
 static void
 debugger_initialize (void)
 {
-	debugger_executable_code_buffer = mono_global_codeman_reserve (EXECUTABLE_CODE_BUFFER_SIZE);
 }
 
 void
 mono_debugger_init (void)
 {
 	mono_debugger_notification_function = mono_debugger_create_notification_function ();
+	debugger_executable_code_buffer = mono_global_codeman_reserve (EXECUTABLE_CODE_BUFFER_SIZE);
 	mono_debugger_event_handler = debugger_event_handler;
 
 	/*
