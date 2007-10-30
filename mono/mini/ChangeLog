@@ -1,8 +1,12 @@
 2007-10-30  Martin Baulig  <martin@ximian.com>
 
+	* mini-trampolines.c
+	(mono_magic_trampoline): Call mono_debugger_trampoline_compiled().
+
 	* debug-mini.h
 	(mono_debugger_thread_created): Added `MonoThread *' argument.
 	(mono_debugger_extended_notification): New public method.
+	(mono_debugger_trampoline_compiled): New public method.
 
 	* debug-mini.c
 	(MonoDebuggerThreadInfo): Added `thread' and

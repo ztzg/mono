@@ -921,3 +921,10 @@ mono_debugger_extended_notification (MonoDebuggerEvent event, guint64 data, guin
 	}
 #endif
 }
+
+void
+mono_debugger_trampoline_compiled (MonoMethod *method, const guint8 *code)
+{
+	mono_debugger_extended_notification (MONO_DEBUGGER_EVENT_TRAMPOLINE,
+					     (guint64) (gsize) method, (guint64) (gsize) code);
+}
