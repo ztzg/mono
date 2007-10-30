@@ -913,7 +913,6 @@ mono_debugger_extended_notification (MonoDebuggerEvent event, guint64 data, guin
 		if (info->thread != thread)
 			continue;
 
-		g_message (G_STRLOC ": %p - %Lx - %x", info, info->extended_notifications, event);
 		if ((info->extended_notifications & (int) event) == 0)
 			continue;
 
