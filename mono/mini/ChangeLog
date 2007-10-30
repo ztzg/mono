@@ -1,3 +1,13 @@
+2007-10-30  Martin Baulig  <martin@ximian.com>
+
+	* debug-mini.h
+	(mono_debugger_thread_created): Added `MonoThread *' argument.
+	(mono_debugger_extended_notification): New public method.
+
+	* debug-mini.c
+	(MonoDebuggerThreadInfo): Added `thread' and
+	`extended_notifications' fields.
+
 2007-10-25  Martin Baulig  <martin@ximian.com>
 
 	* debug-debugger.c
