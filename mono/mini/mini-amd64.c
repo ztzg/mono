@@ -5258,9 +5258,13 @@ mono_debugger_remove_breakpoints_from_code (const guint8 *orig_address, guint8 *
 		if ((info->address < orig_address) || (info->address > orig_address + size))
 			continue;
 
+		if (!found_breakpoint) {
+			memcpy (code, orig_address, size);
+			found_breakpoint = TRUE;
+		}
+
 		offset = info->address - orig_address;
 		code [offset] = info->saved_byte;
-		found_breakpoint = TRUE;
 	}
 
 	return found_breakpoint;
