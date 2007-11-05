@@ -481,10 +481,10 @@ namespace System.Web.UI.WebControls {
 #endif
 			}
 			else {
-				if (Display == ValidatorDisplay.Static) {
+				if (Display != ValidatorDisplay.None) {
 					render_tags = !v;
 					render_text = !v;
-					render_nbsp = v;
+					render_nbsp = v && Display == ValidatorDisplay.Static;
 				}
 			}
 
