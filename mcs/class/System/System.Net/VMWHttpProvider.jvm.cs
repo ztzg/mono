@@ -177,6 +177,10 @@ namespace System.Net
 						new NTCredentials(nc.UserName, nc.Password, host, domain));
 				}
 			}
+			else if(String.Compare (type, "negotiate", StringComparison.InvariantCultureIgnoreCase) == 0)
+			{
+				SetAuthenticationScheme (AuthPolicy.NEGOTIATE);
+			}
 			else
 			{
 				if(!proxyCredentials)
@@ -191,9 +195,7 @@ namespace System.Net
 						AuthScope.ANY_PORT, AuthScope.ANY_REALM, type),
 						new UsernamePasswordCredentials(nc.UserName, nc.Password));
 				}
-			}
-			SetAuthenticationScheme (Char.ToUpper (type [0]) + type.Substring (1));
-
+			}						
 		}
 
 		private void SetAuthenticationScheme (string type) {			
