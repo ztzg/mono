@@ -48,7 +48,6 @@ namespace System.Web.UI.WebControls {
 		AttributeCollection attributes;
 		StateBag attribute_state;
 		bool enabled;
-		bool track_enabled_state;
 
 		public WebControl (HtmlTextWriterTag tag) 
 		{
@@ -238,8 +237,7 @@ namespace System.Web.UI.WebControls {
 
 			set {
 				if (enabled != value) {
-					if (IsTrackingViewState)
-						track_enabled_state = true;
+					ViewState ["Enabled"] = value;
 					enabled = value;
 				}
 			}
@@ -436,7 +434,10 @@ namespace System.Web.UI.WebControls {
 			if (controlSrc == null) 
 				return;
 
-			Enabled = controlSrc.Enabled;
+			o = controlSrc.ViewState ["Enabled"];
+			if (o != null) {
+				enabled = (bool)o;
+			}
 
 			o = controlSrc.ViewState ["AccessKey"];
 			if (o != null)
@@ -574,9 +575,6 @@ namespace System.Web.UI.WebControls {
 
 		protected override object SaveViewState () 
 		{
-			if (track_enabled_state)
-				ViewState ["Enabled"] = enabled;
-
 			object view_state;
 			object attr_view_state = null;
 
