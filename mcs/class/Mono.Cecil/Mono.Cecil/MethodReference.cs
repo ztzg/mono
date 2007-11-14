@@ -32,13 +32,13 @@ namespace Mono.Cecil {
 
 	public class MethodReference : MemberReference, IMethodSignature, IGenericParameterProvider {
 
-		ParameterDefinitionCollection m_parameters;
+		protected ParameterDefinitionCollection m_parameters;
 		MethodReturnType m_returnType;
 
 		bool m_hasThis;
 		bool m_explicitThis;
 		MethodCallingConvention m_callConv;
-		GenericParameterCollection m_genparams;
+		protected GenericParameterCollection m_genparams;
 
 		public virtual bool HasThis {
 			get { return m_hasThis; }
@@ -63,7 +63,7 @@ namespace Mono.Cecil {
 			}
 		}
 
-		public GenericParameterCollection GenericParameters {
+		public virtual GenericParameterCollection GenericParameters {
 			get {
 				if (m_genparams == null)
 					m_genparams = new GenericParameterCollection (this);
@@ -118,7 +118,7 @@ namespace Mono.Cecil {
 			int sentinel = GetSentinel ();
 
 			StringBuilder sb = new StringBuilder ();
-			sb.Append (m_returnType.ReturnType.FullName);
+			sb.Append (ReturnType.ReturnType.FullName);
 			sb.Append (" ");
 			sb.Append (base.ToString ());
 			sb.Append ("(");

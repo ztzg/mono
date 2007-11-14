@@ -43,6 +43,7 @@ namespace Mono.Cecil {
 
 		bool m_hasConstant;
 		object m_const;
+		bool m_constantInitialized;
 
 		public PropertyAttributes Attributes {
 			get { return m_attributes; }
@@ -51,9 +52,11 @@ namespace Mono.Cecil {
 
 		public CustomAttributeCollection CustomAttributes {
 			get {
-				if (m_customAttrs == null)
+				if (m_customAttrs == null) {
 					m_customAttrs = new CustomAttributeCollection (this);
-
+					if (IsDelayedMode)
+						MetaResolver.ResolveCustomAttributes (MetadataToken, m_customAttrs);					
+				}
 				return m_customAttrs;
 			}
 		}
@@ -97,15 +100,33 @@ namespace Mono.Cecil {
 		}
 
 		public bool HasConstant {
-			get { return m_hasConstant; }
+			get {
+				if (IsDelayedMode && !m_constantInitialized)
+					InitConstant ();
+				return m_hasConstant;
+			}
 		}
 
 		public object Constant {
-			get { return m_const; }
+			get {
+				if (IsDelayedMode && !m_constantInitialized) {
+					InitConstant ();
+				}
+				return m_const;
+			}
 			set {
 				m_hasConstant = true;
+				m_constantInitialized = true;
 				m_const = value;
 			}
+		}
+
+		private void InitConstant ()
+		{
+			m_hasConstant = MetaResolver.HasConstant (MetadataToken);
+			if (m_hasConstant)
+				m_const = MetaResolver.ResolveConstant (MetadataToken);
+			m_constantInitialized = true;
 		}
 
 		#region PropertyAttributes

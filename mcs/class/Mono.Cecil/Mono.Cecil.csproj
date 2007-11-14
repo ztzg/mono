@@ -285,11 +285,13 @@
     <Compile Include="Mono.Cecil\IReflectionVisitable.cs" />
     <Compile Include="Mono.Cecil\IReflectionVisitor.cs" />
     <Compile Include="Mono.Cecil\IRequireResolving.cs" />
+    <Compile Include="Mono.Cecil\LazyReflectionReader.cs" />
     <Compile Include="Mono.Cecil\LinkedResource.cs" />
     <Compile Include="Mono.Cecil\ManifestResourceAttributes.cs" />
     <Compile Include="Mono.Cecil\MarshalSpec.cs" />
     <Compile Include="Mono.Cecil\MemberReference.cs" />
     <Compile Include="Mono.Cecil\MemberReferenceCollection.cs" />
+    <Compile Include="Mono.Cecil\MetadataResolver.cs" />
     <Compile Include="Mono.Cecil\MethodAttributes.cs" />
     <Compile Include="Mono.Cecil\MethodCallingConvention.cs" />
     <Compile Include="Mono.Cecil\MethodDefExtendedTable.cs" />

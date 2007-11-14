@@ -38,6 +38,22 @@ namespace Mono.Cecil {
 		TypeReference m_decType;
 		MetadataToken m_token;
 		IDictionary m_annotations;
+		private MetadataResolver m_metaResolver;
+
+		internal MetadataResolver MetaResolver {
+			get {
+				return m_metaResolver;
+			}
+			set {
+				m_metaResolver = value;
+			}
+		}
+
+		protected bool IsDelayedMode {
+			get {
+				return m_metaResolver != null;
+			}
+		}
 
 		public virtual string Name {
 			get { return m_name; }
