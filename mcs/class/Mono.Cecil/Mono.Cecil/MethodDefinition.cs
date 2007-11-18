@@ -550,6 +550,20 @@ namespace Mono.Cecil {
 			}
 		}
 
+		internal void FullLoad () {
+			LoadBody ();
+			if (IsDelayedMode) {
+				object resolved = null;
+				resolved = CustomAttributes;
+				resolved = SecurityDeclarations;
+				resolved = GenericParameters;
+				resolved = Overrides;
+				resolved = Parameters;
+				resolved = PInvokeInfo;				
+				resolved = ReturnType;
+			}
+		}
+
 		public MethodDefinition Clone ()
 		{
 			return Clone (this, new ImportContext (NullReferenceImporter.Instance, this));

@@ -231,7 +231,18 @@ namespace Mono.Cecil
 			ReadFieldLayoutInfos ();
 			//ReadSemantics ();
 			ReadExternTypes ();
-			ReadMarshalSpecs ();			
+			ReadMarshalSpecs ();
+			ReadEntryPoint ();
+			BuildModuleCustomAttributes ();
+		}
+
+
+		private void ReadEntryPoint () {
+			if (TableReader.GetMethodTable () == null)
+				return;
+			uint eprid = CodeReader.GetRid ((int) m_reader.Image.CLIHeader.EntryPointToken);
+			if (eprid > 0 && eprid <= TableReader.GetMethodTable().Rows.Count)
+				Module.Assembly.EntryPoint = GetMethodDefAt (eprid);
 		}
 
 
@@ -374,7 +385,21 @@ namespace Mono.Cecil
 			if (m_tHeap.HasTable (PropertyTable.RId)) {
 				m_properties = new PropertyDefinition [m_tableReader.GetPropertyTable ().Rows.Count];
 			}
-		}				
+		}
+
+		void BuildModuleCustomAttributes () {
+			if (!m_tHeap.HasTable (CustomAttributeTable.RId))
+				return;
+
+			CustomAttributeTable caTable = m_tableReader.GetCustomAttributeTable ();
+			for (int i = 0; i < caTable.Rows.Count; i++) {
+				CustomAttributeRow caRow = caTable [i];
+				if (caRow.Parent.TokenType == TokenType.Module)
+					Module.CustomAttributes.Add ( m_metaResolver.CreateCustomAttribute(caRow) );
+				else if (caRow.Parent.TokenType == TokenType.Assembly)
+					Module.Assembly.CustomAttributes.Add (m_metaResolver.CreateCustomAttribute (caRow));
+			}
+		}
 
 		void ReadClassLayoutInfos () {
 			if (!m_tHeap.HasTable (ClassLayoutTable.RId))

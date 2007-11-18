@@ -81,11 +81,14 @@ namespace Mono.Cecil
 		}
 
 		public override void VisitMethodImplRow (MethodImplRow row) {
-			if (row.MethodBody.TokenType == TokenType.Method) {
-				Add (ref GetOrCreate ((int) row.MethodBody.RID - 1).m_methodsOverrides, m_currentRowIndex);
+			if (row.MethodBody.TokenType != TokenType.Method)
+				return;
+
+			if (row.MethodDeclaration.TokenType == TokenType.Method) {
+				Add (ref GetOrCreate ((int) row.MethodBody.RID - 1).m_methodsOverrides, (int)row.MethodDeclaration.RID-1);
 			}
 			else {
-				Add (ref GetOrCreate ((int) row.MethodBody.RID - 1).m_memberOverrides, m_currentRowIndex);
+				Add (ref GetOrCreate ((int) row.MethodBody.RID - 1).m_memberOverrides, (int) row.MethodDeclaration.RID - 1);
 			}
 			m_currentRowIndex++;
 		}

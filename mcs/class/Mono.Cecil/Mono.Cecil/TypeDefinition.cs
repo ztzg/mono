@@ -218,6 +218,33 @@ namespace Mono.Cecil {
 			}
 		}
 
+		internal void FullLoad () {
+			foreach (MethodDefinition m in Methods) {
+				m.FullLoad ();
+			}
+
+			foreach (MethodDefinition c in Constructors) {
+				c.FullLoad ();
+			}
+
+			if (IsDelayedMode) {
+				foreach (FieldDefinition f in Fields) {
+					f.FullLoad ();
+				}
+				object resolved = null;
+				resolved = this.CustomAttributes;
+				resolved = this.SecurityDeclarations;
+				resolved = BaseType;
+				resolved = DeclaringType;
+				resolved = Events;
+				resolved = GenericParameters;
+				resolved = Interfaces;
+				resolved = NestedTypes;
+				resolved = Properties;
+			}
+
+		}
+
 		#region TypeAttributes
 
 		public bool IsNotPublic {

@@ -157,6 +157,17 @@ namespace Mono.Cecil {
 			set { m_marshalDesc = value; }
 		}
 
+		public void FullLoad () {
+			if (IsDelayedMode) {
+				object resolved = this.Constant;
+				resolved = this.CustomAttributes;
+				resolved = this.DeclaringType;
+				resolved = this.FieldType;
+				resolved = this.RVA;
+				resolved = this.MarshalSpec;
+			}
+		}
+
 		#region FieldAttributes
 
 		public bool IsCompilerControlled {

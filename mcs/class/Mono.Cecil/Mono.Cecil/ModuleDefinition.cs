@@ -143,8 +143,8 @@ namespace Mono.Cecil {
 		{
 		}
 
-		internal ModuleDefinition (string name, AssemblyDefinition asm, StructureReader reader, bool lazy) :
-			this (name, asm, reader, false, lazy)
+		internal ModuleDefinition (string name, AssemblyDefinition asm, StructureReader reader, bool main) :
+			this (name, asm, reader, main, false)
 		{
 		}
 
@@ -416,10 +416,7 @@ namespace Mono.Cecil {
 				m_controller.Reader.VisitModuleDefinition (this);
 
 			foreach (TypeDefinition type in this.Types) {
-				foreach (MethodDefinition meth in type.Methods)
-					meth.LoadBody ();
-				foreach (MethodDefinition ctor in type.Constructors)
-					ctor.LoadBody ();
+				type.FullLoad();				
 			}
 
 			if (m_controller.Reader.SymbolReader == null)

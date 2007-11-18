@@ -330,7 +330,7 @@ namespace Mono.Cecil
 		#endregion	
 	
 
-		private CustomAttribute CreateCustomAttribute (CustomAttributeRow caRow) {
+		internal CustomAttribute CreateCustomAttribute (CustomAttributeRow caRow) {
 			MethodReference ctor = null;
 			if (caRow.Type.TokenType == TokenType.Method)
 				ctor = m_reader.GetMethodDefAt (caRow.Type.RID);
