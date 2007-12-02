@@ -243,6 +243,7 @@
     <Compile Include="Mono.Cecil\DefaultImporter.cs" />
     <Compile Include="Mono.Cecil\EmbeddedResource.cs" />
     <Compile Include="Mono.Cecil\EventAttributes.cs" />
+    <Compile Include="Mono.Cecil\EventDefExtendedTable.cs" />
     <Compile Include="Mono.Cecil\EventDefinition.cs" />
     <Compile Include="Mono.Cecil\EventDefinitionCollection.cs" />
     <Compile Include="Mono.Cecil\EventReference.cs" />

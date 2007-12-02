@@ -15,6 +15,7 @@ namespace Mono.Cecil
 		FieldDefExtendedTable m_fieldDefTable;
 		PropertyDefExtendedTable m_propertyDefTable;
 		ParamDefExtendedTable m_paramDefTable;
+		EventDefExtendedTable m_eventDefTable;
 
 		public MetadataResolver (LazyReflectionReader reader, MetadataExtendedTables tables) {
 			m_reader = reader;
@@ -23,6 +24,7 @@ namespace Mono.Cecil
 			m_fieldDefTable = tables.Fields;
 			m_propertyDefTable = tables.Properties;
 			m_paramDefTable = tables.Parameters;
+			m_eventDefTable = tables.Events;
 		}		
 
 		#region Lazy helper methods
@@ -83,6 +85,11 @@ namespace Mono.Cecil
 				if (m_propertyDefTable [(int) token.RID - 1] == null)
 					return;
 				attributes = m_propertyDefTable [(int) token.RID - 1].m_customAttributes;
+				break;
+			case TokenType.Event:
+				if (m_eventDefTable [(int) token.RID - 1] == null)
+					return;
+				attributes = m_eventDefTable [(int) token.RID - 1].m_customAttributes;
 				break;
 			case TokenType.Param:
 				if (m_paramDefTable [(int) token.RID - 1] == null)

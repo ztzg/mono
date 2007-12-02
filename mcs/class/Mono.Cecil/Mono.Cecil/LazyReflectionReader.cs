@@ -178,19 +178,22 @@ namespace Mono.Cecil
 		}
 
 		public override EventDefinition GetEventDefAt (uint rid) {
-			return null;
-			//EventDefinition current = base.GetEventDefAt (rid);
-			//if (current == null) {
-			//    EventRow erow = TableReader.GetEventTable () [(int) rid - 1];
-			//    MetadataToken ownersToken = m_metaResolver [TokenType.Event] [RelationType.DeclaringType].GetRelatedItem (rid);
-			//    TypeDefinition owner = GetTypeDefAt (ownersToken.RID);
-			//    current = new EventDefinition (
-			//        m_root.Streams.StringsHeap [erow.Name],
-			//        GetTypeDefOrRef (erow.EventType, new GenericContext (owner)), erow.EventFlags);
-			//    current.MetadataToken = MetadataToken.FromMetadataRow (TokenType.Event, (int) rid - 1);
-			//    m_events [(int) rid - 1] = current;
-			//}
-			//return current;
+			EventDefinition current = base.GetEventDefAt (rid);
+			if (current == null) {
+				EventRow erow = TableReader.GetEventTable () [(int) rid - 1];
+				EventExtRow extRow = m_extTables.Events [(int) rid - 1];
+				int ownerRow = extRow.m_declaringType;
+				TypeDefinition owner = GetTypeDefAt ((uint) ownerRow + 1);
+				current = new EventDefinition (
+					m_root.Streams.StringsHeap [erow.Name],
+					GetTypeDefOrRef (erow.EventType, new GenericContext (owner)), erow.EventFlags);
+				current.MetadataToken = MetadataToken.FromMetadataRow (TokenType.Event, (int) rid - 1);
+				current.AddMethod = GetMethodDefAt ((uint) extRow.m_addMethod + 1);
+				current.RemoveMethod = GetMethodDefAt ((uint) extRow.m_removeMethod + 1);
+				m_metaResolver.ResolveCustomAttributes (current.MetadataToken, current.CustomAttributes);
+				m_events [(int) rid - 1] = current;
+			}
+			return current;
 		}
 
 		public override PropertyDefinition GetPropertyDefAt (uint rid) {

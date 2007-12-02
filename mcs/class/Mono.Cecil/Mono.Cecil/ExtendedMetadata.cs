@@ -41,6 +41,7 @@ namespace Mono.Cecil
 		FieldDefExtendedTable m_fieldsExtTable = new FieldDefExtendedTable ();
 		PropertyDefExtendedTable m_propertyExtTable = new PropertyDefExtendedTable ();
 		ParamDefExtendedTable m_paramExtTable = new ParamDefExtendedTable ();
+		EventDefExtendedTable m_eventsTable = new EventDefExtendedTable ();
 
 		public MetadataExtendedTables (TableCollection tables) {
 			BuildTables (tables);
@@ -52,6 +53,7 @@ namespace Mono.Cecil
 			tables.Accept (m_fieldsExtTable);
 			tables.Accept (m_propertyExtTable);
 			tables.Accept (m_paramExtTable);
+			tables.Accept (m_eventsTable);
 		}
 
 		internal TypeDefExtendedTable Types {
@@ -81,6 +83,12 @@ namespace Mono.Cecil
 		internal ParamDefExtendedTable Parameters {
 			get {
 				return m_paramExtTable;
+			}
+		}
+
+		internal EventDefExtendedTable Events {
+			get {
+				return m_eventsTable;
 			}
 		}
 	}
