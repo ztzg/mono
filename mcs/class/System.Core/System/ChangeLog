@@ -1,4 +1,0 @@
-2007-12-20  Stephane Delcroix  <sdelcroix@novell.com>
-
-	* TimeZoneInfo.cs: adapting length check to parse TZif2 files
-	introduced by glibc 2.6.x.
