@@ -80,6 +80,7 @@ void _wapi_collection_init (void)
 
 void _wapi_handle_collect (void)
 {
+#if 0
 	guint32 count = _wapi_shared_layout->collection_count;
 	int i, thr_ret;
 	
@@ -128,5 +129,6 @@ void _wapi_handle_collect (void)
 
 #ifdef DEBUG
 	g_message ("%s: (%d) Collection done", __func__, _wapi_getpid ());
+#endif
 #endif
 }

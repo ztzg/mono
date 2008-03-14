@@ -2421,7 +2421,7 @@ WapiFileType GetFileType(gpointer handle)
 {
 	WapiHandleType type;
 
-	if (!_WAPI_PRIVATE_HAVE_SLOT (handle)) {
+	if (!_WAPI_HAVE_SLOT (handle)) {
 		SetLastError (ERROR_INVALID_HANDLE);
 		return(FILE_TYPE_UNKNOWN);
 	}

@@ -4,7 +4,7 @@
  * Author:
  *	Dick Porter (dick@ximian.com)
  *
- * (C) 2002-2006 Novell, Inc.
+ * (C) 2002-2008 Novell, Inc.
  */
 
 #include <config.h>
@@ -42,13 +42,16 @@
 #include <mono/io-layer/threads.h>
 #include <mono/utils/strenc.h>
 #include <mono/io-layer/timefuncs-private.h>
+#include <mono/io-layer/shared.h>
 
 /* The process' environment strings */
 extern char **environ;
 
-#undef DEBUG
+#define DEBUG
 
 static guint32 process_wait (gpointer handle, guint32 timeout);
+static int process_open_shared (gpointer handle, gpointer handle_specific,
+				gboolean create_shared);
 
 struct _WapiHandleOps _wapi_process_ops = {
 	NULL,				/* close_shared */
@@ -56,7 +59,8 @@ struct _WapiHandleOps _wapi_process_ops = {
 	NULL,				/* own */
 	NULL,				/* is_owned */
 	process_wait,			/* special_wait */
-	NULL				/* prewait */	
+	NULL,				/* prewait */
+	process_open_shared		/* open_shared */
 };
 
 static mono_once_t process_current_once=MONO_ONCE_INIT;
@@ -75,18 +79,17 @@ static gboolean process_set_termination_details (gpointer handle, int status)
 {
 	struct _WapiHandle_process *process_handle;
 	gboolean ok;
-	int thr_ret;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	_wapi_handle_lock_shared_handle (handle);
+	
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up process handle %p",
 			   __func__, handle);
+		_wapi_handle_unlock_shared_handle (handle);
 		return(FALSE);
 	}
-	
-	thr_ret = _wapi_handle_lock_shared_handles ();
-	g_assert (thr_ret == 0);
 
 	if (WIFSIGNALED(status)) {
 		process_handle->exitstatus = 128 + WTERMSIG(status);
@@ -103,9 +106,12 @@ static gboolean process_set_termination_details (gpointer handle, int status)
 	g_message ("%s: Setting handle %p signalled", __func__, handle);
 #endif
 
+	/* This will write the changed handle data back to the file,
+	 * so no need to do it here as well
+	 */
 	_wapi_shared_handle_set_signal_state (handle, TRUE);
 
-	_wapi_handle_unlock_shared_handles ();
+	_wapi_handle_unlock_shared_handle (handle);
 
 	/* Drop the reference we hold so we have somewhere to store
 	 * the exit details, now the process has in fact exited
@@ -126,8 +132,8 @@ static gboolean waitfor_pid (gpointer test, gpointer user_data)
 	int status;
 	pid_t ret;
 	
-	ok = _wapi_lookup_handle (test, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process);
+	ok = _wapi_lookup_shared_handle (test, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process, TRUE);
 	if (ok == FALSE) {
 		/* The handle must have been too old and was reaped */
 		return (FALSE);
@@ -157,6 +163,8 @@ static gboolean waitfor_pid (gpointer test, gpointer user_data)
 #endif
 
 	process->waited = TRUE;
+
+	_wapi_handle_update_shared_handle (test);
 	
 	*(int *)user_data = status;
 	
@@ -206,8 +214,8 @@ static guint32 process_wait (gpointer handle, guint32 timeout)
 	g_message ("%s: Waiting for process %p", __func__, handle);
 #endif
 
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up process handle %p", __func__,
 			   handle);
@@ -260,6 +268,9 @@ static guint32 process_wait (gpointer handle, guint32 timeout)
 				g_message ("%s: waitpid returns: %d, timeout is %d", __func__, ret, timeout);
 #endif
 				
+				/* Make sure we've got uptodate data */
+				_wapi_handle_read_handle_from_file (handle);
+				
 				if (ret == pid) {
 					break;
 				} else if (ret == (pid_t)-1 &&
@@ -301,14 +312,34 @@ static guint32 process_wait (gpointer handle, guint32 timeout)
 	g_message ("%s: Wait done, status %d", __func__, status);
 #endif
 
+	process_handle->waited = TRUE;
+
+	/* This writes the shared data back to the file */
 	ok = process_set_termination_details (handle, status);
 	if (ok == FALSE) {
 		SetLastError (ERROR_OUTOFMEMORY);
 		return (WAIT_FAILED);
 	}
-	process_handle->waited = TRUE;
 	
 	return(WAIT_OBJECT_0);
+}
+
+static int process_open_shared (gpointer handle, gpointer handle_specific,
+				gboolean create_shared)
+{
+	struct _WapiHandle_process *specific = (struct _WapiHandle_process *)handle_specific;
+	int fd;
+	
+#ifdef DEBUG
+	g_message ("%s: Opening process %p, PID %d", __func__, handle,
+		   specific->id);
+#endif
+
+	/* If we create it, create it locked */
+	fd = _wapi_shared_open_process (specific->id, create_shared,
+					create_shared);
+	
+	return(fd);
 }
 
 void _wapi_process_signal_self ()
@@ -992,10 +1023,9 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			env_count++;
 		}
 
-		/* +2: one for the process handle value, and the last
-		 * one is NULL
+		/* The extra one is the NULL terminator
 		 */
-		env_strings = g_new0 (gchar *, env_count + 2);
+		env_strings = g_new0 (gchar *, env_count + 1);
 		
 		/* Copy each environ string into 'strings' turning it
 		 * into utf8 (or the requested encoding) at the same
@@ -1006,18 +1036,6 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			env_strings[env_count] = g_strdup (environ[i]);
 			env_count++;
 		}
-	}
-	/* pass process handle info to the child, so it doesn't have
-	 * to do an expensive search over the whole list
-	 */
-	if (env_strings != NULL) {
-		struct _WapiHandleUnshared *handle_data;
-		struct _WapiHandle_shared_ref *ref;
-		
-		handle_data = &_WAPI_PRIVATE_HANDLES(GPOINTER_TO_UINT(handle));
-		ref = &handle_data->u.shared;
-		
-		env_strings[env_count] = g_strdup_printf ("_WAPI_PROCESS_HANDLE_OFFSET=%d", ref->offset);
 	}
 
 	thr_ret = _wapi_handle_lock_shared_handles ();
@@ -1088,8 +1106,9 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 	}
 	/* parent */
 	
-	ret = _wapi_lookup_handle (handle, WAPI_HANDLE_PROCESS,
-				   (gpointer *)&process_handle_data);
+	ret = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_PROCESS,
+					  (gpointer *)&process_handle_data,
+					  TRUE);
 	if (ret == FALSE) {
 		g_warning ("%s: error looking up process handle %p", __func__,
 			   handle);
@@ -1139,7 +1158,6 @@ cleanup:
 	g_message ("%s: returning handle %p for pid %d", __func__, handle,
 		   pid);
 #endif
-
 	return(ret);
 }
 		
@@ -1178,65 +1196,9 @@ extern void _wapi_time_t_to_filetime (time_t timeval, WapiFileTime *filetime);
 static void process_set_current (void)
 {
 	pid_t pid = _wapi_getpid ();
-	const char *handle_env;
 	struct _WapiHandle_process process_handle = {0};
 	
 	mono_once (&process_ops_once, process_ops_init);
-	
-	handle_env = g_getenv ("_WAPI_PROCESS_HANDLE_OFFSET");
-	g_unsetenv ("_WAPI_PROCESS_HANDLE_OFFSET");
-	
-	if (handle_env != NULL) {
-		struct _WapiHandle_process *process_handlep;
-		gchar *procname = NULL;
-		gboolean ok;
-		
-		current_process = _wapi_handle_new_from_offset (WAPI_HANDLE_PROCESS, atoi (handle_env), TRUE);
-		
-#ifdef DEBUG
-		g_message ("%s: Found my process handle: %p (offset %d 0x%x)",
-			   __func__, current_process, atoi (handle_env),
-			   atoi (handle_env));
-#endif
-
-		ok = _wapi_lookup_handle (current_process, WAPI_HANDLE_PROCESS,
-					  (gpointer *)&process_handlep);
-		if (ok) {
-			/* This test will probably break on linuxthreads, but
-			 * that should be ancient history on all distros we
-			 * care about by now
-			 */
-			if (process_handlep->id == pid) {
-				procname = process_handlep->proc_name;
-				if (!strcmp (procname, "mono")) {
-					/* Set a better process name */
-#ifdef DEBUG
-					g_message ("%s: Setting better process name", __func__);
-#endif
-					
-					process_set_name (process_handlep);
-				} else {
-#ifdef DEBUG
-					g_message ("%s: Leaving process name: %s", __func__, procname);
-#endif
-				}
-
-				return;
-			}
-
-			/* Wrong pid, so drop this handle and fall through to
-			 * create a new one
-			 */
-			_wapi_handle_unref (current_process);
-		}
-	}
-
-	/* We get here if the handle wasn't specified in the
-	 * environment, or if the process ID was wrong, or if the
-	 * handle lookup failed (eg if the parent process forked and
-	 * quit immediately, and deleted the shared data before the
-	 * child got a chance to attach it.)
-	 */
 
 #ifdef DEBUG
 	g_message ("%s: Need to create my own process handle", __func__);
@@ -1252,6 +1214,16 @@ static void process_set_current (void)
 	if (current_process == _WAPI_HANDLE_INVALID) {
 		g_warning ("%s: error creating process handle", __func__);
 		return;
+	}
+
+	/*
+	 * This will either open an existing handle, or create the new
+	 * one.  Either way, we get the shared handle data for our own
+	 * process.
+	 */
+	if (_wapi_handle_attach_shared (current_process, TRUE) == FALSE) {
+		g_warning ("%s: error attaching shared data to handle %p",
+			   __func__, current_process);
 	}
 }
 
@@ -1277,8 +1249,8 @@ guint32 GetProcessId (gpointer handle)
 	struct _WapiHandle_process *process_handle;
 	gboolean ok;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 		SetLastError (ERROR_INVALID_HANDLE);
 		return (0);
@@ -1303,8 +1275,8 @@ static pid_t signal_process_if_gone (gpointer handle)
 	/* Make sure the process is signalled if it has exited - if
 	 * the parent process didn't wait for it then it won't be
 	 */
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 		/* It's possible that the handle has vanished during
 		 * the _wapi_search_handle before it gets here, so
@@ -1327,7 +1299,9 @@ static pid_t signal_process_if_gone (gpointer handle)
 		 * has that ID, but as it's owned by someone else it
 		 * can't be the one listed in our shared memory file)
 		 */
+		_wapi_handle_lock_shared_handle (handle);
 		_wapi_shared_handle_set_signal_state (handle, TRUE);
+		_wapi_handle_unlock_shared_handle (handle);
 	}
 
 	return (process_handle->id);
@@ -1458,8 +1432,8 @@ gboolean GetExitCodeProcess (gpointer process, guint32 *code)
 		return(FALSE);
 	}
 	
-	ok=_wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				(gpointer *)&process_handle);
+	ok=_wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+				       (gpointer *)&process_handle, TRUE);
 	if(ok==FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -1496,8 +1470,8 @@ gboolean GetProcessTimes (gpointer process, WapiFileTime *create_time,
 		return(FALSE);
 	}
 	
-	ok=_wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				(gpointer *)&process_handle);
+	ok=_wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+				       (gpointer *)&process_handle, TRUE);
 	if(ok==FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -1717,8 +1691,8 @@ gboolean EnumProcessModules (gpointer process, gpointer *modules,
 		return(FALSE);
 	}
 
-	ok = _wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	ok = _wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -1795,8 +1769,8 @@ static guint32 get_module_name (gpointer process, gpointer module,
 		return(0);
 	}
 	
-	ok = _wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	ok = _wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -1873,14 +1847,13 @@ static guint32 get_module_name (gpointer process, gpointer module,
 		
 		if (size < bytes) {
 #ifdef DEBUG
-			g_message ("%s: Size %d smaller than needed (%ld); truncating", __func__, size, bytes);
+			g_message ("%s: Size %d smaller than needed (%" G_GSIZE_FORMAT "); truncating", __func__, size, bytes);
 #endif
 
 			memcpy (basename, procname, size);
 		} else {
 #ifdef DEBUG
-			g_message ("%s: Size %d larger than needed (%ld)",
-				   __func__, size, bytes);
+			g_message ("%s: Size %d larger than needed (%" G_GSIZE_FORMAT ")", __func__, size, bytes);
 #endif
 
 			memcpy (basename, procname, bytes);
@@ -1932,8 +1905,8 @@ gboolean GetModuleInformation (gpointer process, gpointer module,
 		return(FALSE);
 	}
 	
-	ok = _wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				  (gpointer *)&process_handle);
+	ok = _wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+					 (gpointer *)&process_handle, TRUE);
 	if (ok == FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -1997,8 +1970,8 @@ gboolean GetProcessWorkingSetSize (gpointer process, size_t *min, size_t *max)
 		return(FALSE);
 	}
 	
-	ok=_wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				(gpointer *)&process_handle);
+	ok=_wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+				       (gpointer *)&process_handle, TRUE);
 	if(ok==FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -2020,8 +1993,10 @@ gboolean SetProcessWorkingSetSize (gpointer process, size_t min, size_t max)
 
 	mono_once (&process_current_once, process_set_current);
 
-	ok=_wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				(gpointer *)&process_handle);
+	_wapi_handle_lock_shared_handle (process);
+	
+	ok=_wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+				       (gpointer *)&process_handle, TRUE);
 	if(ok==FALSE) {
 #ifdef DEBUG
 		g_message ("%s: Can't find process %p", __func__, process);
@@ -2032,6 +2007,9 @@ gboolean SetProcessWorkingSetSize (gpointer process, size_t min, size_t max)
 
 	process_handle->min_working_set=min;
 	process_handle->max_working_set=max;
+
+	_wapi_handle_write_handle_to_file (process);
+	_wapi_handle_unlock_shared_handle (process);
 	
 	return(TRUE);
 }
@@ -2045,8 +2023,8 @@ TerminateProcess (gpointer process, gint32 exitCode)
 	int signo;
 	int ret;
 
-	ok = _wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				  (gpointer *) &process_handle);
+	ok = _wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+					 (gpointer *) &process_handle, TRUE);
 
 	if (ok == FALSE) {
 #ifdef DEBUG
@@ -2085,8 +2063,8 @@ GetPriorityClass (gpointer process)
 	gboolean ok;
 	int ret;
 
-	ok = _wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				  (gpointer *) &process_handle);
+	ok = _wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+					 (gpointer *) &process_handle, TRUE);
 
 	if (!ok) {
 		SetLastError (ERROR_INVALID_HANDLE);
@@ -2139,8 +2117,8 @@ SetPriorityClass (gpointer process, guint32  priority_class)
 	int ret;
 	int prio;
 
-	ok = _wapi_lookup_handle (process, WAPI_HANDLE_PROCESS,
-				  (gpointer *) &process_handle);
+	ok = _wapi_lookup_shared_handle (process, WAPI_HANDLE_PROCESS,
+					 (gpointer *) &process_handle, TRUE);
 
 	if (!ok) {
 		SetLastError (ERROR_INVALID_HANDLE);

@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -27,7 +26,7 @@
 #include <mono/io-layer/shared.h>
 #include <mono/io-layer/handles-private.h>
 
-#undef DEBUG
+#define DEBUG
 
 #ifdef DISABLE_SHARED_HANDLES
 gboolean _wapi_shm_disabled = TRUE;
@@ -35,16 +34,85 @@ gboolean _wapi_shm_disabled = TRUE;
 gboolean _wapi_shm_disabled = FALSE;
 #endif
 
-static gchar *_wapi_shm_file (_wapi_shm_t type)
+#define _WAPI_HANDLE_FILE_VERSION 0
+
+static gchar processes_dir[_POSIX_PATH_MAX];
+static gchar threads_dir[_POSIX_PATH_MAX];
+static gchar named_dir[_POSIX_PATH_MAX];
+static gchar seminfo_file[_POSIX_PATH_MAX];
+static int seminfo_fd;
+
+static void check_disabled (void)
 {
-	static gchar file[_POSIX_PATH_MAX];
-	gchar *name = NULL, *filename, *dir, *wapi_dir;
-	gchar machine_name[256];
-	const gchar *fake_name;
-	struct utsname ubuf;
-	int ret;
-	int len;
+	if (_wapi_shm_disabled || g_getenv ("MONO_DISABLE_SHM")) {
+		const char* val = g_getenv ("MONO_DISABLE_SHM");
+		if (val == NULL || *val == '1' || *val == 'y' || *val == 'Y') {
+			_wapi_shm_disabled = TRUE;
+		}
+	}
+}
+
+static gboolean _wapi_mkdirhier (const gchar *dir, mode_t mode)
+{
+	gchar *working = g_strdup (dir), *p = working;
+	struct stat statbuf;
+
+	if (*p == '/') {
+		p++;
+	}
 	
+	do {
+		/* Find next separator */
+		while(*p && *p != '/') {
+			p++;
+		}
+		
+		if (!*p) {
+			p = NULL;
+		} else {
+			*p = '\0';
+		}
+
+		/* check if 'working' (as far as 'p') refers to an
+		 * non-existant file, or existing directory
+		 */
+		if (access (working, F_OK) != 0) {
+			if (mkdir (working, mode) == -1) {
+				int errno_save = errno;
+				g_free (working);
+				errno = errno_save;
+				return(-1);
+			}
+		} else if ((stat (working, &statbuf) == 0) &&
+			   (!S_ISDIR (statbuf.st_mode))) {
+			g_free (working);
+			errno = ENOTDIR;
+			return(-1);
+		}
+
+		/* Put the separator back we previously turned into a
+		 * '\0', and skip over contiguous separators
+		 */
+		if (p) {
+			*p++ = '/';
+			while (*p == '/') {
+				p++;
+			}
+		}
+	} while(p);
+
+	g_free (working);
+	
+	return(0);
+}
+
+static void locate_shared_files (void)
+{
+	gchar machine_name[256], *name, *base_dir, *file;
+	const gchar *fake_name, *wapi_dir;
+	struct utsname ubuf;
+	int ret, len;
+
 	ret = uname (&ubuf);
 	if (ret == -1) {
 		ubuf.machine[0] = '\0';
@@ -56,259 +124,199 @@ static gchar *_wapi_shm_file (_wapi_shm_t type)
 
 	fake_name = g_getenv ("MONO_SHARED_HOSTNAME");
 	if (fake_name == NULL) {
-		if (gethostname(machine_name, sizeof(machine_name)) != 0)
+		if (gethostname (machine_name, sizeof(machine_name)) != 0) {
 			machine_name[0] = '\0';
+		}
 	} else {
-		len = MIN (strlen (fake_name), sizeof (machine_name) - 1);
+		len = MIN (strlen (fake_name), sizeof(machine_name) - 1);
 		strncpy (machine_name, fake_name, len);
-		machine_name [len] = '\0';
+		machine_name[len] = '\0';
 	}
 	
-	switch (type) {
-	case WAPI_SHM_DATA:
-		name = g_strdup_printf ("shared_data-%s-%s-%s-%d-%d-%d",
-					machine_name, ubuf.sysname,
-					ubuf.machine,
-					(int) sizeof(struct _WapiHandleShared),
-					_WAPI_HANDLE_VERSION, 0);
-		break;
-		
-	case WAPI_SHM_FILESHARE:
-		name = g_strdup_printf ("shared_fileshare-%s-%s-%s-%d-%d-%d",
-					machine_name, ubuf.sysname,
-					ubuf.machine,
-					(int) sizeof(struct _WapiFileShare),
-					_WAPI_HANDLE_VERSION, 0);
-		break;
-	}
-
-	/* I don't know how nfs affects mmap.  If mmap() of files on
-	 * nfs mounts breaks, then there should be an option to set
-	 * the directory.
-	 */
-	wapi_dir = getenv ("MONO_SHARED_DIR");
+	name = g_strdup_printf ("%s-%s-%s-%d", machine_name, ubuf.sysname,
+				ubuf.machine, _WAPI_HANDLE_FILE_VERSION);
+	
+	wapi_dir = g_getenv ("MONO_SHARED_DIR");
 	if (wapi_dir == NULL) {
-		filename = g_build_filename (g_get_home_dir (), ".wapi", name,
-					     NULL);
+		base_dir = g_build_filename (g_get_home_dir (), ".wapi",
+					     "files", name, NULL);
 	} else {
-		filename = g_build_filename (wapi_dir, ".wapi", name, NULL);
+		base_dir = g_build_filename (wapi_dir, ".wapi", "files",
+					     name, NULL);
 	}
 	g_free (name);
-
-	g_snprintf (file, _POSIX_PATH_MAX, "%s", filename);
-	g_free (filename);
-		
-	/* No need to check if the dir already exists or check
-	 * mkdir() errors, because on any error the open() call will
-	 * report the problem.
-	 */
-	dir = g_path_get_dirname (file);
-	mkdir (dir, 0755);
-	g_free (dir);
 	
-	return(file);
+	file = g_build_filename (base_dir, "processes", NULL);
+	g_snprintf (processes_dir, _POSIX_PATH_MAX, "%s", file);
+	g_free (file);
+	if (_wapi_mkdirhier (processes_dir, 0700) == -1) {
+		g_warning ("%s: Can't create processes data dir %s: %s.  Reverting to unshared mode.", __func__, processes_dir, g_strerror (errno));
+		_wapi_shm_disabled = TRUE;
+	}
+	
+	file = g_build_filename (base_dir, "threads", NULL);
+	g_snprintf (threads_dir, _POSIX_PATH_MAX, "%s", file);
+	g_free (file);
+	if (_wapi_mkdirhier (threads_dir, 0700) == -1) {
+		g_warning ("%s: Can't create threads data dir %s: %s.  Reverting to unshared mode.", __func__, threads_dir, g_strerror (errno));
+		_wapi_shm_disabled = TRUE;
+	}
+	
+	file = g_build_filename (base_dir, "named_items", NULL);
+	g_snprintf (named_dir, _POSIX_PATH_MAX, "%s", file);
+	g_free (file);
+	if (_wapi_mkdirhier (named_dir, 0700) == -1) {
+		g_warning ("%s: Can't create named objects data dir %s: %s.  Reverting to unshared mode.", __func__, named_dir, g_strerror (errno));
+		_wapi_shm_disabled = TRUE;
+	}
+	
+	file = g_build_filename (base_dir, "semaphores", NULL);
+	g_snprintf (seminfo_file, _POSIX_PATH_MAX, "%s", file);
+	g_free (file);
+	seminfo_fd = open (seminfo_file, O_CREAT|O_RDWR, 0600);
+	if(seminfo_fd == -1) {
+		g_warning ("%s: Can't open semaphore data file %s: %s.  Reverting to unshared mode.", __func__, seminfo_file, g_strerror (errno));
+		_wapi_shm_disabled = TRUE;
+	}
+
+	/* Locks aren't released on exec, so make sure the file
+	 * descriptor will close (which does release the lock.)
+	 */
+	fcntl (seminfo_fd, F_SETFD, FD_CLOEXEC);
+	/* ignore fcntl() errors for now */
 }
 
-static int _wapi_shm_file_open (const gchar *filename, guint32 wanted_size)
+static void delete_directory_contents (gchar *dirname)
 {
-	int fd;
-	struct stat statbuf;
-	int ret, tries = 0;
-	gboolean created = FALSE;
-	mode_t oldmask;
-
-try_again:
-	if (tries++ > 10) {
-		/* Just give up */
-		return (-1);
-	} else if (tries > 5) {
-		/* Break out of a loop */
-		unlink (filename);
+	DIR *dir = NULL;
+	struct dirent *entry;
+	
+	dir = opendir (dirname);
+	if (dir == NULL) {
+		return;
 	}
 	
-	/* Make sure future processes can open the shared data files */
-	oldmask = umask (066);
-
-	/* No O_CREAT yet, because we need to initialise the file if
-	 * we have to create it.
-	 */
-	fd = open (filename, O_RDWR, 0600);
-	umask (oldmask);
-	
-	if (fd == -1 && errno == ENOENT) {
-		/* OK, its up to us to create it.  O_EXCL to avoid a
-		 * race condition where two processes can
-		 * simultaneously try and create the file
-		 */
-		oldmask = umask (066);
-		fd = open (filename, O_CREAT|O_EXCL|O_RDWR, 0600);
-		umask (oldmask);
+	while((entry = readdir (dir)) != NULL) {
+		if (strcmp (entry->d_name, ".") &&
+		    strcmp (entry->d_name, "..")) {
+			gchar *file = g_build_filename (dirname, entry->d_name,
+							NULL);
 		
-		if (fd == -1 && errno == EEXIST) {
-			/* It's possible that the file was created in
-			 * between finding it didn't exist, and trying
-			 * to create it.  Just try opening it again
-			 */
-			goto try_again;
-		} else if (fd == -1) {
-			g_critical ("%s: shared file [%s] open error: %s",
-				    __func__, filename, g_strerror (errno));
-			return(-1);
-		} else {
-			/* We created the file, so we need to expand
-			 * the file.
-			 *
-			 * (wanted_size-1, because we're about to
-			 * write the other byte to actually expand the
-			 * file.)
-			 */
-			if (lseek (fd, wanted_size-1, SEEK_SET) == -1) {
-				g_critical ("%s: shared file [%s] lseek error: %s", __func__, filename, g_strerror (errno));
-				close (fd);
-				unlink (filename);
-				return(-1);
-			}
-			
-			do {
-				ret = write (fd, "", 1);
-			} while (ret == -1 && errno == EINTR);
-				
-			if (ret == -1) {
-				g_critical ("%s: shared file [%s] write error: %s", __func__, filename, g_strerror (errno));
-				close (fd);
-				unlink (filename);
-				return(-1);
-			}
-			
-			created = TRUE;
-
-			/* The contents of the file is set to all
-			 * zero, because it is opened up with lseek,
-			 * so we don't need to do any more
-			 * initialisation here
-			 */
-		}
-	} else if (fd == -1) {
-		g_critical ("%s: shared file [%s] open error: %s", __func__,
-			    filename, g_strerror (errno));
-		return(-1);
-	}
-	
-	/* Use stat to find the file size (instead of hard coding it)
-	 * because we can expand the file later if needed (for more
-	 * handles or scratch space.)
-	 */
-	if (fstat (fd, &statbuf) == -1) {
-		g_critical ("%s: fstat error: %s", __func__,
-			    g_strerror (errno));
-		if (created == TRUE) {
-			unlink (filename);
-		}
-		close (fd);
-		return(-1);
-	}
-
-	if (statbuf.st_size < wanted_size) {
-		close (fd);
-		if (created == TRUE) {
-#ifdef HAVE_LARGE_FILE_SUPPORT
-			/* Keep gcc quiet... */
-			g_critical ("%s: shared file [%s] is not big enough! (found %lld, need %d bytes)", __func__, filename, statbuf.st_size, wanted_size);
-#else
-			g_critical ("%s: shared file [%s] is not big enough! (found %ld, need %d bytes)", __func__, filename, statbuf.st_size, wanted_size);
+#ifdef DEBUG
+			g_message ("%s: deleting %s", __func__, file);
 #endif
-			unlink (filename);
-			return(-1);
-		} else {
-			/* We didn't create it, so just try opening it again */
-			_wapi_handle_spin (100);
-			goto try_again;
+			unlink (file);
+			g_free (file);
 		}
 	}
-	
-	return(fd);
+	closedir (dir);
 }
 
-static gboolean check_disabled (void)
+static void delete_shared_files (void)
 {
-	if (_wapi_shm_disabled || g_getenv ("MONO_DISABLE_SHM")) {
-		const char* val = g_getenv ("MONO_DISABLE_SHM");
-		if (val == NULL || *val == '1' || *val == 'y' || *val == 'Y') {
-			_wapi_shm_disabled = TRUE;
-		}
-	}
-
-	return(_wapi_shm_disabled);
+	delete_directory_contents (processes_dir);
+	delete_directory_contents (threads_dir);
+	delete_directory_contents (named_dir);
 }
 
-/*
- * _wapi_shm_attach:
- * @success: Was it a success
- *
- * Attach to the shared memory file or create it if it did not exist.
- * Returns the memory area the file was mmapped to.
- */
-gpointer _wapi_shm_attach (_wapi_shm_t type)
+void _wapi_shared_lock_file (int fd)
 {
-	gpointer shm_seg;
-	int fd;
-	struct stat statbuf;
-	gchar *filename=_wapi_shm_file (type);
-	guint32 size;
-	
-	switch(type) {
-	case WAPI_SHM_DATA:
-		size = sizeof(struct _WapiHandleSharedLayout);
-		break;
-		
-	case WAPI_SHM_FILESHARE:
-		size = sizeof(struct _WapiFileShareLayout);
-		break;
-	default:
-		g_error ("Invalid type in _wapi_shm_attach ()");
-		return NULL;
+	int ret;
+	struct flock lockbuf;
+
+	if (_wapi_shm_disabled) {
+		return;
 	}
 
-	if (check_disabled ()) {
-		return g_malloc0 (size);
+	lockbuf.l_type = F_WRLCK;
+	lockbuf.l_whence = SEEK_SET;
+	lockbuf.l_start = 0;
+	lockbuf.l_len = 0;
+	
+	do {
+		ret = fcntl (fd, F_SETLKW, &lockbuf);
+	} while(ret == -1 && errno == EINTR);
+}
+
+void _wapi_shared_unlock_file (int fd)
+{
+	int ret;
+	struct flock lockbuf;
+	
+	if (_wapi_shm_disabled) {
+		return;
 	}
 
-	fd = _wapi_shm_file_open (filename, size);
-	if (fd == -1) {
-		g_critical ("%s: shared file [%s] open error", __func__,
-			    filename);
-		return(NULL);
+	lockbuf.l_type = F_UNLCK;
+	lockbuf.l_whence = SEEK_SET;
+	lockbuf.l_start = 0;
+	lockbuf.l_len = 0;
+	
+	do {
+		ret = fcntl (fd, F_SETLK, &lockbuf);
+	} while(ret == -1 && errno == EINTR);
+}
+
+void _wapi_shared_read_handle (int fd, gpointer data, guint32 datalen)
+{
+	int ret;
+	
+	lseek (fd, 0, SEEK_SET);
+	
+	ret = read (fd, data, datalen);
+	if (ret == -1) {
+		g_warning ("%s: Read error on %d: %s", __func__, fd,
+			   g_strerror (errno));
+	}
+}
+
+void _wapi_shared_write_handle (int fd, gpointer data, guint32 datalen)
+{
+	int ret;
+	
+	lseek (fd, 0, SEEK_SET);
+	
+	ret = write (fd, data, datalen);
+	if (ret == -1) {
+		g_warning ("%s: Write error on %d: %s", __func__, fd,
+			   g_strerror (errno));
+	}
+}
+
+static key_t read_key (void)
+{
+	int ret;
+	key_t key;
+	char *keybuf = (char *)&key;
+	
+	lseek (seminfo_fd, 0, SEEK_SET);
+	
+	ret = read (seminfo_fd, keybuf, sizeof(key_t));
+	if (ret == -1) {
+		g_warning ("%s: Read error on %s: %s", __func__, seminfo_file,
+			   g_strerror (errno));
 	}
 	
-	if (fstat (fd, &statbuf)==-1) {
-		g_critical ("%s: fstat error: %s", __func__,
-			    g_strerror (errno));
-		close (fd);
-		return(NULL);
-	}
+	return(key);
+}
+
+static void write_key (key_t key)
+{
+	int ret;
 	
-	shm_seg = mmap (NULL, statbuf.st_size, PROT_READ|PROT_WRITE,
-			MAP_SHARED, fd, 0);
-	if (shm_seg == MAP_FAILED) {
-		shm_seg = mmap (NULL, statbuf.st_size, PROT_READ|PROT_WRITE,
-			MAP_PRIVATE, fd, 0);
-		if (shm_seg == MAP_FAILED) {
-			g_critical ("%s: mmap error: %s", __func__, g_strerror (errno));
-			close (fd);
-			return(NULL);
-		}
+	lseek (seminfo_fd, 0, SEEK_SET);
+	
+	ret = write (seminfo_fd, (void *)&key, sizeof(key_t));
+	if (ret == -1) {
+		g_warning ("%s: Write error on %s: %s", __func__, seminfo_file,
+			   g_strerror (errno));
 	}
-		
-	close (fd);
-	return(shm_seg);
 }
 
 static void shm_semaphores_init (void)
 {
 	key_t key;
 	key_t oldkey;
-	int thr_ret;
-	struct _WapiHandleSharedLayout *tmp_shared;
 	
 	/* Yet more barmy API - this union is a well-defined parameter
 	 * in a syscall, yet I still have to define it here as it
@@ -334,22 +342,13 @@ static void shm_semaphores_init (void)
 	
 	defs.array = def_vals;
 	
-	/* Temporarily attach the shared data so we can read the
-	 * semaphore key.  We release this mapping and attach again
-	 * after getting the semaphores to avoid a race condition
-	 * where a terminating process can delete the shared files
-	 * between a new process attaching the file and getting access
-	 * to the semaphores (which increments the process count,
-	 * preventing destruction of the shared data...)
-	 */
-	tmp_shared = _wapi_shm_attach (WAPI_SHM_DATA);
-	g_assert (tmp_shared != NULL);
-	
-	key = ftok (_wapi_shm_file (WAPI_SHM_DATA), 'M');
+	key = ftok (seminfo_file, 'M');
 
+	_wapi_shared_lock_file (seminfo_fd);
+	
 again:
 	retries++;
-	oldkey = tmp_shared->sem_key;
+	oldkey = read_key ();
 
 	if (oldkey == 0) {
 #ifdef DEBUG
@@ -381,7 +380,7 @@ again:
 #endif
 		}
 		/* Got a semaphore array, so initialise it and install
-		 * the key into the shared memory
+		 * the key into the shared file
 		 */
 		
 		if (semctl (_wapi_sem_id, 0, SETALL, defs) == -1) {
@@ -395,21 +394,8 @@ again:
 			goto again;
 		}
 
-		if (InterlockedCompareExchange (&tmp_shared->sem_key,
-						key, 0) != 0) {
-			/* Someone else created one and installed the
-			 * key while we were working, so delete the
-			 * array we created and fall through to the
-			 * 'key already known' case.
-			 */
-			semctl (_wapi_sem_id, 0, IPC_RMID);
-			oldkey = tmp_shared->sem_key;
-		} else {
-			/* We've installed this semaphore set's key into
-			 * the shared memory
-			 */
-			goto done;
-		}
+		write_key (key);
+		goto done;
 	}
 	
 #ifdef DEBUG
@@ -425,25 +411,18 @@ again:
 		/* Someone must have deleted the semaphore set, so
 		 * blow away the bad key and try again
 		 */
-		InterlockedCompareExchange (&tmp_shared->sem_key, 0, oldkey);
+		write_key (0);
 		
 		goto again;
 	}
 
   done:
-	/* Increment the usage count of this semaphore set */
-	thr_ret = _wapi_shm_sem_lock (_WAPI_SHARED_SEM_PROCESS_COUNT_LOCK);
-	g_assert (thr_ret == 0);
-	
 #ifdef DEBUG
 	g_message ("%s: Incrementing the process count (%d)", __func__, _wapi_getpid ());
 #endif
 
 	/* We only ever _unlock_ this semaphore, letting the kernel
 	 * restore (ie decrement) this unlock when this process exits.
-	 * We lock another semaphore around it so we can serialise
-	 * access when we're testing the value of this semaphore when
-	 * we exit cleanly, so we can delete the whole semaphore set.
 	 */
 	_wapi_shm_sem_unlock (_WAPI_SHARED_SEM_PROCESS_COUNT);
 
@@ -451,12 +430,7 @@ again:
 	g_message ("%s: Process count is now %d (%d)", __func__, semctl (_wapi_sem_id, _WAPI_SHARED_SEM_PROCESS_COUNT, GETVAL), _wapi_getpid ());
 #endif
 	
-	_wapi_shm_sem_unlock (_WAPI_SHARED_SEM_PROCESS_COUNT_LOCK);
-
-	if (_wapi_shm_disabled)
-		g_free (tmp_shared);
-	else
-		munmap (tmp_shared, sizeof(struct _WapiHandleSharedLayout));
+	_wapi_shared_unlock_file (seminfo_fd);
 }
 
 static mono_mutex_t noshm_sems[_WAPI_SHARED_SEM_COUNT];
@@ -472,7 +446,6 @@ static void noshm_semaphores_init (void)
 
 static void shm_semaphores_remove (void)
 {
-	int thr_ret;
 	int proc_count;
 	
 #ifdef DEBUG
@@ -480,8 +453,7 @@ static void shm_semaphores_remove (void)
 		   _wapi_getpid ());
 #endif
 	
-	thr_ret = _wapi_shm_sem_lock (_WAPI_SHARED_SEM_PROCESS_COUNT_LOCK);
-	g_assert (thr_ret == 0);
+	_wapi_shared_lock_file (seminfo_fd);
 	
 	proc_count = semctl (_wapi_sem_id, _WAPI_SHARED_SEM_PROCESS_COUNT,
 			     GETVAL);
@@ -497,19 +469,40 @@ static void shm_semaphores_remove (void)
 #endif
 
 		semctl (_wapi_sem_id, 0, IPC_RMID);
-		unlink (_wapi_shm_file (WAPI_SHM_DATA));
-		unlink (_wapi_shm_file (WAPI_SHM_FILESHARE));
-	} else {
-		/* "else" clause, because there's no point unlocking
-		 * the semaphore if we've just blown it away...
+		write_key (0);
+
+		/* Delete all shared data files, as there are no more
+		 * processes that can be using them.  (This can't
+		 * race, as we're holding the file lock on the
+		 * semaphore file.)
 		 */
-		_wapi_shm_sem_unlock (_WAPI_SHARED_SEM_PROCESS_COUNT_LOCK);
+		delete_shared_files ();
 	}
+
+	_wapi_shared_unlock_file (seminfo_fd);
 }
 
 static void noshm_semaphores_remove (void)
 {
 	/* No need to do anything */
+}
+
+static void _wapi_shm_semaphores_init (void)
+{
+	if (_wapi_shm_disabled) {
+		noshm_semaphores_init ();
+	} else {
+		shm_semaphores_init ();
+	}
+}
+
+static void _wapi_shm_semaphores_remove (void)
+{
+	if (_wapi_shm_disabled) {
+		noshm_semaphores_remove ();
+	} else {
+		shm_semaphores_remove ();
+	}
 }
 
 static int shm_sem_lock (int sem)
@@ -695,24 +688,6 @@ static int noshm_sem_unlock (int sem)
 	return(ret);
 }
 
-void _wapi_shm_semaphores_init (void)
-{
-	if (check_disabled ()) {
-		noshm_semaphores_init ();
-	} else {
-		shm_semaphores_init ();
-	}
-}
-
-void _wapi_shm_semaphores_remove (void)
-{
-	if (_wapi_shm_disabled) {
-		noshm_semaphores_remove ();
-	} else {
-		shm_semaphores_remove ();
-	}
-}
-
 int _wapi_shm_sem_lock (int sem)
 {
 	if (_wapi_shm_disabled) {
@@ -738,4 +713,132 @@ int _wapi_shm_sem_unlock (int sem)
 	} else {
 		return(shm_sem_unlock (sem));
 	}
+}
+
+void _wapi_shared_init (void)
+{
+	check_disabled ();
+	
+	locate_shared_files ();
+	_wapi_shm_semaphores_init ();
+}
+
+void _wapi_shared_cleanup (void)
+{
+	_wapi_shm_semaphores_remove ();
+}
+
+static int open_private (gchar *shared_filename, gchar *private_filename,
+			 gboolean locked, gboolean create)
+{
+	int ret, fd, oflags;
+	
+	if (create) {
+		oflags = O_CREAT|O_RDWR;
+	} else {
+		oflags = O_RDWR;
+	}
+	
+	fd = open (shared_filename, oflags, 0600);
+	if (fd == -1) {
+		return(-1);
+	}
+
+	ret = link (shared_filename, private_filename);
+	if (ret == -1) {
+		close (fd);
+		return(-1);
+	}
+
+	close (fd);
+	
+	fd = open (private_filename, O_RDWR, 0600);
+	if (fd == -1) {
+		return(-1);
+	}
+
+	/* Locks aren't released on exec, so make sure the file
+	 * descriptor will close (which does release the lock.)
+	 */
+	ret = fcntl (fd, F_SETFD, FD_CLOEXEC);
+	if (ret == -1) {
+		close (fd);
+		return(-1);
+	}
+
+	/* Now we've opened the process-specific link to the file we
+	 * want, unlink it so it gets automatically cleaned up when
+	 * we've finished with it
+	 */
+	unlink (private_filename);
+	
+	if (locked) {
+		_wapi_shared_lock_file (fd);
+	}
+
+	return(fd);
+}
+
+
+int _wapi_shared_open_process (pid_t pid, gboolean locked, gboolean create)
+{
+	gchar filepart[_POSIX_PATH_MAX], *file;
+	gchar private_filepart[_POSIX_PATH_MAX], *private_file;
+	int fd;
+	
+	g_snprintf (filepart, _POSIX_PATH_MAX, "%d", pid);
+	file = g_build_filename (processes_dir, filepart, NULL);
+
+	g_snprintf (private_filepart, _POSIX_PATH_MAX, ".%d#%d", pid,
+		    _wapi_getpid ());
+	private_file = g_build_filename (processes_dir, private_filepart,
+					 NULL);
+	
+	fd = open_private (file, private_file, locked, create);
+	
+	g_free (file);
+	g_free (private_file);
+	
+	return(fd);
+}
+
+int _wapi_shared_open_thread (pid_t pid, pthread_t tid, gboolean locked,
+			      gboolean create)
+{
+	gchar filepart[_POSIX_PATH_MAX], *file;
+	gchar private_filepart[_POSIX_PATH_MAX], *private_file;
+	int fd;
+	
+	g_snprintf (filepart, _POSIX_PATH_MAX, "%d-%ld", pid, tid);
+	file = g_build_filename (threads_dir, filepart, NULL);
+	
+	g_snprintf (private_filepart, _POSIX_PATH_MAX, ".%d-%ld#%d", pid, tid,
+		    _wapi_getpid ());
+	private_file = g_build_filename (threads_dir, private_filepart, NULL);
+	
+	fd = open_private (file, private_file, locked, create);
+	
+	g_free (file);
+	g_free (private_file);
+	
+	return(fd);
+}
+
+int _wapi_shared_open_named (gchar *name, gboolean locked, gboolean create)
+{
+	gchar *file;
+	gchar private_filepart[_POSIX_PATH_MAX], *private_file;
+	int fd;
+	
+	file = g_build_filename (named_dir, name, NULL);
+	
+	g_snprintf (private_filepart, _POSIX_PATH_MAX, ".%s#%d", name, _wapi_getpid ());
+	private_file = g_build_filename (named_dir, private_filepart, NULL);
+	
+	fd = open_private (file, private_file, locked, create);
+
+	g_free (file);
+	g_free (private_file);
+	
+	return(fd);
 }

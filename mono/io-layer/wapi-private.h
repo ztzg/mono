@@ -24,7 +24,7 @@
 /* Increment this whenever an incompatible change is made to the
  * shared handle structure.
  */
-#define _WAPI_HANDLE_VERSION 11
+#define _WAPI_HANDLE_VERSION 1
 
 typedef enum {
 	WAPI_HANDLE_UNUSED=0,
@@ -104,6 +104,13 @@ struct _WapiHandleOps
 	 * signal wait.
 	 */
 	void (*prewait)(gpointer handle);
+
+	/* Called by _wapi_handle_new on shared handles to create the
+	 * shared data.  Returns the file descriptor to the shared
+	 * data file.
+	 */
+	int (*open_shared)(gpointer handle, gpointer handle_specific,
+			   gboolean create_shared);
 };
 
 #include <mono/io-layer/event-private.h>
@@ -114,6 +121,35 @@ struct _WapiHandleOps
 #include <mono/io-layer/thread-private.h>
 #include <mono/io-layer/process-private.h>
 
+struct _WapiHandle
+{
+	WapiHandleType type;
+	guint ref;
+	gboolean signalled;
+	mono_mutex_t signal_mutex;	/* only used by private handles */
+	pthread_cond_t signal_cond;	/*	" "			*/
+	int fd;				/* only used by shared handles */
+	
+	union
+	{
+		struct _WapiHandle_file file;
+		struct _WapiHandle_thread thread;
+		struct _WapiHandle_sem sem;
+		struct _WapiHandle_mutex mutex;
+		struct _WapiHandle_event event;
+		struct _WapiHandle_socket sock;
+		struct _WapiHandle_find find;
+		struct _WapiHandle_process process;
+		struct _WapiHandle_namedmutex namedmutex;
+		struct _WapiHandle_namedsem namedsem;
+		struct _WapiHandle_namedevent namedevent;
+	} u;
+};
+
+#define _WAPI_HANDLE_INITIAL_COUNT /*4096*/256
+
+
+#if 0
 struct _WapiHandle_shared_ref
 {
 	/* This will be split 16:16 with the shared file segment in
@@ -121,8 +157,6 @@ struct _WapiHandle_shared_ref
 	 */
 	guint32 offset;
 };
-
-#define _WAPI_HANDLE_INITIAL_COUNT 4096
 
 struct _WapiHandleUnshared
 {
@@ -160,24 +194,13 @@ struct _WapiHandleShared
 		struct _WapiHandle_namedevent namedevent;
 	} u;
 };
+#endif
 
 #define _WAPI_SHARED_SEM_NAMESPACE 0
-/*#define _WAPI_SHARED_SEM_COLLECTION 1*/
 #define _WAPI_SHARED_SEM_FILESHARE 2
 #define _WAPI_SHARED_SEM_SHARED_HANDLES 3
-#define _WAPI_SHARED_SEM_PROCESS_COUNT_LOCK 6
 #define _WAPI_SHARED_SEM_PROCESS_COUNT 7
 #define _WAPI_SHARED_SEM_COUNT 8	/* Leave some future expansion space */
-
-struct _WapiHandleSharedLayout
-{
-	volatile guint32 collection_count;
-	volatile key_t sem_key;
-	
-	struct _WapiHandleShared handles[_WAPI_HANDLE_INITIAL_COUNT];
-};
-
-#define _WAPI_FILESHARE_SIZE 102400
 
 struct _WapiFileShare
 {
@@ -189,15 +212,6 @@ struct _WapiFileShare
 	guint32 handle_refs;
 	guint32 timestamp;
 };
-
-struct _WapiFileShareLayout
-{
-	guint32 hwm;
-	
-	struct _WapiFileShare share_info[_WAPI_FILESHARE_SIZE];
-};
-
-
 
 #define _WAPI_HANDLE_INVALID (gpointer)-1
 

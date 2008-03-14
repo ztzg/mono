@@ -33,7 +33,7 @@
 #include <valgrind/memcheck.h>
 #endif
 
-#undef DEBUG
+#define DEBUG
 #undef TLS_DEBUG
 
 /* Hash threads with tids. I thought of using TLS for this, but that
@@ -48,13 +48,17 @@ static pthread_key_t thread_hash_key;
  */
 static pthread_key_t thread_attached_key;
 
+static int thread_open_shared (gpointer handle, gpointer handle_specific,
+			       gboolean create_shared);
+
 struct _WapiHandleOps _wapi_thread_ops = {
 	NULL,				/* close */
 	NULL,				/* signal */
 	NULL,				/* own */
 	NULL,				/* is_owned */
 	NULL,				/* special_wait */
-	NULL				/* prewait */
+	NULL,				/* prewait */
+	thread_open_shared		/* open_shared */
 };
 
 static mono_once_t thread_ops_once=MONO_ONCE_INIT;
@@ -63,6 +67,24 @@ static void thread_ops_init (void)
 {
 	_wapi_handle_register_capabilities (WAPI_HANDLE_THREAD,
 					    WAPI_HANDLE_CAP_WAIT);
+}
+
+static int thread_open_shared (gpointer handle, gpointer handle_specific,
+			       gboolean create_shared)
+{
+	struct _WapiHandle_thread *specific = (struct _WapiHandle_thread *)handle_specific;
+	int fd;
+	
+#ifdef DEBUG
+	g_message ("%s: Opening thread %p, %d:%ld", __func__, handle,
+		   specific->owner_pid, specific->id);
+#endif
+
+	/* If we create it, create it locked */
+	fd = _wapi_shared_open_thread (specific->owner_pid, specific->id,
+				       create_shared, create_shared);
+	
+	return(fd);
 }
 
 void _wapi_thread_cleanup (void)
@@ -99,8 +121,8 @@ static void _wapi_thread_abandon_mutexes (gpointer handle)
 		}
 	}
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
@@ -125,7 +147,6 @@ void _wapi_thread_set_termination_details (gpointer handle,
 {
 	struct _WapiHandle_thread *thread_handle;
 	gboolean ok;
-	int thr_ret;
 	
 	if (_wapi_handle_issignalled (handle) ||
 	    _wapi_handle_type (handle) == WAPI_HANDLE_UNUSED) {
@@ -139,18 +160,17 @@ void _wapi_thread_set_termination_details (gpointer handle,
 	g_message ("%s: Thread %p terminating", __func__, handle);
 #endif
 	
-	thr_ret = _wapi_handle_lock_shared_handles ();
-	g_assert (thr_ret == 0);
+	_wapi_handle_lock_shared_handle (handle);
 	
 	_wapi_thread_abandon_mutexes (handle);
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
 
-		_wapi_handle_unlock_shared_handles ();
+		_wapi_handle_unlock_shared_handle (handle);
 		return;
 	}
 	
@@ -159,9 +179,12 @@ void _wapi_thread_set_termination_details (gpointer handle,
 	MONO_SEM_DESTROY (&thread_handle->suspend_sem);
 	g_ptr_array_free (thread_handle->owned_mutexes, TRUE);
 
+	/* This writes the data back to the file, so we don't need to
+	 * do that here
+	 */
 	_wapi_shared_handle_set_signal_state (handle, TRUE);
 
-	_wapi_handle_unlock_shared_handles ();
+	_wapi_handle_unlock_shared_handle (handle);
 	
 #ifdef DEBUG
 	g_message("%s: Recording thread handle %p id %ld status as %d",
@@ -343,11 +366,12 @@ gpointer CreateThread(WapiSecurityAttributes *security G_GNUC_UNUSED, guint32 st
 		return (NULL);
 	}
 
-	thr_ret = _wapi_handle_lock_shared_handles ();
-	g_assert (thr_ret == 0);
+	/* No need to lock the shared data here, as it hasn't reached
+	 * the disk yet
+	 */
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle_p);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle_p, FALSE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
@@ -426,8 +450,15 @@ gpointer CreateThread(WapiSecurityAttributes *security G_GNUC_UNUSED, guint32 st
 #endif
 	}
 
+	/* Must have the thread ID stored in the handle struct before
+	 * calling this.
+	 */
+	if (_wapi_handle_attach_shared (handle, TRUE) == FALSE) {
+		g_warning ("%s: error attaching shared data to handle %p",
+			   __func__, handle);
+	}
+
 cleanup:
-	_wapi_handle_unlock_shared_handles ();
 	
 	/* Must not call _wapi_handle_unref() with the shared handles
 	 * already locked
@@ -477,8 +508,9 @@ static gboolean find_thread_by_id (gpointer handle, gpointer user_data)
 	
 	/* Ignore threads that have already exited (ie they are signalled) */
 	if (_wapi_handle_issignalled (handle) == FALSE) {
-		ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-					  (gpointer *)&thread_handle);
+		ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+						 (gpointer *)&thread_handle,
+						 TRUE);
 		if (ok == FALSE) {
 			/* It's possible that the handle has vanished
 			 * during the _wapi_search_handle before it
@@ -587,8 +619,8 @@ gboolean GetExitCodeThread(gpointer handle, guint32 *exitcode)
 	struct _WapiHandle_thread *thread_handle;
 	gboolean ok;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
@@ -670,17 +702,20 @@ static gpointer thread_attach(gsize *tid)
 		return (NULL);
 	}
 
-	thr_ret = _wapi_handle_lock_shared_handles ();
-	g_assert (thr_ret == 0);
+	/* No need to lock the shared data here, as it hasn't reached
+	 * the disk yet.
+	 */
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle_p);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle_p, FALSE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
 		
 		SetLastError (ERROR_GEN_FAILURE);
-		goto cleanup;
+
+		_wapi_handle_unref (handle);
+		return(NULL);
 	}
 
 	/* Hold a reference while the thread is active, because we use
@@ -718,9 +753,14 @@ static gpointer thread_attach(gsize *tid)
 #endif
 	}
 
-cleanup:
-	_wapi_handle_unlock_shared_handles ();
-	
+	/* Must have the thread ID stored in the handle struct before
+	 * calling this.
+	 */
+	if (_wapi_handle_attach_shared (handle, TRUE) == FALSE) {
+		g_warning ("%s: error attaching shared data to handle %p",
+			   __func__, handle);
+	}
+
 	return(handle);
 }
 
@@ -774,8 +814,8 @@ guint32 ResumeThread(gpointer handle)
 	struct _WapiHandle_thread *thread_handle;
 	gboolean ok;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
@@ -1095,8 +1135,8 @@ gboolean _wapi_thread_apc_pending (gpointer handle)
 	struct _WapiHandle_thread *thread;
 	gboolean ok;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread, TRUE);
 	if (ok == FALSE) {
 #ifdef DEBUG
 		/* This might happen at process shutdown, as all
@@ -1126,8 +1166,8 @@ gboolean _wapi_thread_dispatch_apc_queue (gpointer handle)
 	GSList *list;
 	int thr_ret;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
@@ -1167,8 +1207,8 @@ guint32 QueueUserAPC (WapiApcProc apc_callback, gpointer handle,
 	struct _WapiHandle_thread *thread_handle;
 	gboolean ok;
 	
-	ok = _wapi_lookup_handle (handle, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (handle, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   handle);
@@ -1191,8 +1231,8 @@ void _wapi_thread_own_mutex (gpointer mutex)
 		return;
 	}
 
-	ok = _wapi_lookup_handle (thread, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (thread, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   thread);
@@ -1216,8 +1256,8 @@ void _wapi_thread_disown_mutex (gpointer mutex)
 		return;
 	}
 
-	ok = _wapi_lookup_handle (thread, WAPI_HANDLE_THREAD,
-				  (gpointer *)&thread_handle);
+	ok = _wapi_lookup_shared_handle (thread, WAPI_HANDLE_THREAD,
+					 (gpointer *)&thread_handle, TRUE);
 	if (ok == FALSE) {
 		g_warning ("%s: error looking up thread handle %p", __func__,
 			   thread);
