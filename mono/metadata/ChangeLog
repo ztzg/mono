@@ -1,5 +1,9 @@
 2008-04-29  Martin Baulig  <martin@ximian.com>
 
+	* debug-mono-symfile.h (MONO_SYMBOL_FILE_VERSION): Bump to 42.
+
+2008-04-29  Martin Baulig  <martin@ximian.com>
+
 	**** Kahalo changes start here ****
 
 2008-04-29  Kornél Pál  <kornelpal@gmail.com>
