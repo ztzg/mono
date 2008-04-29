@@ -1,4 +1,0 @@
-2008-02-16  Atsushi Enomoto  <atsushi@ximian.com>
-
-	* ContentTypeTest.cs : (oops we didn't have ChangeLog here) added
-	  another .ctor() test.

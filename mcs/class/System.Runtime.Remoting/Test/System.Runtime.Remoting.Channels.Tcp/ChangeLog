@@ -1,4 +1,0 @@
-2008-01-25  Gert Driesen  <drieseng@users.sourceforge.net>
-
-	* TcpChannelTest.cs: Added simple ctor test that covers bug #355905.
-
