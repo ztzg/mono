@@ -176,7 +176,7 @@ mono_debug_close_mono_symbol_file (MonoSymbolFile *symfile)
 }
 
 static int
-read_leb128 (const char *ptr, const char **rptr)
+read_leb128 (const unsigned char *ptr, const unsigned char **rptr)
 {
 	int ret = 0;
 	int shift = 0;
@@ -196,10 +196,44 @@ read_leb128 (const char *ptr, const char **rptr)
 }
 
 static gchar *
-read_string (const char *ptr)
+read_string (const unsigned char *ptr)
 {
 	int len = read_leb128 (ptr, &ptr);
 	return g_filename_from_utf8 (ptr, len, NULL, NULL, NULL);
+}
+
+typedef struct {
+	MonoSymbolFile *symfile;
+	guint32 last_line, last_file, last_offset;
+	guint32 line, file, offset;
+} StatementMachine;
+
+static gboolean
+check_line (StatementMachine *stm, int offset, MonoDebugSourceLocation **location)
+{
+	gchar *source_file = NULL;
+
+	if ((offset > 0) && (stm->offset < offset)) {
+		stm->last_offset = stm->offset;
+		stm->last_file = stm->file;
+		stm->last_line = stm->line;
+		return FALSE;
+	}
+
+	if (stm->last_file) {
+		int offset = read32(&(stm->symfile->offset_table->_source_table_offset)) +
+			(stm->last_file - 1) * sizeof (MonoSymbolFileSourceEntry);
+		MonoSymbolFileSourceEntry *se = (MonoSymbolFileSourceEntry *)
+			(stm->symfile->raw_contents + offset);
+
+		source_file = read_string ((const char*)stm->symfile->raw_contents + read32(&(se->_name_offset)));
+	}
+
+	*location = g_new0 (MonoDebugSourceLocation, 1);
+	(*location)->source_file = source_file;
+	(*location)->row = stm->last_line;
+	(*location)->il_offset = stm->last_offset;
+	return TRUE;
 }
 
 /**
@@ -215,47 +249,99 @@ read_string (const char *ptr)
 MonoDebugSourceLocation *
 mono_debug_symfile_lookup_location (MonoDebugMethodInfo *minfo, guint32 offset)
 {
-	MonoSymbolFileLineNumberEntry *lne;
+	MonoDebugSourceLocation *location = NULL;
 	MonoSymbolFile *symfile;
-	gchar *source_file = NULL;
 	const unsigned char *ptr;
-	int count, i;
+	StatementMachine stm;
+	guint32 token;
+
+	// FIXME: read from the symbol file
+	static const int line_base = -1;
+	static const int line_range = 8;
+	static const guint8 opcode_base = 12;
+
+	int max_address_incr = (255 - opcode_base) / line_range;
+
+#define DW_LNS_copy 1
+#define DW_LNS_advance_pc 2
+#define DW_LNS_advance_line 3
+#define DW_LNS_set_file 4
+#define DW_LNS_const_add_pc 8
+
+#define DW_LNE_end_sequence 1
 
 	if ((symfile = minfo->handle->symfile) == NULL)
 		return NULL;
 
 	mono_debugger_lock ();
 
-	if (read32(&(minfo->entry->_source_index))) {
-		int offset = read32(&(symfile->offset_table->_source_table_offset)) +
-			(read32(&(minfo->entry->_source_index)) - 1) * sizeof (MonoSymbolFileSourceEntry);
-		MonoSymbolFileSourceEntry *se = (MonoSymbolFileSourceEntry *) (symfile->raw_contents + offset);
+	ptr = symfile->raw_contents + read32(&(minfo->entry->_extended_line_number_table_offset));
 
-		source_file = read_string ((const char*)symfile->raw_contents + read32(&(se->_name_offset)));
+	token = read32(&(minfo->entry->_token));
+	stm.symfile = symfile;
+	stm.file = stm.last_file = read32(&(minfo->entry->_source_index));
+	stm.line = stm.last_line = read32(&(minfo->entry->_start_row));
+	stm.offset = stm.last_offset = 0;
+
+	while (TRUE) {
+		guint8 opcode = *ptr++;
+
+		if (opcode == 0) {
+			guint8 size = *ptr++;
+			const unsigned char *end_ptr = ptr + size;
+
+			opcode = *ptr++;
+
+			if (opcode == DW_LNE_end_sequence) {
+				if (check_line (&stm, -1, &location))
+					goto out_success;
+				break;
+			} else {
+				g_warning ("Unknown extended opcode {0:x} in LNT", opcode);
+				goto error_out;
+			}
+
+			ptr = end_ptr;
+		} else if (opcode < opcode_base) {
+			switch (opcode) {
+			case DW_LNS_copy:
+				if (check_line (&stm, offset, &location))
+					goto out_success;
+				break;
+			case DW_LNS_advance_pc:
+				stm.offset += read_leb128 (ptr, &ptr);
+				break;
+			case DW_LNS_advance_line:
+				stm.line += read_leb128 (ptr, &ptr);
+				break;
+			case DW_LNS_set_file:
+				stm.file = read_leb128 (ptr, &ptr);
+				break;
+			case DW_LNS_const_add_pc:
+				stm.offset += max_address_incr;
+				break;
+			default:
+				g_warning ("Unknown standard opcode {0:x} in LNT", opcode);
+				goto error_out;
+			}
+		} else {
+			opcode -= opcode_base;
+
+			stm.offset += opcode / line_range;
+			stm.line += line_base + (opcode % line_range);
+
+			if (check_line (&stm, offset, &location))
+				goto out_success;
+		}
 	}
 
-	ptr = symfile->raw_contents + read32(&(minfo->entry->_line_number_table_offset));
-
-	count = read32(&(minfo->entry->_num_line_numbers));
-	lne = ((MonoSymbolFileLineNumberEntry *) ptr) + count - 1;
-
-	for (i = count - 1; i >= 0; i--, lne--) {
-		MonoDebugSourceLocation *location;
-
-		if (read32(&(lne->_offset)) > offset)
-			continue;
-
-		location = g_new0 (MonoDebugSourceLocation, 1);
-		location->source_file = source_file;
-		location->row = read32(&(lne->_row));
-		location->il_offset = read32(&(lne->_offset));
-
-		mono_debugger_unlock ();
-		return location;
-	}
-
+ error_out:
 	mono_debugger_unlock ();
 	return NULL;
+
+ out_success:
+	mono_debugger_unlock ();
+	return location;
 }
 
 gint32
@@ -320,9 +406,6 @@ mono_debug_symfile_lookup_method (MonoDebugHandle *handle, MonoMethod *method)
 	minfo->index = (ie - first_ie) + 1;
 	minfo->method = method;
 	minfo->handle = handle;
-	minfo->num_il_offsets = read32(&(me->_num_line_numbers));
-	minfo->il_offsets = (MonoSymbolFileLineNumberEntry *)
-		(symfile->raw_contents + read32(&(me->_line_number_table_offset)));
 
 	minfo->entry = me;
 

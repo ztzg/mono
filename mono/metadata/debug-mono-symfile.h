@@ -48,6 +48,7 @@ struct MonoSymbolFileMethodEntry {
 	guint32 _lexical_block_table_offset;
 	guint32 _namespace_idx;
 	guint32 _local_names_ambiguous;
+	guint32 _extended_line_number_table_offset;
 };
 
 struct MonoSymbolFileSourceEntry {
@@ -94,8 +95,6 @@ struct _MonoDebugMethodInfo {
 	MonoMethod *method;
 	MonoDebugHandle *handle;
 	guint32 index;
-	guint32 num_il_offsets;
-	MonoSymbolFileLineNumberEntry *il_offsets;
 	MonoSymbolFileMethodEntry *entry;
 };
 

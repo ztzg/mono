@@ -1,5 +1,14 @@
 2008-04-29  Martin Baulig  <martin@ximian.com>
 
+	* debug-mono-symfile.h
+	(MonoDebugMethodInfo): Removed `num_il_offsets' and `il_offsets'.
+
+	* debug-mono-symfile.c
+	(mono_debug_symfile_lookup_location): Add support for the new line
+	number table format.
+
+2008-04-29  Martin Baulig  <martin@ximian.com>
+
 	* debug-mono-symfile.h (MONO_SYMBOL_FILE_VERSION): Bump to 42.
 
 2008-04-29  Martin Baulig  <martin@ximian.com>
