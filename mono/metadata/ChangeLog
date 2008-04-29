@@ -1,3 +1,7 @@
+2008-04-29  Martin Baulig  <martin@ximian.com>
+
+	**** Kahalo changes start here ****
+
 2008-04-29  Kornél Pál  <kornelpal@gmail.com>
 
 	* appdomain.c: Use HAVE_SYS_UTIME_H that fixes MSVC build.
