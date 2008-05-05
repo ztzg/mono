@@ -1,3 +1,17 @@
+2008-05-05  Martin Baulig  <martin@ximian.com>
+
+	* debug-mono-symfile.h
+	(MonoSymbolFileMethodEntry): Removed.
+	(MonoSymbolFileLexicalBlockEntry): Removed.
+	(MonoSymbolFileLineNumberEntry): Removed.
+	(MonoDebugLexicalBlockEntry): Removed.
+	(MonoDebugMethodInfo): Replaced `entry' by `guint32 entry_offset'.
+
+	* debug-mono-symfile.c
+	(mono_debug_symfile_lookup_location): Reflect latest symbol file
+	changes; we now get `line_base', `line_range' and `opcode_base'
+	from the offset table.
+
 2008-04-29  Martin Baulig  <martin@ximian.com>
 
 	* debug-mono-symfile.h

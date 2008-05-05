@@ -13,7 +13,6 @@
 
 typedef struct MonoSymbolFileOffsetTable	MonoSymbolFileOffsetTable;
 typedef struct MonoSymbolFileLineNumberEntry	MonoSymbolFileLineNumberEntry;
-typedef struct MonoSymbolFileMethodEntry	MonoSymbolFileMethodEntry;
 typedef struct MonoSymbolFileMethodAddress	MonoSymbolFileMethodAddress;
 typedef struct MonoSymbolFileDynamicTable	MonoSymbolFileDynamicTable;
 typedef struct MonoSymbolFileSourceEntry	MonoSymbolFileSourceEntry;
@@ -31,24 +30,12 @@ struct MonoSymbolFileOffsetTable {
 	guint32 _method_table_offset;
 	guint32 _method_table_size;
 	guint32 _type_count;
-};
-
-struct MonoSymbolFileMethodEntry {
-	guint32 _source_index;
-	guint32 _token;
-	guint32 _start_row;
-	guint32 _end_row;
-	guint32 _num_locals;
-	guint32 _num_line_numbers;
-	guint32 _name_offset;
-	guint32 _type_index_table_offset;
-	guint32 _local_variable_table_offset;
-	guint32 _line_number_table_offset;
-	guint32 _num_lexical_blocks;
-	guint32 _lexical_block_table_offset;
-	guint32 _namespace_idx;
-	guint32 _local_names_ambiguous;
-	guint32 _extended_line_number_table_offset;
+	guint32 _anonymous_scope_count;
+	guint32 _anonymous_scope_table_offset;
+	guint32 _anonymous_scope_table_size;
+	guint32 _line_number_table_line_base;
+	guint32 _line_number_table_line_range;
+	guint32 _line_number_table_opcode_base;
 };
 
 struct MonoSymbolFileSourceEntry {
@@ -81,28 +68,11 @@ struct MonoSymbolFileMethodAddress {
 	guint8 data [MONO_ZERO_LEN_ARRAY];
 };
 
-struct MonoSymbolFileLexicalBlockEntry {
-	guint32 _start_offset;
-	guint32 _end_offset;
-};
-
-struct MonoSymbolFileLineNumberEntry {
-	guint32 _row;
-	guint32 _offset;
-};
-
 struct _MonoDebugMethodInfo {
 	MonoMethod *method;
 	MonoDebugHandle *handle;
 	guint32 index;
-	MonoSymbolFileMethodEntry *entry;
-};
-
-struct _MonoDebugLexicalBlockEntry {
-	guint32 il_start_offset;
-	guint32 native_start_offset;
-	guint32 il_end_offset;
-	guint32 native_end_offset;
+	guint32 entry_offset;
 };
 
 struct _MonoDebugLineNumberEntry {
@@ -120,7 +90,6 @@ struct _MonoSymbolFile {
 };
 
 #define MONO_SYMBOL_FILE_VERSION		42
-#define MONO_SYMBOL_FILE_COMPATIBILITY_VERSION	39
 #define MONO_SYMBOL_FILE_MAGIC			0x45e82623fd7fa614ULL
 
 G_BEGIN_DECLS
