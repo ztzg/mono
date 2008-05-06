@@ -1,4 +1,12 @@
-﻿2008-04-28  Kornél Pál  <kornelpal@gmail.com>
+2008-05-06  Martin Baulig  <martin@ximian.com>
+
+	Fix #383749.
+
+	* debug-mini.c (mono_debugger_thread_created): Add proper locking.
+	(mono_debugger_thread_cleanup): Likewise.
+	(mono_debugger_extended_notification): Likewise.
+
+2008-04-28  Kornél Pál  <kornelpal@gmail.com>
 
 	* mini.c (mono_jit_compile_method_inner): Use g_warning instead of g_error
 	for unsupported METHOD_IMPL_ATTRIBUTE_NATIVE.
