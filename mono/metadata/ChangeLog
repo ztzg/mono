@@ -1,3 +1,10 @@
+2008-05-16  Martin Baulig  <martin@ximian.com>
+
+	* debug-mono-symfile.c
+	(mono_debug_symfile_lookup_location): Reflect latest symbol writer
+	changes; we now use a special extended opcode `DW_LNE_MONO_negate_is_hidden'
+	for `#line hidden'.
+
 2008-05-05  Martin Baulig  <martin@ximian.com>
 
 	* debug-mono-symfile.h

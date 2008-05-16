@@ -215,10 +215,11 @@ check_line (StatementMachine *stm, int offset, MonoDebugSourceLocation **locatio
 {
 	gchar *source_file = NULL;
 
-	if ((offset > 0) && (stm->offset < offset)) {
+	if ((offset > 0) && (stm->offset <= offset)) {
 		stm->last_offset = stm->offset;
 		stm->last_file = stm->file;
-		stm->last_line = stm->line;
+		if (stm->line != 0xfeefee)
+			stm->last_line = stm->line;
 		return FALSE;
 	}
 
@@ -264,6 +265,7 @@ mono_debug_symfile_lookup_location (MonoDebugMethodInfo *minfo, guint32 offset)
 #define DW_LNS_const_add_pc 8
 
 #define DW_LNE_end_sequence 1
+#define DW_LNE_MONO_negate_is_hidden 0x40
 
 	if ((symfile = minfo->handle->symfile) == NULL)
 		return NULL;
@@ -299,12 +301,14 @@ mono_debug_symfile_lookup_location (MonoDebugMethodInfo *minfo, guint32 offset)
 				if (check_line (&stm, -1, &location))
 					goto out_success;
 				break;
+			} else if (opcode == DW_LNE_MONO_negate_is_hidden) {
+				;
 			} else {
 				g_warning ("Unknown extended opcode %x in LNT", opcode);
-				goto error_out;
 			}
 
 			ptr = end_ptr;
+			continue;
 		} else if (opcode < stm.opcode_base) {
 			switch (opcode) {
 			case DW_LNS_copy:
