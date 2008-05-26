@@ -36,15 +36,12 @@ struct MonoSymbolFileOffsetTable {
 	guint32 _line_number_table_line_base;
 	guint32 _line_number_table_line_range;
 	guint32 _line_number_table_opcode_base;
+	guint32 _is_aspx_source;
 };
 
 struct MonoSymbolFileSourceEntry {
 	guint32 _index;
-	guint32 _num_methods;
-	guint32 _num_namespaces;
-	guint32 _name_offset;
-	guint32 _method_offset;
-	guint32 _nstable_offset;
+	guint32 _data_offset;
 };
 
 struct MonoSymbolFileMethodIndexEntry {

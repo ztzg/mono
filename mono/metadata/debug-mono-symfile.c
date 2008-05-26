@@ -229,7 +229,7 @@ check_line (StatementMachine *stm, int offset, MonoDebugSourceLocation **locatio
 		MonoSymbolFileSourceEntry *se = (MonoSymbolFileSourceEntry *)
 			(stm->symfile->raw_contents + offset);
 
-		source_file = read_string (stm->symfile->raw_contents + read32(&(se->_name_offset)));
+		source_file = read_string (stm->symfile->raw_contents + read32(&(se->_data_offset)));
 	}
 
 	*location = g_new0 (MonoDebugSourceLocation, 1);
