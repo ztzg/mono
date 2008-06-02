@@ -16,13 +16,16 @@ typedef struct MonoSymbolFileLineNumberEntry	MonoSymbolFileLineNumberEntry;
 typedef struct MonoSymbolFileMethodAddress	MonoSymbolFileMethodAddress;
 typedef struct MonoSymbolFileDynamicTable	MonoSymbolFileDynamicTable;
 typedef struct MonoSymbolFileSourceEntry	MonoSymbolFileSourceEntry;
-typedef struct MonoSymbolFileMethodIndexEntry	MonoSymbolFileMethodIndexEntry;
+typedef struct MonoSymbolFileMethodEntry	MonoSymbolFileMethodEntry;
 
 /* Keep in sync with OffsetTable in mcs/class/Mono.CSharp.Debugger/MonoSymbolTable.cs */
 struct MonoSymbolFileOffsetTable {
 	guint32 _total_file_size;
 	guint32 _data_section_offset;
 	guint32 _data_section_size;
+	guint32 _compile_unit_count;
+	guint32 _compile_unit_table_offset;
+	guint32 _compile_unit_table_size;
 	guint32 _source_count;
 	guint32 _source_table_offset;
 	guint32 _source_table_size;
@@ -44,9 +47,10 @@ struct MonoSymbolFileSourceEntry {
 	guint32 _data_offset;
 };
 
-struct MonoSymbolFileMethodIndexEntry {
-	guint32 _file_offset;
+struct MonoSymbolFileMethodEntry {
 	guint32 _token;
+	guint32 _data_offset;
+	guint32 _line_number_table;
 };
 
 struct MonoSymbolFileMethodAddress {
@@ -69,7 +73,8 @@ struct _MonoDebugMethodInfo {
 	MonoMethod *method;
 	MonoDebugHandle *handle;
 	guint32 index;
-	guint32 entry_offset;
+	guint32 data_offset;
+	guint32 lnt_offset;
 };
 
 struct _MonoDebugLineNumberEntry {
@@ -80,13 +85,15 @@ struct _MonoDebugLineNumberEntry {
 struct _MonoSymbolFile {
 	const guint8 *raw_contents;
 	int raw_contents_size;
-	int version;
+	int major_version;
+	int minor_version;
 	gchar *filename;
 	GHashTable *method_hash;
 	MonoSymbolFileOffsetTable *offset_table;
 };
 
-#define MONO_SYMBOL_FILE_VERSION		42
+#define MONO_SYMBOL_FILE_MAJOR_VERSION		42
+#define MONO_SYMBOL_FILE_MINOR_VERSION		3
 #define MONO_SYMBOL_FILE_MAGIC			0x45e82623fd7fa614ULL
 
 G_BEGIN_DECLS

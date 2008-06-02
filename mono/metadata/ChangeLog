@@ -1,3 +1,16 @@
+2008-06-02  Martin Baulig  <martin@ximian.com>
+
+	Reflect latest symbol writer changes.
+
+	* debug-mono-symfile.h
+	(MonoSymbolFileMethodIndexEntry): Removed.
+	(MonoSymbolFileMethodEntry): New public typedef.
+	(MonoSymbolFile): Replace `version' with `major_version' and
+	`minor_version'.
+	(MONO_SYMBOL_FILE_VERSION): Replace with
+	`MONO_SYMBOL_FILE_MAJOR_VERSION' and
+	`MONO_SYMBOL_FILE_MINOR_VERSION'.
+
 2008-05-26  Martin Baulig  <martin@ximian.com>
 
 	* debug-mono-symfile.h
