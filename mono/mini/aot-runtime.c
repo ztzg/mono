@@ -57,7 +57,7 @@
 
 #ifdef PLATFORM_WIN32
 #define SHARED_EXT ".dll"
-#elif defined(__ppc__) && defined(__MACH__)
+#elif (defined(__ppc__) || defined(__ppc64__)) && defined(__MACH__)
 #define SHARED_EXT ".dylib"
 #else
 #define SHARED_EXT ".so"
@@ -441,7 +441,7 @@ load_aot_module_from_cache (MonoAssembly *assembly, char **aot_name)
 
 			res = g_spawn_command_line_sync (cmd, &out, &err, &exit_status, NULL);
 
-#if !defined(PLATFORM_WIN32) && !defined(__ppc__) && !defined(__powerpc__)
+#if !defined(PLATFORM_WIN32) && !defined(__ppc__) && !defined(__ppc64__) && !defined(__powerpc__)
 			if (res) {
 				if (!WIFEXITED (exit_status) && (WEXITSTATUS (exit_status) == 0))
 					mono_trace (G_LOG_LEVEL_MESSAGE, MONO_TRACE_AOT, "AOT failed: %s.", err);
@@ -494,6 +494,9 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 		 * Already loaded. This can happen because the assembly loading code might invoke
 		 * the assembly load hooks multiple times for the same assembly.
 		 */
+		return;
+
+	if (assembly->image->dynamic)
 		return;
 
 	if (use_aot_cache)
@@ -726,50 +729,6 @@ decode_cached_class_info (MonoAotModule *module, MonoCachedClassInfo *info, guin
 
 	return TRUE;
 }	
-
-gboolean
-mono_aot_init_vtable (MonoVTable *vtable)
-{
-#ifdef MONO_ARCH_COMMON_VTABLE_TRAMPOLINE
-	int i;
-	MonoAotModule *aot_module;
-	MonoClass *klass = vtable->klass;
-	guint8 *info, *p;
-	MonoCachedClassInfo class_info;
-	gboolean err;
-
-	if (MONO_CLASS_IS_INTERFACE (klass) || klass->rank || !klass->image->assembly->aot_module)
-		return FALSE;
-
-	mono_aot_lock ();
-
-	aot_module = (MonoAotModule*) g_hash_table_lookup (aot_modules, klass->image->assembly);
-	if (!aot_module) {
-		mono_aot_unlock ();
-		return FALSE;
-	}
-
-	info = &aot_module->class_info [aot_module->class_info_offsets [mono_metadata_token_index (klass->type_token) - 1]];
-	p = info;
-
-	err = decode_cached_class_info (aot_module, &class_info, p, &p);
-	if (!err) {
-		mono_aot_unlock ();
-		return FALSE;
-	}
-
-	mono_aot_unlock ();
-
-	//printf ("VT0: %s.%s %d\n", klass->name_space, klass->name, vtable_size);
-	for (i = 0; i < class_info.vtable_size; ++i) {
-		vtable->vtable [i] = mini_get_vtable_trampoline ();
-	}
-
-	return TRUE;
-#else
-	return FALSE;
-#endif
-}
 
 gpointer
 mono_aot_get_method_from_vt_slot (MonoDomain *domain, MonoVTable *vtable, int slot)
@@ -2124,12 +2083,6 @@ mono_aot_get_method (MonoDomain *domain, MonoMethod *method)
 
 gboolean
 mono_aot_is_got_entry (guint8 *code, guint8 *addr)
-{
-	return FALSE;
-}
-
-gboolean
-mono_aot_init_vtable (MonoVTable *vtable)
 {
 	return FALSE;
 }

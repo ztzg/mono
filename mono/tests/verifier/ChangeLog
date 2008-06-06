@@ -1,3 +1,85 @@
+2008-06-06 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* make_ctor_test.sh: New test generator for 
+	constructor related tests.
+
+	* make_tests.sh: Added tests using using
+	the new generator.
+
+2008-05-23 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* valid_contravariant_delegate_1.il
+	* valid_contravariant_delegate_2.il
+	* valid_convariant_delegate_1.il
+	* valid_convariant_delegate_2.il
+	* valid_generic_delegate_1.cs
+	* valid_generic_delegate_2.cs
+	* valid_invariant_delegate.il: Test compatibility of generic
+	delegates in the presence of variance.
+
+2008-05-14 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* valid_visibility_across_generic_instantiations.cs: Regression
+	test for #390128.
+
+2008-05-14 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* test_lib.cs: Dependency for new visibility related tests.
+
+	* Makefile: Added compilation step for test_lib.cs.
+
+2008-05-09 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* make_type_visibility_test.sh: New test
+	generator for visibility tests of generic
+	method and type	arguments.
+
+	* make_tests.sh: Added tests using using
+	the new generator.
+
+2008-05-09 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* make_tests.sh: Changed one test from unverifiable
+	to valid as it only fails on MS runtime due to a bug
+	on its implementation.
+
+2008-05-02 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* valid_nullable_store.il: New test to ensure
+	that nullables are properly compared.
+
+2008-05-02 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* valid_leave_before_try_block.il: New test to ensure
+	that the leave opcode empties the stack.
+
+2008-05-02 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* BatchCompiler.cs: ilasm generates bad tokens when
+	compiling many times within the same appdomain.
+	Using one per source file. Compilation times are
+	now just a bit faster than before.
+
+	* Makefile: Fix typo.
+
+2008-05-01 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* unverifiable_ldsfld_no_fld.il: Fixed compilation
+	and renamed to invalid_ldsfld_no_fld.il.
+
+	* BatchCompiler.cs: New driver to fast compile the
+	verifier test suite. It's about 20x faster now.
+
+	* Makefile: Use the ilasm driver for faster compilation.
+
+2008-04-30 Rodrigo Kumpera <rkumpera@novell.com>
+
+	* make_il_overflow_test.sh: New test generator
+	for a truncated IL stream.
+
+	* make_tests.sh: Fixed generation script. Added
+	tests using the new generator.
+
 2008-04-23 Rodrigo Kumpera <rkumpera@novell.com>
 
 	* make_tests.sh: Add some tests for overlapping

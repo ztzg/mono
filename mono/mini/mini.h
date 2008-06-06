@@ -1120,7 +1120,6 @@ gpointer  mono_aot_get_method               (MonoDomain *domain,
 gpointer  mono_aot_get_method_from_token    (MonoDomain *domain, MonoImage *image, guint32 token) MONO_INTERNAL;
 gboolean  mono_aot_is_got_entry             (guint8 *code, guint8 *addr) MONO_INTERNAL;
 guint8*   mono_aot_get_plt_entry            (guint8 *code) MONO_INTERNAL;
-gboolean  mono_aot_init_vtable              (MonoVTable *vtable) MONO_INTERNAL;
 gboolean  mono_aot_get_cached_class_info    (MonoClass *klass, MonoCachedClassInfo *res) MONO_INTERNAL;
 gboolean  mono_aot_get_class_from_name      (MonoImage *image, const char *name_space, const char *name, MonoClass **klass) MONO_INTERNAL;
 MonoJitInfo* mono_aot_find_jit_info         (MonoDomain *domain, MonoImage *image, gpointer addr) MONO_INTERNAL;
@@ -1334,7 +1333,7 @@ int       mono_debugger_main                    (MonoDomain *domain, MonoAssembl
 
 
 /* Tracing */
-MonoTraceSpec *mono_trace_parse_options         (char *options) MONO_INTERNAL;
+MonoTraceSpec *mono_trace_parse_options         (const char *options) MONO_INTERNAL;
 void           mono_trace_set_assembly          (MonoAssembly *assembly) MONO_INTERNAL;
 gboolean       mono_trace_eval                  (MonoMethod *method) MONO_INTERNAL;
 

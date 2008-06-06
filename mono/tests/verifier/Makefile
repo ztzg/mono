@@ -1,10 +1,23 @@
 
 %.exe: %.cil
-	ilasm -out:$@ $<
+	ilasm2 -out:$@ $<
 
-compile-stamp: generate-stamp
-	for i in *.il; do ilasm2 $$i; done
-	for i in *.cs; do gmcs /unsafe $$i; done
+BatchCompiler.exe: BatchCompiler.cs
+	gmcs -r:../../../../mcs/class/lib/net_2_0/ilasm.exe BatchCompiler.cs
+
+test_lib.dll: test_lib.cs
+	gmcs test_lib.cs -target:library
+
+compile-stamp: generate-stamp BatchCompiler.exe test_lib.dll
+	for i in *.cs; do \
+		EXE="`echo $$i | cut -d. -f1`.exe"; \
+		DLL="`echo $$i | cut -d. -f1`.dll"; \
+		if ! [ -f $$EXE ] && ! [ -f $$DLL ] then \
+			gmcs /unsafe $$i; \
+		fi \
+	done 
+	MONO_PATH=../../../../mcs/class/lib/net_2_0/ mono BatchCompiler.exe
+	#for $$I in *.il; do ilasm2 $$I; done
 	touch compile-stamp
 
 clean:
@@ -20,7 +33,7 @@ generate-stamp: make_tests.sh make_bin_test.sh make_exception_branch_test.sh mak
 
 test: compile-stamp run-test
 
-run-test:
+run-test: compile-stamp
 	@for i in *.exe; do \
 		TEST=`echo $$i | cut -d '.' -f 1`; \
 		RES=99; \
@@ -29,7 +42,7 @@ run-test:
 		then \
 			RES=3; \
 		fi; \
-		if [ "$$FIRST" == "unverifiable" ]; \
+		if [ "$$FIRST" == "unverifiable" ] || [ "$FIRST" == "typeunverifiable" ]; \
 		then \
 			RES=2; \
 		fi; \
@@ -64,7 +77,7 @@ run-test:
 			if [ $$R2 != 0 ]; then \
 				echo "$$TEST is type unverifiable but did not pass under non-strict check, got $${R2} but expected 0"; \
 			fi \
-		else \
+		elif [ $$RES != 99 ]; then \
 			../../metadata/pedump --verify error,warn,cls,code $$TEST.exe >/dev/null 2>/dev/null; \
 			R=$$?; \
 			if [ $$R != $$RES ]; then \

@@ -58,9 +58,8 @@ typedef struct _ProfilerEventData {
 	unsigned int value:26;
 } ProfilerEventData;
 
-#define EXTENDED_EVENT_VALUE_SHIFT (26)
-#define MAX_EVENT_VALUE ((1<<EXTENDED_EVENT_VALUE_SHIFT)-1)
-#define MAX_EXTENDED_EVENT_VALUE ((((guint64))MAX_EVENT_VALUE<<32)|((guint64)0xffffffff))
+#define EVENT_VALUE_BITS (26)
+#define MAX_EVENT_VALUE ((1<<EVENT_VALUE_BITS)-1)
 
 typedef enum {
 	MONO_PROFILER_EVENT_METHOD_JIT = 0,
@@ -97,17 +96,130 @@ typedef enum {
 	gettimeofday (&current_time, NULL);\
 	(t) = (((guint64)current_time.tv_sec) * 1000000) + current_time.tv_usec;\
 } while (0)
-#if 1
-#define MONO_PROFILER_GET_CURRENT_COUNTER(c) MONO_PROFILER_GET_CURRENT_TIME ((c));
+
+static gboolean use_fast_timer = FALSE;
+
+#if (defined(__i386__) || defined(__x86_64__)) && ! defined(PLATFORM_WIN32)
+
+#if defined(__i386__)
+static const guchar cpuid_impl [] = {
+	0x55,                   	/* push   %ebp */
+	0x89, 0xe5,                	/* mov    %esp,%ebp */
+	0x53,                   	/* push   %ebx */
+	0x8b, 0x45, 0x08,             	/* mov    0x8(%ebp),%eax */
+	0x0f, 0xa2,                	/* cpuid   */
+	0x50,                   	/* push   %eax */
+	0x8b, 0x45, 0x10,             	/* mov    0x10(%ebp),%eax */
+	0x89, 0x18,                	/* mov    %ebx,(%eax) */
+	0x8b, 0x45, 0x14,             	/* mov    0x14(%ebp),%eax */
+	0x89, 0x08,                	/* mov    %ecx,(%eax) */
+	0x8b, 0x45, 0x18,             	/* mov    0x18(%ebp),%eax */
+	0x89, 0x10,                	/* mov    %edx,(%eax) */
+	0x58,                   	/* pop    %eax */
+	0x8b, 0x55, 0x0c,             	/* mov    0xc(%ebp),%edx */
+	0x89, 0x02,                	/* mov    %eax,(%edx) */
+	0x5b,                   	/* pop    %ebx */
+	0xc9,                   	/* leave   */
+	0xc3,                   	/* ret     */
+};
+
+typedef void (*CpuidFunc) (int id, int* p_eax, int* p_ebx, int* p_ecx, int* p_edx);
+
+static int 
+cpuid (int id, int* p_eax, int* p_ebx, int* p_ecx, int* p_edx) {
+	int have_cpuid = 0;
+#ifndef _MSC_VER
+	__asm__  __volatile__ (
+		"pushfl\n"
+		"popl %%eax\n"
+		"movl %%eax, %%edx\n"
+		"xorl $0x200000, %%eax\n"
+		"pushl %%eax\n"
+		"popfl\n"
+		"pushfl\n"
+		"popl %%eax\n"
+		"xorl %%edx, %%eax\n"
+		"andl $0x200000, %%eax\n"
+		"movl %%eax, %0"
+		: "=r" (have_cpuid)
+		:
+		: "%eax", "%edx"
+	);
 #else
+	__asm {
+		pushfd
+		pop eax
+		mov edx, eax
+		xor eax, 0x200000
+		push eax
+		popfd
+		pushfd
+		pop eax
+		xor eax, edx
+		and eax, 0x200000
+		mov have_cpuid, eax
+	}
+#endif
+	if (have_cpuid) {
+		CpuidFunc func = (CpuidFunc) cpuid_impl;
+		func (id, p_eax, p_ebx, p_ecx, p_edx);
+		/*
+		 * We use this approach because of issues with gcc and pic code, see:
+		 * http://gcc.gnu.org/cgi-bin/gnatsweb.pl?cmd=view%20audit-trail&database=gcc&pr=7329
+		__asm__ __volatile__ ("cpuid"
+			: "=a" (*p_eax), "=b" (*p_ebx), "=c" (*p_ecx), "=d" (*p_edx)
+			: "a" (id));
+		*/
+		return 1;
+	}
+	return 0;
+}
+
+static void detect_fast_timer (void) {
+	int p_eax, p_ebx, p_ecx, p_edx;
+	
+	if (cpuid (0x1, &p_eax, &p_ebx, &p_ecx, &p_edx)) {
+		if (p_edx & 0x10) {
+			use_fast_timer = TRUE;
+		} else {
+			use_fast_timer = FALSE;
+		}
+	} else {
+		use_fast_timer = FALSE;
+	}
+}
+#endif
+
+#if defined(__x86_64__)
+static void detect_fast_timer (void) {
+	guint32 op = 0x1;
+	guint32 eax,ebx,ecx,edx;
+	__asm__ __volatile__ ("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(op));
+	if (edx & 0x10) {
+		use_fast_timer = TRUE;
+	} else {
+		use_fast_timer = FALSE;
+	}
+}
+#endif
+
 static __inline__ guint64 rdtsc(void) {
 	guint32 hi, lo;
 	__asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
 	return ((guint64) lo) | (((guint64) hi) << 32);
 }
 #define MONO_PROFILER_GET_CURRENT_COUNTER(c) {\
-	(c) = rdtsc ();\
+	if (use_fast_timer) {\
+		(c) = rdtsc ();\
+	} else {\
+		MONO_PROFILER_GET_CURRENT_TIME ((c));\
+	}\
 } while (0)
+#else
+static detect_fast_timer (void) {
+	use_fast_timer = FALSE;
+}
+#define MONO_PROFILER_GET_CURRENT_COUNTER(c) MONO_PROFILER_GET_CURRENT_TIME ((c))
 #endif
 
 
@@ -222,6 +334,7 @@ typedef struct _ProfilerHeapShotWriteJob {
 	guint64 start_time;
 	guint64 end_counter;
 	guint64 end_time;
+	guint32 collection;
 } ProfilerHeapShotWriteJob;
 
 typedef struct _ProfilerPerThreadData {
@@ -244,6 +357,15 @@ typedef struct _ProfilerStatisticalData {
 	int first_unwritten_index;
 } ProfilerStatisticalData;
 
+typedef struct _ProfilerUnmanagedSymbol {
+	guint32 offset;
+	guint32 size;
+	guint32 id;
+	guint32 index;
+} ProfilerUnmanagedSymbol;
+
+struct _ProfilerExecutableFile;
+
 typedef struct _ProfilerExecutableMemoryRegionData {
 	gpointer start;
 	gpointer end;
@@ -251,6 +373,11 @@ typedef struct _ProfilerExecutableMemoryRegionData {
 	char *file_name;
 	guint32 id;
 	gboolean is_new;
+	
+	struct _ProfilerExecutableFile *file;
+	guint32 symbols_count;
+	guint32 symbols_capacity;
+	ProfilerUnmanagedSymbol *symbols;
 } ProfilerExecutableMemoryRegionData;
 
 typedef struct _ProfilerExecutableMemoryRegions {
@@ -258,22 +385,183 @@ typedef struct _ProfilerExecutableMemoryRegions {
 	guint32 regions_capacity;
 	guint32 regions_count;
 	guint32 next_id;
+	guint32 next_unmanaged_function_id;
 } ProfilerExecutableMemoryRegions;
 
-typedef struct _ProfilerUnmanagedFunction {
-	guint32 id;
-	guint32 hits;
-	char *name;
-	struct _ProfilerUnmanagedFunction *next_unwritten;
-} ProfilerUnmanagedFunction;
+/* Start of ELF definitions */
+#define EI_NIDENT 16
+typedef guint16 ElfHalf;
+typedef guint32 ElfWord;
+typedef gsize ElfAddr;
+typedef gsize ElfOff;
 
-typedef struct _ProfilerUnmanagedFunctions {
+typedef struct {
+	unsigned char e_ident[EI_NIDENT];
+	ElfHalf e_type;
+	ElfHalf e_machine;
+	ElfWord e_version;
+	ElfAddr e_entry;
+	ElfOff  e_phoff;
+	ElfOff  e_shoff; // Section header table
+	ElfWord e_flags;
+	ElfHalf e_ehsize; // Header size
+	ElfHalf e_phentsize;
+	ElfHalf e_phnum;
+	ElfHalf e_shentsize; // Section header entry size
+	ElfHalf e_shnum; // Section header entries number
+	ElfHalf e_shstrndx; // String table index
+} ElfHeader;
+
+#if (SIZEOF_VOID_P == 4)
+typedef struct {
+	ElfWord sh_name;
+	ElfWord sh_type;
+	ElfWord sh_flags;
+	ElfAddr sh_addr; // Address in memory
+	ElfOff  sh_offset; // Offset in file
+	ElfWord sh_size;
+	ElfWord sh_link;
+	ElfWord sh_info;
+	ElfWord sh_addralign;
+	ElfWord sh_entsize;
+} ElfSection;
+typedef struct {
+	ElfWord       st_name;
+	ElfAddr       st_value;
+	ElfWord       st_size;
+	unsigned char st_info; // Use ELF32_ST_TYPE to get symbol type
+	unsigned char st_other;
+	ElfHalf       st_shndx; // Or one of SHN_ABS, SHN_COMMON or SHN_UNDEF.
+} ElfSymbol;
+#elif (SIZEOF_VOID_P == 8)
+typedef struct {
+	ElfWord sh_name;
+	ElfWord sh_type;
+	ElfOff sh_flags;
+	ElfAddr sh_addr; // Address in memory
+	ElfOff  sh_offset; // Offset in file
+	ElfOff sh_size;
+	ElfWord sh_link;
+	ElfWord sh_info;
+	ElfOff sh_addralign;
+	ElfOff sh_entsize;
+} ElfSection;
+typedef struct {
+	ElfWord       st_name;
+	unsigned char st_info; // Use ELF_ST_TYPE to get symbol type
+	unsigned char st_other;
+	ElfHalf       st_shndx; // Or one of SHN_ABS, SHN_COMMON or SHN_UNDEF.
+	ElfAddr       st_value;
+	ElfAddr       st_size;
+} ElfSymbol;
+#else
+#error Bad size of void pointer
+#endif
+
+
+#define ELF_ST_BIND(i)   ((i)>>4)
+#define ELF_ST_TYPE(i)   ((i)&0xf)
+
+
+typedef enum {
+	EI_MAG0 = 0,
+	EI_MAG1 = 1,
+	EI_MAG2 = 2,
+	EI_MAG3 = 3,
+	EI_CLASS = 4,
+	EI_DATA = 5
+} ElfIdentFields;
+
+typedef enum {
+	ELF_FILE_TYPE_NONE = 0,
+	ELF_FILE_TYPE_REL = 1,
+	ELF_FILE_TYPE_EXEC = 2,
+	ELF_FILE_TYPE_DYN = 3,
+	ELF_FILE_TYPE_CORE = 4
+} ElfFileType;
+
+typedef enum {
+	ELF_CLASS_NONE = 0,
+	ELF_CLASS_32 = 1,
+	ELF_CLASS_64 = 2
+} ElfIdentClass;
+
+typedef enum {
+	ELF_DATA_NONE = 0,
+	ELF_DATA_LSB = 1,
+	ELF_DATA_MSB = 2
+} ElfIdentData;
+
+typedef enum {
+	ELF_SHT_NULL = 0,
+	ELF_SHT_PROGBITS = 1,
+	ELF_SHT_SYMTAB = 2,
+	ELF_SHT_STRTAB = 3,
+	ELF_SHT_RELA = 4,
+	ELF_SHT_HASH = 5,
+	ELF_SHT_DYNAMIC = 6,
+	ELF_SHT_NOTE = 7,
+	ELF_SHT_NOBITS = 8,
+	ELF_SHT_REL = 9,
+	ELF_SHT_SHLIB = 10,
+	ELF_SHT_DYNSYM = 11
+} ElfSectionType;
+
+typedef enum {
+	ELF_STT_NOTYPE = 0,
+	ELF_STT_OBJECT = 1,
+	ELF_STT_FUNC = 2,
+	ELF_STT_SECTION = 3,
+	ELF_STT_FILE = 4
+} ElfSymbolType;
+
+typedef enum {
+	ELF_SHF_WRITE = 1,
+	ELF_SHF_ALLOC = 2,
+	ELF_SHF_EXECINSTR = 4,
+} ElfSectionFlags;
+
+#define ELF_SHN_UNDEF       0
+#define ELF_SHN_LORESERVE   0xff00
+#define ELF_SHN_LOPROC      0xff00
+#define ELF_SHN_HIPROC      0xff1f
+#define ELF_SHN_ABS         0xfff1
+#define ELF_SHN_COMMON      0xfff2
+#define ELF_SHN_HIRESERVE   0xffff
+/* End of ELF definitions */
+
+typedef struct _ProfilerExecutableFileSectionRegion {
+	ProfilerExecutableMemoryRegionData *region;
+	guint8 *section_address;
+	gsize section_offset;
+} ProfilerExecutableFileSectionRegion;
+
+typedef struct _ProfilerExecutableFile {
+	guint32 reference_count;
+	
+	/* Used for mmap and munmap */
+	int fd;
+	guint8 *data;
+	size_t length;
+	
+	/* File data */
+	ElfHeader *header;
+	guint8 *symbols_start;
+	guint32 symbols_count;
+	guint32 symbol_size;
+	const char *symbols_string_table;
+	const char *main_string_table;
+	
+	ProfilerExecutableFileSectionRegion *section_regions;
+	
+	struct _ProfilerExecutableFile *next_new_file;
+} ProfilerExecutableFile;
+
+typedef struct _ProfilerExecutableFiles {
 	GHashTable *table;
-	ProfilerUnmanagedFunction *unwritten_queue;
-	ProfilerUnmanagedFunction *unwritten_queue_end;
-	guint32 next_id;
-	ProfilerUnmanagedFunction actual_unwritten_queue_end;
-} ProfilerUnmanagedFunctions;
+	ProfilerExecutableFile *new_files;
+} ProfilerExecutableFiles;
+
 
 #ifndef PLATFORM_WIN32
 #include <sys/types.h>
@@ -283,6 +571,12 @@ typedef struct _ProfilerUnmanagedFunctions {
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
+
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
 
 #define MUTEX_TYPE pthread_mutex_t
 #define INITIALIZE_PROFILER_MUTEX() pthread_mutex_init (&(profiler->mutex), NULL)
@@ -422,7 +716,8 @@ struct _MonoProfiler {
 	ProfilerStatisticalData *statistical_data;
 	ProfilerStatisticalData *statistical_data_ready;
 	ProfilerStatisticalData *statistical_data_second_buffer;
-	ProfilerUnmanagedFunctions unmanaged_functions;
+	int statistical_call_chain_depth;
+	
 	THREAD_TYPE data_writer_thread;
 	EVENT_TYPE statistical_data_writer_event;
 	gboolean terminate_writer_thread;
@@ -441,8 +736,10 @@ struct _MonoProfiler {
 	int dump_next_heap_snapshots;
 	guint64 heap_shot_command_file_access_time;
 	gboolean heap_shot_was_signalled;
+	guint32 garbage_collection_counter;
 	
 	ProfilerExecutableMemoryRegions *executable_regions;
+	ProfilerExecutableFiles executable_files;
 	
 	struct {
 #if (HAS_OPROFILE)
@@ -872,72 +1169,6 @@ class_id_mapping_destroy (ClassIdMapping *map) {
 	g_free (map);
 }
 
-static void
-unmanaged_function_new (ProfilerUnmanagedFunctions *functions, Dl_info *dl_info) {
-	ProfilerUnmanagedFunction *function = g_new (ProfilerUnmanagedFunction, 1);
-	function->id = functions->next_id;
-	functions->next_id ++;
-	function->hits = 1;
-	function->next_unwritten = functions->unwritten_queue;
-	functions->unwritten_queue = function;
-	function->name = g_strdup_printf ("[%s]:%s", dl_info->dli_fname, dl_info->dli_sname);
-	g_hash_table_insert (functions->table, dl_info->dli_saddr, function);
-}
-
-static void
-unmanaged_function_destroy (gpointer element) {
-	ProfilerUnmanagedFunction *function = (ProfilerUnmanagedFunction*) element;
-	if (function->name) {
-		g_free (function->name);
-		function->name = NULL;
-	}
-	g_free (function);
-}
-
-static gboolean
-unmanaged_function_hit (ProfilerUnmanagedFunctions *functions, gpointer address) {
-	Dl_info dl_info;
-	if (dladdr (address, &dl_info) && (dl_info.dli_saddr != NULL) && (dl_info.dli_fname != NULL)) {
-		ProfilerUnmanagedFunction *function = g_hash_table_lookup (functions->table, dl_info.dli_saddr);
-		
-		if (function != NULL) {
-			if (function->next_unwritten != NULL) {
-				function->hits ++;
-			} else {
-				function->hits = 1;
-				function->next_unwritten = functions->unwritten_queue;
-				functions->unwritten_queue = function;
-			}
-		} else {
-			unmanaged_function_new (functions, &dl_info);
-		}
-		
-		return TRUE;
-	} else {
-		return FALSE;
-	}
-}
-
-static void
-unmanaged_functions_init (ProfilerUnmanagedFunctions *functions) {
-	functions->next_id = 1;
-	functions->table = g_hash_table_new_full (g_direct_hash, NULL, NULL, unmanaged_function_destroy);
-	functions->unwritten_queue_end = &(functions->actual_unwritten_queue_end);
-	functions->unwritten_queue = functions->unwritten_queue_end;
-	functions->actual_unwritten_queue_end.hits = 0;
-	functions->actual_unwritten_queue_end.id = 0;
-	functions->actual_unwritten_queue_end.name = NULL;
-	functions->actual_unwritten_queue_end.next_unwritten = NULL;
-}
-
-static void
-unmanaged_functions_dispose (ProfilerUnmanagedFunctions *functions) {
-	functions->next_id = 0;
-	g_hash_table_destroy (functions->table);
-	functions->table = NULL;
-	functions->unwritten_queue = NULL;
-}
-
 #if (DEBUG_LOAD_EVENTS)
 static void
 print_load_event (const char *event_name, GHashTable *table, gpointer item, LoadedElement *element);
@@ -1064,7 +1295,7 @@ profiler_heap_shot_object_buffer_new (ProfilerPerThreadData *data) {
 }
 
 static ProfilerHeapShotWriteJob*
-profiler_heap_shot_write_job_new (gboolean heap_shot_was_signalled) {
+profiler_heap_shot_write_job_new (gboolean heap_shot_was_signalled, guint32 collection) {
 	ProfilerHeapShotWriteJob *job = g_new (ProfilerHeapShotWriteJob, 1);
 	job->next = NULL;
 	job->next_unwritten = NULL;
@@ -1076,6 +1307,7 @@ profiler_heap_shot_write_job_new (gboolean heap_shot_was_signalled) {
 	job->end = & (job->buffers->buffer [PROFILER_HEAP_SHOT_WRITE_BUFFER_SIZE]);
 	job->full_buffers = 0;
 	job->heap_shot_was_signalled = heap_shot_was_signalled;
+	job->collection = collection;
 #if DEBUG_HEAP_PROFILER
 	printf ("profiler_heap_shot_write_job_new: created job %p with buffer %p(%p-%p)\n", job, job->buffers, job->start, job->end);
 #endif
@@ -1260,8 +1492,8 @@ profiler_per_thread_data_destroy (ProfilerPerThreadData *data) {
 }
 
 static ProfilerStatisticalData*
-profiler_statistical_data_new (guint32 buffer_size)
-{
+profiler_statistical_data_new (MonoProfiler *profiler) {
+	int buffer_size = profiler->statistical_buffer_size * (profiler->statistical_call_chain_depth + 1);
 	ProfilerStatisticalData *data = g_new (ProfilerStatisticalData, 1);
 
 	data->addresses = g_new0 (gpointer, buffer_size);
@@ -1402,10 +1634,18 @@ write_string (const char *string) {
 	}\
 } while (0)
 
+
 #undef GUINT_TO_POINTER
-#define GUINT_TO_POINTER(u) ((void*)(guint64)(u))
 #undef GPOINTER_TO_UINT
+#if (SIZEOF_VOID_P == 4)
+#define GUINT_TO_POINTER(u) ((void*)(guint32)(u))
+#define GPOINTER_TO_UINT(p) ((guint32)(void*)(p))
+#elif (SIZEOF_VOID_P == 8)
+#define GUINT_TO_POINTER(u) ((void*)(guint64)(u))
 #define GPOINTER_TO_UINT(p) ((guint64)(void*)(p))
+#else
+#error Bad size of void pointer
+#endif
 
 #define WRITE_HEAP_SHOT_JOB_VALUE_WITH_CODE(j,v,c) WRITE_HEAP_SHOT_JOB_VALUE (j, GUINT_TO_POINTER (GPOINTER_TO_UINT (v)|(c)))
 
@@ -1446,7 +1686,7 @@ profiler_heap_shot_write_block (ProfilerHeapShotWriteJob *job) {
 	write_uint64 (job->start_time);
 	write_uint64 (job->end_counter);
 	write_uint64 (job->end_time);
-	
+	write_uint32 (job->collection);
 	MONO_PROFILER_GET_CURRENT_COUNTER (start_counter);
 	MONO_PROFILER_GET_CURRENT_TIME (start_time);
 	write_uint64 (start_counter);
@@ -1632,13 +1872,6 @@ write_mapping_block (gsize thread_id) {
 #endif
 }
 
-static guint64
-get_extended_event_value (ProfilerEventData *event, ProfilerEventData *next) {
-	guint64 result = next->data.number;
-	result |= (((guint64) event->value) << 32);
-	return result;
-}
-
 typedef enum {
 	MONO_PROFILER_PACKED_EVENT_CODE_METHOD_ENTER = 1,
 	MONO_PROFILER_PACKED_EVENT_CODE_METHOD_EXIT_IMPLICIT = 2,
@@ -1669,8 +1902,8 @@ write_event (ProfilerEventData *event) {
 	guint64 event_value;
 
 	event_value = event->value;
-	if (event_value > MAX_EVENT_VALUE) {
-		event_value = get_extended_event_value (event, next);
+	if (event_value == MAX_EVENT_VALUE) {
+		event_value = *((guint64*)next);
 		next ++;
 	}
 	
@@ -1751,24 +1984,40 @@ profiler_executable_memory_region_new (gpointer *start, gpointer *end, guint32 f
 	result->file_name = g_strdup (file_name);
 	result->id = id;
 	result->is_new = TRUE;
+	
+	result->file = NULL;
+	result->symbols_capacity = id;
+	result->symbols_count = id;
+	result->symbols = NULL;
+	
 	return result;
 }
+
+static void
+executable_file_close (ProfilerExecutableMemoryRegionData *region);
 
 static void
 profiler_executable_memory_region_destroy (ProfilerExecutableMemoryRegionData *data) {
 	if (data->file_name != NULL) {
 		g_free (data->file_name);
 	}
+	if (data->symbols != NULL) {
+		g_free (data->symbols);
+	}
+	if (data->file != NULL) {
+		executable_file_close (data);
+	}
 	g_free (data);
 }
 
 static ProfilerExecutableMemoryRegions*
-profiler_executable_memory_regions_new (int next_id) {
+profiler_executable_memory_regions_new (int next_id, int next_unmanaged_function_id) {
 	ProfilerExecutableMemoryRegions *result = g_new (ProfilerExecutableMemoryRegions, 1);
 	result->regions = g_new0 (ProfilerExecutableMemoryRegionData*, 32);
 	result->regions_capacity = 32;
 	result->regions_count = 0;
 	result->next_id = next_id;
+	result->next_unmanaged_function_id = next_unmanaged_function_id;
 	return result;
 }
 
@@ -1841,7 +2090,7 @@ append_region (ProfilerExecutableMemoryRegions *regions, gpointer *start, gpoint
 }
 
 static void
-restore_region_ids (ProfilerExecutableMemoryRegions *old_regions, ProfilerExecutableMemoryRegions *new_regions) {
+restore_old_regions (ProfilerExecutableMemoryRegions *old_regions, ProfilerExecutableMemoryRegions *new_regions) {
 	int old_i;
 	int new_i;
 	
@@ -1853,9 +2102,11 @@ restore_region_ids (ProfilerExecutableMemoryRegions *old_regions, ProfilerExecut
 					(old_region->end == new_region->end) &&
 					(old_region->file_offset == new_region->file_offset) &&
 					! strcmp (old_region->file_name, new_region->file_name)) {
-				new_region->is_new = FALSE;
-				new_region->id = old_region->id;
-				old_region->is_new = TRUE;
+				new_regions->regions [new_i] = old_region;
+				old_regions->regions [old_i] = new_region;
+				
+				// FIXME (sanity check)
+				g_assert (new_region->is_new && ! old_region->is_new);
 			}
 		}
 	}
@@ -1871,6 +2122,347 @@ compare_regions (const void *a1, const void *a2) {
 static void
 sort_regions (ProfilerExecutableMemoryRegions *regions) {
 	qsort (regions->regions, regions->regions_count, sizeof (ProfilerExecutableMemoryRegionData *), compare_regions);
+}
+
+static void
+executable_file_add_region_reference (ProfilerExecutableFile *file, ProfilerExecutableMemoryRegionData *region) {
+	guint8 *section_headers = file->data + file->header->e_shoff;
+	int section_index;
+	
+	for (section_index = 1; section_index < file->header->e_shnum; section_index ++) {
+		ElfSection *section_header = (ElfSection*) (section_headers + (file->header->e_shentsize * section_index));
+		
+		if ((section_header->sh_addr != 0) && (section_header->sh_flags & ELF_SHF_EXECINSTR) &&
+				(region->file_offset <= section_header->sh_offset) && (region->file_offset + (((guint8*)region->end)-((guint8*)region->start)) >= (section_header->sh_offset + section_header->sh_size))) {
+			ProfilerExecutableFileSectionRegion *section_region = & (file->section_regions [section_index]);
+			section_region->region = region;
+			section_region->section_address = (gpointer) section_header->sh_addr;
+			section_region->section_offset = section_header->sh_offset;
+		}
+	}
+}
+
+static ProfilerExecutableFile*
+executable_file_open (ProfilerExecutableMemoryRegionData *region) {
+	ProfilerExecutableFiles *files = & (profiler->executable_files);
+	ProfilerExecutableFile *file = (ProfilerExecutableFile*) g_hash_table_lookup (files->table, region->file_name);
+	if (file == NULL) {
+		guint16 test = 0x0102;
+		struct stat stat_buffer;
+		int symtab_index = 0;
+		int strtab_index = 0;
+		int dynsym_index = 0;
+		int dynstr_index = 0;
+		ElfHeader *header;
+		guint8 *section_headers;
+		int section_index;
+		int strings_index;
+		
+		file = g_new0 (ProfilerExecutableFile, 1);
+		region->file = file;
+		file->reference_count ++;
+		
+		file->fd = open (region->file_name, O_RDONLY);
+		if (file->fd == -1) {
+			//g_warning ("Cannot open file '%s': '%s'", region->file_name, strerror (errno));
+			return file;
+		} else {
+			if (fstat (file->fd, &stat_buffer) != 0) {
+				//g_warning ("Cannot stat file '%s': '%s'", region->file_name, strerror (errno));
+				return file;
+			} else {
+				size_t region_length = ((guint8*)region->end) - ((guint8*)region->start);
+				file->length = stat_buffer.st_size;
+				
+				if (file->length == region_length) {
+					file->data = region->start;
+					close (file->fd);
+					file->fd = -1;
+				} else {
+					file->data = mmap (NULL, file->length, PROT_READ, MAP_PRIVATE, file->fd, 0);
+					
+					if (file->data == MAP_FAILED) {
+						close (file->fd);
+						//g_warning ("Cannot map file '%s': '%s'", region->file_name, strerror (errno));
+						file->data = NULL;
+						return file;
+					}
+				}
+			}
+		}
+		
+		header = (ElfHeader*) file->data;
+		
+		if ((header->e_ident [EI_MAG0] != 0x7f) || (header->e_ident [EI_MAG1] != 'E') ||
+				(header->e_ident [EI_MAG2] != 'L') || (header->e_ident [EI_MAG3] != 'F')) {
+			return file;
+		}
+		
+		if (sizeof (gsize) == 4) {
+			if (header->e_ident [EI_CLASS] != ELF_CLASS_32) {
+				g_warning ("Class is not ELF_CLASS_32 with gsize size %d", (int) sizeof (gsize));
+				return file;
+			}
+		} else if (sizeof (gsize) == 8) {
+			if (header->e_ident [EI_CLASS] != ELF_CLASS_64) {
+				g_warning ("Class is not ELF_CLASS_64 with gsize size %d", (int) sizeof (gsize));
+				return file;
+			}
+		} else {
+			g_warning ("Absurd gsize size %d", (int) sizeof (gsize));
+			return file;
+		}
+		
+		if ((*(guint8*)(&test)) == 0x01) {
+			if (header->e_ident [EI_DATA] != ELF_DATA_MSB) {
+				g_warning ("Data is not ELF_DATA_MSB with first test byte 0x01");
+				return file;
+			}
+		} else if ((*(guint8*)(&test)) == 0x02) {
+			if (header->e_ident [EI_DATA] != ELF_DATA_LSB) {
+				g_warning ("Data is not ELF_DATA_LSB with first test byte 0x02");
+				return file;
+			}
+		} else {
+			g_warning ("Absurd test byte value");
+			return file;
+		}
+		
+		/* OK, this is a usable elf file... */
+		file->header = header;
+		section_headers = file->data + header->e_shoff;
+		file->main_string_table = ((const char*) file->data) + (((ElfSection*) (section_headers + (header->e_shentsize * header->e_shstrndx)))->sh_offset);
+		
+		for (section_index = 0; section_index < header->e_shnum; section_index ++) {
+			ElfSection *section_header = (ElfSection*) (section_headers + (header->e_shentsize * section_index));
+			
+			if (section_header->sh_type == ELF_SHT_SYMTAB) {
+				symtab_index = section_index;
+			} else if (section_header->sh_type == ELF_SHT_DYNSYM) {
+				dynsym_index = section_index;
+			} else if (section_header->sh_type == ELF_SHT_STRTAB) {
+				if (! strcmp (file->main_string_table + section_header->sh_name, ".strtab")) {
+					strtab_index = section_index;
+				} else if (! strcmp (file->main_string_table + section_header->sh_name, ".dynstr")) {
+					dynstr_index = section_index;
+				}
+			}
+		}
+		
+		if ((symtab_index != 0) && (strtab_index != 0)) {
+			section_index = symtab_index;
+			strings_index = strtab_index;
+		} else if ((dynsym_index != 0) && (dynstr_index != 0)) {
+			section_index = dynsym_index;
+			strings_index = dynstr_index;
+		} else {
+			section_index = 0;
+			strings_index = 0;
+		}
+		
+		if (section_index != 0) {
+			ElfSection *section_header = (ElfSection*) (section_headers + (header->e_shentsize * section_index));
+			file->symbol_size = section_header->sh_entsize;
+			file->symbols_count = (guint32) (section_header->sh_size / section_header->sh_entsize);
+			file->symbols_start = file->data + section_header->sh_offset;
+			file->symbols_string_table = ((const char*) file->data) + (((ElfSection*) (section_headers + (header->e_shentsize * strings_index)))->sh_offset);
+		}
+		
+		file->section_regions = g_new0 (ProfilerExecutableFileSectionRegion, file->header->e_shnum);
+	} else {
+		region->file = file;
+		file->reference_count ++;
+	}
+	
+	if (file->header != NULL) {
+		executable_file_add_region_reference (file, region);
+	}
+	
+	if (file->next_new_file == NULL) {
+		file->next_new_file = files->new_files;
+		files->new_files = file;
+	}
+	return file;
+}
+
+static void
+executable_file_free (ProfilerExecutableFile* file) {
+	if (file->fd != -1) {
+		if (close (file->fd) != 0) {
+			g_warning ("Cannot close file: '%s'", strerror (errno));
+		}
+		if (file->data != NULL) {
+			if (munmap (file->data, file->length) != 0) {
+				g_warning ("Cannot unmap file: '%s'", strerror (errno));
+			}
+		}
+	}
+	if (file->section_regions != NULL) {
+		g_free (file->section_regions);
+	}
+	g_free (file);
+}
+
+static void
+executable_file_close (ProfilerExecutableMemoryRegionData *region) {
+	region->file->reference_count --;
+	
+	if (region->file->reference_count <= 0) {
+		ProfilerExecutableFiles *files = & (profiler->executable_files);
+		g_hash_table_remove (files->table, region->file_name);
+		executable_file_free (region->file);
+		region->file = NULL;
+	}
+}
+
+static void
+executable_file_count_symbols (ProfilerExecutableFile *file) {
+	int symbol_index;
+	
+	for (symbol_index = 0; symbol_index < file->symbols_count; symbol_index ++) {
+		ElfSymbol *symbol = (ElfSymbol*) (file->symbols_start + (symbol_index * file->symbol_size));
+		
+		if ((ELF_ST_TYPE (symbol->st_info) == ELF_STT_FUNC) &&
+				(symbol->st_shndx > 0) &&
+				(symbol->st_shndx < file->header->e_shnum)) {
+			int symbol_section_index = symbol->st_shndx;
+			ProfilerExecutableMemoryRegionData *region = file->section_regions [symbol_section_index].region;
+			if ((region != NULL) && (region->symbols == NULL)) {
+				region->symbols_count ++;
+			}
+		}
+	}
+}
+
+static void
+executable_memory_regions_prepare_symbol_tables (ProfilerExecutableMemoryRegions *regions) {
+	int i;
+	for (i = 0; i < regions->regions_count; i++) {
+		ProfilerExecutableMemoryRegionData *region = regions->regions [i];
+		if ((region->symbols_count > 0) && (region->symbols == NULL)) {
+			region->symbols = g_new (ProfilerUnmanagedSymbol, region->symbols_count);
+			region->symbols_capacity = region->symbols_count;
+			region->symbols_count = 0;
+		}
+	}
+}
+
+static const char*
+executable_region_symbol_get_name (ProfilerExecutableMemoryRegionData *region, ProfilerUnmanagedSymbol *symbol) {
+	ElfSymbol *elf_symbol = (ElfSymbol*) (region->file->symbols_start + (symbol->index * region->file->symbol_size));
+	return region->file->symbols_string_table + elf_symbol->st_name;
+}
+
+static void
+executable_file_build_symbol_tables (ProfilerExecutableFile *file) {
+	int symbol_index;
+	
+	for (symbol_index = 0; symbol_index < file->symbols_count; symbol_index ++) {
+		ElfSymbol *symbol = (ElfSymbol*) (file->symbols_start + (symbol_index * file->symbol_size));
+		
+		if ((ELF_ST_TYPE (symbol->st_info) == ELF_STT_FUNC) &&
+				(symbol->st_shndx > 0) &&
+				(symbol->st_shndx < file->header->e_shnum)) {
+			int symbol_section_index = symbol->st_shndx;
+			ProfilerExecutableFileSectionRegion *section_region = & (file->section_regions [symbol_section_index]);
+			ProfilerExecutableMemoryRegionData *region = section_region->region;
+			
+			if (region != NULL) {
+				ProfilerUnmanagedSymbol *new_symbol = & (region->symbols [region->symbols_count]);
+				region->symbols_count ++;
+				
+				new_symbol->id = 0;
+				new_symbol->index = symbol_index;
+				new_symbol->size = symbol->st_size;
+				new_symbol->offset = (((guint8*) symbol->st_value) - section_region->section_address) - (region->file_offset - section_region->section_offset);
+			}
+		}
+	}
+}
+
+static int
+compare_region_symbols (const void *p1, const void *p2) {
+	const ProfilerUnmanagedSymbol *s1 = p1;
+	const ProfilerUnmanagedSymbol *s2 = p2;
+	return (s1->offset < s2->offset)? -1 : ((s1->offset > s2->offset)? 1 : 0);
+}
+
+static void
+executable_memory_regions_sort_symbol_tables (ProfilerExecutableMemoryRegions *regions) {
+	int i;
+	for (i = 0; i < regions->regions_count; i++) {
+		ProfilerExecutableMemoryRegionData *region = regions->regions [i];
+		if ((region->is_new) && (region->symbols != NULL)) {
+			qsort (region->symbols, region->symbols_count, sizeof (ProfilerUnmanagedSymbol), compare_region_symbols);
+		}
+	}
+}
+
+static void
+build_symbol_tables (ProfilerExecutableMemoryRegions *regions, ProfilerExecutableFiles *files) {
+	int i;
+	ProfilerExecutableFile *file;
+	
+	for (i = 0; i < regions->regions_count; i++) {
+		ProfilerExecutableMemoryRegionData *region = regions->regions [i];
+		if ((region->is_new) && (region->file == NULL)) {
+			executable_file_open (region);
+		}
+	}
+	
+	for (file = files->new_files; file != NULL; file = file->next_new_file) {
+		executable_file_count_symbols (file);
+	}
+	
+	executable_memory_regions_prepare_symbol_tables (regions);
+	
+	for (file = files->new_files; file != NULL; file = file->next_new_file) {
+		executable_file_build_symbol_tables (file);
+	}
+	
+	executable_memory_regions_sort_symbol_tables (regions);
+	
+	file = files->new_files;
+	while (file != NULL) {
+		ProfilerExecutableFile *next_file = file->next_new_file;
+		file->next_new_file = NULL;
+		file = next_file;
+	}
+	files->new_files = NULL;
+}
+
+static ProfilerUnmanagedSymbol*
+executable_memory_region_find_symbol (ProfilerExecutableMemoryRegionData *region, guint32 offset) {
+	if (region->symbols_count > 0) {
+		ProfilerUnmanagedSymbol *low = region->symbols;
+		ProfilerUnmanagedSymbol *high = region->symbols + (region->symbols_count - 1);
+		int step = region->symbols_count >> 1;
+		ProfilerUnmanagedSymbol *current = region->symbols + step;
+		
+		do {
+			step = (high - low) >> 1;
+			
+			if (offset < current->offset) {
+				high = current;
+				current = high - step;
+			} else if (offset >= current->offset) {
+				if (offset >= (current->offset + current->size)) {
+					low = current;
+					current = low + step;
+				} else {
+					return current;
+				}
+			}
+		} while (step > 0);
+		
+		if ((offset >= current->offset) && (offset < (current->offset + current->size))) {
+			return current;
+		} else {
+			return NULL;
+		}
+	} else {
+		return NULL;
+	}
 }
 
 //FIXME: make also Win32 and BSD variants
@@ -1903,9 +2495,9 @@ static int hex_digit_value (char c) {
 	if ((c >= '0') && (c <= '9')) {
 		return c - '0';
 	} else if ((c >= 'a') && (c <= 'f')) {
-		return c - 'a';
+		return c - 'a' + 10;
 	} else if ((c >= 'A') && (c <= 'F')) {
-		return c - 'A';
+		return c - 'A' + 10;
 	} else {
 		return 0;
 	}
@@ -2021,7 +2613,7 @@ parse_map_line (ProfilerExecutableMemoryRegions *regions, int fd, char *buffer, 
 			}
 			break;
 		case MAP_LINE_PARSER_STATE_BLANK_BEFORE_FILENAME:
-			if (c == '/') {
+			if ((c == '/') || (c == '[')) {
 				state = MAP_LINE_PARSER_STATE_FILENAME;
 				start_filename = current;
 			} else if (! isblank (c)) {
@@ -2048,9 +2640,10 @@ parse_map_line (ProfilerExecutableMemoryRegions *regions, int fd, char *buffer, 
 			break;
 		}
 		
-		
 		if (c == 0) {
 			return NULL;
+		} else if (c == '\n') {
+			state = MAP_LINE_PARSER_STATE_DONE;
 		}
 		
 		GOTO_NEXT_CHAR(current, buffer, fd);
@@ -2087,21 +2680,53 @@ typedef enum {
 	MONO_PROFILER_STATISTICAL_CODE_END = 0,
 	MONO_PROFILER_STATISTICAL_CODE_METHOD = 1,
 	MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_ID = 2,
-	MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_IN_REGION = 3,
+	MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_NEW_ID = 3,
+	MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_OFFSET_IN_REGION = 4,
+	MONO_PROFILER_STATISTICAL_CODE_CALL_CHAIN = 5,
 	MONO_PROFILER_STATISTICAL_CODE_REGIONS = 7
 } MonoProfilerStatisticalCode;
 
 static void
 refresh_memory_regions (void) {
 	ProfilerExecutableMemoryRegions *old_regions = profiler->executable_regions;
-	ProfilerExecutableMemoryRegions *new_regions = profiler_executable_memory_regions_new (old_regions->next_id);
+	ProfilerExecutableMemoryRegions *new_regions = profiler_executable_memory_regions_new (old_regions->next_id, old_regions->next_unmanaged_function_id);
 	int i;
 	
 	LOG_WRITER_THREAD ("Refreshing memory regions...");
 	scan_process_regions (new_regions);
-	restore_region_ids (old_regions, new_regions);
+	restore_old_regions (old_regions, new_regions);
 	sort_regions (new_regions);
 	LOG_WRITER_THREAD ("Refreshed memory regions.");
+	
+	LOG_WRITER_THREAD ("Building symbol tables...");
+	build_symbol_tables (new_regions, & (profiler->executable_files));
+#if 0
+	printf ("Symbol tables done!\n");
+	printf ("Region summary...\n");
+	for (i = 0; i < new_regions->regions_count; i++) {
+		ProfilerExecutableMemoryRegionData *region = new_regions->regions [i];
+		printf ("Region %d[%d][NEW:%d] (%p-%p) at %d in file %s\n", i, region->id, region->is_new,
+				region->start, region->end, region->file_offset, region->file_name);
+	}
+	printf ("New symbol tables dump...\n");
+	for (i = 0; i < new_regions->regions_count; i++) {
+		ProfilerExecutableMemoryRegionData *region = new_regions->regions [i];
+		
+		if (region->is_new) {
+			int symbol_index;
+			
+			printf ("Region %d[%d][NEW:%d] (%p-%p) at %d in file %s\n", i, region->id, region->is_new,
+					region->start, region->end, region->file_offset, region->file_name);
+			for (symbol_index = 0; symbol_index < region->symbols_count; symbol_index ++) {
+				ProfilerUnmanagedSymbol *symbol = & (region->symbols [symbol_index]);
+				printf ("  [%d] Symbol %s (offset %d, size %d)\n", symbol_index,
+						executable_region_symbol_get_name (region, symbol),
+						symbol->offset, symbol->size);
+			}
+		}
+	}
+#endif
+	LOG_WRITER_THREAD ("Built symbol tables.");
 	
 	// This marks the region "sub-block"
 	write_uint32 (MONO_PROFILER_STATISTICAL_CODE_REGIONS);
@@ -2128,8 +2753,8 @@ refresh_memory_regions (void) {
 			printf ("[refresh_memory_regions] Wrote region %d (%p-%p[%d] '%s')\n", region->id, region->start, region->end, region->file_offset, region->file_name);
 #endif
 			write_uint32 (region->id);
-			write_uint64 (GPOINTER_TO_INT (region->start));
-			write_uint32 (GPOINTER_TO_INT (region->end) - GPOINTER_TO_INT (region->start));
+			write_uint64 (GPOINTER_TO_UINT (region->start));
+			write_uint32 (GPOINTER_TO_UINT (region->end) - GPOINTER_TO_UINT (region->start));
 			write_uint32 (region->file_offset);
 			write_string (region->file_name);
 		}
@@ -2141,6 +2766,78 @@ refresh_memory_regions (void) {
 	profiler->executable_regions = new_regions;
 }
 
+static gboolean
+write_statistical_hit (MonoDomain *domain, gpointer address, gboolean regions_refreshed) {
+	MonoJitInfo *ji = mono_jit_info_table_find (mono_domain_get (), (char*) address);
+	
+	if (ji != NULL) {
+		MonoMethod *method = mono_jit_info_get_method (ji);
+		MethodIdMappingElement *element = method_id_mapping_element_get (method);
+		
+		if (element != NULL) {
+#if DEBUG_STATISTICAL_PROFILER
+			printf ("[write_statistical_hit] Wrote method %d\n", element->id);
+#endif
+			write_uint32 ((element->id << 3) | MONO_PROFILER_STATISTICAL_CODE_METHOD);
+		} else {
+#if DEBUG_STATISTICAL_PROFILER
+			printf ("[write_statistical_hit] Wrote unknown method %p\n", method);
+#endif
+			write_uint32 (MONO_PROFILER_STATISTICAL_CODE_METHOD);
+		}
+	} else {
+		ProfilerExecutableMemoryRegionData *region = find_address_region (profiler->executable_regions, address);
+		
+		if (region == NULL && ! regions_refreshed) {
+#if DEBUG_STATISTICAL_PROFILER
+			printf ("[write_statistical_hit] Cannot find region for address %p, refreshing...\n", address);
+#endif
+			refresh_memory_regions ();
+			regions_refreshed = TRUE;
+			region = find_address_region (profiler->executable_regions, address);
+		}
+		
+		if (region != NULL) {
+			guint32 offset = ((guint8*)address) - ((guint8*)region->start);
+			ProfilerUnmanagedSymbol *symbol = executable_memory_region_find_symbol (region, offset);
+			
+			if (symbol != NULL) {
+				if (symbol->id > 0) {
+#if DEBUG_STATISTICAL_PROFILER
+					printf ("[write_statistical_hit] Wrote unmanaged symbol %d\n", symbol->id);
+#endif
+					write_uint32 ((symbol->id << 3) | MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_ID);
+				} else {
+					ProfilerExecutableMemoryRegions *regions = profiler->executable_regions;
+					const char *symbol_name = executable_region_symbol_get_name (region, symbol);
+					symbol->id = regions->next_unmanaged_function_id;
+					regions->next_unmanaged_function_id ++;
+#if DEBUG_STATISTICAL_PROFILER
+					printf ("[write_statistical_hit] Wrote new unmanaged symbol in region %d[%d]\n", region->id, offset);
+#endif
+					write_uint32 ((region->id << 3) | MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_NEW_ID);
+					write_uint32 (symbol->id);
+					write_string (symbol_name);
+				}
+			} else {
+#if DEBUG_STATISTICAL_PROFILER
+				printf ("[write_statistical_hit] Wrote unknown unmanaged hit in region %d[%d] (address %p)\n", region->id, offset, address);
+#endif
+				write_uint32 ((region->id << 3) | MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_OFFSET_IN_REGION);
+				write_uint32 (offset);
+			}
+		} else {
+#if DEBUG_STATISTICAL_PROFILER
+			printf ("[write_statistical_hit] Wrote unknown unmanaged hit %p\n", address);
+#endif
+			write_uint32 (MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_OFFSET_IN_REGION);
+			write_uint64 (GPOINTER_TO_UINT (address));
+		}
+	}
+	
+	return regions_refreshed;
+}
+
 static void
 flush_all_mappings (void);
 
@@ -2149,8 +2846,9 @@ write_statistical_data_block (ProfilerStatisticalData *data) {
 	int start_index = data->first_unwritten_index;
 	int end_index = data->next_free_index;
 	gboolean regions_refreshed = FALSE;
+	int call_chain_depth = profiler->statistical_call_chain_depth;
+	MonoDomain *domain = mono_domain_get ();
 	int index;
-	ProfilerUnmanagedFunctions *functions = &(profiler->unmanaged_functions);
 	
 	if (end_index > data->end_index)
 		end_index = data->end_index;
@@ -2162,75 +2860,43 @@ write_statistical_data_block (ProfilerStatisticalData *data) {
 	
 	write_clock_data ();
 	
+#if DEBUG_STATISTICAL_PROFILER
+	printf ("[write_statistical_data_block] Starting loop at index %d\n", start_index);
+#endif
+	
 	for (index = start_index; index < end_index; index ++) {
-		gpointer address = data->addresses [index];
-		MonoJitInfo *ji = mono_jit_info_table_find (mono_domain_get (), (char*) address);
+		int base_index = index * (call_chain_depth + 1);
+		gpointer address = data->addresses [base_index];
+		int callers_count;
 		
-		if (ji != NULL) {
-			MonoMethod *method = mono_jit_info_get_method (ji);
-			MethodIdMappingElement *element = method_id_mapping_element_get (method);
-			
-			if (element != NULL) {
-#if DEBUG_STATISTICAL_PROFILER
-				printf ("[write_statistical_data_block] Wrote method %d\n", element->id);
-#endif
-				write_uint32 ((element->id << 3) | MONO_PROFILER_STATISTICAL_CODE_METHOD);
-			} else {
-#if DEBUG_STATISTICAL_PROFILER
-				printf ("[write_statistical_data_block] Wrote unknown method %p\n", method);
-#endif
-				write_uint32 (MONO_PROFILER_STATISTICAL_CODE_METHOD);
-			}
-		} else {
-			if (! unmanaged_function_hit (functions, address)) {
-				ProfilerExecutableMemoryRegionData *region = find_address_region (profiler->executable_regions, address);
-				
-				if (region == NULL && ! regions_refreshed) {
-					refresh_memory_regions ();
-					regions_refreshed = TRUE;
-					region = find_address_region (profiler->executable_regions, address);
-				}
-				
-				if (region != NULL) {
-#if DEBUG_STATISTICAL_PROFILER
-					printf ("[write_statistical_data_block] Wrote unmanaged hit %d[%d]\n", region->id, GPOINTER_TO_INT (address) - GPOINTER_TO_INT (region->start));
-#endif
-					write_uint32 ((region->id << 3) | MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_IN_REGION);
-					write_uint32 (GPOINTER_TO_INT (address) - GPOINTER_TO_INT (region->start));
-				} else {
-#if DEBUG_STATISTICAL_PROFILER
-					printf ("[write_statistical_data_block] Wrote unknown unmanaged hit %p\n", address);
-#endif
-					write_uint32 (MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_IN_REGION);
-					write_uint64 (GPOINTER_TO_INT (address));
-				}
+		regions_refreshed = write_statistical_hit (domain, address, regions_refreshed);
+		base_index ++;
+		
+		for (callers_count = 0; callers_count < call_chain_depth; callers_count ++) {
+			address = data->addresses [base_index + callers_count];
+			if (address == NULL) {
+				break;
 			}
 		}
-	}
-	if (functions->unwritten_queue != functions->unwritten_queue_end) {
-		ProfilerUnmanagedFunction *end = functions->unwritten_queue_end;
-		ProfilerUnmanagedFunction *function = functions->unwritten_queue;
-		functions->unwritten_queue = functions->unwritten_queue_end;
 		
-		while (function != end) {
-			ProfilerUnmanagedFunction *next = function->next_unwritten;
+		if (callers_count > 0) {
+			write_uint32 ((callers_count << 3) | MONO_PROFILER_STATISTICAL_CODE_CALL_CHAIN);
 			
-			write_uint32 ((function->id << 3) | MONO_PROFILER_STATISTICAL_CODE_UNMANAGED_FUNCTION_ID);
-			if (function->name != NULL) {
-				write_uint32 (0);
-				write_string (function->name);
-				g_free (function->name);
-				function->name = NULL;
+			for (callers_count = 0; callers_count < call_chain_depth; callers_count ++) {
+				address = data->addresses [base_index + callers_count];
+				if (address != NULL) {
+					regions_refreshed = write_statistical_hit (domain, address, regions_refreshed);
+				} else {
+					break;
+				}
 			}
-			write_uint32 (function->hits);
-			function->hits = 0;
-			
-			function->next_unwritten = NULL;
-			function = next;
 		}
 	}
 	write_uint32 (MONO_PROFILER_STATISTICAL_CODE_END);
 	
+#if DEBUG_STATISTICAL_PROFILER
+	printf ("[write_statistical_data_block] Ending loop at index %d\n", end_index);
+#endif
 	write_clock_data ();
 	
 	write_current_block (MONO_PROFILER_FILE_BLOCK_KIND_STATISTICAL);
@@ -2281,6 +2947,9 @@ update_mapping (ProfilerPerThreadData *data) {
 			}
 		}
 		
+		if (start->value == MAX_EVENT_VALUE) {
+			start ++;
+		}
 		start ++;
 	}
 #if (DEBUG_LOGGING_PROFILER)
@@ -2307,7 +2976,7 @@ flush_full_event_data_buffer (ProfilerPerThreadData *data) {
 	// We flush all mappings because some id definitions could come
 	// from other threads
 	flush_all_mappings ();
-	g_assert (data->first_unmapped_event == data->end_event);
+	g_assert (data->first_unmapped_event >= data->end_event);
 	
 	write_thread_data_block (data);
 	
@@ -2572,8 +3241,8 @@ print_event_data (gsize thread_id, ProfilerEventData *event, guint64 value) {
 	} else {\
 		ProfilerEventData *extension = data->next_free_event;\
 		data->next_free_event ++;\
-		event->value = delta >> 32;\
-		extension->data.number = delta & 0xffffffff;\
+		event->value = MAX_EVENT_VALUE;\
+		*(guint64*)extension = delta;\
 	}\
 	data->last_event_counter = counter;\
 	LOG_EVENT (data->thread_id, event, delta);\
@@ -2592,8 +3261,8 @@ print_event_data (gsize thread_id, ProfilerEventData *event, guint64 value) {
 	} else {\
 		ProfilerEventData *extension = data->next_free_event;\
 		data->next_free_event ++;\
-		event->value = (v) >> 32;\
-		extension->data.number = (v) & 0xffffffff;\
+		event->value = MAX_EVENT_VALUE;\
+		*(guint64*)extension = (v);\
 	}\
 	LOG_EVENT (data->thread_id, event, (v));\
 }while (0);
@@ -2615,8 +3284,8 @@ print_event_data (gsize thread_id, ProfilerEventData *event, guint64 value) {
 	} else {\
 		ProfilerEventData *extension = data->next_free_event;\
 		data->next_free_event ++;\
-		event->value = delta >> 32;\
-		extension->data.number = delta & 0xffffffff;\
+		event->value = MAX_EVENT_VALUE;\
+		*(guint64*)extension = delta;\
 	}\
 	data->last_event_counter = counter;\
 	LOG_EVENT (data->thread_id, event, delta);\
@@ -2635,8 +3304,8 @@ print_event_data (gsize thread_id, ProfilerEventData *event, guint64 value) {
 	} else {\
 		ProfilerEventData *extension = data->next_free_event;\
 		data->next_free_event ++;\
-		event->value = (v) >> 32;\
-		extension->data.number = (v) & 0xffffffff;\
+		event->value = MAX_EVENT_VALUE;\
+		*(guint64*)extension = (v);\
 	}\
 	LOG_EVENT (data->thread_id, event, (v));\
 }while (0);
@@ -2727,6 +3396,55 @@ object_allocated (MonoProfiler *profiler, MonoObject *obj, MonoClass *klass) {
 	}
 }
 
+static void
+statistical_call_chain (MonoProfiler *profiler, int call_chain_depth, guchar **ips, void *context) {
+	ProfilerStatisticalData *data;
+	int index;
+	
+	do {
+		data = profiler->statistical_data;
+		index = InterlockedIncrement (&data->next_free_index);
+		
+		if (index <= data->end_index) {
+			int base_index = (index - 1) * (profiler->statistical_call_chain_depth + 1);
+			int call_chain_index = 0;
+			
+			//printf ("[statistical_call_chain] (%d)\n", call_chain_depth);
+			while (call_chain_index < call_chain_depth) {
+				//printf ("[statistical_call_chain] [%d] = %p\n", base_index + call_chain_index, ips [call_chain_index]);
+				data->addresses [base_index + call_chain_index] = (gpointer) ips [call_chain_index];
+				call_chain_index ++;
+			}
+			while (call_chain_index <= profiler->statistical_call_chain_depth) {
+				//printf ("[statistical_call_chain] [%d] = NULL\n", base_index + call_chain_index);
+				data->addresses [base_index + call_chain_index] = NULL;
+				call_chain_index ++;
+			}
+		} else {
+			/* Check if we are the one that must swap the buffers */
+			if (index == data->end_index + 1) {
+				ProfilerStatisticalData *new_data;
+
+				/* In the *impossible* case that the writer thread has not finished yet, */
+				/* loop waiting for it and meanwhile lose all statistical events... */
+				do {
+					/* First, wait that it consumed the ready buffer */
+					while (profiler->statistical_data_ready != NULL);
+					/* Then, wait that it produced the free buffer */
+					new_data = profiler->statistical_data_second_buffer;
+				} while (new_data == NULL);
+
+				profiler->statistical_data_ready = data;
+				profiler->statistical_data = new_data;
+				profiler->statistical_data_second_buffer = NULL;
+				WRITER_EVENT_RAISE ();
+			}
+			
+			/* Loop again, hoping to acquire a free slot this time */
+			data = NULL;
+		}
+	} while (data == NULL);
+}
 
 static void
 statistical_hit (MonoProfiler *profiler, guchar *ip, void *context) {
@@ -3082,6 +3800,8 @@ profiler_heap_scan (ProfilerHeapShotHeapBuffers *heap, ProfilerHeapShotWriteJob 
 
 static void
 handle_heap_profiling (MonoProfiler *profiler, MonoGCEvent ev) {
+	static gboolean create_heap_shot_write_job;
+	
 	switch (ev) {
 	case MONO_GC_EVENT_PRE_STOP_WORLD:
 		// Get the lock, so we are sure nobody is flushing events during the collection,
@@ -3089,8 +3809,16 @@ handle_heap_profiling (MonoProfiler *profiler, MonoGCEvent ev) {
 		LOCK_PROFILER ();
 		break;
 	case MONO_GC_EVENT_POST_STOP_WORLD:
-		// Update all mappings, so that we have built all the class descriptors.
-		flush_all_mappings ();
+		create_heap_shot_write_job = dump_current_heap_snapshot ();
+		if (create_heap_shot_write_job) {
+			ProfilerPerThreadData *data;
+			// Update all mappings, so that we have built all the class descriptors.
+			flush_all_mappings ();
+			// Also write all event buffers, so that allocations are recorded.
+			for (data = profiler->per_thread_data; data != NULL; data = data->next) {
+				write_thread_data_block (data);
+			}
+		}
 		// Release lock...
 		UNLOCK_PROFILER ();
 		break;
@@ -3098,8 +3826,8 @@ handle_heap_profiling (MonoProfiler *profiler, MonoGCEvent ev) {
 		ProfilerHeapShotWriteJob *job;
 		ProfilerPerThreadData *data;
 		
-		if (dump_current_heap_snapshot ()) {
-			job = profiler_heap_shot_write_job_new (profiler->heap_shot_was_signalled);
+		if (create_heap_shot_write_job) {
+			job = profiler_heap_shot_write_job_new (profiler->heap_shot_was_signalled, profiler->garbage_collection_counter);
 			profiler->heap_shot_was_signalled = FALSE;
 			MONO_PROFILER_GET_CURRENT_COUNTER (job->start_counter);
 			MONO_PROFILER_GET_CURRENT_TIME (job->start_time);
@@ -3152,10 +3880,18 @@ handle_heap_profiling (MonoProfiler *profiler, MonoGCEvent ev) {
 static void
 gc_event (MonoProfiler *profiler, MonoGCEvent ev, int generation) {
 	gboolean do_heap_profiling = profiler->action_flags.unreachable_objects || profiler->action_flags.heap_shot;
+	guint32 event_value;
+	
+	if (ev == MONO_GC_EVENT_START) {
+		profiler->garbage_collection_counter ++;
+	}
+	
+	event_value = (profiler->garbage_collection_counter << 8) | generation;
+	
 	if (do_heap_profiling && (ev == MONO_GC_EVENT_POST_STOP_WORLD)) {
 		handle_heap_profiling (profiler, ev);
 	}
-	STORE_EVENT_NUMBER_COUNTER (profiler, generation, MONO_PROFILER_EVENT_DATA_TYPE_OTHER, gc_event_code_from_profiler_event (ev), gc_event_kind_from_profiler_event (ev));
+	STORE_EVENT_NUMBER_COUNTER (profiler, event_value, MONO_PROFILER_EVENT_DATA_TYPE_OTHER, gc_event_code_from_profiler_event (ev), gc_event_kind_from_profiler_event (ev));
 	if (do_heap_profiling && (ev != MONO_GC_EVENT_POST_STOP_WORLD)) {
 		handle_heap_profiling (profiler, ev);
 	}
@@ -3163,7 +3899,8 @@ gc_event (MonoProfiler *profiler, MonoGCEvent ev, int generation) {
 
 static void
 gc_resize (MonoProfiler *profiler, gint64 new_size) {
-	STORE_EVENT_NUMBER_COUNTER (profiler, new_size, MONO_PROFILER_EVENT_DATA_TYPE_OTHER, MONO_PROFILER_EVENT_GC_RESIZE, 0);
+	profiler->garbage_collection_counter ++;
+	STORE_EVENT_NUMBER_VALUE (profiler, new_size, MONO_PROFILER_EVENT_DATA_TYPE_OTHER, MONO_PROFILER_EVENT_GC_RESIZE, 0, profiler->garbage_collection_counter);
 }
 
 /* called at the end of the program */
@@ -3224,7 +3961,6 @@ profiler_shutdown (MonoProfiler *prof)
 	if (profiler->executable_regions != NULL) {
 		profiler_executable_memory_regions_destroy (profiler->executable_regions);
 	}
-	unmanaged_functions_dispose (&(profiler->unmanaged_functions));
 	
 	profiler_heap_buffers_free (&(profiler->heap));
 	if (profiler->heap_shot_command_file_name != NULL) {
@@ -3253,11 +3989,13 @@ setup_user_options (const char *arguments) {
 #ifndef PLATFORM_WIN32
 	int gc_request_signal_number = 0;
 #endif
+	detect_fast_timer ();
 	
 	profiler->file_name = NULL;
 	profiler->file_name_suffix = NULL;
 	profiler->per_thread_buffer_size = 10000;
 	profiler->statistical_buffer_size = 10000;
+	profiler->statistical_call_chain_depth = 0;
 	profiler->write_buffer_size = 1024;
 	profiler->heap_shot_command_file_name = NULL;
 	profiler->dump_next_heap_snapshots = 0;
@@ -3291,6 +4029,16 @@ setup_user_options (const char *arguments) {
 				int value = atoi (equals + 1);
 				if (value > 0) {
 					profiler->per_thread_buffer_size = value;
+				}
+			} else if (! (strncmp (argument, "statistical", equals_position) && strncmp (argument, "stat", equals_position) && strncmp (argument, "s", equals_position))) {
+				int value = atoi (equals + 1);
+				if (value > 0) {
+					if (value > 16) {
+						value = 16;
+					}
+					profiler->statistical_call_chain_depth = value;
+					profiler->flags |= MONO_PROFILE_STATISTICAL|MONO_PROFILE_JIT_COMPILATION;
+					profiler->action_flags.jit_time = TRUE;
 				}
 			} else if (! (strncmp (argument, "statistical-thread-buffer-size", equals_position) && strncmp (argument, "sbs", equals_position))) {
 				int value = atoi (equals + 1);
@@ -3358,6 +4106,8 @@ setup_user_options (const char *arguments) {
 			} else if (! (strcmp (argument, "statistical") && strcmp (argument, "stat") && strcmp (argument, "s"))) {
 				profiler->flags |= MONO_PROFILE_STATISTICAL|MONO_PROFILE_JIT_COMPILATION;
 				profiler->action_flags.jit_time = TRUE;
+			} else if (! (strcmp (argument, "force-accurate-timer") && strcmp (argument, "fac"))) {
+				use_fast_timer = FALSE;
 #if (HAS_OPROFILE)
 			} else if (! (strcmp (argument, "oprofile") && strcmp (argument, "oprof"))) {
 				profiler->flags |= MONO_PROFILE_JIT_COMPILATION;
@@ -3547,9 +4297,8 @@ mono_profiler_startup (const char *desc)
 	profiler->loaded_modules = g_hash_table_new_full (g_direct_hash, NULL, NULL, loaded_element_destroy);
 	profiler->loaded_appdomains = g_hash_table_new_full (g_direct_hash, NULL, NULL, loaded_element_destroy);
 	
-	profiler->statistical_data = profiler_statistical_data_new (profiler->statistical_buffer_size);
-	profiler->statistical_data_second_buffer = profiler_statistical_data_new (profiler->statistical_buffer_size);
-	unmanaged_functions_init (&(profiler->unmanaged_functions));
+	profiler->statistical_data = profiler_statistical_data_new (profiler);
+	profiler->statistical_data_second_buffer = profiler_statistical_data_new (profiler);
 	
 	profiler->write_buffers = g_malloc (sizeof (ProfilerFileWriteBuffer) + PROFILER_FILE_WRITE_BUFFER_SIZE);
 	profiler->write_buffers->next = NULL;
@@ -3557,7 +4306,10 @@ mono_profiler_startup (const char *desc)
 	profiler->current_write_position = 0;
 	profiler->full_write_buffers = 0;
 	
-	profiler->executable_regions = profiler_executable_memory_regions_new (1);
+	profiler->executable_regions = profiler_executable_memory_regions_new (1, 1);
+	
+	profiler->executable_files.table = g_hash_table_new (g_str_hash, g_str_equal); 
+	profiler->executable_files.new_files = NULL; 
 	
 	profiler->heap_shot_write_jobs = NULL;
 	if (profiler->action_flags.unreachable_objects || profiler->action_flags.heap_shot) {
@@ -3565,6 +4317,7 @@ mono_profiler_startup (const char *desc)
 	} else {
 		profiler_heap_buffers_clear (&(profiler->heap));
 	}
+	profiler->garbage_collection_counter = 0;
 	
 	WRITER_EVENT_INIT ();
 	LOG_WRITER_THREAD ("mono_profiler_startup: creating writer thread");
@@ -3593,6 +4346,7 @@ mono_profiler_startup (const char *desc)
 	mono_profiler_install_thread (thread_start, thread_end);
 	mono_profiler_install_allocation (object_allocated);
 	mono_profiler_install_statistical (statistical_hit);
+	mono_profiler_install_statistical_call_chain (statistical_call_chain, profiler->statistical_call_chain_depth);
 	mono_profiler_install_gc (gc_event, gc_resize);
 #if (HAS_OPROFILE)
 	mono_profiler_install_jit_end (method_jit_result);

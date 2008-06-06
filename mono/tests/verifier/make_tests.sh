@@ -189,6 +189,7 @@ do
 	./make_bin_test.sh bin_cgt_un_a_${I} unverifiable 'cgt.un' "${TYPE}" 'object'
 	./make_bin_test.sh bin_cgt_un_b_${I} unverifiable 'cgt.un' 'object' "${TYPE}"
   I=`expr $I + 1`
+done
 
 for OP in ceq
 do
@@ -3957,7 +3958,8 @@ do
 
 	./make_call_test.sh call_${I}_non_virtual_compat_this_1 valid "${CTYPE} instance void ClassA::Method1()" "newobj instance void ClassC::.ctor()"
 	./make_call_test.sh call_${I}_non_virtual_compat_this_2 valid "${CTYPE} instance void ClassC::Method1()" "newobj instance void ClassC::.ctor()"
-	./make_call_test.sh call_${I}_non_virtual_compat_this_3 unverifiable "${CTYPE} instance void ClassC::Method1()" "newobj instance void ClassA::.ctor()"
+#This test passes peverify but fails under MS runtime due to a bug on their implementation of method token resolution.
+	./make_call_test.sh call_${I}_non_virtual_compat_this_3 valid "${CTYPE} instance void ClassC::Method1()" "newobj instance void ClassA::.ctor()"
 
 	./make_call_test.sh call_${I}_final_virtual_method_1 valid "${CTYPE} instance void ClassC::VirtMethod()" "newobj instance void ClassC::.ctor()"
 
@@ -4976,6 +4978,117 @@ done
 ./make_boxed_genarg_test.sh boxed_genarg_stack_merge_7 unverifiable "pop\n\tldloc.0\n\tbox IFace" "ldloc.1\n\tnewobj instance void object::.ctor()\n\tcallvirt instance int32 object::GetHashCode()\n\tbrtrue TARGET"
 
 
+
+#test for IL overflow
+
+for I in 0x0E 0x0F 0x10 0x11 0x12 0x13 0x1F 0x2B 0x2C 0x2D 0x2E 0x2F 0x30 0x31 0x32 0x33 0x34 0x35 0x36 0x37 0xDE 0xFE
+do
+	./make_il_overflow_test.sh incomplete_op_${I} invalid $I
+done
+
+for I in 0x20 0x21 0x22 0x23 0x28 0x29 0x38 0x39 0x3A 0x3B 0x3C 0x3D 0x3E 0x3F 0x40 0x41 0x42 0x43 0x44 0x6F 0x70 0x71 0x72 0x73 0x74 0x75 0x79 0x7B 0x7C 0x7D 0x7E 0x7F 0x80 0x81 0x8D 0x8C 0x8F 0xA3 0xA4 0xA5 0xC2 0xC6 0xD0 0xDD
+do
+	./make_il_overflow_test.sh incomplete_op_${I} invalid $I
+	./make_il_overflow_test.sh incomplete_op_${I}_0x00 invalid $I 0x00
+	./make_il_overflow_test.sh incomplete_op_${I}_0x00_0x00 invalid $I 0x00 0x00
+	./make_il_overflow_test.sh incomplete_op_${I}_0x00_0x00_0x00 invalid $I 0x00 0x00
+done
+
+
+for I in 0x06 0x07 0x09 0x0A 0x0E 0x0B 0x0C 0x0D 0x12 0x15 0x16 0x19 0x1C
+do
+	./make_il_overflow_test.sh incomplete_op_0xFE_${I} invalid 0xFE $I
+	./make_il_overflow_test.sh incomplete_op_0xFE_${I}_0x00 invalid 0xFE $I 0x00
+done
+
+#switch
+./make_il_overflow_test.sh incomplete_switch_1 invalid 0x45
+./make_il_overflow_test.sh incomplete_switch_2 invalid 0x45 0x00
+./make_il_overflow_test.sh incomplete_switch_3 invalid 0x45 0x00 0x00
+./make_il_overflow_test.sh incomplete_switch_4 invalid 0x45 0x00 0x00
+
+./make_il_overflow_test.sh incomplete_switch_arg_1 invalid 0x45 0x00 0x00 0x00 0x01
+./make_il_overflow_test.sh incomplete_switch_arg_2 invalid 0x45 0x00 0x00 0x00 0x01 0x00
+
+
+
+#tests for visibility of instantiated generic types and methods
+./make_type_visibility_test.sh type_vis_gist_1 valid "newobj instance void class Foo<[test_lib]ClassC>::.ctor()"
+./make_type_visibility_test.sh type_vis_gist_2 unverifiable "newobj instance void class Foo<[test_lib]NotExportedA>::.ctor()"
+
+
+./make_type_visibility_test.sh type_vis_cast_1 valid "castclass class [test_lib]ClassC"
+./make_type_visibility_test.sh type_vis_cast_2 valid "castclass class [test_lib]NotExportedA"
+./make_type_visibility_test.sh type_vis_cast_gist_1 valid "castclass class Foo<[test_lib]ClassC>"
+./make_type_visibility_test.sh type_vis_cast_gist_2 valid "castclass class Foo<[test_lib]NotExportedA>"
+
+
+./make_type_visibility_test.sh type_vis_sizeof_1 valid "sizeof class [test_lib]ClassC"
+./make_type_visibility_test.sh type_vis_sizeof_2 valid "sizeof class [test_lib]NotExportedA"
+./make_type_visibility_test.sh type_vis_sizeof_gist_1 valid "sizeof class Foo<[test_lib]ClassC>"
+./make_type_visibility_test.sh type_vis_sizeof_gist_2 valid "sizeof class Foo<[test_lib]NotExportedA>"
+
+
+./make_type_visibility_test.sh type_vis_newarr_1 valid "newarr class [test_lib]ClassC" "ldc.i4.1"
+./make_type_visibility_test.sh type_vis_newarr_2 valid "newarr class [test_lib]NotExportedA" "ldc.i4.1"
+./make_type_visibility_test.sh type_vis_newarr_gist_1 valid "newarr class Foo<[test_lib]ClassC>" "ldc.i4.1"
+./make_type_visibility_test.sh type_vis_newarr_gist_2 valid "newarr class Foo<[test_lib]NotExportedA>" "ldc.i4.1"
+
+
+./make_type_visibility_test.sh type_vis_ldelem_1 valid "ldelem class [test_lib]ClassC" "ldc.i4.1\n\tnewarr class [test_lib]ClassC\n\tldc.i4.0"
+./make_type_visibility_test.sh type_vis_ldelem_2 valid "ldelem class [test_lib]NotExportedA" "ldc.i4.1\n\tnewarr class [test_lib]NotExportedA\n\tldc.i4.0"
+./make_type_visibility_test.sh type_vis_ldelem_gist_1 valid "ldelem class Foo<[test_lib]ClassC>" "ldc.i4.1\n\tnewarr class Foo<[test_lib]ClassC>\n\tldc.i4.0"
+./make_type_visibility_test.sh type_vis_ldelem_gist_2 valid "ldelem class Foo<[test_lib]NotExportedA>" "ldc.i4.1\n\tnewarr class Foo<[test_lib]NotExportedA>\n\tldc.i4.0"
+
+
+./make_type_visibility_test.sh type_vis_stelem_1 valid "stelem class [test_lib]ClassC" "ldc.i4.1\n\tnewarr class [test_lib]ClassC\n\tldc.i4.0\n\tldnull"
+./make_type_visibility_test.sh type_vis_stelem_2 valid "stelem class [test_lib]NotExportedA" "ldc.i4.1\n\tnewarr class [test_lib]NotExportedA\n\tldc.i4.0\n\tldnull"
+./make_type_visibility_test.sh type_vis_stelem_gist_1 valid "stelem class Foo<[test_lib]ClassC>" "ldc.i4.1\n\tnewarr class Foo<[test_lib]ClassC>\n\tldc.i4.0\n\tldnull"
+./make_type_visibility_test.sh type_vis_stelem_gist_2 valid "stelem class Foo<[test_lib]NotExportedA>" "ldc.i4.1\n\tnewarr class Foo<[test_lib]NotExportedA>\n\tldc.i4.0\n\tldnull"
+
+
+./make_type_visibility_test.sh type_vis_box_1 valid "box valuetype [test_lib]PublicStruct" "ldloc.1" "valuetype [test_lib]PublicStruct"
+./make_type_visibility_test.sh type_vis_box_2 valid "box valuetype [test_lib]NBStruct" "ldloc.1" "valuetype [test_lib]NBStruct"
+
+
+#generic method
+
+./make_type_visibility_test.sh type_vis_gmethod_1 valid "call void SimpleClass::Generic<[test_lib]ClassC>()"
+./make_type_visibility_test.sh type_vis_gmethod_2 unverifiable "call void SimpleClass::Generic<[test_lib]NotExportedA>()"
+
+
+#Constructor tests
+
+./make_ctor_test.sh ctor_good_ops_1 valid "call instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_good_ops_2 valid "nop\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_good_ops_3 valid "dup\n\tldc.i4.0\n\tstfld int32 Test::val\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_good_ops_4 valid "dup\n\tldfld int32 Test::val\n\tpop\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_good_ops_5 valid "dup\n\tpop\n\tcall instance void object::'.ctor'()"
+
+./make_ctor_test.sh ctor_call_super_2x valid "call instance void object::'.ctor'()\n\tldarg.0\n\tcall instance void object::'.ctor'()"
+
+./make_ctor_test.sh ctor_pass_this_as_arg_1 unverifiable "ldarg.0\n\tcall instance void TestClass::'.ctor'(object)" "other"
+./make_ctor_test.sh ctor_pass_this_as_arg_2 unverifiable "dup\n\tcall instance void TestClass::'.ctor'(object)" "other"
+
+
+./make_ctor_test.sh ctor_no_super_call unverifiable "nop"
+./make_ctor_test.sh ctor_call_invalid_super unverifiable "call instance void TestClass::'.ctor'()"
+./make_call_test.sh ctor_call_outside_ctor unverifiable "call instance void ClassA::.ctor()" "newobj instance void ClassA::.ctor()"
+
+./make_ctor_test.sh ctor_use_non_this_ptr unverifiable "ldloc.0\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_store_this_on_field unverifiable "dup\n\tdup\n\tstfld object Test::obj\n\tcall instance void object::'.ctor'()"
+
+
+./make_ctor_test.sh ctor_use_uninit_this_1 unverifiable "dup\n\tcall void Test::StaticMethod(object)\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_use_uninit_this_2 unverifiable "dup\n\tcall instance void Test::InstanceMethod()\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_use_uninit_this_3 unverifiable "dup\n\tcastclass [mscorlib]System.String\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_use_uninit_this_4 unverifiable "dup\n\tunbox.any Test\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_use_uninit_this_5 unverifiable "dup\n\tcall instance void object::'.ctor'()\n\tcall instance void Test::InstanceMethod()"
+
+./make_ctor_test.sh ctor_bad_ops_1 unverifiable "dup\n\tstloc.0\n\tcall instance void object::'.ctor'()"
+./make_ctor_test.sh ctor_bad_ops_2 unverifiable "dup\n\tcall instance void object::'.ctor'()\n\tcall instance void Test::InstanceMethod()"
+
+#TODO try / catch inside constructor
 
 
 

@@ -1,3 +1,45 @@
+2008-06-05  Zoltan Varga  <vargaz@gmail.com>
+
+	* Makefile.am (libmonoutils_la_SOURCES): Add dtrace.h.
+
+2008-06-05  Andreas Färber  <andreas.faerber@web.de>
+
+	* dtrace.h: New file, defines macros for DTrace probes.
+	* Makefile.am (BUILT_SOURCES): Generate mono-dtrace.h when DTrace enabled.
+
+	Contributed under MIT/X11 license.
+
+2008-05-29  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-value-hash.c: Remove the unused prime functions. Fixes #395320.
+
+2008-05-27  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-value-hash.c: Fix build on older glib versions.
+
+	* Makefile.am (libmonoutils_la_SOURCES): Add mono-value-hash.{h,c}.
+
+	* mono-value-hash.h mono-value-hash.c: New files.
+
+2008-05-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* Makefile.am (libmonoutils_la_SOURCES): Add mono-property-hash.{h,c}.
+
+	* mono-property-hash.h mono-property-hash.c: New files.
+
+2008-05-14  Kornél Pál  <kornelpal@gmail.com>
+
+	* mono-path.c (mono_path_canonicalize): Convert '/' to '\' on Windows that
+	fixes path canonicalization for paths containing '/'.
+
+	Contributed under MIT/X11 license.
+
+2008-05-04  Andreas Faerber  <andreas.faerber@web.de>
+
+	* mono-membar.h: Prepare support for OSX/ppc64.
+
+	Contributed under MIT/X11 license.
+
 2008-04-16  Jonathan Chambers  <joncham@gmail.com>
 	* monobitset.c (find_first_unset): Use gsize instead of gulong for platform
 	  dependent size; fixes Win64.

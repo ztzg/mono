@@ -479,6 +479,7 @@ MINI_OP(OP_GOT_ENTRY, "got_entry")
 
 /* used to impl unbox */
 MINI_OP(OP_UNBOXCAST  , "unboxcast")
+MINI_OP(OP_UNBOXCAST_REG  , "unboxcast_reg")
 
 /* exception related opcodes */
 MINI_OP(OP_CALL_HANDLER  , "call_handler")
@@ -543,6 +544,9 @@ MINI_OP(OP_CISINST, "cisinst")
 MINI_OP(OP_CCASTCLASS, "ccastclass")
 MINI_OP(OP_SAVE_LMF, "save_lmf")
 MINI_OP(OP_RESTORE_LMF, "restore_lmf")
+/* mkrefany/refanyval for generic sharing */
+MINI_OP(OP_MKREFANY_REGS, "mkrefany_regs")
+MINI_OP(OP_REFANYVAL_REG, "refanyval_reg")
 
 /* arch-dep tls access */
 MINI_OP(OP_TLS_GET,            "tls_get")
@@ -576,6 +580,11 @@ MINI_OP(OP_ATOMIC_ADD_IMM_I8, "atomic_add_imm_i8")
 MINI_OP(OP_ATOMIC_ADD_IMM_NEW_I8, "atomic_add_imm_new_i8")
 MINI_OP(OP_ATOMIC_EXCHANGE_I8, "atomic_exchange_i8")
 MINI_OP(OP_MEMORY_BARRIER, "memory_barrier")
+
+/* CompareExchange where the value to store is a constant */
+/* backend->data holds the constant value */
+MINI_OP(OP_ATOMIC_CAS_IMM_I4, "atomic_cas_imm_i4")
+MINI_OP(OP_ATOMIC_CAS_IMM_I8, "atomic_cas_imm_i8")
 
 /* Arch specific opcodes */
 #if defined(__i386__) || defined(__x86_64__)
@@ -666,7 +675,7 @@ MINI_OP(OP_AMD64_LOADI8_MEMINDEX,        "amd64_loadi8_memindex")
 MINI_OP(OP_AMD64_SAVE_SP_TO_LMF,         "amd64_save_sp_to_lmf")
 #endif
 
-#if  defined(__ppc__) || defined(__powerpc__)		
+#if  defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__)
 MINI_OP(OP_PPC_SUBFIC,             "ppc_subfic")
 MINI_OP(OP_PPC_SUBFZE,             "ppc_subfze")
 MINI_OP(OP_CHECK_FINITE,           "ppc_check_finite")

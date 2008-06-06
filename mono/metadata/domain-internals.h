@@ -54,6 +54,7 @@ struct _MonoJitInfoTableChunk
 
 struct _MonoJitInfoTable
 {
+	MonoDomain	       *domain;
 	int			num_chunks;
 	MonoJitInfoTableChunk  *chunks [MONO_ZERO_LEN_ARRAY];
 };
@@ -175,8 +176,10 @@ struct _MonoDomain {
 	MonoInternalHashTable jit_code_hash;
 	/* maps MonoMethod -> MonoJitDynamicMethodInfo */
 	GHashTable         *dynamic_code_hash;
+	int		    num_jit_info_tables;
 	MonoJitInfoTable * 
 	  volatile          jit_info_table;
+	GSList		   *jit_info_free_queue;
 	/* Used when loading assemblies */
 	gchar **search_path;
 	gchar *private_bin_path;
@@ -231,6 +234,9 @@ mono_init_com_types (void) MONO_INTERNAL;
 
 void 
 mono_cleanup (void) MONO_INTERNAL;
+
+void
+mono_close_exe_image (void) MONO_INTERNAL;
 
 void
 mono_jit_info_table_add    (MonoDomain *domain, MonoJitInfo *ji) MONO_INTERNAL;

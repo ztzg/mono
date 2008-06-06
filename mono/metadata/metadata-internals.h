@@ -10,6 +10,12 @@
 #include "mono/utils/mono-compiler.h"
 #include "mono/utils/mono-dl.h"
 #include "mono/utils/monobitset.h"
+#include "mono/utils/mono-property-hash.h"
+#include "mono/utils/mono-value-hash.h"
+
+#define MONO_SECMAN_FLAG_INIT(x)		(x & 0x2)
+#define MONO_SECMAN_FLAG_GET_VALUE(x)		(x & 0x1)
+#define MONO_SECMAN_FLAG_SET_VALUE(x,y)		do { x = ((y) ? 0x3 : 0x2); } while (0)
 
 struct _MonoAssembly {
 	/* 
@@ -35,6 +41,7 @@ struct _MonoAssembly {
 	guint32 aptc:2;		/* Has the [AllowPartiallyTrustedCallers] attributes */
 	guint32 fulltrust:2;	/* Has FullTrust permission */
 	guint32 unmanaged:2;	/* Has SecurityPermissionFlag.UnmanagedCode permission */
+	guint32 skipverification:2;	/* Has SecurityPermissionFlag.SkipVerification permission */
 };
 
 typedef struct {
@@ -142,8 +149,12 @@ struct _MonoImage {
 	/*
 	 * Indexed by method tokens and typedef tokens.
 	 */
-	GHashTable *method_cache;
+	MonoValueHashTable *method_cache;
 	MonoInternalHashTable class_cache;
+
+	/* Indexed by memberref + methodspec tokens */
+	GHashTable *methodref_cache;
+
 	/*
 	 * Indexed by fielddef and memberref tokens
 	 */
@@ -194,6 +205,7 @@ struct _MonoImage {
 	GHashTable *cominterop_invoke_cache;
 	GHashTable *cominterop_wrapper_cache;
 	GHashTable *static_rgctx_invoke_cache; /* LOCKING: marshal lock */
+	GHashTable *thunk_invoke_cache;
 
 	/*
 	 * indexed by MonoClass pointers
@@ -210,6 +222,9 @@ struct _MonoImage {
 	 * indexed by token and MonoGenericContext pointer
 	 */
 	GHashTable *generic_class_cache;
+
+	/* Contains rarely used fields of runtime structures belonging to this image */
+	MonoPropertyHash *property_hash;
 
 	void *reflection_info;
 
@@ -420,6 +435,7 @@ mono_metadata_inflate_generic_inst          (MonoGenericInst       *ginst,
 void mono_dynamic_stream_reset  (MonoDynamicStream* stream) MONO_INTERNAL;
 void mono_assembly_addref       (MonoAssembly *assembly) MONO_INTERNAL;
 void mono_assembly_load_friends (MonoAssembly* ass) MONO_INTERNAL;
+gboolean mono_assembly_has_skip_verification (MonoAssembly* ass) MONO_INTERNAL;
 
 gboolean mono_public_tokens_are_equal (const unsigned char *pubt1, const unsigned char *pubt2) MONO_INTERNAL;
 
@@ -438,6 +454,7 @@ void mono_unload_interface_ids (MonoBitSet *bitset) MONO_INTERNAL;
 
 
 MonoType *mono_metadata_type_dup (MonoMemPool *mp, const MonoType *original) MONO_INTERNAL;
+MonoMethodSignature  *mono_metadata_signature_dup_full (MonoMemPool *mp,MonoMethodSignature *sig) MONO_INTERNAL;
 
 MonoGenericInst *
 mono_get_shared_generic_inst (MonoGenericContainer *container) MONO_INTERNAL;

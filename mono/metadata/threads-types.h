@@ -143,7 +143,7 @@ gboolean mono_thread_test_state (MonoThread *thread, MonoThreadState test) MONO_
 void mono_thread_init_apartment_state (void) MONO_INTERNAL;
 void mono_thread_cleanup_apartment_state (void) MONO_INTERNAL;
 
-gboolean mono_threads_set_shutting_down (void) MONO_INTERNAL;
+void mono_threads_set_shutting_down (void) MONO_INTERNAL;
 gboolean mono_threads_is_shutting_down (void) MONO_INTERNAL;
 
 MonoException* mono_thread_get_undeniable_exception (void);
@@ -157,6 +157,7 @@ typedef struct {
 typedef void (*MonoHazardousFreeFunc) (gpointer p);
 
 void mono_thread_hazardous_free_or_queue (gpointer p, MonoHazardousFreeFunc free_func);
+void mono_thread_hazardous_try_free_all (void);
 
 MonoThreadHazardPointers* mono_hazard_pointer_get (void);
 

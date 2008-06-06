@@ -538,8 +538,10 @@ mono_metadata_compute_size (MonoImage *meta, int tableindex, guint32 *result_bit
 				break;
 			case MONO_TABLE_EVENT:
 				g_assert (i == 2);
-				field_size = MAX (idx_size (MONO_TABLE_TYPEDEF), idx_size(MONO_TABLE_TYPEREF));
-				field_size = MAX (field_size, idx_size(MONO_TABLE_TYPESPEC));
+				n = MAX (meta->tables [MONO_TABLE_TYPEDEF].rows, meta->tables [MONO_TABLE_TYPEREF].rows);
+				n = MAX (n, meta->tables [MONO_TABLE_TYPESPEC].rows);
+				/*This is a coded token for 3 tables, so takes 2 bits */
+				field_size = rtsize (n, 16 - MONO_TYPEDEFORREF_BITS);
 				break;
 			case MONO_TABLE_EVENT_POINTER:
 				g_assert (i == 0);
@@ -596,9 +598,11 @@ mono_metadata_compute_size (MonoImage *meta, int tableindex, guint32 *result_bit
 				break;
 			case MONO_TABLE_GENERICPARAM:
 				g_assert (i == 2 || i == 4 || i == 5);
-				if (i == 2)
-					field_size = MAX (idx_size (MONO_TABLE_METHOD), idx_size (MONO_TABLE_TYPEDEF));
-				else if (i == 4)
+				if (i == 2) {
+					n = MAX (meta->tables [MONO_TABLE_METHOD].rows, meta->tables [MONO_TABLE_TYPEDEF].rows);
+					/*This is a coded token for 2 tables, so takes 1 bit */
+					field_size = rtsize (n, 16 - MONO_TYPEORMETHOD_BITS);
+				} else if (i == 4)
 					field_size = idx_size (MONO_TABLE_TYPEDEF);
 				else if (i == 5)
 					field_size = idx_size (MONO_TABLE_TYPEDEF);
@@ -1783,6 +1787,26 @@ mono_metadata_signature_alloc (MonoImage *m, guint32 nparams)
 	return sig;
 }
 
+MonoMethodSignature*
+mono_metadata_signature_dup_full (MonoMemPool *mp, MonoMethodSignature *sig)
+{
+	int sigsize;
+
+	sigsize = sizeof (MonoMethodSignature) + (sig->param_count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType *);
+
+	if (mp) {
+		MonoMethodSignature *ret;
+		mono_loader_lock ();
+		ret = mono_mempool_alloc (mp, sigsize);
+		mono_loader_unlock ();
+
+		memcpy (ret, sig, sigsize);
+		return ret;
+	} else {
+		return g_memdup (sig, sigsize);
+	}
+}
+
 /*
  * mono_metadata_signature_dup:
  * @sig: method signature
@@ -1795,10 +1819,7 @@ mono_metadata_signature_alloc (MonoImage *m, guint32 nparams)
 MonoMethodSignature*
 mono_metadata_signature_dup (MonoMethodSignature *sig)
 {
-	int sigsize;
-
-	sigsize = sizeof (MonoMethodSignature) + (sig->param_count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType *);
-	return g_memdup (sig, sigsize);
+	return mono_metadata_signature_dup_full (NULL, sig);
 }
 
 /*
@@ -2228,7 +2249,33 @@ free_generic_class (MonoGenericClass *gclass)
 		/* Allocated in mono_generic_class_get_class () */
 		g_free (class->interfaces);
 		g_free (class);
-	}		
+	} else if (gclass->is_dynamic) {
+		MonoDynamicGenericClass *dgclass = (MonoDynamicGenericClass *)gclass;
+
+		for (i = 0; i < dgclass->count_fields; ++i) {
+			MonoClassField *field = dgclass->fields + i;
+			mono_metadata_free_type (field->type);
+			if (field->generic_info) {
+				mono_metadata_free_type (field->generic_info->generic_type);
+				g_free (field->generic_info);
+			}
+			g_free ((char*)field->name);
+		}
+		for (i = 0; i < dgclass->count_properties; ++i) {
+			MonoProperty *property = dgclass->properties + i;
+			g_free ((char*)property->name);
+		}
+		for (i = 0; i < dgclass->count_events; ++i) {
+			MonoEvent *event = dgclass->events + i;
+			g_free ((char*)event->name);
+		}
+		
+		g_free (dgclass->methods);
+		g_free (dgclass->ctors);
+		g_free (dgclass->fields);
+		g_free (dgclass->properties);
+		g_free (dgclass->events);
+	}
 	g_free (gclass);
 }
 
@@ -4095,13 +4142,10 @@ mono_metadata_type_dup (MonoMemPool *mp, const MonoType *o)
 	if (o->type == MONO_TYPE_PTR) {
 		r->data.type = mono_metadata_type_dup (mp, o->data.type);
 	} else if (o->type == MONO_TYPE_ARRAY) {
-		/* FIXME: should mono_dup_array_type() use mempools? */
-		g_assert (!mp);
-		r->data.array = mono_dup_array_type (o->data.array);
+		r->data.array = mono_dup_array_type (mp, o->data.array);
 	} else if (o->type == MONO_TYPE_FNPTR) {
-		/* FIXME: should mono_metadata_signature_deep_dup() use mempools? */
-		g_assert (!mp);
-		r->data.method = mono_metadata_signature_deep_dup (o->data.method);
+		/*FIXME the dup'ed signature is leaked mono_metadata_free_type*/
+		r->data.method = mono_metadata_signature_deep_dup (mp, o->data.method);
 	}
 	return r;
 }

@@ -1144,13 +1144,14 @@ mono_string_to_bstr (MonoString *string_obj)
 #else
 	if (com_provider == MONO_COM_DEFAULT) {
 		int slen = mono_string_length (string_obj);
-		char *ret = g_malloc (slen * 2 + 4 + 2);
+		/* allocate len + 1 utf16 characters plus 4 byte integer for length*/
+		char *ret = g_malloc ((slen + 1) * sizeof(gunichar2) + sizeof(guint32));
 		if (ret == NULL)
 			return NULL;
-		memcpy (ret + 4, mono_string_chars (string_obj), slen * 2);
-		* ((guint32 *) ret) = slen;
-		ret [4 + slen * 2] = 0;
-		ret [5 + slen * 2] = 0;
+		memcpy (ret + sizeof(guint32), mono_string_chars (string_obj), slen * sizeof(gunichar2));
+		* ((guint32 *) ret) = slen * sizeof(gunichar2);
+		ret [4 + slen * sizeof(gunichar2)] = 0;
+		ret [5 + slen * sizeof(gunichar2)] = 0;
 
 		return ret + 4;
 	} else if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
@@ -1178,7 +1179,7 @@ mono_string_from_bstr (gpointer bstr)
 	return mono_string_new_utf16 (mono_domain_get (), bstr, SysStringLen (bstr));
 #else
 	if (com_provider == MONO_COM_DEFAULT) {
-		return mono_string_new_utf16 (mono_domain_get (), bstr, *(guint32 *)((char *)bstr - 4));
+		return mono_string_new_utf16 (mono_domain_get (), bstr, *((guint32 *)bstr - 1) / sizeof(gunichar2));
 	} else if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
 		MonoString* str = NULL;
 		glong written = 0;
@@ -4451,6 +4452,9 @@ mono_marshal_get_delegate_invoke (MonoMethod *method, MonoDelegate *del)
 	if (callvirt) {
 		// From mono_mb_create_and_cache
 		newm = mono_mb_create_method (mb, sig, sig->param_count + 16);
+		newm->skip_visibility = 1;
+		/*We perform double checked locking, so must fence before publishing*/
+		mono_memory_barrier ();
 		mono_marshal_lock ();
 		res = g_hash_table_lookup (cache, &key);
 		if (!res) {
@@ -4467,6 +4471,7 @@ mono_marshal_get_delegate_invoke (MonoMethod *method, MonoDelegate *del)
 		}
 	} else {
 		res = mono_mb_create_and_cache (cache, sig, mb, sig, sig->param_count + 16);
+		res->skip_visibility = 1;
 	}
 	mono_mb_free (mb);
 
@@ -6230,7 +6235,7 @@ emit_marshal_string (EmitMarshalContext *m, int argnum, MonoType *t,
 		if (conv == MONO_MARSHAL_CONV_BSTR_STR)
 			mono_mb_emit_icall (mb, mono_free_bstr);
 		else
-			mono_mb_emit_icall (mb, g_free);
+			mono_mb_emit_icall (mb, mono_marshal_free);
 		break;
 
 	case MARSHAL_ACTION_MANAGED_CONV_IN:
@@ -12007,4 +12012,152 @@ mono_marshal_find_nonzero_bit_offset (guint8 *buf, int len, int *byte_offset, gu
 
 	*byte_offset = i;
 	*bitmask = buf [i];
+}
+
+MonoMethod *
+mono_marshal_get_thunk_invoke_wrapper (MonoMethod *method)
+{
+	MonoMethodBuilder *mb;
+	MonoMethodSignature *sig, *csig;
+	MonoExceptionClause *clause;
+	MonoMethodHeader *header;
+	MonoImage *image;
+	MonoClass *klass;
+	GHashTable *cache;
+	MonoMethod *res;
+	int i, param_count, sig_size, pos_leave;
+
+	g_assert (method);
+
+	klass = method->klass;
+	image = method->klass->image;
+	cache = image->thunk_invoke_cache;
+
+	if ((res = mono_marshal_find_in_cache (cache, method)))
+		return res;
+
+	sig = mono_method_signature (method);
+	mb = mono_mb_new (klass, method->name, MONO_WRAPPER_NATIVE_TO_MANAGED);
+
+	/* add "this" and exception param */
+	param_count = sig->param_count + sig->hasthis + 1;
+
+	/* dup & extend signature */
+	csig = mono_metadata_signature_alloc (image, param_count);
+	sig_size = sizeof (MonoMethodSignature) + ((sig->param_count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType *));
+	memcpy (csig, sig, sig_size);
+	csig->param_count = param_count;
+	csig->hasthis = 0;
+	csig->pinvoke = 1;
+	csig->call_convention = MONO_CALL_DEFAULT;
+
+	if (sig->hasthis) {
+		/* add "this" */
+		csig->params [0] = &klass->byval_arg;
+		/* move params up by one */
+		for (i = 0; i < sig->param_count; i++)
+			csig->params [i + 1] = sig->params [i];
+	}
+
+	/* setup exception param as byref+[out] */
+	csig->params [param_count - 1] = mono_metadata_type_dup (image->mempool,
+		 &mono_defaults.exception_class->byval_arg);
+	csig->params [param_count - 1]->byref = 1;
+	csig->params [param_count - 1]->attrs = PARAM_ATTRIBUTE_OUT;
+
+	/* convert struct return to object */
+	if (MONO_TYPE_ISSTRUCT (sig->ret))
+		csig->ret = &mono_defaults.object_class->byval_arg;
+
+	/* local 0 (temp for exception object) */
+	mono_mb_add_local (mb, &mono_defaults.object_class->byval_arg);
+
+	/* local 1 (temp for result) */
+	if (!MONO_TYPE_IS_VOID (sig->ret))
+		mono_mb_add_local (mb, sig->ret);
+
+	/* clear exception arg */
+	mono_mb_emit_ldarg (mb, param_count - 1);
+	mono_mb_emit_byte (mb, CEE_LDNULL);
+	mono_mb_emit_byte (mb, CEE_STIND_REF);
+
+	/* try */
+	mono_loader_lock ();
+	clause = mono_mempool_alloc0 (image->mempool, sizeof (MonoExceptionClause));
+	mono_loader_unlock ();
+	clause->try_offset = mono_mb_get_label (mb);
+
+	/* push method's args */
+	for (i = 0; i < param_count - 1; i++) {
+		MonoType *type;
+		MonoClass *klass;
+
+		mono_mb_emit_ldarg (mb, i);
+
+		/* get the byval type of the param */
+		klass = mono_class_from_mono_type (csig->params [i]);
+		type = &klass->byval_arg;
+
+		/* unbox struct args */
+		if (MONO_TYPE_ISSTRUCT (type)) {
+			mono_mb_emit_op (mb, CEE_UNBOX, klass);
+
+			/* byref args & and the "this" arg must remain a ptr.
+			   Otherwise make a copy of the value type */
+			if (!(csig->params [i]->byref || (i == 0 && sig->hasthis)))
+				mono_mb_emit_op (mb, CEE_LDOBJ, klass);
+
+			csig->params [i] = &mono_defaults.object_class->byval_arg;
+		}
+	}
+
+	/* call */
+	if (method->flags & METHOD_ATTRIBUTE_VIRTUAL)
+		mono_mb_emit_op (mb, CEE_CALLVIRT, method);
+	else
+		mono_mb_emit_op (mb, CEE_CALL, method);
+
+	/* save result at local 1 */
+	if (!MONO_TYPE_IS_VOID (sig->ret))
+		mono_mb_emit_stloc (mb, 1);
+
+	pos_leave = mono_mb_emit_branch (mb, CEE_LEAVE);
+
+	/* catch */
+	clause->flags = MONO_EXCEPTION_CLAUSE_NONE;
+	clause->try_len = mono_mb_get_pos (mb) - clause->try_offset;
+	clause->data.catch_class = mono_defaults.object_class;
+
+	clause->handler_offset = mono_mb_get_label (mb);
+
+	/* store exception at local 0 */
+	mono_mb_emit_stloc (mb, 0);
+	mono_mb_emit_ldarg (mb, param_count - 1);
+	mono_mb_emit_ldloc (mb, 0);
+	mono_mb_emit_byte (mb, CEE_STIND_REF);
+	mono_mb_emit_branch (mb, CEE_LEAVE);
+
+	clause->handler_len = mono_mb_get_pos (mb) - clause->handler_offset;
+
+	mono_mb_patch_branch (mb, pos_leave);
+	/* end-try */
+
+	if (!MONO_TYPE_IS_VOID (sig->ret)) {
+		mono_mb_emit_ldloc (mb, 1);
+
+		/* box the return value */
+		if (MONO_TYPE_ISSTRUCT (sig->ret))
+			mono_mb_emit_op (mb, CEE_BOX, mono_class_from_mono_type (sig->ret));
+	}
+
+	mono_mb_emit_byte (mb, CEE_RET);
+
+	res = mono_mb_create_and_cache (cache, method, mb, csig, param_count + 16);
+	mono_mb_free (mb);
+
+	header = ((MonoMethodNormal *)res)->header;
+	header->num_clauses = 1;
+	header->clauses = clause;
+
+	return res;
 }
