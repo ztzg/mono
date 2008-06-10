@@ -76,15 +76,11 @@
   -->
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties REFS-RefInfo-rt="repository:jre:sun:1.6.0" REFS-JarPath-rt="" REFS-JarPath-mscorlib="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mscorlib.jar" REFS-JarPath-nunit-framework="..\..\..\..\..\nunit20\framework\bin\Debug_Java20\nunit.framework.jar" REFS-JarPath-system="..\..\..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.jar" REFS-JarPath-system-xml="..\..\..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Xml.jar" />
+      <UserProperties REFS-RefInfo-rt="repository:jre:sun:1.6.0" REFS-JarPath-rt="" REFS-JarPath-nunit-framework="..\..\..\..\..\nunit20\framework\bin\Debug_Java20\nunit.framework.jar" />
     </VisualStudio>
   </ProjectExtensions>
   <ItemGroup>
-    <Reference Include="nunit.framework, Version=0.0.0.0, Culture=neutral">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\nunit20\framework\bin\Debug_Java20\nunit.framework.dll</HintPath>
-    </Reference>
-    <Reference Include="rt, Version=1.6.65535.65535, Culture=neutral, processorArchitecture=MSIL" />
+    <Reference Include="rt, Version=1.6.0.65535, Culture=neutral, processorArchitecture=MSIL" />
     <Reference Include="System" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -108,6 +104,12 @@
     <EmbeddedResource Include="almost_config.xml" />
     <Content Include="HtmlAgilityPack\readme.txt" />
     <EmbeddedResource Include="nunitweb_config.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\nunit20\framework\nunit.framework.dll20.J2EE.csproj">
+      <Project>{ACDA29DB-62AB-4AF8-8862-B3B4FC755BBC}</Project>
+      <Name>nunit.framework.dll20.J2EE</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />

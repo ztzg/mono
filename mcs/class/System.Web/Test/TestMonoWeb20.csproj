@@ -97,16 +97,11 @@
   -->
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties REFS-JarPath-rt="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\jre5\lib\rt.jar" REFS-JarPath-mscorlib="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mscorlib.jar" REFS-JarPath-htmlcompare="mainsoft\MainsoftWebTest\bin\Debug_Java\HtmlCompare.jar" REFS-JarPath-nunit-framework="mainsoft\MainsoftWebTest\bin\Debug_Java\nunit.framework.jar" REFS-JarPath-nunitweb="mainsoft\NunitWeb\NunitWeb\bin\Debug_Java20\NunitWeb.jar" REFS-JarPath-system="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.jar" REFS-JarPath-system-configuration="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Configuration.jar" REFS-JarPath-system-data="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Data.jar" REFS-JarPath-system-drawing="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Drawing.jar;..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\jai_imageio.jar;..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\jai_core.jar;..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\jai_codec.jar;..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\clibwrapper_jiio.jar;..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mlibwrapper_jai.jar" REFS-JarPath-system-web="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Web.jar" REFS-JarPath-system-xml="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.Xml.jar" />
+      <UserProperties />
     </VisualStudio>
   </ProjectExtensions>
   <ItemGroup>
     <Reference Include="J2SE.Helpers, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL" />
-    <Reference Include="nunit.framework, Version=2.2.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\nunit20\nunit-console\bin\Debug_Java20\nunit.framework.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System">
       <HintPath>..\..\..\..\..\..\WINDOWS\Microsoft.NET\Framework\v2.0.50727\System.dll</HintPath>
     </Reference>
@@ -419,6 +414,10 @@
     <None Include="System.Web\ChangeLog" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\nunit20\framework\nunit.framework.dll20.J2EE.csproj">
+      <Project>{ACDA29DB-62AB-4AF8-8862-B3B4FC755BBC}</Project>
+      <Name>nunit.framework.dll20.J2EE</Name>
+    </ProjectReference>
     <ProjectReference Include="mainsoft\MainsoftWebTest\HtmlCompare20.csproj">
       <Project>{C3375963-9409-41A1-ADD2-1076F5A90BDE}</Project>
       <Name>HtmlCompare20</Name>
