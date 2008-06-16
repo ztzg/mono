@@ -608,7 +608,7 @@ namespace System.Web {
 		void RewritePath (string filePath, string pathInfo, string queryString, bool setClientFilePath)
 		{
 			if (UrlUtils.IsRooted (filePath))
-				filePath = UrlUtils.Combine (Request.BaseVirtualDir, UrlUtils.Canonic (filePath).Substring (1));
+				filePath = UrlUtils.Combine (HttpRuntime.AppDomainAppVirtualPath, UrlUtils.Canonic (filePath).Substring (1));
 			else
 				filePath = UrlUtils.Combine (UrlUtils.GetDirectory (Request.FilePath), filePath);
 			if (!StrUtils.StartsWith (filePath, HttpRuntime.AppDomainAppVirtualPath))
