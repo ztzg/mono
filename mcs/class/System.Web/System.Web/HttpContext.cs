@@ -581,11 +581,13 @@ namespace System.Web {
 #endif
 		}
 
+		[MonoLimitation ("rebaseClientPath is always treated as true")]
 		public void RewritePath (string filePath, string pathInfo, string queryString)
 		{
 			RewritePath (filePath, pathInfo, queryString, false);
 		}
 
+		[MonoLimitation ("rebaseClientPath is always treated as true")]
 #if NET_2_0
 		public
 #else
@@ -600,6 +602,7 @@ namespace System.Web {
 				RewritePath (path, null, null, rebaseClientPath);
 		}
 
+		[MonoLimitation("setClientFilePath is always treated as true")]
 #if NET_2_0
 		public
 #else
@@ -607,9 +610,7 @@ namespace System.Web {
 #endif
 		void RewritePath (string filePath, string pathInfo, string queryString, bool setClientFilePath)
 		{
-			if (UrlUtils.IsRooted (filePath))
-				filePath = UrlUtils.Combine (HttpRuntime.AppDomainAppVirtualPath, UrlUtils.Canonic (filePath).Substring (1));
-			else
+			if (!UrlUtils.IsRooted (filePath))
 				filePath = UrlUtils.Combine (UrlUtils.GetDirectory (Request.FilePath), filePath);
 			if (!StrUtils.StartsWith (filePath, HttpRuntime.AppDomainAppVirtualPath))
 				throw new HttpException (404, "The virtual path '" + filePath + "' maps to another application.", filePath);
@@ -622,9 +623,9 @@ namespace System.Web {
 			if (queryString != null)
 				Request.QueryStringRaw = queryString;
 #if NET_2_0
-			if (setClientFilePath)
-				Request.SetFilePath (filePath);
+			Request.SetFilePath (filePath);
 #endif
+			// FIXME: We need an additional property ClientFilePath to be used in ResolveUrl/ResolveClientUrl
 		}
 
 #region internals
