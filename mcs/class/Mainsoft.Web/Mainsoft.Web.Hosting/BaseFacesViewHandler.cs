@@ -35,13 +35,10 @@ namespace Mainsoft.Web.Hosting
 
 		public override UIViewRoot createView (FacesContext facesContext, String viewId) {
 
-			// create instance of Page by viewId
-			StringBuilder sb = new StringBuilder ();
-			sb.Append (facesContext.getExternalContext ().getRequestContextPath ());
-			sb.Append (viewId);
-			IHttpHandler page = PageParser.GetCompiledPageInstance (sb.ToString (), null, ((AspNetFacesContext) facesContext).Context);
-
+			// create instance of Page
 			HttpContext context = ((AspNetFacesContext) facesContext).Context;
+			IHttpHandler page = PageParser.GetCompiledPageInstance (context.Request.CurrentExecutionFilePath, null, context);
+
 			page.ProcessRequest (context);
 			
 			UIViewRoot uiViewRoot = _viewHandler.createView (facesContext, viewId);
