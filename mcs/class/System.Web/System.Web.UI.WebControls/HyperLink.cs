@@ -115,15 +115,13 @@ namespace System.Web.UI.WebControls {
 			}
 			string image_url = ImageUrl;
 			if (image_url != "") {
-				Image img = new Image ();
-				img.ImageUrl = ResolveClientUrl (image_url);
-				string str = Text;
-				if (str != "")
-					img.AlternateText = str;
-				str = ToolTip;
-				if (str != "")
-					img.ToolTip = str;
-				img.RenderControl (w);
+				w.AddAttribute(HtmlTextWriterAttribute.Src, ResolveClientUrl(image_url));
+				if (!String.IsNullOrEmpty (Text))
+					w.AddAttribute (HtmlTextWriterAttribute.Alt, Text);
+				if (!String.IsNullOrEmpty (ToolTip))
+					w.AddAttribute (HtmlTextWriterAttribute.Title, ToolTip);
+				w.RenderBeginTag (HtmlTextWriterTag.Img);
+				w.RenderEndTag ();
 			} else {
 				w.Write (Text);
 			}
