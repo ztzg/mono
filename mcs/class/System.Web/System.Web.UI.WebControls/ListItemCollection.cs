@@ -278,10 +278,13 @@ namespace System.Web.UI.WebControls {
 
 			bool newCollection = (bool) pair.First;
 			object [] itemsArray = (object []) pair.Second;
-			int count = itemsArray.Length;
+            int count = itemsArray==null ? 0 : itemsArray.Length;
 
-			if (newCollection)
-				items = new ArrayList(count);
+            if (newCollection)
+                if (count > 0)
+                    items = new ArrayList(count);
+                else
+                    items = new ArrayList();
 
 			for (int i = 0; i < count; i++) {
 				ListItem item = new ListItem ();
@@ -305,15 +308,18 @@ namespace System.Web.UI.WebControls {
 			bool itemsDirty = false;
 
 			count = items.Count;
-			if (count == 0)
+			if (count == 0 && !dirty)
 				return null;
 
-			object [] itemsState = new object [count];
-			for (int i = 0; i < count; i++) {
-				itemsState [i] = ((IStateManager) items [i]).SaveViewState ();
-				if (itemsState [i] != null)
-					itemsDirty = true;
-			}
+            object[] itemsState = null;
+            if (count > 0) {
+                itemsState = new object [count];
+			    for (int i = 0; i < count; i++) {
+				    itemsState [i] = ((IStateManager) items [i]).SaveViewState ();
+				    if (itemsState [i] != null)
+					    itemsDirty = true;
+			    }
+            }
 
 			if (!dirty && !itemsDirty)
 				return null;
