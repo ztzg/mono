@@ -70,7 +70,11 @@ namespace System.Net
 		private static bool _checkCRL = false;
 		private static SecurityProtocolType _securityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls;
 #if NET_1_1
+#if TARGET_JVM
+		static bool expectContinue = false;
+#else
 		static bool expectContinue = true;
+#endif
 		static bool useNagle;
 #endif
 
