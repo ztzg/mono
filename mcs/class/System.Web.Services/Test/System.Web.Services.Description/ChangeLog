@@ -1,3 +1,17 @@
+2008-06-10  Vladimir Krasnov  <vladimirk@mainsoft.com>
+
+	* ServiceDescriptionReflectorTest.cs: added tests for bug fixes:
+	#345448, #345449, #360241
+
+2008-03-26  Lluis Sanchez Gual <lluis@novell.com> 
+
+	* ServiceDescriptionReflectorTest.cs: Added another test for bug
+	  #345448.
+
+2008-02-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceDescriptionReflectorTest.cs : mark Bug345448() NotWorking.
+
 2008-01-08  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* ServiceDescriptionReflectorTest.cs : added test for empty SOAP

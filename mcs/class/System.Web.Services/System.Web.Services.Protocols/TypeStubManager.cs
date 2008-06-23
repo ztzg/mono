@@ -96,6 +96,7 @@ namespace System.Web.Services.Protocols {
 
 			object [] o = Type.GetCustomAttributes (typeof (WebServiceBindingAttribute), false);
 
+			bool isClientSide = typeof (SoapHttpClientProtocol).IsAssignableFrom (Type);
 			bool defaultAdded = false;
 
 			string defaultBindingName = logicalType.WebServiceName + ProtocolName;
@@ -105,8 +106,8 @@ namespace System.Web.Services.Protocols {
 					if ((at.Name == null || at.Name.Length == 0) || (at.Name == defaultBindingName))
 						defaultAdded = true;
 				}
-						
-			if (!defaultAdded)
+
+			if (!defaultAdded && !isClientSide)
 				AddBindingAt (0, new BindingInfo (null, defaultBindingName, logicalType.WebServiceNamespace));
 
 #if NET_2_0
