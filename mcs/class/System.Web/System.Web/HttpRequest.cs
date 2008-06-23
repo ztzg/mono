@@ -424,6 +424,12 @@ namespace System.Web {
 			}
 		}
 
+		string clientFilePath;
+		internal string ClientFilePath {
+			get { return clientFilePath ?? FilePath; }
+			set { clientFilePath = value; }
+		}
+
 		internal string BaseVirtualDir {
 			get {
 				if (base_virtual_dir == null){
@@ -1301,8 +1307,12 @@ namespace System.Web {
 			}
 		}
 
-		internal void SetFilePath (string path)
+		internal void SetFilePath (string path, bool setClientFilePath)
 		{
+			if (!setClientFilePath)
+			    ClientFilePath = FilePath; // preserve old file path
+			else
+			    ClientFilePath = path;
 			file_path = path;
 			physical_path = null;
 		}

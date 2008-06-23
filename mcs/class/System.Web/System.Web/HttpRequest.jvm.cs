@@ -228,6 +228,7 @@ namespace System.Web
 			worker_request = wr;
 			current_exe_path = null;
 			file_path = null;
+			ClientFilePath = null;
 			base_virtual_dir = null;
 			form = null;
 			all_params = null;

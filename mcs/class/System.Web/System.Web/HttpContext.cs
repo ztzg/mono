@@ -623,9 +623,8 @@ namespace System.Web {
 			if (queryString != null)
 				Request.QueryStringRaw = queryString;
 #if NET_2_0
-			Request.SetFilePath (filePath);
+			Request.SetFilePath (filePath, setClientFilePath);
 #endif
-			// FIXME: We need an additional property ClientFilePath to be used in ResolveUrl/ResolveClientUrl
 		}
 
 #region internals
