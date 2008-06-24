@@ -1132,8 +1132,7 @@ namespace System.Drawing {
 			awt.Paint oldP = NativeObject.getPaint();
 			NativeObject.setPaint(brush);
 			try {
-				geom.AffineTransform oldT = NativeObject.getTransform();
-				NativeObject.transform(GetFinalTransform());
+				geom.AffineTransform oldT = NativeObject.getTransform();				
 				try {
 
 					bool noclip = float.IsPositiveInfinity(width) || (format != null && format.NoClip);
@@ -1147,7 +1146,7 @@ namespace System.Drawing {
 						TextLineIterator iter = new TextLineIterator(s, font, NativeObject.getFontRenderContext(), format, width, height);
 						NativeObject.transform(iter.Transform);
 						for (LineLayout layout = iter.NextLine(); layout != null; layout = iter.NextLine()) {
-							layout.Draw(NativeObject, x, y);
+							layout.Draw (NativeObject, x * UnitConversion [(int) PageUnit], y * UnitConversion [(int) PageUnit]);
 						}
 					}
 					finally {
@@ -1972,7 +1971,7 @@ namespace System.Drawing {
 				statistics[1] = iter.CharsConsumed;
 			}
 
-			return new SizeF(mwidth, mheight);
+			return new SizeF (mwidth / UnitConversion [(int) _pageUnit], mheight / UnitConversion [(int) _pageUnit]);
 		}
 
 		
@@ -2309,15 +2308,20 @@ namespace System.Drawing {
 		}
 
 		public float DpiX {
-			get {				
+			get {
+				if (_image != null)
+					return _image.HorizontalResolution;
+
 				return DefaultScreenResolution;
 			}
 		}
 
 		public float DpiY {
 			get {
-				//TBD: assume 72 (screen) for now
-				return DpiX;
+				if (_image != null)
+					return _image.VerticalResolution;
+
+				return DefaultScreenResolution;
 			}
 		}
 
@@ -2619,5 +2623,6 @@ namespace System.Drawing {
 		#endregion
 	}
 }
+
 
 
