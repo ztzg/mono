@@ -1,0 +1,12 @@
+# -*- sh -*-
+
+# env NOCONFIGURE=1 ./autogen.sh
+# cd eglib; env NOCONFIGURE=1 ./autogen.sh; cd ..
+# cp `which libtool` .
+# ./configure CONFIG_SITE=${PWD}/config_site.x86
+
+LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
+with_glib=embedded
+enable_mcs_build=no
+
+prefix=/home/compwork/vincent/WIP/Mono-SH4/sysroot-x86
