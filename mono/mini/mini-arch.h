@@ -25,6 +25,8 @@
 #include "mini-mips.h"
 #elif defined(__hppa__)
 #include "mini-hppa.h"
+#elif defined(__SH4__) || defined(__SH4A__)
+#include "mini-sh4.h"
 #else
 #error add arch specific include file in mini-arch.h
 #endif

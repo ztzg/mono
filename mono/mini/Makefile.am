@@ -204,6 +204,12 @@ hppa_sources = \
 	exceptions-hppa.c	\
 	tramp-hppa.c
 
+sh4_sources = \
+	mini-sh4.c	\
+	mini-sh4.h	\
+	exceptions-sh4.c	\
+	tramp-sh4.c
+
 common_sources = \
 	mini.c		\
 	mini.h		\
@@ -368,6 +374,13 @@ arch_built = cpu-hppa.h
 arch_define=__hppa__
 endif
 
+if SH4
+arch_sources = $(sh4_sources)
+arch_BURGSRC = $(srcdir)/inssel-long.brg $(srcdir)/inssel-sh4.brg
+arch_built = cpu-sh4.h
+arch_define=__sh4__
+endif
+
 libmono_la_SOURCES = $(common_sources) $(arch_sources)
 
 nodist_libmono_la_SOURCES = inssel.c inssel.h
@@ -448,6 +461,9 @@ cpu-hppa.h: cpu-hppa.md genmdesc$(EXEEXT)
 cpu-mips.h: cpu-mips.md genmdesc$(EXEEXT)
 	$(GENMDESC_PRG) $(srcdir)/cpu-mips.md cpu-mips.h mips_desc
 
+cpu-sh4.h: cpu-sh4.md genmdesc$(EXEEXT)
+	$(GENMDESC_PRG) $(srcdir)/cpu-sh4.md cpu-sh4.h sh4_desc
+
 inssel.c inssel.h: $(BURGSRC)
 	$(monodir)/mono/monoburg/monoburg -c 1 -p -e $(BURGSRC) -d inssel.h -s inssel.c
 
@@ -516,7 +532,8 @@ EXTRA_DIST = $(common_BURGSRC) cprop.c TestDriver.cs ldscript ldscript.mono \
 	$(s390x_sources) inssel-s390x.brg cpu-s390x.md \
 	$(ia64_sources) inssel-ia64.brg cpu-ia64.md \
 	$(alpha_sources) inssel-alpha.brg cpu-alpha.md \
-	$(hppa_sources) inssel-hppa.brg cpu-hppa.md
+	$(hppa_sources) inssel-hppa.brg cpu-hppa.md \
+	$(sh4_sources) inssel-sh4.brg cpu-sh4.md
 
 version.h: Makefile
 	if test -d $(top_srcdir)/.git/svn; then svn_info='git svn info'; fi; \
