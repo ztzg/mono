@@ -94,6 +94,7 @@ xlc )
   am_opt=--include-deps;;
 esac
 
+am_opt=-Wno-portability
 
 if grep "^AM_PROG_LIBTOOL" configure.in >/dev/null; then
   if test -z "$NO_LIBTOOLIZE" ; then 
