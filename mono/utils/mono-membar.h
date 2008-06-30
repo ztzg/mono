@@ -184,6 +184,24 @@ static inline void mono_memory_write_barrier (void)
 {
         mono_memory_barrier ();
 }
+#elif defined (__sh__)
+static inline void mono_memory_barrier (void)
+{
+#if defined (__SH4A__) || defined (__SH5__) || defined (__SH64__)
+	__asm__ __volatile__ ("synco" : : : "memory");
+#else
+	__asm__ __volatile__ ("" : : : "memory");
+#endif
+}
+static inline void mono_memory_read_barrier (void)
+{
+	mono_memory_barrier ();
+}
+
+static inline void mono_memory_write_barrier (void)
+{
+	mono_memory_barrier ();
+}
 #endif
 
 #endif	/* _MONO_UTILS_MONO_MEMBAR_H_ */
