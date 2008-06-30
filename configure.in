@@ -1907,6 +1907,14 @@ case "$host" in
 		jit_wanted=true
 		CFLAGS="$CFLAGS -mbackchain -D__USE_STRING_INLINES"
 		;;
+	sh4-*-linux*)
+		TARGET=SH4;
+		# XXX AC_DEFINE(MONO_ARCH_REGPARMS,1,[Architecture uses registers for Parameters])
+		arch_target=sh4;
+		ACCESS_UNALIGNED="no"
+		JIT_SUPPORTED=yes
+		jit_wanted=true
+		;;
 esac
 
 if test "x$have_visibility_hidden" = "xyes"; then
@@ -2139,6 +2147,7 @@ AM_CONDITIONAL(ARM, test x$TARGET = xARM)
 AM_CONDITIONAL(S390, test x$TARGET = xS390)
 AM_CONDITIONAL(S390x, test x$TARGET = xS390x)
 AM_CONDITIONAL(HPPA, test x$TARGET = xHPPA)
+AM_CONDITIONAL(SH4, test x$TARGET = xSH4)
 
 AM_CONDITIONAL(JIT_SUPPORTED, test x$JIT_SUPPORTED = xyes)
 AM_CONDITIONAL(INTERP_SUPPORTED, test x$interp_wanted = xtrue)
