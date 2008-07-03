@@ -120,6 +120,7 @@ namespace System.Web.UI.WebControls {
 					w.AddAttribute (HtmlTextWriterAttribute.Alt, Text);
 				if (!String.IsNullOrEmpty (ToolTip))
 					w.AddAttribute (HtmlTextWriterAttribute.Title, ToolTip);
+				w.AddStyleAttribute (HtmlTextWriterStyle.BorderWidth, "0px");
 				w.RenderBeginTag (HtmlTextWriterTag.Img);
 				w.RenderEndTag ();
 			} else {
