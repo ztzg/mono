@@ -949,9 +949,10 @@ namespace System.Web.UI.WebControls
 		
 		object CreateDataObject (IDictionary values)
 		{
+			BindingFlags dataObjectBindingFlags = BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.IgnoreCase;
 			object ob = Activator.CreateInstance (DataObjectType);
 			foreach (DictionaryEntry de in values) {
-				PropertyInfo p = DataObjectType.GetProperty ((string)de.Key);
+				PropertyInfo p = DataObjectType.GetProperty ((string) de.Key, dataObjectBindingFlags);
 				if (p == null) throw new InvalidOperationException ("Property " + de.Key + " not found in type '" +DataObjectType + "'.");
 				object[] attributes = p.GetCustomAttributes (typeof (System.ComponentModel.TypeConverterAttribute),
 									     true);
