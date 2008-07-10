@@ -95,6 +95,7 @@ public partial class Page : TemplateControl, IHttpHandler
 	private ArrayList _requiresPostBackCopy;
 	private ArrayList requiresPostDataChanged;
 	private IPostBackEventHandler requiresRaiseEvent;
+	private IPostBackEventHandler formPostedRequiresRaiseEvent;
 	private NameValueCollection secondPostData;
 	private bool requiresPostBackScript;
 	private bool postBackScriptRendered;
@@ -1231,7 +1232,7 @@ public partial class Page : TemplateControl, IHttpHandler
 
 					if (pbdh == null) {
 						if (pbeh != null)
-							RegisterRequiresRaiseEvent (pbeh);
+							formPostedRequiresRaiseEvent = pbeh;
 						continue;
 					}
 		
@@ -1661,8 +1662,7 @@ public partial class Page : TemplateControl, IHttpHandler
 				return true;
 		return false;
 	}
-#endif
-	
+#endif	
 	void RaisePostBackEvents ()
 	{
 #if NET_2_0
@@ -1679,6 +1679,8 @@ public partial class Page : TemplateControl, IHttpHandler
 
 		string eventTarget = postdata [postEventSourceID];
 		if (eventTarget == null || eventTarget.Length == 0) {
+			if (formPostedRequiresRaiseEvent != null)
+				RaisePostBackEvent (formPostedRequiresRaiseEvent, null);
 			Validate ();
 			return;
                 }
