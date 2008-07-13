@@ -53,26 +53,29 @@ namespace System.Data.SqlClient
 		{
 		}
 
+		[MonoLimitation ("Only supported when the SQL type of 'value' is  NVarChar")]
 		public SqlParameter(String parameterName, Object value)
-			: this(parameterName, SqlDbType.NVarChar, 0, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, value,false)
 		{
+			if (value != null && value.GetType () != typeof (String) && value != typeof (char []))
+				throw new NotImplementedException ("This constructor is only supported for SQL type NVarChar");
+			Init (parameterName, SqlDbType.NVarChar, 0, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, value, false);
 		}
 
-		public SqlParameter(String parameterName, SqlDbType dbType)
-			: this(parameterName, dbType, 0, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, null, true)
+		public SqlParameter(String parameterName, SqlDbType dbType)			
 		{
+			Init (parameterName, dbType, 0, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, null, true);
 		}
 
         
-		public SqlParameter(String parameterName, SqlDbType dbType, int size)
-			: this(parameterName, dbType, size, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, null, true)
+		public SqlParameter(String parameterName, SqlDbType dbType, int size)			
 		{
+			Init (parameterName, dbType, size, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, null, true);
 		}
 
 
-		public SqlParameter(String parameterName, SqlDbType dbType, int size, String sourceColumn)
-			: this(parameterName, dbType, size, ParameterDirection.Input, false, 0, 0, sourceColumn, DataRowVersion.Current, null, true)
+		public SqlParameter(String parameterName, SqlDbType dbType, int size, String sourceColumn)			
 		{
+			Init (parameterName, dbType, size, ParameterDirection.Input, false, 0, 0, sourceColumn, DataRowVersion.Current, null, true);
 		}
 
         
@@ -86,8 +89,9 @@ namespace System.Data.SqlClient
 			byte scale,
 			String sourceColumn,
 			DataRowVersion sourceVersion,
-			Object value) : this(parameterName,dbType,size,direction,isNullable,precision,scale,sourceColumn,sourceVersion,value,true)
+			Object value)
 		{
+			Init (parameterName, dbType, size, direction, isNullable, precision, scale, sourceColumn, sourceVersion, value, true);
 		}
 
 #if NET_2_0
@@ -105,12 +109,13 @@ namespace System.Data.SqlClient
 			string xmlSchemaCollectionDatabase,
 			string xmlSchemaCollectionOwningSchema,
 			string xmlSchemaCollectionName
-		) : this (parameterName, dbType, size, direction, sourceColumnNullMapping, precision, scale, sourceColumn, sourceVersion, value, true)
+		)
 		{
+			Init (parameterName, dbType, size, direction, sourceColumnNullMapping, precision, scale, sourceColumn, sourceVersion, value, true);
 		}
 #endif
 
-		SqlParameter(
+		void Init(
 			String parameterName,
 			SqlDbType dbType,
 			int size,
@@ -214,8 +219,7 @@ namespace System.Data.SqlClient
 
 		#endregion // Properties
 
-		#region Methods
-
+		#region Methods		
 		protected internal sealed override object ConvertValue(object value)
 		{
 			// can not convert null or DbNull to other types
