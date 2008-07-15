@@ -1681,7 +1681,8 @@ public partial class Page : TemplateControl, IHttpHandler
 		if (eventTarget == null || eventTarget.Length == 0) {
 			if (formPostedRequiresRaiseEvent != null)
 				RaisePostBackEvent (formPostedRequiresRaiseEvent, null);
-			Validate ();
+			else
+				Validate ();
 			return;
                 }
 
