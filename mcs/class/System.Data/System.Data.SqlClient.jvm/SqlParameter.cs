@@ -33,14 +33,30 @@ using System;
 using System.Collections;
 using System.Data;
 using System.Data.ProviderBase;
+using System.Data.SqlTypes;
 using System.Data.Common;
-
 using java.sql;
 
 namespace System.Data.SqlClient
 {
 	public sealed class SqlParameter : AbstractDbParameter
 	{
+		static readonly Type [] SQL_SPECIFIC_TYPES = new Type [] { typeof(SqlAsyncState),
+																   typeof(SqlBoolean),
+																   typeof(SqlByte),
+																   typeof(SqlBytes),
+																   typeof(SqlChars),
+																   typeof(SqlDateTime),
+																   typeof(SqlDecimal),
+																   typeof(SqlDouble),
+																   typeof(SqlGuid),
+																   typeof(SqlInt16),
+																   typeof(SqlInt32),
+																   typeof(SqlInt64),
+																   typeof(SqlMoney),
+																   typeof(SqlSingle),
+																   typeof(SqlString),
+																   typeof(SqlXml)};
 		#region Fields
 
 		private SqlDbType _sqlDbType;
@@ -53,13 +69,21 @@ namespace System.Data.SqlClient
 		{
 		}
 
-		[MonoLimitation ("Only supported when the SQL type of 'value' is  NVarChar")]
+		[MonoLimitation ("This constructor is not supported for SQL client specific types")]
 		public SqlParameter(String parameterName, Object value)
 		{
-			if (value != null && value.GetType () != typeof (String) && value != typeof (char []))
-				throw new NotImplementedException ("This constructor is only supported for SQL type NVarChar");
+			if (IsSqlSpecificValue(value))
+				throw new NotImplementedException ("This constructor is not supported for SQL client specific types");
 			Init (parameterName, SqlDbType.NVarChar, 0, ParameterDirection.Input, false, 0, 0, String.Empty, DataRowVersion.Current, value, false);
 		}
+
+		bool IsSqlSpecificValue (object val)
+		{
+			if (val == null)
+				return false;
+			return Array.IndexOf (SQL_SPECIFIC_TYPES, val.GetType ()) >= 0;
+		}
+
 
 		public SqlParameter(String parameterName, SqlDbType dbType)			
 		{
