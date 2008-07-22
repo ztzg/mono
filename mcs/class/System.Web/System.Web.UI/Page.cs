@@ -1678,23 +1678,25 @@ public partial class Page : TemplateControl, IHttpHandler
 			return;
 
 		string eventTarget = postdata [postEventSourceID];
-		if (eventTarget == null || eventTarget.Length == 0) {
+		IPostBackEventHandler target = null;
+
+		if (eventTarget != null && eventTarget.Length > 0) {
+#if NET_2_0
+		targetControl = FindControl (eventTarget, true);
+		target = targetControl as IPostBackEventHandler;
+#else
+			target = FindControl (eventTarget) as IPostBackEventHandler;
+#endif
+		}
+	
+		if (target == null)
+		{		
 			if (formPostedRequiresRaiseEvent != null)
 				RaisePostBackEvent (formPostedRequiresRaiseEvent, null);
 			else
 				Validate ();
 			return;
-                }
-
-#if NET_2_0
-		targetControl = FindControl (eventTarget, true);
-		IPostBackEventHandler target = targetControl as IPostBackEventHandler;
-#else
-		IPostBackEventHandler target = FindControl (eventTarget) as IPostBackEventHandler;
-#endif
-			
-		if (target == null)
-			return;
+		}
 
 		string eventArgument = postdata [postEventArgumentID];
 		RaisePostBackEvent (target, eventArgument);
