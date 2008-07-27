@@ -1,3 +1,9 @@
+2008-07-24  Igor Zelmanovich <igorz@mainsoft.com>
+
+	* HttpWorkerRequest.cs:
+	* HttpWorkerRequest.jvm.cs:
+	consider setCharacterEncoding(string) is J2EE 1.4 or higher
+
 2008-02-24  Vladimir Krasnov  <vladimirk@mainsoft.com>
 
 	* HttpContext.cs: made GetResourceObject method internal

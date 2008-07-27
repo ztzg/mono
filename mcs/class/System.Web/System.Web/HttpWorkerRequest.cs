@@ -117,6 +117,14 @@ namespace System.Web {
 			ResponseHeaderIndexer = CollectionsUtil.CreateCaseInsensitiveHashtable(ResponseHeaderMaximum);
 			for (int i = 0; i < ResponseHeaderMaximum; i++)
 				ResponseHeaderIndexer[GetKnownResponseHeaderName(i)] = i;
+			
+#if TARGET_J2EE
+			_setCharacterEncodingMethodInfo = typeof (javax.servlet.ServletResponse).GetMethod ("setCharacterEncoding", new Type [] { typeof (string) });
+#if DEBUG
+			if (_setCharacterEncodingMethodInfo == null)
+				Console.WriteLine ("javax.servlet.ServletResponse.setCharacterEncoding(string) - no such method");
+#endif
+#endif
 		}
 
 		public virtual string MachineConfigPath {

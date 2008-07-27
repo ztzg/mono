@@ -32,11 +32,14 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Reflection;
 
 namespace System.Web
 {
 	public abstract partial class HttpWorkerRequest
 	{
+		static readonly MethodInfo _setCharacterEncodingMethodInfo;
+
 		java.io.Writer _outputWriter;
 
 		public virtual void SendResponseFromMemory (IntPtr data, int length)
@@ -67,8 +70,12 @@ namespace System.Web
 					; //throw ;
 
 				javax.servlet.http.HttpServletResponse sr = (javax.servlet.http.HttpServletResponse) prov.GetService (typeof (javax.servlet.http.HttpServletResponse));
-				if (sr != null)
-					sr.setCharacterEncoding (encoding.HeaderName);
+				if (sr != null && _setCharacterEncodingMethodInfo != null){
+#if DEBUG
+					Console.WriteLine ("javax.servlet.ServletResponse.setCharacterEncoding(" + encoding.HeaderName + ") was called");
+#endif
+					_setCharacterEncodingMethodInfo.Invoke (sr, new object [] { encoding.HeaderName });
+				}
 
 				return (java.io.Writer) prov.GetService (typeof (java.io.Writer));
 			}
