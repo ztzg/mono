@@ -14,11 +14,12 @@ using System.Security.Permissions;
 using System.Text;
 using System.Threading;
 using System.Net;
+using vmw.@internal.net;
 
 namespace System.Net
 {
 	[Serializable]
-	public class HttpWebRequest : WebRequest
+	public class HttpWebRequest : WebRequest, vmw.@internal.net.IJavaWebRequest
 	{
 		#region Fields
 
@@ -486,8 +487,18 @@ namespace System.Net
 			Headers.RemoveAndAdd ("Range", value + from + "-" + to);
 		}
 
-		public override Stream GetRequestStream()
+		public void SetRequestStreamProvider (InputStreamProvider streamProvider)
 		{
+			VMWHttpProvider provider = _provider as VMWHttpProvider;
+			if (provider == null)
+				throw new NotImplementedException ();
+			if (streamProvider == null )
+				throw new ArgumentNullException ("streamProvider");
+			provider.SetRequestStreamProvider (streamProvider);
+		}
+
+		public override Stream GetRequestStream()
+		{			
 			return _provider.GetRequestStream();
 //			lock(this)
 //			{

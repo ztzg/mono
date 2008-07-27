@@ -13,6 +13,7 @@ using java.security;
 using System.Collections.Specialized;
 using System.Collections;
 using mainsoft.apache.commons.httpclient.cookie;
+using vmw.@internal.net;
 
 namespace System.Net
 {
@@ -601,6 +602,24 @@ namespace System.Net
 			}
 		}
 
+		public void SetRequestStreamProvider (InputStreamProvider streamProvider) {
+
+			bool isPutPost = String.Compare ("post", MethodName, true) == 0
+				|| String.Compare ("put", MethodName, true) == 0;
+			if (!isPutPost)
+				throw new ProtocolViolationException ();
+			lock (this) {
+				if (_isAborted)
+					throw new WebException ("The operation has been aborted.", WebExceptionStatus.RequestCanceled);
+				
+				this.OpenConnection ();
+				RequestEntity reqEntity = new StreamProviderRequestEntity (streamProvider, _contentLength);				
+				EntityEnclosingMethod method = (EntityEnclosingMethod) _method;				
+				method.setRequestEntity (reqEntity);				
+				_hasRequest = true;				
+			}
+
+		}		
 		
 
 		public override Stream GetRequestStream()
@@ -1352,5 +1371,44 @@ namespace System.Net
 			GSSCredential creds = m_internalProvider.getCredentials ();			
 			return new DelegatedCredentials (creds);
 		}
+	}
+
+	class StreamProviderRequestEntity : RequestEntity
+	{
+		InputStreamProvider _streamProvider;
+		long _contentLength;		
+		
+		public StreamProviderRequestEntity(InputStreamProvider provider, long contentLength)
+		{
+			if (contentLength <= 0)
+				throw new ArgumentException("Using StreamProvider is only allowed when the content length is set");
+			_streamProvider = provider;
+			_contentLength = contentLength;
+		}
+		
+		java.io.InputStream getStream()
+		{
+			return new vmw.@internal.io.InputStreamWrapper( _streamProvider.CreateStream());
+		}
+		public long getContentLength() {
+			return _contentLength;
+		}
+
+		public String getContentType() {			
+			return null;
+		}
+
+		public bool isRepeatable() {
+			return true;
+		}
+
+		public void writeRequest(java.io.OutputStream output) {
+			java.io.InputStream stream = getStream();
+			int len;
+			sbyte[] array = new sbyte[4096];
+			while ((len = stream.read(array)) > 0)
+				output.write (array, 0, len);			
+		}
+		
 	}
 }
