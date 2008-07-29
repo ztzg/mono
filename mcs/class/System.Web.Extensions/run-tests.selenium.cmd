@@ -45,6 +45,10 @@ set ResultsURL=/PostResults
 set ResultsDir=FuncTests%TIMESTAMP%
 set OUTPUT_FILE_PREFIX=System_Web_Extensions_Selenium
 
+if "%GH_VERSION%"=="" (
+	set GH_VERSION=0.0.0.1
+)
+
 set COMMON_PREFIX=%cd%\%TIMESTAMP%_%OUTPUT_FILE_PREFIX%.GH_%GH_VERSION%.1.%USERNAME%
 set SELENIUM_OUTPUT_XML=%COMMON_PREFIX%.xml
 set BUILD_LOG=%COMMON_PREFIX%.build.log
@@ -91,6 +95,9 @@ rem ====================================
 
 type %SELENIUM_HOME%\SeleniumTestResultsTail.txt >>%SELENIUM_OUTPUT_XML%
 
+type %SELENIUM_OUTPUT_XML% >> tmp_result.xml
+move /y tmp_result.xml %SELENIUM_OUTPUT_XML%
+
 :after_tests
 goto afterExecuteTestSuite
 
@@ -119,12 +126,24 @@ if NOT %ResultsAsHtml%=="" (
 exit /B
 
 goto END
+
 :BUILD_EXCEPTION
 @echo Error in building solutions. See %BUILD_LOG% for details...
 REM EXIT 1
 GOTO END
 
 :afterExecuteTestSuite
+
+echo Building transform utility
+rem svn+ssh://svn@svn.il.mainsoft.com/.../studio/GH/DevQA/utils/SeleniumPostResults 
+rem =====================================================
+set TRANSFORM_UTIL=%~dp0..\..\..\..\DevQA\utils\SeleniumPostResults
+msbuild %TRANSFORM_UTIL%\SeleniumPostResults.csproj >>%BUILD_LOG% 2<&1
+move /y %TRANSFORM_UTIL%\bin\Debug\SeleniumPostResults.exe .
+
+echo Transform Selenium report to NUnit format
+SeleniumPostResults.exe %SELENIUM_OUTPUT_XML%
+move /y tmp_result.xml %SELENIUM_OUTPUT_XML%
+
 :END
 endlocal
-
