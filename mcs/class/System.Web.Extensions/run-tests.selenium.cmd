@@ -139,7 +139,7 @@ rem svn+ssh://svn@svn.il.mainsoft.com/.../studio/GH/DevQA/utils/SeleniumPostResu
 rem =====================================================
 set TRANSFORM_UTIL=%~dp0..\..\..\..\DevQA\utils\SeleniumPostResults
 msbuild %TRANSFORM_UTIL%\SeleniumPostResults.csproj >>%BUILD_LOG% 2<&1
-move /y %TRANSFORM_UTIL%\bin\Debug\SeleniumPostResults.exe .
+move /y %TRANSFORM_UTIL%\bin\SeleniumPostResults.exe .
 
 echo Transform Selenium report to NUnit format
 SeleniumPostResults.exe %SELENIUM_OUTPUT_XML%
