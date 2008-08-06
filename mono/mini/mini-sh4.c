@@ -39,17 +39,21 @@ gpointer mono_arch_context_get_int_reg(MonoContext *ctx, int reg)
 	return NULL;
 }
 
+/**
+ * Initialize the cpu to execute managed code.
+ */
 void mono_arch_cpu_init(void)
 {
-	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 
+/**
+ * This function returns the optimizations supported on this cpu.
+ */
 guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 {
-	/* TODO - CV */
-	g_assert(0);
+	/* No SH4-specific optimizations yet. */
+	*exclude_mask = 0;
 	return 0;
 }
 
@@ -193,10 +197,12 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	return NULL;
 }
 
+/**
+ * Initialize architecture specific code.
+ */
 void mono_arch_init(void)
 {
-	/* TODO - CV */
-	g_assert(0);
+	/* TODO - CV : InitializeCriticalSection (&mini_arch_mutex); */
 	return;
 }
 
