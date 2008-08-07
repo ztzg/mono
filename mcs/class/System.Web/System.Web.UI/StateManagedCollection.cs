@@ -48,6 +48,8 @@ namespace System.Web.UI {
 		public void SetDirty ()
 		{
 			saveEverything = true;
+			for (int i = 0; i < items.Count; i++)
+				SetDirtyObject(items[i]);
 		}
 
 		protected abstract void SetDirtyObject (object o);
@@ -150,7 +152,8 @@ namespace System.Web.UI {
 				for (int n=0; n<items.Count; n++)
 				{
 					IStateManager item = (IStateManager) items [n];
-					int oi = Array.IndexOf (originalItems, item);
+					// igorz:
+					int oi = -1;// Array.IndexOf(originalItems, item);
 					object ns = item.SaveViewState ();
 					if (ns != null) hasData = true;
 					
