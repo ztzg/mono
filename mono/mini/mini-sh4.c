@@ -8,6 +8,7 @@
  */
 
 #include <glib.h>
+
 #include "mini.h"
 #include "cpu-sh4.h"
 
@@ -122,8 +123,18 @@ void mono_arch_emit_this_vret_args(MonoCompile *cfg, MonoCallInst *inst, int thi
 
 void mono_arch_flush_icache(guint8 *code, gint size)
 {
-	/* TODO - CV */
-	g_assert(0);
+#if defined (__SH4A__)
+	guint32 addr = (guint32)code & ~0xF;
+	guint32 end  = (guint32)code + size;
+#endif
+	mono_memory_barrier();
+
+#if defined (__SH4A__)
+	while (addr <= end) {
+		__asm__ __volatile__ ("icbi @%0" : : "r"(addr));
+		addr += 32;
+	}
+#endif
 	return;
 }
 
