@@ -8,7 +8,9 @@
  */
 
 #include <glib.h>
+
 #include "mini.h"
+#include "mono/arch/sh4/sh4-codegen.h"
 
 gpointer mono_arch_create_rgctx_lazy_fetch_trampoline(guint32 slot)
 {
@@ -114,7 +116,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	 */
 
 	/* pseudo-code: new_lmf.regs[] = { %R0, ..., %R15 }; */
-	for (i = 0; i < 15; i++)
+	for (i = 0; i <= 14; i++)
 		sh4_movl_dispRx(buf, (SH4IntRegister)i, i * 4, sh4_r15);
 
 	/* Compute the previous SP value before saving into new_lmf.regs[]. */
@@ -232,7 +234,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	/* pseudo-code: { %R1, ..., %R14 } = new_lmf.regs[]; */
 	/* Do not restore R0 and R15 because there are used later. */
-	for (i = 1; i < 15; i++)
+	for (i = 1; i <= 14; i++)
 		sh4_movl_dispRy(buf, i * 4, sh4_r15, (SH4IntRegister)i);
 
 	/* pseudo-code: %PR = %Caller_PR; */

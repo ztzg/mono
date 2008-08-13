@@ -426,7 +426,7 @@ This macro should be defined for all POSIX platforms.',
 'TODO - CV',
 
 	MONO_CONTEXT_GET_BP =>
-'Get the stack frame pointer from a Mono context. This macro is
+'Get the frame pointer from a Mono context. This macro is
 mandatory.',
 
 	MONO_CONTEXT_GET_IP =>
@@ -437,7 +437,7 @@ mandatory.',
 'Get the stack pointer from a Mono context. This macro is mandatory.',
 
 	MONO_CONTEXT_SET_BP =>
-'Set the stack frame pointer of a Mono context. This macro is
+'Set the frame pointer of a Mono context. This macro is
 mandatory.',
 
 	MONO_CONTEXT_SET_FUNC =>
@@ -448,7 +448,7 @@ mandatory.',
 mandatory.',
 
 	MONO_CONTEXT_SET_SP =>
-'TODO - CV',
+'Set the stack pointer of a Mono context.',
 
 	MONO_EMIT_NEW_BRANCH_BIREG_LABEL =>
 'TODO - CV',
@@ -584,7 +584,7 @@ my %value = (
 	MonoCompileArch => ' void *', # TODO - CV
 	MonoContext     => '
 	guint32 ip;
-	guint32 regs[MONO_MAX_IREGS];
+	guint32 regs[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
 ',
 	MonoLMF         => '
 	gpointer    previous_lmf;

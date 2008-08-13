@@ -97,7 +97,6 @@
 # TODO float_conv_to_i2:
 # TODO float_conv_to_i4:
 # TODO float_conv_to_i8:
-# TODO float_conv_to_r4:
 # TODO float_conv_to_u:
 # TODO float_conv_to_u1:
 # TODO float_conv_to_u2:
@@ -111,9 +110,7 @@
 # TODO float_rem:
 # TODO float_rem_un:
 # TODO float_sub:
-# TODO fmove:
 # TODO iconst:
-# TODO int_adc_imm:
 # TODO int_add:
 # TODO int_and:
 # TODO int_beq:
@@ -127,7 +124,6 @@
 # TODO int_not:
 # TODO int_or:
 # TODO int_rem:
-# TODO int_sbb_imm:
 # TODO int_shl:
 # TODO int_shr:
 # TODO int_sub:

@@ -152,7 +152,7 @@
 #define MONO_ARCH_USE_SIGACTION 1
 
 /*
- * Get the stack frame pointer from a Mono context. This macro is
+ * Get the frame pointer from a Mono context. This macro is
  * mandatory.
 */
 #define MONO_CONTEXT_GET_BP(context) ((gpointer)(context)->regs[sh4_fp])
@@ -169,7 +169,7 @@
 #define MONO_CONTEXT_GET_SP(context) ((gpointer)(context)->regs[sh4_sp])
 
 /*
- * Set the stack frame pointer of a Mono context. This macro is
+ * Set the frame pointer of a Mono context. This macro is
  * mandatory.
 */
 #define MONO_CONTEXT_SET_BP(context, vbp) do { (context)->regs[sh4_fp] = (guint32)(vbp); } while (0);
@@ -207,7 +207,7 @@ typedef  void * MonoCompileArch;
  * is stored in this arch-specific structure. */
 typedef struct { 
 	guint32 ip;
-	guint32 regs[MONO_MAX_IREGS];
+	guint32 regs[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
  } MonoContext;
 
 /* When managed code needs to call into native code, it does through
