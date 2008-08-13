@@ -304,6 +304,5 @@ const char *mono_arch_regname(int reg)
 void mono_arch_setup_jit_tls_data(MonoJitTlsData *tls)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return;
 }

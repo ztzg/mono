@@ -570,7 +570,6 @@ my %value = (
 	MONO_INIT_CONTEXT_FROM_FUNC  => '(context, func) do { g_assert(0); } while (0);', # TODO - CV
 	MONO_MAX_FREGS               => ' 16',
 	MONO_MAX_IREGS               => ' 16',
-	MONO_SAVED_GREGS                 => ' 0', # TODO
 	MONO_ARCH_SOFT_FLOAT             => ' 1',
 	MONO_ARCH_EMULATE_CONV_R8_UN     => ' 1',
 	MONO_ARCH_EMULATE_DIV            => ' 1',
@@ -585,7 +584,7 @@ my %value = (
 	MonoCompileArch => ' void *', # TODO - CV
 	MonoContext     => '
 	guint32 ip;
-	guint32 regs[MONO_SAVED_GREGS];
+	guint32 regs[MONO_MAX_IREGS];
 ',
 	MonoLMF         => '
 	gpointer    previous_lmf;

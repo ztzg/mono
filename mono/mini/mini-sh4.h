@@ -199,11 +199,6 @@
 */
 #define MONO_MAX_IREGS 16
 
-/*
- * TODO - CV
-*/
-#define MONO_SAVED_GREGS 0
-
 /* Structure where the arch-specific code can store
  * data during a compilation. */
 typedef  void * MonoCompileArch;
@@ -212,7 +207,7 @@ typedef  void * MonoCompileArch;
  * is stored in this arch-specific structure. */
 typedef struct { 
 	guint32 ip;
-	guint32 regs[MONO_SAVED_GREGS];
+	guint32 regs[MONO_MAX_IREGS];
  } MonoContext;
 
 /* When managed code needs to call into native code, it does through
