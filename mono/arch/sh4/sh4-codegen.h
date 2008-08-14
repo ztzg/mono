@@ -43,7 +43,7 @@ typedef enum {
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	g_assert((int)(imm) >= -128);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert((int)(imm) <= 127);		\
 	sh4_emit16(code, (0x7 << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
@@ -72,7 +72,7 @@ typedef enum {
 } while(0)
 
 #define sh4_and_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0x9 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -86,63 +86,63 @@ typedef enum {
 } while(0)
 
 #define sh4_andb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0xD << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
 #define sh4_bra(code, imm) do {		\
 	g_assert((int)(imm) >= -4096);		\
-	g_assert((int)(imm) <= 819);		\
+	g_assert((int)(imm) <= 4094);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0xA << 12) | ((((imm) & 1FFE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bsr(code, imm) do {		\
 	g_assert((int)(imm) >= -4096);		\
-	g_assert((int)(imm) <= 819);		\
+	g_assert((int)(imm) <= 4094);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0xB << 12) | ((((imm) & 1FFE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bt(code, imm) do {		\
 	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) <= 254);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0x9 << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bf(code, imm) do {		\
 	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) <= 254);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0xB << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bts(code, imm) do {		\
 	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) <= 254);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0xD << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bts(code, imm) do {		\
 	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) <= 254);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0xD << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bfs(code, imm) do {		\
 	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) <= 254);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0xF << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bfs(code, imm) do {		\
 	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) <= 254);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0xF << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
@@ -161,7 +161,7 @@ typedef enum {
 
 #define sh4_cmpeq_imm_R0(code, imm) do {		\
 	g_assert((int)(imm) >= -128);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert((int)(imm) <= 127);		\
 	sh4_emit16(code, (0x8 << 12) | (0x8 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
@@ -441,7 +441,7 @@ typedef enum {
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	g_assert((int)(imm) >= -128);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert((int)(imm) <= 127);		\
 	sh4_emit16(code, (0xE << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
@@ -480,13 +480,13 @@ typedef enum {
 #define sh4_movb_dispRy_R0(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= -8);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 15);		\
 	sh4_emit16(code, (0x8 << 12) | (0x4 << 8) | (((Ry) & 0xF) << 4) | (((imm) & 0xF) << 0)); \
 } while(0)
 
 #define sh4_movb_dispGBR_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0x4 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -518,13 +518,13 @@ typedef enum {
 #define sh4_movb_R0_dispRy(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= -8);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 15);		\
 	sh4_emit16(code, (0x8 << 12) | (0x0 << 8) | (((Ry) & 0xF) << 4) | (((imm) & 0xF) << 0)); \
 } while(0)
 
 #define sh4_movb_R0_dispGBR(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0x0 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -534,8 +534,8 @@ typedef enum {
 	g_assert((int)Rx <= 15);		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= -32);		\
-	g_assert((int)(imm) <= 63);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 60);		\
 	g_assert(((int)(imm) & 0x3) == 0);	\
 	sh4_emit16(code, (0x1 << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x3C) >> 2) << 0)); \
 } while(0)
@@ -569,15 +569,15 @@ typedef enum {
 	g_assert((int)Rx <= 15);		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= -32);		\
-	g_assert((int)(imm) <= 63);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 60);		\
 	g_assert(((int)(imm) & 0x3) == 0);	\
 	sh4_emit16(code, (0x5 << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x3C) >> 2) << 0)); \
 } while(0)
 
 #define sh4_movl_dispGBR_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -512);		\
-	g_assert((int)(imm) <= 1023);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 1020);		\
 	g_assert(((int)(imm) & 0x3) == 0);	\
 	sh4_emit16(code, (0xC << 12) | (0x6 << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
@@ -585,8 +585,8 @@ typedef enum {
 #define sh4_movl_dispPC(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= -512);		\
-	g_assert((int)(imm) <= 1023);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 1020);		\
 	g_assert(((int)(imm) & 0x3) == 0);	\
 	sh4_emit16(code, (0xD << 12) | (((Rx) & 0xF)  << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
@@ -616,8 +616,8 @@ typedef enum {
 } while(0)
 
 #define sh4_movl_R0_dispGBR(code, imm) do {		\
-	g_assert((int)(imm) >= -512);		\
-	g_assert((int)(imm) <= 1023);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 1020);		\
 	g_assert(((int)(imm) & 0x3) == 0);	\
 	sh4_emit16(code, (0xC << 12) | (0x2 << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
@@ -649,15 +649,15 @@ typedef enum {
 #define sh4_movw_dispRy_R0(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= -16);		\
-	g_assert((int)(imm) <= 31);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 30);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0x5 << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x1E) >> 1) << 0)); \
 } while(0)
 
 #define sh4_movw_dispGBR_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 510);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0xC << 12) | (0x5 << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
@@ -665,8 +665,8 @@ typedef enum {
 #define sh4_movw_dispPC(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 510);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x9 << 12) | (((Rx) & 0xF)  << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
@@ -698,22 +698,22 @@ typedef enum {
 #define sh4_movw_R0_dispRy(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= -16);		\
-	g_assert((int)(imm) <= 31);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 30);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0x8 << 12) | (0x1 << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x1E) >> 1) << 0)); \
 } while(0)
 
 #define sh4_movw_R0_dispGBR(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 511);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 510);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
 	sh4_emit16(code, (0xC << 12) | (0x1 << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_mova_dispPC_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -512);		\
-	g_assert((int)(imm) <= 1023);		\
+	g_assert((int)(imm) >= 0);		\
+	g_assert((int)(imm) <= 1020);		\
 	g_assert(((int)(imm) & 0x3) == 0);	\
 	sh4_emit16(code, (0xC << 12) | (0x7 << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
@@ -817,7 +817,7 @@ typedef enum {
 } while(0)
 
 #define sh4_or_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0xB << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -831,7 +831,7 @@ typedef enum {
 } while(0)
 
 #define sh4_orb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0xF << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -1145,13 +1145,13 @@ typedef enum {
 } while(0)
 
 #define sh4_trapa_imm(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0x3 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
 #define sh4_tst_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0x8 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -1165,13 +1165,13 @@ typedef enum {
 } while(0)
 
 #define sh4_tstb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0xC << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
 #define sh4_xor_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0xA << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
@@ -1185,7 +1185,7 @@ typedef enum {
 } while(0)
 
 #define sh4_xorb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
+	g_assert((int)(imm) >= 0);		\
 	g_assert((int)(imm) <= 255);		\
 	sh4_emit16(code, (0xC << 12) | (0xE << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)

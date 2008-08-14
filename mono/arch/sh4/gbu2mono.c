@@ -39,7 +39,34 @@
 #define DEFINE_TABLE /* Used in the following header. */
 #include "sh-opc.h"
 
-void printf_checks(const sh_nibble_type nibbles[9])
+void printf_checks_imm(int sign_extended, int nb_bits, int factor)
+{
+	int min = 0;
+	int max = 0;
+
+	assert(nb_bits > 0);
+	assert(factor > 0);
+
+	if (sign_extended == 0) {
+		min = 0;
+		max = (1 << nb_bits) - 1;
+	} else {
+		min = - (1 << (nb_bits - 1));
+		max = (1 << (nb_bits - 1)) - 1;
+	}
+
+	min *= factor;
+	max *= factor;
+
+	printf("	g_assert((int)(imm) >= %d);		\\\n", min);
+	printf("	g_assert((int)(imm) <= %d);		\\\n", max);
+	if (factor != 1)
+		printf("	g_assert(((int)(imm) & 0x%x) == 0);	\\\n", factor - 1);
+
+	return;
+}
+
+void printf_checks(const sh_nibble_type nibbles[9], int force_sign)
 {
 	int i = 0;
 
@@ -74,57 +101,47 @@ void printf_checks(const sh_nibble_type nibbles[9])
 			break;
 
 		case REG_B:
-			printf("	g_assert((int)(imm) >= 0);		\\\n");
-			printf("	g_assert((int)(imm) <= 7);		\\\n");
+			printf_checks_imm(0, 3, 1);
 			break;
 
 		case IMM0_4:
 		case IMM1_4:
-			printf("	g_assert((int)(imm) >= -8);		\\\n");
-			printf("	g_assert((int)(imm) <= 15);		\\\n");
+			printf_checks_imm(0, 4, 1);
 			break;
 
 		case IMM0_4BY2:
 		case IMM1_4BY2:
-			printf("	g_assert((int)(imm) >= -16);		\\\n");
-			printf("	g_assert((int)(imm) <= 31);		\\\n");
-			printf("	g_assert(((int)(imm) & 0x1) == 0);	\\\n");
+			printf_checks_imm(0, 4, 2);
 			break;
 
 		case IMM0_4BY4:
 		case IMM1_4BY4:
-			printf("	g_assert((int)(imm) >= -32);		\\\n");
-			printf("	g_assert((int)(imm) <= 63);		\\\n");
-			printf("	g_assert(((int)(imm) & 0x3) == 0);	\\\n");
+			printf_checks_imm(0, 4, 4);
 			break;
 
 		case IMM0_8:
 		case IMM1_8:
-			printf("	g_assert((int)(imm) >= -128);		\\\n");
-			printf("	g_assert((int)(imm) <= 255);		\\\n");
+			printf_checks_imm(force_sign != 0 ? 1 : 0, 8, 1);
 			break;
 
-		case BRANCH_8:
 		case IMM0_8BY2:
 		case IMM1_8BY2:
 		case PCRELIMM_8BY2:
-			printf("	g_assert((int)(imm) >= -256);		\\\n");
-			printf("	g_assert((int)(imm) <= 511);		\\\n");
-			printf("	g_assert(((int)(imm) & 0x1) == 0);	\\\n");
+			printf_checks_imm(0, 8, 2);
 			break;
 
 		case IMM0_8BY4:
 		case IMM1_8BY4:
 		case PCRELIMM_8BY4:
-			printf("	g_assert((int)(imm) >= -512);		\\\n");
-			printf("	g_assert((int)(imm) <= 1023);		\\\n");
-			printf("	g_assert(((int)(imm) & 0x3) == 0);	\\\n");
+			printf_checks_imm(0, 8, 4);
+			break;
+
+		case BRANCH_8:
+			printf_checks_imm(1, 8, 2);
 			break;
 
 		case BRANCH_12:
-			printf("	g_assert((int)(imm) >= -4096);		\\\n");
-			printf("	g_assert((int)(imm) <= 819);		\\\n");
-			printf("	g_assert(((int)(imm) & 0x1) == 0);	\\\n");
+			printf_checks_imm(1, 12, 2);
 			break;
 
 		default:
@@ -514,8 +531,21 @@ int main(void)
 	printf_header();
 
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
+		int force_sign = 0;
+
 		if ((sh_table[i].arch & arch_sh4_nofpu) != arch_sh4_nofpu)
 			continue;
+
+		if ((strcmp(sh_table[i].name, "add") == 0 &&
+		     sh_table[i].arg[0] == A_IMM &&
+		     sh_table[i].arg[1] == A_REG_N) ||
+		    (strcmp(sh_table[i].name, "cmp/eq") == 0 &&
+		     sh_table[i].arg[0] == A_IMM &&
+		     sh_table[i].arg[1] == A_R0) ||
+		    (strcmp(sh_table[i].name, "mov") == 0 &&
+		     sh_table[i].arg[0] == A_IMM &&
+		     sh_table[i].arg[1] == A_REG_N))
+			force_sign = 1;
 
 		printf("#define sh4_");
 		for (j = 0; sh_table[i].name[j] != '\0'; j++)
@@ -523,7 +553,7 @@ int main(void)
 				printf("%c", sh_table[i].name[j]);
 		printf_args(sh_table[i].arg);
 		printf("do {		\\\n");
-		printf_checks(sh_table[i].nibbles);
+		printf_checks(sh_table[i].nibbles, force_sign);
 		printf_nibbles(sh_table[i].nibbles);
 		printf("} while(0)\n");
 		printf("\n");
