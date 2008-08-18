@@ -562,11 +562,11 @@ my %value = (
 	MONO_ARCH_INST_SREG2_MASK    => '(a) (0)',
 	MONO_ARCH_USE_FPSTACK        => ' FALSE',
 	MONO_ARCH_USE_SIGACTION      => ' 1',
-	MONO_CONTEXT_GET_BP          => '(context) ((gpointer)(context)->regs[sh4_fp])',
-	MONO_CONTEXT_GET_IP          => '(context) ((gpointer)(context)->ip)',
-	MONO_CONTEXT_GET_SP          => '(context) ((gpointer)(context)->regs[sh4_sp])',
-	MONO_CONTEXT_SET_BP          => '(context, vbp) do { (context)->regs[sh4_fp] = (guint32)(vbp); } while (0);',
-	MONO_CONTEXT_SET_IP          => '(context, vip) do { (context)->ip = (guint32)(vip); } while (0);',
+	MONO_CONTEXT_GET_BP          => '(context) ((gpointer)(context)->registers[sh4_fp])',
+	MONO_CONTEXT_GET_IP          => '(context) ((gpointer)(context)->pc)',
+	MONO_CONTEXT_GET_SP          => '(context) ((gpointer)(context)->registers[sh4_sp])',
+	MONO_CONTEXT_SET_BP          => '(context, vbp) do { (context)->registers[sh4_fp] = (guint32)(vbp); } while (0);',
+	MONO_CONTEXT_SET_IP          => '(context, vpc) do { (context)->pc = (guint32)(vpc); } while (0);',
 	MONO_INIT_CONTEXT_FROM_FUNC  => '(context, func) do { g_assert(0); } while (0);', # TODO - CV
 	MONO_MAX_FREGS               => ' 16',
 	MONO_MAX_IREGS               => ' 16',
@@ -583,15 +583,15 @@ my %value = (
 	MONO_ARCH_EMULATE_MUL_DIV        => ' 1',
 	MonoCompileArch => ' void *', # TODO - CV
 	MonoContext     => '
-	guint32 ip;
-	guint32 regs[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
+	guint32 pc;
+	guint32 registers[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
 ',
 	MonoLMF         => '
 	gpointer    previous_lmf;
 	gpointer    lmf_addr;
 	MonoMethod *method;
-	guint32     ip;
-	guint32     regs[MONO_MAX_IREGS];
+	guint32     pc;
+	guint32     registers[MONO_MAX_IREGS];
 	guint32     ebp; /* required by Mini but not used with the SH4. */
 ',
 );

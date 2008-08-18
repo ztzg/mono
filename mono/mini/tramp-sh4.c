@@ -35,7 +35,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer arg1, MonoTrampolineType 
  * inline void trampoline_code()
  * {
  * 	// Save all registers.
- * 	new_lmf.regs[] = { %R0, ..., %R15 };
+ * 	new_lmf.registers[] = { %R0, ..., %R15 };
  * 
  * 	struct MonoLMF new_lmf;
  * 
@@ -44,9 +44,9 @@ gpointer mono_arch_create_specific_trampoline(gpointer arg1, MonoTrampolineType 
  * 	new_lmf.method = %Caller_SP[0];
  * 
  * #if trampoline_type == MONO_TRAMPOLINE_JUMP
- * 	new_lmf.ip = NULL;
+ * 	new_lmf.pc = NULL;
  * #else
- * 	new_lmf.ip = %PR;
+ * 	new_lmf.pc = %PR;
  * #endif
  * 
  * 	new_lmf.lmf_addr = mono_get_lmf_addr();
@@ -58,13 +58,13 @@ gpointer mono_arch_create_specific_trampoline(gpointer arg1, MonoTrampolineType 
  * #def trampoline mono_get_trampoline_func(trampoline_type)
  * 
  * 	// Call the actual trampoline, parameters are :
- * 	compiled_methode = trampoline(new_lmf.regs, new_lmf.ip, new_lmf.method, NULL);
+ * 	compiled_methode = trampoline(new_lmf.registers, new_lmf.pc, new_lmf.method, NULL);
  * 
  * 	// Restore the previous LMF list.
  * 	*(new_lmf.lmf_addr) = &(new_lmf.previous_lmf);
  * 
  * 	// Restore almost all registers.
- * 	{ %R1, ..., %R14 } = new_lmf.regs[];
+ * 	{ %R1, ..., %R14 } = new_lmf.registers[];
  * 	%PR = %Caller_PR;
  * 
  * 	// Remove the method's address from the previous frame.
@@ -84,49 +84,49 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	int i = 0;
 
 	guint8 *code = NULL;
-	guint8 *buf = NULL;
+	guint8 *buffer = NULL;
 
 #define TRAMPOLINE_SIZE 148
 
-	code = buf = mono_global_codeman_reserve(TRAMPOLINE_SIZE);
+	code = buffer = mono_global_codeman_reserve(TRAMPOLINE_SIZE);
 
 	/* Save the return address. */
-	sh4_stsl_PR_decRx(buf, sh4_r15);
+	sh4_stsl_PR_decRx(buffer, sh4_r15);
 
 	/* pseudo-code: struct MonoLMF new_lmf; */
-	sh4_add_imm(buf, -sizeof(MonoLMF) + offsetof(MonoLMF, regs), sh4_r15);
+	sh4_add_imm(buffer, -sizeof(MonoLMF) + offsetof(MonoLMF, registers), sh4_r15);
 
 	/* At this point, the stack looks like :
-	 *	:          :
-	 *	|          |
-	 *	|----------|
-	 *	|  method  | Caller's frame.
-	 *	|==========|
-	 *	|    PR    |
-	 *	|----------|
-	 *	| .regs[]  | Current frame.
-	 *	| - - - - -| <- SP
-	 *	| new_lmf  |
-	 *	|----------|
-	 *	:          :
+	 *	:              :
+	 *	|              |
+	 *	|--------------|
+	 *	|    method    | Caller's frame.
+	 *	|==============|
+	 *	|      PR      |
+	 *	|--------------|
+	 *	| .registers[] | Current frame.
+	 *	| - - - - - - -| <- SP
+	 *	|   new_lmf    |
+	 *	|--------------|
+	 *	:              :
 	 */
 
 	/*
 	 * Save all registers.
 	 */
 
-	/* pseudo-code: new_lmf.regs[] = { %R0, ..., %R15 }; */
+	/* pseudo-code: new_lmf.registers[] = { %R0, ..., %R15 }; */
 	for (i = 0; i <= 14; i++)
-		sh4_movl_dispRx(buf, (SH4IntRegister)i, i * 4, sh4_r15);
+		sh4_movl_dispRx(buffer, (SH4IntRegister)i, i * 4, sh4_r15);
 
-	/* Compute the previous SP value before saving into new_lmf.regs[]. */
-	sh4_mov(buf, sh4_r15, sh4_r8);
-	sh4_add_imm(buf, sizeof(MonoLMF) - offsetof(MonoLMF, regs) + 4 /* stacked PR. */, sh4_r8);
-	sh4_movl_dispRx(buf, sh4_r8, 60, sh4_r15);
+	/* Compute the previous SP value before saving into new_lmf.registers[]. */
+	sh4_mov(buffer, sh4_r15, sh4_r8);
+	sh4_add_imm(buffer, sizeof(MonoLMF) - offsetof(MonoLMF, registers) + 4 /* stacked PR. */, sh4_r8);
+	sh4_movl_dispRx(buffer, sh4_r8, 60, sh4_r15);
 
 	/* Adjust SP to finish the local allocation of new_lmf,
 	   so now it will be used to point to the local new_lmf.*/
-	sh4_add_imm(buf, -offsetof(MonoLMF, regs), sh4_r15);
+	sh4_add_imm(buffer, -offsetof(MonoLMF, registers), sh4_r15);
 
 	/*
 	 * This trampoline is called with the method's parameters, so the
@@ -134,151 +134,151 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	 */
 
 	/* At this point, the stack looks like :
-	 *	:          :
-	 *	|          |
-	 *	|----------|
-	 *	|  method  | Caller's frame.
-	 *	|==========|
-	 *	|    PR    |
-	 *	|----------|
-	 *	| .regs[]  | Current frame.
-	 *	| - - - - -|
-	 *	| new_lmf  |
-	 *	|----------| <- SP
-	 *	:          :
+	 *	:              :
+	 *	|              |
+	 *	|--------------|
+	 *	|    method    | Caller's frame.
+	 *	|==============|
+	 *	|      PR      |
+	 *	|--------------|
+	 *	| .registers[] | Current frame.
+	 *	| - - - - - - -|
+	 *	|   new_lmf    |
+	 *	|--------------| <- SP
+	 *	:              :
 	 */
 
 	/* pseudo-code: new_lmf.method = %Caller_SP[0]; */
-	sh4_mov(buf, sh4_r15, sh4_r8);
-	sh4_add_imm(buf, sizeof(MonoLMF) + 4 /* stacked PR. */, sh4_r8);
-	sh4_movl_indRy(buf, sh4_r8, sh4_r9);
-	sh4_movl_dispRx(buf, sh4_r9, offsetof(MonoLMF, method), sh4_r15);
+	sh4_mov(buffer, sh4_r15, sh4_r8);
+	sh4_add_imm(buffer, sizeof(MonoLMF) + 4 /* stacked PR. */, sh4_r8);
+	sh4_movl_indRy(buffer, sh4_r8, sh4_r9);
+	sh4_movl_dispRx(buffer, sh4_r9, offsetof(MonoLMF, method), sh4_r15);
 
 	if (trampoline_type == MONO_TRAMPOLINE_JUMP)
-		/* pseudo-code: new_lmf.ip = NULL; */
-		sh4_mov_imm(buf, 0, sh4_r10);
+		/* pseudo-code: new_lmf.pc = NULL; */
+		sh4_mov_imm(buffer, 0, sh4_r10);
 	else
-		/* pseudo-code: new_lmf.ip = %PR; */
-		sh4_sts_PR(buf, sh4_r10);
+		/* pseudo-code: new_lmf.pc = %PR; */
+		sh4_sts_PR(buffer, sh4_r10);
 
-	sh4_movl_dispRx(buf, sh4_r10, offsetof(MonoLMF, ip), sh4_r15);
+	sh4_movl_dispRx(buffer, sh4_r10, offsetof(MonoLMF, pc), sh4_r15);
 
 	/* The address of the constant pointing to mono_get_lmf_addr() is not
 	   known yet, so use a fake instruction. */
-	patch1 = buf;
-	sh4_sleep(buf);
+	patch1 = buffer;
+	sh4_sleep(buffer);
 
 	/* pseudo-code: new_lmf.lmf_addr = mono_get_lmf_addr(); */
-	sh4_jsr_indRx(buf, sh4_r8);
-	sh4_nop(buf);
+	sh4_jsr_indRx(buffer, sh4_r8);
+	sh4_nop(buffer);
 
-	sh4_mov(buf, sh4_r0, sh4_r11); /* R11 now holds "new_lmf.lmf_addr". */
-	sh4_movl_dispRx(buf, sh4_r11, offsetof(MonoLMF, lmf_addr), sh4_r15);
+	sh4_mov(buffer, sh4_r0, sh4_r11); /* R11 now holds "new_lmf.lmf_addr". */
+	sh4_movl_dispRx(buffer, sh4_r11, offsetof(MonoLMF, lmf_addr), sh4_r15);
 
 	/*
 	 * Insert the new LMF at the beginning of the LMF list.
 	 */
 
 	/* pseudo-code: new_lmf.previous_lmf = *(new_lmf.lmf_addr); */
-	sh4_movl_indRy(buf, sh4_r11, sh4_r1);
-	sh4_movl_dispRx(buf, sh4_r1, offsetof(MonoLMF, previous_lmf), sh4_r15);
+	sh4_movl_indRy(buffer, sh4_r11, sh4_r1);
+	sh4_movl_dispRx(buffer, sh4_r1, offsetof(MonoLMF, previous_lmf), sh4_r15);
 
 	/* pseudo-code: *(new_lmf.lmf_addr) = &new_lmf;  */
-	sh4_movl_indRx(buf, sh4_r15, sh4_r11);
+	sh4_movl_indRx(buffer, sh4_r15, sh4_r11);
 
 	/* Fill parameters passed to the trampoline. */
-	sh4_mov(buf, sh4_r15, sh4_r4);
-	sh4_add_imm(buf, offsetof(MonoLMF, regs), sh4_r4);
-	sh4_mov(buf, sh4_r10, sh4_r5); /* R10 is currently used as "new_lmf.ip". */
-	sh4_mov(buf, sh4_r9, sh4_r6);  /* R9 is currently used as "new_lmf.method". */
-	sh4_mov_imm(buf, 0, sh4_r7);
+	sh4_mov(buffer, sh4_r15, sh4_r4);
+	sh4_add_imm(buffer, offsetof(MonoLMF, registers), sh4_r4);
+	sh4_mov(buffer, sh4_r10, sh4_r5); /* R10 is currently used as "new_lmf.pc". */
+	sh4_mov(buffer, sh4_r9, sh4_r6);  /* R9 is currently used as "new_lmf.method". */
+	sh4_mov_imm(buffer, 0, sh4_r7);
 
 	/* The address of the constant pointing to trampoline() is not
 	   known yet, so use a fake instruction. */
-	patch2 = buf;
-	sh4_sleep(buf);
+	patch2 = buffer;
+	sh4_sleep(buffer);
 
-	/* pseudo-code: compiled_methode = trampoline(new_lmf.regs, new_lmf.ip, new_lmf.method, NULL); */
-	sh4_jsr_indRx(buf, sh4_r8);
-	sh4_nop(buf);
+	/* pseudo-code: compiled_methode = trampoline(new_lmf.registers, new_lmf.pc, new_lmf.method, NULL); */
+	sh4_jsr_indRx(buffer, sh4_r8);
+	sh4_nop(buffer);
 
 	/*
 	 * Restore the previous LMF list.
 	 */
 
 	/* pseudo-code: *(new_lmf.lmf_addr) = &(new_lmf.previous_lmf); */
-	sh4_mov(buf, sh4_r15, sh4_r8);
-	sh4_add_imm(buf, offsetof(MonoLMF, previous_lmf), sh4_r8);
-	sh4_movl_indRx(buf, sh4_r8, sh4_r11); /* R11 is currently used as "new_lmf.lmf_addr". */
+	sh4_mov(buffer, sh4_r15, sh4_r8);
+	sh4_add_imm(buffer, offsetof(MonoLMF, previous_lmf), sh4_r8);
+	sh4_movl_indRx(buffer, sh4_r8, sh4_r11); /* R11 is currently used as "new_lmf.lmf_addr". */
 
 	/*
 	 * Restore all registers.
 	 */
 
-	sh4_add_imm(buf, offsetof(MonoLMF, regs), sh4_r15);
+	sh4_add_imm(buffer, offsetof(MonoLMF, registers), sh4_r15);
 
 	/* At this point, the stack looks like :
-	 *	:          :
-	 *	|          |
-	 *	|----------|
-	 *	|  method  | Caller's frame.
-	 *	|==========|
-	 *	|    PR    |
-	 *	|----------|
-	 *	| .regs[]  | Current frame.
-	 *	| - - - - -| <- SP
-	 *	| new_lmf  |
-	 *	|----------|
-	 *	:          :
+	 *	:              :
+	 *	|              |
+	 *	|--------------|
+	 *	|    method    | Caller's frame.
+	 *	|==============|
+	 *	|      PR      |
+	 *	|--------------|
+	 *	| .registers[] | Current frame.
+	 *	| - - - - - - -| <- SP
+	 *	|   new_lmf    |
+	 *	|--------------|
+	 *	:              :
 	 */
 
-	/* pseudo-code: { %R1, ..., %R14 } = new_lmf.regs[]; */
+	/* pseudo-code: { %R1, ..., %R14 } = new_lmf.registers[]; */
 	/* Do not restore R0 and R15 because there are used later. */
 	for (i = 1; i <= 14; i++)
-		sh4_movl_dispRy(buf, i * 4, sh4_r15, (SH4IntRegister)i);
+		sh4_movl_dispRy(buffer, i * 4, sh4_r15, (SH4IntRegister)i);
 
 	/* pseudo-code: %PR = %Caller_PR; */
-	sh4_add_imm(buf, sizeof(MonoLMF) - offsetof(MonoLMF, regs), sh4_r15);
-	sh4_ldsl_incRx_PR(buf, sh4_r15);
+	sh4_add_imm(buffer, sizeof(MonoLMF) - offsetof(MonoLMF, registers), sh4_r15);
+	sh4_ldsl_incRx_PR(buffer, sh4_r15);
 
 	/*
 	 * Remove the method's address from the previous frame.
 	 */
 
 	/* pseudo-code: %SP = %SP + 1; */
-	sh4_add_imm(buf, 4, sh4_r15); /* method */
+	sh4_add_imm(buffer, 4, sh4_r15); /* method */
 
 	/* At this point, the stack looks like :
-	 *	:          :
-	 *	|          |
-	 *	|----------| <- SP
-	 *	|  method  | Caller's frame.
-	 *	|==========|
-	 *	:          : Current frame.
+	 *	:              :
+	 *	|              |
+	 *	|--------------| <- SP
+	 *	|    method    | Caller's frame.
+	 *	|==============|
+	 *	:              : Current frame.
 	 */
 
 	if (trampoline_type != MONO_TRAMPOLINE_CLASS_INIT)
 		/* pseudo-code: goto compiled_methode; */
 		/* R0 is the result from the call to trampoline(). */
-		sh4_jmp_indRx(buf, sh4_r0);
+		sh4_jmp_indRx(buffer, sh4_r0);
 	else
 		/* pseudo-code: return; */
-		sh4_rts(buf);
-	sh4_nop(buf);
+		sh4_rts(buffer);
+	sh4_nop(buffer);
 
 	/* Align the constant pool. */
-	while (((guint32)buf % 4) != 0)
-		sh4_nop(buf);
+	while (((guint32)buffer % 4) != 0)
+		sh4_nop(buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_dispPC(patch1, (guint32)buf - (((guint32)patch1 + 4) & ~0x3), sh4_r8);
-	sh4_emit32(buf, (int)mono_get_lmf_addr);
+	sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r8);
+	sh4_emit32(buffer, (int)mono_get_lmf_addr);
 
-	sh4_movl_dispPC(patch2, (guint32)buf - (((guint32)patch2 + 4) & ~0x3), sh4_r8);
-	sh4_emit32(buf, (int)mono_get_trampoline_func(trampoline_type));
+	sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r8);
+	sh4_emit32(buffer, (int)mono_get_trampoline_func(trampoline_type));
 
 	/* Sanity checks. */
-	g_assert(buf - code <= TRAMPOLINE_SIZE);
+	g_assert(buffer - code <= TRAMPOLINE_SIZE);
 
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, TRAMPOLINE_SIZE);
@@ -286,7 +286,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	return code;
 }
 
-guint32 mono_arch_get_rgctx_lazy_fetch_offset(gpointer *regs)
+guint32 mono_arch_get_rgctx_lazy_fetch_offset(gpointer *registers)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -300,7 +300,7 @@ gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMe
 	return NULL;
 }
 
-void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *regs)
+void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 {
 	/* TODO - CV */
 	g_assert(0);

@@ -155,30 +155,30 @@
  * Get the frame pointer from a Mono context. This macro is
  * mandatory.
 */
-#define MONO_CONTEXT_GET_BP(context) ((gpointer)(context)->regs[sh4_fp])
+#define MONO_CONTEXT_GET_BP(context) ((gpointer)(context)->registers[sh4_fp])
 
 /*
  * Get the instruction pointer from a Mono context. This macro is
  * mandatory.
 */
-#define MONO_CONTEXT_GET_IP(context) ((gpointer)(context)->ip)
+#define MONO_CONTEXT_GET_IP(context) ((gpointer)(context)->pc)
 
 /*
  * Get the stack pointer from a Mono context. This macro is mandatory.
 */
-#define MONO_CONTEXT_GET_SP(context) ((gpointer)(context)->regs[sh4_sp])
+#define MONO_CONTEXT_GET_SP(context) ((gpointer)(context)->registers[sh4_sp])
 
 /*
  * Set the frame pointer of a Mono context. This macro is
  * mandatory.
 */
-#define MONO_CONTEXT_SET_BP(context, vbp) do { (context)->regs[sh4_fp] = (guint32)(vbp); } while (0);
+#define MONO_CONTEXT_SET_BP(context, vbp) do { (context)->registers[sh4_fp] = (guint32)(vbp); } while (0);
 
 /*
  * Set the instruction pointer of a Mono context. This macro is
  * mandatory.
 */
-#define MONO_CONTEXT_SET_IP(context, vip) do { (context)->ip = (guint32)(vip); } while (0);
+#define MONO_CONTEXT_SET_IP(context, vpc) do { (context)->pc = (guint32)(vpc); } while (0);
 
 /*
  * This macro retrieves the Mono context from a function pointer. This
@@ -206,8 +206,8 @@ typedef  void * MonoCompileArch;
 /* The execution state of a thread during exception handling
  * is stored in this arch-specific structure. */
 typedef struct { 
-	guint32 ip;
-	guint32 regs[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
+	guint32 pc;
+	guint32 registers[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
  } MonoContext;
 
 /* When managed code needs to call into native code, it does through
@@ -218,8 +218,8 @@ struct MonoLMF {
 	gpointer    previous_lmf;
 	gpointer    lmf_addr;
 	MonoMethod *method;
-	guint32     ip;
-	guint32     regs[MONO_MAX_IREGS];
+	guint32     pc;
+	guint32     registers[MONO_MAX_IREGS];
 	guint32     ebp; /* required by Mini but not used with the SH4. */
  };
 
