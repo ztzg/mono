@@ -185,21 +185,147 @@ gpointer mono_arch_get_restore_context(void)
 	return code;
 }
 
-gpointer mono_arch_get_rethrow_exception(void)
+
+/**
+ * Raise an exception based on the passed parameters.
+ */
+static void throw_exception(MonoObject *exception, guint32 pc, guint32 *registers, gboolean rethrow)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	static void (* restore_context)(MonoContext *) = NULL;
+	MonoContext context;
+
+	if (restore_context == NULL)
+		restore_context = mono_arch_get_restore_context();
+
+	memset(&context, 0, sizeof(MonoContext));
+	memcpy(&(context.registers), registers, sizeof(context.registers));
+	context.pc = pc;
+
+	if (rethrow != 0) {
+		MonoObject *object = mono_object_isinst(exception, mono_defaults.exception_class);
+		if (object != NULL)
+			((MonoException*)exception)->stack_trace = NULL;
+	}
+
+	/* Adjust PC to point to the call instruction. */
+	mono_handle_exception(&context, exception, (gpointer)pc, FALSE);
+	restore_context(&context);
+
+	g_assert_not_reached();
 }
 
-gpointer mono_arch_get_throw_exception_by_name(void)
+/**
+ * Returns a pointer to a method which can be used to raise exceptions.
+ *
+ * void throw_exception_trampoline(MonoObject *exception)
+ * {
+ * 	// Save all registers onto the stack.
+ * 	registers[] = { %R0, ..., %R15 };
+ * 
+ * 	unsigned int registers[16];
+ * 
+ * #if rethrow != 0
+ * 	goto throw_exception(exception, %PC, %SP, 1);
+ * #else
+ * 	goto throw_exception(exception, %PC, %SP, 0);
+ * #endif
+ * }
+ */
+static gpointer get_throw_exception(gboolean rethrow)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	int i = 0;
+	guint8 *code   = NULL;
+	guint8 *buffer = NULL;
+	guint8 *patch  = NULL;
+
+#define THROW_EXCEPTION_SIZE 56
+
+	code = buffer = mono_global_codeman_reserve(THROW_EXCEPTION_SIZE);
+
+	/*
+	 * Save all registers onto the stack.
+	 */
+
+	/* Adjust SP to allocate the stacked registers[]. */
+	sh4_add_imm(buffer, -16 * 4, sh4_r15);
+
+	/* At this point, the stack looks like :
+	 *	:             :
+	 *	|             | Caller's frame.
+	 *	|=============|
+	 *	|             | Current frame.
+	 *	| registers[] |
+	 *	|             |
+	 *	|-------------| <- SP
+	 *	:             :
+	 */
+
+	/* pseudo-code: registers[] = { %R0, ..., %R15 }; */
+	for (i = 0; i <= 14; i++)
+		sh4_movl_dispRx(buffer, (SH4IntRegister)i, i * 4, sh4_r15);
+
+	/* Compute the previous value of SP before saving into registers[]. */
+	sh4_mov(buffer, sh4_r15, sh4_r0);
+	sh4_add_imm(buffer, 16 * 4, sh4_r0);
+	sh4_movl_dispRx(buffer, sh4_r0, 15 * 4, sh4_r15);
+
+	/*
+	 * Jump to throw_exception.
+	 */
+
+	/* Fill parameters passed to the throw_exception().
+	   The variable 'exception' is already in place in sh4_r4. */
+	sh4_sts_PR(buffer, sh4_r5);
+	sh4_mov(buffer, sh4_r15, sh4_r6);
+	sh4_mov_imm(buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
+
+	/* The address of the constant pointing to throw_exception() is not
+	   known yet, so use a fake instruction. */
+	patch = buffer;
+	sh4_sleep(buffer);
+
+	/* pseudo-code: goto throw_exception(exception, pc, sp, 0/1); */
+	sh4_jmp_indRx(buffer, sh4_r0);
+	sh4_nop(buffer);
+
+	/* Align the constant pool. */
+	while (((guint32)buffer % 4) != 0)
+		sh4_nop(buffer);
+
+	/* Build the constant pool & patch the corresponding instructions. */
+	sh4_movl_dispPC(patch, (guint32)buffer - (((guint32)patch + 4) & ~0x3), sh4_r0);
+	sh4_emit32(buffer, (guint32)throw_exception);
+
+	/* Sanity checks. */
+	g_assert(buffer - code <= THROW_EXCEPTION_SIZE);
+
+	/* Flush instruction cache, since we've generated code. */
+	mono_arch_flush_icache(code, THROW_EXCEPTION_SIZE);
+
+	return code;
+}
+
+gpointer mono_arch_get_rethrow_exception(void)
+{
+	static guint8 *code = NULL;
+
+	if (code == NULL)
+		code = get_throw_exception(TRUE);
+
+	return code;
 }
 
 gpointer mono_arch_get_throw_exception(void)
+{
+	static guint8 *code = NULL;
+
+	if (code == NULL)
+		code = get_throw_exception(FALSE);
+
+	return code;
+}
+
+gpointer mono_arch_get_throw_exception_by_name(void)
 {
 	/* TODO - CV */
 	g_assert(0);
