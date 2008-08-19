@@ -487,6 +487,14 @@ namespace System.Net
 			Headers.RemoveAndAdd ("Range", value + from + "-" + to);
 		}
 
+		public void SetPreAuthenticateNTLM (bool val) 
+		{
+			VMWHttpProvider provider = _provider as VMWHttpProvider;
+			if (provider == null)
+				throw new NotImplementedException ();
+			provider.SetPreAuthenticateNTLM (val);
+		}
+
 		public void SetRequestStreamProvider (InputStreamProvider streamProvider)
 		{
 			VMWHttpProvider provider = _provider as VMWHttpProvider;

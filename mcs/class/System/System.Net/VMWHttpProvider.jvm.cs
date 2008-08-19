@@ -43,6 +43,7 @@ namespace System.Net
 		private const int DEFAULT_IDLE_THREAD_TIMEOUT = 2;
 
 		private bool _isConnectionOpened;
+		private bool _preAuthenticateNTLM = false;
 		
 		static VMWHttpProvider()
 		{
@@ -587,6 +588,8 @@ namespace System.Net
 						case "OPTIONS": _method = new OptionsMethod(uriString);break;
 						default: _method = new GenericMethod(uriString, MethodName); break;
 					}
+					if (_preAuthenticateNTLM)
+						_method.getParams ().setPreauthenticateNTLM (_preAuthenticateNTLM);
 				}
 			}
 		}
@@ -600,6 +603,11 @@ namespace System.Net
 					_hostConfig = new HostConfiguration();
 				}
 			}
+		}
+
+		public void SetPreAuthenticateNTLM (bool val) 
+		{
+			_preAuthenticateNTLM = val;
 		}
 
 		public void SetRequestStreamProvider (InputStreamProvider streamProvider) {
@@ -752,6 +760,28 @@ namespace System.Net
 			}
 		}
 
+		private void FillRequestHeaders () 
+		{
+			mainsoft.apache.commons.httpclient.Header [] reqHeaders =
+				_method.getRequestHeaders ();
+			if (reqHeaders == null)
+				return;
+			for (int i = 0; i < reqHeaders.Length; i++) {
+
+				mainsoft.apache.commons.httpclient.HeaderElement [] elements = reqHeaders [i].getElements ();
+				for (int j = 0; j < elements.Length; j++) {
+					string key = elements [j].getName ();
+					string val = elements [j].getValue ();
+					string pair = (key == null) ? ((val == null) ? "" : val) : ((val == null) ? key : key + "=" + val);
+					try {
+						Headers.Add (reqHeaders [i].getName (), pair);
+					}
+					catch (Exception e) { }
+				}
+
+			}		
+		}
+
 		public override WebResponse GetResponse()
 		{
 			lock(this)
@@ -778,6 +808,7 @@ namespace System.Net
 							_method.getRequestHeader("Host");
 						if(hostHeader != null)
 							Headers.SetInternal("Host", hostHeader.getValue());
+						FillRequestHeaders ();
 
 						_response = new HttpWebResponse(_method, _state, _stateCache, GetAddress(), this.MethodName);
 						
@@ -792,7 +823,7 @@ namespace System.Net
 									CookieContainer.Add(GetAddress(), cooky);
 								}
 							}
-						}
+						}						
 
 						_hasResponse = true;
 						int respCodeAsInt = (int) _response.StatusCode;
