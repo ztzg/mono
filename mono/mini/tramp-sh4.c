@@ -79,12 +79,11 @@ gpointer mono_arch_create_specific_trampoline(gpointer arg1, MonoTrampolineType 
  */
 guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 {
-	guint8 * patch1 = 0;
-	guint8 * patch2 = 0;
 	int i = 0;
-
-	guint8 *code = NULL;
+	guint8 *code   = NULL;
 	guint8 *buffer = NULL;
+	guint8 *patch1 = NULL;
+	guint8 *patch2 = NULL;
 
 #define TRAMPOLINE_SIZE 148
 
@@ -119,7 +118,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	for (i = 0; i <= 14; i++)
 		sh4_movl_dispRx(buffer, (SH4IntRegister)i, i * 4, sh4_r15);
 
-	/* Compute the previous SP value before saving into new_lmf.registers[]. */
+	/* Compute the previous value of SP before saving into new_lmf.registers[]. */
 	sh4_mov(buffer, sh4_r15, sh4_r8);
 	sh4_add_imm(buffer, sizeof(MonoLMF) - offsetof(MonoLMF, registers) + 4 /* stacked PR. */, sh4_r8);
 	sh4_movl_dispRx(buffer, sh4_r8, 60, sh4_r15);
@@ -163,8 +162,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	sh4_movl_dispRx(buffer, sh4_r10, offsetof(MonoLMF, pc), sh4_r15);
 
-	/* The address of the constant pointing to mono_get_lmf_addr() is not
-	   known yet, so use a fake instruction. */
+	/* Patch slot for : sh4_r8 <- mono_get_lmf_addr */
 	patch1 = buffer;
 	sh4_sleep(buffer);
 
@@ -193,8 +191,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	sh4_mov(buffer, sh4_r9, sh4_r6);  /* R9 is currently used as "new_lmf.method". */
 	sh4_mov_imm(buffer, 0, sh4_r7);
 
-	/* The address of the constant pointing to trampoline() is not
-	   known yet, so use a fake instruction. */
+	/* Patch slot for : sh4_r8 <- trampoline */
 	patch2 = buffer;
 	sh4_sleep(buffer);
 
@@ -272,10 +269,10 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	/* Build the constant pool & patch the corresponding instructions. */
 	sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r8);
-	sh4_emit32(buffer, (int)mono_get_lmf_addr);
+	sh4_emit32(buffer, (guint32)mono_get_lmf_addr);
 
 	sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r8);
-	sh4_emit32(buffer, (int)mono_get_trampoline_func(trampoline_type));
+	sh4_emit32(buffer, (guint32)mono_get_trampoline_func(trampoline_type));
 
 	/* Sanity checks. */
 	g_assert(buffer - code <= TRAMPOLINE_SIZE);

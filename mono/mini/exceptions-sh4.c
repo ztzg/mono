@@ -101,8 +101,7 @@ gpointer mono_arch_get_call_filter(void)
 
 	/* pseudo-code: handler(); */
 	sh4_jsr_indRx(buffer, sh4_r5);
-	sh4_movl_dispRy(buffer, 14 * 4, sh4_r4, sh4_r14);
-	/* ^ Optim ^ : "%R14 = context.registers[14];" into the delay slot. */
+	sh4_movl_dispRy(buffer, 14 * 4, sh4_r4, sh4_r14); /* <= Delay slot optimization. */
 
 	/*
 	 * Restore all callee-saved registers from the stack.
@@ -279,8 +278,7 @@ static gpointer get_throw_exception(gboolean rethrow)
 	sh4_mov(buffer, sh4_r15, sh4_r6);
 	sh4_mov_imm(buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
 
-	/* The address of the constant pointing to throw_exception() is not
-	   known yet, so use a fake instruction. */
+	/* Patch slot for : sh4_r0 <- throw_exception */
 	patch = buffer;
 	sh4_sleep(buffer);
 
