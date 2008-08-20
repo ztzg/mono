@@ -290,7 +290,6 @@ guint32 mono_arch_regalloc_cost(MonoCompile *cfg, MonoMethodVar *vmv)
 void mono_arch_register_lowlevel_calls(void)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 

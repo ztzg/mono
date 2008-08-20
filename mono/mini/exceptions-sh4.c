@@ -184,7 +184,6 @@ gpointer mono_arch_get_restore_context(void)
 	return code;
 }
 
-
 /**
  * Raise an exception based on the passed parameters.
  */
@@ -216,30 +215,36 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 /**
  * Returns a pointer to a method which can be used to raise exceptions.
  *
- * void throw_exception_trampoline(MonoObject *exception)
+ * void throw_exception_trampoline(void *exception)
  * {
  * 	// Save all registers onto the stack.
  * 	registers[] = { %R0, ..., %R15 };
  * 
  * 	unsigned int registers[16];
  * 
- * #if rethrow != 0
- * 	goto throw_exception(exception, %PC, %SP, 1);
- * #else
- * 	goto throw_exception(exception, %PC, %SP, 0);
+ * #if by_name != 0
+ * 	exception = mono_exception_from_name(mono_defaults.corlib, "System", exception);
  * #endif
+ * 
+ * 	goto throw_exception(exception, %PC, %SP, rethrow);
  * }
  */
-static gpointer get_throw_exception(gboolean rethrow)
+static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 {
 	int i = 0;
+	int size = 58;
+
 	guint8 *code   = NULL;
 	guint8 *buffer = NULL;
-	guint8 *patch  = NULL;
+	guint8 *patch0 = NULL;
+	guint8 *patch1 = NULL;
+	guint8 *patch2 = NULL;
+	guint8 *patch3 = NULL;
 
-#define THROW_EXCEPTION_SIZE 56
+	if (by_name != 0)
+		size += 28;
 
-	code = buffer = mono_global_codeman_reserve(THROW_EXCEPTION_SIZE);
+	code = buffer = mono_global_codeman_reserve(size);
 
 	/*
 	 * Save all registers onto the stack.
@@ -268,37 +273,75 @@ static gpointer get_throw_exception(gboolean rethrow)
 	sh4_add_imm(buffer, 16 * 4, sh4_r0);
 	sh4_movl_dispRx(buffer, sh4_r0, 15 * 4, sh4_r15);
 
+	if (by_name != 0) {
+		/* Currently, sh4_r4 holds the name of the exception. */
+		sh4_mov(buffer, sh4_r4, sh4_r6);
+
+		/* Patch slot for : sh4_r4 <- mono_defaults.corlib */
+		patch1 = buffer;
+		sh4_sleep(buffer);
+
+		/* Patch slot for : sh4_r0 <- mono_exception_from_name */
+		patch3 = buffer;
+		sh4_sleep(buffer);
+
+		/* The current return address have to be preserved through
+		   the next call because it is used later. */
+		sh4_sts_PR(buffer, sh4_r8);
+
+		/* pseudo-code: exception = mono_exception_from_name(mono_defaults.corlib, "System", exception); */
+		sh4_jsr_indRx(buffer, sh4_r0);
+
+		/* Patch slot for : sh4_r5 <- "System" */
+		patch2 = buffer;
+		sh4_sleep(buffer); /* <= Delay slot optimization. */
+
+		/* Overwrite the variable 'exception'. */
+		sh4_mov(buffer, sh4_r0, sh4_r4);
+
+		sh4_lds_PR(buffer, sh4_r8);
+	}
+
 	/*
 	 * Jump to throw_exception.
 	 */
 
-	/* Fill parameters passed to the throw_exception().
-	   The variable 'exception' is already in place in sh4_r4. */
+	/* Fill parameters passed to the throw_exception(),
+	   sh4_r4 already holds the variable 'exception'. */
 	sh4_sts_PR(buffer, sh4_r5);
 	sh4_mov(buffer, sh4_r15, sh4_r6);
-	sh4_mov_imm(buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
 
 	/* Patch slot for : sh4_r0 <- throw_exception */
-	patch = buffer;
+	patch0 = buffer;
 	sh4_sleep(buffer);
 
-	/* pseudo-code: goto throw_exception(exception, pc, sp, 0/1); */
+	/* pseudo-code: goto throw_exception(exception, pc, sp, rethrow); */
 	sh4_jmp_indRx(buffer, sh4_r0);
-	sh4_nop(buffer);
+
+	sh4_mov_imm(buffer, (rethrow != 0 ? 1 : 0), sh4_r7); /* <= Delay slot optimization. */
 
 	/* Align the constant pool. */
 	while (((guint32)buffer % 4) != 0)
 		sh4_nop(buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_dispPC(patch, (guint32)buffer - (((guint32)patch + 4) & ~0x3), sh4_r0);
+	sh4_movl_dispPC(patch0, (guint32)buffer - (((guint32)patch0 + 4) & ~0x3), sh4_r0);
 	sh4_emit32(buffer, (guint32)throw_exception);
 
+	if (by_name != 0) {
+		sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r4);
+		sh4_emit32(buffer, (guint32)mono_defaults.corlib);
+		sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r5);
+		sh4_emit32(buffer, (guint32)"System");
+		sh4_movl_dispPC(patch3, (guint32)buffer - (((guint32)patch3 + 4) & ~0x3), sh4_r0);
+		sh4_emit32(buffer, (guint32)mono_exception_from_name);
+	}
+
 	/* Sanity checks. */
-	g_assert(buffer - code <= THROW_EXCEPTION_SIZE);
+	g_assert(buffer - code <= size);
 
 	/* Flush instruction cache, since we've generated code. */
-	mono_arch_flush_icache(code, THROW_EXCEPTION_SIZE);
+	mono_arch_flush_icache(code, size);
 
 	return code;
 }
@@ -308,7 +351,7 @@ gpointer mono_arch_get_rethrow_exception(void)
 	static guint8 *code = NULL;
 
 	if (code == NULL)
-		code = get_throw_exception(TRUE);
+		code = get_throw_exception(FALSE, TRUE);
 
 	return code;
 }
@@ -318,16 +361,19 @@ gpointer mono_arch_get_throw_exception(void)
 	static guint8 *code = NULL;
 
 	if (code == NULL)
-		code = get_throw_exception(FALSE);
+		code = get_throw_exception(FALSE, FALSE);
 
 	return code;
 }
 
 gpointer mono_arch_get_throw_exception_by_name(void)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	static guint8 *code = NULL;
+
+	if (code == NULL)
+		code = get_throw_exception(TRUE, FALSE);
+
+	return code;
 }
 
 gboolean mono_arch_handle_exception(void *sigctx, gpointer obj, gboolean test_only)
