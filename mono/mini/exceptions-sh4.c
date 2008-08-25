@@ -172,6 +172,8 @@ gpointer mono_arch_get_restore_context(void)
 	/* pseudo-code: goto context.pc; */
 	sh4_add_imm(buffer, - offsetof(MonoContext, registers) + offsetof(MonoContext, pc), sh4_r0);
 	sh4_movl_indRy(buffer, sh4_r0, sh4_r0);
+
+	/* FIXME: How can I restore sh4_r0 ? How do some C libraries do ? */
 	sh4_jmp_indRx(buffer, sh4_r0);
 	sh4_nop(buffer);
 
