@@ -10,6 +10,7 @@ host_alias=sh4-linux
 cross_compiling=yes
 
 CC=sh4-linux-gcc
+CPPFLAGS=-D__SH4A__
 LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
 
 prefix=/home/compwork/vincent/WIP/Mono-SH4/sysroot-sh4
