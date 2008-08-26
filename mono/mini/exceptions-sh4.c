@@ -53,7 +53,7 @@ gpointer mono_arch_get_call_filter(void)
 	if (code != NULL)
 		return code;
 
-#define CALL_FILTER_SIZE 58
+#define CALL_FILTER_SIZE 64
 
 	code = buffer = mono_global_codeman_reserve(CALL_FILTER_SIZE);
 
@@ -92,7 +92,7 @@ gpointer mono_arch_get_call_filter(void)
 	sh4_add_imm(buffer, offsetof(MonoContext, registers), sh4_r4);
 
 	/* pseudo-code: { %R8, ... , %R14 } = context.registers[8..14]; */
-	for (i = 8; i <= 13; i++) /* R14 is set into the next delay slot. */
+	for (i = 8; i <= 14; i++)
 		sh4_movl_dispRy(buffer, i * 4, sh4_r4, (SH4IntRegister)i);
 
 	/*
@@ -101,7 +101,7 @@ gpointer mono_arch_get_call_filter(void)
 
 	/* pseudo-code: handler(); */
 	sh4_jsr_indRx(buffer, sh4_r5);
-	sh4_movl_dispRy(buffer, 14 * 4, sh4_r4, sh4_r14); /* <= Delay slot optimization. */
+	sh4_nop(buffer);
 
 	/*
 	 * Restore all callee-saved registers from the stack.
@@ -276,6 +276,10 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	sh4_movl_dispRx(buffer, sh4_r0, 15 * 4, sh4_r15);
 
 	if (by_name != 0) {
+		/* The current return address have to be preserved through
+		   the next call because it is used later. */
+		sh4_sts_PR(buffer, sh4_r8);
+
 		/* Currently, sh4_r4 holds the name of the exception. */
 		sh4_mov(buffer, sh4_r4, sh4_r6);
 
@@ -283,20 +287,17 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 		patch1 = buffer;
 		sh4_sleep(buffer);
 
+		/* Patch slot for : sh4_r5 <- "System" */
+		patch2 = buffer;
+		sh4_sleep(buffer);
+
 		/* Patch slot for : sh4_r0 <- mono_exception_from_name */
 		patch3 = buffer;
 		sh4_sleep(buffer);
 
-		/* The current return address have to be preserved through
-		   the next call because it is used later. */
-		sh4_sts_PR(buffer, sh4_r8);
-
 		/* pseudo-code: exception = mono_exception_from_name(mono_defaults.corlib, "System", exception); */
 		sh4_jsr_indRx(buffer, sh4_r0);
-
-		/* Patch slot for : sh4_r5 <- "System" */
-		patch2 = buffer;
-		sh4_sleep(buffer); /* <= Delay slot optimization. */
+		sh4_nop(buffer);
 
 		/* Overwrite the variable 'exception'. */
 		sh4_mov(buffer, sh4_r0, sh4_r4);
@@ -312,6 +313,7 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	   sh4_r4 already holds the variable 'exception'. */
 	sh4_sts_PR(buffer, sh4_r5);
 	sh4_mov(buffer, sh4_r15, sh4_r6);
+	sh4_mov_imm(buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
 
 	/* Patch slot for : sh4_r0 <- throw_exception */
 	patch0 = buffer;
@@ -319,8 +321,7 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 
 	/* pseudo-code: goto throw_exception(exception, pc, sp, rethrow); */
 	sh4_jmp_indRx(buffer, sh4_r0);
-
-	sh4_mov_imm(buffer, (rethrow != 0 ? 1 : 0), sh4_r7); /* <= Delay slot optimization. */
+	sh4_nop(buffer);
 
 	/* Align the constant pool. */
 	while (((guint32)buffer % 4) != 0)
