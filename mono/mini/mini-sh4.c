@@ -419,8 +419,25 @@ guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 
 void mono_arch_create_vars(MonoCompile *cfg)
 {
-	/* TODO - CV */
-	g_assert(0);
+	MonoMethodSignature *signature = NULL;
+	struct call_info *call_info = NULL;
+
+	signature = mono_method_signature(cfg->method);
+
+	call_info = get_call_info(cfg->generic_sharing_context, signature);
+
+	if (call_info->ret.storage == into_register)
+		cfg->ret_var_is_local = TRUE;
+	else { /* call_info->ret.storage == onto_stack */
+		if (MONO_TYPE_ISSTRUCT(signature->ret)) {
+			NOT_IMPLEMENTED;
+			cfg->vret_addr = mono_compile_create_var(cfg, &mono_defaults.int_class->byval_arg, OP_ARG);
+		}
+	}
+
+	g_free(call_info->args);
+	g_free(call_info);
+
 	return;
 }
 
@@ -469,8 +486,7 @@ void mono_arch_flush_icache(guint8 *code, gint size)
 
 void mono_arch_flush_register_windows(void)
 {
-	/* TODO - CV */
-	g_assert(0);
+	/* Not used. */
 	return;
 }
 
