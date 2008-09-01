@@ -243,11 +243,146 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 	return call_info;
 }
 
+/**
+ * For variable length argument lists emit a signature cookie.
+ */
+static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, struct arg_info *arg_info)
+{
+	MonoInst *arg = NULL;
+	MonoInst *signature = NULL;
+
+	/* Declare a room where the signature cookie will be stored. */
+	MONO_INST_NEW(cfg, signature, OP_ICONST);
+	signature->inst_p0 = call->signature;
+
+	/* Create a new argument pointing to the signature cookie. */
+	MONO_INST_NEW(cfg, arg, OP_OUTARG);
+	arg->inst_left = signature;
+	arg->inst_call = call;
+
+	if (arg_info->storage == into_register) {
+		arg->backend.reg3 = arg_info->reg;
+	}
+	else { /* arg_info->storage == onto_stack */
+		arg->opcode = OP_OUTARG_MEMBASE;
+		arg->backend.size = arg_info->size;
+		arg->backend.arg_info = arg_info->offset;
+	}
+
+	MONO_INST_LIST_ADD_TAIL(&arg->node, &call->out_args);
+
+	return;
+}
+
+/**
+ * Take the arguments and generate the Mono instructions in an
+ * arch-specific way to properly call the function.
+ */
 MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call, int is_virtual)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	MonoMethodSignature *signature = NULL;
+	struct call_info *call_info = NULL;
+	int sentinelpos = -1;
+	int arg_count = 0;
+	int i = 0;
+
+	signature = call->signature;
+	arg_count = signature->param_count + signature->hasthis;
+	call_info = get_call_info(cfg->generic_sharing_context, signature);
+
+	if (call_info->ret.type == structure)
+		NOT_IMPLEMENTED;
+
+	if (signature->pinvoke == 0 &&
+	    signature->call_convention == MONO_CALL_VARARG)
+		sentinelpos = signature->sentinelpos + (is_virtual ? 1 : 0);
+
+	for (i = 0; i < arg_count; i++) {
+		struct arg_info *arg_info = &(call_info->args[i]);
+		MonoInst *arg = NULL;
+
+		/* Emit the signature cookie just before the implicit arguments. */
+		if (sentinelpos == i &&
+		    signature->pinvoke == 0 &&
+		    signature->call_convention == MONO_CALL_VARARG)
+			emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
+
+		MONO_INST_NEW(cfg, arg, OP_OUTARG);
+		arg->cil_code  = call->args[i]->cil_code;
+		arg->type      = call->args[i]->type;
+		arg->inst_left = call->args[i];
+		arg->inst_call = call;
+
+		switch (arg_info->type) {
+		case integer64:
+			if (arg_info->storage == into_register)
+				call->used_iregs |= 1 << (arg_info->reg + 1);
+			/* Fall through. */
+		case integer32:
+			if (arg_info->storage == into_register) {
+				arg->backend.reg3 = arg_info->reg;
+				call->used_iregs |= 1 << arg_info->reg;
+			}
+			else { /* arg_info->storage == onto_stack */
+				arg->opcode = OP_OUTARG_MEMBASE;
+				arg->backend.size = arg_info->size;
+				arg->backend.arg_info = arg_info->offset;
+			}
+			break;
+
+		case float32:
+			if (arg_info->storage == into_register) {
+				NOT_IMPLEMENTED;
+			}
+			else { /* arg_info->storage == onto_stack */
+				NOT_IMPLEMENTED;
+			}
+			break;
+
+		case float64:
+			if (arg_info->storage == into_register) {
+				NOT_IMPLEMENTED;
+			}
+			else { /* arg_info->storage == onto_stack */
+				NOT_IMPLEMENTED;
+			}
+			break;
+
+		case structure:
+			if (arg_info->storage == into_register) {
+				NOT_IMPLEMENTED;
+			}
+			else { /* arg_info->storage == onto_stack */
+				NOT_IMPLEMENTED;
+			}
+			break;
+
+		default:
+			g_assert_not_reached();
+			break;
+		}
+
+		MONO_INST_LIST_ADD_TAIL(&arg->node, &call->out_args);
+	}
+
+	/* Emit the signature cookie in case no implicit arguments are specified. */
+	if (signature->pinvoke == 0 &&
+	    sentinelpos == arg_count &&
+	    signature->call_convention == MONO_CALL_VARARG)
+		emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
+
+	if (call_info->stack_align_amount != 0) {
+		; /* TODO - CV */
+	}
+
+	call->stack_usage = call_info->stack_usage;
+	cfg->param_area = MAX(cfg->param_area, call->stack_usage);
+	cfg->flags |= MONO_CFG_HAS_CALLS;
+
+	g_free(call_info->args);
+	g_free(call_info);
+
+	return call;
 }
 
 void mono_arch_cleanup(void)
