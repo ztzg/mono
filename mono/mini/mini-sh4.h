@@ -199,6 +199,16 @@
 */
 #define MONO_MAX_IREGS 16
 
+/*
+ * This macro defines the first argument used in the calling convention.
+*/
+#define MONO_SH4_REG_FIRST_ARG sh4_r4
+
+/*
+ * This macro defines the last argument used in the calling convention.
+*/
+#define MONO_SH4_REG_LAST_ARG sh4_r7
+
 /* Structure where the arch-specific code can store
  * data during a compilation. */
 typedef  void * MonoCompileArch;

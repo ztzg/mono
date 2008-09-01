@@ -12,11 +12,235 @@
 #include "mini.h"
 #include "cpu-sh4.h"
 
+struct arg_info {
+	guint32 offset;
+	guint16 size;
+	SH4IntRegister reg;
+
+	enum {
+		integer32,
+		integer64,
+		float32,
+		float64,
+		structure
+	} type;
+
+	enum {
+		into_register,
+		onto_stack,
+	} storage;
+};
+
+struct call_info {
+	int nargs;
+	guint32 reg_usage;
+	guint32 stack_usage;
+	guint32 stack_align_amount;
+	struct arg_info ret;
+	struct arg_info sig_cookie;
+	struct arg_info *args;
+};
+
 void mono_arch_allocate_vars(MonoCompile *cfg)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return;
+}
+
+static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
+{
+	arg_info->size = 4;
+	arg_info->type = integer32;
+	arg_info->offset = *stack_size;
+
+	if (*arg_reg <= MONO_SH4_REG_LAST_ARG) {
+		arg_info->storage = into_register;
+		(*arg_reg)++;
+	}
+	else {
+		arg_info->storage = onto_stack;
+		(*stack_size) += 4;
+	}
+}
+
+/**
+ * Obtain information about a call according to the calling convention and
+ * determine the amount of space required for code and stack. In addition
+ * determine starting points for stack-based arguments, and area for
+ * structures being returned on the stack.
+ */
+static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoMethodSignature *signature)
+{
+	struct call_info *call_info = NULL;
+	SH4IntRegister arg_reg = MONO_SH4_REG_FIRST_ARG;
+	MonoType *basic_type = NULL;
+	guint32 stack_size = 0;
+	guint32 i = 0;
+
+	call_info = g_malloc0(sizeof(struct call_info));
+	call_info->args = g_malloc0(sizeof(struct arg_info) * (signature->param_count + signature->hasthis));
+
+	/* Determine where the result will be stored. */
+	basic_type = mono_type_get_underlying_type(signature->ret);
+	basic_type = mini_get_basic_type_from_generic(context, basic_type);
+	switch (basic_type->type) {
+	case MONO_TYPE_BOOLEAN:
+	case MONO_TYPE_CHAR:
+	case MONO_TYPE_I1:
+	case MONO_TYPE_U1:
+	case MONO_TYPE_I2:
+	case MONO_TYPE_U2:
+	case MONO_TYPE_I4:
+	case MONO_TYPE_U4:
+	case MONO_TYPE_I:
+	case MONO_TYPE_U:
+	case MONO_TYPE_STRING:
+	case MONO_TYPE_PTR:
+	case MONO_TYPE_CLASS:
+	case MONO_TYPE_ARRAY:
+	case MONO_TYPE_FNPTR:
+	case MONO_TYPE_OBJECT:
+	case MONO_TYPE_SZARRAY:
+		call_info->ret.storage = into_register;
+		call_info->ret.type = integer32;
+		call_info->ret.reg = sh4_r0;
+		break;
+
+	case MONO_TYPE_I8:
+	case MONO_TYPE_U8:
+		NOT_IMPLEMENTED;
+		/* call_info->ret.storage = into_register; */
+		/* call_info->ret.type = integer64; */
+		/* call_info->ret.reg = sh4_r0; */
+		break;
+
+	case MONO_TYPE_R4:
+		NOT_IMPLEMENTED;
+		/* call_info->ret.storage = into_register; */
+		/* call_info->ret.type = float32; */
+		/* call_info->ret.reg = sh4_fr0; */
+		break;
+
+	case MONO_TYPE_R8:
+		NOT_IMPLEMENTED;
+		/* call_info->ret.storage = into_register; */
+		/* call_info->ret.type = float64; */
+		/* call_info->ret.reg = sh4_fr0; */
+		break;
+
+	case MONO_TYPE_VOID:
+		/* Nothing to do */
+		break;
+
+	case MONO_TYPE_GENERICINST:
+		if (mono_type_generic_inst_is_valuetype(signature->ret) == 0) {
+			call_info->ret.storage = into_register;
+			call_info->ret.type = integer32;
+			call_info->ret.reg = sh4_r0;
+			break;
+		}
+		/* else fall through. */
+	case MONO_TYPE_VALUETYPE:
+	case MONO_TYPE_TYPEDBYREF:
+		/* Used to return structure, for instance. */
+		NOT_IMPLEMENTED;
+		break;
+
+	default:
+		g_error("Can't handle type '0x%x' as return value", signature->ret->type);
+		break;
+	}
+
+	/* Store the 'this' pointer before regular arguments. */
+	if (signature->hasthis)
+		add_int32_arg(&arg_reg, &stack_size, &(call_info->args[0]));
+
+	/* Determine where the arguments will be stored. */
+	for (i = 0; i < signature->param_count; i++) {
+		struct arg_info *arg_info = &(call_info->args[signature->hasthis + i]);
+
+		/* Emit the signature cookie just before the implicit arguments. */
+		if (signature->pinvoke == 0 &&
+		    signature->sentinelpos == i &&
+		    signature->call_convention == MONO_CALL_VARARG)
+			add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
+
+		if (signature->params[i]->byref) {
+			add_int32_arg(&arg_reg, &stack_size, arg_info);
+			continue;
+		}
+
+		basic_type = mono_type_get_underlying_type(signature->params[i]);
+		basic_type = mini_get_basic_type_from_generic(context, basic_type);
+		switch (basic_type->type) {
+		case MONO_TYPE_END:
+		case MONO_TYPE_VOID:
+		case MONO_TYPE_BOOLEAN:
+		case MONO_TYPE_CHAR:
+		case MONO_TYPE_I1:
+		case MONO_TYPE_U1:
+		case MONO_TYPE_I2:
+		case MONO_TYPE_U2:
+		case MONO_TYPE_I4:
+		case MONO_TYPE_U4:
+		case MONO_TYPE_I:
+		case MONO_TYPE_U:
+		case MONO_TYPE_STRING:
+		case MONO_TYPE_PTR:
+		case MONO_TYPE_CLASS:
+		case MONO_TYPE_ARRAY:
+		case MONO_TYPE_FNPTR:
+		case MONO_TYPE_OBJECT:
+		case MONO_TYPE_SZARRAY:
+			add_int32_arg(&arg_reg, &stack_size, arg_info);
+			break;
+
+		case MONO_TYPE_I8:
+		case MONO_TYPE_U8:
+			NOT_IMPLEMENTED;
+			/* add_int64_arg(&arg_reg, &stack_size, arg_info); */
+			break;
+
+		case MONO_TYPE_R4:
+			NOT_IMPLEMENTED;
+			/* add_float32_arg(&arg_reg, &stack_size, arg_info); */
+			break;
+
+		case MONO_TYPE_R8:
+			NOT_IMPLEMENTED;
+			/* add_float64_arg(&arg_reg, &stack_size, arg_info); */
+			break;
+
+		case MONO_TYPE_GENERICINST:
+		if (mono_type_generic_inst_is_valuetype(signature->params[i]) == 0) {
+			add_int32_arg(&arg_reg, &stack_size, arg_info);
+			break;
+		}
+		/* else fall through. */
+		case MONO_TYPE_VALUETYPE:
+		case MONO_TYPE_TYPEDBYREF:
+			NOT_IMPLEMENTED;
+			break;
+
+		default:
+			g_error("Can't handle type '0x%x' as argument", signature->params[i]->type);
+			break;
+		}
+	}
+
+	/* Emit the signature cookie in case no implicit arguments are specified. */
+	if (signature->pinvoke == 0 &&
+	    signature->sentinelpos == signature->param_count &&
+	    signature->call_convention == MONO_CALL_VARARG)
+		add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
+
+	/* Align the stack frame on a 4-bytes boundary. */
+	call_info->stack_usage = (stack_size + 0x3) & ~0x3;
+	call_info->stack_align_amount = call_info->stack_usage - stack_size;
+	call_info->reg_usage = arg_reg;
+
+	return call_info;
 }
 
 MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call, int is_virtual)
@@ -65,13 +289,6 @@ void mono_arch_create_vars(MonoCompile *cfg)
 	return;
 }
 
-void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
-}
-
 void mono_arch_emit_epilog(MonoCompile *cfg)
 {
 	/* TODO - CV */
@@ -86,32 +303,11 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 	return;
 }
 
-MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
-}
-
-void mono_arch_emit_outarg_vt(MonoCompile *cfg, MonoInst *ins, MonoInst *src)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
-}
-
 guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return NULL;
-}
-
-void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *val)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
 }
 
 void mono_arch_emit_this_vret_args(MonoCompile *cfg, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
@@ -164,7 +360,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 	return NULL;
 }
 
-int mono_arch_get_argument_info(MonoMethodSignature *csig, int param_count, MonoJitArgumentInfo *arg_info)
+int mono_arch_get_argument_info(MonoMethodSignature *csig, int arg_count, MonoJitArgumentInfo *arg_info)
 {
 	/* TODO - CV */
 	g_assert(0);

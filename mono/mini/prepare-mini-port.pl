@@ -543,6 +543,12 @@ which have a special meaning). Obviously, this macro is mandatory.',
 
 	MONO_ZERO_REG =>
 'TODO - CV',
+
+	MONO_SH4_REG_FIRST_ARG =>
+'This macro defines the first argument used in the calling convention.',
+
+	MONO_SH4_REG_LAST_ARG =>
+'This macro defines the last argument used in the calling convention.',
 );
 
 ######################################################################
@@ -581,6 +587,8 @@ my %value = (
 	MONO_ARCH_EMULATE_LMUL           => ' 1',
 	MONO_ARCH_EMULATE_LONG_MUL_OPTS  => ' 1',
 	MONO_ARCH_EMULATE_MUL_DIV        => ' 1',
+	MONO_SH4_REG_FIRST_ARG           => ' sh4_r4',
+	MONO_SH4_REG_LAST_ARG            => ' sh4_r7',
 	MonoCompileArch => ' void *', # TODO - CV
 	MonoContext     => '
 	guint32 pc;
@@ -636,6 +644,12 @@ open($file, ">mini-$arch.h") or die $!;
 print $file "#include <mono/arch/$arch/$arch-codegen.h>\n";
 print $file "#include <glib.h>\n";
 print $file "\n";
+
+# Force the definition of $arch specific macros.
+foreach my $macro (keys %value) {
+	my $regexp = '^MONO_' . uc($arch) . '_';
+	push @extracted, $macro if $macro =~ m/$regexp/;
+}
 
 foreach my $macro (sort @extracted) {
 	$description{$macro} = "UNKNOWN MACRO" if not exists $description{$macro};
