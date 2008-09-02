@@ -1,3 +1,5 @@
+#ifndef MONO_SH4_H
+#define MONO_SH4_H
 #include <mono/arch/sh4/sh4-codegen.h>
 #include <glib.h>
 
@@ -232,4 +234,5 @@ struct MonoLMF {
 	guint32     registers[MONO_MAX_IREGS];
 	guint32     ebp; /* required by Mini but not used with the SH4. */
  };
+#endif /* MONO_SH4_H */
 

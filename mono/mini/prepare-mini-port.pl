@@ -641,15 +641,11 @@ foreach my $macro (keys %extracted) {
 
 open($file, ">mini-$arch.h") or die $!;
 
+print $file "#ifndef MONO_". uc($arch) . "_H\n";
+print $file "#define MONO_". uc($arch) . "_H\n";
 print $file "#include <mono/arch/$arch/$arch-codegen.h>\n";
 print $file "#include <glib.h>\n";
 print $file "\n";
-
-# Force the definition of $arch specific macros.
-foreach my $macro (keys %value) {
-	my $regexp = '^MONO_' . uc($arch) . '_';
-	push @extracted, $macro if $macro =~ m/$regexp/;
-}
 
 foreach my $macro (sort @extracted) {
 	$description{$macro} = "UNKNOWN MACRO" if not exists $description{$macro};
@@ -693,6 +689,7 @@ if (exists $value{MonoLMF}) {
 } else {
 	print $file "/* TODO struct MonoLMF { }; */\n";
 }
+print $file "#endif /* MONO_". uc($arch) . "_H */\n";
 print $file "\n";
 
 close $file;
