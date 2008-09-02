@@ -1438,7 +1438,8 @@ namespace System.Net
 			int len;
 			sbyte[] array = new sbyte[4096];
 			while ((len = stream.read(array)) > 0)
-				output.write (array, 0, len);			
+				output.write (array, 0, len);
+			stream.close ();
 		}
 		
 	}
