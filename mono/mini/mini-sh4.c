@@ -504,11 +504,36 @@ const char *mono_arch_fregname(int reg)
 	return NULL;
 }
 
+/**
+ * Return a list of variables that can be allocated to
+ * the integer registers in the current architecture.
+ */
 GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	int i = 0;
+	GList *vars = NULL;
+
+	for (i = 0; i < cfg->num_varinfo; i++) {
+		MonoInst *ins = cfg->varinfo [i];
+		MonoMethodVar *var = MONO_VARINFO(cfg, i);
+
+		/* Skip unused variables. */
+		if (var->range.first_use.abs_pos >= var->range.last_use.abs_pos ||
+		    (ins->flags & (MONO_INST_IS_DEAD | MONO_INST_VOLATILE | MONO_INST_INDIRECT)) ||
+		    (ins->opcode != OP_LOCAL && ins->opcode != OP_ARG))
+			continue;
+
+		/* Allocate 32 bit variables only. */
+		if (mono_is_regsize_var(ins->inst_vtype)) {
+			g_assert(MONO_VARINFO (cfg, i)->reg == -1);
+			g_assert(i == var->idx);
+			vars = g_list_prepend(vars, var);
+		}
+	}
+
+	vars = mono_varlist_sort(cfg, vars, 0);
+
+	return vars;
 }
 
 int mono_arch_get_argument_info(MonoMethodSignature *csig, int arg_count, MonoJitArgumentInfo *arg_info)
