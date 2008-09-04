@@ -19,11 +19,72 @@ gpointer mono_arch_create_rgctx_lazy_fetch_trampoline(guint32 slot)
 	return NULL;
 }
 
-gpointer mono_arch_create_specific_trampoline(gpointer arg1, MonoTrampolineType tramp_type, MonoDomain *domain, guint32 *code_len)
+/**
+ * Create the stub used to transfer control to a specified trampoline.
+ */
+gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTrampolineType trampoline_type, MonoDomain *domain, guint32 *code_length)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	int short_branch = 0;
+	guint8 *code   = NULL;
+	guint8 *buffer = NULL;
+	guint8 *patch1 = NULL;
+	guint8 *patch2 = NULL;
+	guint8 *trampoline = NULL;
+
+	trampoline = mono_get_trampoline_code(trampoline_type);
+
+#define SPECIFIC_TRAMPOLINE_SIZE 20
+
+	mono_domain_lock(domain);
+	code = buffer = mono_code_manager_reserve(domain->code_mp, SPECIFIC_TRAMPOLINE_SIZE);
+	mono_domain_unlock(domain);
+
+	/* Patch slot for : sh4_r0 <- methode2compile */
+	patch1 = buffer;
+	sh4_sleep(buffer);
+
+	/* Push the address of the method to compile onto the stack.
+	   The trampoline will automatically pop this "hidden" parameter.
+	   TODO - CV : May be I could use a caller-saved register instead ? */
+	sh4_movl_decRx(buffer, sh4_r0, sh4_r15);
+
+	/* If possible, branch to the trampoline in an optimized way,
+	   that is, without the need of the constant pool. */
+	if (short_branch != 0) {
+		NOT_IMPLEMENTED;
+		sh4_bra(buffer, 0 /* Fake value. */);
+	} else {
+		/* Patch slot for : sh4_r0 <- trampoline */
+		patch2 = buffer;
+		sh4_sleep(buffer);
+
+		sh4_jmp_indRx(buffer, sh4_r0);
+	}
+	sh4_nop(buffer);
+
+	/* Align the constant pool. */
+	while (((guint32)buffer % 4) != 0)
+		sh4_nop(buffer);
+
+	/* Build the constant pool & patch the corresponding instructions. */
+	sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r0);
+	sh4_emit32(buffer, (guint32)methode2compile);
+
+	if (short_branch == 0) {
+		sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r0);
+		sh4_emit32(buffer, (guint32)trampoline);
+	}
+
+	/* Sanity checks. */
+	g_assert(buffer - code <= SPECIFIC_TRAMPOLINE_SIZE);
+
+	/* Flush instruction cache, since we've generated code. */
+	mono_arch_flush_icache(code, SPECIFIC_TRAMPOLINE_SIZE);
+
+	if (code_length != NULL)
+		*code_length = buffer - code;
+
+	return code;
 }
 
 /**
