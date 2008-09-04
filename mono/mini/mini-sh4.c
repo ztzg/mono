@@ -550,11 +550,26 @@ MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* cfg)
 	return NULL;
 }
 
+/**
+ * Return a list of callee-saved registers (a.k.a global registers)
+ * that can be used to allocate variables in the current method.
+ *
+ * The registers sh4_r14 and sh4_r15 are respectively used as the
+ * frame pointer and as the stack pointer. Maybe sh4_r12 will be
+ * used one day as the global pointer.
+ */
 GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	GList *regs = NULL;
+
+	regs = g_list_prepend(regs, (gpointer)sh4_r8);
+	regs = g_list_prepend(regs, (gpointer)sh4_r9);
+	regs = g_list_prepend(regs, (gpointer)sh4_r10);
+	regs = g_list_prepend(regs, (gpointer)sh4_r11);
+	regs = g_list_prepend(regs, (gpointer)sh4_r12);
+	regs = g_list_prepend(regs, (gpointer)sh4_r13);
+
+	return regs;
 }
 
 MonoInst *mono_arch_get_inst_for_method(MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
