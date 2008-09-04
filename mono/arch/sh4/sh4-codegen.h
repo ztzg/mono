@@ -95,14 +95,14 @@ typedef enum {
 	g_assert((int)(imm) >= -4096);		\
 	g_assert((int)(imm) <= 4094);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
-	sh4_emit16(code, (0xA << 12) | ((((imm) & 1FFE) >> 1) << 0)); \
+	sh4_emit16(code, (0xA << 12) | ((((imm) & 0x1FFE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bsr(code, imm) do {		\
 	g_assert((int)(imm) >= -4096);		\
 	g_assert((int)(imm) <= 4094);		\
 	g_assert(((int)(imm) & 0x1) == 0);	\
-	sh4_emit16(code, (0xB << 12) | ((((imm) & 1FFE) >> 1) << 0)); \
+	sh4_emit16(code, (0xB << 12) | ((((imm) & 0x1FFE) >> 1) << 0)); \
 } while(0)
 
 #define sh4_bt(code, imm) do {		\

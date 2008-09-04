@@ -245,7 +245,7 @@ void printf_nibbles(const sh_nibble_type nibbles[9])
 			break;
 
 		case BRANCH_12:
-			printf("((((imm) & 1FFE) >> 1) << %d)", 4 - length);
+			printf("((((imm) & 0x1FFE) >> 1) << %d)", 4 - length);
 			length += 12;
 			break;
 
