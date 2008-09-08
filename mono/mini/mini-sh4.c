@@ -22,7 +22,7 @@ struct arg_info {
 		integer64,
 		float32,
 		float64,
-		structure
+		aggregate
 	} type;
 
 	enum {
@@ -68,7 +68,7 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
  * Obtain information about a call according to the calling convention and
  * determine the amount of space required for code and stack. In addition
  * determine starting points for stack-based arguments, and area for
- * structures being returned on the stack.
+ * aggregates being returned on the stack.
  */
 static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoMethodSignature *signature)
 {
@@ -143,7 +143,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 		/* else fall through. */
 	case MONO_TYPE_VALUETYPE:
 	case MONO_TYPE_TYPEDBYREF:
-		/* Used to return structure, for instance. */
+		/* Used to return aggregate, for instance. */
 		NOT_IMPLEMENTED;
 		break;
 
@@ -290,7 +290,7 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	arg_count = signature->param_count + signature->hasthis;
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
 
-	if (call_info->ret.type == structure)
+	if (call_info->ret.type == aggregate)
 		NOT_IMPLEMENTED;
 
 	if (signature->pinvoke == 0 &&
@@ -348,7 +348,7 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 			}
 			break;
 
-		case structure:
+		case aggregate:
 			if (arg_info->storage == into_register) {
 				NOT_IMPLEMENTED;
 			}
