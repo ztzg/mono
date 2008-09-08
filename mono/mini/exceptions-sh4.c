@@ -133,12 +133,21 @@ gpointer mono_arch_get_call_filter(void)
  *
  * void restore_context(MonoContext *context)
  * {
- * 	// Restore almost all registers.
- * 	{ %R1, ..., %R15 } = context.registers[];
+ *      // Mimic a return from an ordinary routine
+ *      // by setting the linkage register Pr to the value of the saved PC.
+ *      %R1<- context.Pc_saved
+ *      %Pr<- %R1
+ *
+ * 	// Restore all registers.
+ * 	{ %R0, ..., %R15 } <- context.registers[];
  * 
- * 	// Jump to the saved PC.
- * 	goto context.pc;
+ *      // Final return.
+ *      rts
  * }
+ *
+ * The main assumption that is done here is that Pr is stored
+ * onto the stack even for a leaf routine. This point is not
+ * required by SH4 ABI for a pure C routine (non managed code).
  */
 gpointer mono_arch_get_restore_context(void)
 {
@@ -147,34 +156,32 @@ gpointer mono_arch_get_restore_context(void)
 	int i = 0;
 
 	if (code != NULL)
-		return code;
+		return (gpointer)code;
 
-#define RESTORE_CONTEXT_SIZE 42
+#define RESTORE_CONTEXT_SIZE 46
 
-	code = buffer = mono_global_codeman_reserve(RESTORE_CONTEXT_SIZE);
+	code = buffer = (guint8*)mono_global_codeman_reserve(RESTORE_CONTEXT_SIZE);
+
+        /* R0 is now used to point to "context.pc" (used later). */
+	sh4_mov(buffer, sh4_r4, sh4_r0);
+	sh4_add_imm(buffer, offsetof(MonoContext, pc), sh4_r0);
+
+        /* Transfer the saved PC into LR */
+	sh4_movl_indRy(buffer, sh4_r0, sh4_r1);
+	sh4_lds_PR(buffer,sh4_r1);
 
 	/*
-	 * Restore almost all registers.
+	 * Restore all registers. Pseudo-code is:
+	 * { %R0, ..., %R15 } <- context.registers[];
 	 */
-
-	/* R0 is now used to point to "context.registers[]" (used later). */
-	sh4_mov(buffer, sh4_r4, sh4_r0);
-	sh4_add_imm(buffer, offsetof(MonoContext, registers), sh4_r0);
-
-	/* pseudo-code: { %R1, ..., %R15 } = context.registers[]; */
-	for (i = 1; i <= 15; i++)
+	sh4_add_imm(buffer, - offsetof(MonoContext, pc) + offsetof(MonoContext,registers), sh4_r0);
+	for (i = 15; i >=0; i--)
 		sh4_movl_dispRy(buffer, i * 4, sh4_r0, (SH4IntRegister)i);
 
 	/*
-	 * Jump to the saved PC.
+	 * Final jump.
 	 */
-
-	/* pseudo-code: goto context.pc; */
-	sh4_add_imm(buffer, - offsetof(MonoContext, registers) + offsetof(MonoContext, pc), sh4_r0);
-	sh4_movl_indRy(buffer, sh4_r0, sh4_r0);
-
-	/* FIXME: How can I restore sh4_r0 ? How do some C libraries do ? */
-	sh4_jmp_indRx(buffer, sh4_r0);
+	sh4_rts(buffer);
 	sh4_nop(buffer);
 
 	/* Sanity checks. */
@@ -183,8 +190,10 @@ gpointer mono_arch_get_restore_context(void)
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, RESTORE_CONTEXT_SIZE);
 
-	return code;
+	return (gpointer)code;
 }
+
+
 
 /**
  * Raise an exception based on the passed parameters.
