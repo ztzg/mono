@@ -277,6 +277,12 @@ typedef enum {
 	sh4_emit16(code, (0x6 << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xD << 0)); \
 } while(0)
 
+#define sh4_icbi_indRx(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0xE << 4) | (0x3 << 0)); \
+} while(0)
+
 #define sh4_jmp_indRx(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
@@ -724,10 +730,34 @@ typedef enum {
 	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0xC << 4) | (0x3 << 0)); \
 } while(0)
 
+#define sh4_movcol_R0_indRx(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x7 << 4) | (0x3 << 0)); \
+} while(0)
+
+#define sh4_movlil_indRy_R0(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x0 << 12) | (((Ry) & 0xF) << 8) | (0x6 << 4) | (0x3 << 0)); \
+} while(0)
+
 #define sh4_movt(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_movual_indRy_R0(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Ry) & 0xF) << 8) | (0xA << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_movual_incRy_R0(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Ry) & 0xF) << 8) | (0xE << 4) | (0x9 << 0)); \
 } while(0)
 
 #define sh4_mulsw(code, Ry, Rx) do {		\
@@ -840,6 +870,12 @@ typedef enum {
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x8 << 4) | (0x3 << 0)); \
+} while(0)
+
+#define sh4_prefi_indRx(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0xD << 4) | (0x3 << 0)); \
 } while(0)
 
 #define sh4_rotcl(code, Rx) do {		\
@@ -1136,6 +1172,10 @@ typedef enum {
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
 	sh4_emit16(code, (0x6 << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_synco(code) do {		\
+	sh4_emit16(code, (0x0 << 12) | (0x0 << 8) | (0xA << 4) | (0xB << 0)); \
 } while(0)
 
 #define sh4_tasb_indRx(code, Rx) do {		\

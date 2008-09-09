@@ -533,7 +533,7 @@ int main(void)
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
 		int force_sign = 0;
 
-		if ((sh_table[i].arch & arch_sh4_nofpu) != arch_sh4_nofpu)
+		if ((sh_table[i].arch & arch_sh4a_nofpu) != arch_sh4a_nofpu)
 			continue;
 
 		if ((strcmp(sh_table[i].name, "add") == 0 &&
