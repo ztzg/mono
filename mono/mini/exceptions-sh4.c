@@ -133,12 +133,19 @@ gpointer mono_arch_get_call_filter(void)
  *
  * void restore_context(MonoContext *context)
  * {
- * 	// Restore almost all registers.
- * 	{ %R1, ..., %R15 } = context.registers[];
+ * 	// Mimic a return from an ordinary routine by setting the
+ * 	// linkage register PR to the value of the saved PC.
+ * 	%PR = context.pc
+ *
+ * 	// Restore all registers.
+ * 	{ %R0, ..., %R15 } = context.registers[];
  * 
- * 	// Jump to the saved PC.
- * 	goto context.pc;
+ *      return;
  * }
+ *
+ * The main assumption that is done here is that PR is stored
+ * onto the stack even for a leaf routine. This point is not
+ * required by SH4 ABI for a pure C routine (non managed code).
  */
 gpointer mono_arch_get_restore_context(void)
 {
@@ -149,32 +156,33 @@ gpointer mono_arch_get_restore_context(void)
 	if (code != NULL)
 		return code;
 
-#define RESTORE_CONTEXT_SIZE 42
+#define RESTORE_CONTEXT_SIZE 44
 
 	code = buffer = mono_global_codeman_reserve(RESTORE_CONTEXT_SIZE);
 
-	/*
-	 * Restore almost all registers.
-	 */
-
-	/* R0 is now used to point to "context.registers[]" (used later). */
-	sh4_mov(buffer, sh4_r4, sh4_r0);
-	sh4_add_imm(buffer, offsetof(MonoContext, registers), sh4_r0);
-
-	/* pseudo-code: { %R1, ..., %R15 } = context.registers[]; */
-	for (i = 1; i <= 15; i++)
-		sh4_movl_dispRy(buffer, i * 4, sh4_r0, (SH4IntRegister)i);
+	/* R15 now points to "context.registers[]" (used later). */
+	sh4_mov(buffer, sh4_r4, sh4_r15);
+	sh4_add_imm(buffer, offsetof(MonoContext, registers), sh4_r15);
 
 	/*
-	 * Jump to the saved PC.
+	 * Mimic a return from an ordinary routine by setting the
+	 * linkage register PR to the value of the saved PC.
 	 */
 
-	/* pseudo-code: goto context.pc; */
-	sh4_add_imm(buffer, - offsetof(MonoContext, registers) + offsetof(MonoContext, pc), sh4_r0);
-	sh4_movl_indRy(buffer, sh4_r0, sh4_r0);
+	/* pseudo-code: %PR = context.pc; */
+	sh4_movl_dispRy(buffer, offsetof(MonoContext, pc), sh4_r4, sh4_r4);
+	sh4_lds_PR(buffer, sh4_r4);
 
-	/* FIXME: How can I restore sh4_r0 ? How do some C libraries do ? */
-	sh4_jmp_indRx(buffer, sh4_r0);
+	/*
+	 * Restore all registers.
+	 */
+
+	/* pseudo-code: { %R0, ..., %R15 } = context.registers[]; */
+	for (i = 0; i <= 15; i++)
+		sh4_movl_dispRy(buffer, i * 4, sh4_r15, (SH4IntRegister)i);
+
+	/* pseudo-code: return; */
+	sh4_rts(buffer);
 	sh4_nop(buffer);
 
 	/* Sanity checks. */
