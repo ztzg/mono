@@ -1,4 +1,4 @@
-/*
+/* -*- c-set-style: "K&R"; c-basic-offset: 8 -*-
   Copyright (c) 2008, STMicroelectronics
   All rights reserved.
 

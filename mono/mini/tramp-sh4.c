@@ -1,4 +1,4 @@
-/*
+/* -*- c-set-style: "K&R"; c-basic-offset: 8 -*-
  * tramp-sh4.c: JIT trampoline code for SH4
  *
  * Authors:

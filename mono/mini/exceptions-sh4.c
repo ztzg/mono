@@ -1,4 +1,4 @@
-/*
+/* -*- c-set-style: "K&R"; c-basic-offset: 8 -*-
  * exceptions-sh4.c: exception support for SH4
  *
  * Authors:

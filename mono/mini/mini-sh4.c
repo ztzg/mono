@@ -1,4 +1,4 @@
-/*
+/* -*- c-set-style: "K&R"; c-basic-offset: 8 -*-
  * mini-sh4.c: SH4 backend for the Mono code generator
  *
  * Authors:
