@@ -690,6 +690,15 @@ if (exists $value{MonoLMF}) {
 	print $file "/* TODO struct MonoLMF { }; */\n";
 }
 print $file "#endif /* MONO_". uc($arch) . "_H */\n";
+
+print $file "\n";
+
+print $file "#ifndef NDEBUG\n";
+print $file "#  define SH4_DEBUG(format, ...) fprintf(stderr, \"! %s:%d: \" format \"\\n\", __FUNCTION__, __LINE__, __VA_ARGS__)\n";
+print $file "#else\n";
+print $file "#  define SH4_DEBUG(format, ...)\n";
+print $file "#endif /* NDEBUG */\n";
+
 print $file "\n";
 
 close $file;

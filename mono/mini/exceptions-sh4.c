@@ -50,6 +50,8 @@ gpointer mono_arch_get_call_filter(void)
 	guint8 *buffer = NULL;
 	int i = 0;
 
+	SH4_DEBUG("code = %p", code);
+
 	if (code != NULL)
 		return code;
 
@@ -123,6 +125,8 @@ gpointer mono_arch_get_call_filter(void)
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, CALL_FILTER_SIZE);
 
+	SH4_DEBUG("code = %p", code);
+
 	return code;
 }
 
@@ -152,6 +156,8 @@ gpointer mono_arch_get_restore_context(void)
 	static guint8 *code = NULL;
 	guint8 *buffer = NULL;
 	int i = 0;
+
+	SH4_DEBUG("code = %p", code);
 
 	if (code != NULL)
 		return code;
@@ -191,6 +197,8 @@ gpointer mono_arch_get_restore_context(void)
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, RESTORE_CONTEXT_SIZE);
 
+	SH4_DEBUG("code = %p", code);
+
 	return code;
 }
 
@@ -201,6 +209,8 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 {
 	static void (* restore_context)(MonoContext *) = NULL;
 	MonoContext context;
+
+	SH4_DEBUG("args => %p, %d, %p, %d", exception, pc, registers, rethrow);
 
 	if (restore_context == NULL)
 		restore_context = mono_arch_get_restore_context();
@@ -250,6 +260,8 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	guint8 *patch1 = NULL;
 	guint8 *patch2 = NULL;
 	guint8 *patch3 = NULL;
+
+	SH4_DEBUG("args => %d, %d", by_name, rethrow);
 
 	if (by_name != 0)
 		size += 28;
@@ -353,6 +365,8 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, size);
+
+	SH4_DEBUG("code = %p", code);
 
 	return code;
 }

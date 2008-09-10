@@ -236,3 +236,9 @@ struct MonoLMF {
  };
 #endif /* MONO_SH4_H */
 
+#ifndef NDEBUG
+#  define SH4_DEBUG(format, ...) fprintf(stderr, "! %s:%d: " format "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
+#else
+#  define SH4_DEBUG(format, ...)
+#endif /* NDEBUG */
+

@@ -54,6 +54,8 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 	arg_info->type = integer32;
 	arg_info->offset = *stack_size;
 
+	SH4_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
+
 	if (*arg_reg <= MONO_SH4_REG_LAST_ARG) {
 		arg_info->storage = into_register;
 		(*arg_reg)++;
@@ -62,6 +64,9 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 		arg_info->storage = onto_stack;
 		(*stack_size) += 4;
 	}
+
+	SH4_DEBUG("arg_reg = %d", *arg_reg);
+	SH4_DEBUG("stack_size = %d", *stack_size);
 }
 
 /**
@@ -78,12 +83,17 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 	guint32 stack_size = 0;
 	guint32 i = 0;
 
+	SH4_DEBUG("args => %p, %p", context, signature);
+
 	call_info = g_malloc0(sizeof(struct call_info));
 	call_info->args = g_malloc0(sizeof(struct arg_info) * (signature->param_count + signature->hasthis));
 
 	/* Determine where the result will be stored. */
 	basic_type = mono_type_get_underlying_type(signature->ret);
 	basic_type = mini_get_basic_type_from_generic(context, basic_type);
+
+	SH4_DEBUG("basic_type of result = %d", basic_type->type);
+
 	switch (basic_type->type) {
 	case MONO_TYPE_BOOLEAN:
 	case MONO_TYPE_CHAR:
@@ -173,6 +183,9 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 
 		basic_type = mono_type_get_underlying_type(signature->params[i]);
 		basic_type = mini_get_basic_type_from_generic(context, basic_type);
+
+		SH4_DEBUG("basic_type of arg[%d] = %d", i, basic_type->type);
+
 		switch (basic_type->type) {
 		case MONO_TYPE_END:
 		case MONO_TYPE_VOID:
@@ -251,6 +264,8 @@ static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, s
 	MonoInst *arg = NULL;
 	MonoInst *signature = NULL;
 
+	SH4_DEBUG("args => %p, %p, %p", cfg, call, arg_info);
+
 	/* Declare a room where the signature cookie will be stored. */
 	MONO_INST_NEW(cfg, signature, OP_ICONST);
 	signature->inst_p0 = call->signature;
@@ -286,6 +301,8 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	int arg_count = 0;
 	int i = 0;
 
+	SH4_DEBUG("args => %p, %p, %p, %d", cfg, bb, call, is_virtual);
+
 	signature = call->signature;
 	arg_count = signature->param_count + signature->hasthis;
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
@@ -312,6 +329,8 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 		arg->type      = call->args[i]->type;
 		arg->inst_left = call->args[i];
 		arg->inst_call = call;
+
+		SH4_DEBUG("type of arg[%d] = %d", i, arg_info->type);
 
 		switch (arg_info->type) {
 		case integer64:
@@ -422,6 +441,8 @@ void mono_arch_create_vars(MonoCompile *cfg)
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
 
+	SH4_DEBUG("args => %p", cfg);
+
 	signature = mono_method_signature(cfg->method);
 
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
@@ -475,6 +496,8 @@ void mono_arch_flush_icache(guint8 *code, gint size)
 	guint32 addr = (guint32)code & ~0xF;
 	guint32 end  = (guint32)code + size;
 
+	SH4_DEBUG("args => %p, %d", code, size);
+
 	while (addr <= end) {
 		__asm__ __volatile__ ("ocbp @%0" : : "r"(addr));
 		__asm__ __volatile__ ("icbi @%0" : : "r"(addr));
@@ -513,6 +536,8 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 	int i = 0;
 	GList *vars = NULL;
 
+	SH4_DEBUG("args => %p", cfg);
+
 	for (i = 0; i < cfg->num_varinfo; i++) {
 		MonoInst *ins = cfg->varinfo [i];
 		MonoMethodVar *var = MONO_VARINFO(cfg, i);
@@ -527,6 +552,9 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 		if (mono_is_regsize_var(ins->inst_vtype)) {
 			g_assert(MONO_VARINFO (cfg, i)->reg == -1);
 			g_assert(i == var->idx);
+
+			SH4_DEBUG("var '%p' allocated to a register", var);
+
 			vars = g_list_prepend(vars, var);
 		}
 	}
@@ -561,6 +589,8 @@ MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* cfg)
 GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
 {
 	GList *regs = NULL;
+
+	SH4_DEBUG("args => %p", cfg);
 
 	regs = g_list_prepend(regs, (gpointer)sh4_r8);
 	regs = g_list_prepend(regs, (gpointer)sh4_r9);
