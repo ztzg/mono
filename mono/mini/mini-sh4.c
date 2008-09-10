@@ -22,7 +22,8 @@ struct arg_info {
 		integer64,
 		float32,
 		float64,
-		aggregate
+		aggregate,
+		none,
 	} type;
 
 	enum {
@@ -40,13 +41,6 @@ struct call_info {
 	struct arg_info sig_cookie;
 	struct arg_info *args;
 };
-
-void mono_arch_allocate_vars(MonoCompile *cfg)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
-}
 
 static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
 {
@@ -404,6 +398,192 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	return call;
 }
 
+/**
+ * Allocate space onto the stack for variables/parameters/...
+ * according to the SH4 ABI, and specify how to access them.
+ */
+void mono_arch_allocate_vars(MonoCompile *cfg)
+{
+	MonoMethodSignature *signature = NULL;
+	struct call_info *call_info = NULL;
+	int scratch_offset = 0;
+	int locals_offset = 0;
+	int i = 0;
+
+	SH4_DEBUG("args => %p", cfg);
+
+	signature = mono_method_signature(cfg->method);
+	call_info = get_call_info(cfg->generic_sharing_context, signature);
+
+	/* Allocate space to save the LMF just below the stack pointer. */
+	if (cfg->method->save_lmf != 0) {
+		NOT_IMPLEMENTED;
+		cfg->stack_offset += sizeof(struct MonoLMF);
+	}
+
+	/* Allocate space for parameters, computed into mono_arch_call_opcode(). */
+	cfg->stack_offset += cfg->param_area;
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============| <- SP
+	 *	:              : Callee's frame.
+	 */
+
+	/* Allocate space to save scratch registers (sh4_r8 -> sh4_r13). */
+	for (i = sh4_r8; i <= sh4_r13; i++)
+		if ((cfg->used_int_regs & (SH4IntRegister)i) != 0)
+			scratch_offset += 4;
+
+	cfg->stack_offset += scratch_offset;
+
+	/* Allocate space to save the previous frame pointer (sh4_r14). */
+	cfg->stack_offset += 4;
+
+	/* Allocate space to save the PR. */
+	cfg->stack_offset += 4;
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------| <- SP
+	 *	:              :
+	 */
+
+	cfg->frame_reg = sh4_r14;
+	cfg->used_int_regs |= 1 << sh4_r14;
+
+	/* Compute space used by local variables and specify how to access them. */
+	for (i = cfg->locals_start; i < cfg->num_varinfo; i++) {
+		MonoInst *inst = cfg->varinfo[i];
+		guint32 align = 0;
+		guint32 size = 0;
+
+		/* Nothing to do if the variable is already allocated
+		   to a register or if it is unused. */
+		if (inst->opcode == OP_REGVAR || (inst->flags & MONO_INST_IS_DEAD) != 0)
+			continue;
+
+		/* inst->backend.is_pinvoke indicates native sized value types,
+		   this is used by the pinvoke wrappers when they call functions
+		   returning structures. */
+		if (inst->backend.is_pinvoke != 0 && MONO_TYPE_ISSTRUCT(inst->inst_vtype))
+			size = mono_class_native_size(inst->inst_vtype->data.klass, &align);
+		else
+			size = mono_type_size(inst->inst_vtype, (int *)&align);
+
+		/* Align the access on a `align`-bytes boundary. */
+		locals_offset += align - 1;
+		locals_offset &= ~(align - 1);
+
+		/* Specify how to access this local variable. */
+		inst->opcode = OP_REGOFFSET;
+		inst->inst_basereg = cfg->frame_reg;
+		inst->inst_offset = locals_offset;
+
+		SH4_DEBUG("local '%d' size = %d", i, size);
+		SH4_DEBUG("local '%d' offset = %d", i, locals_offset);
+
+		locals_offset += size;
+	}
+
+	/* Allocate space for local variables. */
+	cfg->stack_offset += locals_offset;
+
+	/* Align the stack frame on a 4-bytes boundary. */
+	cfg->stack_offset = (cfg->stack_offset + 0x3) & ~0x3;
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------|
+	 *	|  local var.  |
+	 *	|--------------| <- FP, SP
+	 *	:              :
+	 */
+
+	if (signature->pinvoke != 0 &&
+	    signature->call_convention == MONO_CALL_VARARG) {
+		/* Currently, the SH4 backend is able to store the signature
+		   cookie into a register, however it appears the generic
+		   part of Mono can not handle this because only the field
+		   "gint32 sig_cookie" into MonoCompile is available. I don't
+		   like the idea to do like other backend, so I'm waiting for
+		   another solution. CV */
+		NOT_IMPLEMENTED;
+	}
+
+	/* The stack size is now fully known so specify how to access parameters. */
+	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
+		MonoInst *inst = cfg->varinfo[i];
+		struct arg_info *arg_info = &call_info->args[i];
+
+		/* Nothing to do if the variable is already allocated to a register.
+		   TODO - CV : When does this happen ? */
+		if (inst->opcode == OP_REGVAR)
+			continue;
+
+		if (arg_info->storage == onto_stack) {
+			inst->opcode = OP_REGOFFSET;
+			inst->inst_basereg = cfg->frame_reg;
+			inst->inst_offset = arg_info->offset;
+
+			SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
+
+			/* The parameter area is before local variables and
+			   scratch registers are stored (despite the stack
+			   grows to low address, offsets are positively
+			   computed). */
+			inst->inst_offset -= locals_offset + scratch_offset;
+		}
+		else { /* arg_info->storage == into_register */
+			inst->opcode = OP_REGVAR;
+			inst->dreg = arg_info->reg;
+
+			SH4_DEBUG("arg '%d' reg = %d", i, arg_info->reg);
+		}
+	}
+
+	SH4_DEBUG("return type = %d", call_info->ret.type);
+
+	/* Specify how to access the return value. */
+	switch (call_info->ret.type) {
+	case aggregate:
+		NOT_IMPLEMENTED;
+		/* The caller set sh4_r2 to point to already allocated
+		   space where the return aggregate will be hold. */
+		cfg->ret->opcode = OP_REGVAR;
+		cfg->ret->inst_c0 = sh4_r2;
+		break;
+
+	case integer32:
+	case integer64:
+	case float32:
+	case float64:
+		cfg->ret->opcode = OP_REGVAR;
+		cfg->ret->inst_c0 = call_info->ret.reg; /* sh4_r0 or sh4_fr0 */
+		break;
+
+	case none: /* void */
+		break;
+
+	default:
+		g_assert_not_reached();
+		break;
+	}
+
+	g_free(call_info->args);
+	g_free(call_info);
+}
+
 void mono_arch_cleanup(void)
 {
 	/* TODO - CV */
@@ -695,10 +875,14 @@ gboolean mono_arch_print_tree(MonoInst *tree, int arity)
 	return 0;
 }
 
+/**
+ * Return the cost, in number of memory references, of the action of
+ * allocating the variable VMV into a register during global register
+ * allocation.
+ */
 guint32 mono_arch_regalloc_cost(MonoCompile *cfg, MonoMethodVar *vmv)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return 0;
 }
 
