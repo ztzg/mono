@@ -1,134 +1,18 @@
 #!/bin/env perl
 
-# optional | recommended | required
-# depencies
-
 use strict;
 use warnings;
-
 use File::Find;
-
-=head1 XXX
-
-=cut
 
 die "Usage: 'gen-mini-port.pl \$(arch)' into Mini's sources directory\n"
     if not defined $ARGV[0] or
        not -e 'mini-arch.h';
 
 my $arch =  $ARGV[0];
-my @cpu_mds    = <cpu-*.md>;
 my @mini_archs = <mini-*.h>;
-
-=head2 Instruction selection
-
-=cut
 
 my %extracted = ();
 my @extracted = ();
-
-find(\&extract_opcodes, @cpu_mds);
-
-sub extract_opcodes
-{
-	return if not -f or not -r;
-	return if $_ eq "cpu-$arch.md";
-
-	open(my $file, "<$_") or die $!;
-
-	foreach my $line (<$file>) {
-		if ($line =~ m/^\s*(\w+):/) {
-			$extracted{$1}->{$_} = 1;
-		}
-	}
-
-	close $file;
-}
-
-foreach my $opcode (keys %extracted) {
-	my $found = 1;
-	foreach my $cpu_md (@cpu_mds) {
-		next if $cpu_md eq "cpu-$arch.md";
-
-		if (not exists $extracted{$opcode}->{$cpu_md}) {
-			if (exists $extracted{"int_" . $opcode}->{$cpu_md}) {
-				$found = 2;
-			} else {
-				$found = 0;
-				last;
-			}
-		}
-	}
-
-	push @extracted, "$opcode"     if ($found == 1);
-	push @extracted, "int_$opcode" if ($found == 2);
-}
-
-my $header = "# " . ucfirst($arch) . " cpu description file\n";
-$header .= '
-# This file is read by genmdesc to produce a table with all the relevant information
-# about the cpu instructions that may be used by the register allocator, the scheduler
-# and other parts of the arch-dependent part of mini.
-#
-# An opcode name is followed by a colon and optional specifiers.
-# A specifier has a name, a colon and a value. Specifiers are separated by white space.
-# Here is a description of the specifiers valid for this file and their possible values.
-#
-# dest:register       describes the destination register of an instruction
-# src1:register       describes the first source register of an instruction
-# src2:register       describes the second source register of an instruction
-#
-# register may have the following values:
-#	i  integer register
-#	b  base register (used in address references)
-#	f  floating point register
-#
-# len:number         describe the maximun length in bytes of the instruction
-# 		     number is a positive integer.  If the length is not specified
-#                    it defaults to zero.   But lengths are only checked if the given opcode
-#                    is encountered during compilation. Some opcodes, like CONV_U4 are
-#                    transformed into other opcodes in the brg files, so they do not show up
-#                    during code generation.
-#
-# cost:number        describe how many cycles are needed to complete the instruction (unused)
-#
-# clob:spec          describe if the instruction clobbers registers or has special needs
-#
-# spec can be one of the following characters:
-#	c  clobbers caller-save registers
-#
-# flags:spec        describe if the instruction uses or sets the flags (unused)
-#
-# spec can be one of the following chars:
-# 	s  sets the flags
-#       u  uses the flags
-#       m  uses and modifies the flags
-#
-# res:spec          describe what units are used in the processor (unused)
-#
-# delay:            describe delay slots (unused)
-#
-# the required specifiers are: len, clob (if registers are clobbered), the registers
-# specifiers if the registers are actually used, flags (when scheduling is implemented).
-#
-';
-
-$header .= "# See the code in mini-$arch.c for more details on how the specifiers are used.\n#\n";
-
-open(my $file, ">cpu-$arch.md") or die $!;
-print $file $header;
-print $file "# TODO $_:\n" foreach (sort @extracted);
-close $file;
-
-=head2 Native code emission
-
-=cut
-
-#TODO;
-
-=head2 Call conventions and register allocation
-
-=cut
 
 my %description = (
 	MONO_ARCH_AOT_PLT_OFFSET_REG =>
@@ -639,7 +523,7 @@ foreach my $macro (keys %extracted) {
 	push @extracted, "$macro" if ($found == 1);
 }
 
-open($file, ">mini-$arch.h") or die $!;
+open(my $file, ">mini-$arch.h") or die $!;
 
 print $file "#ifndef MONO_". uc($arch) . "_H\n";
 print $file "#define MONO_". uc($arch) . "_H\n";
