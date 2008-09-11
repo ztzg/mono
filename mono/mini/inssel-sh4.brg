@@ -18,4 +18,12 @@ stmt: OP_OUTARG (reg) {
 	mono_call_inst_add_outarg_reg (s, call, tree->dreg, tree->backend.reg3, FALSE);
 }
 
+# Describes how to return a result into a register.
+stmt: OP_SETRET (reg) {
+	tree->opcode = OP_MOVE;
+	tree->sreg1 = state->left->reg1;
+	tree->dreg = sh4_r0;
+	mono_bblock_add_inst (s->cbb, tree);
+}
+
 %%
