@@ -836,7 +836,6 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
 void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 
@@ -857,14 +856,12 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 void mono_arch_peephole_pass_1(MonoCompile *cfg, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 
 void mono_arch_peephole_pass_2(MonoCompile *cfg, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 
