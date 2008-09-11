@@ -1,0 +1,21 @@
+%%
+
+#
+# inssel-sh4.brg: burg file for special SH4 instructions
+#
+# (C) 2008 STMicroelectronics, Inc.
+#
+
+# Describes how to pass a parameter into a register.
+stmt: OP_OUTARG (reg) {
+	MonoCallInst *call = (MonoCallInst*)tree->inst_right;
+
+	tree->opcode = OP_MOVE;
+	tree->dreg   = mono_regstate_next_int (s->rs);
+	tree->sreg1  = state->left->reg1;
+	mono_bblock_add_inst (s->cbb, tree);
+
+	mono_call_inst_add_outarg_reg (s, call, tree->dreg, tree->backend.reg3, FALSE);
+}
+
+%%
