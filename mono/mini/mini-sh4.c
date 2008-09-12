@@ -253,19 +253,19 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 /**
  * For variable length argument lists emit a signature cookie.
  */
-static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, struct arg_info *arg_info)
+static inline void emit_signature_cookie(MonoCompile *compile_unit, MonoCallInst *call, struct arg_info *arg_info)
 {
 	MonoInst *arg = NULL;
 	MonoInst *signature = NULL;
 
-	SH4_DEBUG("args => %p, %p, %p", cfg, call, arg_info);
+	SH4_DEBUG("args => %p, %p, %p", compile_unit, call, arg_info);
 
 	/* Declare a room where the signature cookie will be stored. */
-	MONO_INST_NEW(cfg, signature, OP_ICONST);
+	MONO_INST_NEW(compile_unit, signature, OP_ICONST);
 	signature->inst_p0 = call->signature;
 
 	/* Create a new argument pointing to the signature cookie. */
-	MONO_INST_NEW(cfg, arg, OP_OUTARG);
+	MONO_INST_NEW(compile_unit, arg, OP_OUTARG);
 	arg->inst_left = signature;
 	arg->inst_call = call;
 
@@ -287,7 +287,7 @@ static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, s
  * Take the arguments and generate the Mono instructions in an
  * arch-specific way to properly call the function.
  */
-MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call, int is_virtual)
+MonoCallInst *mono_arch_call_opcode(MonoCompile *compile_unit, MonoBasicBlock* bb, MonoCallInst *call, int is_virtual)
 {
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
@@ -295,11 +295,11 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	int arg_count = 0;
 	int i = 0;
 
-	SH4_DEBUG("args => %p, %p, %p, %d", cfg, bb, call, is_virtual);
+	SH4_DEBUG("args => %p, %p, %p, %d", compile_unit, bb, call, is_virtual);
 
 	signature = call->signature;
 	arg_count = signature->param_count + signature->hasthis;
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
+	call_info = get_call_info(compile_unit->generic_sharing_context, signature);
 
 	if (call_info->ret.type == aggregate)
 		NOT_IMPLEMENTED;
@@ -316,9 +316,9 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 		if (sentinelpos == i &&
 		    signature->pinvoke == 0 &&
 		    signature->call_convention == MONO_CALL_VARARG)
-			emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
+			emit_signature_cookie(compile_unit, call, &(call_info->sig_cookie));
 
-		MONO_INST_NEW(cfg, arg, OP_OUTARG);
+		MONO_INST_NEW(compile_unit, arg, OP_OUTARG);
 		arg->cil_code  = call->args[i]->cil_code;
 		arg->type      = call->args[i]->type;
 		arg->inst_left = call->args[i];
@@ -382,15 +382,15 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	if (signature->pinvoke == 0 &&
 	    sentinelpos == arg_count &&
 	    signature->call_convention == MONO_CALL_VARARG)
-		emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
+		emit_signature_cookie(compile_unit, call, &(call_info->sig_cookie));
 
 	if (call_info->stack_align_amount != 0) {
 		; /* TODO - CV */
 	}
 
 	call->stack_usage = call_info->stack_usage;
-	cfg->param_area = MAX(cfg->param_area, call->stack_usage);
-	cfg->flags |= MONO_CFG_HAS_CALLS;
+	compile_unit->param_area = MAX(compile_unit->param_area, call->stack_usage);
+	compile_unit->flags |= MONO_CFG_HAS_CALLS;
 
 	g_free(call_info->args);
 	g_free(call_info);
@@ -402,7 +402,7 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
  * Allocate space onto the stack for variables/parameters/...
  * according to the SH4 ABI, and specify how to access them.
  */
-void mono_arch_allocate_vars(MonoCompile *cfg)
+void mono_arch_allocate_vars(MonoCompile *compile_unit)
 {
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
@@ -410,19 +410,19 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	int locals_offset = 0;
 	int i = 0;
 
-	SH4_DEBUG("args => %p", cfg);
+	SH4_DEBUG("args => %p", compile_unit);
 
-	signature = mono_method_signature(cfg->method);
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
+	signature = mono_method_signature(compile_unit->method);
+	call_info = get_call_info(compile_unit->generic_sharing_context, signature);
 
 	/* Allocate space to save the LMF just below the stack pointer. */
-	if (cfg->method->save_lmf != 0) {
+	if (compile_unit->method->save_lmf != 0) {
 		NOT_IMPLEMENTED;
-		cfg->stack_offset += sizeof(struct MonoLMF);
+		compile_unit->stack_offset += sizeof(struct MonoLMF);
 	}
 
 	/* Allocate space for parameters, computed into mono_arch_call_opcode(). */
-	cfg->stack_offset += cfg->param_area;
+	compile_unit->stack_offset += compile_unit->param_area;
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -434,16 +434,16 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	/* Allocate space to save scratch registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
-		if ((cfg->used_int_regs & (SH4IntRegister)i) != 0)
+		if ((compile_unit->used_int_regs & (SH4IntRegister)i) != 0)
 			scratch_offset += 4;
 
-	cfg->stack_offset += scratch_offset;
+	compile_unit->stack_offset += scratch_offset;
 
 	/* Allocate space to save the previous frame pointer (sh4_r14). */
-	cfg->stack_offset += 4;
+	compile_unit->stack_offset += 4;
 
 	/* Allocate space to save the PR. */
-	cfg->stack_offset += 4;
+	compile_unit->stack_offset += 4;
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -455,12 +455,12 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	 *	:              :
 	 */
 
-	cfg->frame_reg = sh4_r14;
-	cfg->used_int_regs |= 1 << sh4_r14;
+	compile_unit->frame_reg = sh4_r14;
+	compile_unit->used_int_regs |= 1 << sh4_r14;
 
 	/* Compute space used by local variables and specify how to access them. */
-	for (i = cfg->locals_start; i < cfg->num_varinfo; i++) {
-		MonoInst *inst = cfg->varinfo[i];
+	for (i = compile_unit->locals_start; i < compile_unit->num_varinfo; i++) {
+		MonoInst *inst = compile_unit->varinfo[i];
 		guint32 align = 0;
 		guint32 size = 0;
 
@@ -483,7 +483,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 		/* Specify how to access this local variable. */
 		inst->opcode = OP_REGOFFSET;
-		inst->inst_basereg = cfg->frame_reg;
+		inst->inst_basereg = compile_unit->frame_reg;
 		inst->inst_offset = locals_offset;
 
 		SH4_DEBUG("local '%d' size = %d", i, size);
@@ -493,10 +493,10 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	}
 
 	/* Allocate space for local variables. */
-	cfg->stack_offset += locals_offset;
+	compile_unit->stack_offset += locals_offset;
 
 	/* Align the stack frame on a 4-bytes boundary. */
-	cfg->stack_offset = (cfg->stack_offset + 0x3) & ~0x3;
+	compile_unit->stack_offset = (compile_unit->stack_offset + 0x3) & ~0x3;
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -523,7 +523,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	/* The stack size is now fully known so specify how to access parameters. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
-		MonoInst *inst = cfg->varinfo[i];
+		MonoInst *inst = compile_unit->varinfo[i];
 		struct arg_info *arg_info = &call_info->args[i];
 
 		/* Nothing to do if the variable is already allocated to a register.
@@ -533,7 +533,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 		if (arg_info->storage == onto_stack) {
 			inst->opcode = OP_REGOFFSET;
-			inst->inst_basereg = cfg->frame_reg;
+			inst->inst_basereg = compile_unit->frame_reg;
 			inst->inst_offset = arg_info->offset;
 
 			SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
@@ -560,16 +560,16 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		NOT_IMPLEMENTED;
 		/* The caller set sh4_r2 to point to already allocated
 		   space where the return aggregate will be hold. */
-		cfg->ret->opcode = OP_REGVAR;
-		cfg->ret->inst_c0 = sh4_r2;
+		compile_unit->ret->opcode = OP_REGVAR;
+		compile_unit->ret->inst_c0 = sh4_r2;
 		break;
 
 	case integer32:
 	case integer64:
 	case float32:
 	case float64:
-		cfg->ret->opcode = OP_REGVAR;
-		cfg->ret->inst_c0 = call_info->ret.reg; /* sh4_r0 or sh4_fr0 */
+		compile_unit->ret->opcode = OP_REGVAR;
+		compile_unit->ret->inst_c0 = call_info->ret.reg; /* sh4_r0 or sh4_fr0 */
 		break;
 
 	case none: /* void */
@@ -616,23 +616,23 @@ guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 	return 0;
 }
 
-void mono_arch_create_vars(MonoCompile *cfg)
+void mono_arch_create_vars(MonoCompile *compile_unit)
 {
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
 
-	SH4_DEBUG("args => %p", cfg);
+	SH4_DEBUG("args => %p", compile_unit);
 
-	signature = mono_method_signature(cfg->method);
+	signature = mono_method_signature(compile_unit->method);
 
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
+	call_info = get_call_info(compile_unit->generic_sharing_context, signature);
 
 	if (call_info->ret.storage == into_register)
-		cfg->ret_var_is_local = TRUE;
+		compile_unit->ret_var_is_local = TRUE;
 	else { /* call_info->ret.storage == onto_stack */
 		if (MONO_TYPE_ISSTRUCT(signature->ret)) {
 			NOT_IMPLEMENTED;
-			cfg->vret_addr = mono_compile_create_var(cfg, &mono_defaults.int_class->byval_arg, OP_ARG);
+			compile_unit->vret_addr = mono_compile_create_var(compile_unit, &mono_defaults.int_class->byval_arg, OP_ARG);
 		}
 	}
 
@@ -642,28 +642,28 @@ void mono_arch_create_vars(MonoCompile *cfg)
 	return;
 }
 
-void mono_arch_emit_epilog(MonoCompile *cfg)
+void mono_arch_emit_epilog(MonoCompile *compile_unit)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return;
 }
 
-void mono_arch_emit_exceptions(MonoCompile *cfg)
+void mono_arch_emit_exceptions(MonoCompile *compile_unit)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return;
 }
 
-guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
+guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return NULL;
 }
 
-void mono_arch_emit_this_vret_args(MonoCompile *cfg, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
+void mono_arch_emit_this_vret_args(MonoCompile *compile_unit, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -711,16 +711,16 @@ const char *mono_arch_fregname(int reg)
  * Return a list of variables that can be allocated to
  * the integer registers in the current architecture.
  */
-GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
+GList *mono_arch_get_allocatable_int_vars(MonoCompile *compile_unit)
 {
 	int i = 0;
 	GList *vars = NULL;
 
-	SH4_DEBUG("args => %p", cfg);
+	SH4_DEBUG("args => %p", compile_unit);
 
-	for (i = 0; i < cfg->num_varinfo; i++) {
-		MonoInst *ins = cfg->varinfo [i];
-		MonoMethodVar *var = MONO_VARINFO(cfg, i);
+	for (i = 0; i < compile_unit->num_varinfo; i++) {
+		MonoInst *ins = compile_unit->varinfo [i];
+		MonoMethodVar *var = MONO_VARINFO(compile_unit, i);
 
 		/* Skip unused variables. */
 		if (var->range.first_use.abs_pos >= var->range.last_use.abs_pos ||
@@ -730,7 +730,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 
 		/* Allocate 32 bit variables only. */
 		if (mono_is_regsize_var(ins->inst_vtype)) {
-			g_assert(MONO_VARINFO (cfg, i)->reg == -1);
+			g_assert(MONO_VARINFO (compile_unit, i)->reg == -1);
 			g_assert(i == var->idx);
 
 			SH4_DEBUG("var '%p' allocated to a register", var);
@@ -739,7 +739,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 		}
 	}
 
-	vars = mono_varlist_sort(cfg, vars, 0);
+	vars = mono_varlist_sort(compile_unit, vars, 0);
 
 	return vars;
 }
@@ -751,7 +751,7 @@ int mono_arch_get_argument_info(MonoMethodSignature *csig, int arg_count, MonoJi
 	return 0;
 }
 
-MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* cfg)
+MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* compile_unit)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -766,11 +766,11 @@ MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* cfg)
  * frame pointer and as the stack pointer. Maybe sh4_r12 will be
  * used one day as the global pointer.
  */
-GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
+GList *mono_arch_get_global_int_regs(MonoCompile *compile_unit)
 {
 	GList *regs = NULL;
 
-	SH4_DEBUG("args => %p", cfg);
+	SH4_DEBUG("args => %p", compile_unit);
 
 	regs = g_list_prepend(regs, (gpointer)sh4_r8);
 	regs = g_list_prepend(regs, (gpointer)sh4_r9);
@@ -782,14 +782,14 @@ GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
 	return regs;
 }
 
-MonoInst *mono_arch_get_inst_for_method(MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
+MonoInst *mono_arch_get_inst_for_method(MonoCompile *compile_unit, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return NULL;
 }
 
-MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
+MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* compile_unit)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -812,14 +812,14 @@ void mono_arch_init(void)
 	return;
 }
 
-void *mono_arch_instrument_epilog(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments)
+void *mono_arch_instrument_epilog(MonoCompile *compile_unit, void *func, void *p, gboolean enable_arguments)
 {
 	/* TODO - CV */
 	g_assert(0);
 	return NULL;
 }
 
-void *mono_arch_instrument_prolog(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments)
+void *mono_arch_instrument_prolog(MonoCompile *compile_unit, void *func, void *p, gboolean enable_arguments)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -833,13 +833,13 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
 	return 0;
 }
 
-void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *bb)
+void mono_arch_lowering_pass(MonoCompile *compile_unit, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
 	return;
 }
 
-void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *bb)
+void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -853,13 +853,13 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 	return;
 }
 
-void mono_arch_peephole_pass_1(MonoCompile *cfg, MonoBasicBlock *bb)
+void mono_arch_peephole_pass_1(MonoCompile *compile_unit, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
 	return;
 }
 
-void mono_arch_peephole_pass_2(MonoCompile *cfg, MonoBasicBlock *bb)
+void mono_arch_peephole_pass_2(MonoCompile *compile_unit, MonoBasicBlock *bb)
 {
 	/* TODO - CV */
 	return;
@@ -877,7 +877,7 @@ gboolean mono_arch_print_tree(MonoInst *tree, int arity)
  * allocating the variable VMV into a register during global register
  * allocation.
  */
-guint32 mono_arch_regalloc_cost(MonoCompile *cfg, MonoMethodVar *vmv)
+guint32 mono_arch_regalloc_cost(MonoCompile *compile_unit, MonoMethodVar *vmv)
 {
 	/* TODO - CV */
 	return 0;
