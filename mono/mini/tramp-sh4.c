@@ -83,11 +83,12 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, SPECIFIC_TRAMPOLINE_SIZE);
 
-	if (code_length != NULL)
+	if (code_length != NULL) {
 		*code_length = buffer - code;
+		SH4_DEBUG("code_length = %d", *code_length);
+	}
 
 	SH4_DEBUG("code = %p", code);
-	SH4_DEBUG("code_length = %d", *code_length);
 
 	return code;
 }
