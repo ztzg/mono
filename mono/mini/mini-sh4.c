@@ -500,6 +500,9 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 	/* Align the stack frame on a 4-bytes boundary. */
 	compile_unit->stack_offset = (compile_unit->stack_offset + 0x3) & ~0x3;
 
+	/* Record the amount of space needed by local variables, for mono_arch_emit_prolog(). */
+	compile_unit->arch.localloc_size = compile_unit->stack_offset - locals_offset;
+
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -658,10 +661,171 @@ void mono_arch_emit_exceptions(MonoCompile *compile_unit)
 	return;
 }
 
+/**
+ * Create the instruction sequence for a function prologue.
+ */
 guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 {
-	/* TODO - CV */
-	g_assert(0);
+	MonoMethodSignature *signature = NULL;
+	struct call_info *call_info = NULL;
+	MonoMethod *method = NULL;
+	guint8 *buffer = NULL;
+	int localloc_size = 0;
+	int i = 0;
+
+	SH4_DEBUG("args => %p", compile_unit);
+
+	method = compile_unit->method;
+
+	if (method->save_lmf != 0) {
+		NOT_IMPLEMENTED;
+	}
+
+	if (method->wrapper_type == MONO_WRAPPER_NATIVE_TO_MANAGED) {
+		NOT_IMPLEMENTED;
+	}
+
+	/* Re-align compile_unit->stack_offset if needed,
+	   due to the spilling of variables in mini-codegen.c. */
+	/* compile_unit->stack_offset = (stack_size + 0x3) & ~0x3; */
+
+	signature = mono_method_signature(compile_unit->method);
+
+	compile_unit->code_size = 40 + signature->param_count * 10;
+	buffer = compile_unit->native_code = g_malloc(compile_unit->code_size);
+
+	call_info = get_call_info(compile_unit->generic_sharing_context, signature);
+
+	if (call_info->ret.type == aggregate)
+		NOT_IMPLEMENTED;
+
+	/* Save arguments at the right place : into register or onto the stack. */
+	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
+		struct arg_info *arg_info = &call_info->args[i];
+		MonoInst *inst = compile_unit->args[i];
+
+		/* Sanity checks. */
+		g_assert(inst->opcode == OP_REGVAR && arg_info->storage == into_register);
+
+		SH4_DEBUG("arg[%d] is on stack ? %d", i, (int)(inst->opcode != OP_REGVAR));
+
+		switch (arg_info->type) {
+		case integer64:
+			NOT_IMPLEMENTED;
+			if (inst->opcode == OP_REGVAR)
+				sh4_mov(buffer, inst->dreg + 1, arg_info->reg + 1);
+			else
+				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
+
+		case integer32:
+			if (inst->opcode == OP_REGVAR)
+				sh4_mov(buffer, inst->dreg, arg_info->reg);
+			else
+				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
+			break;
+
+		case float64:
+		case float32:
+		case aggregate:
+			NOT_IMPLEMENTED;
+			break;
+
+		case none:
+		default:
+			g_assert_not_reached();
+			break;
+		}
+	}
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============| <- SP
+	 *	:              : Callee's frame.
+	 */
+
+	/* Save scratch registers (sh4_r8 -> sh4_r13). */
+	for (i = sh4_r8; i <= sh4_r13; i++)
+		if (compile_unit->used_int_regs & (1 << i))
+			sh4_movl_decRx(buffer, (SH4IntRegister)i, sh4_r15);
+
+	/* Save the previous frame pointer (sh4_r14). */
+	sh4_movl_decRx(buffer, sh4_r14, sh4_r15);
+
+	/* Save the PR. */
+	sh4_stsl_PR_decRx(buffer, sh4_r15);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------| <- SP
+	 *	:              :
+	 */
+
+	/* The space needed by local variables is computed into mono_arch_allocate_vars(). */
+	localloc_size = compile_unit->arch.localloc_size;
+	if (localloc_size != 0) {
+		if (sh4_is_imm8(localloc_size))
+			sh4_add_imm(buffer, -localloc_size, sh4_r15);
+		else {
+			NOT_IMPLEMENTED;
+
+			/* R14 can be used to increment the stack size (that is, used
+			   to decrement R15) because it was saved previously and will
+			   be overwritten later. */
+			sh4_xor(buffer, sh4_r14, sh4_r14);
+
+			if (sh4_is_imm32(localloc_size)) {
+				sh4_add_imm(buffer, -((localloc_size & 0xFF000000) >> 24), sh4_r14);
+				sh4_shll8(buffer, sh4_r14);
+
+				sh4_add_imm(buffer, -((localloc_size & 0x00FF0000) >> 16), sh4_r14);
+				sh4_shll8(buffer, sh4_r14);
+			}
+			else
+				g_assert(sh4_is_imm16(localloc_size));
+
+			sh4_add_imm(buffer, -((localloc_size & 0x0000FF00) >> 8), sh4_r14);
+			sh4_shll8(buffer, sh4_r14);
+
+			sh4_add_imm(buffer, -(localloc_size & 0x000000FF), sh4_r14);
+
+			sh4_add(buffer, sh4_r14, sh4_r15);
+		}
+	}
+
+	SH4_DEBUG("localloc_size = %d", localloc_size);
+
+	/* Set the frame pointer. */
+	sh4_mov(buffer, sh4_r15, sh4_r14);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------|
+	 *	|  local var.  |
+	 *	|--------------| <- FP, SP
+	 *	:              :
+	 */
+
+	compile_unit->code_len = buffer - compile_unit->native_code;
+
+	/* Sanity checks. */
+	g_assert(compile_unit->code_len < compile_unit->code_size);
+
+	/* Flush instruction cache, since we've generated code. */
+	mono_arch_flush_icache(compile_unit->native_code, compile_unit->code_len);
+
+	g_free(call_info->args);
+	g_free(call_info);
+
 	return NULL;
 }
 

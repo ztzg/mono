@@ -473,7 +473,9 @@ my %value = (
 	MONO_ARCH_EMULATE_MUL_DIV        => ' 1',
 	MONO_SH4_REG_FIRST_ARG           => ' sh4_r4',
 	MONO_SH4_REG_LAST_ARG            => ' sh4_r7',
-	MonoCompileArch => ' void *', # TODO - CV
+	MonoCompileArch => '
+	gint localloc_size;
+',
 	MonoContext     => '
 	guint32 pc;
 	guint32 registers[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
@@ -549,7 +551,7 @@ foreach my $macro (sort @extracted) {
 print $file "/* Structure where the arch-specific code can store\n";
 print $file " * data during a compilation. */\n";
 if (exists $value{MonoCompileArch}) {
-	print $file "typedef $value{MonoCompileArch} MonoCompileArch;\n";
+	print $file "typedef struct { $value{MonoCompileArch} } MonoCompileArch;\n";
 } else {
 	print $file "/* TODO typedef MonoCompileArch; */\n";
 }
@@ -578,10 +580,21 @@ print $file "#endif /* MONO_". uc($arch) . "_H */\n";
 print $file "\n";
 
 print $file "#ifndef NDEBUG\n";
-print $file "#  define SH4_DEBUG(format, ...) fprintf(stderr, \"! %s:%d: \" format \"\\n\", __FUNCTION__, __LINE__, __VA_ARGS__)\n";
+print $file "#  define " . uc($arch) . "_DEBUG(format, ...) fprintf(stderr, \"! %s:%d: \" format \"\\n\", __FUNCTION__, __LINE__, __VA_ARGS__)\n";
 print $file "#else\n";
-print $file "#  define SH4_DEBUG(format, ...)\n";
+print $file "#  define " . uc($arch) . "_DEBUG(format, ...)\n";
 print $file "#endif /* NDEBUG */\n";
+
+print $file "\n";
+
+print $file "#define ${arch}_is_imm8(value)   ((value) > INT8_MIN  && (value) < INT8_MAX)\n";
+print $file "#define ${arch}_is_imm16(value)  ((value) > INT16_MIN && (value) < INT16_MAX)\n";
+print $file "#define ${arch}_is_imm32(value)  ((value) > INT32_MIN && (value) < INT32_MAX)\n";
+print $file "#define ${arch}_is_imm64(value)  ((value) > INT64_MIN && (value) < INT64_MAX)\n";
+print $file "#define ${arch}_is_uimm8(value)  ((value) > 0 && (value) < UINT8_MAX)\n";
+print $file "#define ${arch}_is_uimm16(value) ((value) > 0 && (value) < UINT16_MAX)\n";
+print $file "#define ${arch}_is_uimm32(value) ((value) > 0 && (value) < UINT32_MAX)\n";
+print $file "#define ${arch}_is_uimm64(value) ((value) > 0 && (value) < UINT64_MAX)\n";
 
 print $file "\n";
 

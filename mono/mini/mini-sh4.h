@@ -213,7 +213,9 @@
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */
-typedef  void * MonoCompileArch;
+typedef struct { 
+	gint localloc_size;
+ } MonoCompileArch;
 
 /* The execution state of a thread during exception handling
  * is stored in this arch-specific structure. */
@@ -241,4 +243,13 @@ struct MonoLMF {
 #else
 #  define SH4_DEBUG(format, ...)
 #endif /* NDEBUG */
+
+#define sh4_is_imm8(value)   ((value) > INT8_MIN  && (value) < INT8_MAX)
+#define sh4_is_imm16(value)  ((value) > INT16_MIN && (value) < INT16_MAX)
+#define sh4_is_imm32(value)  ((value) > INT32_MIN && (value) < INT32_MAX)
+#define sh4_is_imm64(value)  ((value) > INT64_MIN && (value) < INT64_MAX)
+#define sh4_is_uimm8(value)  ((value) > 0 && (value) < UINT8_MAX)
+#define sh4_is_uimm16(value) ((value) > 0 && (value) < UINT16_MAX)
+#define sh4_is_uimm32(value) ((value) > 0 && (value) < UINT32_MAX)
+#define sh4_is_uimm64(value) ((value) > 0 && (value) < UINT64_MAX)
 
