@@ -52,10 +52,12 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 
 	if (*arg_reg <= MONO_SH4_REG_LAST_ARG) {
 		arg_info->storage = into_register;
+		arg_info->reg = *arg_reg;
 		(*arg_reg)++;
 	}
 	else {
 		arg_info->storage = onto_stack;
+		arg_info->reg = sh4_r15;
 		(*stack_size) += 4;
 	}
 
