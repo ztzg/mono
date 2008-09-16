@@ -818,9 +818,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	/* Sanity checks. */
 	g_assert(compile_unit->code_len < compile_unit->code_size);
 
-	/* Flush instruction cache, since we've generated code. */
-	mono_arch_flush_icache(compile_unit->native_code, compile_unit->code_len);
-
 	g_free(call_info->args);
 	g_free(call_info);
 
