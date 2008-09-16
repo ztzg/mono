@@ -815,8 +815,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	 *	:              :
 	 */
 
-	compile_unit->code_len = buffer - compile_unit->native_code;
-
 	/* Sanity checks. */
 	g_assert(compile_unit->code_len < compile_unit->code_size);
 
@@ -826,7 +824,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	g_free(call_info->args);
 	g_free(call_info);
 
-	return NULL;
+	return buffer;
 }
 
 void mono_arch_emit_this_vret_args(MonoCompile *compile_unit, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
