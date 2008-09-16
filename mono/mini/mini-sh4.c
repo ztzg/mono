@@ -1005,10 +1005,66 @@ void mono_arch_lowering_pass(MonoCompile *compile_unit, MonoBasicBlock *bb)
 	return;
 }
 
-void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bb)
+void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *basic_block)
 {
-	/* TODO - CV */
-	g_assert(0);
+	MonoInst *inst = NULL;
+	guint8 *buffer = NULL;
+
+	SH4_DEBUG("args => %p, %p", compile_unit, basic_block);
+
+	/* A chunk of code memory was previously allocated (native_code)
+	   then partially used (code_len) into mono_arch_emit_prolog
+	   and/or into this function. */
+	buffer = compile_unit->native_code + compile_unit->code_len;
+
+	mono_debug_open_block(compile_unit, basic_block, compile_unit->code_len);
+
+	MONO_BB_FOR_EACH_INS(basic_block, inst) {
+		guint offset   = 0;
+		int length_max = 0;
+		int length     = 0;
+		guint8 *code   = NULL;
+
+		offset = buffer - compile_unit->native_code;
+
+		/* Get the 'len' field of this opcode, specify into cpu-sh4.md. */
+		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
+
+		SH4_DEBUG("inst => %s", mono_inst_name(inst->opcode));
+		SH4_DEBUG("inst_len => %d", length_max);
+
+		/* Reallocate enough room to store the SH4 instructions
+		   used to implement the current opcode. */
+		while (offset + length_max > compile_unit->code_size) {
+			compile_unit->code_size *= 2;
+			compile_unit->native_code = g_realloc(compile_unit->native_code, compile_unit->code_size);
+
+			buffer = compile_unit->native_code + offset;
+
+			mono_jit_stats.code_reallocs++;
+		}
+
+		mono_debug_record_line_number(compile_unit, inst, offset);
+
+		/* Save the start address to make sanity checks later. */
+		code = buffer;
+
+		switch (inst->opcode) {
+		default:
+			g_warning("unknown opcode %s\n", mono_inst_name(inst->opcode));
+			g_assert_not_reached();
+		}
+
+		/* Sanity checks. */
+		length = buffer - code;
+		if (length > length_max) {
+			g_warning("max length of the opcode %s is at least %d, not %d", mono_inst_name(inst->opcode), length, length_max);
+			g_assert_not_reached();
+		}
+	}
+
+	compile_unit->code_len = buffer - compile_unit->native_code;
+
 	return;
 }
 
