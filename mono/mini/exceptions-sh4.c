@@ -305,15 +305,15 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 
 		/* Patch slot for : sh4_r4 <- mono_defaults.corlib */
 		patch1 = buffer;
-		sh4_sleep(buffer);
+		sh4_ldtlb(buffer);
 
 		/* Patch slot for : sh4_r5 <- "System" */
 		patch2 = buffer;
-		sh4_sleep(buffer);
+		sh4_ldtlb(buffer);
 
 		/* Patch slot for : sh4_r0 <- mono_exception_from_name */
 		patch3 = buffer;
-		sh4_sleep(buffer);
+		sh4_ldtlb(buffer);
 
 		/* pseudo-code: exception = mono_exception_from_name(mono_defaults.corlib, "System", exception); */
 		sh4_jsr_indRx(buffer, sh4_r0);
@@ -337,7 +337,7 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 
 	/* Patch slot for : sh4_r0 <- throw_exception */
 	patch0 = buffer;
-	sh4_sleep(buffer);
+	sh4_ldtlb(buffer);
 
 	/* pseudo-code: goto throw_exception(exception, pc, sp, rethrow); */
 	sh4_jmp_indRx(buffer, sh4_r0);
