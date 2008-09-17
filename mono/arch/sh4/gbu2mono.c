@@ -144,6 +144,12 @@ void printf_checks(const sh_nibble_type nibbles[9], int force_sign)
 			printf_checks_imm(1, 12, 2);
 			break;
 
+		case REG_N_D:
+		case REG_NM:
+		case REG_N_B01:
+			/* XXX */
+			break;
+
 		default:
 			assert(0);
 			break;
@@ -241,6 +247,12 @@ void printf_nibbles(const sh_nibble_type nibbles[9])
 		case BRANCH_12:
 			printf("((((imm) & 0x1FFE) >> 1) << %d)", 4 - length);
 			length += 12;
+			break;
+
+		case REG_N_D:
+		case REG_NM:
+		case REG_N_B01:
+			/* XXX */
 			break;
 
 		default:
@@ -381,6 +393,23 @@ void printf_args(const sh_arg_type args[4])
 		case A_BDISP8:
 			break;
 
+		case FPUL_N:
+		case FPSCR_N:
+		case FPUL_M:
+		case FPSCR_M:
+		case F_REG_N:
+		case F_REG_M:
+		case D_REG_N:
+		case D_REG_M:
+		case V_REG_N:
+		case V_REG_M:
+		case F_FR0:
+		case DX_REG_N:
+		case DX_REG_M:
+		case XMTRX_M4:
+			/* XXX */
+			break;
+
 		default:
 			assert(0);
 			break;
@@ -459,6 +488,23 @@ void printf_args(const sh_arg_type args[4])
 			printf(", imm");
 			break;
 
+		case FPUL_N:
+		case FPSCR_N:
+		case FPUL_M:
+		case FPSCR_M:
+		case F_REG_N:
+		case F_REG_M:
+		case D_REG_N:
+		case D_REG_M:
+		case V_REG_N:
+		case V_REG_M:
+		case F_FR0:
+		case DX_REG_N:
+		case DX_REG_M:
+		case XMTRX_M4:
+			/* XXX */
+			break;
+
 		default:
 			assert(0);
 			break;
@@ -484,7 +530,7 @@ int main(void)
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
 		int force_sign = 0;
 
-		if ((sh_table[i].arch & arch_sh4a_nofpu) != arch_sh4a_nofpu)
+		if ((sh_table[i].arch & arch_sh4a) != arch_sh4a)
 			continue;
 
 		if ((strcmp(sh_table[i].name, "add") == 0 &&
