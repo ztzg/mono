@@ -408,7 +408,7 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 {
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
-	int scratch_offset = 0;
+	int regsave_offset = 0;
 	int locals_offset = 0;
 	int i = 0;
 
@@ -434,12 +434,12 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 	 *	:              : Callee's frame.
 	 */
 
-	/* Allocate space to save scratch registers (sh4_r8 -> sh4_r13). */
+	/* Allocate space to save global registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
 		if ((compile_unit->used_int_regs & (SH4IntRegister)i) != 0)
-			scratch_offset += 4;
+			regsave_offset += 4;
 
-	compile_unit->stack_offset += scratch_offset;
+	compile_unit->stack_offset += regsave_offset;
 
 	/* Allocate space to save the previous frame pointer (sh4_r14). */
 	compile_unit->stack_offset += 4;
@@ -544,10 +544,10 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 			SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
 
 			/* The parameter area is before local variables and
-			   scratch registers are stored (despite the stack
+			   global registers are stored (despite the stack
 			   grows to low address, offsets are positively
 			   computed). */
-			inst->inst_offset -= locals_offset + scratch_offset;
+			inst->inst_offset -= locals_offset + regsave_offset;
 		}
 		else { /* arg_info->storage == into_register */
 			inst->opcode = OP_REGVAR;
@@ -668,20 +668,17 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 {
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
-	MonoMethod *method = NULL;
 	guint8 *buffer = NULL;
 	int localloc_size = 0;
 	int i = 0;
 
 	SH4_DEBUG("args => %p", compile_unit);
 
-	method = compile_unit->method;
-
-	if (method->save_lmf != 0) {
+	if (compile_unit->method->save_lmf != 0) {
 		NOT_IMPLEMENTED;
 	}
 
-	if (method->wrapper_type == MONO_WRAPPER_NATIVE_TO_MANAGED) {
+	if (compile_unit->method->wrapper_type == MONO_WRAPPER_NATIVE_TO_MANAGED) {
 		NOT_IMPLEMENTED;
 	}
 
@@ -745,7 +742,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	 *	:              : Callee's frame.
 	 */
 
-	/* Save scratch registers (sh4_r8 -> sh4_r13). */
+	/* Save global registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
 		if (compile_unit->used_int_regs & (1 << i))
 			sh4_movl_decRx(buffer, (SH4IntRegister)i, sh4_r15);
