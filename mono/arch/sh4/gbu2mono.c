@@ -468,67 +468,18 @@ void printf_args(const sh_arg_type args[4])
 	printf(") ");
 }
 
-void printf_header()
-{
-	printf("/* Copyright (C)  2008 STMicroelectronics\n");
-	printf("   for testing do the following: ./test | as -o test.o */\n");
-	printf("\n");
-	printf("#ifndef __MONO_SH4_CODEGEN_H__\n");
-	printf("#define __MONO_SH4_CODEGEN_H__\n");
-	printf("\n");
-	printf("#include \"glib.h\" /* g_assert(), */\n");
-	printf("\n");
-	printf("typedef enum {\n");
-	printf("	sh4_r0 = 0,\n");
-	printf("	sh4_r1,\n");
-	printf("	sh4_r2,\n");
-	printf("	sh4_r3,\n");
-	printf("	sh4_r4,\n");
-	printf("	sh4_r5,\n");
-	printf("	sh4_r6,\n");
-	printf("	sh4_r7,\n");
-	printf("	sh4_r8,\n");
-	printf("	sh4_r9,\n");
-	printf("	sh4_r10,\n");
-	printf("	sh4_r11,\n");
-	printf("	sh4_r12,\n");
-	printf("	sh4_r13,\n");
-	printf("	sh4_r14,\n");
-	printf("	sh4_r15,\n");
-	printf("	sh4_gp = sh4_r12,\n");
-	printf("	sh4_fp = sh4_r14,\n");
-	printf("	sh4_sp = sh4_r15,\n");
-	printf("	sh4_pr\n");
-	printf("} SH4IntRegister;\n");
-	printf("\n");
-	printf("#define sh4_emit16(address, value) do {					   \\\n");
-	printf("	*((guint16 *) (void *)(address)) = (guint16)value;		   \\\n");
-	printf("	(address) = (typeof(address))(((guint16 *)(void *)(address)) + 1); \\\n");
-	printf("} while(0)\n");
-	printf("\n");
-	printf("#define sh4_emit32(address, value) do {					   \\\n");
-	printf("	*((guint32 *) (void *)(address)) = (guint32)value;		   \\\n");
-	printf("	(address) = (typeof(address))(((guint32 *)(void *)(address)) + 1); \\\n");
-	printf("} while(0)\n");
-	printf("\n");
-
-	return;
-}
-
-void printf_footer()
-{
-	printf("\n");
-	printf("#endif /* __MONO_SH4_CODEGEN_H__ */\n");
-
-	return;
-}
-
 int main(void)
 {
 	int i = 0;
 	int j = 0;
 
-	printf_header();
+	printf("/* Copyright (C)  2008 STMicroelectronics */");
+	printf("\n");
+	printf("#ifndef __MONO_SH4_CODEGEN_H__\n");
+	printf("#define __MONO_SH4_CODEGEN_H__\n");
+	printf("\n");
+	printf("#include \"sh4-codegen-header.h\"\n");
+	printf("\n");
 
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
 		int force_sign = 0;
@@ -558,8 +509,9 @@ int main(void)
 		printf("} while(0)\n");
 		printf("\n");
 	}
-
-	printf_footer();
+	printf("\n");
+	printf("#endif /* __MONO_SH4_CODEGEN_H__ */\n");
+	printf("\n");
 
 	return 0;
 }
