@@ -38,4 +38,45 @@ typedef enum {
 	(address) = (typeof(address))(((guint32 *)(void *)(address)) + 1); \
 } while(0)
 
+#ifndef INT24_MIN
+#  define INT24_MIN (-8388608)
+#endif
+
+#ifndef INT24_MAX
+#  define INT24_MAX (8388607)
+#endif
+
+#ifndef UINT24_MAX
+#  define UINT24_MAX (16777216U)
+#endif
+
+#define sh4_is_imm8(value)   ((value) > INT8_MIN  && (value) < INT8_MAX)
+#define sh4_is_imm16(value)  ((value) > INT16_MIN && (value) < INT16_MAX)
+#define sh4_is_imm24(value)  ((value) > INT24_MIN && (value) < INT24_MAX)
+#define sh4_is_imm32(value)  ((value) > INT32_MIN && (value) < INT32_MAX)
+#define sh4_is_imm64(value)  ((value) > INT64_MIN && (value) < INT64_MAX)
+#define sh4_is_uimm8(value)  ((value) > 0 && (value) < UINT8_MAX)
+#define sh4_is_uimm16(value) ((value) > 0 && (value) < UINT16_MAX)
+#define sh4_is_uimm24(value) ((value) > 0 && (value) < UINT24_MAX)
+#define sh4_is_uimm32(value) ((value) > 0 && (value) < UINT32_MAX)
+#define sh4_is_uimm64(value) ((value) > 0 && (value) < UINT64_MAX)
+
+#define sh4_build_uint(code, value, Rx)					\
+	g_assert(value >= 0);						\
+	g_assert(value <= UINT32_MAX);					\
+	sh4_xor(buffer, (Rx), (Rx));					\
+	if (sh4_is_uimm32((value)) && !sh4_is_uimm24((value))) {	\
+		sh4_add_imm(buffer, ((value) & 0xFF000000) >> 24, (Rx)); \
+		sh4_shll8(buffer, (Rx));				\
+	}								\
+	if (sh4_is_uimm24((value)) && !sh4_is_uimm16((value))) {	\
+		sh4_add_imm(buffer, ((value) & 0x00FF0000) >> 16, (Rx)); \
+		sh4_shll8(buffer, (Rx));				\
+	}								\
+	if (sh4_is_uimm16((value)) && !sh4_is_uimm8((value))) {		\
+		sh4_add_imm(buffer, ((value) & 0x0000FF00) >> 8, (Rx));	\
+		sh4_shll8(buffer, (Rx));				\
+	}								\
+	sh4_add_imm(buffer, (value) & 0x000000FF, (Rx));
+
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */

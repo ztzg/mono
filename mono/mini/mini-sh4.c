@@ -772,29 +772,11 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 		if (sh4_is_imm8(localloc_size))
 			sh4_add_imm(buffer, -localloc_size, sh4_r15);
 		else {
-			NOT_IMPLEMENTED;
-
 			/* R14 can be used to increment the stack size (that is, used
 			   to decrement R15) because it was saved previously and will
 			   be overwritten later. */
-			sh4_xor(buffer, sh4_r14, sh4_r14);
-
-			if (sh4_is_imm32(localloc_size)) {
-				sh4_add_imm(buffer, -((localloc_size & 0xFF000000) >> 24), sh4_r14);
-				sh4_shll8(buffer, sh4_r14);
-
-				sh4_add_imm(buffer, -((localloc_size & 0x00FF0000) >> 16), sh4_r14);
-				sh4_shll8(buffer, sh4_r14);
-			}
-			else
-				g_assert(sh4_is_imm16(localloc_size));
-
-			sh4_add_imm(buffer, -((localloc_size & 0x0000FF00) >> 8), sh4_r14);
-			sh4_shll8(buffer, sh4_r14);
-
-			sh4_add_imm(buffer, -(localloc_size & 0x000000FF), sh4_r14);
-
-			sh4_add(buffer, sh4_r14, sh4_r15);
+			sh4_build_uint(buffer, sh4_r14, localloc_size);
+			sh4_sub(buffer, sh4_r14, sh4_r15);
 		}
 	}
 

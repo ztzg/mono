@@ -587,17 +587,6 @@ print $file "#endif /* NDEBUG */\n";
 
 print $file "\n";
 
-print $file "#define ${arch}_is_imm8(value)   ((value) > INT8_MIN  && (value) < INT8_MAX)\n";
-print $file "#define ${arch}_is_imm16(value)  ((value) > INT16_MIN && (value) < INT16_MAX)\n";
-print $file "#define ${arch}_is_imm32(value)  ((value) > INT32_MIN && (value) < INT32_MAX)\n";
-print $file "#define ${arch}_is_imm64(value)  ((value) > INT64_MIN && (value) < INT64_MAX)\n";
-print $file "#define ${arch}_is_uimm8(value)  ((value) > 0 && (value) < UINT8_MAX)\n";
-print $file "#define ${arch}_is_uimm16(value) ((value) > 0 && (value) < UINT16_MAX)\n";
-print $file "#define ${arch}_is_uimm32(value) ((value) > 0 && (value) < UINT32_MAX)\n";
-print $file "#define ${arch}_is_uimm64(value) ((value) > 0 && (value) < UINT64_MAX)\n";
-
-print $file "\n";
-
 close $file;
 
 =head2 Method trampolines
