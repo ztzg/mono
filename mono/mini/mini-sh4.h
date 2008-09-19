@@ -183,11 +183,21 @@
 #define MONO_CONTEXT_SET_IP(context, vpc) do { (context)->pc = (guint32)(vpc); } while (0);
 
 /*
+ * Set the stack pointer of a Mono context.
+*/
+#define MONO_CONTEXT_SET_SP(context, vsp) do { (context)->registers[sh4_fp] = (guint32)(vsp); } while (0);
+
+/*
  * This macro retrieves the Mono context from a function pointer. This
  * macro have to be defined if your architecture does not support
  * MONO_INIT_CONTEXT_FROM_CURRENT.
 */
-#define MONO_INIT_CONTEXT_FROM_FUNC(context, func) do { g_assert(0); } while (0);
+#define MONO_INIT_CONTEXT_FROM_FUNC(context, func) do {			\
+		MONO_CONTEXT_SET_IP((context), (func));			\
+		MONO_CONTEXT_SET_BP((context), __builtin_frame_address(0)); \
+		MONO_CONTEXT_SET_SP((context), __builtin_frame_address(0)); \
+	} while (0)
+
 
 /*
  * This macro defines the maximum number of floating point registers.

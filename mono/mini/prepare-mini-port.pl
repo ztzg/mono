@@ -456,8 +456,14 @@ my %value = (
 	MONO_CONTEXT_GET_IP          => '(context) ((gpointer)(context)->pc)',
 	MONO_CONTEXT_GET_SP          => '(context) ((gpointer)(context)->registers[sh4_sp])',
 	MONO_CONTEXT_SET_BP          => '(context, vbp) do { (context)->registers[sh4_fp] = (guint32)(vbp); } while (0);',
+	MONO_CONTEXT_SET_SP          => '(context, vsp) do { (context)->registers[sh4_fp] = (guint32)(vsp); } while (0);',
 	MONO_CONTEXT_SET_IP          => '(context, vpc) do { (context)->pc = (guint32)(vpc); } while (0);',
-	MONO_INIT_CONTEXT_FROM_FUNC  => '(context, func) do { g_assert(0); } while (0);', # TODO - CV
+	MONO_INIT_CONTEXT_FROM_FUNC  => '(context, func) do {			\
+		MONO_CONTEXT_SET_IP((context), (func));			\
+		MONO_CONTEXT_SET_BP((context), __builtin_frame_address(0)); \
+		MONO_CONTEXT_SET_SP((context), __builtin_frame_address(0)); \
+	} while (0)
+',
 	MONO_MAX_FREGS               => ' 16',
 	MONO_MAX_IREGS               => ' 16',
 	MONO_ARCH_SOFT_FLOAT             => ' 1',
