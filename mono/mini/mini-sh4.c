@@ -1228,10 +1228,14 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 	return;
 }
 
-void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *ji, gboolean run_cctors)
+void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, gboolean run_cctors)
 {
-	/* TODO - CV */
-	g_assert(0);
+	SH4_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
+
+	for (; patch_info != NULL; patch_info = patch_info->next){
+		NOT_IMPLEMENTED;
+	}
+
 	return;
 }
 
