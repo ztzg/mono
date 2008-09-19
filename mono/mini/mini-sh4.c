@@ -1108,10 +1108,11 @@ GList *mono_arch_get_global_int_regs(MonoCompile *compile_unit)
 	return regs;
 }
 
-MonoInst *mono_arch_get_inst_for_method(MonoCompile *compile_unit, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
+/**
+ * Check for opcodes we can handle directly in hardware.     
+ */
+MonoInst *mono_arch_get_inst_for_method(MonoCompile *compile_unit, MonoMethod *method, MonoMethodSignature *signature, MonoInst **args)
 {
-	/* TODO - CV */
-	g_assert(0);
 	return NULL;
 }
 
