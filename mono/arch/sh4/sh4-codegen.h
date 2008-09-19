@@ -378,6 +378,18 @@
 	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0xA << 0)); \
 } while(0)
 
+#define sh4_lds_FPUL(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Ry) & 0xF) << 8) | (0x5 << 4) | (0xA << 0)); \
+} while(0)
+
+#define sh4_lds_FPSCR(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Ry) & 0xF) << 8) | (0x6 << 4) | (0xA << 0)); \
+} while(0)
+
 #define sh4_ldsl_incRx_MACH(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
@@ -394,6 +406,18 @@
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0x6 << 0)); \
+} while(0)
+
+#define sh4_ldsl_incRy_FPUL(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Ry) & 0xF) << 8) | (0x5 << 4) | (0x6 << 0)); \
+} while(0)
+
+#define sh4_ldsl_incRy_FPSCR(code, Ry) do {		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Ry) & 0xF) << 8) | (0x6 << 4) | (0x6 << 0)); \
 } while(0)
 
 #define sh4_ldtlb(code) do {		\
@@ -1081,6 +1105,18 @@
 	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0xA << 0)); \
 } while(0)
 
+#define sh4_sts_FPUL(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x5 << 4) | (0xA << 0)); \
+} while(0)
+
+#define sh4_sts_FPSCR(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x6 << 4) | (0xA << 0)); \
+} while(0)
+
 #define sh4_stsl_MACH_decRx(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
@@ -1097,6 +1133,18 @@
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0x2 << 0)); \
+} while(0)
+
+#define sh4_stsl_FPUL_decRx(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (0x5 << 4) | (0x2 << 0)); \
+} while(0)
+
+#define sh4_stsl_FPSCR_decRx(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (0x6 << 4) | (0x2 << 0)); \
 } while(0)
 
 #define sh4_sub(code, Ry, Rx) do {		\
@@ -1243,6 +1291,462 @@
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (0x0 << 4) | (0x3 << 0)); \
+} while(0)
+
+#define sh4_fabs(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x5 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fabs_double(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x5 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fadd(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x0 << 0)); \
+} while(0)
+
+#define sh4_fadd_double(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	g_assert(!(Ry & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x0 << 0)); \
+} while(0)
+
+#define sh4_fcmpeq(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x4 << 0)); \
+} while(0)
+
+#define sh4_fcmpeq_double(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	g_assert(!(Ry & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x4 << 0)); \
+} while(0)
+
+#define sh4_fcmpgt(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x5 << 0)); \
+} while(0)
+
+#define sh4_fcmpgt_double(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	g_assert(!(Ry & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x5 << 0)); \
+} while(0)
+
+#define sh4_fcnvds_double_FPUL(code, Rx) do {		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | ((((Rx) & 0xF) << 1)  << 8) | (0xB << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fcnvsd_FPUL_double(code, Rx) do {		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | ((((Rx) & 0xF) << 1)  << 8) | (0xA << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fdiv(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x3 << 0)); \
+} while(0)
+
+#define sh4_fdiv_double(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	g_assert(!(Ry & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x3 << 0)); \
+} while(0)
+
+#define sh4_fipr(code, Ry, Rx) do {		\
+	g_assert(!((Rx & 0x3) || (Ry & 0x3)));		\
+	sh4_emit16(code, (0xF << 12) | (((((Rx) & 0xF) << 2) | (((Ry) & 0xF) >> 2))  << 8) | (0xE << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fldi0(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x8 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fldi1(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x9 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_flds_FPUL(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x1 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_float_FPUL(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_float_FPUL_double(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x2 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fmac(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xE << 0)); \
+} while(0)
+
+#define sh4_fmov(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xC << 0)); \
+} while(0)
+
+#define sh4_fmov_Xdouble_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xC << 0)); \
+} while(0)
+
+#define sh4_fmov_indRy(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x8 << 0)); \
+} while(0)
+
+#define sh4_fmov_indRy_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x8 << 0)); \
+} while(0)
+
+#define sh4_fmov_indRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xA << 0)); \
+} while(0)
+
+#define sh4_fmov_Xdouble_indRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xA << 0)); \
+} while(0)
+
+#define sh4_fmov_incRy(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_fmov_incRy_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_fmov_decRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xB << 0)); \
+} while(0)
+
+#define sh4_fmov_Xdouble_decRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xB << 0)); \
+} while(0)
+
+#define sh4_fmov_dispR0Ry(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x6 << 0)); \
+} while(0)
+
+#define sh4_fmov_dispR0Ry_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x6 << 0)); \
+} while(0)
+
+#define sh4_fmov_dispR0Rx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x7 << 0)); \
+} while(0)
+
+#define sh4_fmov_Xdouble_dispR0Rx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x7 << 0)); \
+} while(0)
+
+#define sh4_fmovd_indRy_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x8 << 0)); \
+} while(0)
+
+#define sh4_fmovd_Xdouble_indRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xA << 0)); \
+} while(0)
+
+#define sh4_fmovd_incRy_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_fmovd_Xdouble_decRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xB << 0)); \
+} while(0)
+
+#define sh4_fmovd_dispR0Ry_Xdouble(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x6 << 0)); \
+} while(0)
+
+#define sh4_fmovd_Xdouble_dispR0Rx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x7 << 0)); \
+} while(0)
+
+#define sh4_fmovs_indRy(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x8 << 0)); \
+} while(0)
+
+#define sh4_fmovs_indRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xA << 0)); \
+} while(0)
+
+#define sh4_fmovs_incRy(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x9 << 0)); \
+} while(0)
+
+#define sh4_fmovs_decRx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0xB << 0)); \
+} while(0)
+
+#define sh4_fmovs_dispR0Ry(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x6 << 0)); \
+} while(0)
+
+#define sh4_fmovs_dispR0Rx(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x7 << 0)); \
+} while(0)
+
+#define sh4_fmul(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x2 << 0)); \
+} while(0)
+
+#define sh4_fmul_double(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	g_assert(!(Ry & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x2 << 0)); \
+} while(0)
+
+#define sh4_fneg(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x4 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fneg_double(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x4 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fpchg(code) do {		\
+	sh4_emit16(code, (0xF << 12) | (0x7 << 8) | (0xF << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_frchg(code) do {		\
+	sh4_emit16(code, (0xF << 12) | (0xB << 8) | (0xF << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fsca_FPUL_double(code, Rx) do {		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | ((((Rx) & 0xF) << 1)  << 8) | (0xF << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fschg(code) do {		\
+	sh4_emit16(code, (0xF << 12) | (0x3 << 8) | (0xF << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fsqrt(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x6 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fsqrt_double(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x6 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fsrra(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x7 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fsts_FPUL(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x0 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_fsub(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x1 << 0)); \
+} while(0)
+
+#define sh4_fsub_double(code, Ry, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	g_assert((int)Ry >= 0);			\
+	g_assert((int)Ry <= 15);		\
+	g_assert(!(Ry & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | (0x1 << 0)); \
+} while(0)
+
+#define sh4_ftrc_FPUL(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x3 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_ftrc_double_FPUL(code, Rx) do {		\
+	g_assert((int)Rx >= 0);			\
+	g_assert((int)Rx <= 15);		\
+	g_assert(!(Rx & 0x1));		\
+	sh4_emit16(code, (0xF << 12) | (((Rx) & 0xF)  << 8) | (0x3 << 4) | (0xD << 0)); \
+} while(0)
+
+#define sh4_ftrv(code, Rx) do {		\
+	g_assert(!(Rx & 0x3));		\
+	sh4_emit16(code, (0xF << 12) | (((((Rx) & 0xF) << 2) | 0x1)  << 8) | (0xF << 4) | (0xD << 0)); \
 } while(0)
 
 

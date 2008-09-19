@@ -28,6 +28,37 @@ typedef enum {
 	sh4_pr
 } SH4IntRegister;
 
+typedef enum {
+	sh4_fr0 = 0,
+	sh4_fr1,
+	sh4_fr2,
+	sh4_fr3,
+	sh4_fr4,
+	sh4_fr5,
+	sh4_fr6,
+	sh4_fr7,
+	sh4_fr8,
+	sh4_fr9,
+	sh4_fr10,
+	sh4_fr11,
+	sh4_fr12,
+	sh4_fr13,
+	sh4_fr14,
+	sh4_fr15,
+	sh4_dr0 = sh4_fr0,
+	sh4_dr2 = sh4_fr2,
+	sh4_dr4 = sh4_fr4,
+	sh4_dr6 = sh4_fr6,
+	sh4_dr8 = sh4_fr8,
+	sh4_dr10 = sh4_fr10,
+	sh4_dr12 = sh4_fr12,
+	sh4_dr14 = sh4_fr14,
+	sh4_fv0 = sh4_fr0,
+	sh4_fv4 = sh4_fr4,
+	sh4_fv8 = sh4_fr8,
+	sh4_fv12 = sh4_fr12
+} SH4FloatRegister;
+
 #define sh4_emit16(address, value) do {					   \
 	*((guint16 *) (void *)(address)) = (guint16)value;		   \
 	(address) = (typeof(address))(((guint16 *)(void *)(address)) + 1); \

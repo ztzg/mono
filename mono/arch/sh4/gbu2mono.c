@@ -66,7 +66,7 @@ void printf_checks_imm(int sign_extended, int nb_bits, int factor)
 	return;
 }
 
-void printf_checks(const sh_nibble_type nibbles[9], int force_sign)
+void printf_checks(const sh_nibble_type nibbles[9], int force_sign, int double_arg)
 {
 	int i = 0;
 
@@ -93,11 +93,15 @@ void printf_checks(const sh_nibble_type nibbles[9], int force_sign)
 		case REG_N:
 			printf("	g_assert((int)Rx >= 0);			\\\n");
 			printf("	g_assert((int)Rx <= 15);		\\\n");
+			if (double_arg)
+				printf("	g_assert(!(Rx & 0x1));		\\\n");
 			break;
 
 		case REG_M:
 			printf("	g_assert((int)Ry >= 0);			\\\n");
 			printf("	g_assert((int)Ry <= 15);		\\\n");
+			if (double_arg)
+				printf("	g_assert(!(Ry & 0x1));		\\\n");
 			break;
 
 		case REG_B:
@@ -145,9 +149,15 @@ void printf_checks(const sh_nibble_type nibbles[9], int force_sign)
 			break;
 
 		case REG_N_D:
+			printf("	g_assert(!(Rx & 0x1));		\\\n");
+			break;
+
 		case REG_NM:
+			printf("	g_assert(!((Rx & 0x3) || (Ry & 0x3)));		\\\n");
+			break;
+
 		case REG_N_B01:
-			/* XXX */
+			printf("	g_assert(!(Rx & 0x3));		\\\n");
 			break;
 
 		default:
@@ -250,9 +260,18 @@ void printf_nibbles(const sh_nibble_type nibbles[9])
 			break;
 
 		case REG_N_D:
-		case REG_NM:
+			printf("((((Rx) & 0xF) << 1)  << %d)", 12 - length);
+			length += 4;
+			break;
+			
 		case REG_N_B01:
-			/* XXX */
+			printf("(((((Rx) & 0xF) << 2) | 0x1)  << %d)", 12 - length);
+			length += 4;
+			break;
+			
+		case REG_NM:
+			printf("(((((Rx) & 0xF) << 2) | (((Ry) & 0xF) >> 2))  << %d)", 12 - length);
+			length += 4;
 			break;
 
 		default:
@@ -272,7 +291,7 @@ void printf_nibbles(const sh_nibble_type nibbles[9])
 	return;
 }
 
-void printf_args(const sh_arg_type args[4])
+void printf_args(const sh_arg_type args[4], int* double_arg)
 {
 	int i = 0;
 
@@ -394,18 +413,31 @@ void printf_args(const sh_arg_type args[4])
 			break;
 
 		case FPUL_N:
-		case FPSCR_N:
 		case FPUL_M:
+			printf("_FPUL");
+			break;
+
+		case FPSCR_N:
 		case FPSCR_M:
+			printf("_FPSCR");
+			break;
+
+		case D_REG_N:
+			printf("_double");
+			*double_arg = 1;
+			break;
+
+		case DX_REG_N:
+		case DX_REG_M:
+			printf("_Xdouble");
+			break;
+
 		case F_REG_N:
 		case F_REG_M:
-		case D_REG_N:
 		case D_REG_M:
 		case V_REG_N:
 		case V_REG_M:
 		case F_FR0:
-		case DX_REG_N:
-		case DX_REG_M:
 		case XMTRX_M4:
 			/* XXX */
 			break;
@@ -447,12 +479,20 @@ void printf_args(const sh_arg_type args[4])
 		case A_REG_N:
 		case A_INC_N:
 		case A_IND_N:
+		case F_REG_N:
+		case D_REG_N:
+		case DX_REG_N:
+		case V_REG_N:
 			printf(", Rx");
 			break;
 
 		case A_INC_M:
 		case A_IND_M:
 		case A_REG_M:
+		case F_REG_M:
+		case D_REG_M:
+		case DX_REG_M:
+		case V_REG_M:
 			printf(", Ry");
 			break;
 
@@ -492,15 +532,7 @@ void printf_args(const sh_arg_type args[4])
 		case FPSCR_N:
 		case FPUL_M:
 		case FPSCR_M:
-		case F_REG_N:
-		case F_REG_M:
-		case D_REG_N:
-		case D_REG_M:
-		case V_REG_N:
-		case V_REG_M:
 		case F_FR0:
-		case DX_REG_N:
-		case DX_REG_M:
 		case XMTRX_M4:
 			/* XXX */
 			break;
@@ -529,6 +561,7 @@ int main(void)
 
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
 		int force_sign = 0;
+		int double_args = 0;
 
 		if ((sh_table[i].arch & arch_sh4a) != arch_sh4a)
 			continue;
@@ -548,9 +581,9 @@ int main(void)
 		for (j = 0; sh_table[i].name[j] != '\0'; j++)
 			if (isalnum(sh_table[i].name[j]) != 0)
 				printf("%c", sh_table[i].name[j]);
-		printf_args(sh_table[i].arg);
+		printf_args(sh_table[i].arg, &double_args);
 		printf("do {		\\\n");
-		printf_checks(sh_table[i].nibbles, force_sign);
+		printf_checks(sh_table[i].nibbles, force_sign, double_args);
 		printf_nibbles(sh_table[i].nibbles);
 		printf("} while(0)\n");
 		printf("\n");
