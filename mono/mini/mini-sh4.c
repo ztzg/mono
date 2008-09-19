@@ -647,13 +647,6 @@ void mono_arch_create_vars(MonoCompile *compile_unit)
 	return;
 }
 
-void mono_arch_emit_exceptions(MonoCompile *compile_unit)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
-}
-
 /**
  * Create the instruction sequence for a function prologue.
  */
@@ -942,6 +935,55 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 
 	/* Sanity checks. */
 	g_assert(buffer - code <= EPILOGUE_SIZE);
+	g_assert(compile_unit->code_len < compile_unit->code_size);
+
+	return;
+}
+
+void mono_arch_emit_exceptions(MonoCompile *compile_unit)
+{
+	MonoJumpInfo *patch_info = NULL;
+	int exceptions_size = 0;
+	guint8 *buffer = NULL;
+	guint8 *code   = NULL;
+
+	SH4_DEBUG("args => %p", compile_unit);
+
+	/* Compute the space needed by exceptions infos. */
+	for (patch_info = compile_unit->patch_info; patch_info != NULL; patch_info = patch_info->next) {
+		if (patch_info->type != MONO_PATCH_INFO_EXC)
+			continue;
+
+		/* TODO : replace '0' with the size of the actual code. */
+		exceptions_size += 0;
+	}
+
+	SH4_DEBUG("exceptions_size = %d", exceptions_size);
+
+	/* Reallocate enough room to store the SH4 instructions
+	   used to implement an epilogue. */
+	while (compile_unit->code_len + exceptions_size > compile_unit->code_size) {
+		compile_unit->code_size *= 2;
+		compile_unit->native_code = g_realloc(compile_unit->native_code, compile_unit->code_size);
+
+		mono_jit_stats.code_reallocs++;
+	}
+
+	code = buffer = compile_unit->native_code + compile_unit->code_len;
+
+	/* Patch code to raise exceptions. */
+	for (patch_info = compile_unit->patch_info; patch_info != NULL; patch_info = patch_info->next) {
+		if (patch_info->type != MONO_PATCH_INFO_EXC)
+			continue;
+
+		/* TODO - CV */
+		NOT_IMPLEMENTED;
+	}
+
+	compile_unit->code_len = buffer - compile_unit->native_code;
+
+	/* Sanity checks. */
+	g_assert(buffer - code <= exceptions_size);
 	g_assert(compile_unit->code_len < compile_unit->code_size);
 
 	return;
