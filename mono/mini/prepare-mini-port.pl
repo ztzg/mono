@@ -475,6 +475,7 @@ my %value = (
 	MONO_SH4_REG_LAST_ARG            => ' sh4_r7',
 	MonoCompileArch => '
 	gint localloc_size;
+	gint argalloc_size;
 ',
 	MonoContext     => '
 	guint32 pc;

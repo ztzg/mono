@@ -647,13 +647,6 @@ void mono_arch_create_vars(MonoCompile *compile_unit)
 	return;
 }
 
-void mono_arch_emit_epilog(MonoCompile *compile_unit)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
-}
-
 void mono_arch_emit_exceptions(MonoCompile *compile_unit)
 {
 	/* TODO - CV */
@@ -696,6 +689,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	if (call_info->ret.type == aggregate)
 		NOT_IMPLEMENTED;
 
+	compile_unit->arch.argalloc_size = 0;
+
 	/* Save arguments at the right place : into register or onto the stack. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
 		struct arg_info *arg_info = &call_info->args[i];
@@ -711,14 +706,18 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 			NOT_IMPLEMENTED;
 			if (inst->opcode == OP_REGVAR)
 				sh4_mov(buffer, inst->dreg + 1, arg_info->reg + 1);
-			else
+			else {
 				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
-
+				compile_unit->arch.argalloc_size += 4;
+			}
+			/* Fall through. */
 		case integer32:
 			if (inst->opcode == OP_REGVAR)
 				sh4_mov(buffer, inst->dreg, arg_info->reg);
-			else
+			else {
 				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
+				compile_unit->arch.argalloc_size += 4;
+			}
 			break;
 
 		case float64:
@@ -733,6 +732,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 			break;
 		}
 	}
+
+	/* Sanity checks. */
+	g_assert(compile_unit->param_area == compile_unit->arch.argalloc_size);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -801,6 +803,148 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	g_free(call_info);
 
 	return buffer;
+}
+
+void mono_arch_emit_epilog(MonoCompile *compile_unit)
+{
+	guint8 *buffer = NULL;
+	guint8 *code   = NULL;
+	guint8 *patch1 = NULL;
+	guint8 *patch2 = NULL;
+	int localloc_size = 0;
+	int argalloc_size = 0;
+	int i = 0;
+
+	SH4_DEBUG("args => %p", compile_unit);
+
+	if (compile_unit->method->save_lmf != 0) {
+		NOT_IMPLEMENTED;
+	}
+
+#define EPILOGUE_SIZE 44
+
+	/* Reallocate enough room to store the SH4 instructions
+	   used to implement an epilogue. */
+	while (compile_unit->code_len + EPILOGUE_SIZE > compile_unit->code_size) {
+		compile_unit->code_size *= 2;
+		compile_unit->native_code = g_realloc(compile_unit->native_code, compile_unit->code_size);
+
+		mono_jit_stats.code_reallocs++;
+	}
+
+	code = buffer = compile_unit->native_code + compile_unit->code_len;
+
+	/* Reset the stack pointer. */
+	sh4_mov(buffer, sh4_r14, sh4_r15);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------|
+	 *	|  local var.  |
+	 *	|--------------| <- FP, SP
+	 *	:              :
+	 */
+
+	/* Free the space used by local variables. */
+	localloc_size = compile_unit->arch.localloc_size;
+	if (localloc_size != 0) {
+		if (sh4_is_imm8(localloc_size))
+			sh4_add_imm(buffer, localloc_size, sh4_r15);
+		else {
+			/* R14 can be used to increment the stack size (that is, used
+			   to decrement R15) because it was saved previously and will
+			   be overwritten later. */
+
+			/* Patch slot for : sh4_r14 <- localloc_size */
+			patch1 = buffer;
+			sh4_sleep(buffer);
+
+			sh4_add(buffer, sh4_r14, sh4_r15);
+		}
+	}
+
+	SH4_DEBUG("localloc_size = %d", localloc_size);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------| <- SP
+	 *	:              :
+	 */
+
+	/* Restore the PR. */
+	sh4_ldsl_incRx_PR(buffer, sh4_r15);
+
+	/* Restore the previous frame pointer (sh4_r14). */
+	sh4_movl_incRy(buffer, sh4_r15, sh4_r14);
+
+	/* Restore scratch registers (sh4_r8 -> sh4_r13). */
+	for (i = sh4_r8; i <= sh4_r13; i++)
+		if (compile_unit->used_int_regs & (1 << i))
+			sh4_movl_incRy(buffer, sh4_r15, (SH4IntRegister)i);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============| <- SP
+	 *	:              : Callee's frame.
+	 */
+
+	/* Free the space used by parameters. */
+	argalloc_size = compile_unit->arch.argalloc_size;
+	if (argalloc_size != 0) {
+		if (sh4_is_imm8(argalloc_size))
+			sh4_add_imm(buffer, argalloc_size, sh4_r15);
+		else {
+			NOT_IMPLEMENTED;
+#if 0
+			/* I don't know yet if I can use a local register
+			   (a.k.a scratch register). */
+
+			/* Patch slot for : sh4_rXX <- argalloc_size */
+			patch2 = buffer;
+			sh4_sleep(buffer);
+
+			sh4_add(buffer, sh4_rXX, sh4_r15);
+#endif
+		}
+	}
+
+	/* At this point, the stack is fully restored (as caller's point of view). */
+
+	sh4_rts(buffer);
+	sh4_nop(buffer);
+
+	/* Align the constant pool. */
+	if (patch1 != NULL || patch2 != NULL)
+		while (((guint32)buffer % 4) != 0)
+			sh4_nop(buffer);
+
+	/* Build the constant pool & patch the corresponding instructions. */
+	if (patch1 != NULL) {
+		sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r8);
+		sh4_emit32(buffer, (guint32)localloc_size);
+	}
+	if (patch2 != NULL) {
+		sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r8);
+		sh4_emit32(buffer, (guint32)argalloc_size);
+	}
+
+	compile_unit->code_len = buffer - compile_unit->native_code;
+
+	/* Sanity checks. */
+	g_assert(buffer - code <= EPILOGUE_SIZE);
+	g_assert(compile_unit->code_len < compile_unit->code_size);
+
+	return;
 }
 
 void mono_arch_emit_this_vret_args(MonoCompile *compile_unit, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
