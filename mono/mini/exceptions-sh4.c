@@ -13,10 +13,59 @@
 #include "mini.h"
 #include "mono/arch/sh4/sh4-codegen.h"
 
-MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *res, MonoJitInfo *prev_ji, MonoContext *context, MonoContext *new_context, char **trace, MonoLMF **lmf, int *native_offset, gboolean *managed)
+MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *result,
+				     MonoJitInfo *previous_jit_info, MonoContext *context, MonoContext *new_context,
+				     char **trace, MonoLMF **lmf, int *native_offset, gboolean *managed)
 {
-	/* TODO - CV */
-	g_assert(0);
+	MonoJitInfo *jit_info = NULL;
+	gpointer pc = MONO_CONTEXT_GET_IP(context);
+
+	SH4_DEBUG("args => %p, %p, %p, %p, %p, %p, %p, %p, %p, %p",
+		  domain, jit_tls, result, previous_jit_info, context,
+		  new_context, trace, lmf, native_offset, managed);
+
+	if (managed != NULL)
+		*managed = FALSE;
+
+	/* Avoid costly table lookup during stack overflow. */
+	if (previous_jit_info != NULL &&
+	    (pc > previous_jit_info->code_start &&
+	     ((guint8 *)pc < (guint8 *)previous_jit_info->code_start + previous_jit_info->code_size)))
+		jit_info = previous_jit_info;
+	else
+		jit_info = mono_jit_info_table_find(domain, pc);
+
+	if (jit_info != NULL) {
+		NOT_IMPLEMENTED;
+	}
+	else if (*lmf != NULL) {
+		*new_context = *context;
+
+		if (trace != NULL)
+			NOT_IMPLEMENTED;
+
+		/* Check if it is a trampoline LMF. */
+		jit_info = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
+		if (jit_info == NULL) {
+			/* Top LMF entry. */
+			if ((*lmf)->method != NULL)
+				return (gpointer)-1;
+
+			bzero(result, sizeof(MonoJitInfo));
+			result->method = (*lmf)->method;
+		}
+
+		/* Adjust the new context with information from the LMF. */
+		new_context->pc = (*lmf)->pc;
+		memcpy(new_context->registers, (*lmf)->registers, sizeof(new_context->registers));
+		*lmf = (*lmf)->previous_lmf;
+
+		if (jit_info != NULL)
+			return jit_info;
+		else
+			return result;
+	}
+
 	return NULL;
 }
 
