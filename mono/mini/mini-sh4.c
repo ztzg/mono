@@ -276,6 +276,8 @@ static inline void emit_signature_cookie(MonoCompile *compile_unit, MonoCallInst
 	switch (arg_info->storage) {
 	case into_register:
 		arg->backend.reg3 = arg_info->reg;
+		/* CV : why is this not done into the register allocation phase ? */
+		call->used_iregs |= 1 << arg_info->reg;
 		break;
 
 	case onto_stack:
@@ -346,6 +348,7 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *compile_unit, MonoBasicBlock* b
 			switch (arg_info->storage) {
 			case into_register:
 				arg->backend.reg3 = arg_info->reg;
+				/* CV : why is this not done into the register allocation phase ? */
 				call->used_iregs |= 1 << arg_info->reg;
 				break;
 
