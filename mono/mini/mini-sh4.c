@@ -29,6 +29,7 @@ struct arg_info {
 	enum {
 		into_register,
 		onto_stack,
+		nowhere
 	} storage;
 };
 
@@ -136,7 +137,8 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 		break;
 
 	case MONO_TYPE_VOID:
-		/* Nothing to do */
+		call_info->ret.storage = nowhere;
+		call_info->ret.type = none;
 		break;
 
 	case MONO_TYPE_GENERICINST:
@@ -271,13 +273,20 @@ static inline void emit_signature_cookie(MonoCompile *compile_unit, MonoCallInst
 	arg->inst_left = signature;
 	arg->inst_call = call;
 
-	if (arg_info->storage == into_register) {
+	switch (arg_info->storage) {
+	case into_register:
 		arg->backend.reg3 = arg_info->reg;
-	}
-	else { /* arg_info->storage == onto_stack */
+		break;
+
+	case onto_stack:
 		arg->opcode = OP_OUTARG_MEMBASE;
 		arg->backend.size = arg_info->size;
 		arg->backend.arg_info = arg_info->offset;
+		break;
+
+	case nowhere:
+	default:
+		g_assert_not_reached();
 	}
 
 	MONO_INST_LIST_ADD_TAIL(&arg->node, &call->out_args);
@@ -334,42 +343,34 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *compile_unit, MonoBasicBlock* b
 				call->used_iregs |= 1 << (arg_info->reg + 1);
 			/* Fall through. */
 		case integer32:
-			if (arg_info->storage == into_register) {
+			switch (arg_info->storage) {
+			case into_register:
 				arg->backend.reg3 = arg_info->reg;
 				call->used_iregs |= 1 << arg_info->reg;
-			}
-			else { /* arg_info->storage == onto_stack */
+				break;
+
+			case onto_stack:
 				arg->opcode = OP_OUTARG_MEMBASE;
 				arg->backend.size = arg_info->size;
 				arg->backend.arg_info = arg_info->offset;
+				break;
+
+			case nowhere:
+			default:
+				g_assert_not_reached();
 			}
 			break;
 
 		case float32:
-			if (arg_info->storage == into_register) {
-				NOT_IMPLEMENTED;
-			}
-			else { /* arg_info->storage == onto_stack */
-				NOT_IMPLEMENTED;
-			}
+			NOT_IMPLEMENTED;
 			break;
 
 		case float64:
-			if (arg_info->storage == into_register) {
-				NOT_IMPLEMENTED;
-			}
-			else { /* arg_info->storage == onto_stack */
-				NOT_IMPLEMENTED;
-			}
+			NOT_IMPLEMENTED;
 			break;
 
 		case aggregate:
-			if (arg_info->storage == into_register) {
-				NOT_IMPLEMENTED;
-			}
-			else { /* arg_info->storage == onto_stack */
-				NOT_IMPLEMENTED;
-			}
+			NOT_IMPLEMENTED;
 			break;
 
 		default:
@@ -536,7 +537,15 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 		if (inst->opcode == OP_REGVAR)
 			continue;
 
-		if (arg_info->storage == onto_stack) {
+		switch (arg_info->storage) {
+		case into_register:
+			inst->opcode = OP_REGVAR;
+			inst->dreg = arg_info->reg;
+
+			SH4_DEBUG("arg '%d' reg = %d", i, arg_info->reg);
+			break;
+
+		case onto_stack:
 			inst->opcode = OP_REGOFFSET;
 			inst->inst_basereg = compile_unit->frame_reg;
 			inst->inst_offset = arg_info->offset;
@@ -548,12 +557,11 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 			   grows to low address, offsets are positively
 			   computed). */
 			inst->inst_offset -= locals_offset + regsave_offset;
-		}
-		else { /* arg_info->storage == into_register */
-			inst->opcode = OP_REGVAR;
-			inst->dreg = arg_info->reg;
+			break;
 
-			SH4_DEBUG("arg '%d' reg = %d", i, arg_info->reg);
+		case nowhere:
+		default:
+			g_assert_not_reached();
 		}
 	}
 
@@ -632,13 +640,24 @@ void mono_arch_create_vars(MonoCompile *compile_unit)
 
 	call_info = get_call_info(compile_unit->generic_sharing_context, signature);
 
-	if (call_info->ret.storage == into_register)
+	switch (call_info->ret.storage) {
+	case into_register:
 		compile_unit->ret_var_is_local = TRUE;
-	else { /* call_info->ret.storage == onto_stack */
+		break;
+
+	case onto_stack:
 		if (MONO_TYPE_ISSTRUCT(signature->ret)) {
 			NOT_IMPLEMENTED;
 			compile_unit->vret_addr = mono_compile_create_var(compile_unit, &mono_defaults.int_class->byval_arg, OP_ARG);
 		}
+		break;
+
+	case nowhere:
+		/* Nothing to do. */
+		break;
+
+	default:
+		g_assert_not_reached();
 	}
 
 	g_free(call_info->args);
