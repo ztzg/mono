@@ -485,7 +485,7 @@ my %value = (
 ',
 	MonoContext     => '
 	guint32 pc;
-	guint32 registers[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
+	guint32 registers[MONO_MAX_IREGS];
 ',
 	MonoLMF         => '
 	gpointer    previous_lmf;

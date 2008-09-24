@@ -232,7 +232,7 @@ typedef struct {
  * is stored in this arch-specific structure. */
 typedef struct { 
 	guint32 pc;
-	guint32 registers[MONO_MAX_IREGS]; /* TODO - CV : should I save global registers only ? */
+	guint32 registers[MONO_MAX_IREGS];
  } MonoContext;
 
 /* When managed code needs to call into native code, it does through

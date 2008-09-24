@@ -600,10 +600,11 @@ void mono_arch_allocate_vars(MonoCompile *compile_unit)
 	g_free(call_info);
 }
 
+/**
+ * Cleanup architecture specific code.
+ */
 void mono_arch_cleanup(void)
 {
-	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 
