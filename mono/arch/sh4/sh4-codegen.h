@@ -7,10 +7,11 @@
 #define sh4_add_imm(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= -128);		\
-	g_assert((int)(imm) <= 127);		\
+	g_assert(SH4_CHECK_IMM_add_imm(imm));	\
 	sh4_emit16(code, (0x7 << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_add_imm(imm)((int)(imm) >= -128 && (int)(imm) <= 127)
 
 #define sh4_add(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -37,10 +38,11 @@
 } while(0)
 
 #define sh4_and_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_and_imm_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x9 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_and_imm_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_and(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -51,66 +53,67 @@
 } while(0)
 
 #define sh4_andb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_andb_imm_dispR0GBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0xD << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_andb_imm_dispR0GBR(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
+
 #define sh4_bra(code, imm) do {		\
-	g_assert((int)(imm) >= -4096);		\
-	g_assert((int)(imm) <= 4094);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bra(imm));	\
 	sh4_emit16(code, (0xA << 12) | ((((imm) & 0x1FFE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bra(imm)((int)(imm) >= -4096 && (int)(imm) <= 4094 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bsr(code, imm) do {		\
-	g_assert((int)(imm) >= -4096);		\
-	g_assert((int)(imm) <= 4094);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bsr(imm));	\
 	sh4_emit16(code, (0xB << 12) | ((((imm) & 0x1FFE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bsr(imm)((int)(imm) >= -4096 && (int)(imm) <= 4094 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bt(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 254);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bt(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0x9 << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bt(imm)((int)(imm) >= -256 && (int)(imm) <= 254 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bf(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 254);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bf(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0xB << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bf(imm)((int)(imm) >= -256 && (int)(imm) <= 254 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bts(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 254);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bts(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0xD << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bts(imm)((int)(imm) >= -256 && (int)(imm) <= 254 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bts(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 254);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bts(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0xD << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bts(imm)((int)(imm) >= -256 && (int)(imm) <= 254 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bfs(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 254);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bfs(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0xF << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_bfs(imm)((int)(imm) >= -256 && (int)(imm) <= 254 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_bfs(code, imm) do {		\
-	g_assert((int)(imm) >= -256);		\
-	g_assert((int)(imm) <= 254);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_bfs(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0xF << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_bfs(imm)((int)(imm) >= -256 && (int)(imm) <= 254 && ((int)(imm) & 0x1) == 0)
 
 #define sh4_clrmac(code) do {		\
 	sh4_emit16(code, (0x0 << 12) | (0x0 << 8) | (0x2 << 4) | (0x8 << 0)); \
@@ -125,10 +128,11 @@
 } while(0)
 
 #define sh4_cmpeq_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= -128);		\
-	g_assert((int)(imm) <= 127);		\
+	g_assert(SH4_CHECK_IMM_cmpeq_imm_R0(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0x8 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_cmpeq_imm_R0(imm)((int)(imm) >= -128 && (int)(imm) <= 127)
 
 #define sh4_cmpeq(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -305,10 +309,11 @@
 #define sh4_ldc_bank(code, Rx, imm) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 7);		\
+	g_assert(SH4_CHECK_IMM_ldc_bank(imm));	\
 	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0x7) << 4) | (0xE << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_ldc_bank(imm)((int)(imm) >= 0 && (int)(imm) <= 7)
 
 #define sh4_ldcl_incRx_SR(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -355,10 +360,11 @@
 #define sh4_ldcl_incRx_bank(code, Rx, imm) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 7);		\
+	g_assert(SH4_CHECK_IMM_ldcl_incRx_bank(imm));	\
 	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0x7) << 4) | (0x7 << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_ldcl_incRx_bank(imm)((int)(imm) >= 0 && (int)(imm) <= 7)
 
 #define sh4_lds_MACH(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -435,10 +441,11 @@
 #define sh4_mov_imm(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= -128);		\
-	g_assert((int)(imm) <= 127);		\
+	g_assert(SH4_CHECK_IMM_mov_imm(imm));	\
 	sh4_emit16(code, (0xE << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_mov_imm(imm)((int)(imm) >= -128 && (int)(imm) <= 127)
 
 #define sh4_mov(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -475,16 +482,18 @@
 #define sh4_movb_dispRy_R0(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 15);		\
+	g_assert(SH4_CHECK_IMM_movb_dispRy_R0(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0x4 << 8) | (((Ry) & 0xF) << 4) | (((imm) & 0xF) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_movb_dispRy_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 15)
+
 #define sh4_movb_dispGBR_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_movb_dispGBR_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x4 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movb_dispGBR_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_movb_dispR0Ry(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -513,27 +522,29 @@
 #define sh4_movb_R0_dispRy(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 15);		\
+	g_assert(SH4_CHECK_IMM_movb_R0_dispRy(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0x0 << 8) | (((Ry) & 0xF) << 4) | (((imm) & 0xF) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_movb_R0_dispRy(imm)((int)(imm) >= 0 && (int)(imm) <= 15)
+
 #define sh4_movb_R0_dispGBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_movb_R0_dispGBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x0 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movb_R0_dispGBR(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_movl_dispRx(code, Ry, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 60);		\
-	g_assert(((int)(imm) & 0x3) == 0);	\
+	g_assert(SH4_CHECK_IMM_movl_dispRx(imm));	\
 	sh4_emit16(code, (0x1 << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x3C) >> 2) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movl_dispRx(imm)((int)(imm) >= 0 && (int)(imm) <= 60 && ((int)(imm) & 0x3) == 0)
 
 #define sh4_movl_dispR0Rx(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -564,27 +575,27 @@
 	g_assert((int)Rx <= 15);		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 60);		\
-	g_assert(((int)(imm) & 0x3) == 0);	\
+	g_assert(SH4_CHECK_IMM_movl_dispRy(imm));	\
 	sh4_emit16(code, (0x5 << 12) | (((Rx) & 0xF)  << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x3C) >> 2) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_movl_dispRy(imm)((int)(imm) >= 0 && (int)(imm) <= 60 && ((int)(imm) & 0x3) == 0)
+
 #define sh4_movl_dispGBR_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 1020);		\
-	g_assert(((int)(imm) & 0x3) == 0);	\
+	g_assert(SH4_CHECK_IMM_movl_dispGBR_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x6 << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movl_dispGBR_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 1020 && ((int)(imm) & 0x3) == 0)
 
 #define sh4_movl_dispPC(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 1020);		\
-	g_assert(((int)(imm) & 0x3) == 0);	\
+	g_assert(SH4_CHECK_IMM_movl_dispPC(imm));	\
 	sh4_emit16(code, (0xD << 12) | (((Rx) & 0xF)  << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movl_dispPC(imm)((int)(imm) >= 0 && (int)(imm) <= 1020 && ((int)(imm) & 0x3) == 0)
 
 #define sh4_movl_dispR0Ry(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -611,11 +622,11 @@
 } while(0)
 
 #define sh4_movl_R0_dispGBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 1020);		\
-	g_assert(((int)(imm) & 0x3) == 0);	\
+	g_assert(SH4_CHECK_IMM_movl_R0_dispGBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x2 << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movl_R0_dispGBR(imm)((int)(imm) >= 0 && (int)(imm) <= 1020 && ((int)(imm) & 0x3) == 0)
 
 #define sh4_movw_dispR0Rx(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -644,27 +655,27 @@
 #define sh4_movw_dispRy_R0(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 30);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_movw_dispRy_R0(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0x5 << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x1E) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_movw_dispRy_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 30 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_movw_dispGBR_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 510);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_movw_dispGBR_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x5 << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movw_dispGBR_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 510 && ((int)(imm) & 0x1) == 0)
 
 #define sh4_movw_dispPC(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 510);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_movw_dispPC(imm));	\
 	sh4_emit16(code, (0x9 << 12) | (((Rx) & 0xF)  << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_movw_dispPC(imm)((int)(imm) >= 0 && (int)(imm) <= 510 && ((int)(imm) & 0x1) == 0)
 
 #define sh4_movw_dispR0Ry(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -693,25 +704,25 @@
 #define sh4_movw_R0_dispRy(code, imm, Ry) do {		\
 	g_assert((int)Ry >= 0);			\
 	g_assert((int)Ry <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 30);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_movw_R0_dispRy(imm));	\
 	sh4_emit16(code, (0x8 << 12) | (0x1 << 8) | (((Ry) & 0xF) << 4) | ((((imm) & 0x1E) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_movw_R0_dispRy(imm)((int)(imm) >= 0 && (int)(imm) <= 30 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_movw_R0_dispGBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 510);		\
-	g_assert(((int)(imm) & 0x1) == 0);	\
+	g_assert(SH4_CHECK_IMM_movw_R0_dispGBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x1 << 8) | ((((imm) & 0x1FE) >> 1) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_movw_R0_dispGBR(imm)((int)(imm) >= 0 && (int)(imm) <= 510 && ((int)(imm) & 0x1) == 0)
+
 #define sh4_mova_dispPC_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 1020);		\
-	g_assert(((int)(imm) & 0x3) == 0);	\
+	g_assert(SH4_CHECK_IMM_mova_dispPC_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x7 << 8) | ((((imm) & 0x3FC) >> 2) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_mova_dispPC_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 1020 && ((int)(imm) & 0x3) == 0)
 
 #define sh4_movcal_R0_indRx(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -836,10 +847,11 @@
 } while(0)
 
 #define sh4_or_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_or_imm_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0xB << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_or_imm_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_or(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -850,10 +862,11 @@
 } while(0)
 
 #define sh4_orb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_orb_imm_dispR0GBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0xF << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_orb_imm_dispR0GBR(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_pref_indRx(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -1032,10 +1045,11 @@
 #define sh4_stc_bank(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 7);		\
+	g_assert(SH4_CHECK_IMM_stc_bank(imm));	\
 	sh4_emit16(code, (0x0 << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0x7) << 4) | (0x2 << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_stc_bank(imm)((int)(imm) >= 0 && (int)(imm) <= 7)
 
 #define sh4_stcl_SR_decRx(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -1082,10 +1096,11 @@
 #define sh4_stcl_bank_decRx(code, imm, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
 	g_assert((int)Rx <= 15);		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 7);		\
+	g_assert(SH4_CHECK_IMM_stcl_bank_decRx(imm));	\
 	sh4_emit16(code, (0x4 << 12) | (((Rx) & 0xF)  << 8) | (((imm) & 0x7) << 4) | (0x3 << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_stcl_bank_decRx(imm)((int)(imm) >= 0 && (int)(imm) <= 7)
 
 #define sh4_sts_MACH(code, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -1198,16 +1213,18 @@
 } while(0)
 
 #define sh4_trapa_imm(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_trapa_imm(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x3 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_trapa_imm(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
+
 #define sh4_tst_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_tst_imm_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0x8 << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_tst_imm_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_tst(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -1218,16 +1235,18 @@
 } while(0)
 
 #define sh4_tstb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_tstb_imm_dispR0GBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0xC << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
 
+#define SH4_CHECK_IMM_tstb_imm_dispR0GBR(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
+
 #define sh4_xor_imm_R0(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_xor_imm_R0(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0xA << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_xor_imm_R0(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_xor(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
@@ -1238,10 +1257,11 @@
 } while(0)
 
 #define sh4_xorb_imm_dispR0GBR(code, imm) do {		\
-	g_assert((int)(imm) >= 0);		\
-	g_assert((int)(imm) <= 255);		\
+	g_assert(SH4_CHECK_IMM_xorb_imm_dispR0GBR(imm));	\
 	sh4_emit16(code, (0xC << 12) | (0xE << 8) | (((imm) & 0xFF) << 0)); \
 } while(0)
+
+#define SH4_CHECK_IMM_xorb_imm_dispR0GBR(imm)((int)(imm) >= 0 && (int)(imm) <= 255)
 
 #define sh4_xtrct(code, Ry, Rx) do {		\
 	g_assert((int)Rx >= 0);			\
