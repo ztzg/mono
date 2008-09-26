@@ -1,9 +1,6 @@
 # -*- sh -*-
 
-# env NOCONFIGURE=1 ./autogen.sh
-# cd eglib; env NOCONFIGURE=1 ./autogen.sh; cd ..
-# cp `which libtool` .
-# ./configure CONFIG_SITE=${PWD}/config_site.sh4
+# env NOCONFIGURE=1 ./autogen.sh; cd eglib; env NOCONFIGURE=1 ./autogen.sh; cd ..; cp `which libtool` .; ./configure CONFIG_SITE=${PWD}/config_site.sh4
 
 host=sh4-superh-linux
 host_alias=sh4-linux
@@ -15,14 +12,15 @@ LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
 
 prefix=/home/compwork/vincent/WIP/Mono-SH4/sysroot-sh4
 
-# This values are OK :
+# These values are OK :
 mono_cv_uscore=no
 mono_cv_sizeof_sunpath=108
 with_glib=embedded
 enable_mcs_build=no
 ac_cv_c_bigendian=no
 
-# This values are not verified :
+# These values are for devel. purpose :
 with_tls=pthread
 with_sigaltstack=no
 large_offt=no
+with_gc=none
