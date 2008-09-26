@@ -41,16 +41,16 @@
 #define DEFINE_TABLE /* Used in the following header. */
 #include "sh-opc.h"
 
-void printf_check_imm(const sh_nibble_type nibbles[9], int force_sign)
+static int printf_checks(const sh_nibble_type nibbles[9], int force_sign, char *name)
 {
 	int i = 0;
+	int factor = 0;
 
 	for (i = 0; i < 9; i++) {
 		int min = 0;
 		int max = 0;
 		int sign_extended = 0;
 		int nb_bits = 0;
-		int factor = 0;
 
 		switch (nibbles[i]) {
 		case REG_B:
@@ -133,20 +133,21 @@ void printf_check_imm(const sh_nibble_type nibbles[9], int force_sign)
 		min *= factor;
 		max *= factor;
 
-		printf("(");
-		printf("(int)(imm) >= %d && (int)(imm) <= %d", min, max);
+		printf("#define SH4_CHECK_RANGE_%s(imm) ((int)(imm) >= %d && (int)(imm) <= %d)\n", name, min, max);
+
 		if (factor != 1)
-			printf(" && ((int)(imm) & 0x%x) == 0", factor - 1);
-		printf(")");
+			printf("#define SH4_CHECK_ALIGN_%s(imm) (((int)(imm) & 0x%x) == 0)\n", name, factor - 1);
+
+		/* Only one immediate value per instruction is supported. */
+		break;
 	}
 
-	return;
+	return (factor >> 1);
 }
 
-int printf_checks(const sh_nibble_type nibbles[9], int force_sign, int double_arg, char *name)
+static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int double_arg, char *name, int scaling)
 {
 	int i = 0;
-	int check_imm = 0;
 
 	for (i = 0; i < 9; i++) {
 		switch (nibbles[i]) {
@@ -199,8 +200,9 @@ int printf_checks(const sh_nibble_type nibbles[9], int force_sign, int double_ar
  		case PCRELIMM_8BY4:
  		case BRANCH_8:
  		case BRANCH_12:
-			printf("	g_assert(SH4_CHECK_IMM_%s(imm));	\\\n", name);
-			check_imm = 1;
+			printf("	g_assert(SH4_CHECK_RANGE_%s(imm));	\\\n", name);
+			if (scaling != 0)
+				printf("	g_assert(SH4_CHECK_ALIGN_%s(imm));	\\\n", name);
 			break;
 
 		case REG_N_D:
@@ -221,10 +223,10 @@ int printf_checks(const sh_nibble_type nibbles[9], int force_sign, int double_ar
 		}
 	}
 
-	return check_imm;
+	return;
 }
 
-void printf_nibbles(const sh_nibble_type nibbles[9])
+static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 {
 	int i = 0;
 	int length = 0;
@@ -266,51 +268,62 @@ void printf_nibbles(const sh_nibble_type nibbles[9])
 			break;
 
 		case REG_B:
+			assert(scaling == 0);
 			printf("(((imm) & 0x7) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_4:
 		case IMM1_4:
+			assert(scaling == 0);
 			printf("(((imm) & 0xF) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_4BY2:
 		case IMM1_4BY2:
-			printf("((((imm) & 0x1E) >> 1) << %d)", 12 - length);
+			printf("((((imm) & 0x1E) >> %d) << %d)", scaling, 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_4BY4:
 		case IMM1_4BY4:
-			printf("((((imm) & 0x3C) >> 2) << %d)", 12 - length);
+			printf("((((imm) & 0x3C) >> %d) << %d)", scaling, 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_8:
 		case IMM1_8:
+			assert(scaling == 0);
 			printf("(((imm) & 0xFF) << %d)", 8 - length);
 			length += 8;
 			break;
 
 		case BRANCH_8:
+		case PCRELIMM_8BY2:
+			printf("((((imm) & 0x1FE) >> %d) << %d)", scaling, 8 - length);
+			length += 8;
+			break;
+
 		case IMM0_8BY2:
 		case IMM1_8BY2:
-		case PCRELIMM_8BY2:
-			printf("((((imm) & 0x1FE) >> 1) << %d)", 8 - length);
+			printf("((((imm) & 0x1FE) >> %d) << %d)", scaling, 8 - length);
+			length += 8;
+			break;
+
+		case PCRELIMM_8BY4:
+			printf("((((imm) & 0x3FC) >> %d) << %d)", scaling, 8 - length);
 			length += 8;
 			break;
 
 		case IMM0_8BY4:
 		case IMM1_8BY4:
-		case PCRELIMM_8BY4:
-			printf("((((imm) & 0x3FC) >> 2) << %d)", 8 - length);
+			printf("((((imm) & 0x3FC) >> %d) << %d)", scaling, 8 - length);
 			length += 8;
 			break;
 
 		case BRANCH_12:
-			printf("((((imm) & 0x1FFE) >> 1) << %d)", 4 - length);
+			printf("((((imm) & 0x1FFE) >> %d) << %d)", scaling, 4 - length);
 			length += 12;
 			break;
 
@@ -346,7 +359,7 @@ void printf_nibbles(const sh_nibble_type nibbles[9])
 	return;
 }
 
-void disambiguate(const sh_arg_type args[4], char *name, int size)
+static void disambiguate(const sh_arg_type args[4], char *name, int size)
 {
 	int i = 0;
 
@@ -354,7 +367,6 @@ void disambiguate(const sh_arg_type args[4], char *name, int size)
 		assert(strlen(dest) + strlen(str) < size - 1);	\
 		strcat(dest, str);				\
 	} while(0);
-
 
 	for (i = 0; i < 4; i++) {
 		if (args[i] == A_END)
@@ -511,7 +523,7 @@ void disambiguate(const sh_arg_type args[4], char *name, int size)
 	return;
 }
 
-void printf_args(const sh_arg_type args[4], int* double_arg)
+static void printf_args(const sh_arg_type args[4], int* double_arg)
 {
 	int i = 0;
 
@@ -634,7 +646,7 @@ int main(void)
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
 		int force_sign = 0;
 		int double_args = 0;
-		int check_imm = 0;
+		int scaling = 0;
 		int index = 0;
 
 		if ((sh_table[i].arch & arch_sh4a) != arch_sh4a)
@@ -663,21 +675,17 @@ int main(void)
 
 		disambiguate(sh_table[i].arg, name, sizeof(name));
 
+		scaling = printf_checks(sh_table[i].nibbles, force_sign, name);
+
 		printf("#define sh4_%s", name);
 		printf_args(sh_table[i].arg, &double_args);
 		printf("do {		\\\n");
-		check_imm = printf_checks(sh_table[i].nibbles, force_sign, double_args, name);
-		printf_nibbles(sh_table[i].nibbles);
+		printf_assert(sh_table[i].nibbles, force_sign, double_args, name, scaling);
+		printf_nibbles(sh_table[i].nibbles, scaling);
 		printf("} while(0)\n");
 		printf("\n");
-
-		if (check_imm == 0)
-			continue;
-
-		printf("#define SH4_CHECK_IMM_%s(imm)", name);
-		printf_check_imm(sh_table[i].nibbles, force_sign);
-		printf("\n\n");
 	}
+
 	printf("\n");
 	printf("#endif /* __MONO_SH4_CODEGEN_H__ */\n");
 	printf("\n");

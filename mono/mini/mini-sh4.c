@@ -784,7 +784,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	/* The space needed by local variables is computed into mono_arch_allocate_vars(). */
 	localloc_size = compile_unit->arch.localloc_size;
 	if (localloc_size != 0) {
-		if (SH4_CHECK_IMM_add_imm(localloc_size))
+		if (SH4_CHECK_RANGE_add_imm(localloc_size))
 			sh4_add_imm(buffer, -localloc_size, sh4_r15);
 		else {
 			/* R14 can be used to increment the stack size (that is, used
@@ -868,7 +868,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	/* Free the space used by local variables. */
 	localloc_size = compile_unit->arch.localloc_size;
 	if (localloc_size != 0) {
-		if (SH4_CHECK_IMM_add_imm(localloc_size))
+		if (SH4_CHECK_RANGE_add_imm(localloc_size))
 			sh4_add_imm(buffer, localloc_size, sh4_r15);
 		else {
 			/* R14 can be used to increment the stack size (that is, used
@@ -917,7 +917,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	/* Free the space used by parameters. */
 	argalloc_size = compile_unit->arch.argalloc_size;
 	if (argalloc_size != 0) {
-		if (SH4_CHECK_IMM_add_imm(argalloc_size))
+		if (SH4_CHECK_RANGE_add_imm(argalloc_size))
 			sh4_add_imm(buffer, argalloc_size, sh4_r15);
 		else {
 			NOT_IMPLEMENTED;
