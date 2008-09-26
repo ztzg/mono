@@ -65,6 +65,8 @@
 #define CONFIG_CPU "hppa"
 #elif defined(mips) || defined(__mips) || defined(_mips)
 #define CONFIG_CPU "mips"
+#elif defined(__SH4__)
+#define CONFIG_CPU "sh4"
 #else
 #warning Unknown CPU
 #define CONFIG_CPU "unknownCPU"

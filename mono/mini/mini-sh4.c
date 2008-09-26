@@ -960,6 +960,8 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	g_assert(buffer - code <= EPILOGUE_SIZE);
 	g_assert(compile_unit->code_len < compile_unit->code_size);
 
+	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
+
 	return;
 }
 
@@ -1008,6 +1010,8 @@ void mono_arch_emit_exceptions(MonoCompile *compile_unit)
 	/* Sanity checks. */
 	g_assert(buffer - code <= exceptions_size);
 	g_assert(compile_unit->code_len < compile_unit->code_size);
+
+	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
 
 	return;
 }
