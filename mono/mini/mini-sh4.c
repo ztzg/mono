@@ -946,11 +946,11 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 
 	/* Build the constant pool & patch the corresponding instructions. */
 	if (patch1 != NULL) {
-		sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r8);
+		sh4_movl_PCrel(patch1, buffer, sh4_r8);
 		sh4_emit32(buffer, (guint32)localloc_size);
 	}
 	if (patch2 != NULL) {
-		sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r8);
+		sh4_movl_PCrel(patch2, buffer, sh4_r8);
 		sh4_emit32(buffer, (guint32)argalloc_size);
 	}
 

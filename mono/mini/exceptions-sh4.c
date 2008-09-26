@@ -397,15 +397,15 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 		sh4_nop(buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_dispPC(patch0, (guint32)buffer - (((guint32)patch0 + 4) & ~0x3), sh4_r0);
+	sh4_movl_PCrel(patch0, buffer, sh4_r0);
 	sh4_emit32(buffer, (guint32)throw_exception);
 
 	if (by_name != 0) {
-		sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r4);
+		sh4_movl_PCrel(patch1, buffer, sh4_r4);
 		sh4_emit32(buffer, (guint32)mono_defaults.corlib);
-		sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r5);
+		sh4_movl_PCrel(patch2, buffer, sh4_r5);
 		sh4_emit32(buffer, (guint32)"System");
-		sh4_movl_dispPC(patch3, (guint32)buffer - (((guint32)patch3 + 4) & ~0x3), sh4_r0);
+		sh4_movl_PCrel(patch3, buffer, sh4_r0);
 		sh4_emit32(buffer, (guint32)mono_exception_from_name);
 	}
 

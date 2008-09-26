@@ -69,11 +69,11 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 		sh4_nop(buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r0);
+	sh4_movl_PCrel(patch1, buffer, sh4_r0);
 	sh4_emit32(buffer, (guint32)methode2compile);
 
 	if (short_branch == 0) {
-		sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r0);
+		sh4_movl_PCrel(patch2, buffer, sh4_r0);
 		sh4_emit32(buffer, (guint32)trampoline);
 	}
 
@@ -337,10 +337,10 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 		sh4_nop(buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_dispPC(patch1, (guint32)buffer - (((guint32)patch1 + 4) & ~0x3), sh4_r8);
+	sh4_movl_PCrel(patch1, buffer, sh4_r8);
 	sh4_emit32(buffer, (guint32)mono_get_lmf_addr);
 
-	sh4_movl_dispPC(patch2, (guint32)buffer - (((guint32)patch2 + 4) & ~0x3), sh4_r8);
+	sh4_movl_PCrel(patch2, buffer, sh4_r8);
 	sh4_emit32(buffer, (guint32)mono_get_trampoline_func(trampoline_type));
 
 	/* Sanity checks. */

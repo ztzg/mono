@@ -110,4 +110,7 @@ typedef enum {
 	}								\
 	sh4_add_imm(buffer, (value) & 0x000000FF, (Rx));
 
+#define sh4_movl_PCrel(code, address, Rx)	\
+	sh4_movl_dispPC(code, (guint32)address - (((guint32)code + 4) & ~0x3), Rx)
+
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */
