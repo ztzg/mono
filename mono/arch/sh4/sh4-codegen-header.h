@@ -93,6 +93,6 @@ typedef enum {
 #define SH4_IS_UIMM64(value) ((value) > 0 && (value) < UINT64_MAX)
 
 #define sh4_movl_PCrel(code, address, Rx)	\
-	sh4_movl_dispPC(code, (guint32)address - (((guint32)code + 4) & ~0x3), Rx)
+	sh4_movl_dispPC((code), (guint32)(address) - (((guint32)(code) + 4) & ~0x3), Rx)
 
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */
