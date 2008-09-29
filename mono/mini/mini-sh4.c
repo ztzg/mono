@@ -790,8 +790,14 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 			/* R14 can be used to increment the stack size (that is, used
 			   to decrement R15) because it was saved previously and will
 			   be overwritten later. */
-			sh4_build_uint(buffer, sh4_r14, localloc_size);
+			NOT_IMPLEMENTED;
+#if 0
+			/* Patch slot for : sh4_r14 <-localloc _size */
+			patch = buffer;
+			sh4_ldtlb(buffer);
+
 			sh4_sub(buffer, sh4_r14, sh4_r15);
+#endif
 		}
 	}
 
