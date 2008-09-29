@@ -818,6 +818,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	 *	:              :
 	 */
 
+	compile_unit->code_len = buffer - compile_unit->native_code;
+
 	/* Sanity checks. */
 	g_assert(compile_unit->code_len < compile_unit->code_size);
 
