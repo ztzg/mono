@@ -718,21 +718,32 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 		SH4_DEBUG("arg[%d] is on stack ? %d", i, (int)(inst->opcode != OP_REGVAR));
 
 		switch (arg_info->type) {
-		case integer64:
-			NOT_IMPLEMENTED;
-			if (inst->opcode == OP_REGVAR)
-				sh4_mov(buffer, inst->dreg + 1, arg_info->reg + 1);
+
+		case integer32:
+			if (inst->opcode == OP_REGVAR) {
+				if (inst->dreg != arg_info->reg)
+					sh4_mov(buffer, inst->dreg, arg_info->reg);
+			}
 			else {
-				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
+				sh4_movl_decRx(buffer, inst->dreg, sh4_r15);
 				compile_unit->arch.argalloc_size += 4;
 			}
-			/* Fall through. */
-		case integer32:
-			if (inst->opcode == OP_REGVAR)
-				sh4_mov(buffer, inst->dreg, arg_info->reg);
+			break;
+
+		case integer64:
+			NOT_IMPLEMENTED;
+			if (inst->opcode == OP_REGVAR) {
+				if (inst->dreg != arg_info->reg) {
+					/* TODO - CV : check the order. */
+					sh4_mov(buffer, inst->dreg + 1, arg_info->reg + 1);
+					sh4_mov(buffer, inst->dreg, arg_info->reg);
+				}
+			}
 			else {
+				/* TODO - CV : check the order. */
 				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
-				compile_unit->arch.argalloc_size += 4;
+				sh4_movl_decRx(buffer, inst->dreg, sh4_r15);
+				compile_unit->arch.argalloc_size += 8;
 			}
 			break;
 
