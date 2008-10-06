@@ -12,6 +12,8 @@ LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
 
 prefix=/home/compwork/vincent/WIP/Mono-SH4/sysroot-sh4
 
+CC_FOR_BUILD=/sw/st/gnu_compil/gnu/linux-rh-ws-3/gcc/gcc-3.4.4/bin/gcc
+
 # These values are OK :
 mono_cv_uscore=no
 mono_cv_sizeof_sunpath=108
