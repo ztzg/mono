@@ -279,13 +279,14 @@ fi
 dnl may require a specific autoconf version
 dnl AC_PROG_CC_FOR_BUILD
 dnl CC_FOR_BUILD not automatically detected
-CC_FOR_BUILD=$CC
-CFLAGS_FOR_BUILD=$CFLAGS
-BUILD_EXEEXT=
 if test "x$cross_compiling" = "xyes"; then
+   if test "x$CC_FOR_BUILD" = "x"; then
 	CC_FOR_BUILD=cc
-	CFLAGS_FOR_BUILD=
-	BUILD_EXEEXT=""
+   fi
+else
+	CC_FOR_BUILD=$CC
+	CFLAGS_FOR_BUILD=$CFLAGS
+	BUILD_EXEEXT=
 fi
 AC_SUBST(CC_FOR_BUILD)
 AC_SUBST(CFLAGS_FOR_BUILD)
