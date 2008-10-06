@@ -1385,9 +1385,25 @@ void mono_arch_register_lowlevel_calls(void)
 
 const char *mono_arch_regname(int reg)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	switch (reg) {
+	case sh4_r0: return "sh4_r0";
+	case sh4_r1: return "sh4_r1";
+	case sh4_r2: return "sh4_r2";
+	case sh4_r3: return "sh4_r3";
+	case sh4_r4: return "sh4_r4";
+	case sh4_r5: return "sh4_r5";
+	case sh4_r6: return "sh4_r6";
+	case sh4_r7: return "sh4_r7";
+	case sh4_r8: return "sh4_r8";
+	case sh4_r9: return "sh4_r9";
+	case sh4_r10: return "sh4_r10";
+	case sh4_r11: return "sh4_r11";
+	case sh4_r12: return "sh4_r12";
+	case sh4_r13: return "sh4_r13";
+	case sh4_r14: return "sh4_r14";
+	case sh4_r15: return "sh4_r15";
+	}
+	return "unknown";
 }
 
 void mono_arch_setup_jit_tls_data(MonoJitTlsData *tls)
