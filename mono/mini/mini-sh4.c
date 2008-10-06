@@ -11,6 +11,7 @@
 
 #include "mini.h"
 #include "cpu-sh4.h"
+#include "cstpool-sh4.h"
 
 struct arg_info {
 	guint32 offset;
