@@ -1195,9 +1195,58 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
 	return 0;
 }
 
-void mono_arch_lowering_pass(MonoCompile *compile_unit, MonoBasicBlock *bb)
+/**
+ * Decompose some generic opcodes to architecture-specific ones.
+ *
+ * This opcode decomposition is really helpful because it gives to
+ * Mono a better estimation of used resources (registers and length).
+ *
+ * For instance, the opcode "icompare_imm" is not easily translatable
+ * from MonoInst to SH4 code because it only works with R0, moreover
+ * the global register allocator and the "call" handler have already
+ * done some register assignment. This lowering pass allows to do
+ * something like this :
+ *
+ *     if ins->sreg1 is not already assigned to a physical register and
+ *        ins->inst_imm is in the range of "cmpeq_imm_R0" then
+ *         replace OP_ICOMPARE_IMM with OP_SH4_ICOMPARE_IMM_R0
+ *     else
+ *         replace OP_ICOMPARE_IMM with OP_ICOMPARE
+ *
+ * Now, the machine description file should be adapted to specify R0
+ * as a "fixed" register for this new architecture-specific opcode :
+ *
+ *     sh4_icompare_imm: src1:0 len:2
+ */
+void mono_arch_lowering_pass(MonoCompile *compile_unit, MonoBasicBlock *basic_block)
 {
-	/* TODO - CV */
+	MonoInst *inst = NULL;
+
+#define register_not_assigned(reg) ((reg) < 0 || (reg) >= MONO_MAX_IREGS)
+
+	/* Setup the virtual-register allocator. */
+	if (basic_block->max_vreg > compile_unit->rs->next_vreg)
+		compile_unit->rs->next_vreg = basic_block->max_vreg;
+
+	MONO_BB_FOR_EACH_INS(basic_block, inst) {
+		switch (inst->opcode) {
+
+		case OP_ICOMPARE_IMM:
+			if (register_not_assigned(inst->sreg1) &&
+			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm))
+				inst->opcode = OP_SH4_ICOMPARE_IMM_R0;
+			else
+				mono_decompose_op_imm(compile_unit, inst);
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	/* Save the state of the virtual-register allocator. */
+	basic_block->max_vreg = compile_unit->rs->next_vreg;
+
 	return;
 }
 
@@ -1207,6 +1256,7 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 	guint8 *buffer = NULL;
 
 	SH4_DEBUG("args => %p, %p", compile_unit, basic_block);
+	SH4_DEBUG("method: %s", compile_unit->method->name);
 
 	/* A chunk of code memory was previously allocated (native_code)
 	   then partially used (code_len) into mono_arch_emit_prolog
@@ -1246,6 +1296,16 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 		code = buffer;
 
 		switch (inst->opcode) {
+
+		case OP_ICOMPARE_IMM:
+			g_assert_not_reached();
+			break;
+
+		case OP_SH4_ICOMPARE_IMM_R0:
+			g_assert(inst->sreg1 == sh4_r0);
+			sh4_cmpeq_imm_R0(buffer, inst->inst_imm);
+			break;
+
 		default:
 			g_warning("unknown opcode %s\n", mono_inst_name(inst->opcode));
 			g_assert_not_reached();
@@ -1254,7 +1314,8 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 		/* Sanity checks. */
 		length = buffer - code;
 		if (length > length_max) {
-			g_warning("max length of the opcode %s is at least %d, not %d", mono_inst_name(inst->opcode), length, length_max);
+			g_warning("max length of the opcode %s is at least %d, not %d",
+				  mono_inst_name(inst->opcode), length, length_max);
 			g_assert_not_reached();
 		}
 	}

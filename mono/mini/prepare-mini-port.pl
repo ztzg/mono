@@ -446,7 +446,7 @@ my %value = (
 	MONO_ARCH_CPU_SPEC           => ' sh4_desc',
 	MONO_ARCH_FPSTACK_SIZE       => ' 0',
 	MONO_ARCH_FRAME_ALIGNMENT    => ' 32',
-	MONO_ARCH_INST_FIXED_REG     => '(a) (-1)', # TODO - CV
+	MONO_ARCH_INST_FIXED_REG     => '(desc) ((desc == \'0\') ? sh4_r0 : -1)',
 	MONO_ARCH_INST_IS_REGPAIR    => '(a) FALSE',
 	MONO_ARCH_INST_REGPAIR_REG2  => '(a, b) (-1)',
 	MONO_ARCH_INST_SREG2_MASK    => '(a) (0)',

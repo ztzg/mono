@@ -47,6 +47,8 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
+sh4_icompare_imm_R0: src1:0 len:2
+
 icompare_imm:
 int_beq:
 store_membase_imm:
