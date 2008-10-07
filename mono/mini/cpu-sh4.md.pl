@@ -1,3 +1,16 @@
+#!/bin/env perl
+
+# This script extracts from the file 'mini-sh4.c' information to build the file
+# 'cpu-sh4.md'. The information should have the following format :
+#
+#     /* MD: <description> */
+#
+# where "<description>" is a suitable line for the machine description parser.
+
+use strict;
+use warnings;
+
+my $header = << 'EOF';
 # SH4 cpu description file
 #
 # This file is read by genmdesc to produce a table with all the relevant information
@@ -49,27 +62,13 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
-sh4_icompare_imm_R0: src1:0 len:2
-int_beq:
-store_membase_imm:
-iconst:
-loadu4_membase:
-voidcall:
-move:
-load_membase:
-voidcall_reg:
-br:
-start_handler:
-int_cgt_un:
-endfilter:
-store_membase_reg:
-compare_imm:
-beq:
-bne.un:
-label:
-icompare:
-storei4_membase_imm:
-call_reg:
-call:
-storei4_membase_reg:
-loadi4_membase:
+EOF
+
+open(my $desc, ">cpu-sh4.md") or die $!;
+open(my $core, "mini-sh4.c") or die $!;
+
+print $desc $header;
+
+foreach my $line (<$core>) {
+	print $desc "$1\n" if $line =~ /\/\* MD: (.*) \*\//;
+}

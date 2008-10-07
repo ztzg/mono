@@ -1313,11 +1313,38 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 			break;
 
 		case OP_SH4_ICOMPARE_IMM_R0:
+			/* MD: sh4_icompare_imm_R0: src1:0 len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_cmpeq_imm_R0(buffer, inst->inst_imm);
 			break;
 
 		default:
+			/* The following opcodes are not yet supported, however
+			   I need them to pass some trivial examples. */
+			/* MD: int_beq: */
+			/* MD: store_membase_imm: */
+			/* MD: iconst: */
+			/* MD: loadu4_membase: */
+			/* MD: voidcall: */
+			/* MD: move: */
+			/* MD: load_membase: */
+			/* MD: voidcall_reg: */
+			/* MD: br: */
+			/* MD: start_handler: */
+			/* MD: int_cgt_un: */
+			/* MD: endfilter: */
+			/* MD: store_membase_reg: */
+			/* MD: compare_imm: */
+			/* MD: beq: */
+			/* MD: bne.un: */
+			/* MD: label: */
+			/* MD: icompare: */
+			/* MD: storei4_membase_imm: */
+			/* MD: call_reg: */
+			/* MD: call: */
+			/* MD: storei4_membase_reg: */
+			/* MD: loadi4_membase: */
+
 			g_warning("unknown opcode %s\n", mono_inst_name(inst->opcode));
 			g_assert_not_reached();
 		}
