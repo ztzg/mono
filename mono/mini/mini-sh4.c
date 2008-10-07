@@ -721,17 +721,17 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 		case integer64:
 			NOT_IMPLEMENTED;
 			if (inst->opcode == OP_REGVAR)
-				sh4_mov(buffer, inst->dreg + 1, arg_info->reg + 1);
+				sh4_mov(&buffer, inst->dreg + 1, arg_info->reg + 1);
 			else {
-				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
+				sh4_movl_decRx(&buffer, inst->dreg + 1, sh4_r15);
 				compile_unit->arch.argalloc_size += 4;
 			}
 			/* Fall through. */
 		case integer32:
 			if (inst->opcode == OP_REGVAR)
-				sh4_mov(buffer, inst->dreg, arg_info->reg);
+				sh4_mov(&buffer, inst->dreg, arg_info->reg);
 			else {
-				sh4_movl_decRx(buffer, inst->dreg + 1, sh4_r15);
+				sh4_movl_decRx(&buffer, inst->dreg + 1, sh4_r15);
 				compile_unit->arch.argalloc_size += 4;
 			}
 			break;
@@ -763,13 +763,13 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	/* Save global registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
 		if (compile_unit->used_int_regs & (1 << i))
-			sh4_movl_decRx(buffer, (SH4IntRegister)i, sh4_r15);
+			sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_r15);
 
 	/* Save the previous frame pointer (sh4_r14). */
-	sh4_movl_decRx(buffer, sh4_r14, sh4_r15);
+	sh4_movl_decRx(&buffer, sh4_r14, sh4_r15);
 
 	/* Save the PR. */
-	sh4_stsl_PR_decRx(buffer, sh4_r15);
+	sh4_stsl_PR_decRx(&buffer, sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -785,7 +785,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	localloc_size = compile_unit->arch.localloc_size;
 	if (localloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(localloc_size))
-			sh4_add_imm(buffer, -localloc_size, sh4_r15);
+			sh4_add_imm(&buffer, -localloc_size, sh4_r15);
 		else {
 			/* R14 can be used to increment the stack size (that is, used
 			   to decrement R15) because it was saved previously and will
@@ -794,9 +794,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 #if 0
 			/* Patch slot for : sh4_r14 <-localloc _size */
 			patch = buffer;
-			sh4_ldtlb(buffer);
+			sh4_ldtlb(&buffer);
 
-			sh4_sub(buffer, sh4_r14, sh4_r15);
+			sh4_sub(&buffer, sh4_r14, sh4_r15);
 #endif
 		}
 	}
@@ -804,7 +804,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 	SH4_DEBUG("localloc_size = %d", localloc_size);
 
 	/* Set the frame pointer. */
-	sh4_mov(buffer, sh4_r15, sh4_r14);
+	sh4_mov(&buffer, sh4_r15, sh4_r14);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -859,7 +859,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	code = buffer = compile_unit->native_code + compile_unit->code_len;
 
 	/* Reset the stack pointer. */
-	sh4_mov(buffer, sh4_r14, sh4_r15);
+	sh4_mov(&buffer, sh4_r14, sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -877,7 +877,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	localloc_size = compile_unit->arch.localloc_size;
 	if (localloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(localloc_size))
-			sh4_add_imm(buffer, localloc_size, sh4_r15);
+			sh4_add_imm(&buffer, localloc_size, sh4_r15);
 		else {
 			/* R14 can be used to increment the stack size (that is, used
 			   to decrement R15) because it was saved previously and will
@@ -885,9 +885,9 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 
 			/* Patch slot for : sh4_r14 <- localloc_size */
 			patch1 = buffer;
-			sh4_ldtlb(buffer);
+			sh4_ldtlb(&buffer);
 
-			sh4_add(buffer, sh4_r14, sh4_r15);
+			sh4_add(&buffer, sh4_r14, sh4_r15);
 		}
 	}
 
@@ -904,15 +904,15 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	 */
 
 	/* Restore the PR. */
-	sh4_ldsl_incRx_PR(buffer, sh4_r15);
+	sh4_ldsl_incRx_PR(&buffer, sh4_r15);
 
 	/* Restore the previous frame pointer (sh4_r14). */
-	sh4_movl_incRy(buffer, sh4_r15, sh4_r14);
+	sh4_movl_incRy(&buffer, sh4_r15, sh4_r14);
 
 	/* Restore scratch registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
 		if (compile_unit->used_int_regs & (1 << i))
-			sh4_movl_incRy(buffer, sh4_r15, (SH4IntRegister)i);
+			sh4_movl_incRy(&buffer, sh4_r15, (SH4IntRegister)i);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -926,7 +926,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	argalloc_size = compile_unit->arch.argalloc_size;
 	if (argalloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(argalloc_size))
-			sh4_add_imm(buffer, argalloc_size, sh4_r15);
+			sh4_add_imm(&buffer, argalloc_size, sh4_r15);
 		else {
 			NOT_IMPLEMENTED;
 #if 0
@@ -935,31 +935,31 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 
 			/* Patch slot for : sh4_rXX <- argalloc_size */
 			patch2 = buffer;
-			sh4_ldtlb(buffer);
+			sh4_ldtlb(&buffer);
 
-			sh4_add(buffer, sh4_rXX, sh4_r15);
+			sh4_add(&buffer, sh4_rXX, sh4_r15);
 #endif
 		}
 	}
 
 	/* At this point, the stack is fully restored (as caller's point of view). */
 
-	sh4_rts(buffer);
-	sh4_nop(buffer);
+	sh4_rts(&buffer);
+	sh4_nop(&buffer);
 
 	/* Align the constant pool. */
 	if (patch1 != NULL || patch2 != NULL)
 		while (((guint32)buffer % 4) != 0)
-			sh4_nop(buffer);
+			sh4_nop(&buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
 	if (patch1 != NULL) {
-		sh4_movl_PCrel(patch1, buffer, sh4_r8);
-		sh4_emit32(buffer, (guint32)localloc_size);
+		sh4_movl_PCrel(&patch1, buffer, sh4_r8);
+		sh4_emit32(&buffer, (guint32)localloc_size);
 	}
 	if (patch2 != NULL) {
-		sh4_movl_PCrel(patch2, buffer, sh4_r8);
-		sh4_emit32(buffer, (guint32)argalloc_size);
+		sh4_movl_PCrel(&patch2, buffer, sh4_r8);
+		sh4_emit32(&buffer, (guint32)argalloc_size);
 	}
 
 	compile_unit->code_len = buffer - compile_unit->native_code;

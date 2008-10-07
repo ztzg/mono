@@ -232,7 +232,7 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 	int length = 0;
 	int value = 0;
 
-	printf("	sh4_emit16(*code, ");
+	printf("	sh4_emit16(code, ");
 
 	for (i = 0; i < 9; i++) {
 		switch (nibbles[i]) {
