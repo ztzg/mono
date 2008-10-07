@@ -59,15 +59,18 @@ typedef enum {
 	sh4_fv12 = sh4_fr12
 } SH4FloatRegister;
 
-#define sh4_emit16(address, value) do {					   \
-	*((guint16 *) (void *)(address)) = (guint16)value;		   \
-	(address) = (typeof(address))(((guint16 *)(void *)(address)) + 1); \
-} while(0)
+static inline void sh4_emit16(guint8 **address, unsigned int value) 
+{
+	*((guint16 *)(void *)(* address)) = (guint16) value;
+	(*address)+=2;
+}
 
-#define sh4_emit32(address, value) do {					   \
-	*((guint32 *) (void *)(address)) = (guint32)value;		   \
-	(address) = (typeof(address))(((guint32 *)(void *)(address)) + 1); \
-} while(0)
+
+static inline void sh4_emit32(guint8 **address, unsigned int value) 
+{
+	*((guint32 *)(void *)(* address)) = (guint32) value;
+	(*address)+=4;
+}
 
 #ifndef INT24_MIN
 #  define INT24_MIN (-8388608)
@@ -93,6 +96,6 @@ typedef enum {
 #define SH4_IS_UIMM64(value) ((value) > 0 && (value) < UINT64_MAX)
 
 #define sh4_movl_PCrel(code, address, Rx)	\
-	sh4_movl_dispPC((code), (guint32)(address) - (((guint32)(code) + 4) & ~0x3), Rx)
+	sh4_movl_dispPC((code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
 
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */

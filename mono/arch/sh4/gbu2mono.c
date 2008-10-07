@@ -170,17 +170,17 @@ static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int d
 			break;
 
 		case REG_N:
-			printf("	g_assert((int)Rx >= 0);			\\\n");
-			printf("	g_assert((int)Rx <= 15);		\\\n");
+			printf("	g_assert((int)Rx >= 0);\n");
+			printf("	g_assert((int)Rx <= 15);\n");
 			if (double_arg)
-				printf("	g_assert(!(Rx & 0x1));		\\\n");
+				printf("	g_assert(!(Rx & 0x1));\n");
 			break;
 
 		case REG_M:
-			printf("	g_assert((int)Ry >= 0);			\\\n");
-			printf("	g_assert((int)Ry <= 15);		\\\n");
+			printf("	g_assert((int)Ry >= 0);\n");
+			printf("	g_assert((int)Ry <= 15);\n");
 			if (double_arg)
-				printf("	g_assert(!(Ry & 0x1));		\\\n");
+				printf("	g_assert(!(Ry & 0x1));\n");
 			break;
 
 		case REG_B:
@@ -200,21 +200,21 @@ static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int d
  		case PCRELIMM_8BY4:
  		case BRANCH_8:
  		case BRANCH_12:
-			printf("	g_assert(SH4_CHECK_RANGE_%s(imm));	\\\n", name);
+			printf("	g_assert(SH4_CHECK_RANGE_%s(imm));\n", name);
 			if (scaling != 0)
-				printf("	g_assert(SH4_CHECK_ALIGN_%s(imm));	\\\n", name);
+				printf("	g_assert(SH4_CHECK_ALIGN_%s(imm));\n", name);
 			break;
 
 		case REG_N_D:
-			printf("	g_assert(!(Rx & 0x1));		\\\n");
+			printf("	g_assert(!(Rx & 0x1));\n");
 			break;
 
 		case REG_NM:
-			printf("	g_assert(!((Rx & 0x3) || (Ry & 0x3)));		\\\n");
+			printf("	g_assert(!((Rx & 0x3) || (Ry & 0x3)));\n");
 			break;
 
 		case REG_N_B01:
-			printf("	g_assert(!(Rx & 0x3));		\\\n");
+			printf("	g_assert(!(Rx & 0x3));\n");
 			break;
 
 		default:
@@ -527,7 +527,7 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 {
 	int i = 0;
 
-	printf("(code");
+	printf("(guint8 **code");
 
 	for (i = 0; i < 4; i++) {
 		if (args[i] == A_END)
@@ -535,63 +535,69 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 
 		switch (args[i]) {
 		case A_DISP_REG_M:
-			printf(", imm");
-			printf(", Ry");
+			printf(",int imm");
+			printf(",SH4IntRegister Ry");
 			break;
 
 		case A_DISP_REG_N:
-			printf(", imm");
-			printf(", Rx");
+			printf(",int imm");
+			printf(",SH4IntRegister Rx");
 			break;
 
 		case A_DISP_GBR:
 		case A_DISP_PC:
 		case A_BDISP8:
-			printf(", imm");
+			printf(",int imm");
 			break;
 
 		case A_BDISP12:
-			printf(", imm");
+			printf(",int imm");
 			break;
 
 		case A_DEC_N:
 		case A_REG_N:
 		case A_INC_N:
 		case A_IND_N:
+			printf(",SH4IntRegister Rx");
+			break;
+
 		case F_REG_N:
 		case DX_REG_N:
 		case V_REG_N:
-			printf(", Rx");
+			printf(",SH4FloatRegister Rx");
 			break;
-
+			
 		case D_REG_N:
 			*double_arg = 1;
-			printf(", Rx");
+			printf(",SH4FloatRegister Rx");
 			break;
 
 		case A_INC_M:
 		case A_IND_M:
 		case A_REG_M:
+			printf(",SH4IntRegister Ry");
+			break;
+
 		case F_REG_M:
 		case D_REG_M:
 		case DX_REG_M:
 		case V_REG_M:
-			printf(", Ry");
+			printf(",SH4FloatRegister Ry");
 			break;
-
+			
 		case A_GBR:
 			break;
 
 		case A_IMM:
-			printf(", imm");
+			printf(",int imm");
 			break;
 
 		case A_IND_R0_REG_M:
-			printf(", Ry");
+			printf(",SH4IntRegister  Ry");
 			break;
 
 		case A_IND_R0_REG_N:
-			printf(", Rx");
+			printf(",SH4IntRegister  Rx");
 			break;
 
 		case A_MACH:
@@ -608,7 +614,7 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 			break;
 
 		case A_REG_B:
-			printf(", imm");
+			printf(",int imm");
 			break;
 
 		case FPUL_N:
@@ -663,6 +669,10 @@ int main(void)
 		     sh_table[i].arg[1] == A_REG_N))
 			force_sign = 1;
 
+		if (strcmp(sh_table[i].name, "bt/s") == 0 ||
+			strcmp(sh_table[i].name, "bf/s") == 0)
+			continue;
+
 		bzero(name, sizeof(name));
 		index = 0;
 
@@ -677,12 +687,12 @@ int main(void)
 
 		scaling = printf_checks(sh_table[i].nibbles, force_sign, name);
 
-		printf("#define sh4_%s", name);
+		printf("static inline void sh4_%s", name);
 		printf_args(sh_table[i].arg, &double_args);
-		printf("do {		\\\n");
+		printf("\n{\n");
 		printf_assert(sh_table[i].nibbles, force_sign, double_args, name, scaling);
 		printf_nibbles(sh_table[i].nibbles, scaling);
-		printf("} while(0)\n");
+		printf("}\n");
 		printf("\n");
 	}
 
