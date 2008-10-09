@@ -98,4 +98,6 @@ static inline void sh4_emit32(guint8 **address, unsigned int value)
 #define sh4_movl_PCrel(code, address, Rx)	\
 	sh4_movl_dispPC((code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
 
+#define sh4_die(code) sh4_ldtlb(code)
+
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */

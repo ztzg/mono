@@ -43,7 +43,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 
 	/* Patch slot for : sh4_r0 <- methode2compile */
 	patch1 = buffer;
-	sh4_ldtlb(&buffer);
+	sh4_die(&buffer);
 
 	/* Push the address of the method to compile onto the stack.
 	   The trampoline will automatically pop this "hidden" parameter.
@@ -58,7 +58,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 	} else {
 		/* Patch slot for : sh4_r0 <- trampoline */
 		patch2 = buffer;
-		sh4_ldtlb(&buffer);
+		sh4_die(&buffer);
 
 		sh4_jmp_indRx(&buffer, sh4_r0);
 	}
@@ -233,7 +233,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	/* Patch slot for : sh4_r8 <- mono_get_lmf_addr */
 	patch1 = buffer;
-	sh4_ldtlb(&buffer);
+	sh4_die(&buffer);
 
 	/* pseudo-code: new_lmf.lmf_addr = mono_get_lmf_addr(); */
 	sh4_jsr_indRx(&buffer, sh4_r8);
@@ -262,7 +262,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	/* Patch slot for : sh4_r8 <- trampoline */
 	patch2 = buffer;
-	sh4_ldtlb(&buffer);
+	sh4_die(&buffer);
 
 	/* pseudo-code: compiled_methode = trampoline(new_lmf.registers, new_lmf.pc, new_lmf.method, NULL); */
 	sh4_jsr_indRx(&buffer, sh4_r8);

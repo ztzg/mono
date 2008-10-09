@@ -803,9 +803,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *compile_unit)
 			   be overwritten later. */
 			NOT_IMPLEMENTED;
 #if 0
-			/* Patch slot for : sh4_r14 <-localloc _size */
+			/* Patch slot for : sh4_r14 <- localloc_size */
 			patch = buffer;
-			sh4_ldtlb(&buffer);
+			sh4_die(&buffer);
 
 			sh4_sub(&buffer, sh4_r14, sh4_r15);
 #endif
@@ -896,7 +896,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 
 			/* Patch slot for : sh4_r14 <- localloc_size */
 			patch1 = buffer;
-			sh4_ldtlb(&buffer);
+			sh4_die(&buffer);
 
 			sh4_add(&buffer, sh4_r14, sh4_r15);
 		}
@@ -946,7 +946,7 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 
 			/* Patch slot for : sh4_rXX <- argalloc_size */
 			patch2 = buffer;
-			sh4_ldtlb(&buffer);
+			sh4_die(&buffer);
 
 			sh4_add(&buffer, sh4_rXX, sh4_r15);
 #endif
