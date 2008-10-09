@@ -95,9 +95,9 @@ static inline void sh4_emit32(guint8 **address, unsigned int value)
 #define SH4_IS_UIMM32(value) ((value) > 0 && (value) < UINT32_MAX)
 #define SH4_IS_UIMM64(value) ((value) > 0 && (value) < UINT64_MAX)
 
-#define sh4_movl_PCrel(code, address, Rx)	\
-	sh4_movl_dispPC((code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
+#define sh4_movl_PCrel(cfg, code, address, Rx)	\
+	sh4_movl_dispPC((cfg), (code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
 
-#define sh4_die(code) sh4_ldtlb(code)
+#define sh4_die(cfg, code) sh4_ldtlb(cfg, code)
 
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */

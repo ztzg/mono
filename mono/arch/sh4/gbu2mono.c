@@ -527,7 +527,7 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 {
 	int i = 0;
 
-	printf("(guint8 **code");
+	printf("(void *cfg, guint8 **code");
 
 	for (i = 0; i < 4; i++) {
 		if (args[i] == A_END)
@@ -641,12 +641,17 @@ int main(void)
 	int j = 0;
 	char name[1024];
 
-	printf("/* Copyright (C)  2008 STMicroelectronics */");
+	printf("/**\n"
+	       " * Copyright (C) 2008 STMicroelectronics.\n"
+	       " * This file has been generated automatically, do not modify.\n"
+	       " */\n");
 	printf("\n");
 	printf("#ifndef __MONO_SH4_CODEGEN_H__\n");
 	printf("#define __MONO_SH4_CODEGEN_H__\n");
 	printf("\n");
 	printf("#include \"sh4-codegen-header.h\"\n");
+	printf("\n");
+	printf("extern void sh4_cstpool_check(void *cfg, guint8 **code);\n");
 	printf("\n");
 
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
@@ -690,6 +695,8 @@ int main(void)
 		printf("static inline void sh4_%s", name);
 		printf_args(sh_table[i].arg, &double_args);
 		printf("\n{\n");
+		printf("	if (cfg != NULL)\n");
+		printf("		sh4_cstpool_check(cfg, code);\n");
 		printf_assert(sh_table[i].nibbles, force_sign, double_args, name, scaling);
 		printf_nibbles(sh_table[i].nibbles, scaling);
 		printf("}\n");
