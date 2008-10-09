@@ -50,6 +50,7 @@
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
 sh4_icompare_imm_R0: src1:0 len:2
+br: clob:0 len:12
 int_beq:
 store_membase_imm:
 iconst:
@@ -58,7 +59,6 @@ voidcall:
 move:
 load_membase:
 voidcall_reg:
-br:
 start_handler:
 int_cgt_un:
 endfilter:

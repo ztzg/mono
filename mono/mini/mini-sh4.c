@@ -1318,6 +1318,64 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 			sh4_cmpeq_imm_R0(&buffer, inst->inst_imm);
 			break;
 
+		case OP_BR: {
+			/* MD: br: clob:0 len:12 */
+			MonoJumpInfoType type;
+			gpointer target = NULL;
+			int displacement = 0;
+			guint8 *patch = NULL;
+
+			if (inst->flags & MONO_INST_BRLABEL) {
+				type = MONO_PATCH_INFO_LABEL;
+				target = inst->inst_i0;
+				offset = inst->inst_i0->inst_c0;
+			}
+			else {
+				type = MONO_PATCH_INFO_BB;
+				target = inst->inst_target_bb;
+				offset = inst->inst_target_bb->native_offset;
+			}
+
+			displacement = (compile_unit->native_code + (int)target) - buffer;
+
+			/* Does 'target' could be known during the lowering
+			   pass ? If so, we can do this optimization with a
+			   SH4 specialized opcode. */
+			if (offset != 0 && SH4_CHECK_RANGE_bra(displacement)) {
+				sh4_bra(&buffer, displacement);
+				sh4_nop(&buffer);
+				break;
+			}
+
+/* cstpool-sh4 ready ;) */
+#ifdef CSTPOOL_SH4_H
+			sh4_movl_PCrel(cfg, &buffer, sh4_r0, target, type);
+
+			sh4_jmp_indRx(cfg, &buffer, sh4_r0);
+			sh4_nop(cfg, &buffer);
+#else
+			/* Patch slot for : sh4_r0 <- target */
+			patch = buffer;
+			sh4_die(&buffer);
+
+			sh4_jmp_indRx(&buffer, sh4_r0);
+			sh4_nop(&buffer);
+
+			/* Align the constant pool. */
+			while (((guint32)buffer % 4) != 0)
+				sh4_nop(&buffer);
+
+			/* Patch the "sh4_r0 <- target" instruction. */
+			sh4_movl_PCrel(&patch, buffer, sh4_r0);
+
+			/* Build a "fake" constant pool which will be
+			   patched later by mono_arch_patch_code(). */
+			mono_add_patch_info(compile_unit, buffer - compile_unit->native_code, type, target);
+			sh4_emit32(&buffer, 0);
+#endif
+			break;
+		}
+
 		default:
 			/* The following opcodes are not yet supported, however
 			   I need them to pass some trivial examples. */
@@ -1329,7 +1387,6 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 			/* MD: move: */
 			/* MD: load_membase: */
 			/* MD: voidcall_reg: */
-			/* MD: br: */
 			/* MD: start_handler: */
 			/* MD: int_cgt_un: */
 			/* MD: endfilter: */
