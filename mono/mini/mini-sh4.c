@@ -1398,11 +1398,22 @@ void mono_arch_peephole_pass_2(MonoCompile *compile_unit, MonoBasicBlock *bb)
 	return;
 }
 
+/**
+ * Print platform-specific opcode details.
+ */
 gboolean mono_arch_print_tree(MonoInst *tree, int arity)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return 0;
+	gboolean done = 0;
+
+	switch (tree->opcode) {
+		case OP_SH4_ICOMPARE_IMM_R0:
+			printf("[%s,0x%x]", mono_arch_regname(sh4_r0), tree->inst_imm);
+			done = 1;
+		default:
+			done = 0;
+	}
+
+	return done;
 }
 
 /**
