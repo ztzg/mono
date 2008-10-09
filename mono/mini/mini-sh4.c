@@ -1368,7 +1368,19 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 	SH4_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
 
 	for (; patch_info != NULL; patch_info = patch_info->next){
-		NOT_IMPLEMENTED;
+		guint8 *patch = NULL;
+		guint8 *target = NULL;
+
+		if (patch_info->type != MONO_PATCH_INFO_LABEL &&
+		    patch_info->type != MONO_PATCH_INFO_BB)
+			NOT_IMPLEMENTED;
+
+		patch = patch_info->ip.i + code;
+		target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
+
+		SH4_DEBUG("*0x%x = 0x%x", (guint32)patch, (guint32)target);
+
+		sh4_emit32(&patch, (guint32)target);
 	}
 
 	return;
