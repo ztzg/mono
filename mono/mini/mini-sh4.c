@@ -920,8 +920,8 @@ void mono_arch_emit_epilog(MonoCompile *compile_unit)
 	/* Restore the previous frame pointer (sh4_r14). */
 	sh4_movl_incRy(&buffer, sh4_r15, sh4_r14);
 
-	/* Restore scratch registers (sh4_r8 -> sh4_r13). */
-	for (i = sh4_r8; i <= sh4_r13; i++)
+	/* Restore global registers (sh4_r13 -> sh4_r8). */
+	for (i = sh4_r13; i >= sh4_r8; i--)
 		if (compile_unit->used_int_regs & (1 << i))
 			sh4_movl_incRy(&buffer, sh4_r15, (SH4IntRegister)i);
 
