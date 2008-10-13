@@ -1264,7 +1264,10 @@ void mono_arch_lowering_pass(MonoCompile *compile_unit, MonoBasicBlock *basic_bl
 void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *basic_block)
 {
 	MonoInst *inst = NULL;
+	MonoCallInst *call;
 	guint8 *buffer = NULL;
+
+	MonoCompile *cfg = compile_unit;  /* DFE - To REMOVE when parameter renamed */
 
 	SH4_DEBUG("args => %p, %p", compile_unit, basic_block);
 	SH4_DEBUG("method: %s", compile_unit->method->name);
@@ -1306,18 +1309,126 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 		/* Save the start address to make sanity checks later. */
 		code = buffer;
 
-		switch (inst->opcode) {
+		g_print("SH4: Emiting [%s] opcode\n",
+			mono_inst_name(inst->opcode));
 
+		switch (inst->opcode) {
 		case OP_ICOMPARE_IMM:
 			g_assert_not_reached();
 			break;
 
 		case OP_SH4_ICOMPARE_IMM_R0:
+			g_print("SH4_CHECK: [sh4_icompare_immR0] const=%0lX\n", inst->inst_imm);
 			/* MD: sh4_icompare_imm_R0: src1:0 len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_cmpeq_imm_R0(&buffer, inst->inst_imm);
 			break;
+		case OP_ICOMPARE:
+			/* MD: icompare: src1:i src2:i len:2 */
+			g_print("SH4_CHECK: [sh4_icompare] sreg1=%d, sreg2=%d, dreg= %d\n", inst->sreg1, inst->sreg2, inst->dreg);
+			sh4_cmpeq(&buffer, inst->sreg1, inst->sreg2);
+			break;
+		case OP_ICONST:
+			/* MD: iconst: dest:i len:12 */
+			g_print("SH4_CHECK: [iconst] dreg=%d, const=%0lX\n", inst->dreg, inst->inst_imm);
 
+			if (SH4_CHECK_RANGE_mov_imm(inst->inst_imm)) {
+				sh4_mov_imm(&buffer, inst->inst_imm, inst->dreg);
+			} else {
+				guint8 *patch1	= NULL;
+				guint8 *patch2	= NULL;
+				guint8 *dest	= NULL;
+
+				patch1 = buffer;
+				sh4_movl_dispPC(&buffer, 0, inst->dreg); /* 0 to be patched */
+				patch2 = buffer;
+				sh4_bra(&buffer, 0); /* 0 to be patched with @ after cst-pool */
+				sh4_nop(&buffer); /* delay slot */
+				/* Align the constant pool. */
+				while (((guint32)buffer % 4) != 0) {
+					sh4_nop(&buffer);
+				}
+				/* Constant Pool is here... */
+				dest = buffer;
+				sh4_emit32(&buffer, inst->inst_imm);
+
+				/* patch instruction at patch1 */
+				sh4_movl_PCrel(&patch1, dest, inst->dreg);
+				/* patch instruction at patch2 */
+				sh4_bra(&patch2, (buffer - patch2) - 4);  /* DFE - TO BE UPDATED!!! */
+			}
+			break;
+		case OP_FCALL:
+			/* MD: */
+		case OP_LCALL:
+			/* MD: */
+		case OP_VCALL:
+			/* MD: */
+		case OP_VOIDCALL:
+			/* MD: voidcall: clob:c len:16 */
+		case OP_CALL: {
+			/* MD: call: clob:c len:16 */
+			guint8 *patch1	= NULL;
+			guint8 *patch2	= NULL;
+			guint8 *dest	= NULL;
+
+			g_print("SH4_CHECK: [fcall/lcall/vcall/voidcall/call] Target: [");
+			call = (MonoCallInst*)inst;
+
+			patch1 = buffer;
+			/* clobber R0 */
+			sh4_movl_dispPC(&buffer, 0, sh4_r0); /* 0 to be patched */
+			patch2 = buffer;
+			sh4_bra(&buffer, 0); /* 0 to be patched with @ after cst-pool */
+			sh4_nop(&buffer); /* delay slot */
+			/* Align the constant pool. */
+			while (((guint32)buffer % 4) != 0) {
+				sh4_nop(&buffer);
+			}
+			/* Constant Pool is here... */
+			dest = buffer;
+			sh4_emit32(&buffer, 0); /* 0 to be patched */
+
+			/* patch instruction at patch2 */
+			sh4_bra(&patch2, (buffer - patch2) - 4); /* DFE - TO BE UPDATED!!! */
+
+			sh4_jsr_indRx(&buffer, sh4_r0);
+			sh4_nop(&buffer); /* delay slot */
+
+			/* patch instruction at patch1 */
+			sh4_movl_PCrel(&patch1, dest, sh4_r0);
+
+			/* patch cst-pool with call destination */
+			if (inst->flags & MONO_INST_HAS_METHOD) {
+				g_print("MONO_PATCH_INFO_METHOD] %p\n", call->method);
+				mono_add_patch_info (cfg, dest - compile_unit->native_code, MONO_PATCH_INFO_METHOD, call->method);
+			} else {
+				g_print("MONO_PATCH_INFO_ABS] %p\n", call->fptr);
+				mono_add_patch_info (cfg, dest - compile_unit->native_code, MONO_PATCH_INFO_ABS, call->fptr);
+			}
+			break;
+		}
+		case OP_MOVE:
+			/* MD: move: dest:i src1:i len:2 */
+			g_print("SH4_CHECK: [move] sreg=%d, dreg=%d\n", inst->sreg1, inst->dreg);
+			sh4_mov(&buffer, inst->sreg1, inst->dreg);
+			break;
+		case OP_FCALL_REG:
+			/* MD: */
+		case OP_LCALL_REG:
+			/* MD: */
+		case OP_VCALL_REG:
+			/* MD: */
+		case OP_VOIDCALL_REG:
+			/* MD: voidcall_reg: src1:i clob:c len:4 */
+		case OP_CALL_REG: {
+			/* MD: call_reg: src1:i clob:c len:4 */
+			g_print("SH4_CHECK: [fcall_reg/lcall_reg/vcall_reg/voidcall_reg/call_reg]: TargetReg: %d\n", inst->sreg1);
+			call = (MonoCallInst*)inst;
+			sh4_jsr_indRx(&buffer, inst->sreg1);
+			sh4_nop(&buffer); /* delay slot */
+			break;
+		}
 		case OP_BR: {
 			/* MD: br: clob:0 len:12 */
 			MonoJumpInfoType type;
@@ -1342,7 +1453,7 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 			   pass ? If so, we can do this optimization with a
 			   SH4 specialized opcode. */
 			if (offset != 0 && SH4_CHECK_RANGE_bra(displacement)) {
-				sh4_bra(&buffer, displacement);
+				sh4_bra(&buffer, displacement - 4);  /* DFE - TO BE UPDATED!!! */
 				sh4_nop(&buffer);
 				break;
 			}
@@ -1381,35 +1492,29 @@ void mono_arch_output_basic_block(MonoCompile *compile_unit, MonoBasicBlock *bas
 			   I need them to pass some trivial examples. */
 			/* MD: int_beq: */
 			/* MD: store_membase_imm: */
-			/* MD: iconst: */
 			/* MD: loadu4_membase: */
-			/* MD: voidcall: */
-			/* MD: move: */
 			/* MD: load_membase: */
-			/* MD: voidcall_reg: */
 			/* MD: start_handler: */
 			/* MD: int_cgt_un: */
 			/* MD: endfilter: */
 			/* MD: store_membase_reg: */
-			/* MD: compare_imm: */
 			/* MD: beq: */
 			/* MD: bne.un: */
 			/* MD: label: */
-			/* MD: icompare: */
+			/* MD: compare_imm: */
 			/* MD: storei4_membase_imm: */
-			/* MD: call_reg: */
-			/* MD: call: */
 			/* MD: storei4_membase_reg: */
 			/* MD: loadi4_membase: */
 
 			g_warning("unknown opcode %s\n", mono_inst_name(inst->opcode));
 			g_assert_not_reached();
+
 		}
 
 		/* Sanity checks. */
 		length = buffer - code;
 		if (length > length_max) {
-			g_warning("max length of the opcode %s is at least %d, not %d",
+			g_warning("max length of the opcode %s is at least %d, not %d\n",
 				  mono_inst_name(inst->opcode), length, length_max);
 			g_assert_not_reached();
 		}
