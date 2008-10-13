@@ -133,10 +133,10 @@ static int printf_checks(const sh_nibble_type nibbles[9], int force_sign, char *
 		min *= factor;
 		max *= factor;
 
-		printf("#define SH4_CHECK_RANGE_%s(imm) ((int)(imm) >= %d && (int)(imm) <= %d)\n", name, min, max);
+		printf("#define SH4_CHECK_RANGE_%s(imm) ((imm) >= %d && (imm) <= %d)\n", name, min, max);
 
 		if (factor != 1)
-			printf("#define SH4_CHECK_ALIGN_%s(imm) (((int)(imm) & 0x%x) == 0)\n", name, factor - 1);
+			printf("#define SH4_CHECK_ALIGN_%s(imm) (((imm) & 0x%x) == 0)\n", name, factor - 1);
 
 		/* Only one immediate value per instruction is supported. */
 		break;
@@ -170,15 +170,15 @@ static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int d
 			break;
 
 		case REG_N:
-			printf("	g_assert((int)Rx >= 0);\n");
-			printf("	g_assert((int)Rx <= 15);\n");
+			printf("	g_assert(Rx >= 0);\n");
+			printf("	g_assert(Rx <= 15);\n");
 			if (double_arg)
 				printf("	g_assert(!(Rx & 0x1));\n");
 			break;
 
 		case REG_M:
-			printf("	g_assert((int)Ry >= 0);\n");
-			printf("	g_assert((int)Ry <= 15);\n");
+			printf("	g_assert(Ry >= 0);\n");
+			printf("	g_assert(Ry <= 15);\n");
 			if (double_arg)
 				printf("	g_assert(!(Ry & 0x1));\n");
 			break;
@@ -258,87 +258,87 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 			break;
 
 		case REG_N:
-			printf("(((Rx) & 0xF)  << %d)", 12 - length);
+			printf("((Rx & 0xF) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case REG_M:
-			printf("(((Ry) & 0xF) << %d)", 12 - length);
+			printf("((Ry & 0xF) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case REG_B:
 			assert(scaling == 0);
-			printf("(((imm) & 0x7) << %d)", 12 - length);
+			printf("((imm & 0x7) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_4:
 		case IMM1_4:
 			assert(scaling == 0);
-			printf("(((imm) & 0xF) << %d)", 12 - length);
+			printf("((imm & 0xF) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_4BY2:
 		case IMM1_4BY2:
-			printf("((((imm) & 0x1E) >> %d) << %d)", scaling, 12 - length);
+			printf("(((imm & 0x1E) >> %d) << %d)", scaling, 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_4BY4:
 		case IMM1_4BY4:
-			printf("((((imm) & 0x3C) >> %d) << %d)", scaling, 12 - length);
+			printf("(((imm & 0x3C) >> %d) << %d)", scaling, 12 - length);
 			length += 4;
 			break;
 
 		case IMM0_8:
 		case IMM1_8:
 			assert(scaling == 0);
-			printf("(((imm) & 0xFF) << %d)", 8 - length);
+			printf("((imm & 0xFF) << %d)", 8 - length);
 			length += 8;
 			break;
 
 		case BRANCH_8:
 		case PCRELIMM_8BY2:
-			printf("((((imm) & 0x1FE) >> %d) << %d)", scaling, 8 - length);
+			printf("(((imm & 0x1FE) >> %d) << %d)", scaling, 8 - length);
 			length += 8;
 			break;
 
 		case IMM0_8BY2:
 		case IMM1_8BY2:
-			printf("((((imm) & 0x1FE) >> %d) << %d)", scaling, 8 - length);
+			printf("(((imm & 0x1FE) >> %d) << %d)", scaling, 8 - length);
 			length += 8;
 			break;
 
 		case PCRELIMM_8BY4:
-			printf("((((imm) & 0x3FC) >> %d) << %d)", scaling, 8 - length);
+			printf("(((imm & 0x3FC) >> %d) << %d)", scaling, 8 - length);
 			length += 8;
 			break;
 
 		case IMM0_8BY4:
 		case IMM1_8BY4:
-			printf("((((imm) & 0x3FC) >> %d) << %d)", scaling, 8 - length);
+			printf("(((imm & 0x3FC) >> %d) << %d)", scaling, 8 - length);
 			length += 8;
 			break;
 
 		case BRANCH_12:
-			printf("((((imm) & 0x1FFE) >> %d) << %d)", scaling, 4 - length);
+			printf("(((imm & 0x1FFE) >> %d) << %d)", scaling, 4 - length);
 			length += 12;
 			break;
 
 		case REG_N_D:
-			printf("((((Rx) & 0xF) << 1)  << %d)", 12 - length);
+			printf("(((Rx & 0xF) << 1) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case REG_N_B01:
-			printf("(((((Rx) & 0xF) << 2) | 0x1)  << %d)", 12 - length);
+			printf("((((Rx & 0xF) << 2) | 0x1) << %d)", 12 - length);
 			length += 4;
 			break;
 
 		case REG_NM:
-			printf("(((((Rx) & 0xF) << 2) | (((Ry) & 0xF) >> 2))  << %d)", 12 - length);
+			printf("((((Rx & 0xF) << 2) | ((Ry & 0xF) >> 2)) << %d)", 12 - length);
 			length += 4;
 			break;
 
@@ -535,69 +535,69 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 
 		switch (args[i]) {
 		case A_DISP_REG_M:
-			printf(",int imm");
-			printf(",SH4IntRegister Ry");
+			printf(", int imm");
+			printf(", SH4IntRegister Ry");
 			break;
 
 		case A_DISP_REG_N:
-			printf(",int imm");
-			printf(",SH4IntRegister Rx");
+			printf(", int imm");
+			printf(", SH4IntRegister Rx");
 			break;
 
 		case A_DISP_GBR:
 		case A_DISP_PC:
 		case A_BDISP8:
-			printf(",int imm");
+			printf(", int imm");
 			break;
 
 		case A_BDISP12:
-			printf(",int imm");
+			printf(", int imm");
 			break;
 
 		case A_DEC_N:
 		case A_REG_N:
 		case A_INC_N:
 		case A_IND_N:
-			printf(",SH4IntRegister Rx");
+			printf(", SH4IntRegister Rx");
 			break;
 
 		case F_REG_N:
 		case DX_REG_N:
 		case V_REG_N:
-			printf(",SH4FloatRegister Rx");
+			printf(", SH4FloatRegister Rx");
 			break;
-			
+
 		case D_REG_N:
 			*double_arg = 1;
-			printf(",SH4FloatRegister Rx");
+			printf(", SH4FloatRegister Rx");
 			break;
 
 		case A_INC_M:
 		case A_IND_M:
 		case A_REG_M:
-			printf(",SH4IntRegister Ry");
+			printf(", SH4IntRegister Ry");
 			break;
 
 		case F_REG_M:
 		case D_REG_M:
 		case DX_REG_M:
 		case V_REG_M:
-			printf(",SH4FloatRegister Ry");
+			printf(", SH4FloatRegister Ry");
 			break;
-			
+
 		case A_GBR:
 			break;
 
 		case A_IMM:
-			printf(",int imm");
+			printf(", int imm");
 			break;
 
 		case A_IND_R0_REG_M:
-			printf(",SH4IntRegister  Ry");
+			printf(", SH4IntRegister Ry");
 			break;
 
 		case A_IND_R0_REG_N:
-			printf(",SH4IntRegister  Rx");
+			printf(", SH4IntRegister Rx");
 			break;
 
 		case A_MACH:
@@ -614,7 +614,7 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 			break;
 
 		case A_REG_B:
-			printf(",int imm");
+			printf(", int imm");
 			break;
 
 		case FPUL_N:
@@ -632,7 +632,7 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 		}
 	}
 
-	printf(") ");
+	printf(")\n");
 }
 
 int main(void)
@@ -694,7 +694,7 @@ int main(void)
 
 		printf("static inline void sh4_%s", name);
 		printf_args(sh_table[i].arg, &double_args);
-		printf("\n{\n");
+		printf("{\n");
 		printf("	if (cfg != NULL)\n");
 		printf("		sh4_cstpool_check(cfg, code);\n");
 		printf_assert(sh_table[i].nibbles, force_sign, double_args, name, scaling);

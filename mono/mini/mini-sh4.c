@@ -2,7 +2,9 @@
  * mini-sh4.c: SH4 backend for the Mono code generator
  *
  * Authors:
- *   Cedric VINCENT (cedric.vincent@gmail.com)
+ *   Cedric VINCENT (cedric.vincent@st.com)
+ *   Denis FERRANTI (denis.ferranti@st.com)
+ *   Yvan Roux (yvan.roux@st.com)
  *
  * (C) 2008 STMicroelectronics.
  */

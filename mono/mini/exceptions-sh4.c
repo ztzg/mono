@@ -2,7 +2,8 @@
  * exceptions-sh4.c: exception support for SH4
  *
  * Authors:
- *   Cedric VINCENT (cedric.vincent@gmail.com)
+ *   Cedric VINCENT (cedric.vincent@st.com)
+ *   Yves JANIN (yves.janin@st.com)
  *
  * (C) 2008 STMicroelectronics.
  */

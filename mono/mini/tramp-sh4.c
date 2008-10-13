@@ -2,7 +2,7 @@
  * tramp-sh4.c: JIT trampoline code for SH4
  *
  * Authors:
- *   Cedric VINCENT (cedric.vincent@gmail.com)
+ *   Cedric VINCENT (cedric.vincent@st.com)
  *
  * (C) 2008 STMicroelectronics.
  */
