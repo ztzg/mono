@@ -1341,10 +1341,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				guint8 *dest	= NULL;
 
 				patch1 = buffer;
-				sh4_movl_dispPC(NULL, &buffer, 0, inst->dreg); /* 0 to be patched */
+				sh4_die(NULL, &buffer); /* Patch slot1 for : movl @(dest), inst->dreg */
+
 				patch2 = buffer;
-				sh4_bra(NULL, &buffer, 0); /* 0 to be patched with @ after cst-pool */
+				sh4_die(NULL, &buffer); /* Patch slot2 for : bra_label "buffer" */
 				sh4_nop(NULL, &buffer); /* delay slot */
+
 				/* Align the constant pool. */
 				while (((guint32)buffer % 4) != 0) {
 					sh4_nop(NULL, &buffer);
@@ -1355,8 +1357,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 				/* patch instruction at patch1 */
 				sh4_movl_PCrel(NULL, &patch1, dest, inst->dreg);
+
 				/* patch instruction at patch2 */
-				sh4_bra(NULL, &patch2, (buffer - patch2) - 4);  /* DFE - TO BE UPDATED!!! */
+				sh4_bra_label(NULL, &patch2, buffer);
 			}
 			break;
 		case OP_FCALL:
@@ -1377,11 +1380,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			call = (MonoCallInst*)inst;
 
 			patch1 = buffer;
-			/* clobber R0 */
-			sh4_movl_dispPC(NULL, &buffer, 0, sh4_r0); /* 0 to be patched */
+			sh4_die(NULL, &buffer); /* Patch slot1 for : movl @(dest), sh4_r0 */
+
 			patch2 = buffer;
-			sh4_bra(NULL, &buffer, 0); /* 0 to be patched with @ after cst-pool */
+			sh4_die(NULL, &buffer); /* Patch slot for : bra_label "buffer" */
 			sh4_nop(NULL, &buffer); /* delay slot */
+
 			/* Align the constant pool. */
 			while (((guint32)buffer % 4) != 0) {
 				sh4_nop(NULL, &buffer);
@@ -1391,7 +1395,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_emit32(&buffer, 0); /* 0 to be patched */
 
 			/* patch instruction at patch2 */
-			sh4_bra(NULL, &patch2, (buffer - patch2) - 4); /* DFE - TO BE UPDATED!!! */
+			sh4_bra_label(NULL, &patch2, buffer);
 
 			sh4_jsr_indRx(NULL, &buffer, sh4_r0);
 			sh4_nop(NULL, &buffer); /* delay slot */
@@ -1434,7 +1438,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: br: clob:0 len:12 */
 			MonoJumpInfoType type;
 			gpointer target = NULL;
-			int displacement = 0;
+			guint8 *address = NULL;
 			guint8 *patch = NULL;
 
 			if (inst->flags & MONO_INST_BRLABEL) {
@@ -1448,13 +1452,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				offset = inst->inst_target_bb->native_offset;
 			}
 
-			displacement = (cfg->native_code + (int)target) - buffer;
+			address = cfg->native_code + (int)target;
 
 			/* Does 'target' could be known during the lowering
 			   pass ? If so, we can do this optimization with a
 			   SH4 specialized opcode. */
-			if (offset != 0 && SH4_CHECK_RANGE_bra(displacement)) {
-				sh4_bra(NULL, &buffer, displacement - 4); /* DFE - TO BE UPDATED!!! */
+			if (offset != 0 && SH4_CHECK_RANGE_bra_label(buffer, address)) {
+				sh4_bra_label(NULL, &buffer, address);
 				sh4_nop(NULL, &buffer);
 				break;
 			}
