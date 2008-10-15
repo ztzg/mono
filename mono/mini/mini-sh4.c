@@ -1417,7 +1417,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_MOVE:
 			/* MD: move: dest:i src1:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [move] sreg=%d, dreg=%d\n", inst->sreg1, inst->dreg);
-			sh4_mov(NULL, &buffer, inst->sreg1, inst->dreg);
+			if (inst->sreg1 != inst->dreg)
+				sh4_mov(NULL, &buffer, inst->sreg1, inst->dreg);
 			break;
 		case OP_FCALL_REG:
 			/* MD: */
