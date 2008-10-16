@@ -70,7 +70,6 @@ static inline void sh4_emit16(guint8 **address, unsigned int value)
 	(*address)+=2;
 }
 
-
 static inline void sh4_emit32(guint8 **address, unsigned int value) 
 {
 	*((guint32 *)(void *)(* address)) = (guint32) value;

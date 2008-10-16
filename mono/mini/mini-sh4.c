@@ -1033,7 +1033,7 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 	/* Sanity checks. */
 	g_assert(buffer - code <= exceptions_size);
-	g_assert(cfg->code_len < cfg->code_size);
+	g_assert(cfg->code_len <= cfg->code_size);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
 
@@ -1466,10 +1466,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 /* cstpool-sh4 ready ;) */
 #if 0
-			sh4_movl_PCrel(cfg, NULL, &buffer, sh4_r0, target, type);
+			sh4_movl_PCrel(cfg, &buffer, sh4_r0, target, type);
 
-			sh4_jmp_indRx(cfg, NULL, &buffer, sh4_r0);
-			sh4_nop(cfg, NULL, &buffer);
+			sh4_jmp_indRx(cfg, &buffer, sh4_r0);
+			sh4_nop(cfg, &buffer);
 #else
 			/* Patch slot for : sh4_r0 <- target */
 			patch = buffer;
@@ -1497,6 +1497,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* The following opcodes are not yet supported, however
 			   I need them to pass some trivial examples. */
 			/* MD: int_beq: */
+			/* MD: int_bne_un: */
 			/* MD: store_membase_imm: */
 			/* MD: loadu4_membase: */
 			/* MD: load_membase: */
@@ -1528,9 +1529,37 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	cfg->code_len = buffer - cfg->native_code;
 
+	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
+
 	return;
 }
 
+/**
+ * Process the patch data created during the instruction build process,
+ * i.e. in mono_arch_output_basic_block(). This resolves jumps, calls,
+ * variables, ...
+ *
+ * Patching branches is too much tricky because the constant pool
+ * (to be patched) is not always at the same offset from the branch
+ * instruction. Typically, you have two possibilities :
+ *
+ *     movl @cstpool, R0
+ *     braf r0
+ *     nop
+ *     .word ! to be patched
+ *     .word ! to be patched
+ *
+ * or :
+ *
+ *     movl @cstpool, R0
+ *     braf r0
+ *     nop
+ *     nop
+ *     .word ! to be patched
+ *     .word ! to be patched
+ *
+ * That's why all resolutions are absolute.
+ */
 void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, gboolean run_cctors)
 {
 	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
@@ -1539,16 +1568,31 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 		guint8 *patch = NULL;
 		guint8 *target = NULL;
 
-		if (patch_info->type != MONO_PATCH_INFO_LABEL &&
-		    patch_info->type != MONO_PATCH_INFO_BB)
-			NOT_IMPLEMENTED;
-
 		patch = patch_info->ip.i + code;
-		target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
+
+		SH4_EXTRA_DEBUG("type = %d", patch_info->type);
+
+		switch (patch_info->type) {
+
+		case MONO_PATCH_INFO_LABEL:
+		case MONO_PATCH_INFO_BB:
+		case MONO_PATCH_INFO_METHOD:
+		case MONO_PATCH_INFO_ABS:
+		case MONO_PATCH_INFO_INTERNAL_METHOD:
+			/* Absolute. */
+			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
+			break;
+
+		default:
+			NOT_IMPLEMENTED;
+			break;
+		}
 
 		SH4_EXTRA_DEBUG("*0x%x = 0x%x", (guint32)patch, (guint32)target);
 
 		sh4_emit32(&patch, (guint32)target);
+
+		/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
 	}
 
 	return;
