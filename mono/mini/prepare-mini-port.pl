@@ -588,8 +588,12 @@ print $file "\n";
 
 print $file "#ifndef NDEBUG\n";
 print $file "#  define " . uc($arch) . "_DEBUG(format, ...) fprintf(stderr, \"! %s:%d: \" format \"\\n\", __FUNCTION__, __LINE__, __VA_ARGS__)\n";
+print $file "#  define " . uc($arch) . "_CFG_DEBUG(LVL) if (cfg->verbose_level >= LVL)\n";
+print $file "#  define " . uc($arch) . "_EXTRA_DEBUG(format, ...) if (${arch}_extra_debug != 0) " . uc($arch) . "_DEBUG(format, __VA_ARGS__)\n";
 print $file "#else\n";
-print $file "#  define " . uc($arch) . "_DEBUG(format, ...)\n";
+print $file "#  define " . uc($arch) . "_DEBUG(format, ...) (0)\n";
+print $file "#  define " . uc($arch) . "_CFG_DEBUG(LVL) if (0)\n";
+print $file "#  define " . uc($arch) . "_EXTRA_DEBUG(format, ...) (0)\n";
 print $file "#endif /* NDEBUG */\n";
 
 print $file "\n";

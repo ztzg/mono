@@ -31,7 +31,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 	guint8 *patch2 = NULL;
 	guint8 *trampoline = NULL;
 
-	SH4_DEBUG("args => %p, %d, %p, %p", methode2compile, trampoline_type, domain, code_length);
+	SH4_EXTRA_DEBUG("args => %p, %d, %p, %p", methode2compile, trampoline_type, domain, code_length);
 
 	trampoline = mono_get_trampoline_code(trampoline_type);
 
@@ -85,10 +85,10 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 
 	if (code_length != NULL) {
 		*code_length = buffer - code;
-		SH4_DEBUG("code_length = %d", *code_length);
+		SH4_EXTRA_DEBUG("code_length = %d", *code_length);
 	}
 
-	SH4_DEBUG("code = %p", code);
+	SH4_EXTRA_DEBUG("code = %p", code);
 
 	return code;
 }
@@ -152,7 +152,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	guint8 *patch1 = NULL;
 	guint8 *patch2 = NULL;
 
-	SH4_DEBUG("args => %d", trampoline_type);
+	SH4_EXTRA_DEBUG("args => %d", trampoline_type);
 
 #define TRAMPOLINE_SIZE 148
 
@@ -349,7 +349,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code, TRAMPOLINE_SIZE);
 
-	SH4_DEBUG("code = %p", code);
+	SH4_EXTRA_DEBUG("code = %p", code);
 
 	return code;
 }

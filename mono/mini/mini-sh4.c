@@ -15,6 +15,8 @@
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
+int sh4_extra_debug = 0;
+
 struct arg_info {
 	guint32 offset;
 	guint16 size;
@@ -52,7 +54,7 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 	arg_info->type = integer32;
 	arg_info->offset = *stack_size;
 
-	SH4_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
+	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
 
 	if (*arg_reg <= MONO_SH4_REG_LAST_ARG) {
 		arg_info->storage = into_register;
@@ -65,8 +67,8 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 		(*stack_size) += 4;
 	}
 
-	SH4_DEBUG("arg_reg = %d", *arg_reg);
-	SH4_DEBUG("stack_size = %d", *stack_size);
+	SH4_EXTRA_DEBUG("arg_reg = %d", *arg_reg);
+	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
 }
 
 /**
@@ -83,7 +85,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 	guint32 stack_size = 0;
 	guint32 i = 0;
 
-	SH4_DEBUG("args => %p, %p", context, signature);
+	SH4_EXTRA_DEBUG("args => %p, %p", context, signature);
 
 	call_info = g_malloc0(sizeof(struct call_info));
 	call_info->args = g_malloc0(sizeof(struct arg_info) * (signature->param_count + signature->hasthis));
@@ -92,7 +94,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 	basic_type = mono_type_get_underlying_type(signature->ret);
 	basic_type = mini_get_basic_type_from_generic(context, basic_type);
 
-	SH4_DEBUG("basic_type of result = %d", basic_type->type);
+	SH4_EXTRA_DEBUG("basic_type of result = %d", basic_type->type);
 
 	switch (basic_type->type) {
 	case MONO_TYPE_BOOLEAN:
@@ -185,7 +187,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 		basic_type = mono_type_get_underlying_type(signature->params[i]);
 		basic_type = mini_get_basic_type_from_generic(context, basic_type);
 
-		SH4_DEBUG("basic_type of arg[%d] = %d", i, basic_type->type);
+		SH4_EXTRA_DEBUG("basic_type of arg[%d] = %d", i, basic_type->type);
 
 		switch (basic_type->type) {
 		case MONO_TYPE_END:
@@ -1051,7 +1053,7 @@ void mono_arch_flush_icache(guint8 *code, gint size)
 	guint32 addr = (guint32)code & ~0xF;
 	guint32 end  = (guint32)code + size;
 
-	SH4_DEBUG("args => %p, %d", code, size);
+	SH4_EXTRA_DEBUG("args => %p, %d", code, size);
 
 	while (addr <= end) {
 		__asm__ __volatile__ ("ocbp @%0" : : "r"(addr));
@@ -1531,7 +1533,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, gboolean run_cctors)
 {
-	SH4_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
+	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
 
 	for (; patch_info != NULL; patch_info = patch_info->next){
 		guint8 *patch = NULL;
@@ -1544,7 +1546,7 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 		patch = patch_info->ip.i + code;
 		target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
 
-		SH4_DEBUG("*0x%x = 0x%x", (guint32)patch, (guint32)target);
+		SH4_EXTRA_DEBUG("*0x%x = 0x%x", (guint32)patch, (guint32)target);
 
 		sh4_emit32(&patch, (guint32)target);
 	}

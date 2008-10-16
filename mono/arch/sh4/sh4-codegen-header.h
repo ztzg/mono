@@ -5,6 +5,11 @@
 
 #include "glib.h" /* g_assert(), */
 
+/* This variable is defined into mini-sh4.c. If set to non zero with
+   an external tool (as a debugger), some extra debug information are
+   printed on stderr. */
+extern int sh4_extra_debug;
+
 typedef enum {
 	sh4_r0 = 0,
 	sh4_r1,
