@@ -225,7 +225,6 @@
  * data during a compilation. */
 typedef struct { 
 	gint localloc_size;
-	gint argalloc_size;
  } MonoCompileArch;
 
 /* The execution state of a thread during exception handling

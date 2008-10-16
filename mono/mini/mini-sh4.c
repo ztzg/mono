@@ -281,7 +281,6 @@ static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, s
 	switch (arg_info->storage) {
 	case into_register:
 		arg->backend.reg3 = arg_info->reg;
-		/* CV : why is this not done into the register allocation phase ? */
 		call->used_iregs |= 1 << arg_info->reg;
 		break;
 
@@ -353,7 +352,6 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 			switch (arg_info->storage) {
 			case into_register:
 				arg->backend.reg3 = arg_info->reg;
-				/* CV : why is this not done into the register allocation phase ? */
 				call->used_iregs |= 1 << arg_info->reg;
 				break;
 
@@ -710,64 +708,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	if (call_info->ret.type == aggregate)
 		NOT_IMPLEMENTED;
 
-	cfg->arch.argalloc_size = 0;
-
-	/* Save arguments at the right place : into register or onto the stack. */
-	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
-		struct arg_info *arg_info = &call_info->args[i];
-		MonoInst *inst = cfg->args[i];
-
-		/* Sanity checks. */
-		g_assert(inst->opcode == OP_REGVAR && arg_info->storage == into_register);
-
-		SH4_CFG_DEBUG(4) SH4_DEBUG("arg[%d] is on stack ? %d", i, (int)(inst->opcode != OP_REGVAR));
-
-		switch (arg_info->type) {
-
-		case integer32:
-			if (inst->opcode == OP_REGVAR) {
-				if (inst->dreg != arg_info->reg)
-					sh4_mov(NULL, &buffer, inst->dreg, arg_info->reg);
-			}
-			else {
-				sh4_movl_decRx(NULL, &buffer, inst->dreg, sh4_r15);
-				cfg->arch.argalloc_size += 4;
-			}
-			break;
-
-		case integer64:
-			NOT_IMPLEMENTED;
-			if (inst->opcode == OP_REGVAR) {
-				if (inst->dreg != arg_info->reg) {
-					/* TODO - CV : check the order. */
-					sh4_mov(NULL, &buffer, inst->dreg + 1, arg_info->reg + 1);
-					sh4_mov(NULL, &buffer, inst->dreg, arg_info->reg);
-				}
-			}
-			else {
-				/* TODO - CV : check the order. */
-				sh4_movl_decRx(NULL, &buffer, inst->dreg + 1, sh4_r15);
-				sh4_movl_decRx(NULL, &buffer, inst->dreg, sh4_r15);
-				cfg->arch.argalloc_size += 8;
-			}
-			break;
-
-		case float64:
-		case float32:
-		case aggregate:
-			NOT_IMPLEMENTED;
-			break;
-
-		case none:
-		default:
-			g_assert_not_reached();
-			break;
-		}
-	}
-
-	/* Sanity checks. */
-	g_assert(cfg->param_area == cfg->arch.argalloc_size);
-
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -796,6 +736,55 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 *	|--------------| <- SP
 	 *	:              :
 	 */
+
+	/* Copy arguments at the expected place : into register or onto the stack. */
+	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
+		struct arg_info *arg_info = &call_info->args[i];
+		MonoInst *inst = cfg->args[i];
+
+		/* Sanity checks. */
+		g_assert(inst->opcode == OP_REGVAR && arg_info->storage == into_register);
+
+		switch (arg_info->type) {
+
+		case integer32:
+			if (inst->opcode == OP_REGVAR) {
+				if (inst->dreg != arg_info->reg)
+					sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+			}
+			else {
+				sh4_movl_dispRx(NULL, &buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
+			}
+			break;
+
+		case integer64:
+			NOT_IMPLEMENTED;
+			if (inst->opcode == OP_REGVAR) {
+				if (inst->dreg != arg_info->reg) {
+					/* TODO - CV : check the order. */
+					sh4_mov(NULL, &buffer, arg_info->reg + 1, inst->dreg + 1);
+					sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+				}
+			}
+			else {
+				/* TODO - CV : check the order. */
+				sh4_movl_decRx(NULL, &buffer, inst->dreg + 1, sh4_r15);
+				sh4_movl_decRx(NULL, &buffer, inst->dreg, sh4_r15);
+			}
+			break;
+
+		case float64:
+		case float32:
+		case aggregate:
+			NOT_IMPLEMENTED;
+			break;
+
+		case none:
+		default:
+			g_assert_not_reached();
+			break;
+		}
+	}
 
 	/* The space needed by local variables is computed into mono_arch_allocate_vars(). */
 	localloc_size = cfg->arch.localloc_size;
@@ -938,14 +927,15 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	 *	:              : Callee's frame.
 	 */
 
-	/* Free the space used by parameters. */
-	argalloc_size = cfg->arch.argalloc_size;
+/* Do we have to do such a thing ? */
+#if 0
+	/* Free the space used by parameters, computed into mono_arch_call_opcode(). */
+	argalloc_size = cfg->param_area;
 	if (argalloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(argalloc_size))
 			sh4_add_imm(NULL, &buffer, argalloc_size, sh4_r15);
 		else {
 			NOT_IMPLEMENTED;
-#if 0
 			/* I don't know yet if I can use a local register
 			   (a.k.a scratch register). */
 
@@ -954,9 +944,9 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 			sh4_die(NULL, &buffer);
 
 			sh4_add(NULL, &buffer, sh4_rXX, sh4_r15);
-#endif
 		}
 	}
+#endif
 
 	/* At this point, the stack is fully restored (as caller's point of view). */
 
