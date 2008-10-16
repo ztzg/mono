@@ -382,10 +382,86 @@ void mono_arch_nullify_plt_entry(guint8 *code)
 	return;
 }
 
-void mono_arch_patch_callsite(guint8 *method_start, guint8 *orig_code, guint8 *addr)
+
+/**
+ * Search for and patch the calling sequence pointed to by 'code'
+ * so it calls 'address'.
+ *
+ * Possible calling sequences are:
+ *
+ *     . for OP_.*CALL opcodes:
+ *
+ *         #if XXX
+ *         -14: movl @cstpool, R0
+ *         -12: bra cstpool_end
+ *         #else
+ *         -16: movl @cstpool, R0
+ *         -14: bra cstpool_end
+ *         -12: nop
+ *         #endif
+ *          -10:     nop
+ *              cstpool:
+ *          -8:     .word 0xXXXX
+ *          -6:     .word 0xYYYY
+ *              cstpool_end:
+ *          -4:     jsr @r0
+ *          -2:     nop
+ *           0: <- code points here
+ *
+ *     . for OP_.*CALL_REG opcodes:
+ *
+ *           NOT_IMPLEMENTED;
+ *
+ */
+void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 {
-	/* TODO - CV */
-	g_assert(0);
+	guint16 *code16 = (void *)code;
+	guint32 strong_align = 0;
+	guint8 *cstpool = NULL;
+	int patch_cstpool = 0;
+
+	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
+
+	/*
+	 * Search in reverse order for the calling
+	 * sequence of OP_.*CALL opcodes.
+	 */
+
+	if (code16[-1] == 0x0009 || /* nop */
+	    code16[-2] == 0x400B || /* jsr @r0 */
+	    code16[-5] == 0x0009) { /* nop */
+
+		strong_align = (guint32)code & 0x00000003;
+		cstpool = code - 8;
+
+		if (strong_align == 0) {
+			if (code16[-6] == 0xA002 && /* bra cstpool_end */
+			    code16[-7] == 0xD001)   /* movl @cstpool, R0 */
+				patch_cstpool = 1;
+		} else {
+			if (code16[-6] == 0x0009 && /* nop */
+			    code16[-7] == 0xA003 && /* bra cstpool_end */
+			    code16[-8] == 0xD001)   /* movl @cstpool, R0 */
+				patch_cstpool = 1;
+		}
+	}
+
+	if (patch_cstpool != 0) {
+		sh4_emit32(&cstpool, (guint32)address);
+
+		/* Flush instruction cache, since we've generated code. */
+		mono_arch_flush_icache(code - 16, 16);
+
+		return;
+	}
+
+	/*
+	 * Search in reverse order for the calling
+	 * sequence of OP_.*CALL_REG opcodes.
+	 */
+
+	NOT_IMPLEMENTED;
+
 	return;
 }
 
