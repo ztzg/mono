@@ -1,7 +1,17 @@
+/* -*- c-set-style: "K&R"; c-basic-offset: 8 -*-
+ * mini-sh4.h: SH4 backend for the Mono code generator
+ *
+ * Authors:
+ *   Cedric VINCENT (cedric.vincent@gmail.com)
+ *
+ * (C) 2008 STMicroelectronics.
+ */
+
 #ifndef MONO_SH4_H
 #define MONO_SH4_H
 #include <mono/arch/sh4/sh4-codegen.h>
 #include <glib.h>
+
 
 /*
  * Bitmask selecting the caller-saved floating-point registers,
@@ -223,8 +233,51 @@
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */
+#define SH4_MAX_CSTPOOL       255 /* Maximum number of constants in a pool */
+
+/* Tackling constant pools */
+typedef enum {
+  cstpool_undef     = 0,
+  cstpool_filling   = 1,   /* The only state where you can add data */
+  cstpool_allocated = 2,
+  cstpool_patched   = 3,
+} CstPool_State;
+
+typedef struct MonoSH4CstPool{
+	struct  MonoSH4CstPool *next;
+	CstPool_State state    ;
+	guint32 pool_off0_start; /* |pc/2|*2 of this first instruction */
+				 /* that contributes to the memory pool*/
+
+	guint32  pool_off;       /* Base address of the pool           */
+	guint32  pool_nbcst;     /* Number of constants in the pool    */
+
+	/* Memorize constant - Actual type of field "type" is    */
+	/* MonoJumpInfoType. It is defined in mini.h that        */
+	/* includes mini-arch.h that includes it self mini-sh4.h.*/
+	gint16          type    [SH4_MAX_CSTPOOL];
+	guint16         reg     [SH4_MAX_CSTPOOL];
+	gconstpointer   pool_cst[SH4_MAX_CSTPOOL];
+	guint32         off_inst[SH4_MAX_CSTPOOL];
+
+	guint32  pool_nbcst_emitted; /* Temporary -                   */
+} MonoSH4CstPool;
+
+typedef struct {
+	MonoMemPool    *mempool;
+	MonoSH4CstPool *start;
+	MonoSH4CstPool *last;
+
+	guint32         nbpool;        /* For statistics and debug only */
+	guint32         nbcst;         /* For statistics and debug only */
+
+	guint32         nb_bblocks;
+	guint32        *tab_bb_offset;
+} MonoSH4CstPool_Env;
+
 typedef struct { 
 	gint localloc_size;
+	MonoSH4CstPool_Env *poolenv;
  } MonoCompileArch;
 
 /* The execution state of a thread during exception handling
