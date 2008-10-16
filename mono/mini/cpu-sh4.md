@@ -57,7 +57,7 @@ call: clob:c len:16
 move: dest:i src1:i len:2
 voidcall_reg: src1:i clob:c len:4
 call_reg: src1:i clob:c len:4
-br: clob:0 len:12
+br: clob:0 len:16
 int_beq:
 int_bne_un:
 store_membase_imm:

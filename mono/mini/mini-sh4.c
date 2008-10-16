@@ -1263,7 +1263,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
 	MonoInst *inst = NULL;
-	MonoCallInst *call;
 	guint8 *buffer = NULL;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p", cfg, basic_block);
@@ -1329,7 +1328,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			} else {
 				sh4_cstpool_add(cfg,&buffer,MONO_PATCH_INFO_NONE,
 						&(inst->inst_imm),inst->dreg);
-
 			}
 			break;
 		case OP_FCALL:
@@ -1342,45 +1340,26 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: voidcall: clob:c len:16 */
 		case OP_CALL: {
 			/* MD: call: clob:c len:16 */
-			guint8 *patch1	= NULL;
-			guint8 *patch2	= NULL;
-			guint8 *dest	= NULL;
+			MonoCallInst *call = (MonoCallInst*)inst;
+			MonoJumpInfoType type;
+			gpointer target = NULL;
 
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [fcall/lcall/vcall/voidcall/call]:%s", "");
-			call = (MonoCallInst*)inst;
-
-			patch1 = buffer;
-			sh4_die(NULL, &buffer); /* Patch slot1 for : movl @(dest), sh4_r0 */
-
-			patch2 = buffer;
-			sh4_die(NULL, &buffer); /* Patch slot for : bra_label "buffer" */
-			sh4_nop(NULL, &buffer); /* delay slot */
-
-			/* Align the constant pool. */
-			while (((guint32)buffer % 4) != 0) {
-				sh4_nop(NULL, &buffer);
+			/* patch cst-pool with call destination */
+			if (inst->flags & MONO_INST_HAS_METHOD) {
+				type = MONO_PATCH_INFO_METHOD;
+				target = call->method;
+			} else {
+				type = MONO_PATCH_INFO_ABS;
+				target = (gpointer)call->fptr;
 			}
-			/* Constant Pool is here... */
-			dest = buffer;
-			sh4_emit32(&buffer, 0); /* 0 to be patched */
 
-			/* patch instruction at patch2 */
-			sh4_bra_label(NULL, &patch2, buffer);
+			/* TODO - CV : optimize with sh4_bsr if possible. */
+
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
 
 			sh4_jsr_indRx(NULL, &buffer, sh4_r0);
 			sh4_nop(NULL, &buffer); /* delay slot */
 
-			/* patch instruction at patch1 */
-			sh4_movl_PCrel(NULL, &patch1, dest, sh4_r0);
-
-			/* patch cst-pool with call destination */
-			if (inst->flags & MONO_INST_HAS_METHOD) {
-				SH4_CFG_DEBUG(4) SH4_DEBUG(" Target[MONO_PATCH_INFO_METHOD] %p\n", call->method);
-				mono_add_patch_info (cfg, dest - cfg->native_code, MONO_PATCH_INFO_METHOD, call->method);
-			} else {
-				SH4_CFG_DEBUG(4) SH4_DEBUG(" Target[MONO_PATCH_INFO_ABS] %p\n", call->fptr);
-				mono_add_patch_info (cfg, dest - cfg->native_code, MONO_PATCH_INFO_ABS, call->fptr);
-			}
 			break;
 		}
 		case OP_MOVE:
@@ -1399,18 +1378,15 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: voidcall_reg: src1:i clob:c len:4 */
 		case OP_CALL_REG: {
 			/* MD: call_reg: src1:i clob:c len:4 */
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [fcall_reg/lcall_reg/vcall_reg/voidcall_reg/call_reg]: TargetReg: %d\n", inst->sreg1);
-			call = (MonoCallInst*)inst;
 			sh4_jsr_indRx(NULL, &buffer, inst->sreg1);
 			sh4_nop(NULL, &buffer); /* delay slot */
 			break;
 		}
 		case OP_BR: {
-			/* MD: br: clob:0 len:12 */
+			/* MD: br: clob:0 len:16 */
 			MonoJumpInfoType type;
 			gpointer target = NULL;
 			guint8 *address = NULL;
-			guint8 *patch = NULL;
 
 			if (inst->flags & MONO_INST_BRLABEL) {
 				type = MONO_PATCH_INFO_LABEL;
@@ -1434,32 +1410,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				break;
 			}
 
-/* cstpool-sh4 ready ;) */
-#if 0
-			sh4_movl_PCrel(cfg, &buffer, sh4_r0, target, type);
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
 
 			sh4_jmp_indRx(cfg, &buffer, sh4_r0);
 			sh4_nop(cfg, &buffer);
-#else
-			/* Patch slot for : sh4_r0 <- target */
-			patch = buffer;
-			sh4_die(NULL, &buffer);
 
-			sh4_jmp_indRx(NULL, &buffer, sh4_r0);
-			sh4_nop(NULL, &buffer);
-
-			/* Align the constant pool. */
-			while (((guint32)buffer % 4) != 0)
-				sh4_nop(NULL, &buffer);
-
-			/* Patch the "sh4_r0 <- target" instruction. */
-			sh4_movl_PCrel(NULL, &patch, buffer, sh4_r0);
-
-			/* Build a "fake" constant pool which will be
-			   patched later by mono_arch_patch_code(). */
-			mono_add_patch_info(cfg, buffer - cfg->native_code, type, target);
-			sh4_emit32(&buffer, 0);
-#endif
 			break;
 		}
 
