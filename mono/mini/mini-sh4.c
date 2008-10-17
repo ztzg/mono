@@ -748,44 +748,130 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		/* Sanity checks. */
 		g_assert(inst->opcode == OP_REGVAR && arg_info->storage == into_register);
 
-		switch (arg_info->type) {
+		/* The argument ends up into a register... */
+		if (inst->opcode == OP_REGVAR) {
+			switch (arg_info->storage) {
+			/* ... and was already into a register. */
+			case into_register:
+				switch (arg_info->type) {
+				case integer32:
+					if (inst->dreg != arg_info->reg)
+						sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+					break;
 
-		case integer32:
-			if (inst->opcode == OP_REGVAR) {
-				if (inst->dreg != arg_info->reg)
-					sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
-			}
-			else {
-				sh4_movl_dispRx(NULL, &buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
-			}
-			break;
+				case integer64:
+					NOT_IMPLEMENTED;
+					if (inst->dreg != arg_info->reg) {
+						/* TODO - CV : check the order. */
+						sh4_mov(NULL, &buffer, arg_info->reg + 1, inst->dreg + 1);
+						sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+					}
+					break;
 
-		case integer64:
-			NOT_IMPLEMENTED;
-			if (inst->opcode == OP_REGVAR) {
-				if (inst->dreg != arg_info->reg) {
-					/* TODO - CV : check the order. */
-					sh4_mov(NULL, &buffer, arg_info->reg + 1, inst->dreg + 1);
-					sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+				case float64:
+				case float32:
+				case aggregate:
+					NOT_IMPLEMENTED;
+					break;
+
+				case none:
+				default:
+					g_assert_not_reached();
+					break;
 				}
-			}
-			else {
-				/* TODO - CV : check the order. */
-				sh4_movl_decRx(NULL, &buffer, inst->dreg + 1, sh4_r15);
-				sh4_movl_decRx(NULL, &buffer, inst->dreg, sh4_r15);
-			}
-			break;
+				break;
 
-		case float64:
-		case float32:
-		case aggregate:
-			NOT_IMPLEMENTED;
-			break;
+			/* ... but was onto the stack. */
+			case onto_stack:
+				switch (arg_info->type) {
+				case integer32:
+					sh4_movl_dispRx(NULL, &buffer, sh4_r15, arg_info->offset, inst->dreg);
+					break;
 
-		case none:
-		default:
-			g_assert_not_reached();
-			break;
+				case integer64:
+					NOT_IMPLEMENTED;
+					break;
+
+				case float64:
+				case float32:
+				case aggregate:
+					NOT_IMPLEMENTED;
+					break;
+
+				case none:
+				default:
+					g_assert_not_reached();
+					break;
+				}
+				break;
+
+			/* ... but was nowhere ! */
+			default:
+				g_assert_not_reached();
+				break;
+			}
+		}
+		/* The argument ends up onto the stack... */
+		else {
+			switch (arg_info->storage) {
+			/* ... but was into a register. */
+			case into_register:
+				switch (arg_info->type) {
+				case integer32:
+					g_assert(inst->inst_basereg == sh4_r15);
+					sh4_movl_dispRx(NULL, &buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
+					break;
+
+				case integer64:
+					NOT_IMPLEMENTED;
+					break;
+
+				case float64:
+				case float32:
+				case aggregate:
+					NOT_IMPLEMENTED;
+					break;
+
+				case none:
+				default:
+					g_assert_not_reached();
+					break;
+				}
+				break;
+
+			/* ... and was already onto the stack. */
+			case onto_stack:
+				/* What should I do here :
+				   . copy from a stack location to another one ? or
+				   . adjust inst->inst_offset according to arg_info->offset ? or
+				   . do nothing because it is already correctly set ? */
+				switch (arg_info->type) {
+				case integer32:
+					NOT_IMPLEMENTED;
+					break;
+
+				case integer64:
+					NOT_IMPLEMENTED;
+					break;
+
+				case float64:
+				case float32:
+				case aggregate:
+					NOT_IMPLEMENTED;
+					break;
+
+				case none:
+				default:
+					g_assert_not_reached();
+					break;
+				}
+				break;
+
+			/* ... but was nowhere ! */
+			default:
+				g_assert_not_reached();
+				break;
+			}
 		}
 	}
 
