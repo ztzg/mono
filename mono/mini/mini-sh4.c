@@ -1485,11 +1485,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				offset = inst->inst_target_bb->native_offset;
 			}
 
-			address = cfg->native_code + (int)target;
+			address = cfg->native_code + (int)offset;
 
-			/* Does 'target' could be known during the lowering
-			   pass ? If so, we can do this optimization with a
-			   SH4 specialized opcode. */
+			/* Use the optimal instruction if possible. */
 			if (offset != 0 && SH4_CHECK_RANGE_bra_label(buffer, address)) {
 				sh4_bra_label(NULL, &buffer, address);
 				sh4_nop(NULL, &buffer);
@@ -1503,20 +1501,58 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case OP_IBEQ: {
+			/* MD: int_beq: clob:0 len:18 */
+			/* MD: beq: clob:0 len:18 */
+			MonoJumpInfoType type;
+			gpointer target = NULL;
+			guint8 *address = NULL;
+			guint8 *patch = NULL;
 
+			if (inst->flags & MONO_INST_BRLABEL) {
+				type = MONO_PATCH_INFO_LABEL;
+				target = inst->inst_i0;
+				offset = inst->inst_i0->inst_c0;
+			}
+			else {
+				type = MONO_PATCH_INFO_BB;
+				target = inst->inst_true_bb;
+				offset = inst->inst_true_bb->native_offset;
+			}
+
+			address = cfg->native_code + (int)offset;
+
+			/* Use the optimal instruction if possible. */
+			if (offset != 0 && SH4_CHECK_RANGE_bt_label(buffer, address)) {
+				sh4_bt_label(NULL, &buffer, address);
+				break;
+			}
+
+			/* Reverse the test to skip the unconditional jump. */
+			patch = buffer;
+			sh4_die(NULL, &buffer); /* patch slot for : bf_label "skip_jump" */
+
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
+
+			sh4_jmp_indRx(cfg, &buffer, sh4_r0);
+			sh4_nop(cfg, &buffer);
+
+			/* Back patch the reversed test. */
+			sh4_bf_label(NULL, &patch, buffer);
+
+			break;
+		}
 		default:
 			/* The following opcodes are not yet supported, however
 			   I need them to pass some trivial examples. */
-			/* MD: int_beq: */
 			/* MD: int_bne_un: */
-			/* MD: store_membase_imm: */
-			/* MD: loadu4_membase: */
-			/* MD: load_membase: */
+			/* MD: store_membase_imm: dest:b */
+			/* MD: loadu4_membase: dest:i src1:b */
+			/* MD: load_membase: dest:i src1:b */
 			/* MD: start_handler: */
 			/* MD: int_cgt_un: */
 			/* MD: endfilter: */
 			/* MD: store_membase_reg: */
-			/* MD: beq: */
 			/* MD: bne.un: */
 			/* MD: label: */
 			/* MD: compare_imm: */

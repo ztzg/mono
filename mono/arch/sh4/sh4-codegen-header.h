@@ -107,9 +107,15 @@ static inline void sh4_emit32(guint8 **address, unsigned int value)
 #define SH4_LABEL(from, to) (guint32)((guint32)(to) - (guint32)(from) - 4)
 
 #define SH4_CHECK_RANGE_bra_label(from, to) SH4_CHECK_RANGE_bra(SH4_LABEL((from), (to)))
-
 #define SH4_CHECK_ALIGN_bra_label(from, to) SH4_CHECK_ALIGN_bra(SH4_LABEL((from), (to)))
-
 #define sh4_bra_label(cfg, code, address) sh4_bra(cfg, code, SH4_LABEL(*code, address))
+
+#define SH4_CHECK_RANGE_bt_label(from, to) SH4_CHECK_RANGE_bt(SH4_LABEL((from), (to)))
+#define SH4_CHECK_ALIGN_bt_label(from, to) SH4_CHECK_ALIGN_bt(SH4_LABEL((from), (to)))
+#define sh4_bt_label(cfg, code, address) sh4_bt(cfg, code, SH4_LABEL(*code, address))
+
+#define SH4_CHECK_RANGE_bf_label(from, to) SH4_CHECK_RANGE_bf(SH4_LABEL((from), (to)))
+#define SH4_CHECK_ALIGN_bf_label(from, to) SH4_CHECK_ALIGN_bf(SH4_LABEL((from), (to)))
+#define sh4_bf_label(cfg, code, address) sh4_bf(cfg, code, SH4_LABEL(*code, address))
 
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */
