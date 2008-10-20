@@ -1365,10 +1365,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				   &buffer);
 
 	MONO_BB_FOR_EACH_INS(basic_block, inst) {
-		guint32 offset   = 0;
+		guint32 offset     = 0;
 		guint32 length_max = 0;
-		int     length = 0;
-		guint8 *code   = NULL;
+		int length   = 0;
+		guint8 *code = NULL;
 
 		offset = buffer - cfg->native_code;
 
@@ -1417,11 +1417,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 		case OP_FCALL:
-			/* MD: */
 		case OP_LCALL:
-			/* MD: */
 		case OP_VCALL:
-			/* MD: */
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:16 */
 		case OP_CALL: {
@@ -1455,11 +1452,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_mov(NULL, &buffer, inst->sreg1, inst->dreg);
 			break;
 		case OP_FCALL_REG:
-			/* MD: */
 		case OP_LCALL_REG:
-			/* MD: */
 		case OP_VCALL_REG:
-			/* MD: */
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:4 */
 		case OP_CALL_REG: {
@@ -1473,22 +1467,23 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			MonoJumpInfoType type;
 			gpointer target = NULL;
 			guint8 *address = NULL;
+			int displace = 0;
 
 			if (inst->flags & MONO_INST_BRLABEL) {
 				type = MONO_PATCH_INFO_LABEL;
 				target = inst->inst_i0;
-				offset = inst->inst_i0->inst_c0;
+				displace = inst->inst_i0->inst_c0;
 			}
 			else {
 				type = MONO_PATCH_INFO_BB;
 				target = inst->inst_target_bb;
-				offset = inst->inst_target_bb->native_offset;
+				displace = inst->inst_target_bb->native_offset;
 			}
 
-			address = cfg->native_code + (int)offset;
+			address = cfg->native_code + displace;
 
 			/* Use the optimal instruction if possible. */
-			if (offset != 0 && SH4_CHECK_RANGE_bra_label(buffer, address)) {
+			if (displace != 0 && SH4_CHECK_RANGE_bra_label(buffer, address)) {
 				sh4_bra_label(NULL, &buffer, address);
 				sh4_nop(NULL, &buffer);
 				break;
@@ -1508,22 +1503,23 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			gpointer target = NULL;
 			guint8 *address = NULL;
 			guint8 *patch = NULL;
+			int displace = 0;
 
 			if (inst->flags & MONO_INST_BRLABEL) {
 				type = MONO_PATCH_INFO_LABEL;
 				target = inst->inst_i0;
-				offset = inst->inst_i0->inst_c0;
+				displace = inst->inst_i0->inst_c0;
 			}
 			else {
 				type = MONO_PATCH_INFO_BB;
 				target = inst->inst_true_bb;
-				offset = inst->inst_true_bb->native_offset;
+				displace = inst->inst_true_bb->native_offset;
 			}
 
-			address = cfg->native_code + (int)offset;
+			address = cfg->native_code + displace;
 
 			/* Use the optimal instruction if possible. */
-			if (offset != 0 && SH4_CHECK_RANGE_bt_label(buffer, address)) {
+			if (displace != 0 && SH4_CHECK_RANGE_bt_label(buffer, address)) {
 				sh4_bt_label(NULL, &buffer, address);
 				break;
 			}
@@ -1542,10 +1538,49 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case OP_IBNE_UN: {
+			/* MD: int_bne_un: clob:0 len:18 */
+			/* MD: bne.un: clob:0 len:18 */
+			MonoJumpInfoType type;
+			gpointer target = NULL;
+			guint8 *address = NULL;
+			guint8 *patch = NULL;
+			int displace = 0;
+
+			if (inst->flags & MONO_INST_BRLABEL) {
+				type = MONO_PATCH_INFO_LABEL;
+				target = inst->inst_i0;
+				displace = inst->inst_i0->inst_c0;
+			}
+			else {
+				type = MONO_PATCH_INFO_BB;
+				target = inst->inst_true_bb;
+				displace = inst->inst_true_bb->native_offset;
+			}
+
+			address = cfg->native_code + displace;
+
+			/* Use the optimal instruction if possible. */
+			if (displace != 0 && SH4_CHECK_RANGE_bf_label(buffer, address)) {
+				sh4_bf_label(NULL, &buffer, address);
+				break;
+			}
+
+			/* Reverse the test to skip the unconditional jump. */
+			patch = buffer;
+			sh4_die(NULL, &buffer); /* patch slot for : bt_label "skip_jump" */
+
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
+
+			sh4_jmp_indRx(cfg, &buffer, sh4_r0);
+			sh4_nop(cfg, &buffer);
+
+			/* Back patch the reversed test. */
+			sh4_bt_label(NULL, &patch, buffer);
+		}
 		default:
 			/* The following opcodes are not yet supported, however
 			   I need them to pass some trivial examples. */
-			/* MD: int_bne_un: */
 			/* MD: store_membase_imm: dest:b */
 			/* MD: loadu4_membase: dest:i src1:b */
 			/* MD: load_membase: dest:i src1:b */
@@ -1553,12 +1588,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_cgt_un: */
 			/* MD: endfilter: */
 			/* MD: store_membase_reg: */
-			/* MD: bne.un: */
 			/* MD: label: */
 			/* MD: compare_imm: */
 			/* MD: storei4_membase_imm: */
 			/* MD: storei4_membase_reg: */
 			/* MD: loadi4_membase: */
+			/* MD: loadu1_membase: */
 
 			g_warning("unknown opcode %s\n", mono_inst_name(inst->opcode));
 			g_assert_not_reached();

@@ -60,7 +60,8 @@ call_reg: src1:i clob:c len:4
 br: clob:0 len:16
 int_beq: clob:0 len:18
 beq: clob:0 len:18
-int_bne_un:
+int_bne_un: clob:0 len:18
+bne.un: clob:0 len:18
 store_membase_imm: dest:b
 loadu4_membase: dest:i src1:b
 load_membase: dest:i src1:b
@@ -68,9 +69,9 @@ start_handler:
 int_cgt_un:
 endfilter:
 store_membase_reg:
-bne.un:
 label:
 compare_imm:
 storei4_membase_imm:
 storei4_membase_reg:
 loadi4_membase:
+loadu1_membase:
