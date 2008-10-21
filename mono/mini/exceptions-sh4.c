@@ -42,16 +42,16 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 	else if (*lmf != NULL) {
 		*new_context = *context;
 
+		/* Top LMF entry (or bad LMF ?). */
+		if ((*lmf)->method == NULL)
+			return (gpointer)-1;
+
 		if (trace != NULL)
 			NOT_IMPLEMENTED;
 
 		/* Check if it is a trampoline LMF. */
 		jit_info = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
 		if (jit_info == NULL) {
-			/* Top LMF entry. */
-			if ((*lmf)->method != NULL)
-				return (gpointer)-1;
-
 			bzero(result, sizeof(MonoJitInfo));
 			result->method = (*lmf)->method;
 		}
