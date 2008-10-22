@@ -128,7 +128,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
  * 	compiled_methode = trampoline(new_lmf.registers, new_lmf.pc, new_lmf.method, NULL);
  * 
  * 	// Restore the previous LMF list.
- * 	*(new_lmf.lmf_addr) = &(new_lmf.previous_lmf);
+ * 	*(new_lmf.lmf_addr) = new_lmf.previous_lmf;
  * 
  * 	// Restore almost all registers.
  * 	{ %R1, ..., %R14 } = new_lmf.registers[];
@@ -154,7 +154,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	SH4_EXTRA_DEBUG("args => %d", trampoline_type);
 
-#define TRAMPOLINE_SIZE 148
+#define TRAMPOLINE_SIZE 146
 
 	code = buffer = mono_global_codeman_reserve(TRAMPOLINE_SIZE);
 
@@ -272,9 +272,8 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	 * Restore the previous LMF list.
 	 */
 
-	/* pseudo-code: *(new_lmf.lmf_addr) = &(new_lmf.previous_lmf); */
-	sh4_mov(NULL, &buffer, sh4_r15, sh4_r8);
-	sh4_add_imm(NULL, &buffer, offsetof(MonoLMF, previous_lmf), sh4_r8);
+	/* pseudo-code: *(new_lmf.lmf_addr) = new_lmf.previous_lmf; */
+	sh4_movl_dispRy(NULL, &buffer, offsetof(MonoLMF, previous_lmf), sh4_r15, sh4_r8);
 	sh4_movl_indRx(NULL, &buffer, sh4_r8, sh4_r11); /* R11 is currently used as "new_lmf.lmf_addr". */
 
 	/*
