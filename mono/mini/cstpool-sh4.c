@@ -411,7 +411,14 @@ sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval,
 
    /* Fill in data */
    index  = tmp->pool_nbcst;
-   tmp->pool_cst[index] = target;
+   /* For actual constants copy the value, and not only the pointer */
+   if (type == MONO_PATCH_INFO_NONE) {
+	   tmp->pool_cst[index] = sh4_cstpool_malloc(env->mempool, sizeof(gconstpointer));
+	   *((guint32 *) tmp->pool_cst[index]) = *((guint32 *) target);
+   } else {
+	   tmp->pool_cst[index] = target;
+   }
+	   
    tmp->type    [index] = (gint16)type;
    tmp->off_inst[index] = offset;
    tmp->reg     [index] = (guint16)reg;
