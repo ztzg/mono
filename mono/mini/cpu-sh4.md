@@ -49,6 +49,15 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
+int_add_imm: dest:1 src2:i len:2
+add_imm: dest:1 src2:i len:2
+addcc_imm: dest:1 src2:i len:2
+addcc: dest:1 src2:i len:2
+int_add: dest:1 src2:i len:2
+int_addcc: dest:1 src2:i len:2
+subcc: dest:1 src2:i len:2
+int_sub: dest:1 src2:i len:2
+int_subcc: dest:1 src2:i len:2
 sh4_icompare_imm_R0: src1:0 len:2
 icompare: src1:i src2:i len:2
 iconst: dest:i len:12

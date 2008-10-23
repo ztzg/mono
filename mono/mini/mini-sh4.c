@@ -1335,6 +1335,20 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				mono_decompose_op_imm(cfg, inst);
 			break;
 
+		case OP_ADD_IMM:
+		case OP_IADD_IMM:
+		case OP_ADDCC_IMM:
+			if(!SH4_CHECK_RANGE_add_imm(inst->inst_imm)) {
+				mono_decompose_op_imm(cfg, inst);
+			}
+			break;
+
+		case OP_SUB_IMM:
+		case OP_ISUB_IMM:
+		case OP_SUBCC_IMM:
+			mono_decompose_op_imm(cfg, inst);
+			break;
+
 		default:
 			break;
 		}
@@ -1390,6 +1404,53 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		SH4_CFG_DEBUG(4) SH4_DEBUG("SH4: Emiting [%s] opcode\n", mono_inst_name(inst->opcode));
 
 		switch (inst->opcode) {
+		case OP_ADD_IMM:
+		case OP_IADD_IMM:
+		case OP_ADDCC_IMM:
+			/* MD: int_add_imm: dest:1 src2:i len:2 */
+			/* MD: add_imm: dest:1 src2:i len:2 */
+			/* MD: addcc_imm: dest:1 src2:i len:2 */
+			/* Should be there because previous lowering phase should 
+			   place immediate (inst->inst_imm) value into reg (inst->dreg).
+			*/
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4: [%s] dreg=%d, inst_imm=%0lX\n",
+						   mono_inst_name(inst->opcode), inst->dreg, (unsigned long) inst->inst_imm);
+			g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_imm));
+			sh4_add_imm(NULL, &buffer, inst->inst_imm, inst->dreg);
+			break;
+
+		case OP_SUB_IMM:
+		case OP_ISUB_IMM:
+		case OP_SUBCC_IMM:
+			/* Should be there because previous lowering phase should 
+			   place immediate (inst->inst_imm) value into reg (inst->dreg).
+			*/
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4: [%s] dreg=%d, inst_imm=%0lX\n",
+						   mono_inst_name(inst->opcode), inst->dreg, (unsigned long) inst->inst_imm);
+			g_assert(0);
+			break;
+
+		case OP_ADDCC:
+		case OP_IADDCC:
+		case OP_IADD:
+			/* MD: addcc: dest:1 src2:i len:2 */
+			/* MD: int_add: dest:1 src2:i len:2 */
+			/* MD: int_addcc: dest:1 src2:i len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_ADD: [add] sreg1=%d, sreg2=%d, dreg=%d\n", inst->sreg1, inst->sreg2, inst->dreg);
+			sh4_add(NULL, &buffer, inst->sreg2, inst->dreg);
+			break;
+		
+		case OP_SUBCC:
+		case OP_ISUBCC:
+		case OP_ISUB:
+			/* MD: subcc: dest:1 src2:i len:2 */
+			/* MD: int_sub: dest:1 src2:i len:2 */
+			/* MD: int_subcc: dest:1 src2:i len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_SUB: [sub] sreg1=%d, sreg2=%d, dreg=%d\n",
+						   inst->sreg1, inst->sreg2, inst->dreg);
+			sh4_sub(NULL, &buffer, inst->sreg2, inst->dreg);
+			break;
+		
 		case OP_ICOMPARE_IMM:
 			g_assert_not_reached();
 			break;
