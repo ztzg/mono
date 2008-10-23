@@ -1399,7 +1399,7 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  * This opcode decomposition is really helpful because it gives to
  * Mono a better estimation of used resources (registers and length).
  *
- * For instance, the opcode "icompare_imm" is not easily translatable
+ * For instance, the opcode "ceq_imm" is not easily translatable
  * from MonoInst to SH4 code because it only works with R0, moreover
  * the global register allocator and the "call" handler have already
  * done some register assignment. This lowering pass allows to do
@@ -1407,14 +1407,14 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  *
  *     if ins->sreg1 is not already assigned to a physical register and
  *        ins->inst_imm is in the range of "cmpeq_imm_R0" then
- *         replace OP_ICOMPARE_IMM with OP_SH4_ICOMPARE_IMM_R0
+ *         replace OP_CEQ_IMM with OP_SH4_CEQ_IMM_R0
  *     else
- *         replace OP_ICOMPARE_IMM with OP_ICOMPARE
+ *         replace OP_CEQ_IMM with OP_CEQ
  *
  * Now, the machine description file should be adapted to specify R0
  * as a "fixed" register for this new architecture-specific opcode :
  *
- *     sh4_icompare_imm: src1:0 len:2
+ *     sh4_ceq_imm: src1:0 len:2
  */
 void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
@@ -1428,15 +1428,15 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	MONO_BB_FOR_EACH_INS(basic_block, inst) {
 		switch (inst->opcode) {
-
-		case OP_ICOMPARE_IMM:
+#if 0
+		case OP_CEQ_IMM:
 			if (register_not_assigned(inst->sreg1) &&
 			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm))
 				inst->opcode = OP_SH4_ICOMPARE_IMM_R0;
 			else
 				mono_decompose_op_imm(cfg, inst);
 			break;
-
+#endif
 		default:
 			break;
 		}
@@ -1492,21 +1492,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		SH4_CFG_DEBUG(4) SH4_DEBUG("SH4: Emiting [%s] opcode\n", mono_inst_name(inst->opcode));
 
 		switch (inst->opcode) {
-		case OP_ICOMPARE_IMM:
-			g_assert_not_reached();
-			break;
-
-		case OP_SH4_ICOMPARE_IMM_R0:
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_icompare_immR0] const=%0lX\n", (unsigned long) inst->inst_imm);
-			/* MD: sh4_icompare_imm_R0: src1:0 len:2 */
+		case OP_SH4_CEQ_IMM_R0: {
+			/* MD: sh4_ceq_imm_R0: src1:0 len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_cmpeq_imm_R0(NULL, &buffer, inst->inst_imm);
 			break;
-		case OP_ICOMPARE:
-			/* MD: icompare: src1:i src2:i len:2 */
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_icompare] sreg1=%d, sreg2=%d, dreg= %d\n", inst->sreg1, inst->sreg2, inst->dreg);
-			sh4_cmpeq(NULL, &buffer, inst->sreg1, inst->sreg2);
-			break;
+		}
 		case OP_ICONST:
 			/* MD: iconst: dest:i len:12 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [iconst] dreg=%d, const=%0lX\n", inst->dreg, (unsigned long) inst->inst_imm);
@@ -1684,6 +1675,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case OP_LABEL: {
+			/* MD: label: len:0 */
+			inst->inst_c0 = code - cfg->native_code;
+			break;
+		}
 		default:
 			/* The following opcodes are not yet supported, however
 			   I need them to pass some trivial examples. */
@@ -1694,12 +1690,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_cgt_un: */
 			/* MD: endfilter: */
 			/* MD: store_membase_reg: */
-			/* MD: label: */
 			/* MD: compare_imm: */
 			/* MD: storei4_membase_imm: */
 			/* MD: storei4_membase_reg: */
 			/* MD: loadi4_membase: */
 			/* MD: loadu1_membase: */
+			/* MD: icompare_imm: */
+			/* MD: icompare: */
 
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
 			//g_assert_not_reached();
@@ -1812,7 +1809,7 @@ gboolean mono_arch_print_tree(MonoInst *tree, int arity)
 	gboolean done = 0;
 
 	switch (tree->opcode) {
-		case OP_SH4_ICOMPARE_IMM_R0:
+		case OP_SH4_CEQ_IMM_R0:
 			printf("[%s,0x%x]", mono_arch_regname(sh4_r0), tree->inst_imm);
 			done = 1;
 		default:
