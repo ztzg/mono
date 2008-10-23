@@ -739,6 +739,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 *	:              :
 	 */
 
+	/* TODO - CV : Should the LMF be saved here ? */
+
 	/* Copy arguments at the expected place : into register or onto the stack. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
 		struct arg_info *arg_info = &call_info->args[i];
@@ -1356,8 +1358,8 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
 
 gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 {
-	/* TODO - CV */
-	g_assert(0);
+	/* WIP */
+	g_warning("get_vcall_slot_addr not yet implemented\n");
 	return NULL;
 }
 
@@ -1596,6 +1598,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case CEE_BEQ:
 		case OP_IBEQ: {
 			/* MD: int_beq: clob:0 len:18 */
 			/* MD: beq: clob:0 len:18 */
@@ -1638,6 +1641,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case CEE_BNE_UN:
 		case OP_IBNE_UN: {
 			/* MD: int_bne_un: clob:0 len:18 */
 			/* MD: bne.un: clob:0 len:18 */
@@ -1677,6 +1681,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Back patch the reversed test. */
 			sh4_bt_label(NULL, &patch, buffer);
+
+			break;
 		}
 		default:
 			/* The following opcodes are not yet supported, however
@@ -1695,9 +1701,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: loadi4_membase: */
 			/* MD: loadu1_membase: */
 
-			g_warning("unknown opcode %s\n", mono_inst_name(inst->opcode));
-			g_assert_not_reached();
-
+			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
+			//g_assert_not_reached();
 		}
 
 		/* Sanity checks. */
