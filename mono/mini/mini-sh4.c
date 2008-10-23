@@ -1451,6 +1451,45 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			mono_decompose_op_imm(cfg, inst);
 			break;
 
+		case OP_STORE_MEMBASE_IMM:
+		case OP_STOREI4_MEMBASE_IMM:
+			if (!SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
+				MonoInst *temp;
+
+				MONO_INST_NEW (cfg, temp, OP_ICONST);
+				temp->inst_c0 = inst->inst_imm;
+				temp->dreg = mono_regstate_next_int (cfg->rs);
+				MONO_INST_LIST_ADD_TAIL (&(temp)->node, &(inst)->node);
+				/* We merge the case STORE_MEMBASE and STOREI4_MEMBASE */
+				inst->opcode = OP_STORE_MEMBASE_REG;
+				inst->sreg1 = temp->dreg;
+			}
+			break;
+		case OP_LOAD_MEMBASE:
+		case OP_LOADU4_MEMBASE:	
+		case OP_LOADI4_MEMBASE:
+			if (!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
+				MonoInst *temp, *temp2;
+				/* load offset in new register */
+				MONO_INST_NEW (cfg, temp, OP_ICONST);
+				temp->inst_c0 = inst->inst_offset;
+				temp->dreg = mono_regstate_next_int (cfg->rs);
+				/* add basereg from LOAD to this new register */
+				MONO_INST_NEW (cfg, temp2, OP_IADD);
+				temp2->sreg1 = inst->inst_basereg;
+				temp2->sreg2 = temp->dreg;
+				temp2->dreg = temp->dreg;
+				MONO_INST_LIST_ADD_TAIL (&(temp2)->node, &(inst)->node);
+				MONO_INST_LIST_ADD_TAIL (&(temp)->node, &(temp2)->node);
+				/* We merge the case OP_LOAD_MEMBASE, OP_LOADU4_MEMBASE and
+				 OP_LOADI4_MEMBASE */
+				inst->opcode = OP_SH4_LOAD_MEMBASE;
+				inst->inst_offset = 0;
+				inst->inst_basereg = temp2->dreg;
+				/* inst->dreg destination reg is kept */
+			}
+			break;
+
 		default:
 			break;
 		}
@@ -1556,15 +1595,65 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SH4_CEQ_IMM_R0: {
 			/* MD: sh4_ceq_imm_R0: src1:0 len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_cmpeq_imm_R0(NULL, &buffer, inst->inst_imm);
+			sh4_cmpeq_imm_R0(cfg, &buffer, inst->inst_imm);
 			break;
 		}
+		case OP_STORE_MEMBASE_IMM:
+			/* MD: store_membase_imm: clob:0 dest:b len:14 */
+		case OP_STOREI4_MEMBASE_IMM:
+			/* MD: storei4_membase_imm: clob:0 dest:b len:14 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [store_membase_imm] const=%0lx, destbasereg=%d, offset=%0lx\n", (unsigned long) inst->inst_imm, inst->inst_destbasereg, (unsigned long) inst->inst_offset);
+			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
+				/* Put immediate to store in Cst-Pool & clobber R0 */
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, 
+						&(inst->inst_imm), sh4_r0);
+				sh4_movl_dispRx(cfg, &buffer, sh4_r0,
+						inst->inst_offset, inst->inst_destbasereg); 
+			} else {
+				/* Avoid this in mono_arch_lowering_pass() */
+				g_assert(0);
+			}
+			break;
+		case OP_STORE_MEMBASE_REG:
+			/* MD: store_membase_reg: clob:0 dest:b src1:i len:16 */
+		case OP_STOREI4_MEMBASE_REG:
+			/* MD: storei4_membase_reg: clob:0 dest:b src1:i len:16 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [store_membase_reg/storei4_membase_reg] sreg1=%d, destbasereg=%d, offset=%0lx\n", inst->sreg1, inst->inst_destbasereg, (unsigned long) inst->inst_offset);
+			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
+				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, 
+						inst->inst_offset, inst->inst_destbasereg); 
+			} else {
+				/* Put store-offset in Cst-Pool & clobber R0 */
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
+						&(inst->inst_offset), sh4_r0);
+				/* Compute store address in sh4_r0 as we cannot clobber 
+				   destbasereg */
+				sh4_add(cfg, &buffer, inst->inst_destbasereg, sh4_r0);
+				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, 0, sh4_r0); 
+			}
+			break;
+		case OP_LOAD_MEMBASE:
+			/* MD: load_membase: dest:i src1:b len:2 */
+		case OP_LOADU4_MEMBASE:	
+			/* MD: loadu4_membase: dest:i src1:b len:2 */
+		case OP_LOADI4_MEMBASE:	
+			/* MD: loadi4_membase: dest:i src1:b len:2 */
+		case OP_SH4_LOAD_MEMBASE:
+			/* MD: sh4_load_membase: dest:i src1:b len:2 */ 
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_load_membase] dreg=%d, basereg=%d, offset=%0lx\n", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
+			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
+				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, 
+						inst->inst_basereg, inst->dreg); 
+			} else {
+				/* Not used in mono_arch_lowering_pass() */
+				/* DFE 				g_assert(0); */
+				g_warning("OP_LOAD_MEMBASE: Should not happen...\n");
+			}
+			break;
 		case OP_ICONST:
 			/* MD: iconst: dest:i len:12 */
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [iconst] dreg=%d, const=%0lX\n", inst->dreg, (unsigned long) inst->inst_c0);
-
 			if (SH4_CHECK_RANGE_mov_imm(inst->inst_c0)) {
-				sh4_mov_imm(NULL, &buffer, inst->inst_c0, inst->dreg);
+				sh4_mov_imm(cfg, &buffer, inst->inst_c0, inst->dreg);
 			} else {
 				sh4_cstpool_add(cfg,&buffer,MONO_PATCH_INFO_NONE,
 						&(inst->inst_c0),inst->dreg);
@@ -1594,8 +1683,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
 
-			sh4_jsr_indRx(NULL, &buffer, sh4_r0);
-			sh4_nop(NULL, &buffer); /* delay slot */
+			sh4_jsr_indRx(cfg, &buffer, sh4_r0);
+			sh4_nop(cfg, &buffer); /* delay slot */
 
 			break;
 		}
@@ -1603,7 +1692,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: move: dest:i src1:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [move] sreg=%d, dreg=%d\n", inst->sreg1, inst->dreg);
 			if (inst->sreg1 != inst->dreg)
-				sh4_mov(NULL, &buffer, inst->sreg1, inst->dreg);
+				sh4_mov(cfg, &buffer, inst->sreg1, inst->dreg);
 			break;
 		case OP_FCALL_REG:
 		case OP_LCALL_REG:
@@ -1612,8 +1701,61 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: voidcall_reg: src1:i clob:c len:4 */
 		case OP_CALL_REG: {
 			/* MD: call_reg: src1:i clob:c len:4 */
-			sh4_jsr_indRx(NULL, &buffer, inst->sreg1);
-			sh4_nop(NULL, &buffer); /* delay slot */
+			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
+			sh4_nop(cfg, &buffer); /* delay slot */
+			break;
+		}
+		case OP_START_HANDLER: {
+			/* MD: start_handler: clob:0 len:16 */
+			guint32 tmp_offset;
+
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [start_handler] basereg=%d, offset=%0lx\n", inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
+			/* Put offset + 4 (because of sh4_stsl_PR_decRx) in Cst-Pool & clobber R0 */
+			tmp_offset = inst->inst_left->inst_offset + 4;
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
+					&(tmp_offset), sh4_r0);
+
+			/* Compute store address in destbasereg */
+			sh4_add(cfg, &buffer, sh4_r0, inst->inst_left->inst_basereg);
+			sh4_stsl_PR_decRx(cfg, &buffer, inst->inst_left->inst_basereg);
+			break;
+		}
+		case OP_ENDFILTER: {
+			/* MD: endfilter:  clob:0 len:18 */
+			guint32 tmp_offset;
+
+			// Keep in sync with start_handler
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [endfilter] sreg1=%d, basereg=%d, offset=%0lx\n", inst->sreg1, inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
+#if 0 /* DFE: SEEMS TO DEPEND ON LMF SAVE: see mono_get_lmf_addr ... */
+			if (ins->sreg1 != -1 && ins->sreg1 != sh4_rX)
+				sh4_move (NULL, &buffer, sh4_rX, ins->sreg1);
+#endif
+			g_warning("OP_ENDFILTER: Not fully implemented...");
+			/* Put offset - 4 (because of sh4_ldsl_incRx_PR) in Cst-Pool & clobber R0 */
+			tmp_offset = inst->inst_left->inst_offset - 4;
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
+					&(tmp_offset), sh4_r0);
+			/* Compute store address in destbasereg */
+			sh4_add(cfg, &buffer, sh4_r0, inst->inst_left->inst_destbasereg);
+			sh4_ldsl_incRx_PR(cfg, &buffer, inst->inst_left->inst_basereg);
+			sh4_rts(cfg, &buffer);
+			break;
+		}
+		case OP_ENDFINALLY: {
+			/* MD: endfinally:  clob:0 len:18 */
+			guint32 tmp_offset;
+
+			// Keep in sync with start_handler
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [endfinally] basereg=%d, offset=%0lx\n", inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
+			/* Put offset - 4 (because of sh4_ldsl_incRx_PR) in 
+			   Cst-Pool & clobber R0 */
+			tmp_offset = inst->inst_left->inst_offset - 4;
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
+					&(tmp_offset), sh4_r0);
+			/* Compute store address in destbasereg */
+			sh4_add(cfg, &buffer, sh4_r0, inst->inst_destbasereg);
+			sh4_ldsl_incRx_PR(cfg, &buffer, inst->inst_left->inst_basereg);
+			sh4_rts(cfg, &buffer);
 			break;
 		}
 		case OP_BR: {
@@ -1638,8 +1780,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Use the optimal instruction if possible. */
 			if (displace != 0 && SH4_CHECK_RANGE_bra_label(buffer, address)) {
-				sh4_bra_label(NULL, &buffer, address);
-				sh4_nop(NULL, &buffer);
+				sh4_bra_label(cfg, &buffer, address);
+				sh4_nop(cfg, &buffer);
 				break;
 			}
 
@@ -1681,7 +1823,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Reverse the test to skip the unconditional jump. */
 			patch = buffer;
-			sh4_die(NULL, &buffer); /* patch slot for : bf_label "skip_jump" */
+			sh4_die(cfg, &buffer); /* patch slot for : bf_label "skip_jump" */
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
 
@@ -1744,20 +1886,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		default:
 			/* The following opcodes are not yet supported, however
 			   I need them to pass some trivial examples. */
-			/* MD: store_membase_imm: dest:b */
-			/* MD: loadu4_membase: dest:i src1:b */
-			/* MD: load_membase: dest:i src1:b */
-			/* MD: start_handler: */
-			/* MD: int_cgt_un: */
-			/* MD: endfilter: */
-			/* MD: store_membase_reg: */
-			/* MD: compare_imm: */
-			/* MD: storei4_membase_imm: */
-			/* MD: storei4_membase_reg: */
-			/* MD: loadi4_membase: */
-			/* MD: loadu1_membase: */
 			/* MD: icompare_imm: */
 			/* MD: icompare: */
+			/* MD: compare_imm: */
+			/* MD: compare: */
+			/* MD: int_cgt_un: */
 
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
 			//g_assert_not_reached();
