@@ -416,7 +416,7 @@ fi
 # with an ancient tar program (Solaris)
 #
 AC_MSG_CHECKING(integrity of package)
-if test -f $srcdir/$mcsdir/class/System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap/SoapTypeMapper.cs
+if [test x$enable_mcs_build == xno || test -f $srcdir/$mcsdir/class/System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap/SoapTypeMapper.cs]
 then
    AC_MSG_RESULT(ok)
 else
