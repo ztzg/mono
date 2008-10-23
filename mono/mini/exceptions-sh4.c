@@ -14,6 +14,14 @@
 #include "mini.h"
 #include "mono/arch/sh4/sh4-codegen.h"
 
+/**
+ * This function is used to gather information from 'ctx'. It returns the 
+ * MonoJitInfo of the corresponding function, unwinds one stack frame and
+ * stores the resulting context into 'new_ctx'. It also stores a string 
+ * describing the stack location into 'trace' (if not NULL), and modifies
+ * the 'lmf' if necessary. 'native_offset' is used to return the PC offset
+ * from the start of the function or -1 if that info is not available.
+ */
 MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *result,
 				     MonoJitInfo *previous_jit_info, MonoContext *context, MonoContext *new_context,
 				     char **trace, MonoLMF **lmf, int *native_offset, gboolean *managed)
@@ -25,8 +33,6 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		  domain, jit_tls, result, previous_jit_info, context,
 		  new_context, trace, lmf, native_offset, managed);
 
-	if (managed != NULL)
-		*managed = FALSE;
 
 	/* Avoid costly table lookup during stack overflow. */
 	if (previous_jit_info != NULL &&
@@ -36,22 +42,77 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 	else
 		jit_info = mono_jit_info_table_find(domain, pc);
 
+	if (managed != NULL)
+		*managed = FALSE;
+
 	if (jit_info != NULL) {
+		*new_context = *context;
+
+		if (managed != NULL)
+			if (jit_info->method->wrapper_type == 0)
+				*managed = TRUE;
+
+		/* Some managed methods like pinvoke wrappers might have save_lmf
+		   set. In this case, register save/restore code is not generated
+		   by the JIT, so we have to restore registers from the LMF. */
+		if (jit_info->method->save_lmf != 0) {
+			/* We only need to do this if the exception was raised in managed
+			   code, since otherwise the LMF was already popped off the stack. */
+			if (*lmf != NULL &&
+			    (MONO_CONTEXT_GET_BP(context) >= (gpointer)(*lmf)->registers[sh4_r14])) {
+				memcpy(new_context->registers, (*lmf)->registers, sizeof(new_context->registers));
+				new_context->pc = (*lmf)->pc;
+			}
+		}
+		else {
+			NOT_IMPLEMENTED;
+#if 0
+			offset = 0;
+
+			for (i = 8; i <= 15; i++) {
+				if (jit_info->used_regs & (1 << i)) {
+					offset += sizeof(guint32);
+					new_context->registers[i] = XXX; //*(gulong*)((char*)sframe->sp - offset);
+				}
+			}
+
+			new_context->pc = XXX;
+#endif
+		}
+
+		/* Remove any unused LMF. */
+		if (*lmf && MONO_CONTEXT_GET_BP(context) >= (gpointer)(*lmf)->registers[sh4_r14])
+			*lmf = (*lmf)->previous_lmf;
+
 		NOT_IMPLEMENTED;
+
+		/* Unwind one stack frame. Here comes a typical prologue :
+		       mov.l   r14,@-r15
+		       sts.l   pr,@-r15
+		       [...]   // stack noops
+		       mov     r15,r14
+
+		   This functionality is not yet implemented because I do not
+		   have enough time, however it is in good way. If you try to
+		   make it works, take care about the offset due to the save
+		   of the LMF. CV */
+
+		MONO_CONTEXT_SET_IP(new_context, *((guint32 *)MONO_CONTEXT_GET_BP(context) + 1) - 4);
+		MONO_CONTEXT_SET_BP(new_context, *((guint32 *)MONO_CONTEXT_GET_BP(context) + 2));
+		MONO_CONTEXT_SET_SP(new_context, MONO_CONTEXT_GET_BP(new_context));
+
+		return jit_info;
 	}
 	else if (*lmf != NULL) {
 		*new_context = *context;
 
-		/* Top LMF entry (or bad LMF ?). */
-		if ((*lmf)->method == NULL)
-			return (gpointer)-1;
-
-		if (trace != NULL)
-			NOT_IMPLEMENTED;
-
 		/* Check if it is a trampoline LMF. */
 		jit_info = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
 		if (jit_info == NULL) {
+			/* Top LMF entry. */
+			if ((*lmf)->method == NULL)
+				return (gpointer)-1;
+
 			bzero(result, sizeof(MonoJitInfo));
 			result->method = (*lmf)->method;
 		}
