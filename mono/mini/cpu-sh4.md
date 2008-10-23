@@ -51,26 +51,28 @@
 
 sh4_icompare_imm_R0: src1:0 len:2
 icompare: src1:i src2:i len:2
+store_membase_imm: clob:0 dest:b len:14
+storei4_membase_imm: clob:0 dest:b len:14
+store_membase_reg: clob:0 dest:b src1:i len:16
+storei4_membase_reg: clob:0 dest:b src1:i len:16
+load_membase: dest:i src1:b len:2
+loadu4_membase: dest:i src1:b len:2
+loadi4_membase: dest:i src1:b len:2
+sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
 voidcall: clob:c len:16
 call: clob:c len:16
 move: dest:i src1:i len:2
 voidcall_reg: src1:i clob:c len:4
 call_reg: src1:i clob:c len:4
+start_handler: clob:0 len:16
+endfilter:  clob:0 len:18
+endfinally:  clob:0 len:18
 br: clob:0 len:16
 int_beq: clob:0 len:18
 beq: clob:0 len:18
 int_bne_un:
-store_membase_imm: dest:b
-loadu4_membase: dest:i src1:b
-load_membase: dest:i src1:b
-start_handler:
-int_cgt_un:
-endfilter:
-store_membase_reg:
-bne.un:
-label:
-compare_imm:
-storei4_membase_imm:
-storei4_membase_reg:
-loadi4_membase:
+int_cgt_un: dest:i len:16
+bne.un: len:4
+label: len:0
+compare_imm: src1:i len:4
