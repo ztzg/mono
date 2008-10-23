@@ -1407,13 +1407,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		case OP_ICONST:
 			/* MD: iconst: dest:i len:12 */
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [iconst] dreg=%d, const=%0lX\n", inst->dreg, (unsigned long) inst->inst_imm);
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [iconst] dreg=%d, const=%0lX\n", inst->dreg, (unsigned long) inst->inst_c0);
 
-			if (SH4_CHECK_RANGE_mov_imm(inst->inst_imm)) {
-				sh4_mov_imm(NULL, &buffer, inst->inst_imm, inst->dreg);
+			if (SH4_CHECK_RANGE_mov_imm(inst->inst_c0)) {
+				sh4_mov_imm(NULL, &buffer, inst->inst_c0, inst->dreg);
 			} else {
 				sh4_cstpool_add(cfg,&buffer,MONO_PATCH_INFO_NONE,
-						&(inst->inst_imm),inst->dreg);
+						&(inst->inst_c0),inst->dreg);
 			}
 			break;
 		case OP_FCALL:
