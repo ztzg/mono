@@ -1557,7 +1557,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4: [%s] dreg=%d, inst_imm=%0lX\n",
 						   mono_inst_name(inst->opcode), inst->dreg, (unsigned long) inst->inst_imm);
 			g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_imm));
-			sh4_add_imm(NULL, &buffer, inst->inst_imm, inst->dreg);
+			sh4_add_imm(cfg, &buffer, inst->inst_imm, inst->dreg);
 			break;
 
 		case OP_SUB_IMM:
@@ -1578,7 +1578,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_add: dest:1 src2:i len:2 */
 			/* MD: int_addcc: dest:1 src2:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_ADD: [add] sreg1=%d, sreg2=%d, dreg=%d\n", inst->sreg1, inst->sreg2, inst->dreg);
-			sh4_add(NULL, &buffer, inst->sreg2, inst->dreg);
+			sh4_add(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
 		
 		case OP_SUBCC:
@@ -1589,7 +1589,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_subcc: dest:1 src2:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_SUB: [sub] sreg1=%d, sreg2=%d, dreg=%d\n",
 						   inst->sreg1, inst->sreg2, inst->dreg);
-			sh4_sub(NULL, &buffer, inst->sreg2, inst->dreg);
+			sh4_sub(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
 		
 		case OP_SH4_CEQ_IMM_R0: {
@@ -1633,11 +1633,28 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 		case OP_LOAD_MEMBASE:
-			/* MD: load_membase: dest:i src1:b len:2 */
+			/* MD: load_membase: clob:0 dest:i src1:b len:16 */
 		case OP_LOADU4_MEMBASE:	
-			/* MD: loadu4_membase: dest:i src1:b len:2 */
+			/* MD: loadu4_membase: clob:0 dest:i src1:b len:16 */
 		case OP_LOADI4_MEMBASE:	
-			/* MD: loadi4_membase: dest:i src1:b len:2 */
+			/* MD: loadi4_membase: clob:0 dest:i src1:b len:16 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [op_load_membase/op_loadu4_membase/op_loadi4_membase] dreg=%d, basereg=%d, offset=%0lx\n", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
+			/* DFE: this should be avoided by mono_arch_lowering_pass(),
+			 * but still happens with negative offsets */
+			if (!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
+				/* Put store-offset in Cst-Pool & clobber R0 */
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
+						&(inst->inst_offset), sh4_r0);
+				/* Compute store address in sh4_r0 as we cannot clobber 
+				   destbasereg */
+				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_r0);
+				sh4_movl_dispRy(cfg, &buffer, 0,
+						sh4_r0, inst->dreg);
+			} else {
+				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
+						inst->inst_basereg, inst->dreg);
+			}
+			break;
 		case OP_SH4_LOAD_MEMBASE:
 			/* MD: sh4_load_membase: dest:i src1:b len:2 */ 
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_load_membase] dreg=%d, basereg=%d, offset=%0lx\n", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
@@ -1646,8 +1663,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 						inst->inst_basereg, inst->dreg); 
 			} else {
 				/* Not used in mono_arch_lowering_pass() */
-				/* DFE 				g_assert(0); */
-				g_warning("OP_LOAD_MEMBASE: Should not happen...\n");
+				g_assert(0);
 			}
 			break;
 		case OP_ICONST:
@@ -1728,7 +1744,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [endfilter] sreg1=%d, basereg=%d, offset=%0lx\n", inst->sreg1, inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
 #if 0 /* DFE: SEEMS TO DEPEND ON LMF SAVE: see mono_get_lmf_addr ... */
 			if (ins->sreg1 != -1 && ins->sreg1 != sh4_rX)
-				sh4_move (NULL, &buffer, sh4_rX, ins->sreg1);
+				sh4_move (cfg, &buffer, sh4_rX, ins->sreg1);
 #endif
 			g_warning("OP_ENDFILTER: Not fully implemented...");
 			/* Put offset - 4 (because of sh4_ldsl_incRx_PR) in Cst-Pool & clobber R0 */
@@ -1817,7 +1833,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Use the optimal instruction if possible. */
 			if (displace != 0 && SH4_CHECK_RANGE_bt_label(buffer, address)) {
-				sh4_bt_label(NULL, &buffer, address);
+				sh4_bt_label(cfg, &buffer, address);
 				break;
 			}
 
@@ -1860,7 +1876,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Use the optimal instruction if possible. */
 			if (displace != 0 && SH4_CHECK_RANGE_bf_label(buffer, address)) {
-				sh4_bf_label(NULL, &buffer, address);
+				sh4_bf_label(cfg, &buffer, address);
 				break;
 			}
 
