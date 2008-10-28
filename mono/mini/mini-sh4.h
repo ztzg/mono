@@ -249,6 +249,34 @@ typedef enum {
   cstpool_patched   = 3,
 } CstPool_State;
 
+/* Float and double values add some complexity */
+enum CstPool_Const_Type {
+   cstpool_type_int     = 0,     /* Integer */
+   cstpool_type_float   = 1,     /* Float   */
+   cstpool_type_double  = 2,     /* Double: 32 low  bits */
+};
+
+/* This structure should only be used in file cstpool-sh4.c
+ * where elementary functions to manipulate its fields
+ * are defined.
+ */
+typedef struct{
+   guint16  const_type;          /* CstPool_Const_Type */
+   union {
+
+     union {
+       float   f;
+       guint32 i;
+     }u2;
+
+     union {
+       double  d;
+       guint32 tabint[2];
+     }u3;
+
+   } u1;
+} CstPool_Const_Values;
+
 typedef struct MonoSH4CstPool{
 	struct  MonoSH4CstPool *next;
 	CstPool_State state    ;
@@ -281,7 +309,7 @@ typedef struct {
 	guint32        *tab_bb_offset;
 } MonoSH4CstPool_Env;
 
-typedef struct { 
+typedef struct {
 	gint localloc_size;
 	MonoSH4CstPool_Env *poolenv;
  } MonoCompileArch;

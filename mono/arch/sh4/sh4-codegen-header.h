@@ -102,6 +102,9 @@ static inline void sh4_emit32(guint8 **address, unsigned int value)
 #define sh4_movl_PCrel(cfg, code, address, Rx)	\
 	sh4_movl_dispPC((cfg), (code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
 
+#define sh4_mova_PCrel_R0(cfg,code,address)     \
+	sh4_mova_dispPC_R0((cfg), (code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3))
+
 #define sh4_die(cfg, code) sh4_ldtlb(cfg, code)
 
 #define SH4_LABEL(from, to) (guint32)((guint32)(to) - (guint32)(from) - 4)

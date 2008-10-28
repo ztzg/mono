@@ -18,6 +18,8 @@ void sh4_cstpool_end(MonoCompile *cfg);
 void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval,
                      MonoJumpInfoType type, gconstpointer target,
                      guint32 reg);
+void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f);
+void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d);
 void sh4_cstpool_check(void *cfg, guint8 **pcval);
 void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb,
                               guint8 **pcval);
