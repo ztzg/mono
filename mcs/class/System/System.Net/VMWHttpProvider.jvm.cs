@@ -14,6 +14,9 @@ using System.Collections.Specialized;
 using System.Collections;
 using mainsoft.apache.commons.httpclient.cookie;
 using vmw.@internal.net;
+using vmw.common;
+using JInputStream = java.io.InputStream;
+using JOutputStream = java.io.OutputStream;
 
 namespace System.Net
 {
@@ -38,14 +41,16 @@ namespace System.Net
 		protected bool _hasResponse;
 		protected bool _hasRequest;
 		protected Stream _writeStream;
-		private GHWebAsyncResult _asyncWrite;		
-		private const int DEFAULT_IDLE_CONNECTION_TIMEOUT = 0;
-		private const int DEFAULT_IDLE_THREAD_TIMEOUT = 2;
 
+        private GHWebAsyncResult _asyncWrite;
+        private StreamProviderRequestEntity _reqEntity;
 		private bool _isConnectionOpened;
 		private bool _preAuthenticateNTLM = false;
-		
-		static VMWHttpProvider()
+
+        private const int DEFAULT_IDLE_CONNECTION_TIMEOUT = 0;
+        private const int DEFAULT_IDLE_THREAD_TIMEOUT = 2;
+
+        static VMWHttpProvider()
 		{
 			if(java.lang.System.getProperty("mainsoft.apache.commons.logging.Log") == null)
 				java.lang.System.setProperty("mainsoft.apache.commons.logging.Log",
@@ -621,9 +626,9 @@ namespace System.Net
 					throw new WebException ("The operation has been aborted.", WebExceptionStatus.RequestCanceled);
 				
 				this.OpenConnection ();
-				RequestEntity reqEntity = new StreamProviderRequestEntity (streamProvider, _contentLength);				
+				_reqEntity = new StreamProviderRequestEntity (streamProvider, _contentLength);				
 				EntityEnclosingMethod method = (EntityEnclosingMethod) _method;				
-				method.setRequestEntity (reqEntity);				
+				method.setRequestEntity (_reqEntity);				
 				_hasRequest = true;				
 			}
 
@@ -795,7 +800,13 @@ namespace System.Net
 					try
 					{	
 						synchHeaders();
-						InternalExecuteMethod ();						
+                        try {
+                            InternalExecuteMethod();
+                        }
+                        finally {
+                            if (_reqEntity != null)
+                                _reqEntity.dispose();
+                        }
 						int numOfRedirects = 0;
 						while (isRedirectNeeded (_method) && _allowAutoRedirect && numOfRedirects < MaxAutoRedirections) {
 							if (!HandleManualyRedirect ())
@@ -1406,21 +1417,21 @@ namespace System.Net
 
 	class StreamProviderRequestEntity : RequestEntity
 	{
-		InputStreamProvider _streamProvider;
-		long _contentLength;		
-		
+        const int MaxStoreInMemory = 100000; // Streams smaller then 100K will not be stored in files.
+
+        InputStreamProvider _streamProvider;
+		long _contentLength;
+        byte[] _savedContent;
+        string _savedFileName;
+
 		public StreamProviderRequestEntity(InputStreamProvider provider, long contentLength)
 		{
-			if (contentLength <= 0)
+			if (contentLength < 0)
 				throw new ArgumentException("Using StreamProvider is only allowed when the content length is set");
 			_streamProvider = provider;
 			_contentLength = contentLength;
 		}
 		
-		java.io.InputStream getStream()
-		{
-			return new vmw.@internal.io.InputStreamWrapper( _streamProvider.CreateStream());
-		}
 		public long getContentLength() {
 			return _contentLength;
 		}
@@ -1433,14 +1444,59 @@ namespace System.Net
 			return true;
 		}
 
-		public void writeRequest(java.io.OutputStream output) {
-			java.io.InputStream stream = getStream();
-			int len;
-			sbyte[] array = new sbyte[4096];
-			while ((len = stream.read(array)) > 0)
-				output.write (array, 0, len);
-			stream.close ();
-		}
-		
+        public void dispose()
+        {
+            try {
+                if (_savedFileName != null)
+                    File.Delete(_savedFileName);
+            }
+            catch (Exception e) {} // Ignore the exception.
+        }
+
+        private Stream getStream()
+        {
+            try {
+                return (Stream)_streamProvider.CreateStream();
+            }
+            catch (Exception e) {
+                if (_savedContent != null)
+                    return new MemoryStream(_savedContent);
+                if (_savedFileName != null)
+                    return new FileStream(_savedFileName, FileMode.Open);
+                throw e;
+            }
+        }
+
+		public void writeRequest(JOutputStream output)
+        {
+            Stream inputStream = getStream();
+            Stream saveContents = null;
+            if (_savedContent == null && _savedFileName == null) {
+                if (_contentLength < MaxStoreInMemory)
+                    saveContents = new MemoryStream();
+                else {
+                    _savedFileName = Path.GetTempFileName();
+                    saveContents = new FileStream(_savedFileName, FileMode.OpenOrCreate);
+                }
+            }
+
+            int len;
+            byte[] array = new byte[16384];
+            try {
+                while ((len = inputStream.Read(array, 0, array.Length)) > 0)
+                {
+                    if (saveContents != null)
+                        saveContents.Write(array, 0, len);
+                    output.write(TypeUtils.ToSByteArray(array), 0, len);
+                }
+            }
+            finally {
+                if (saveContents != null)
+                    saveContents.Close();
+                inputStream.Close();
+            }
+            if (saveContents is MemoryStream)
+                _savedContent = (saveContents as MemoryStream).ToArray();
+        }
 	}
 }
