@@ -73,9 +73,9 @@ call: clob:c len:16
 move: dest:i src1:i len:2
 voidcall_reg: src1:i clob:c len:4
 call_reg: src1:i clob:c len:4
-start_handler: clob:0 len:16
-endfilter:  clob:0 len:18
-endfinally:  clob:0 len:18
+start_handler: clob:0 len:6
+endfilter: src1:I clob:0 len:12
+endfinally: clob:0 len:10
 br: clob:0 len:16
 int_beq: clob:0 len:18
 beq: clob:0 len:18

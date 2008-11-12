@@ -1580,7 +1580,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_ADD: [add] sreg1=%d, sreg2=%d, dreg=%d\n", inst->sreg1, inst->sreg2, inst->dreg);
 			sh4_add(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
-		
+
 		case OP_SUBCC:
 		case OP_ISUBCC:
 		case OP_ISUB:
@@ -1591,7 +1591,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 						   inst->sreg1, inst->sreg2, inst->dreg);
 			sh4_sub(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
-		
+
 		case OP_SH4_CEQ_IMM_R0: {
 			/* MD: sh4_ceq_imm_R0: src1:0 len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
@@ -1695,6 +1695,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				target = (gpointer)call->fptr;
 			}
 
+			/* Please, update mono_arch_patch_callsite() according
+			   to any changes made on this code-generation. CV */
+
 			/* TODO - CV : optimize with sh4_bsr if possible. */
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
@@ -1721,59 +1724,80 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_nop(cfg, &buffer); /* delay slot */
 			break;
 		}
+
+		/**
+		 * The START_HANDLER instruction marks the beginning of a handler
+		 * block. It is called using a call instruction, so sh4_pr contains
+		 * the return address. Since the handler executes in the same stack
+		 * frame as the method itself, we can't use save/restore to save
+		 * the return address. Instead, we save it into a dedicated
+		 * variable.
+		 */
 		case OP_START_HANDLER: {
-			/* MD: start_handler: clob:0 len:16 */
-			guint32 tmp_offset;
+			/* MD: start_handler: clob:0 len:6 */
+			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [start_handler] basereg=%d, offset=%0lx\n", inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
-			/* Put offset + 4 (because of sh4_stsl_PR_decRx) in Cst-Pool & clobber R0 */
-			tmp_offset = inst->inst_left->inst_offset + 4;
-			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-					&(tmp_offset), sh4_r0);
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_CHECK: [start_handler] basereg=%d, offset=%0lx\n",
+					  spvar->inst_basereg,
+					  (unsigned long)spvar->inst_offset);
 
-			/* Compute store address in destbasereg */
-			sh4_add(cfg, &buffer, sh4_r0, inst->inst_left->inst_basereg);
-			sh4_stsl_PR_decRx(cfg, &buffer, inst->inst_left->inst_basereg);
+			/* We enforce R0 here because the SH4 instruction used to save
+			   the return address clobbered the destination register. */
+			if (spvar->inst_basereg != sh4_r0)
+				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_r0);
+
+			if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset))
+				sh4_add_imm(cfg, &buffer, spvar->inst_offset, sh4_r0);
+			else {
+				NOT_IMPLEMENTED;
+			}
+
+			sh4_stsl_PR_decRx(cfg, &buffer, sh4_r0);
+
 			break;
 		}
-		case OP_ENDFILTER: {
-			/* MD: endfilter:  clob:0 len:18 */
-			guint32 tmp_offset;
 
-			// Keep in sync with start_handler
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [endfilter] sreg1=%d, basereg=%d, offset=%0lx\n", inst->sreg1, inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
-#if 0 /* DFE: SEEMS TO DEPEND ON LMF SAVE: see mono_get_lmf_addr ... */
-			if (ins->sreg1 != -1 && ins->sreg1 != sh4_rX)
-				sh4_move (cfg, &buffer, sh4_rX, ins->sreg1);
-#endif
-			g_warning("OP_ENDFILTER: Not fully implemented...");
-			/* Put offset - 4 (because of sh4_ldsl_incRx_PR) in Cst-Pool & clobber R0 */
-			tmp_offset = inst->inst_left->inst_offset - 4;
-			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-					&(tmp_offset), sh4_r0);
-			/* Compute store address in destbasereg */
-			sh4_add(cfg, &buffer, sh4_r0, inst->inst_left->inst_destbasereg);
-			sh4_ldsl_incRx_PR(cfg, &buffer, inst->inst_left->inst_basereg);
-			sh4_rts(cfg, &buffer);
-			break;
-		}
+		/* Restore the return address saved with the opcode "start_handler",
+		 * and return the value in "sreg1" if it is an "endfilter". */
+		case OP_ENDFILTER:
+			/* MD: endfilter: src1:I clob:0 len:12 */
 		case OP_ENDFINALLY: {
-			/* MD: endfinally:  clob:0 len:18 */
-			guint32 tmp_offset;
+			/* MD: endfinally: clob:0 len:10 */
+			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
-			// Keep in sync with start_handler
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [endfinally] basereg=%d, offset=%0lx\n", inst->inst_left->inst_basereg, (unsigned long) inst->inst_left->inst_offset);
-			/* Put offset - 4 (because of sh4_ldsl_incRx_PR) in 
-			   Cst-Pool & clobber R0 */
-			tmp_offset = inst->inst_left->inst_offset - 4;
-			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-					&(tmp_offset), sh4_r0);
-			/* Compute store address in destbasereg */
-			sh4_add(cfg, &buffer, sh4_r0, inst->inst_destbasereg);
-			sh4_ldsl_incRx_PR(cfg, &buffer, inst->inst_left->inst_basereg);
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_CHECK: [endfinally/endfilter] basereg=%d, offset=%0lx\n",
+						   spvar->inst_basereg,
+						   (unsigned long) spvar->inst_offset);
+
+			/* We enforce R0 here because the SH4 instruction used to save
+			   the return address clobbered the source register. */
+			if (spvar->inst_basereg != sh4_r0)
+				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_r0);
+
+			if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset))
+				sh4_add_imm(cfg, &buffer, spvar->inst_offset, sh4_r0);
+			else {
+				NOT_IMPLEMENTED;
+			}
+
+			sh4_ldsl_incRx_PR(cfg, &buffer, sh4_r0);
+
+			if (inst->opcode == OP_ENDFILTER) {
+				/* "src1:I" means any register but R0. */
+				g_assert(inst->sreg1 != sh4_r0);
+
+				/* Move the return value into the return register (R0). */
+				sh4_mov(cfg, &buffer, inst->sreg1, sh4_r0);
+			}
+
 			sh4_rts(cfg, &buffer);
+			sh4_nop(cfg, &buffer);
+
 			break;
 		}
+
 		case OP_BR: {
 			/* MD: br: clob:0 len:16 */
 			MonoJumpInfoType type;

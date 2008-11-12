@@ -33,7 +33,6 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		  domain, jit_tls, result, previous_jit_info, context,
 		  new_context, trace, lmf, native_offset, managed);
 
-
 	/* Avoid costly table lookup during stack overflow. */
 	if (previous_jit_info != NULL &&
 	    (pc > previous_jit_info->code_start &&

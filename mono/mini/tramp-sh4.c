@@ -381,7 +381,6 @@ void mono_arch_nullify_plt_entry(guint8 *code)
 	return;
 }
 
-
 /**
  * Search for and patch the calling sequence pointed to by 'code'
  * so it calls 'address'.
