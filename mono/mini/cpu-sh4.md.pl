@@ -28,6 +28,7 @@ my $header = << 'EOF';
 # register may have the following values:
 #	i  integer register
 #	0  sh4_r0 register
+#	I  any integer register but sh4_r0
 #	b  base register (used in address references)
 #	f  floating point register
 #
@@ -43,7 +44,7 @@ my $header = << 'EOF';
 # clob:spec          describe if the instruction clobbers registers or has special needs
 #
 # spec can be one of the following characters:
-#	c  clobbers caller-save registers
+#	c  clobbers local registers
 #	0  clobbers the register sh4_r0
 #
 # flags:spec        describe if the instruction uses or sets the flags (unused)

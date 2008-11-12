@@ -15,6 +15,7 @@
 # register may have the following values:
 #	i  integer register
 #	0  sh4_r0 register
+#	I  any integer register but sh4_r0
 #	b  base register (used in address references)
 #	f  floating point register
 #
@@ -30,7 +31,7 @@
 # clob:spec          describe if the instruction clobbers registers or has special needs
 #
 # spec can be one of the following characters:
-#	c  clobbers caller-save registers
+#	c  clobbers local registers
 #	0  clobbers the register sh4_r0
 #
 # flags:spec        describe if the instruction uses or sets the flags (unused)
@@ -49,23 +50,23 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
-int_add_imm: dest:1 src2:i len:2
-add_imm: dest:1 src2:i len:2
-addcc_imm: dest:1 src2:i len:2
-addcc: dest:1 src2:i len:2
-int_add: dest:1 src2:i len:2
-int_addcc: dest:1 src2:i len:2
-subcc: dest:1 src2:i len:2
-int_sub: dest:1 src2:i len:2
-int_subcc: dest:1 src2:i len:2
+int_add_imm: dest:1 src1:i len:2
+add_imm: dest:1 src1:i len:2
+addcc_imm: dest:1 src1:i len:2
+addcc: dest:1 src1:i src2:i len:2
+int_add: dest:1 src1:i src2:i len:2
+int_addcc: dest:1 src1:i src2:i len:2
+subcc: dest:1 src1:i src2:i len:2
+int_sub: dest:1 src1:i src2:i len:2
+int_subcc: dest:1 src1:i src2:i len:2
 sh4_ceq_imm_R0: src1:0 len:2
 store_membase_imm: clob:0 dest:b len:14
 storei4_membase_imm: clob:0 dest:b len:14
 store_membase_reg: clob:0 dest:b src1:i len:16
 storei4_membase_reg: clob:0 dest:b src1:i len:16
-load_membase: clob:0 dest:i src1:b len:16
-loadu4_membase: clob:0 dest:i src1:b len:16
-loadi4_membase: clob:0 dest:i src1:b len:16
+load_membase: clob:0 dest:i src1:I len:16
+loadu4_membase: clob:0 dest:i src1:I len:16
+loadi4_membase: clob:0 dest:i src1:I len:16
 sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
 voidcall: clob:c len:16
