@@ -5,6 +5,7 @@
  *   Cedric VINCENT (cedric.vincent@st.com)
  *   Denis FERRANTI (denis.ferranti@st.com)
  *   Yvan Roux (yvan.roux@st.com)
+ *   Julien Villette (julien.villette@st.com)
  *
  * (C) 2008 STMicroelectronics.
  */
@@ -1393,6 +1394,30 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
 	return 0;
 }
 
+/* Map Mono comparison opcodes to SH4 ones. */
+static inline guint16 op_imm_to_sh4_op(int opcode)
+{
+	switch (opcode) {
+	case OP_ICEQ:
+	case CEE_BEQ:
+	case OP_IBEQ:
+	case CEE_BNE_UN:
+	case OP_IBNE_UN:
+		return OP_SH4_CMPEQ;
+
+	case OP_ICGT:
+	case OP_ICGT_UN:
+		return OP_SH4_CMPGT;
+
+	default:
+		NOT_IMPLEMENTED;
+		return 0;
+	}
+
+	g_assert_not_reached();
+	return 0;
+}
+
 /**
  * Decompose some generic opcodes to architecture-specific ones.
  *
@@ -1407,18 +1432,19 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  *
  *     if ins->sreg1 is not already assigned to a physical register and
  *        ins->inst_imm is in the range of "cmpeq_imm_R0" then
- *         replace OP_CEQ_IMM with OP_SH4_CEQ_IMM_R0
+ *         replace OP_CMPEQ_IMM with OP_SH4_CMPEQ_IMM_R0
  *     else
- *         replace OP_CEQ_IMM with OP_CEQ
+ *         replace OP_CMPEQ_IMM with OP_CMPEQ
  *
  * Now, the machine description file should be adapted to specify R0
  * as a "fixed" register for this new architecture-specific opcode :
  *
- *     sh4_ceq_imm: src1:0 len:2
+ *     sh4_cmpeq_imm_R0: src1:0 len:2
  */
 void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
 	MonoInst *inst = NULL;
+	MonoInst *next_inst = NULL;
 
 #define register_not_assigned(reg) ((reg) < 0 || (reg) >= MONO_MAX_IREGS)
 
@@ -1426,17 +1452,40 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	if (basic_block->max_vreg > cfg->rs->next_vreg)
 		cfg->rs->next_vreg = basic_block->max_vreg;
 
-	MONO_BB_FOR_EACH_INS(basic_block, inst) {
+	MONO_BB_FOR_EACH_INS_SAFE(basic_block, next_inst, inst) {
 		switch (inst->opcode) {
-#if 0
-		case OP_CEQ_IMM:
-			if (register_not_assigned(inst->sreg1) &&
-			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm))
-				inst->opcode = OP_SH4_CEQ_IMM_R0;
-			else
-				mono_decompose_op_imm(cfg, inst);
+		case OP_COMPARE:
+		case OP_ICOMPARE:
+			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
+			g_assert(next_inst != NULL);
+
+			inst->opcode = op_imm_to_sh4_op(next_inst->opcode);
+
 			break;
-#endif
+
+		case OP_COMPARE_IMM:
+		case OP_ICOMPARE_IMM: {
+			MonoInst *temp_inst = NULL;
+
+			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
+			g_assert(next_inst != NULL);
+
+			if (register_not_assigned(inst->sreg1) &&
+			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm) &&
+			    0 /* Not workig yet : bug in the local reg allocator ? */) {
+				inst->opcode = OP_SH4_CMPEQ_IMM_R0;
+			}
+			else {
+				MONO_INST_NEW(cfg, temp_inst, OP_ICONST);
+				temp_inst->inst_c0 = inst->inst_imm;
+				temp_inst->dreg = mono_regstate_next_int(cfg->rs);
+				MONO_INST_LIST_ADD_TAIL(&(temp_inst)->node, &(inst)->node);
+				inst->opcode = op_imm_to_sh4_op(next_inst->opcode);
+				inst->sreg2 = temp_inst->dreg;
+			}
+			break;
+		}
+
 		case OP_ADD_IMM:
 		case OP_IADD_IMM:
 		case OP_ADDCC_IMM:
@@ -1448,6 +1497,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SUB_IMM:
 		case OP_ISUB_IMM:
 		case OP_SUBCC_IMM:
+			/* TODO - CV : optimization => use add_imm if possible. */
 			mono_decompose_op_imm(cfg, inst);
 			break;
 
@@ -1465,6 +1515,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				inst->sreg1 = temp->dreg;
 			}
 			break;
+
 		case OP_LOAD_MEMBASE:
 		case OP_LOADU4_MEMBASE:	
 		case OP_LOADI4_MEMBASE:
@@ -1516,8 +1567,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	mono_debug_open_block(cfg, basic_block, cfg->code_len);
 
-	sh4_cstpool_check_begin_bb(cfg,basic_block,
-				   &buffer);
+	sh4_cstpool_check_begin_bb(cfg, basic_block, &buffer);
 
 	MONO_BB_FOR_EACH_INS(basic_block, inst) {
 		guint32 offset     = 0;
@@ -1586,12 +1636,49 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_sub(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
 
-		case OP_SH4_CEQ_IMM_R0: {
-			/* MD: sh4_ceq_imm_R0: src1:0 len:2 */
+		case OP_SH4_CMPEQ:
+			/* MD: sh4_cmpeq: src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/EQ: [%s] sreg1=%d, sreg2=%d",
+						   mono_inst_name(inst->opcode),
+						   inst->sreg1,
+						   inst->sreg2);
+			sh4_cmpeq(cfg, &buffer, inst->sreg1, inst->sreg2);
+			break;
+
+		case OP_SH4_CMPEQ_IMM_R0:
+			/* MD: sh4_cmpeq_imm_R0: src1:0 len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/EQ_IMM_R0: [%s] sreg1=%d, inst_imm=%0lX",
+						   mono_inst_name(inst->opcode),
+						   inst->sreg1,
+						   (unsigned long) inst->inst_imm);
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_cmpeq_imm_R0(cfg, &buffer, inst->inst_imm);
 			break;
-		}
+
+		case OP_SH4_CMPGT:
+			/* MD: sh4_cmpgt: src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/GT: [%s] sreg1=%d, sreg2=%d",
+						   mono_inst_name(inst->opcode),
+						   inst->sreg1,
+						   inst->sreg2);
+			sh4_cmpgt(cfg, &buffer, inst->sreg1, inst->sreg2);
+			break;
+
+		case OP_ICEQ:
+		case OP_ICGT:
+		case OP_ICGT_UN:
+			/* MD: int_ceq: dest:i len:2 */
+			/* MD: int_cgt: dest:i len:2 */
+			/* MD: int_cgt_un: dest:i len:2 */
+
+			/* The lowering pass already converted things like :
+			           (cgt.un (compare (...
+			   into things like :
+			           (cgt.un (sh4_cmpgt (...
+			   So we just have to pick up the status register. */
+			sh4_movt(cfg, &buffer, inst->dreg);
+			break;
+
 		case OP_STORE_MEMBASE_IMM:
 			/* MD: store_membase_imm: clob:0 dest:b len:14 */
 		case OP_STOREI4_MEMBASE_IMM:
@@ -1671,6 +1758,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		case OP_ICONST:
 			/* MD: iconst: dest:i len:12 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("ICONST: [iconst] constant=%0lx", (unsigned long) inst->inst_c0);
+
 			if (SH4_CHECK_RANGE_mov_imm(inst->inst_c0)) {
 				sh4_mov_imm(cfg, &buffer, inst->inst_c0, inst->dreg);
 			} else {
@@ -1927,13 +2017,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		}
 		default:
-			/* The following opcodes are not yet supported, however
-			   I need them to pass some trivial examples. */
-			/* MD: icompare_imm: */
-			/* MD: icompare: */
-			/* MD: compare_imm: */
-			/* MD: compare: */
-			/* MD: int_cgt_un: */
 
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
 			//g_assert_not_reached();
@@ -2046,11 +2129,20 @@ gboolean mono_arch_print_tree(MonoInst *tree, int arity)
 	gboolean done = 0;
 
 	switch (tree->opcode) {
-		case OP_SH4_CEQ_IMM_R0:
-			printf("[%s,0x%x]", mono_arch_regname(sh4_r0), tree->inst_imm);
-			done = 1;
-		default:
-			done = 0;
+	case OP_SH4_CMPEQ_IMM_R0:
+		printf("[%s,0x%x]", mono_arch_regname(sh4_r0), tree->inst_imm);
+		done = 1;
+		break;
+
+	case OP_SH4_CMPEQ:
+	case OP_SH4_CMPGT:
+		printf("[%s,%s]", mono_arch_regname(tree->sreg1), mono_arch_regname(tree->sreg2));
+		done = 1;
+		break;
+
+	default:
+		done = 0;
+		break;
 	}
 
 	return done;

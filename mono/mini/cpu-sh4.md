@@ -59,7 +59,12 @@ int_addcc: dest:1 src1:i src2:i len:2
 subcc: dest:1 src1:i src2:i len:2
 int_sub: dest:1 src1:i src2:i len:2
 int_subcc: dest:1 src1:i src2:i len:2
-sh4_ceq_imm_R0: src1:0 len:2
+sh4_cmpeq: src1:i src2:i len:2
+sh4_cmpeq_imm_R0: src1:0 len:2
+sh4_cmpgt: src1:i src2:i len:2
+int_ceq: dest:i len:2
+int_cgt: dest:i len:2
+int_cgt_un: dest:i len:2
 store_membase_imm: clob:0 dest:b len:14
 storei4_membase_imm: clob:0 dest:b len:14
 store_membase_reg: clob:0 dest:b src1:i len:16
@@ -83,8 +88,3 @@ beq: clob:0 len:18
 int_bne_un: clob:0 len:18
 bne.un: clob:0 len:18
 label: len:0
-icompare_imm:
-icompare:
-compare_imm:
-compare:
-int_cgt_un:
