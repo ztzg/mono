@@ -323,6 +323,12 @@ namespace System.Net
 			{
 				SetJavaCredential((NetworkCredential)creds, "any", true);
 			}
+			else
+			{
+				NetworkCredential nc = creds.GetCredential(proxy.Address, "any");
+				if(nc!=null)
+					SetJavaCredential(nc, "any", true);
+			}
 
 			_method.setDoAuthentication(true);
 		}
@@ -359,6 +365,12 @@ namespace System.Net
 			else if(_credentials is NetworkCredential)
 			{
 				SetJavaCredential((NetworkCredential)_credentials, "any");
+			}
+			else
+			{
+				NetworkCredential nc = _credentials.GetCredential(GetOriginalAddress(), "any");
+				if (nc != null)
+					SetJavaCredential(nc, "any");
 			}
 
 			_method.setDoAuthentication(true);
