@@ -75,10 +75,10 @@ loadi4_membase: clob:0 dest:i src1:I len:16
 sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
 voidcall: clob:c len:16
-call: clob:c len:16
+call: dest:0 clob:c len:16
 move: dest:i src1:i len:2
 voidcall_reg: src1:i clob:c len:4
-call_reg: src1:i clob:c len:4
+call_reg: dest:0 src1:i clob:c len:4
 start_handler: clob:0 len:6
 endfilter: src1:I clob:0 len:12
 endfinally: clob:0 len:10

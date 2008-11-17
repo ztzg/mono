@@ -1472,7 +1472,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			if (register_not_assigned(inst->sreg1) &&
 			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm) &&
-			    0 /* Not workig yet : bug in the local reg allocator ? */) {
+			    0 /* Not working yet : bug in the local reg allocator ? */) {
 				inst->opcode = OP_SH4_CMPEQ_IMM_R0;
 			}
 			else {
@@ -1768,13 +1768,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 						&(inst->inst_c0),inst->dreg);
 			}
 			break;
-		case OP_FCALL:
-		case OP_LCALL:
-		case OP_VCALL:
+
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:16 */
 		case OP_CALL: {
-			/* MD: call: clob:c len:16 */
+			/* MD: call: dest:0 clob:c len:16 */
 			MonoCallInst *call = (MonoCallInst*)inst;
 			MonoJumpInfoType type;
 			gpointer target = NULL;
@@ -1800,19 +1798,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+
 		case OP_MOVE:
 			/* MD: move: dest:i src1:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [move] sreg=%d, dreg=%d", inst->sreg1, inst->dreg);
 			if (inst->sreg1 != inst->dreg)
 				sh4_mov(cfg, &buffer, inst->sreg1, inst->dreg);
 			break;
-		case OP_FCALL_REG:
-		case OP_LCALL_REG:
-		case OP_VCALL_REG:
+
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:4 */
 		case OP_CALL_REG: {
-			/* MD: call_reg: src1:i clob:c len:4 */
+			/* MD: call_reg: dest:0 src1:i clob:c len:4 */
 			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
 			sh4_nop(cfg, &buffer); /* delay slot */
 			break;
