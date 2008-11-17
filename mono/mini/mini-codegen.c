@@ -1515,7 +1515,18 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 					}
 				}
 				else if ((dest_sreg1 != -1) && (dest_sreg1 != val)) {
+#ifdef __SH4A__
+					/* To be discussed on the Mono mailing list.
+					 * The original code (below) is wrong and
+					 * the SH4 target specific fix should be generalized 
+					 * for all targets.
+					 */
+					MonoInst *copy = create_copy_ins (cfg, dest_sreg1, val, NULL, ip, fp);
+					insert_before_ins (ins, copy);
+					val = dest_sreg1;
+#else
 					create_copy_ins (cfg, dest_sreg1, val, ins, ip, fp);
+#endif   /* __SH4A__ */
 				}
 				
 				ins->sreg1 = val;

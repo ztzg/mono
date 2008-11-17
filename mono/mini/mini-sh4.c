@@ -1471,8 +1471,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			g_assert(next_inst != NULL);
 
 			if (register_not_assigned(inst->sreg1) &&
-			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm) &&
-			    0 /* Not working yet : bug in the local reg allocator ? */) {
+			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm)) {
 				inst->opcode = OP_SH4_CMPEQ_IMM_R0;
 			}
 			else {
