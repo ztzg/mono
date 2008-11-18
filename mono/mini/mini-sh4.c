@@ -1470,7 +1470,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
 			g_assert(next_inst != NULL);
 
-			if (register_not_assigned(inst->sreg1) &&
+			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
 			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm)) {
 				inst->opcode = OP_SH4_CMPEQ_IMM_R0;
 			}
