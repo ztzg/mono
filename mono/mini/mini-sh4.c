@@ -1601,9 +1601,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ADD_IMM:
 		case OP_IADD_IMM:
 		case OP_ADDCC_IMM:
-			/* MD: int_add_imm: dest:1 src1:i len:2 */
-			/* MD: add_imm: dest:1 src1:i len:2 */
-			/* MD: addcc_imm: dest:1 src1:i len:2 */
+			/* MD: int_add_imm: clob:1 dest:i src1:i len:2 */
+			/* MD: add_imm: clob:1 dest:i src1:i len:2 */
+			/* MD: addcc_imm: clob:1 dest:i src1:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4: [%s] dreg=%d, inst_imm=%0lX",
 						   mono_inst_name(inst->opcode), inst->dreg, (unsigned long) inst->inst_imm);
 			g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_imm));
@@ -1619,9 +1619,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ADDCC:
 		case OP_IADDCC:
 		case OP_IADD:
-			/* MD: addcc: dest:1 src1:i src2:i len:2 */
-			/* MD: int_add: dest:1 src1:i src2:i len:2 */
-			/* MD: int_addcc: dest:1 src1:i src2:i len:2 */
+			/* MD: addcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: int_add: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: int_addcc: clob:1 dest:i src1:i src2:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_ADD: [add] sreg1=%d, sreg2=%d, dreg=%d", inst->sreg1, inst->sreg2, inst->dreg);
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_add(cfg, &buffer, inst->sreg2, inst->dreg);
@@ -1630,9 +1630,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SUBCC:
 		case OP_ISUBCC:
 		case OP_ISUB:
-			/* MD: subcc: dest:1 src1:i src2:i len:2 */
-			/* MD: int_sub: dest:1 src1:i src2:i len:2 */
-			/* MD: int_subcc: dest:1 src1:i src2:i len:2 */
+			/* MD: subcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: int_sub: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: int_subcc: clob:1 dest:i src1:i src2:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_SUB: [sub] sreg1=%d, sreg2=%d, dreg=%d",
 						   inst->sreg1, inst->sreg2, inst->dreg);
 			g_assert(inst->sreg1 == inst->dreg);

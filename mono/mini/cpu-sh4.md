@@ -51,15 +51,15 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
-int_add_imm: dest:1 src1:i len:2
-add_imm: dest:1 src1:i len:2
-addcc_imm: dest:1 src1:i len:2
-addcc: dest:1 src1:i src2:i len:2
-int_add: dest:1 src1:i src2:i len:2
-int_addcc: dest:1 src1:i src2:i len:2
-subcc: dest:1 src1:i src2:i len:2
-int_sub: dest:1 src1:i src2:i len:2
-int_subcc: dest:1 src1:i src2:i len:2
+int_add_imm: clob:1 dest:i src1:i len:2
+add_imm: clob:1 dest:i src1:i len:2
+addcc_imm: clob:1 dest:i src1:i len:2
+addcc: clob:1 dest:i src1:i src2:i len:2
+int_add: clob:1 dest:i src1:i src2:i len:2
+int_addcc: clob:1 dest:i src1:i src2:i len:2
+subcc: clob:1 dest:i src1:i src2:i len:2
+int_sub: clob:1 dest:i src1:i src2:i len:2
+int_subcc: clob:1 dest:i src1:i src2:i len:2
 sh4_cmpeq: src1:i src2:i len:2
 sh4_cmpeq_imm_R0: src1:0 len:2
 sh4_cmpgt: src1:i src2:i len:2
