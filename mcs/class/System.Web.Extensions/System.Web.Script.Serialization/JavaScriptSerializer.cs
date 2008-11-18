@@ -349,6 +349,8 @@ namespace System.Web.Script.Serialization
 					type = _typeResolver.ResolveType ((string) dict [SerializedTypeNameKey]);
 				}
 			}
+			if (type.IsInterface)
+				type = CreateTypeByInterface(type);
 
 			object target = Activator.CreateInstance (type, true);
 
@@ -377,6 +379,20 @@ namespace System.Web.Script.Serialization
 			}
 
 			return target;
+		}
+
+		private Type CreateTypeByInterface(Type type)
+		{
+			if (type.IsGenericType)
+			{
+				Type genType = type.GetGenericTypeDefinition();
+
+				if (genType == typeof(IDictionary<,>))
+				{
+					return typeof(Dictionary<,>).MakeGenericType(type.GetGenericArguments());
+				}
+			}
+			return type;
 		}
 
 		public object DeserializeObject (string input) {
