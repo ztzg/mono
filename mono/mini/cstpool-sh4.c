@@ -407,8 +407,7 @@ static void
 sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
                       gboolean end_bb, guint8 **pcval)
 {
-
-   MonoSH4CstPool *cur_pool = cfg->arch.poolenv->last;
+   MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
 
    guint32 index;        /* Index of current item in data pool */
    CstPool_Const_Values *g;
@@ -534,7 +533,7 @@ static void
 sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb,
                             MonoBasicBlock *bb, guint8 **pcval)
 {
-   MonoSH4CstPool *cur_pool = cfg->arch.poolenv->last;
+   MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
 
    /* No pool, no constant pool or pool already emitted */
    if(cur_pool == NULL              || 
