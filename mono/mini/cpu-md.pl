@@ -1,7 +1,7 @@
 #!/bin/env perl
 
-# This script extracts from the file 'mini-sh4.c' information to build the file
-# 'cpu-sh4.md'. The information should have the following format :
+# This script extracts from the file 'mini-${arch}.c' information to build the file
+# 'cpu-${arch}.md'. The information should have the following format :
 #
 #     /* MD: <description> */
 #
@@ -9,6 +9,9 @@
 
 use strict;
 use warnings;
+
+my $arch = shift @ARGV;
+die "Usage: ./cpu-md.pl ARCH\n" if not defined $arch;
 
 my $header = << 'EOF';
 # SH4 cpu description file
@@ -66,8 +69,8 @@ my $header = << 'EOF';
 
 EOF
 
-open(my $desc, ">cpu-sh4.md") or die $!;
-open(my $core, "mini-sh4.c") or die $!;
+open(my $desc, ">cpu-${arch}.md") or die $!;
+open(my $core, "mini-${arch}.c") or die $!;
 
 print $desc $header;
 

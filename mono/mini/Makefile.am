@@ -465,6 +465,9 @@ cpu-mips.h: cpu-mips.md genmdesc$(EXEEXT)
 cpu-sh4.h: cpu-sh4.md genmdesc$(EXEEXT)
 	$(GENMDESC_PRG) $(srcdir)/cpu-sh4.md cpu-sh4.h sh4_desc
 
+cpu-sh4.md: mini-sh4.c
+	cd $(srcdir); ./cpu-md.pl sh4
+
 inssel.c inssel.h: $(BURGSRC)
 	$(monodir)/mono/monoburg/monoburg -c 1 -p -e $(BURGSRC) -d inssel.h -s inssel.c
 
