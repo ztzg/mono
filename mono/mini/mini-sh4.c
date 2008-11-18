@@ -1496,8 +1496,12 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SUB_IMM:
 		case OP_ISUB_IMM:
 		case OP_SUBCC_IMM:
-			/* TODO - CV : optimization => use add_imm if possible. */
-			mono_decompose_op_imm(cfg, inst);
+			if(SH4_CHECK_RANGE_add_imm(-inst->inst_imm)) {
+				inst->opcode = OP_ADD_IMM;
+				inst->inst_imm = -inst->inst_imm;
+			} else {
+				mono_decompose_op_imm(cfg, inst);
+			}
 			break;
 
 		case OP_STORE_MEMBASE_IMM:
