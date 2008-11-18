@@ -30,7 +30,7 @@ typedef enum {
 	sh4_gp = sh4_r12,
 	sh4_fp = sh4_r14,
 	sh4_sp = sh4_r15,
-	sh4_pr
+	sh4_temp = sh4_r3
 } SH4IntRegister;
 
 typedef enum {

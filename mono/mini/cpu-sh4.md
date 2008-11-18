@@ -15,7 +15,8 @@
 # register may have the following values:
 #	i  integer register
 #	0  sh4_r0 register
-#	I  any integer register but sh4_r0
+#	t  sh4_temp register
+#	I  any integer register but sh4_temp
 #	b  base register (used in address references)
 #	f  floating point register
 #
@@ -65,13 +66,13 @@ sh4_cmpgt: src1:i src2:i len:2
 int_ceq: dest:i len:2
 int_cgt: dest:i len:2
 int_cgt_un: dest:i len:2
-store_membase_imm: clob:0 dest:b len:14
-storei4_membase_imm: clob:0 dest:b len:14
-store_membase_reg: clob:0 dest:b src1:i len:16
-storei4_membase_reg: clob:0 dest:b src1:i len:16
-load_membase: clob:0 dest:i src1:I len:16
-loadu4_membase: clob:0 dest:i src1:I len:16
-loadi4_membase: clob:0 dest:i src1:I len:16
+store_membase_imm: clob:t dest:b len:14
+storei4_membase_imm: clob:t dest:b len:14
+store_membase_reg: clob:t dest:b src1:i len:16
+storei4_membase_reg: clob:t dest:b src1:i len:16
+load_membase: clob:t dest:i src1:I len:16
+loadu4_membase: clob:t dest:i src1:I len:16
+loadi4_membase: clob:t dest:i src1:I len:16
 sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
 voidcall: clob:c len:16
@@ -79,12 +80,12 @@ call: dest:0 clob:c len:16
 move: dest:i src1:i len:2
 voidcall_reg: src1:i clob:c len:4
 call_reg: dest:0 src1:i clob:c len:4
-start_handler: clob:0 len:6
-endfilter: src1:I clob:0 len:12
-endfinally: clob:0 len:10
-br: clob:0 len:16
-int_beq: clob:0 len:18
-beq: clob:0 len:18
-int_bne_un: clob:0 len:18
-bne.un: clob:0 len:18
+start_handler: clob:t len:6
+endfilter: src1:i dest:0 clob:t len:12
+endfinally: clob:t len:10
+br: clob:t len:16
+int_beq: clob:t len:18
+beq: clob:t len:18
+int_bne_un: clob:t len:18
+bne.un: clob:t len:18
 label: len:0

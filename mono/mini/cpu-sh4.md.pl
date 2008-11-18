@@ -28,7 +28,8 @@ my $header = << 'EOF';
 # register may have the following values:
 #	i  integer register
 #	0  sh4_r0 register
-#	I  any integer register but sh4_r0
+#	t  sh4_temp register
+#	I  any integer register but sh4_temp
 #	b  base register (used in address references)
 #	f  floating point register
 #
