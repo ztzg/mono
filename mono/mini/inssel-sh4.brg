@@ -7,42 +7,27 @@
 #
 
 stmt: OP_START_HANDLER {
-	MonoInst *spvar = mono_find_spvar_for_region (s, s->cbb->region);
-	tree->inst_left = spvar;
 	mono_bblock_add_inst (s->cbb, tree);
 }
 
 stmt: OP_ENDFINALLY {
-	MonoInst *spvar = mono_find_spvar_for_region (s, s->cbb->region);
-	tree->inst_left = spvar;
 	mono_bblock_add_inst (s->cbb, tree);
 }
 
 stmt: OP_ENDFILTER (reg) {
-	MonoInst *spvar = mono_find_spvar_for_region (s, s->cbb->region);
-	tree->inst_left = spvar;
 	tree->sreg1 = state->left->reg1;
 	mono_bblock_add_inst (s->cbb, tree);
 }
 
 # Describes how to pass a parameter into a register.
 stmt: OP_OUTARG (reg) {
-	MonoCallInst *call = (MonoCallInst*)tree->inst_right;
-
-	tree->opcode = OP_MOVE;
-	tree->dreg   = mono_regstate_next_int (s->rs);
-	tree->sreg1  = state->left->reg1;
-	mono_bblock_add_inst (s->cbb, tree);
-
-	mono_call_inst_add_outarg_reg (s, call, tree->dreg, tree->backend.reg3, FALSE);
+	MONO_EMIT_UNALU(s, tree, OP_MOVE, mono_regstate_next_int(s->rs), state->left->reg1);
+	mono_call_inst_add_outarg_reg (s, (MonoCallInst*)tree->inst_right, tree->dreg, tree->backend.reg3, FALSE);
 }
 
 # Describes how to return a result into a register.
 stmt: OP_SETRET (reg) {
-	tree->opcode = OP_MOVE;
-	tree->sreg1 = state->left->reg1;
-	tree->dreg = sh4_r0;
-	mono_bblock_add_inst (s->cbb, tree);
+	MONO_EMIT_UNALU(s, tree, OP_MOVE, sh4_r0, state->left->reg1);
 }
 
 %%
