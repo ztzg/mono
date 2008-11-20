@@ -340,6 +340,13 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 		    signature->call_convention == MONO_CALL_VARARG)
 			emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
 
+		if (is_virtual != 0 && i == 0) {
+			/* The argument will be attached to the call instruction. */
+			arg = call->args[0]; /* <= Definitively useless! But similar to other backends... */
+			call->used_iregs |= 1 << arg_info->reg;
+			continue;
+		}
+
 		MONO_INST_NEW(cfg, arg, OP_OUTARG);
 		arg->cil_code  = call->args[i]->cil_code;
 		arg->type      = call->args[i]->type;
