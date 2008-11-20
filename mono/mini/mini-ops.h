@@ -972,6 +972,7 @@ MINI_OP(OP_HPPA_SETF4REG, "hppa_setf4reg")
 /* SH4 specific opcodes */
 #if defined(__SH4__) || defined(__sh4__)
 MINI_OP(OP_SH4_LOAD_MEMBASE, "sh4_load_membase")
+MINI_OP(OP_SH4_LOADU1_MEMBASE, "sh4_loadu1_membase")
 MINI_OP(OP_SH4_CMPEQ,        "sh4_cmpeq")
 MINI_OP(OP_SH4_CMPEQ_IMM_R0, "sh4_cmpeq_imm_R0")
 MINI_OP(OP_SH4_CMPGT,        "sh4_cmpgt")

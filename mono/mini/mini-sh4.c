@@ -1519,10 +1519,15 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_LOADU1_MEMBASE:
 		case OP_LOAD_MEMBASE:
 		case OP_LOADU4_MEMBASE:	
 		case OP_LOADI4_MEMBASE:
 			if (!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
+				/* We should be testing the range with 
+				   SH4_CHECK_RANGE_movb_dispRy_R0() in the case of
+				   OP_LOADU1_MEMBASE. As the immediate is 4-bits in both
+				   cases, we simplify */
 				MonoInst *temp, *temp2;
 				/* load offset in new register */
 				MONO_INST_NEW (cfg, temp, OP_ICONST);
@@ -1535,9 +1540,13 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				temp2->dreg = temp->dreg;
 				MONO_INST_LIST_ADD_TAIL (&(temp2)->node, &(inst)->node);
 				MONO_INST_LIST_ADD_TAIL (&(temp)->node, &(temp2)->node);
-				/* We merge the case OP_LOAD_MEMBASE, OP_LOADU4_MEMBASE and
-				 OP_LOADI4_MEMBASE */
-				inst->opcode = OP_SH4_LOAD_MEMBASE;
+				if (inst->opcode == OP_LOADU1_MEMBASE) {
+					inst->opcode = OP_SH4_LOADU1_MEMBASE;
+				} else {
+				   /* We merge the case OP_LOAD_MEMBASE, OP_LOADU4_MEMBASE and
+				      OP_LOADI4_MEMBASE */
+					inst->opcode = OP_SH4_LOAD_MEMBASE;
+				}
 				inst->inst_offset = 0;
 				inst->inst_basereg = temp2->dreg;
 				/* inst->dreg destination reg is kept */
@@ -1715,6 +1724,31 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_add(cfg, &buffer, inst->inst_destbasereg, sh4_temp);
 				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, 0, sh4_temp); 
 			}
+			break;
+
+		case OP_LOADU1_MEMBASE:
+			/* MD: loadu1_membase: dest:0 src1:b len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [op_loadu1_membase] dreg=%d, basereg=%d, offset=%0lx", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
+			g_assert(inst->dreg == 0);
+
+			/* DFE: this should be avoided by mono_arch_lowering_pass(),
+			 * but it may still happen with negative offsets */
+			if (SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset)) {
+				sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset,
+						   inst->inst_basereg);
+			} else {
+				g_assert(0); /* Not used in mono_arch_lowering_pass() */
+			}
+			break;
+
+		case OP_SH4_LOADU1_MEMBASE:
+			/* MD: sh4_loadu1_membase: dest:0 src1:b len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_loadu1_membase] dreg=%d, basereg=%d, offset=%0lx", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
+			g_assert(inst->dreg == 0);
+			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
+			
+			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, 
+					   inst->inst_basereg); 
 			break;
 
 		case OP_LOAD_MEMBASE:
