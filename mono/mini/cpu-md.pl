@@ -30,7 +30,7 @@ my $header = << 'EOF';
 #
 # register may have the following values:
 #	i  integer register
-#	0  sh4_r0 register
+#	z  sh4_r0 register
 #	t  sh4_temp register
 #	I  any integer register but sh4_temp
 #	b  base register (used in address references)
@@ -49,7 +49,7 @@ my $header = << 'EOF';
 #
 # spec can be one of the following characters:
 #	c  clobbers local registers
-#	0  clobbers the register sh4_r0
+#	z  clobbers the register sh4_r0
 #
 # flags:spec        describe if the instruction uses or sets the flags (unused)
 #

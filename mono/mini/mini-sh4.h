@@ -133,7 +133,7 @@
  * This macro provides, from the machine-description of an instruction,
  * the fixed hreg corresponding to that value. This macro is mandatory.
  */
-#define MONO_ARCH_INST_FIXED_REG(desc) ((desc == 't') ? sh4_temp : (desc == '0') ? sh4_r0 : -1)
+#define MONO_ARCH_INST_FIXED_REG(desc) ((desc == 't') ? sh4_temp : (desc == 'z') ? sh4_r0 : -1)
 
 /*
  * This macro tests if a register denotes a register pair (from

@@ -14,7 +14,7 @@
 #
 # register may have the following values:
 #	i  integer register
-#	0  sh4_r0 register
+#	z  sh4_r0 register
 #	t  sh4_temp register
 #	I  any integer register but sh4_temp
 #	b  base register (used in address references)
@@ -33,7 +33,7 @@
 #
 # spec can be one of the following characters:
 #	c  clobbers local registers
-#	0  clobbers the register sh4_r0
+#	z  clobbers the register sh4_r0
 #
 # flags:spec        describe if the instruction uses or sets the flags (unused)
 #
@@ -61,7 +61,7 @@ subcc: clob:1 dest:i src1:i src2:i len:2
 int_sub: clob:1 dest:i src1:i src2:i len:2
 int_subcc: clob:1 dest:i src1:i src2:i len:2
 sh4_cmpeq: src1:i src2:i len:2
-sh4_cmpeq_imm_R0: src1:0 len:2
+sh4_cmpeq_imm_R0: src1:z len:2
 sh4_cmpgt: src1:i src2:i len:2
 int_ceq: dest:i len:2
 int_cgt: dest:i len:2
@@ -70,20 +70,20 @@ store_membase_imm: clob:t dest:b len:14
 storei4_membase_imm: clob:t dest:b len:14
 store_membase_reg: clob:t dest:b src1:i len:16
 storei4_membase_reg: clob:t dest:b src1:i len:16
-loadu1_membase: dest:0 src1:b len:2
+loadu1_membase: dest:z src1:b len:2
+sh4_loadu1_membase: dest:z src1:b len:2
 load_membase: clob:t dest:i src1:I len:16
 loadu4_membase: clob:t dest:i src1:I len:16
 loadi4_membase: clob:t dest:i src1:I len:16
-sh4_loadu1_membase: dest:0 src1:b len:2
 sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
 voidcall: clob:c len:16
-call: dest:0 clob:c len:16
+call: dest:z clob:c len:16
 move: dest:i src1:i len:2
 voidcall_reg: src1:i clob:c len:4
-call_reg: dest:0 src1:i clob:c len:4
+call_reg: dest:z src1:i clob:c len:4
 start_handler: clob:t len:6
-endfilter: src1:i dest:0 clob:t len:12
+endfilter: src1:i dest:z clob:t len:12
 endfinally: clob:t len:10
 br: clob:t len:16
 int_beq: clob:t len:18

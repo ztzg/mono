@@ -1439,7 +1439,7 @@ static inline guint16 op_imm_to_sh4_op(int opcode)
  * Now, the machine description file should be adapted to specify R0
  * as a "fixed" register for this new architecture-specific opcode :
  *
- *     sh4_cmpeq_imm_R0: src1:0 len:2
+ *     sh4_cmpeq_imm_R0: src1:z len:2
  */
 void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
@@ -1658,7 +1658,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_CMPEQ_IMM_R0:
-			/* MD: sh4_cmpeq_imm_R0: src1:0 len:2 */
+			/* MD: sh4_cmpeq_imm_R0: src1:z len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/EQ_IMM_R0: [%s] sreg1=%d, inst_imm=%0lX",
 						   mono_inst_name(inst->opcode),
 						   inst->sreg1,
@@ -1727,7 +1727,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_LOADU1_MEMBASE:
-			/* MD: loadu1_membase: dest:0 src1:b len:2 */
+			/* MD: loadu1_membase: dest:z src1:b len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [op_loadu1_membase] dreg=%d, basereg=%d, offset=%0lx", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
 			g_assert(inst->dreg == 0);
 
@@ -1742,7 +1742,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_LOADU1_MEMBASE:
-			/* MD: sh4_loadu1_membase: dest:0 src1:b len:2 */
+			/* MD: sh4_loadu1_membase: dest:z src1:b len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_loadu1_membase] dreg=%d, basereg=%d, offset=%0lx", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
@@ -1809,7 +1809,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:16 */
 		case OP_CALL: {
-			/* MD: call: dest:0 clob:c len:16 */
+			/* MD: call: dest:z clob:c len:16 */
 			MonoCallInst *call = (MonoCallInst*)inst;
 			MonoJumpInfoType type;
 			gpointer target = NULL;
@@ -1846,7 +1846,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:4 */
 		case OP_CALL_REG: {
-			/* MD: call_reg: dest:0 src1:i clob:c len:4 */
+			/* MD: call_reg: dest:z src1:i clob:c len:4 */
 			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
 			sh4_nop(cfg, &buffer); /* delay slot */
 			break;
@@ -1888,7 +1888,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
-			/* MD: endfilter: src1:i dest:0 clob:t len:12 */
+			/* MD: endfilter: src1:i dest:z clob:t len:12 */
 			sh4_mov(cfg, &buffer, inst->sreg1, sh4_r0);
 		case OP_ENDFINALLY: {
 			/* MD: endfinally: clob:t len:10 */
@@ -2051,7 +2051,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		}
 		default:
-
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
 			//g_assert_not_reached();
 		}
