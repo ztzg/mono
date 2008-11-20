@@ -89,3 +89,4 @@ beq: clob:t len:18
 int_bne_un: clob:t len:18
 bne.un: clob:t len:18
 label: len:0
+checkthis: clob:t src1:i len:2

@@ -2009,6 +2009,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			inst->inst_c0 = code - cfg->native_code;
 			break;
 		}
+		case OP_CHECK_THIS: {
+			/* MD: checkthis: clob:t src1:i len:2 */
+			/* Trig an exception if sreg1 can not be dereferenced,
+			   might be misaligned in case of vtypes so use a byte load. */
+			sh4_movb_indRy(cfg, &buffer, inst->sreg1, sh4_temp);
+			break;
+		}
 		default:
 
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
