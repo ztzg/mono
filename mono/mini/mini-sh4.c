@@ -1232,8 +1232,35 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 void mono_arch_emit_this_vret_args(MonoCompile *cfg, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
 {
-	/* TODO - CV */
-	g_assert(0);
+	int this_dreg = -1;
+
+	/* Keep in sync with get_call_info(). */
+	if (vt_reg == -1)
+		this_dreg = sh4_r4;
+	else
+		this_dreg = sh4_r5;
+
+	/* Add the "this" argument. */
+	if (this_reg != -1) {
+		MonoInst *this;
+		MONO_INST_NEW(cfg, this, OP_MOVE);
+		this->type  = this_type;
+		this->sreg1 = this_reg;
+		this->dreg  = mono_regstate_next_int(cfg->rs);
+		mono_bblock_add_inst(cfg->cbb, this);
+		mono_call_inst_add_outarg_reg(cfg, inst, this->dreg, this_dreg, FALSE);
+	}
+
+	/* Add the "vt" argument. */
+	if (vt_reg != -1) {
+		MonoInst *vtarg;
+		MONO_INST_NEW(cfg, vtarg, OP_MOVE);
+		vtarg->sreg1 = vt_reg;
+		vtarg->dreg  = mono_regstate_next_int(cfg->rs);
+		mono_bblock_add_inst(cfg->cbb, vtarg);
+		mono_call_inst_add_outarg_reg(cfg, inst, vtarg->dreg, sh4_r4, FALSE);
+	}
+
 	return;
 }
 
