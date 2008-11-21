@@ -1440,8 +1440,10 @@ static inline guint16 op_imm_to_sh4_op(int opcode)
 		return OP_SH4_CMPEQ;
 
 	case OP_ICGT:
-	case OP_ICGT_UN:
 		return OP_SH4_CMPGT;
+
+	case OP_ICGT_UN:
+		return OP_SH4_CMPHI;
 
 	default:
 		NOT_IMPLEMENTED;
@@ -1698,6 +1700,15 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 						   inst->sreg1,
 						   inst->sreg2);
 			sh4_cmpgt(cfg, &buffer, inst->sreg1, inst->sreg2);
+			break;
+
+		case OP_SH4_CMPHI:
+			/* MD: sh4_cmphi: src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/HI: [%s] sreg1=%d, sreg2=%d",
+						   mono_inst_name(inst->opcode),
+						   inst->sreg1,
+						   inst->sreg2);
+			sh4_cmphi(cfg, &buffer, inst->sreg1, inst->sreg2);
 			break;
 
 		case OP_ICEQ:
