@@ -975,6 +975,7 @@ MINI_OP(OP_SH4_LOAD_MEMBASE, "sh4_load_membase")
 MINI_OP(OP_SH4_LOADU1_MEMBASE, "sh4_loadu1_membase")
 MINI_OP(OP_SH4_CMPEQ,        "sh4_cmpeq")
 MINI_OP(OP_SH4_CMPEQ_IMM_R0, "sh4_cmpeq_imm_R0")
+MINI_OP(OP_SH4_AND_IMM_R0, "sh4_and_imm_R0")
 MINI_OP(OP_SH4_CMPGT,        "sh4_cmpgt")
 MINI_OP(OP_SH4_CMPHI,        "sh4_cmphi")
 #endif

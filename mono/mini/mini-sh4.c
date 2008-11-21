@@ -1539,6 +1539,15 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_AND_IMM:
+			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
+			    SH4_CHECK_RANGE_and_imm_R0(inst->inst_imm)) {
+				inst->opcode = OP_SH4_AND_IMM_R0;
+			}
+			else {
+				mono_decompose_op_imm(cfg, inst);
+			}
+
 		case OP_STORE_MEMBASE_IMM:
 		case OP_STOREI4_MEMBASE_IMM:
 			if (!SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
@@ -1672,6 +1681,31 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 						   inst->sreg1, inst->sreg2, inst->dreg);
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_sub(cfg, &buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_SH4_AND_IMM_R0:
+			/* MD: sh4_and_imm_R0: clob:1 dest:i src1:z len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_AND_IMM_R0: [%s] sreg1=%d, imm=%d, dreg=%d",
+					  mono_inst_name(inst->opcode),
+					  inst->inst_imm,
+					  inst->sreg1,
+					  inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			g_assert(inst->sreg1 == sh4_r0);
+			sh4_and_imm_R0(cfg, &buffer, inst->inst_imm);
+			break;
+
+		case OP_IAND:
+			/* MD: int_and: clob:1 dest:i src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_AND: [%s] sreg1=%d, sreg2=%d, dreg=%d",
+					  mono_inst_name(inst->opcode),
+					  inst->sreg1,
+					  inst->sreg2,
+					  inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_and(cfg, &buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPEQ:
