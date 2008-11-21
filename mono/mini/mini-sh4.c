@@ -1445,7 +1445,13 @@ static inline guint16 op_imm_to_sh4_op(int opcode)
 	case OP_ICGT_UN:
 		return OP_SH4_CMPHI;
 
+	case OP_IBLT:
+		/* The T-bit will be negated as for OP_IBNE_UN (for instance). */
+		return OP_SH4_CMPGE;
+
 	default:
+		g_warning("unsupported opcode %s (0x%x) in op_imm_to_sh4_op()\n",
+			  mono_inst_name(opcode), opcode);
 		NOT_IMPLEMENTED;
 		return 0;
 	}
@@ -1743,6 +1749,24 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 						   inst->sreg1,
 						   inst->sreg2);
 			sh4_cmphi(cfg, &buffer, inst->sreg1, inst->sreg2);
+			break;
+
+		case OP_SH4_CMPGE:
+			/* MD: sh4_cmpge: src1:i src2:i len:6 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/GE: [%s] sreg1=%d, sreg2=%d",
+						   mono_inst_name(inst->opcode),
+						   inst->sreg1,
+						   inst->sreg2);
+			sh4_cmpge(cfg, &buffer, inst->sreg1, inst->sreg2);
+			break;
+
+		case OP_SH4_CMPHS:
+			/* MD: sh4_cmphs: src1:i src2:i len:6 */
+			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CMP/HS: [%s] sreg1=%d, sreg2=%d",
+						   mono_inst_name(inst->opcode),
+						   inst->sreg1,
+						   inst->sreg2);
+			sh4_cmphs(cfg, &buffer, inst->sreg1, inst->sreg2);
 			break;
 
 		case OP_ICEQ:
@@ -2064,10 +2088,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case OP_IBLT:
+			/* MD: int_blt: clob:t len:18 */
 		case CEE_BNE_UN:
+			/* MD: bne.un: clob:t len:18 */
 		case OP_IBNE_UN: {
 			/* MD: int_bne_un: clob:t len:18 */
-			/* MD: bne.un: clob:t len:18 */
 			MonoJumpInfoType type;
 			gpointer target = NULL;
 			guint8 *address = NULL;

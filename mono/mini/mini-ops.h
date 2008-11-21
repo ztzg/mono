@@ -978,4 +978,6 @@ MINI_OP(OP_SH4_CMPEQ_IMM_R0, "sh4_cmpeq_imm_R0")
 MINI_OP(OP_SH4_AND_IMM_R0, "sh4_and_imm_R0")
 MINI_OP(OP_SH4_CMPGT,        "sh4_cmpgt")
 MINI_OP(OP_SH4_CMPHI,        "sh4_cmphi")
+MINI_OP(OP_SH4_CMPGE,        "sh4_cmpge")
+MINI_OP(OP_SH4_CMPHS,        "sh4_cmphs")
 #endif
