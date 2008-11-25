@@ -1432,13 +1432,17 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
 static inline guint16 op_imm_to_sh4_op(int opcode)
 {
 	switch (opcode) {
-	case OP_ICEQ:
-	case CEE_BEQ:
-	case OP_IBEQ:
 	case CEE_BNE_UN:
 	case OP_IBNE_UN:
+		/* The T-bit will be negated into mono_arch_output_basic_block(). */
+	case CEE_BEQ:
+	case OP_IBEQ:
+	case OP_ICEQ:
 		return OP_SH4_CMPEQ;
 
+	case OP_IBLE:
+		/* The T-bit will be negated into mono_arch_output_basic_block(). */
+	case OP_IBGT:
 	case OP_ICGT:
 		return OP_SH4_CMPGT;
 
@@ -1446,7 +1450,8 @@ static inline guint16 op_imm_to_sh4_op(int opcode)
 		return OP_SH4_CMPHI;
 
 	case OP_IBLT:
-		/* The T-bit will be negated as for OP_IBNE_UN (for instance). */
+		/* The T-bit will be negated into mono_arch_output_basic_block(). */
+	case OP_IBGE:
 		return OP_SH4_CMPGE;
 
 	default:
@@ -1546,6 +1551,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_AND_IMM:
+		case OP_IAND_IMM:
 			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
 			    SH4_CHECK_RANGE_and_imm_R0(inst->inst_imm)) {
 				inst->opcode = OP_SH4_AND_IMM_R0;
@@ -2045,10 +2051,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case OP_IBGT:
+			/* MD: int_bgt: clob:t len:18 */
+		case OP_IBGE:
+			/* MD: int_bge: clob:t len:18 */
 		case CEE_BEQ:
+			/* MD: beq: clob:t len:18 */
 		case OP_IBEQ: {
 			/* MD: int_beq: clob:t len:18 */
-			/* MD: beq: clob:t len:18 */
 			MonoJumpInfoType type;
 			gpointer target = NULL;
 			guint8 *address = NULL;
@@ -2088,6 +2098,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+		case OP_IBLE:
+			/* MD: int_ble: clob:t len:18 */
 		case OP_IBLT:
 			/* MD: int_blt: clob:t len:18 */
 		case CEE_BNE_UN:
@@ -2214,6 +2226,7 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 		case MONO_PATCH_INFO_METHOD:
 		case MONO_PATCH_INFO_ABS:
 		case MONO_PATCH_INFO_INTERNAL_METHOD:
+		case MONO_PATCH_INFO_CLASS_INIT:
 			/* Absolute. */
 			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
 			break;

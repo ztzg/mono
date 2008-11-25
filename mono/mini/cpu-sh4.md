@@ -87,8 +87,11 @@ start_handler: clob:t len:6
 endfilter: src1:i dest:z clob:t len:12
 endfinally: clob:t len:10
 br: clob:t len:16
-int_beq: clob:t len:18
+int_bgt: clob:t len:18
+int_bge: clob:t len:18
 beq: clob:t len:18
+int_beq: clob:t len:18
+int_ble: clob:t len:18
 int_blt: clob:t len:18
 bne.un: clob:t len:18
 int_bne_un: clob:t len:18
