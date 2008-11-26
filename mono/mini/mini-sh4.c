@@ -1428,41 +1428,85 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
 	return 0;
 }
 
-/* Map Mono comparison opcodes to SH4 ones. */
-static inline guint16 op_imm_to_sh4_op(int opcode)
+/**
+ * Convert Mono comparison & conditional branch opcodes to SH4 ones.
+ *
+ * As you may noticed, "compare" is paired with opcodes like "beq",
+ * "cgt.un", ... Currently, the signature of "compare" is "src1:X
+ * src2:X" and the the signature of "beq" and "cgt.un" is respectively
+ * "" and "dest:X", that means we have to use a "status" register to
+ * known the result of the previous comparison. It works like a charm
+ * on X86 and/or SPARC but it is not suitable for SH4 because its
+ * "status" register only keep the equalness, not other possible tests
+ * ("<", ">=", ...).
+ *
+ * A first solution is to test the next opcode to decide which kind of
+ * comparison & conditional branch we have to do. Another solution is
+ * to adjust the BURG to emit a custom code sequence. Personally, I
+ * prefer the first solution because I do not feel happy with
+ * auto-generated code (as with BURG) when a simple solution exists.
+ */
+static inline void convert_comparison_to_sh4(guint16 *opcode, guint16 *next_opcode)
 {
-	switch (opcode) {
-	case CEE_BNE_UN:
-	case OP_IBNE_UN:
-		/* The T-bit will be negated into mono_arch_output_basic_block(). */
-	case CEE_BEQ:
-	case OP_IBEQ:
+	switch (*next_opcode) {
 	case OP_ICEQ:
-		return OP_SH4_CMPEQ;
+		*opcode = OP_SH4_CMPEQ;
+		*next_opcode = OP_SH4_MOVT;
+		break;
 
-	case OP_IBLE:
-		/* The T-bit will be negated into mono_arch_output_basic_block(). */
-	case OP_IBGT:
 	case OP_ICGT:
-		return OP_SH4_CMPGT;
+		*opcode = OP_SH4_CMPGT;
+		*next_opcode = OP_SH4_MOVT;
+		break;
 
 	case OP_ICGT_UN:
-		return OP_SH4_CMPHI;
+		*opcode = OP_SH4_CMPHI;
+		*next_opcode = OP_SH4_MOVT;
+		break;
+
+	case CEE_BEQ:
+	case OP_IBEQ:
+		*opcode = OP_SH4_CMPEQ;
+		*next_opcode = OP_SH4_BT;
+		break;
+
+	case CEE_BNE_UN:
+	case OP_IBNE_UN:
+		*opcode = OP_SH4_CMPEQ;
+		*next_opcode = OP_SH4_BF;
+		break;
+
+	case OP_IBGT:
+		*opcode = OP_SH4_CMPGT;
+		*next_opcode = OP_SH4_BT;
+		break;
+
+	case OP_IBLE:
+		*opcode = OP_SH4_CMPGT;
+		*next_opcode = OP_SH4_BF;
+		break;
+
+	case OP_IBGE:
+		*opcode = OP_SH4_CMPGE;
+		*next_opcode = OP_SH4_BT;
+		break;
 
 	case OP_IBLT:
-		/* The T-bit will be negated into mono_arch_output_basic_block(). */
-	case OP_IBGE:
-		return OP_SH4_CMPGE;
+		*opcode = OP_SH4_CMPGE;
+		*next_opcode = OP_SH4_BF;
+		break;
+
+	case OP_COND_EXC_NE_UN:
+	case OP_COND_EXC_LE_UN:
+		g_warning("cond_exc_* not yet supported\n");
+		*opcode = OP_SH4_CMPEQ;
+		break;
 
 	default:
-		g_warning("unsupported opcode %s (0x%x) in op_imm_to_sh4_op()\n",
-			  mono_inst_name(opcode), opcode);
+		g_warning("unsupported next_opcode %s (0x%x) in %s()\n",
+			  mono_inst_name(*next_opcode), *next_opcode, __FUNCTION__);
 		NOT_IMPLEMENTED;
-		return 0;
 	}
-
-	g_assert_not_reached();
-	return 0;
 }
 
 /**
@@ -1503,35 +1547,33 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		switch (inst->opcode) {
 		case OP_COMPARE:
 		case OP_ICOMPARE:
-			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
-			g_assert(next_inst != NULL);
-
-			inst->opcode = op_imm_to_sh4_op(next_inst->opcode);
-
-			break;
-
 		case OP_COMPARE_IMM:
-		case OP_ICOMPARE_IMM: {
-			MonoInst *temp_inst = NULL;
-
+		case OP_ICOMPARE_IMM:
 			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
 			g_assert(next_inst != NULL);
 
+			convert_comparison_to_sh4(&inst->opcode, &next_inst->opcode);
+
+			if (inst->opcode == OP_COMPARE ||
+			    inst->opcode == OP_ICOMPARE)
+				break;
+
+			/* Optimize if possible. */
 			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
-			    op_imm_to_sh4_op(next_inst->opcode) == OP_SH4_CMPEQ &&
-			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm)) {
+			    SH4_CHECK_RANGE_cmpeq_imm_R0(inst->inst_imm) &&
+			    inst->opcode == OP_SH4_CMPEQ) {
 				inst->opcode = OP_SH4_CMPEQ_IMM_R0;
 			}
 			else {
+				MonoInst *temp_inst = NULL;
+
 				MONO_INST_NEW(cfg, temp_inst, OP_ICONST);
 				temp_inst->inst_c0 = inst->inst_imm;
 				temp_inst->dreg = mono_regstate_next_int(cfg->rs);
 				MONO_INST_LIST_ADD_TAIL(&(temp_inst)->node, &(inst)->node);
-				inst->opcode = op_imm_to_sh4_op(next_inst->opcode);
 				inst->sreg2 = temp_inst->dreg;
 			}
 			break;
-		}
 
 		case OP_ADD_IMM:
 		case OP_IADD_IMM:
@@ -1775,18 +1817,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_cmphs(cfg, &buffer, inst->sreg1, inst->sreg2);
 			break;
 
-		case OP_ICEQ:
-		case OP_ICGT:
-		case OP_ICGT_UN:
-			/* MD: int_ceq: dest:i len:2 */
-			/* MD: int_cgt: dest:i len:2 */
-			/* MD: int_cgt_un: dest:i len:2 */
-
-			/* The lowering pass already converted things like :
-			           (cgt.un (compare (...
-			   into things like :
-			           (cgt.un (sh4_cmpgt (...
-			   So we just have to pick up the status register. */
+		case OP_SH4_MOVT:
+			/* MD: sh4_movt: dest:i len:2 */
 			sh4_movt(cfg, &buffer, inst->dreg);
 			break;
 
@@ -2051,19 +2083,15 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
-		case OP_IBGT:
-			/* MD: int_bgt: clob:t len:18 */
-		case OP_IBGE:
-			/* MD: int_bge: clob:t len:18 */
-		case CEE_BEQ:
-			/* MD: beq: clob:t len:18 */
-		case OP_IBEQ: {
-			/* MD: int_beq: clob:t len:18 */
+		case OP_SH4_BT: {
 			MonoJumpInfoType type;
 			gpointer target = NULL;
 			guint8 *address = NULL;
 			guint8 *patch = NULL;
 			int displace = 0;
+			/* MD: sh4_bt: clob:t len:18 */
+		case OP_SH4_BF:
+			/* MD: sh4_bf: clob:t len:18 */
 
 			if (inst->flags & MONO_INST_BRLABEL) {
 				type = MONO_PATCH_INFO_LABEL;
@@ -2078,15 +2106,20 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			address = cfg->native_code + displace;
 
-			/* Use the optimal instruction if possible. */
+			/* Use the optimal instruction if possible.
+			   Note: CHECK_RANGE(bt) and CHECK_RANGE(bf) are equivalent. */
 			if (displace != 0 && SH4_CHECK_RANGE_bt_label(buffer, address)) {
-				sh4_bt_label(cfg, &buffer, address);
+				if (inst->opcode == OP_SH4_BT) {
+					sh4_bt_label(cfg, &buffer, address);
+				} else {
+					sh4_bf_label(cfg, &buffer, address);
+				}
 				break;
 			}
 
 			/* Reverse the test to skip the unconditional jump. */
 			patch = buffer;
-			sh4_die(cfg, &buffer); /* patch slot for : bf_label "skip_jump" */
+			sh4_die(cfg, &buffer); /* patch slot for : bf/t_label "skip_jump" */
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
@@ -2094,54 +2127,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_nop(cfg, &buffer);
 
 			/* Back patch the reversed test. */
-			sh4_bf_label(NULL, &patch, buffer);
-
-			break;
-		}
-		case OP_IBLE:
-			/* MD: int_ble: clob:t len:18 */
-		case OP_IBLT:
-			/* MD: int_blt: clob:t len:18 */
-		case CEE_BNE_UN:
-			/* MD: bne.un: clob:t len:18 */
-		case OP_IBNE_UN: {
-			/* MD: int_bne_un: clob:t len:18 */
-			MonoJumpInfoType type;
-			gpointer target = NULL;
-			guint8 *address = NULL;
-			guint8 *patch = NULL;
-			int displace = 0;
-
-			if (inst->flags & MONO_INST_BRLABEL) {
-				type = MONO_PATCH_INFO_LABEL;
-				target = inst->inst_i0;
-				displace = inst->inst_i0->inst_c0;
+			if (inst->opcode == OP_SH4_BT) {
+				sh4_bf_label(NULL, &patch, buffer);
+			} else {
+				sh4_bt_label(NULL, &patch, buffer);
 			}
-			else {
-				type = MONO_PATCH_INFO_BB;
-				target = inst->inst_true_bb;
-				displace = inst->inst_true_bb->native_offset;
-			}
-
-			address = cfg->native_code + displace;
-
-			/* Use the optimal instruction if possible. */
-			if (displace != 0 && SH4_CHECK_RANGE_bf_label(buffer, address)) {
-				sh4_bf_label(cfg, &buffer, address);
-				break;
-			}
-
-			/* Reverse the test to skip the unconditional jump. */
-			patch = buffer;
-			sh4_die(NULL, &buffer); /* patch slot for : bt_label "skip_jump" */
-
-			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
-
-			sh4_jmp_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer);
-
-			/* Back patch the reversed test. */
-			sh4_bt_label(NULL, &patch, buffer);
 
 			break;
 		}

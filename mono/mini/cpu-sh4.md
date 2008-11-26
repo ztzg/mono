@@ -64,9 +64,7 @@ sh4_cmpgt: src1:i src2:i len:2
 sh4_cmphi: src1:i src2:i len:2
 sh4_cmpge: src1:i src2:i len:6
 sh4_cmphs: src1:i src2:i len:6
-int_ceq: dest:i len:2
-int_cgt: dest:i len:2
-int_cgt_un: dest:i len:2
+sh4_movt: dest:i len:2
 store_membase_imm: clob:t dest:b len:14
 storei4_membase_imm: clob:t dest:b len:14
 store_membase_reg: clob:t dest:b src1:i len:16
@@ -87,13 +85,7 @@ start_handler: clob:t len:6
 endfilter: src1:i dest:z clob:t len:12
 endfinally: clob:t len:10
 br: clob:t len:16
-int_bgt: clob:t len:18
-int_bge: clob:t len:18
-beq: clob:t len:18
-int_beq: clob:t len:18
-int_ble: clob:t len:18
-int_blt: clob:t len:18
-bne.un: clob:t len:18
-int_bne_un: clob:t len:18
+sh4_bt: clob:t len:18
+sh4_bf: clob:t len:18
 label: len:0
 checkthis: clob:t src1:i len:2
