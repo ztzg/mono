@@ -65,6 +65,7 @@ sh4_cmphi: src1:i src2:i len:2
 sh4_cmpge: src1:i src2:i len:6
 sh4_cmphs: src1:i src2:i len:6
 sh4_movt: dest:i len:2
+outarg_membase: src1:i len:2
 store_membase_imm: clob:t dest:b len:14
 storei4_membase_imm: clob:t dest:b len:14
 store_membase_reg: clob:t dest:b src1:i len:16
@@ -76,11 +77,11 @@ loadu4_membase: clob:t dest:i src1:I len:16
 loadi4_membase: clob:t dest:i src1:I len:16
 sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
-voidcall: clob:c len:16
-call: dest:z clob:c len:16
+voidcall: clob:c len:30
+call: dest:z clob:c len:30
+voidcall_reg: src1:i clob:c len:18
+call_reg: dest:z src1:i clob:c len:18
 move: dest:i src1:i len:2
-voidcall_reg: src1:i clob:c len:4
-call_reg: dest:z src1:i clob:c len:4
 start_handler: clob:t len:6
 endfilter: src1:i dest:z clob:t len:12
 endfinally: clob:t len:10

@@ -25,6 +25,13 @@ stmt: OP_OUTARG (reg) {
 	mono_call_inst_add_outarg_reg (s, (MonoCallInst*)tree->inst_right, tree->dreg, tree->backend.reg3, FALSE);
 }
 
+# Describes how to pass a parameter onto the stack.
+stmt: OP_OUTARG_MEMBASE (reg) {
+	tree->sreg1 = state->left->reg1;
+	/* tree->dreg = sh4_sp; Obvious and useless. */
+	mono_bblock_add_inst(s->cbb, tree);
+}
+
 # Describes how to return a result into a register.
 stmt: OP_SETRET (reg) {
 	MONO_EMIT_UNALU(s, tree, OP_MOVE, sh4_r0, state->left->reg1);

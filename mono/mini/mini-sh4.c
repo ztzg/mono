@@ -288,7 +288,8 @@ static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, s
 	case onto_stack:
 		arg->opcode = OP_OUTARG_MEMBASE;
 		arg->backend.size = arg_info->size;
-		arg->backend.arg_info = arg_info->offset;
+		/* Useless because the SH4 uses "mov.l Rx,@-R15" to store parameters.
+		arg->backend.arg_info = arg_info->offset; */
 		break;
 
 	case nowhere:
@@ -330,6 +331,10 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	    signature->call_convention == MONO_CALL_VARARG)
 		sentinelpos = signature->sentinelpos + (is_virtual ? 1 : 0);
 
+	/* Used into mono_arch_output_basic_block():*CALL*
+	   to free the space used by parameters after a call. */
+	cfg->arch.argalloc_size = 0;
+
 	for (i = 0; i < arg_count; i++) {
 		struct arg_info *arg_info = &(call_info->args[i]);
 		MonoInst *arg = NULL;
@@ -370,7 +375,10 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 			case onto_stack:
 				arg->opcode = OP_OUTARG_MEMBASE;
 				arg->backend.size = arg_info->size;
-				arg->backend.arg_info = arg_info->offset;
+				/* Useless because the SH4 uses "mov.l Rx,@-R15" to store parameters.
+				arg->backend.arg_info = arg_info->offset; */
+
+				cfg->arch.argalloc_size += 4;
 				break;
 
 			case nowhere:
@@ -410,7 +418,6 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	}
 
 	call->stack_usage = call_info->stack_usage;
-	cfg->param_area = MAX(cfg->param_area, call->stack_usage);
 	cfg->flags |= MONO_CFG_HAS_CALLS;
 
 	g_free(call_info->args);
@@ -427,7 +434,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 {
 	MonoMethodSignature *signature = NULL;
 	struct call_info *call_info = NULL;
-	int regsave_offset = 0;
 	int locals_offset = 0;
 	int i = 0;
 
@@ -435,9 +441,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
-
-	/* Allocate space for parameters, computed into mono_arch_call_opcode(). */
-	cfg->stack_offset += cfg->param_area;
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -447,18 +450,21 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	 *	:              : Callee's frame.
 	 */
 
+	/* Record the amount of space needed to save registers, for mono_arch_emit_prolog(). */
+	cfg->arch.regsave_size = 0;
+
 	/* Allocate space to save global registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
-		if ((cfg->used_int_regs & (SH4IntRegister)i) != 0)
-			regsave_offset += 4;
-
-	cfg->stack_offset += regsave_offset;
+		if ((cfg->used_int_regs & (1 << i)) != 0)
+			cfg->arch.regsave_size += 4;
 
 	/* Allocate space to save the previous frame pointer (sh4_r14). */
-	cfg->stack_offset += 4;
+	cfg->arch.regsave_size += 4;
 
 	/* Allocate space to save the PR. */
-	cfg->stack_offset += 4;
+	cfg->arch.regsave_size += 4;
+
+	cfg->stack_offset += cfg->arch.regsave_size;
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -570,10 +576,9 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 			SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
 
 			/* The parameter area is before local variables and
-			   global registers are stored (despite the stack
-			   grows to low address, offsets are positively
-			   computed). */
-			inst->inst_offset -= locals_offset + regsave_offset;
+			   saved registers area (the stack grows to low address,
+			   offsets are positively computed). */
+			inst->inst_offset += locals_offset + cfg->arch.regsave_size;
 			break;
 
 		case nowhere:
@@ -754,9 +759,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		struct arg_info *arg_info = &call_info->args[i];
 		MonoInst *inst = cfg->args[i];
 
-		/* Sanity checks. */
-		g_assert(inst->opcode == OP_REGVAR && arg_info->storage == into_register);
-
 		/* The argument ends up into a register... */
 		if (inst->opcode == OP_REGVAR) {
 			switch (arg_info->storage) {
@@ -793,10 +795,14 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			/* ... but was onto the stack. */
 			case onto_stack:
 				switch (arg_info->type) {
-				case integer32:
-					sh4_movl_dispRx(NULL, &buffer, sh4_r15, arg_info->offset, inst->dreg);
+				case integer32: {
+					int offset = cfg->arch.regsave_size + arg_info->offset;
+					if (SH4_CHECK_RANGE_movl_dispRy(offset))
+						sh4_movl_dispRy(NULL, &buffer, offset, sh4_r15, inst->dreg);
+					else
+						NOT_IMPLEMENTED;
 					break;
-
+				}
 				case integer64:
 					NOT_IMPLEMENTED;
 					break;
@@ -1016,9 +1022,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	guint8 *buffer = NULL;
 	guint8 *code   = NULL;
 	guint8 *patch1 = NULL;
-	guint8 *patch2 = NULL;
 	int localloc_size = 0;
-	int argalloc_size = 0;
 	int i = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
@@ -1124,34 +1128,13 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	 *	:              : Callee's frame.
 	 */
 
-/* Do we have to do such a thing ? */
-#if 0
-	/* Free the space used by parameters, computed into mono_arch_call_opcode(). */
-	argalloc_size = cfg->param_area;
-	if (argalloc_size != 0) {
-		if (SH4_CHECK_RANGE_add_imm(argalloc_size))
-			sh4_add_imm(NULL, &buffer, argalloc_size, sh4_r15);
-		else {
-			NOT_IMPLEMENTED;
-			/* I don't know yet if I can use a local register
-			   (a.k.a scratch register). */
-
-			/* Patch slot for : sh4_rXX <- argalloc_size */
-			patch2 = buffer;
-			sh4_die(NULL, &buffer);
-
-			sh4_add(NULL, &buffer, sh4_rXX, sh4_r15);
-		}
-	}
-#endif
-
 	/* At this point, the stack is fully restored (as caller's point of view). */
 
 	sh4_rts(NULL, &buffer);
 	sh4_nop(NULL, &buffer);
 
 	/* Align the constant pool. */
-	if (patch1 != NULL || patch2 != NULL)
+	if (patch1 != NULL)
 		while (((guint32)buffer % 4) != 0)
 			sh4_nop(NULL, &buffer);
 
@@ -1159,10 +1142,6 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	if (patch1 != NULL) {
 		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r8);
 		sh4_emit32(&buffer, (guint32)localloc_size);
-	}
-	if (patch2 != NULL) {
-		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_r8);
-		sh4_emit32(&buffer, (guint32)argalloc_size);
 	}
 
 	cfg->code_len = buffer - cfg->native_code;
@@ -1822,11 +1801,17 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movt(cfg, &buffer, inst->dreg);
 			break;
 
+		case OP_OUTARG_MEMBASE:
+			/* MD: outarg_membase: src1:i len:2 */
+			sh4_movl_decRx(cfg, &buffer, inst->sreg1, sh4_sp);
+			break;
+
 		case OP_STORE_MEMBASE_IMM:
 			/* MD: store_membase_imm: clob:t dest:b len:14 */
 		case OP_STOREI4_MEMBASE_IMM:
 			/* MD: storei4_membase_imm: clob:t dest:b len:14 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [store_membase_imm] const=%0lx, destbasereg=%d, offset=%0lx", (unsigned long) inst->inst_imm, inst->inst_destbasereg, (unsigned long) inst->inst_offset);
+
 			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
 				/* Put immediate to store in Cst-Pool & clobber Rtemp */
 				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, 
@@ -1838,6 +1823,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				g_assert(0);
 			}
 			break;
+
 		case OP_STORE_MEMBASE_REG:
 			/* MD: store_membase_reg: clob:t dest:b src1:i len:16 */
 		case OP_STOREI4_MEMBASE_REG:
@@ -1877,7 +1863,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [sh4_loadu1_membase] dreg=%d, basereg=%d, offset=%0lx", inst->dreg, inst->inst_basereg, (unsigned long) inst->inst_offset);
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
-			
+
 			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, 
 					   inst->inst_basereg); 
 			break;
@@ -1924,6 +1910,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				g_assert(0);
 			}
 			break;
+
 		case OP_ICONST:
 			/* MD: iconst: dest:i len:12 */
 			SH4_CFG_DEBUG(4)
@@ -1938,9 +1925,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_VOIDCALL:
-			/* MD: voidcall: clob:c len:16 */
+			/* MD: voidcall: clob:c len:30 */
 		case OP_CALL: {
-			/* MD: call: dest:z clob:c len:16 */
+			/* MD: call: dest:z clob:c len:30 */
 			MonoCallInst *call = (MonoCallInst*)inst;
 			MonoJumpInfoType type;
 			gpointer target = NULL;
@@ -1960,10 +1947,27 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* TODO - CV : optimize with sh4_bsr if possible. */
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
+			inst->sreg1 = sh4_r0;
 
-			sh4_jsr_indRx(cfg, &buffer, sh4_r0);
+		case OP_VOIDCALL_REG:
+			/* MD: voidcall_reg: src1:i clob:c len:18 */
+		case OP_CALL_REG:
+			/* MD: call_reg: dest:z src1:i clob:c len:18 */
+
+			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
 			sh4_nop(cfg, &buffer); /* delay slot */
 
+			/* Free the space used by parameters, computed into mono_arch_call_opcode(). */
+			if (cfg->arch.argalloc_size != 0) {
+				if (SH4_CHECK_RANGE_add_imm(cfg->arch.argalloc_size))
+					sh4_add_imm(cfg, &buffer, cfg->arch.argalloc_size, sh4_sp);
+				else {
+					/* sh4_temp belongs to clobbered registers,
+					   so we can reuse it here. */
+					sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
+					sh4_add(cfg, &buffer, sh4_temp, sh4_sp);
+				}
+			}
 			break;
 		}
 
@@ -1973,15 +1977,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (inst->sreg1 != inst->dreg)
 				sh4_mov(cfg, &buffer, inst->sreg1, inst->dreg);
 			break;
-
-		case OP_VOIDCALL_REG:
-			/* MD: voidcall_reg: src1:i clob:c len:4 */
-		case OP_CALL_REG: {
-			/* MD: call_reg: dest:z src1:i clob:c len:4 */
-			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
-			sh4_nop(cfg, &buffer); /* delay slot */
-			break;
-		}
 
 		/**
 		 * The START_HANDLER instruction marks the beginning of a handler
@@ -2083,6 +2078,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+
 		case OP_SH4_BT: {
 			MonoJumpInfoType type;
 			gpointer target = NULL;
@@ -2135,11 +2131,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+
 		case OP_LABEL: {
 			/* MD: label: len:0 */
 			inst->inst_c0 = code - cfg->native_code;
 			break;
 		}
+
 		case OP_CHECK_THIS: {
 			/* MD: checkthis: clob:t src1:i len:2 */
 			/* Trig an exception if sreg1 can not be dereferenced,
@@ -2147,6 +2145,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movb_indRy(cfg, &buffer, inst->sreg1, sh4_temp);
 			break;
 		}
+
 		default:
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
 			//g_assert_not_reached();

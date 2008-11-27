@@ -245,6 +245,8 @@
 /* Structure where the arch-specific code can store
  * data during a compilation. */
 typedef struct {
+	gint argalloc_size;
+	gint regsave_size;
 	gint localloc_size;
 	void *poolenv;
 } MonoCompileArch;
