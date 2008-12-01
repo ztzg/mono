@@ -1641,6 +1641,22 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	return;
 }
 
+/* Free the space used by parameters, computed into mono_arch_call_opcode(). */
+static inline void free_args_area(MonoCompile *cfg, guint8 **buffer)
+{
+	if (cfg->arch.argalloc_size != 0) {
+		if (SH4_CHECK_RANGE_add_imm(cfg->arch.argalloc_size))
+			sh4_add_imm(cfg, buffer, cfg->arch.argalloc_size, sh4_sp);
+		else {
+			/* sh4_temp belongs to clobbered registers during a call,
+			   so we can reuse it here. */
+			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, 
+					&cfg->arch.argalloc_size, sh4_temp);
+			sh4_add(cfg, buffer, sh4_temp, sh4_sp);
+		}
+	}
+}
+
 void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
 	MonoInst *inst = NULL;
@@ -1946,30 +1962,47 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* TODO - CV : optimize with sh4_bsr if possible. */
 
-			sh4_cstpool_add(cfg, &buffer, type, target, sh4_r0);
-			inst->sreg1 = sh4_r0;
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
+
+			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
+			sh4_nop(cfg, &buffer); /* delay slot */
+
+			free_args_area(cfg, &buffer);
+			break;
+		}
+
+		case OP_VOIDCALL_MEMBASE:
+			/* MD: voidcall_membase: src1:b clob:c len:34 */
+		case OP_CALL_MEMBASE:
+			/* MD: call_membase: dest:z src1:b clob:c len:34 */
+			if (!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
+				/* Put store-offset in Cst-Pool & clobber Rtemp */
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
+						&(inst->inst_offset), sh4_temp);
+				/* Compute store address in sh4_temp as we cannot clobber 
+				   sreg1 */
+				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
+				sh4_movl_indRy(cfg, &buffer, sh4_temp, sh4_temp);
+			} else {
+				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
+						inst->inst_basereg, sh4_temp);
+			}
+
+			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
+			sh4_nop(cfg, &buffer); /* delay slot */
+
+			free_args_area(cfg, &buffer);
+			break;
 
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:18 */
 		case OP_CALL_REG:
 			/* MD: call_reg: dest:z src1:i clob:c len:18 */
-
 			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
 			sh4_nop(cfg, &buffer); /* delay slot */
 
-			/* Free the space used by parameters, computed into mono_arch_call_opcode(). */
-			if (cfg->arch.argalloc_size != 0) {
-				if (SH4_CHECK_RANGE_add_imm(cfg->arch.argalloc_size))
-					sh4_add_imm(cfg, &buffer, cfg->arch.argalloc_size, sh4_sp);
-				else {
-					/* sh4_temp belongs to clobbered registers,
-					   so we can reuse it here. */
-					sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
-					sh4_add(cfg, &buffer, sh4_temp, sh4_sp);
-				}
-			}
+			free_args_area(cfg, &buffer);
 			break;
-		}
 
 		case OP_MOVE:
 			/* MD: move: dest:i src1:i len:2 */

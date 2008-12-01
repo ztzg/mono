@@ -390,10 +390,10 @@ void mono_arch_nullify_plt_entry(guint8 *code)
  *     . for OP_.*CALL opcodes:
  *
  *         #if strong_align
- *         -14: movl @cstpool, R0
+ *         -14: movl @cstpool, R3
  *         -12: bra cstpool_end
  *         #else
- *         -16: movl @cstpool, R0
+ *         -16: movl @cstpool, R3
  *         -14: bra cstpool_end
  *         -12: nop
  *         #endif
@@ -402,7 +402,7 @@ void mono_arch_nullify_plt_entry(guint8 *code)
  *          -8:     .word 0xXXXX
  *          -6:     .word 0xYYYY
  *              cstpool_end:
- *          -4:     jsr @r0
+ *          -4:     jsr @r3
  *          -2:     nop
  *           0: <- code points here
  *
@@ -418,21 +418,23 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
+	g_assert(sh4_temp == sh4_r3);
+
 	/*
 	 * Search in reverse order for the calling
 	 * sequence of OP_.*CALL opcodes.
 	 */
 
 	if (code16[-1] == 0x0009 && /* nop */
-	    code16[-2] == 0x400B && /* jsr @r0 */
+	    code16[-2] == 0x430B && /* jsr @r3 */
 	    code16[-5] == 0x0009    /* nop */
 	    &&
 	    ((code16[-6] == 0xA002 &&   /* bra cstpool_end */
-	      code16[-7] == 0xD001)     /* movl @cstpool, R0 */
+	      code16[-7] == 0xD301)     /* movl @cstpool, R3 */
 	     ||
 	     (code16[-6] == 0x0009 &&   /* nop */
 	      code16[-7] == 0xA003 &&   /* bra cstpool_end */
-	      code16[-8] == 0xD001))) { /* movl @cstpool, R0 */
+	      code16[-8] == 0xD301))) { /* movl @cstpool, R3 */
 		cstpool = code - 8;
 		sh4_emit32(&cstpool, (guint32)address);
 
