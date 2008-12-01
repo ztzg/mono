@@ -715,7 +715,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 
-	cfg->code_size = 40 + 80 + signature->param_count * 10;
+	cfg->code_size = 46 + 80 + signature->param_count * 10;
 	buffer = cfg->native_code = g_malloc(cfg->code_size);
 
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
@@ -972,20 +972,40 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	/* The space needed by local variables is computed into mono_arch_allocate_vars(). */
 	localloc_size = cfg->arch.localloc_size;
 	if (localloc_size != 0) {
-		if (SH4_CHECK_RANGE_add_imm(localloc_size))
+		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
 			sh4_add_imm(NULL, &buffer, -localloc_size, sh4_r15);
-		else {
+		}
+		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
 			/* R14 can be used to increment the stack size (that is, used
 			   to decrement R15) because it was saved previously and will
 			   be overwritten later. */
-			NOT_IMPLEMENTED;
-#if 0
-			/* Patch slot for : sh4_r14 <- localloc_size */
-			patch = buffer;
+			sh4_mov_imm(NULL, &buffer, localloc_size, sh4_r14);
+			sh4_sub(NULL, &buffer, sh4_r14, sh4_r15);
+		}
+		else {
+			guint8 *patch0 = NULL;
+			guint8 *patch1 = NULL;
+
+			/* Patch slot for : sh4_r0 <- cfg->method */
+			patch0 = buffer;
 			sh4_die(NULL, &buffer);
 
 			sh4_sub(NULL, &buffer, sh4_r14, sh4_r15);
-#endif
+
+			/* Patch slot for : bra_label "skip_cstpool" */
+			patch1 = buffer;
+			sh4_die(NULL, &buffer);
+			sh4_nop(NULL, &buffer);
+
+			/* Align the constant pool. */
+			while (((guint32)buffer % 4) != 0)
+				sh4_nop(NULL, &buffer);
+
+			/* Build the constant pool & patch the corresponding instruction. */
+			sh4_movl_PCrel(NULL, &patch0, buffer, sh4_r14);
+			sh4_emit32(&buffer, (guint32)localloc_size);
+
+			sh4_bra_label(NULL, &patch1, buffer);
 		}
 	}
 
