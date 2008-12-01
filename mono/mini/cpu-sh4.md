@@ -83,6 +83,7 @@ voidcall_membase: src1:b clob:c len:34
 call_membase: dest:z src1:b clob:c len:34
 voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
+throw: src1:i len:20
 move: dest:i src1:i len:2
 start_handler: clob:t len:6
 endfilter: src1:i dest:z clob:t len:12

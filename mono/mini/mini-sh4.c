@@ -2004,6 +2004,21 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			free_args_area(cfg, &buffer);
 			break;
 
+		case OP_THROW:
+			/* MD: throw: src1:i len:20 */
+			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
+				sh4_mov(cfg, &buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
+
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD,
+					(gpointer)"mono_arch_throw_exception", sh4_temp);
+
+			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
+			sh4_nop(cfg, &buffer); /* delay slot */
+
+			/* Should never return and help the unwinder. */
+			sh4_die(cfg, &buffer);
+			break;
+
 		case OP_MOVE:
 			/* MD: move: dest:i src1:i len:2 */
 			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [move] sreg=%d, dreg=%d", inst->sreg1, inst->dreg);
