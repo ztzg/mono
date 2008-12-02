@@ -1,0 +1,27 @@
+Because it is hard to set a breakpoint into generated code, I suggest
+you to use the following trick.
+
+In Mono's sources, at the expected place insert these instructions:
+
+    sh4_die(NULL, &buffer);
+    sh4_nop(NULL, &buffer);
+
+Then, tell GDB to not pass the SIGILL signal to the application:
+
+    (gdb) handle SIGILL nopass
+    Signal        Stop      Print   Pass to program Description
+    SIGILL        Yes       Yes     No              Illegal instruction
+
+When your "diepoint" is hit, the flow is passed into the debugger:
+
+    Program received signal SIGILL, Illegal instruction.
+    [Switching to Thread 693588512 (LWP 1046)]
+    0x29d075de in ?? ()
+    (gdb) x/i $pc
+    0x29d075de:     ldtlb
+    (gdb)
+    0x29d075e0:     nop
+
+Then move manually the PC to the next "nop" instruction:
+
+    (gdb) set $pc=$pc+2

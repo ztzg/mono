@@ -1,0 +1,36 @@
+The SH4 code emitter 'sh4-codegen.h' is composed of thousands of
+macros which look like this: "sh4_$STATEMENT_$DISAMBIGUATION".
+The meaning of the tokens $STATEMENT and $DISAMBIGUATION are
+obvious, however some example for the last one should be
+welcomed :
+
+   . "_imm", an immediate value is used ;
+   . "_R0", R0 is implicitly used ;
+   . "_dispRx", Rx + an immediate value will be indirectly used ;
+   . "_decRx", Rx will be indirectly used, then decremented ;
+   . "_indRx", Rx will be indirectly used ;
+
+For many statements Ry is the source and Rx is the destination. The
+following example is a matching between some macros and the GNU AS
+syntax :
+
+   . sh4_add(code, Ry, Rx)              => add Rx, Ry
+   . sh4_add_imm(code, imm, Rx)         => add #imm, Ry
+   . sh4_and_imm_R0(code, imm)          => and #imm, R0
+   . sh4_movl_dispRx(code, Ry, imm, Rx) => mov.l Ry, @(#imm, Rx)
+   . sh4_movb_decRx(code, Ry, Rx)       => mov.b Ry, @-Rx
+   . sh4_movb_indRx(code, Ry, Rx)       => mov.b Ry, @Rx
+
+To check if an immediate value is suitable for an instruction, you
+have to use the macros "SH4_CHECK_IMM_*" instead of things like :
+
+    if (imm >= -128 && imm <= 127)
+
+because this is massively error-prone: different instructions require
+different ranges and different alignment constraints.
+
+The SH4 code emitter can be re-generated from GNU Binutils thanks to
+'gbu2mono':
+
+   gcc gbu2mono.c -I ${BINUTILS}/opcodes -o gbu2mono
+   ./gbu2mono > sh4-codegen.h
