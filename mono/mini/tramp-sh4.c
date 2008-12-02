@@ -35,7 +35,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 
 	trampoline = mono_get_trampoline_code(trampoline_type);
 
-#define SPECIFIC_TRAMPOLINE_SIZE 20
+#define SPECIFIC_TRAMPOLINE_SIZE 22
 
 	mono_domain_lock(domain);
 	code = buffer = mono_code_manager_reserve(domain->code_mp, SPECIFIC_TRAMPOLINE_SIZE);
@@ -63,6 +63,9 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 		sh4_jmp_indRx(NULL, &buffer, sh4_r0);
 	}
 	sh4_nop(NULL, &buffer);
+
+	/* Should return elsewhere. */
+	sh4_die(NULL, &buffer);
 
 	/* Align the constant pool. */
 	while (((guint32)buffer % 4) != 0)
