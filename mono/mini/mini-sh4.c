@@ -1153,13 +1153,11 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	sh4_rts(NULL, &buffer);
 	sh4_nop(NULL, &buffer);
 
-	/* Align the constant pool. */
-	if (patch1 != NULL)
+	/* Align & build the constant pool & patch the corresponding instructions. */
+	if (patch1 != NULL) {
 		while (((guint32)buffer % 4) != 0)
 			sh4_nop(NULL, &buffer);
 
-	/* Build the constant pool & patch the corresponding instructions. */
-	if (patch1 != NULL) {
 		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r8);
 		sh4_emit32(&buffer, (guint32)localloc_size);
 	}
@@ -1178,6 +1176,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 void mono_arch_emit_exceptions(MonoCompile *cfg)
 {
 	MonoJumpInfo *patch_info = NULL;
+	int exceptions_count = 0;
 	int exceptions_size = 0;
 	guint8 *buffer = NULL;
 	guint8 *code   = NULL;
@@ -1189,8 +1188,8 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
 			continue;
 
-		/* TODO : replace '0' with the size of the actual code. */
-		exceptions_size += 0;
+		exceptions_size += 26;
+		exceptions_count++;
 	}
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("exceptions_size = %d", exceptions_size);
@@ -1206,11 +1205,66 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 	/* Patch code to raise exceptions. */
 	for (patch_info = cfg->patch_info; patch_info != NULL; patch_info = patch_info->next) {
+		MonoClass *class = NULL;
+		guint8 *patch0 = NULL;
+		guint8 *patch1 = NULL;
+		guint8 *patch2 = NULL;
+
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
 			continue;
 
-		/* TODO - CV */
-		NOT_IMPLEMENTED;
+		class = mono_class_from_name(mono_defaults.corlib, "System", patch_info->data.name);
+		g_assert(class != NULL);
+
+#if 0 /* TODO - CV */
+		for (i = 0; i < exceptions_count; i++) {
+			/* Reuse a throw sequence for the same exception class. */
+			if (classes[i] == class) {
+				NOT_IMPLEMENTED;
+				goto end_loop;
+			}
+		}
+#endif
+
+		/* Pass parameters to the exception handler:
+		      1. type token
+		      2. offset between the "throw" site and the current PC. */
+
+		/* Patch slot for : sh4_r4 <- type token */
+		patch0 = buffer;
+		sh4_die(NULL, &buffer);
+
+		/* Patch slot for : sh4_r5 <- current PC - throw PC */
+		patch1 = buffer;
+		sh4_die(NULL, &buffer);
+
+		/* Patch slot for : sh4_temp <- mono_arch_throw_exception_by_name */
+		patch2 = buffer;
+		sh4_die(NULL, &buffer);
+
+		sh4_jsr_indRx(NULL, &buffer, sh4_temp);
+		sh4_nop(NULL, &buffer); /* delay slot */
+
+		/* Should never return. */
+		sh4_die(NULL, &buffer);
+
+		/* Align the constant pool. */
+		while (((guint32)buffer % 4) != 0)
+			sh4_nop(NULL, &buffer);
+
+		/* Build the constant pool & patch the corresponding instructions. */
+		sh4_movl_PCrel(NULL, &patch0, buffer, MONO_SH4_REG_FIRST_ARG);
+		sh4_emit32(&buffer, (guint32)(class->type_token - MONO_TOKEN_TYPE_DEF));
+
+		sh4_movl_PCrel(NULL, &patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1);
+		sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i - 6));
+
+		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_temp);
+		/* Reuse this path_info to set the jump in mono_arch_patch_code(). */
+		patch_info->type = MONO_PATCH_INFO_INTERNAL_METHOD;
+		patch_info->data.name = "mono_arch_throw_exception_by_name";
+		patch_info->ip.i = buffer - cfg->native_code;
+		sh4_emit32(&buffer, (guint32)0);
 	}
 
 	cfg->code_len = buffer - cfg->native_code;
@@ -1220,8 +1274,7 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 	g_assert(cfg->code_len <= cfg->code_size);
 
 	/* Free constant pools. It's safer to do it there
-	 * than in function mono_arch_emit_epilog().
-	 */
+	 * than in function mono_arch_emit_epilog(). */
 	sh4_cstpool_end(cfg);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
@@ -1445,65 +1498,75 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  * prefer the first solution because I do not feel happy with
  * auto-generated code (as with BURG) when a simple solution exists.
  */
-static inline void convert_comparison_to_sh4(guint16 *opcode, guint16 *next_opcode)
+static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
 {
-	switch (*next_opcode) {
+	switch (next_inst->opcode) {
 	case OP_ICEQ:
-		*opcode = OP_SH4_CMPEQ;
-		*next_opcode = OP_SH4_MOVT;
+		inst->opcode = OP_SH4_CMPEQ;
+		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
 	case OP_ICGT:
-		*opcode = OP_SH4_CMPGT;
-		*next_opcode = OP_SH4_MOVT;
+		inst->opcode = OP_SH4_CMPGT;
+		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
 	case OP_ICGT_UN:
-		*opcode = OP_SH4_CMPHI;
-		*next_opcode = OP_SH4_MOVT;
+		inst->opcode = OP_SH4_CMPHI;
+		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
 	case CEE_BEQ:
 	case OP_IBEQ:
-		*opcode = OP_SH4_CMPEQ;
-		*next_opcode = OP_SH4_BT;
-		break;
-
-	case CEE_BNE_UN:
-	case OP_IBNE_UN:
-		*opcode = OP_SH4_CMPEQ;
-		*next_opcode = OP_SH4_BF;
-		break;
-
-	case OP_IBGT:
-		*opcode = OP_SH4_CMPGT;
-		*next_opcode = OP_SH4_BT;
-		break;
-
-	case OP_IBLE:
-		*opcode = OP_SH4_CMPGT;
-		*next_opcode = OP_SH4_BF;
-		break;
-
-	case OP_IBGE:
-		*opcode = OP_SH4_CMPGE;
-		*next_opcode = OP_SH4_BT;
-		break;
-
-	case OP_IBLT:
-		*opcode = OP_SH4_CMPGE;
-		*next_opcode = OP_SH4_BF;
+		inst->opcode = OP_SH4_CMPEQ;
+		next_inst->opcode = OP_SH4_BT;
 		break;
 
 	case OP_COND_EXC_NE_UN:
+		/* Trick used in output_basic_block(). */
+		next_inst->backend.data = (gpointer)-1;
+	case CEE_BNE_UN:
+	case OP_IBNE_UN:
+		inst->opcode = OP_SH4_CMPEQ;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
+	case OP_IBGT:
+		inst->opcode = OP_SH4_CMPGT;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
+	case OP_IBGT_UN:
+		inst->opcode = OP_SH4_CMPHI;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
 	case OP_COND_EXC_LE_UN:
-		g_warning("cond_exc_* not yet supported\n");
-		*opcode = OP_SH4_CMPEQ;
+		/* Trick used in output_basic_block(). */
+		next_inst->backend.data = (gpointer)-1;
+	case OP_IBLE_UN:
+		inst->opcode = OP_SH4_CMPHI;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
+	case OP_IBLE:
+		inst->opcode = OP_SH4_CMPGT;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
+	case OP_IBGE:
+		inst->opcode = OP_SH4_CMPGE;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
+	case OP_IBLT:
+		inst->opcode = OP_SH4_CMPGE;
+		next_inst->opcode = OP_SH4_BF;
 		break;
 
 	default:
-		g_warning("unsupported next_opcode %s (0x%x) in %s()\n",
-			  mono_inst_name(*next_opcode), *next_opcode, __FUNCTION__);
+		g_warning("unsupported next_inst->opcode %s (0x%x) in %s()\n",
+			  mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
 		NOT_IMPLEMENTED;
 	}
 }
@@ -1551,7 +1614,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
 			g_assert(next_inst != NULL);
 
-			convert_comparison_to_sh4(&inst->opcode, &next_inst->opcode);
+			convert_comparison_to_sh4(inst, next_inst);
 
 			if (inst->opcode == OP_COMPARE ||
 			    inst->opcode == OP_ICOMPARE)
@@ -1670,7 +1733,7 @@ static inline void free_args_area(MonoCompile *cfg, guint8 **buffer)
 		else {
 			/* sh4_temp belongs to clobbered registers during a call,
 			   so we can reuse it here. */
-			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, 
+			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE,
 					&cfg->arch.argalloc_size, sh4_temp);
 			sh4_add(cfg, buffer, sh4_temp, sh4_sp);
 		}
@@ -2157,7 +2220,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SH4_BF:
 			/* MD: sh4_bf: clob:t len:18 */
 
-			if (inst->flags & MONO_INST_BRLABEL) {
+			/* Find which kind of relocation should be used. */
+			if (inst->backend.data == (gpointer)-1) {
+				type = MONO_PATCH_INFO_EXC;
+				target = inst->inst_p1;
+				displace = 0; /* Not used for exceptions. */
+			}
+			else if (inst->flags & MONO_INST_BRLABEL) {
 				type = MONO_PATCH_INFO_LABEL;
 				target = inst->inst_i0;
 				displace = inst->inst_i0->inst_c0;
