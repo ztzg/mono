@@ -1627,13 +1627,13 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				inst->opcode = OP_SH4_CMPEQ_IMM_R0;
 			}
 			else {
-				MonoInst *temp_inst = NULL;
+				MonoInst *new_inst = NULL;
 
-				MONO_INST_NEW(cfg, temp_inst, OP_ICONST);
-				temp_inst->inst_c0 = inst->inst_imm;
-				temp_inst->dreg = mono_regstate_next_int(cfg->rs);
-				MONO_INST_LIST_ADD_TAIL(&(temp_inst)->node, &(inst)->node);
-				inst->sreg2 = temp_inst->dreg;
+				MONO_INST_NEW(cfg, new_inst, OP_ICONST);
+				new_inst->inst_c0 = inst->inst_imm;
+				new_inst->dreg = mono_regstate_next_int(cfg->rs);
+				MONO_INST_LIST_ADD_TAIL(&(new_inst)->node, &(inst)->node);
+				inst->sreg2 = new_inst->dreg;
 			}
 			break;
 
@@ -1665,53 +1665,89 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 		case OP_STORE_MEMBASE_IMM:
-		case OP_STOREI4_MEMBASE_IMM:
-			if (!SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
-				MonoInst *temp;
+		case OP_STOREI4_MEMBASE_IMM: {
+			MonoInst *new_inst = NULL;
 
-				MONO_INST_NEW (cfg, temp, OP_ICONST);
-				temp->inst_c0 = inst->inst_imm;
-				temp->dreg = mono_regstate_next_int (cfg->rs);
-				MONO_INST_LIST_ADD_TAIL (&(temp)->node, &(inst)->node);
-				/* We merge the case STORE_MEMBASE and STOREI4_MEMBASE */
-				inst->opcode = OP_STORE_MEMBASE_REG;
-				inst->sreg1 = temp->dreg;
-			}
+			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
+				break;
+
+			MONO_INST_NEW (cfg, new_inst, OP_ICONST);
+			new_inst->inst_c0 = inst->inst_imm;
+			new_inst->dreg = mono_regstate_next_int (cfg->rs);
+			MONO_INST_LIST_ADD_TAIL (&(new_inst)->node, &(inst)->node);
+
+			/* We merge the case STORE_MEMBASE and STOREI4_MEMBASE. */
+			inst->opcode = OP_STORE_MEMBASE_REG;
+			inst->sreg1 = new_inst->dreg;
 			break;
+		}
 
 		case OP_LOADU1_MEMBASE:
 		case OP_LOAD_MEMBASE:
-		case OP_LOADU4_MEMBASE:	
-		case OP_LOADI4_MEMBASE:
-			if (!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
-				/* We should be testing the range with 
-				   SH4_CHECK_RANGE_movb_dispRy_R0() in the case of
-				   OP_LOADU1_MEMBASE. As the immediate is 4-bits in both
-				   cases, we simplify */
-				MonoInst *temp, *temp2;
-				/* load offset in new register */
-				MONO_INST_NEW (cfg, temp, OP_ICONST);
-				temp->inst_c0 = inst->inst_offset;
-				temp->dreg = mono_regstate_next_int (cfg->rs);
-				/* add basereg from LOAD to this new register */
-				MONO_INST_NEW (cfg, temp2, OP_IADD);
-				temp2->sreg1 = inst->inst_basereg;
-				temp2->sreg2 = temp->dreg;
-				temp2->dreg = temp->dreg;
-				MONO_INST_LIST_ADD_TAIL (&(temp2)->node, &(inst)->node);
-				MONO_INST_LIST_ADD_TAIL (&(temp)->node, &(temp2)->node);
-				if (inst->opcode == OP_LOADU1_MEMBASE) {
-					inst->opcode = OP_SH4_LOADU1_MEMBASE;
-				} else {
-				   /* We merge the case OP_LOAD_MEMBASE, OP_LOADU4_MEMBASE and
-				      OP_LOADI4_MEMBASE */
-					inst->opcode = OP_SH4_LOAD_MEMBASE;
-				}
-				inst->inst_offset = 0;
-				inst->inst_basereg = temp2->dreg;
-				/* inst->dreg destination reg is kept */
-			}
+		case OP_LOADU4_MEMBASE:
+		case OP_LOADI4_MEMBASE: {
+			MonoInst *new_inst  = NULL;
+			MonoInst *new_inst2 = NULL;
+
+			/* We should be testing the range of movb_dispRy_R0()
+			   in the case of OP_LOADU1_MEMBASE. As the immediate
+			   is 4-bits in both cases, we simplify. */
+			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset))
+				break;
+
+			/* Load the offset in new register. */
+			MONO_INST_NEW(cfg, new_inst, OP_ICONST);
+			new_inst->inst_c0 = inst->inst_offset;
+			new_inst->dreg = mono_regstate_next_int(cfg->rs);
+
+			/* Add basereg from LOAD to this new register. */
+			MONO_INST_NEW(cfg, new_inst2, OP_IADD);
+			new_inst2->sreg1 = inst->inst_basereg;
+			new_inst2->sreg2 = new_inst->dreg;
+			new_inst2->dreg = new_inst->dreg;
+
+			MONO_INST_LIST_ADD_TAIL(&new_inst2->node, &inst->node);
+			MONO_INST_LIST_ADD_TAIL(&new_inst->node, &new_inst2->node);
+
+			/* We merge the case OP_LOAD_MEMBASE,
+			   OP_LOADU4_MEMBASE and  OP_LOADI4_MEMBASE. */
+			if (inst->opcode == OP_LOADU1_MEMBASE)
+				inst->opcode = OP_SH4_LOAD_MEMBASE;
+			else
+				inst->opcode = OP_SH4_LOADU1_MEMBASE;
+
+			inst->inst_offset = 0;
+			inst->inst_basereg = new_inst2->dreg;
+			/* inst->dreg destination reg is kept. */
+
 			break;
+		}
+
+		case OP_VOIDCALL_MEMBASE:
+		case OP_CALL_MEMBASE: {
+			MonoInst *new_inst = NULL;
+
+			/* The opcodes call*_membase are splitted into
+			   load_membase + call*_reg. */
+			MONO_INST_NEW(cfg, new_inst, OP_LOAD_MEMBASE);
+			MONO_INST_LIST_ADD_TAIL(&new_inst->node, &inst->node);
+
+			/* Link the new opcodes together. */
+			new_inst->inst_basereg = inst->inst_basereg;
+			new_inst->inst_offset = inst->inst_offset;
+			new_inst->dreg = mono_regstate_next_int(cfg->rs);
+
+			inst->inst_offset = 0;
+			inst->sreg1 = new_inst->dreg;
+
+			/* Convert call*_membase to call*_reg. */
+			if (inst->opcode == OP_VOIDCALL_MEMBASE)
+				inst->opcode = OP_VOIDCALL_REG;
+			else
+				inst->opcode = OP_CALL_REG;
+
+			break;
+		}
 
 		default:
 			break;
@@ -1990,8 +2026,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				/* Compute store address in sh4_temp as we cannot clobber 
 				   destbasereg */
 				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
-				sh4_movl_dispRy(cfg, &buffer, 0,
-						sh4_temp, inst->dreg);
+				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
 			} else {
 				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
 						inst->inst_basereg, inst->dreg);
@@ -2053,29 +2088,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			free_args_area(cfg, &buffer);
 			break;
 		}
-
-		case OP_VOIDCALL_MEMBASE:
-			/* MD: voidcall_membase: src1:b clob:c len:34 */
-		case OP_CALL_MEMBASE:
-			/* MD: call_membase: dest:z src1:b clob:c len:34 */
-			if (!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
-				/* Put store-offset in Cst-Pool & clobber Rtemp */
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-						&(inst->inst_offset), sh4_temp);
-				/* Compute store address in sh4_temp as we cannot clobber 
-				   sreg1 */
-				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
-				sh4_movl_indRy(cfg, &buffer, sh4_temp, sh4_temp);
-			} else {
-				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
-						inst->inst_basereg, sh4_temp);
-			}
-
-			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer); /* delay slot */
-
-			free_args_area(cfg, &buffer);
-			break;
 
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:18 */

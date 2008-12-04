@@ -79,8 +79,6 @@ sh4_load_membase: dest:i src1:b len:2
 iconst: dest:i len:12
 voidcall: clob:c len:30
 call: dest:z clob:c len:30
-voidcall_membase: src1:b clob:c len:34
-call_membase: dest:z src1:b clob:c len:34
 voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
 throw: src1:i len:20
