@@ -269,7 +269,11 @@ test_sources = 		\
 	iltests.il.in		\
 	test.cs			\
 	generics.cs	\
-	generics-variant-types.il
+	generics-variant-types.il \
+	trivial-return_int.cs	\
+	trivial-add_int.cs	\
+	trivial-fibonacci.cs	\
+	trivial-outarg.cs
 
 if MONO_DEBUGGER_SUPPORTED
 if AMD64
@@ -403,6 +407,9 @@ libmono_la_LIBADD = \
 generics.exe: generics.cs TestDriver.dll generics-variant-types.dll
 	$(MCS) -out:$@ $< -r:TestDriver.dll -r:generics-variant-types.dll
 
+trivial-%.exe: trivial-%.cs
+	$(MCS) -out:$@ $<
+
 %.exe: %.cs TestDriver.dll
 	$(MCS) -out:$@ -unsafe $< -r:TestDriver.dll
 
@@ -485,6 +492,31 @@ aotcheck: mono $(regtests)
 	for i in $(regtests); do $(RUNTIME) --aot $$i || exit 1; done
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
+
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg
+
+trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe
+
+trivial-return_int: trivial-return_int.exe
+	$(RUNTIME) $<; test $$? = 3
+
+trivial-add_int: trivial-add_int.exe
+	$(RUNTIME) $<; test $$? = 3
+	$(RUNTIME) $< x x; test $$? = 5
+
+trivial-fibonacci: trivial-fibonacci.exe
+	$(RUNTIME) $<; test $$? = 0
+	$(RUNTIME) $< x; test $$? = 1
+	$(RUNTIME) $< x x; test $$? = 1
+	$(RUNTIME) $< x x x; test $$? = 2
+	$(RUNTIME) $< x x x x; test $$? = 3
+	$(RUNTIME) $< x x x x x; test $$? = 5
+	$(RUNTIME) $< x x x x x x; test $$? = 8
+
+trivial-outarg: trivial-outarg.exe
+	$(RUNTIME) $<; test $$? = 28
+	$(RUNTIME) $< x; test $$? = 33
+	$(RUNTIME) $< x x; test $$? = 38
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe
