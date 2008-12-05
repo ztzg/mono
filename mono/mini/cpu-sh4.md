@@ -58,6 +58,10 @@ add: clob:1 dest:i src1:i src2:i len:2
 int_sub: clob:1 dest:i src1:i src2:i len:2
 sh4_and_imm_R0: clob:1 dest:i src1:z len:2
 int_and: clob:1 dest:i src1:i src2:i len:2
+int_shl_imm: clob:1 dest:i src1:i len:2
+shl_imm: clob:1 dest:i src1:i len:2
+int_shl: clob:1 dest:i src1:i src2:i len:2
+int_mul: dest:i src1:i src2:i len:4
 sh4_cmpeq: src1:i src2:i len:2
 sh4_cmpeq_imm_R0: src1:z len:2
 sh4_cmpgt: src1:i src2:i len:2

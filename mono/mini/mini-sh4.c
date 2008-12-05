@@ -1572,6 +1572,31 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 }
 
 /**
+ * Helper routine: returns true if sh4 has got a shift
+ * instruction that shifts values by the considered
+ * immediate.
+ */
+static inline gboolean sh4_has_shift_inst_imm(guint32 immediate)
+{
+	gboolean ret = FALSE;
+
+	switch(immediate) {
+		case 1U:	/* Fall through */
+		case 2U:	/* Fall through */
+		case 8U:	/* Fall through */
+		case 16U:
+			ret = TRUE;
+		break;
+
+		default:
+			ret = FALSE;
+		break;
+	}
+
+	return ret;
+}
+
+/**
  * Decompose some generic opcodes to architecture-specific ones.
  *
  * This opcode decomposition is really helpful because it gives to
@@ -1647,9 +1672,15 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SUB_IMM:
 		case OP_ISUB_IMM:
 			if(SH4_CHECK_RANGE_add_imm(-inst->inst_imm)) {
-				inst->opcode = OP_ADD_IMM;
+				inst->opcode = OP_IADD_IMM;
 				inst->inst_imm = -inst->inst_imm;
 			} else {
+				/* Hack!!!
+				 * 32 bit target: SUB_IMM(pointer) == ISUB_IMM(int) 
+				 * This case is not handled in mono_op_imm_to_op()
+				 * called by mono_decompose_op_imm().
+				 */
+				inst->opcode = OP_ISUB_IMM;
 				mono_decompose_op_imm(cfg, inst);
 			}
 			break;
@@ -1663,6 +1694,67 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			else {
 				mono_decompose_op_imm(cfg, inst);
 			}
+			break;
+
+		case OP_SHL_IMM:       /* Fall through */
+		case OP_ISHL_IMM:
+			if(inst->inst_imm==0) {
+				inst->opcode = OP_MOVE;
+			} else if(!sh4_has_shift_inst_imm(inst->inst_imm)) {
+				/* Hack!!!
+				 * 32 bit target: SUB_IMM(pointer) == ISUB_IMM(int) 
+				 * This case is not handled in mono_op_imm_to_op()
+				 * called by mono_decompose_op_imm().
+				 */
+				inst->opcode = OP_ISHL_IMM;
+				mono_decompose_op_imm(cfg, inst);
+			}
+			break;
+
+		case OP_MUL_IMM:    /* Fall through */
+		case OP_IMUL_IMM: {
+			MonoInst *new_inst;
+			guint32 imm8;
+
+			/* An obvious case */
+			if(inst->inst_imm == 0) {
+				inst->opcode = OP_ICONST;
+				inst->inst_c0= 0;
+				break;  /* Early exit */
+			}
+
+			/* The case where immediate is 1 may already have
+			 * been reduced by CIL compilers.
+			 */
+			if(inst->inst_imm == 1) {
+				inst->opcode = OP_MOVE;
+				break;  /* Early exit */
+			}
+
+			/* If immediate is a power of 2, we perform some elementary
+			 * operator strengh reductions in a limited number of cases:
+			 *
+			 *  - imm8==1 --> the goal is to map instruction shll.
+			 *  - imm8==2 --> the goal is to map instruction shll2
+			 *  - imm8==8 --> the goal is to map instruction shll8.
+			 *  - imm8==16--> the goal is to map instruction shll16.
+			 */
+			imm8 = mono_is_power_of_two(inst->inst_imm);
+			if(sh4_has_shift_inst_imm(imm8)) {
+				inst->opcode = OP_ISHL_IMM;
+				inst->inst_imm = imm8;
+				break;   /* Early exit */
+			}
+
+			/* Now, the general case */
+			MONO_INST_NEW(cfg,new_inst,OP_ICONST);
+			new_inst->inst_c0 = inst->inst_imm;
+			new_inst->dreg = mono_regstate_next_int (cfg->rs);
+			MONO_INST_LIST_ADD_TAIL (&(new_inst)->node, &(inst)->node);
+			inst->opcode = OP_IMUL;
+			inst->sreg2 = new_inst->dreg;
+			break;
+		}
 
 		case OP_STORE_MEMBASE_IMM:
 		case OP_STOREI4_MEMBASE_IMM: {
@@ -1874,6 +1966,76 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 					  inst->dreg);
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_and(cfg, &buffer, inst->sreg2, inst->sreg1);
+			break;
+
+		case OP_ISHL_IMM:     /* Fall through */
+		case OP_SHL_IMM:
+			/* MD: int_shl_imm: clob:1 dest:i src1:i len:2 */
+			/* MD: shl_imm: clob:1 dest:i src1:i len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_SHL_IMM: [%s] sreg1=%d, dreg=%d,imm=%d",
+					   mono_inst_name(inst->opcode),
+					   inst->sreg1,
+					   inst->dreg,
+					   inst->inst_imm);
+
+			/* Check that immediate belongs to set {1,2,8,16} */
+			g_assert(sh4_has_shift_inst_imm(inst->inst_imm));
+			g_assert(inst->sreg1 == inst->dreg);
+
+			if(inst->inst_imm==1) {
+				sh4_shll(cfg,&buffer,inst->dreg);
+			} else if (inst->inst_imm==2) {
+				sh4_shll2(cfg,&buffer,inst->dreg);
+			} else if (inst->inst_imm==8) {
+				sh4_shll8(cfg,&buffer,inst->dreg);
+			} else if (inst->inst_imm==16){
+				sh4_shll16(cfg,&buffer,inst->dreg);
+			}
+			break;
+
+		case OP_ISHL:
+			/* Note: shld Rm,Rn instruction performs a logical shift
+			 * where "the dynamic shift direction" is indicated by
+			 * Rm. Clearly "if Rm is less than zero, [instruction] is
+			 * a logical right shift".
+			 * ECMA-335 standard (June 2006) does not specify what
+			 * happens if second argument of shl instruction is negative
+			 * (see p. 92 section III).
+			 * We're going to suppose that behaviour is unspecified,
+			 * which from a practical point of view means that we can
+			 * map shld instruction directly.
+			 *
+			 * By comparison, note that ISO/IEC 1989 standard that defines
+			 * the C language states in this case that "behavior is
+			 * undefined".
+			 */
+
+			/* MD: int_shl: clob:1 dest:i src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_ISHL: [%s] sreg1=%d, sreg2=%d, dreg=%d",
+					   mono_inst_name(inst->opcode),
+					   inst->sreg1,
+					   inst->sreg2,
+					   inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shld(cfg,&buffer,inst->sreg2,inst->dreg);
+			break;
+
+		case OP_IMUL:
+			/* MD: int_mul: dest:i src1:i src2:i len:4 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_IMUL: [%s] sreg1=%d, sreg2=%d, dreg=%d",
+					   mono_inst_name(inst->opcode),
+					   inst->sreg1,
+					   inst->sreg2,
+					   inst->dreg);
+
+			/* 32*32 bit multiplication -> result in MACL reg.
+			 * transfer MACL into destination reg.
+			 */
+			sh4_mull(cfg,&buffer,inst->sreg1,inst->sreg2);
+			sh4_sts_MACL(cfg,&buffer,inst->dreg);
 			break;
 
 		case OP_SH4_CMPEQ:

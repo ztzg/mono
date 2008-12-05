@@ -101,12 +101,6 @@
 #define MONO_ARCH_EMULATE_LONG_MUL_OPTS 1
 
 /*
- * If this macro is defined, the multiplication and division opcodes
- * will be emulated.
- */
-#define MONO_ARCH_EMULATE_MUL_DIV 1
-
-/*
  * This macro defines the size of the floating-point stack.
  * Use the value 0 if no floating-point stack is available.
  */
