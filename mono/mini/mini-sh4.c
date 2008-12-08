@@ -1685,6 +1685,30 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_OR_IMM:    /* Fall through */
+		case OP_IOR_IMM:
+			if((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
+			    SH4_CHECK_RANGE_or_imm_R0(inst->inst_imm)) {
+				inst->opcode = OP_SH4_OR_IMM_R0;
+			} else {
+				/* Hack!! See previous comment. */
+				inst->opcode = OP_IOR_IMM;
+				mono_decompose_op_imm(cfg, inst);
+			}
+			break;
+
+		case OP_XOR_IMM:   /* Fall through */
+		case OP_IXOR_IMM:
+			if((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
+			   SH4_CHECK_RANGE_xor_imm_R0(inst->inst_imm)) {
+				inst->opcode = OP_SH4_XOR_IMM_R0;
+			} else {
+				/* Hack!! See previous comment. */
+				inst->opcode = OP_IXOR_IMM;
+				mono_decompose_op_imm(cfg, inst);
+			}
+			break;
+
 		case OP_AND_IMM:
 		case OP_IAND_IMM:
 			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
@@ -1943,13 +1967,61 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_sub(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
 
+		case OP_SH4_OR_IMM_R0:
+			/* MD: sh4_or_imm_R0: clob:1 dest:i src1:z len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_OR_IMM_R0: [%s] sreg1=%d, imm=%d, dreg=%d",
+					  mono_inst_name(inst->opcode),
+					  inst->sreg1,
+					  inst->inst_imm,
+					  inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			g_assert(inst->sreg1 == sh4_r0);
+			sh4_or_imm_R0(cfg, &buffer, inst->inst_imm);
+			break;
+
+		case OP_IOR:
+			/* MD: int_or: clob:1 dest:i src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_OR: [or] sreg1=%d, sreg2=%d,dreg=%d",
+					inst->sreg1,
+					inst->sreg2,
+					inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_or(cfg, &buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_SH4_XOR_IMM_R0:
+			/* MD: sh4_xor_imm_R0: clob:1 dest:i src1:z len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_XOR_IMM_R0: [%s] sreg1=%d, imm=%d, dreg=%d",
+					  mono_inst_name(inst->opcode),
+					  inst->sreg1,
+					  inst->inst_imm,
+					  inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			g_assert(inst->sreg1 == sh4_r0);
+			sh4_xor_imm_R0(cfg, &buffer, inst->inst_imm);
+			break;
+
+		case OP_IXOR:
+			/* MD: int_xor: clob:1 dest:i src1:i src2:i len:2 */
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_XOR: [xor] sreg1=%d, sreg2=%d,dreg=%d",
+					inst->sreg1,
+					inst->sreg2,
+					inst->dreg);
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_xor(cfg, &buffer, inst->sreg2, inst->dreg);
+			break;
+
 		case OP_SH4_AND_IMM_R0:
 			/* MD: sh4_and_imm_R0: clob:1 dest:i src1:z len:2 */
 			SH4_CFG_DEBUG(4)
 				SH4_DEBUG("SH4_AND_IMM_R0: [%s] sreg1=%d, imm=%d, dreg=%d",
 					  mono_inst_name(inst->opcode),
-					  inst->inst_imm,
 					  inst->sreg1,
+					  inst->inst_imm,
 					  inst->dreg);
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
