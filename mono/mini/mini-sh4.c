@@ -2107,18 +2107,23 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: store_membase_imm: clob:t dest:b len:14 */
 		case OP_STOREI4_MEMBASE_IMM:
 			/* MD: storei4_membase_imm: clob:t dest:b len:14 */
-			SH4_CFG_DEBUG(4) SH4_DEBUG("SH4_CHECK: [store_membase_imm] const=%0lx, destbasereg=%d, offset=%0lx", (unsigned long) inst->inst_imm, inst->inst_destbasereg, (unsigned long) inst->inst_offset);
+			SH4_CFG_DEBUG(4)
+				SH4_DEBUG("SH4_CHECK: [store_membase_imm] const=%0lx, destbasereg=%d, offset=%0lx",
+					  (unsigned long) inst->inst_imm,
+					  inst->inst_destbasereg,
+					  (unsigned long) inst->inst_offset);
 
-			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
-				/* Put immediate to store in Cst-Pool & clobber Rtemp */
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, 
+			g_assert(SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset));
+
+			/* Do not use the constant pool if possible. */
+			if (SH4_CHECK_RANGE_mov_imm(inst->inst_imm))
+				sh4_mov_imm(cfg, &buffer, inst->inst_imm, sh4_temp);
+			else
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
 						&(inst->inst_imm), sh4_temp);
-				sh4_movl_dispRx(cfg, &buffer, sh4_temp,
-						inst->inst_offset, inst->inst_destbasereg); 
-			} else {
-				/* Avoid this in mono_arch_lowering_pass() */
-				g_assert(0);
-			}
+
+			sh4_movl_dispRx(cfg, &buffer, sh4_temp,
+					inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 		case OP_STORE_MEMBASE_REG:
