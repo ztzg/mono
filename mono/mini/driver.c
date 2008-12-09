@@ -45,6 +45,7 @@
 #include <mono/metadata/security-core-clr.h>
 #include <mono/metadata/gc-internal.h>
 #include <mono/metadata/coree.h>
+#include <mono/metadata/attach.h>
 #include "mono/utils/mono-counters.h"
 #include <mono/os/gc_wrapper.h>
 
@@ -114,6 +115,7 @@ opt_funcs [sizeof (int) * 8] = {
 	NULL
 };
 
+
 #define DEFAULT_OPTIMIZATIONS (	\
 	MONO_OPT_PEEPHOLE |	\
 	MONO_OPT_CFOLD |	\
@@ -127,7 +129,9 @@ opt_funcs [sizeof (int) * 8] = {
 	MONO_OPT_INTRINS |  \
 	MONO_OPT_LOOP |  \
 	MONO_OPT_EXCEPTION |  \
+    MONO_OPT_CMOV |  \
 	MONO_OPT_GSHARED |	\
+	MONO_OPT_SIMD |	\
 	MONO_OPT_AOT)
 
 #define EXCLUDED_FROM_ALL (MONO_OPT_SHARED | MONO_OPT_PRECOMP)
@@ -294,6 +298,11 @@ opt_sets [] = {
        MONO_OPT_BRANCH,
        MONO_OPT_CFOLD,
        MONO_OPT_FCMOV,
+#ifdef MONO_ARCH_SIMD_INTRINSICS
+       MONO_OPT_SIMD,
+       MONO_OPT_SSE2,
+       MONO_OPT_SIMD | MONO_OPT_SSE2,
+#endif
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_INTRINS,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP,
@@ -302,12 +311,14 @@ opt_sets [] = {
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_SSA,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_EXCEPTION,
+       MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_EXCEPTION | MONO_OPT_CMOV,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_EXCEPTION | MONO_OPT_ABCREM,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_EXCEPTION | MONO_OPT_ABCREM | MONO_OPT_SSAPRE,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_ABCREM,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_TREEPROP,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_SSAPRE,
-       MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_ABCREM | MONO_OPT_SHARED
+       MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_ABCREM | MONO_OPT_SHARED,
+       DEFAULT_OPTIMIZATIONS, 
 };
 
 typedef int (*TestMethod) (void);
@@ -321,7 +332,8 @@ domain_dump_native_code (MonoDomain *domain) {
 #endif
 
 static int
-mini_regression (MonoImage *image, int verbose, int *total_run) {
+mini_regression (MonoImage *image, int verbose, int *total_run)
+{
 	guint32 i, opt, opt_flags;
 	MonoMethod *method;
 	MonoCompile *cfg;
@@ -329,6 +341,7 @@ mini_regression (MonoImage *image, int verbose, int *total_run) {
 	int result, expected, failed, cfailed, run, code_size, total;
 	TestMethod func;
 	GTimer *timer = g_timer_new ();
+	MonoDomain *domain = mono_domain_get ();
 
 	if (mini_stats_fd) {
 		fprintf (mini_stats_fd, "$stattitle = \'Mono Benchmark Results (various optimizations)\';\n");
@@ -378,10 +391,10 @@ mini_regression (MonoImage *image, int verbose, int *total_run) {
 		comp_time = elapsed = 0.0;
 
 		/* fixme: ugly hack - delete all previously compiled methods */
-		g_hash_table_destroy (mono_domain_get ()->jit_trampoline_hash);
-		mono_domain_get ()->jit_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-		mono_internal_hash_table_destroy (&(mono_domain_get ()->jit_code_hash));
-		mono_jit_code_hash_init (&(mono_domain_get ()->jit_code_hash));
+		g_hash_table_destroy (domain_jit_info (domain)->jit_trampoline_hash);
+		domain_jit_info (domain)->jit_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
+		mono_internal_hash_table_destroy (&(domain->jit_code_hash));
+		mono_jit_code_hash_init (&(domain->jit_code_hash));
 
 		g_timer_start (timer);
 		if (mini_stats_fd)
@@ -956,6 +969,72 @@ static void main_thread_handler (gpointer user_data)
 	}
 }
 
+static int
+load_agent (MonoDomain *domain, char *desc)
+{
+	char* col = strchr (desc, ':');	
+	char *agent, *args;
+	MonoAssembly *agent_assembly;
+	MonoImage *image;
+	MonoMethod *method;
+	guint32 entry;
+	MonoArray *main_args;
+	gpointer pa [1];
+	MonoImageOpenStatus open_status;
+
+	if (col) {
+		agent = g_memdup (desc, col - desc + 1);
+		agent [col - desc] = '\0';
+		args = col + 1;
+	} else {
+		agent = g_strdup (desc);
+		args = NULL;
+	}
+
+	agent_assembly = mono_assembly_open (agent, &open_status);
+	if (!agent_assembly) {
+		fprintf (stderr, "Cannot open agent assembly '%s': %s.\n", agent, mono_image_strerror (open_status));
+		g_free (agent);
+		return 2;
+	}
+
+	/* 
+	 * Can't use mono_jit_exec (), as it sets things which might confuse the
+	 * real Main method.
+	 */
+	image = mono_assembly_get_image (agent_assembly);
+	entry = mono_image_get_entry_point (image);
+	if (!entry) {
+		g_print ("Assembly '%s' doesn't have an entry point.\n", mono_image_get_filename (image));
+		g_free (agent);
+		return 1;
+	}
+
+	method = mono_get_method (image, entry, NULL);
+	if (method == NULL){
+		g_print ("The entry point method of assembly '%s' could not be loaded\n", agent);
+		g_free (agent);
+		return 1;
+	}
+	
+	mono_thread_set_main (mono_thread_current ());
+
+	if (args) {
+		main_args = (MonoArray*)mono_array_new (domain, mono_defaults.string_class, 1);
+		mono_array_set (main_args, MonoString*, 0, mono_string_new (domain, args));
+	} else {
+		main_args = (MonoArray*)mono_array_new (domain, mono_defaults.string_class, 0);
+	}
+
+	g_free (agent);
+
+	pa [0] = main_args;
+	/* Pass NULL as 'exc' so unhandled exceptions abort the runtime */
+	mono_runtime_invoke (method, NULL, pa, NULL);
+
+	return 0;
+}
+
 static void
 mini_usage_jitdeveloper (void)
 {
@@ -973,10 +1052,12 @@ mini_usage_jitdeveloper (void)
 		 "    --regression           Runs the regression test contained in the assembly\n"
 		 "    --statfile FILE        Sets the stat file to FILE\n"
 		 "    --stats                Print statistics about the JIT operations\n"
-		 "    --wapi=hps|semdel      IO-layer maintenance\n"
+		 "    --wapi=hps|semdel|seminfo IO-layer maintenance\n"
 		 "    --inject-async-exc METHOD OFFSET Inject an asynchronous exception at METHOD\n"
 		 "    --verify-all           Run the verifier on all methods\n"
 		 "    --full-aot             Avoid JITting any code\n"
+		 "    --agent=ASSEMBLY[:ARG] Loads the specific agent assembly and executes its Main method with the given argument before loading the main assembly.\n"
+		 "    --no-x86-stack-align   Don't align stack on x86\n"
 		 "\n"
 		 "Other options:\n" 
 		 "    --graph[=TYPE] METHOD  Draws a graph of the specified method:\n");
@@ -1017,7 +1098,10 @@ mini_usage (void)
 		"    --optimize=OPT         Turns on or off a specific optimization\n"
 		"                           Use --list-opt to get a list of optimizations\n"
 		"    --security[=mode]      Turns on the unsupported security manager (off by default)\n"
-		"                           mode is one of cas, core-clr, verifiable or validil\n");
+		"                           mode is one of cas, core-clr, verifiable or validil\n"
+		"    --attach=OPTIONS       Pass OPTIONS to the attach agent in the runtime.\n"
+		"                           Currently the only supported option is 'disable'.\n"
+	  );
 }
 
 static void
@@ -1056,14 +1140,10 @@ mini_debug_usage (void)
 		 "                         process with the debugger.\n");
 }
 
-#if defined(__arm__) && defined(__ARM_EABI__)
+#if defined(MONO_ARCH_ARCHITECTURE)
 /* Redefine ARCHITECTURE to include more information */
 #undef ARCHITECTURE
-#if G_BYTE_ORDER == G_LITTLE_ENDIAN
-#define ARCHITECTURE "armel"
-#else
-#define ARCHITECTURE "armeb"
-#endif
+#define ARCHITECTURE MONO_ARCH_ARCHITECTURE
 #endif
 
 static const char info[] =
@@ -1135,6 +1215,8 @@ mono_main (int argc, char* argv[])
 	char *profile_options = NULL;
 	char *aot_options = NULL;
 	char *forced_version = NULL;
+	GPtrArray *agents = NULL;
+	char *attach_options = NULL;
 #ifdef MONO_JIT_INFO_TABLE_TEST
 	int test_jit_info_table = FALSE;
 #endif
@@ -1179,7 +1261,9 @@ mono_main (int argc, char* argv[])
 		} else if (strcmp (argv [i], "--verbose") == 0 || strcmp (argv [i], "-v") == 0) {
 			mini_verbose++;
 		} else if (strcmp (argv [i], "--version") == 0 || strcmp (argv [i], "-V") == 0) {
-			g_print ("Mono JIT compiler version %s (%s)\nCopyright (C) 2002-2008 Novell, Inc and Contributors. www.mono-project.com\n", VERSION, FULL_VERSION);
+			char *build = mono_get_runtime_build_info ();
+			g_print ("Mono JIT compiler version %s (%s)\nCopyright (C) 2002-2008 Novell, Inc and Contributors. www.mono-project.com\n", VERSION, build);
+			g_free (build);
 			g_print (info);
 			if (mini_verbose) {
 				const char *cerror;
@@ -1298,6 +1382,12 @@ mono_main (int argc, char* argv[])
 		} else if (strncmp (argv [i], "--profile=", 10) == 0) {
 			enable_profile = TRUE;
 			profile_options = argv [i] + 10;
+		} else if (strncmp (argv [i], "--agent=", 8) == 0) {
+			if (agents == NULL)
+				agents = g_ptr_array_new ();
+			g_ptr_array_add (agents, argv [i] + 8);
+		} else if (strncmp (argv [i], "--attach=", 9) == 0) {
+			attach_options = argv [i] + 9;
 		} else if (strcmp (argv [i], "--compile") == 0) {
 			if (i + 1 >= argc){
 				fprintf (stderr, "error: --compile option requires a method name argument\n");
@@ -1331,27 +1421,21 @@ mono_main (int argc, char* argv[])
 			if (!parse_debug_options (argv [i] + 8))
 				return 1;
 		} else if (strcmp (argv [i], "--security") == 0) {
-			/* fixme enable verifiable code when the verifier works with 2.0
-			* mini_verifier_set_mode (MINI_VERIFIER_MODE_VERIFIABLE);
-			*/
+			mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
 			mono_security_set_mode (MONO_SECURITY_MODE_CAS);
 			mono_activate_security_manager ();
 		} else if (strncmp (argv [i], "--security=", 11) == 0) {
 			if (strcmp (argv [i] + 11, "temporary-smcs-hack") == 0) {
 				mono_security_set_mode (MONO_SECURITY_MODE_SMCS_HACK);
 			} else if (strcmp (argv [i] + 11, "core-clr") == 0) {
-				/* fixme enable verifiable code when the verifier works with 2.0
-				 * mini_verifier_set_mode (MINI_VERIFIER_MODE_VERIFIABLE);
-				 */
+				mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
 				mono_security_set_mode (MONO_SECURITY_MODE_CORE_CLR);
 			} else if (strcmp (argv [i] + 11, "core-clr-test") == 0) {
 				/* fixme should we enable verifiable code here?*/
 				mono_security_set_mode (MONO_SECURITY_MODE_CORE_CLR);
 				mono_security_core_clr_test = TRUE;
 			} else if (strcmp (argv [i] + 11, "cas") == 0){
-				/* fixme enable verifiable code when the verifier works with 2.0
-				 * mini_verifier_set_mode (MINI_VERIFIER_MODE_VERIFIABLE);
-				 */
+				mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
 				mono_security_set_mode (MONO_SECURITY_MODE_CAS);
 				mono_activate_security_manager ();
 			} else  if (strcmp (argv [i] + 11, "validil") == 0) {
@@ -1382,6 +1466,8 @@ mono_main (int argc, char* argv[])
 				fprintf (stderr, "Invalid --wapi suboption: '%s'\n", argv [i]);
 				return 1;
 			}
+		} else if (strcmp (argv [i], "--no-x86-stack-align") == 0) {
+			mono_do_x86_stack_align = FALSE;
 #ifdef MONO_JIT_INFO_TABLE_TEST
 		} else if (strcmp (argv [i], "--test-jit-info-table") == 0) {
 			test_jit_info_table = TRUE;
@@ -1410,6 +1496,8 @@ mono_main (int argc, char* argv[])
 		mono_profiler_load (profile_options);
 	}
 
+	mono_attach_parse_options (attach_options);
+
 	if (trace_options != NULL){
 		/* 
 		 * Need to call this before mini_init () so we can trace methods 
@@ -1419,6 +1507,13 @@ mono_main (int argc, char* argv[])
 		if (mono_jit_trace_calls == NULL)
 			exit (1);
 	}
+
+#ifdef DISABLE_JIT
+	if (!mono_aot_only) {
+		fprintf (stderr, "This runtime has been configured with --enable-minimal=jit, so the --full-aot command line option is required.\n");
+		exit (1);
+	}
+#endif
 
 	if (action == DO_DEBUGGER) {
 		enable_debugging = TRUE;
@@ -1436,6 +1531,21 @@ mono_main (int argc, char* argv[])
 	mono_set_defaults (mini_verbose, opt);
 	mono_setup_vtable_in_class_init = FALSE;
 	domain = mini_init (argv [i], forced_version);
+
+	if (agents) {
+		int i;
+
+		for (i = 0; i < agents->len; ++i) {
+			int res = load_agent (domain, (char*)g_ptr_array_index (agents, i));
+			if (res) {
+				g_ptr_array_free (agents, TRUE);
+				mini_cleanup (domain);
+				return 1;
+			}
+		}
+
+		g_ptr_array_free (agents, TRUE);
+	}
 	
 	switch (action) {
 	case DO_REGRESSION:
@@ -1532,6 +1642,28 @@ mono_main (int argc, char* argv[])
 		main_thread_handler (&main_args);
 		mono_thread_manage ();
 #endif
+
+	/* 
+	 * On unix, WaitForMultipleObjects for threads is implemented by waiting on
+	 * a cond variable, which is set by the thread when it exits _mono code_, 
+	 * but it could still be running libc code. On amd64, the libc thread exit 
+	 * code does a stack unwind, and if it encounters a frame pointing to native
+	 * code which is in memory which is no longer mapped (because the runtime has
+	 * shut down), it will crash:
+	 * http://mail-archives.apache.org/mod_mbox/harmony-dev/200801.mbox/%3C200801130327.41572.gshimansky@apache.org%3E
+	 * Testcase: tests/main-exit-background-change.exe.
+	 * To make this race less frequent, we avoid freeing the global code manager.
+	 * Since mono_main () is hopefully only used by the runtime executable, this 
+	 * will only cause a shutdown leak. This workaround also has the advantage
+	 * that it can be back-ported to 2.0 safely.
+	 * FIXME: Fix this properly by waiting for threads to really exit using 
+	 * pthread_join (). This cannot be done currently as the io-layer calls
+	 * pthread_detach ().
+	 */
+#ifdef __x86_64__
+		mono_dont_free_global_codeman = TRUE;
+#endif
+
 		mini_cleanup (domain);
 
 		/* Look up return value from System.Environment.ExitCode */

@@ -1,0 +1,39 @@
+2008-11-02  Jonathan Pryor  <jpryor@novell.com>
+
+	* Documentation/**: Added.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added AccelMode.cs, AccelerationAttribute.cs and SimdRuntime.cs.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added Vector2ul.cs.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added Vector2l.cs.
+
+2008-10-27  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added Vector2d.cs.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added Vector8s.cs.
+
+2008-10-23  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added Vector16sb.cs.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Type renaming adjustments.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Mono.Simd.dll.sources: Added Vector8us.cs and Vector16b.cs.
+
+2008-10-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Initial checking of the file layout

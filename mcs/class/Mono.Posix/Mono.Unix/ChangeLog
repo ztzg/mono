@@ -1,3 +1,15 @@
+2008-11-04  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* UnixStream.cs: Do not check offset against int.MaxValue 
+	(System.IO doesn't have it). Reviewed by Jonathan Pryor.
+	Bug reported by Siro Blanco <siro.blanco@gmail.com>.
+
+2008-11-03  Miguel de Icaza  <miguel@novell.com>
+
+	* UnixClient.cs (Client): Make this property public when using the
+	Mono 2.0 profile, based on a discussion with Vlad Hociota and Joe
+	Shaw. 
+
 2008-02-11  Jonathan Pryor  <jpryor@novell.com>
 
 	* UnixSignal.cs: Improve argument checking to match docs.

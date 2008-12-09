@@ -880,6 +880,8 @@ namespace System.Xml
 
 		public virtual XmlReader ReadSubtree ()
 		{
+			if (NodeType != XmlNodeType.Element)
+				throw new InvalidOperationException (String.Format ("ReadSubtree() can be invoked only when the reader is positioned on an element. Current node is {0}. {1}", NodeType, GetLocation ()));
 			return new SubtreeXmlReader (this);
 		}
 
@@ -1255,6 +1257,16 @@ namespace System.Xml
 			return binary.ReadElementContentAsBinHex (
 				buffer, offset, length);
 		}
+
+		private void CheckSupport ()
+		{
+			// Default implementation expects both.
+			if (!CanReadBinaryContent || !CanReadValueChunk)
+				throw new NotSupportedException ();
+			if (binary == null)
+				binary = new XmlReaderBinarySupport (this);
+		}
+		
 #endif
 
 #if NET_2_0
@@ -1272,18 +1284,7 @@ namespace System.Xml
 			return binary.ReadValueChunk (buffer, offset, length);
 		}
 
-		private void CheckSupport ()
-		{
-			// Default implementation expects both.
-			if (!CanReadBinaryContent || !CanReadValueChunk)
-				throw new NotSupportedException ();
-			if (binary == null)
-				binary = new XmlReaderBinarySupport (this);
-		}
-
-#if !NET_2_1
 		public abstract void ResolveEntity ();
-#endif
 
 		public virtual void Skip ()
 		{
@@ -1307,12 +1308,12 @@ namespace System.Xml
 		{
 			return new XmlException (this as IXmlLineInfo, BaseURI, message);
 		}
-
+#if NET_2_0
 		private XmlException XmlError (string message, Exception innerException)
 		{
 			return new XmlException (this as IXmlLineInfo, BaseURI, message);
 		}
-
+#endif
 		#endregion
 	}
 }

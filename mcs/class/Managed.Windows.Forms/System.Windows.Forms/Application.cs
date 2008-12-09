@@ -157,6 +157,7 @@ namespace System.Windows.Forms
 
 		private Application ()
 		{
+			browser_embedded = false;
 		}
 
 #if NET_2_0
@@ -177,8 +178,9 @@ namespace System.Windows.Forms
 			// class, which signs up for the PreRun and FormAdded
 			// events so that it can provide a11y support for MWF.
 			string uia_winforms_assembly = "UIAutomationWinforms, Version=1.0.0.0, Culture=neutral, PublicKeyToken=f4ceacb585d99812";
-			string listener_type_name = "Mono.UIAutomation.Winforms.FormListener";
+			string listener_type_name = string.Empty;
 			string init_method_name = "Initialize";
+			MethodInfo init_method;
 			
 			Assembly mwf_providers = null;
 			try {
@@ -189,14 +191,41 @@ namespace System.Windows.Forms
 				return;
 			
 			try {
+				//FormListener
+				listener_type_name = "Mono.UIAutomation.Winforms.FormListener";
 				Type listener_type = mwf_providers.GetType (listener_type_name, false);
-				if (listener_type == null)
-					return;
-				MethodInfo init_method = listener_type.GetMethod (init_method_name, BindingFlags.Static | BindingFlags.Public);
-				if (init_method == null)
-					return;
-				init_method.Invoke (null, new object [] {});
+				if (listener_type != null) {
+					init_method = listener_type.GetMethod (init_method_name, BindingFlags.Static | BindingFlags.Public);
+					if (init_method != null)
+						init_method.Invoke (null, new object [] {});
+				}
+				//ToolTipListener
+				listener_type_name = "Mono.UIAutomation.Winforms.ToolTipListener";
+				listener_type = mwf_providers.GetType (listener_type_name, false);
+				if (listener_type != null) {
+					init_method = listener_type.GetMethod (init_method_name, BindingFlags.Static | BindingFlags.Public);
+					if (init_method != null)
+						init_method.Invoke (null, new object [] {});
+				}
+				//HelpProviderListener
+				listener_type_name = "Mono.UIAutomation.Winforms.HelpProviderListener";
+				listener_type = mwf_providers.GetType (listener_type_name, false);
+				if (listener_type != null) {
+					init_method = listener_type.GetMethod (init_method_name, BindingFlags.Static | BindingFlags.Public);
+					if (init_method != null)
+						init_method.Invoke (null, new object [] {});
+				}
+				//ErrorProviderListener
+				listener_type_name = "Mono.UIAutomation.Winforms.ErrorProviderListener";
+				listener_type = mwf_providers.GetType (listener_type_name, false);
+				if (listener_type != null) {
+					init_method = listener_type.GetMethod (init_method_name, BindingFlags.Static | BindingFlags.Public);
+					if (init_method != null)
+						init_method.Invoke (null, new object [] {});
+				}
 			} catch { }
+
+
 		}
 #endif
 		
@@ -478,6 +507,11 @@ namespace System.Windows.Forms
 			lock (message_filters) {
 				message_filters.Add (value);
 			}
+		}
+
+		internal static void AddKeyFilter (IKeyFilter value)
+		{
+			XplatUI.AddKeyFilter (value);
 		}
 
 		public static void DoEvents ()

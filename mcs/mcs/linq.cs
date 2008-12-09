@@ -100,7 +100,7 @@ namespace Mono.CSharp.Linq
 			public bool NoExactMatch (EmitContext ec, MethodBase method)
 			{
 #if GMCS_SOURCE				
-				ParameterData pd = TypeManager.GetParameterData (method);
+				AParametersCollection pd = TypeManager.GetParameterData (method);
 				Type source_type = pd.ExtensionMethodType;
 				if (source_type != null) {
 					Argument a = (Argument) Arguments [0];
@@ -207,7 +207,7 @@ namespace Mono.CSharp.Linq
 		{
 			Parameters p = new Parameters (parameters);
 
-			LambdaExpression selector = new LambdaExpression ((TypeContainer)ec.TypeContainer, p, loc);
+			LambdaExpression selector = new LambdaExpression (p, loc);
 			selector.Block = new SelectorBlock (ec.CurrentBlock, p, ti, loc);
 			selector.Block.AddStatement (new ContextualReturn (expr));
 
@@ -514,17 +514,16 @@ namespace Mono.CSharp.Linq
 					//
 					// Spread resolved initializer type
 					//
-					parameter.ParameterType = type;
-					parameter.Resolve (ec);
+					((ImplicitLambdaParameter) parameter).Type = type;
 				}
 
 				return e;
 			}
 
-			protected override void Error_InvalidInitializer (Expression initializer)
+			protected override void Error_InvalidInitializer (string initializer)
 			{
 				Report.Error (1932, loc, "A range variable `{0}' cannot be initialized with `{1}'",
-					Name, initializer.GetSignatureForError ());
+					Name, initializer);
 			}			
 		}
 

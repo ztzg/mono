@@ -25,7 +25,6 @@
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/exception.h>
-#include <mono/metadata/rawbuffer.h>
 #include <mono/metadata/metadata-internals.h>
 #include <mono/metadata/gc-internal.h>
 #include <mono/metadata/appdomain.h>
@@ -121,6 +120,10 @@ static const MonoRuntimeInfo supported_runtimes[] = {
 
 /* The stable runtime version */
 #define DEFAULT_RUNTIME_VERSION "v1.1.4322"
+
+/* Callbacks installed by the JIT */
+static MonoCreateDomainFunc create_domain_hook;
+static MonoFreeDomainFunc free_domain_hook;
 
 /* This is intentionally not in the header file, so people don't misuse it. */
 extern void _mono_debug_init_corlib (MonoDomain *domain);
@@ -998,6 +1001,18 @@ mono_jit_info_set_generic_sharing_context (MonoJitInfo *ji, MonoGenericSharingCo
 
 	gi->generic_sharing_context = gsctx;
 }
+ 
+void
+mono_install_create_domain_hook (MonoCreateDomainFunc func)
+{
+	create_domain_hook = func;
+}
+
+void
+mono_install_free_domain_hook (MonoFreeDomainFunc func)
+{
+	free_domain_hook = func;
+}
 
 /**
  * mono_string_equal:
@@ -1158,11 +1173,7 @@ mono_domain_create (void)
 	domain->num_jit_info_tables = 1;
 	domain->jit_info_table = jit_info_table_new (domain);
 	domain->jit_info_free_queue = NULL;
-	domain->class_init_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-	domain->jump_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
 	domain->finalizable_objects_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-	domain->jit_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-	domain->delegate_trampoline_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
 
 	InitializeCriticalSection (&domain->lock);
 	InitializeCriticalSection (&domain->assemblies_lock);
@@ -1175,7 +1186,13 @@ mono_domain_create (void)
 	domain_id_alloc (domain);
 	mono_appdomains_unlock ();
 
+	mono_perfcounters->loader_appdomains++;
+	mono_perfcounters->loader_total_appdomains++;
+
 	mono_debug_domain_create (domain);
+
+	if (create_domain_hook)
+		create_domain_hook (domain);
 
 	mono_profiler_appdomain_loaded (domain, MONO_PROFILE_OK);
 	
@@ -1227,7 +1244,6 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	InitializeCriticalSection (&appdomains_mutex);
 
 	mono_metadata_init ();
-	mono_raw_buffer_init ();
 	mono_images_init ();
 	mono_assemblies_init ();
 	mono_classes_init ();
@@ -1281,8 +1297,8 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	}
 	
 	/* Now that we have a runtime, set the policy for unhandled exceptions */
-	if (mono_get_runtime_info ()->framework_version [0] < '2') {
-		mono_runtime_unhandled_exception_policy_set (MONO_UNHANLED_POLICY_LEGACY);
+	if (mono_framework_version () < 2) {
+		mono_runtime_unhandled_exception_policy_set (MONO_UNHANDLED_POLICY_LEGACY);
 	}
 
 	if ((status != MONO_IMAGE_OK) || (ass == NULL)) {
@@ -1668,7 +1684,6 @@ mono_cleanup (void)
 	mono_assemblies_cleanup ();
 	mono_images_cleanup ();
 	mono_debug_cleanup ();
-	mono_raw_buffer_cleanup ();
 	mono_metadata_cleanup ();
 
 	TlsFree (appdomain_thread_id);
@@ -1797,20 +1812,6 @@ mono_domain_register_shared_generic (MonoDomain *domain, MonoMethod *method, Mon
 	g_hash_table_insert (domain->shared_generics_hash, method, jit_info);
 }
 
-static void
-dynamic_method_info_free (gpointer key, gpointer value, gpointer user_data)
-{
-	MonoJitDynamicMethodInfo *di = value;
-	mono_code_manager_destroy (di->code_mp);
-	g_free (di);
-}
-
-static void
-delete_jump_list (gpointer key, gpointer value, gpointer user_data)
-{
-	g_slist_free (value);
-}
-
 void
 mono_domain_free (MonoDomain *domain, gboolean force)
 {
@@ -1825,6 +1826,9 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		return;
 
 	mono_profiler_appdomain_event (domain, MONO_PROFILE_START_UNLOAD);
+
+	if (free_domain_hook)
+		free_domain_hook (domain);
 
 	mono_debug_domain_unload (domain);
 
@@ -1871,11 +1875,6 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		domain->static_data_array = NULL;
 	}
 	mono_internal_hash_table_destroy (&domain->jit_code_hash);
-	if (domain->dynamic_code_hash) {
-		g_hash_table_foreach (domain->dynamic_code_hash, dynamic_method_info_free, NULL);
-		g_hash_table_destroy (domain->dynamic_code_hash);
-		domain->dynamic_code_hash = NULL;
-	}
 	mono_g_hash_table_destroy (domain->ldstr_table);
 	domain->ldstr_table = NULL;
 
@@ -1900,16 +1899,12 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	mono_mempool_invalidate (domain->mp);
 	mono_code_manager_invalidate (domain->code_mp);
 #else
+	mono_perfcounters->loader_bytes -= mono_mempool_get_allocated (domain->mp);
 	mono_mempool_destroy (domain->mp);
 	domain->mp = NULL;
 	mono_code_manager_destroy (domain->code_mp);
 	domain->code_mp = NULL;
 #endif	
-	if (domain->jump_target_hash) {
-		g_hash_table_foreach (domain->jump_target_hash, delete_jump_list, NULL);
-		g_hash_table_destroy (domain->jump_target_hash);
-		domain->jump_target_hash = NULL;
-	}
 	if (domain->type_hash) {
 		mono_g_hash_table_destroy (domain->type_hash);
 		domain->type_hash = NULL;
@@ -1922,16 +1917,8 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		mono_g_hash_table_destroy (domain->type_init_exception_hash);
 		domain->type_init_exception_hash = NULL;
 	}
-	g_hash_table_destroy (domain->class_init_trampoline_hash);
-	domain->class_init_trampoline_hash = NULL;
-	g_hash_table_destroy (domain->jump_trampoline_hash);
-	domain->jump_trampoline_hash = NULL;
 	g_hash_table_destroy (domain->finalizable_objects_hash);
 	domain->finalizable_objects_hash = NULL;
-	g_hash_table_destroy (domain->jit_trampoline_hash);
-	domain->jit_trampoline_hash = NULL;
-	g_hash_table_destroy (domain->delegate_trampoline_hash);
-	domain->delegate_trampoline_hash = NULL;
 	if (domain->shared_generics_hash) {
 		g_hash_table_destroy (domain->shared_generics_hash);
 		domain->shared_generics_hash = NULL;
@@ -1939,6 +1926,10 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	if (domain->method_rgctx_hash) {
 		g_hash_table_destroy (domain->method_rgctx_hash);
 		domain->method_rgctx_hash = NULL;
+	}
+	if (domain->generic_virtual_cases) {
+		g_hash_table_destroy (domain->generic_virtual_cases);
+		domain->generic_virtual_cases = NULL;
 	}
 
 	DeleteCriticalSection (&domain->assemblies_lock);
@@ -1951,6 +1942,8 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	mono_profiler_appdomain_event (domain, MONO_PROFILE_END_UNLOAD);
 
 	mono_gc_free_fixed (domain);
+
+	mono_perfcounters->loader_appdomains--;
 
 	if ((domain == mono_root_domain))
 		mono_root_domain = NULL;
@@ -1981,6 +1974,20 @@ gint32
 mono_domain_get_id (MonoDomain *domain)
 {
 	return domain->domain_id;
+}
+
+gpointer
+mono_domain_alloc (MonoDomain *domain, guint size)
+{
+	mono_perfcounters->loader_bytes += size;
+	return mono_mempool_alloc (domain->mp, size);
+}
+
+gpointer
+mono_domain_alloc0 (MonoDomain *domain, guint size)
+{
+	mono_perfcounters->loader_bytes += size;
+	return mono_mempool_alloc0 (domain->mp, size);
 }
 
 void 
@@ -2387,3 +2394,15 @@ mono_debugger_check_runtime_version (const char *filename)
 
 	return NULL;
 }
+
+/**
+ * mono_framework_version:
+ *
+ * Return the major version of the framework curently executing.
+ */
+int
+mono_framework_version (void)
+{
+	return current_runtime->framework_version [0] - '0';
+}
+

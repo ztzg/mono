@@ -174,6 +174,7 @@ typedef struct MonoCompileArch {
 
 #define MONO_ARCH_USE_SIGACTION
 #define MONO_ARCH_NEED_DIV_CHECK 1
+#define MONO_ARCH_ENABLE_NORMALIZE_OPCODES 1
 
 #define MIPS_NUM_REG_ARGS (MIPS_LAST_ARG_REG-MIPS_FIRST_ARG_REG+1)
 #define MIPS_NUM_REG_FPARGS (MIPS_LAST_FPARG_REG-MIPS_FIRST_FPARG_REG+1)
@@ -238,16 +239,10 @@ typedef struct {
 		MONO_CONTEXT_SET_SP ((ctx), MONO_CONTEXT_GET_BP (ctx));	\
 	} while (0)
 
-#if 0
-#define mono_find_jit_info mono_arch_find_jit_info
-#define CUSTOM_STACK_WALK
-#endif
-
 /* re-attaches with gdb - sometimes causes executable to hang */
 #undef HAVE_BACKTRACE_SYMBOLS
 
 #undef DEBUG_EXCEPTIONS
-#undef CUSTOM_EXCEPTION_HANDLING
 
 #define MONO_ZERO_REG		mips_zero
 
@@ -277,9 +272,9 @@ typedef struct {
         	MonoInst *target_label; \
 		target_label = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoInst));	\
 		target_label->opcode = OP_LABEL;	\
-		MONO_INST_LIST_ADD (&target_label->node, \
-				   &(targetbb)->ins_list); \
+	        target_label->next = (targetbb)->code; \
 		target_label->inst_c0 = (targetbb)->native_offset; \
+	        (targetbb)->code = target_label; \
 		inst = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoInst));	\
 		inst->opcode = op;	\
                 (inst)->sreg1 = sr1; \
@@ -294,9 +289,9 @@ typedef struct {
         	MonoInst *target_label; \
 		target_label = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoInst));	\
 		target_label->opcode = OP_LABEL;	\
-		MONO_INST_LIST_ADD (&target_label->node, \
-				   &(targetbb)->ins_list); \
+	        target_label->next = (targetbb)->code; \
 		target_label->inst_c0 = (targetbb)->native_offset; \
+	        (targetbb)->code = target_label; \
 		inst = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoInst));	\
 		inst->opcode = op;	\
                 (inst)->sreg1 = sr1; \

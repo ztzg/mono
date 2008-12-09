@@ -1,3 +1,41 @@
+2008-10-21  Marek Habersack  <mhabersack@novell.com>
+
+	* OutputCacheModule.cs: seal the class.
+	Made OnRawResponseRemoved a static method.
+
+	* CachedVaryBy.cs: seal the class.
+	Use portable line terminators instead of literal '\n'.
+
+	* Cache.cs: seal the CacheItem and CacheItemEnumerator classes.
+
+	* CacheDependency.cs: dispose the associated dependency in the
+	DependencyDispose method.
+
+	* CachedRawResponse.cs: seal the class
+
+2008-10-15  Marek Habersack  <mhabersack@novell.com>
+
+	* OutputCacheModule.cs: do not take any action if Response returns
+	null from GetCachedResponse.
+
+2008-09-30  Juraj Skripsky  <js@hotfeet.ch>
+
+	* CachedRawResponse.cs: Don't allocate a 32k buffer that is never 
+	used. Fixes enhancement bug #430963.
+
+2008-09-29  Marek Habersack  <mhabersack@novell.com>
+
+	* OutputCacheModule.cs: invalidate cache entries when the
+	corresponding source file (.as?x) is recompiled by hooking up to
+	System.Web.Compilation.BuildManager's build cache entry removal
+	event. Fixes bug #429926
+
+2008-09-26  Juraj Skripsky  <js@hotfeet.ch>
+
+	* OutputCacheModule.cs: Consistently use InternalCache for
+	CachedRawResponse items and Cache for CachedVaryBy items.
+	Partial fix for bug #429926.   
+
 2008-08-11  Marek Habersack  <mhabersack@novell.com>
 
 	* Cache.cs: dispose item timer when removing an entry. Fixes bug

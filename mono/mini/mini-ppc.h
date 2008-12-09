@@ -18,7 +18,7 @@
  * reproduceable results for benchmarks */
 #define MONO_ARCH_CODE_ALIGNMENT 32
 
-void ppc_patch (guchar *code, guchar *target);
+void ppc_patch (guchar *code, const guchar *target);
 
 struct MonoLMF {
 	gpointer    previous_lmf;
@@ -68,7 +68,8 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_USE_FPSTACK FALSE
 #define MONO_ARCH_FPSTACK_SIZE 0
 
-#define MONO_ARCH_INST_FIXED_REG(desc) (((desc) == 'l')? ppc_r4:\
+#define MONO_ARCH_INST_FIXED_REG(desc) (((desc) == 'a')? ppc_r3:\
+					((desc) == 'l')? ppc_r4:\
 					((desc) == 'g'? ppc_f1:-1))
 #define MONO_ARCH_INST_SREG2_MASK(ins) (0)
 
@@ -113,6 +114,15 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_IMT_REG ppc_r12
 #define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
 
+#define MONO_ARCH_VTABLE_REG	ppc_r12
+#define MONO_ARCH_RGCTX_REG	ppc_r12
+
+#define MONO_ARCH_ENABLE_NORMALIZE_OPCODES 1
+#define MONO_ARCH_NO_IOV_CHECK 1
+#define MONO_ARCH_HAVE_DECOMPOSE_OPTS 1
+
+#define MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK 1
+
 #define MONO_ARCH_USE_SIGACTION 1
 #define MONO_ARCH_NEED_DIV_CHECK 1
 
@@ -121,10 +131,11 @@ typedef struct MonoCompileArch {
 
 /* we have the stack pointer, not the base pointer in sigcontext */
 #define MONO_CONTEXT_SET_IP(ctx,ip) do { (ctx)->sc_ir = (int)ip; } while (0); 
+/* FIXME: should be called SET_SP */
 #define MONO_CONTEXT_SET_BP(ctx,bp) do { (ctx)->sc_sp = (int)bp; } while (0); 
 
 #define MONO_CONTEXT_GET_IP(ctx) ((gpointer)((ctx)->sc_ir))
-#define MONO_CONTEXT_GET_BP(ctx) ((gpointer)((ctx)->sc_sp))
+#define MONO_CONTEXT_GET_BP(ctx) ((gpointer)((ctx)->regs [ppc_r31-13]))
 #define MONO_CONTEXT_GET_SP(ctx) ((gpointer)((ctx)->sc_sp))
 
 #ifdef __APPLE__
@@ -136,11 +147,10 @@ typedef struct {
 } MonoPPCStackFrame;
 
 #define MONO_INIT_CONTEXT_FROM_FUNC(ctx,start_func) do {	\
-		MonoPPCStackFrame *sframe;	\
-		__asm__ volatile("lwz   %0,0(r1)" : "=r" (sframe));	\
-		MONO_CONTEXT_SET_BP ((ctx), sframe->sp);	\
-		sframe = (MonoPPCStackFrame*)sframe->sp;	\
-		MONO_CONTEXT_SET_IP ((ctx), sframe->lr);	\
+		gpointer r1;					\
+		__asm__ volatile("mr   %0,r1" : "=r" (r1));	\
+		MONO_CONTEXT_SET_BP ((ctx), r1);		\
+		MONO_CONTEXT_SET_IP ((ctx), (start_func));	\
 	} while (0)
 
 #else
@@ -150,19 +160,14 @@ typedef struct {
 	unsigned long lr;
 } MonoPPCStackFrame;
 
-#define MONO_INIT_CONTEXT_FROM_FUNC(ctx,func) do {	\
-		MonoPPCStackFrame *sframe;	\
-		__asm__ volatile("lwz   %0,0(1)" : "=r" (sframe));	\
-		MONO_CONTEXT_SET_BP ((ctx), sframe->sp);	\
-		sframe = (MonoPPCStackFrame*)sframe->sp;	\
-		MONO_CONTEXT_SET_IP ((ctx), sframe->lr);	\
+#define MONO_INIT_CONTEXT_FROM_FUNC(ctx,start_func) do {	\
+		gpointer r1;					\
+		__asm__ volatile("mr   %0,1" : "=r" (r1));	\
+		MONO_CONTEXT_SET_BP ((ctx), r1);		\
+		MONO_CONTEXT_SET_IP ((ctx), (start_func));	\
 	} while (0)
 
 #endif
-
-#define mono_find_jit_info mono_arch_find_jit_info
-#define CUSTOM_STACK_WALK 1
-#define CUSTOM_EXCEPTION_HANDLING 1
 
 typedef struct {
 	gint8 reg;
@@ -181,15 +186,17 @@ typedef struct {
 #elif defined (__APPLE__) && defined (_STRUCT_MCONTEXT)
 	typedef struct __darwin_ucontext os_ucontext;
 
-	#define UCONTEXT_REG_Rn(ctx, n)   ((ctx)->uc_mcontext->__ss.__r##n)
+	#define UCONTEXT_REG_Rn(ctx, n)   ((&(ctx)->uc_mcontext->__ss.__r0) [(n)])
 	#define UCONTEXT_REG_FPRn(ctx, n) ((ctx)->uc_mcontext->__fs.__fpregs [(n)])
 	#define UCONTEXT_REG_NIP(ctx)     ((ctx)->uc_mcontext->__ss.__srr0)
+	#define UCONTEXT_REG_LNK(ctx)     ((ctx)->uc_mcontext->__ss.__lr)
 #elif defined (__APPLE__) && !defined (_STRUCT_MCONTEXT)
 	typedef struct ucontext os_ucontext;
 
-	#define UCONTEXT_REG_Rn(ctx, n)   ((ctx)->uc_mcontext->ss.r##n)
+	#define UCONTEXT_REG_Rn(ctx, n)   ((&(ctx)->uc_mcontext->ss.r0) [(n)])
 	#define UCONTEXT_REG_FPRn(ctx, n) ((ctx)->uc_mcontext->fs.fpregs [(n)])
 	#define UCONTEXT_REG_NIP(ctx)     ((ctx)->uc_mcontext->ss.srr0)
+	#define UCONTEXT_REG_LNK(ctx)     ((ctx)->uc_mcontext->ss.lr)
 #elif defined(__NetBSD__)
 	typedef ucontext_t os_ucontext;
 

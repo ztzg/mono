@@ -63,7 +63,7 @@ namespace System {
 		 * Changes which are already detected at runtime, like the addition
 		 * of icalls, do not require an increment.
 		 */
-		private const int mono_corlib_version = 68;
+		private const int mono_corlib_version = 69;
 
 #if NET_2_0
 		[ComVisible (true)]
@@ -187,10 +187,6 @@ namespace System {
 				if (os == null) {
 					Version v = Version.CreateFromString (GetOSVersionString ());
 					PlatformID p = Platform;
-#if NET_2_0
-					if ((int) p == 128)
-						p = PlatformID.Unix;
-#endif
 					os = new OperatingSystem (p, v);
 				}
 				return os;
@@ -686,9 +682,13 @@ namespace System {
 		// private methods
 
 		internal static bool IsRunningOnWindows {
-			get { return ((int) Platform != 128); }
+			get { return ((int) Platform < 4); }
 		}
 
+		//
+		// Used by gacutil.exe
+		//
+#pragma warning disable 169		
 		private static string GacPath {
 			get {
 				if (Environment.IsRunningOnWindows) {
@@ -700,6 +700,7 @@ namespace System {
 				return Path.Combine (Path.Combine (internalGetGacPath (), "mono"), "gac");
 			}
 		}
+#pragma warning restore 169
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static string [] GetLogicalDrivesInternal ();

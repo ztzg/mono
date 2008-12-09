@@ -23,6 +23,17 @@
 #include <mono/utils/mono-logger.h>
 #include <mono/metadata/gc-internal.h>
 #include <mono/metadata/marshal.h> /* for mono_delegate_free_ftnptr () */
+#include <mono/metadata/attach.h>
+#if HAVE_SEMAPHORE_H
+#include <semaphore.h>
+/* we do this only for known working systems (OSX for example
+ * has the header and functions, but they don't work at all): in other cases
+ * we fall back to the io-layer slightly slower and signal-unsafe Event.
+ */
+#ifdef __linux__
+#define USE_POSIX_SEM 1
+#endif
+#endif
 
 #ifndef PLATFORM_WIN32
 #include <pthread.h>
@@ -594,6 +605,7 @@ alloc_handle (HandleData *handles, MonoObject *obj)
 			mono_gc_weak_link_add (&(handles->entries [slot]), obj);
 	}
 
+	mono_perfcounters->gc_num_handles++;
 	unlock_handles (handles);
 	/*g_print ("allocated entry %d of type %d to object %p (in slot: %p)\n", slot, handles->type, obj, handles->entries [slot]);*/
 	return (slot << 3) | (handles->type + 1);
@@ -777,6 +789,7 @@ mono_gchandle_free (guint32 gchandle)
 	} else {
 		/* print a warning? */
 	}
+	mono_perfcounters->gc_num_handles--;
 	/*g_print ("freed entry %d of type %d\n", slot, handles->type);*/
 	unlock_handles (handles);
 }
@@ -820,6 +833,9 @@ mono_gchandle_free_domain (MonoDomain *domain)
 
 #ifndef HAVE_NULL_GC
 
+#if USE_POSIX_SEM
+static sem_t finalizer_sem;
+#endif
 static HANDLE finalizer_event;
 static volatile gboolean finished=FALSE;
 
@@ -830,7 +846,11 @@ mono_gc_finalize_notify (void)
 	g_message (G_GNUC_PRETTY_FUNCTION ": prodding finalizer");
 #endif
 
+#if USE_POSIX_SEM
+	sem_post (&finalizer_sem);
+#else
 	SetEvent (finalizer_event);
+#endif
 }
 
 static void
@@ -904,8 +924,16 @@ finalizer_thread (gpointer unused)
 		/* Wait to be notified that there's at least one
 		 * finaliser to run
 		 */
+#if USE_POSIX_SEM
+		sem_wait (&finalizer_sem);
+#else
 		/* Use alertable=FALSE since we will be asked to exit using the event too */
 		WaitForSingleObjectEx (finalizer_event, INFINITE, FALSE);
+#endif
+
+#ifndef DISABLE_ATTACH
+		mono_attach_maybe_start ();
+#endif
 
 		if (domains_to_finalize) {
 			mono_finalizer_lock ();
@@ -957,6 +985,9 @@ mono_gc_init (void)
 	if (finalizer_event == NULL || pending_done_event == NULL || shutdown_event == NULL || thread_started_event == NULL) {
 		g_assert_not_reached ();
 	}
+#if USE_POSIX_SEM
+	sem_init (&finalizer_sem, 0, 0);
+#endif
 
 	mono_thread_create (mono_domain_get (), finalizer_thread, NULL);
 

@@ -24,14 +24,14 @@
  */
 MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *result,
 				     MonoJitInfo *previous_jit_info, MonoContext *context, MonoContext *new_context,
-				     char **trace, MonoLMF **lmf, int *native_offset, gboolean *managed)
+				     MonoLMF **lmf, gboolean *managed)
 {
 	MonoJitInfo *jit_info = NULL;
 	gpointer pc = MONO_CONTEXT_GET_IP(context);
 
-	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %p, %p, %p, %p, %p, %p",
+	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %p, %p, %p, %p",
 		  domain, jit_tls, result, previous_jit_info, context,
-		  new_context, trace, lmf, native_offset, managed);
+		  new_context, lmf, managed);
 
 	/* Avoid costly table lookup during stack overflow. */
 	if (previous_jit_info != NULL &&

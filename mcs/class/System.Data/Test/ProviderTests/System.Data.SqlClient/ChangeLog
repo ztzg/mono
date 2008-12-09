@@ -1,3 +1,67 @@
+2008-11-11  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Added (SMALL)MONEY rounding tests.
+
+2008-11-11  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Added tests for bug #428139. Added test for
+	SMALLMONEY overflows. Added workaround for Assert.AreEqual bug in
+	NUnit v2.2.0. 
+
+2008-11-09  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlConnectionTest.cs: Added tests for ClearPool and ClearAllPools.
+
+2008-11-08  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlConnectionTest.cs: Added test for bug #383061.
+
+2008-09-17  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* SqlCommandBuilderTest.cs: Added test for DeriverParameters.
+	
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Enabled test for bug #412569.
+
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Enabled and improved tests for pending transaction
+	and transaction that is not associated with connection. Added tests for
+	Prepare.
+
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Enabled and improved tests for Execute* with 
+	only a transaction set.
+
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Enabled test for bug #412579.
+ 
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Enabled and improved test for bug #412576.
+	Enabled test for changing Connection while reader is open.
+
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlConnectionTest.cs: Enabled and improved test for bug #412571.
+
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlConnectionTest.cs: Enabled test for bug #412574.
+
+2008-07-28  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandTest.cs: Moved tests that do not require connection to
+	regular test suite. Improved existing tests, and added set of new
+	tests. Reduce failure count.
+	* SqlConnectionTest.cs: Moved tests that do not require connection to
+	regular test suite. Improved existing tests, and added set of new
+	tests. Reduce failure count.
+	* SqlTransactionTest.cs: Added several tests.
+
 2008-07-10  Veerapuram Varadhan  <vvaradhan@novell.com>
 
 	* SqlCommandTest.cs (bug326182_*): Test case for Bug#326182 - StoredProcedure 

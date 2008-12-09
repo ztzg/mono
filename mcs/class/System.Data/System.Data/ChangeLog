@@ -1,13 +1,134 @@
-2008-08-26  Veerapuram Varadhan  <vvaradhan@novell.com>
+2008-09-27  Raja R Harinath  <harinath@hurrynot.org>
 
-	** Fixes #377146
-	* XmlDataReader.cs (ReadElementElement): For reference types that
-	implement IXmlSerializable, call the corresponding ReadXml.
-	
+	* DataView.cs: Convert into a partial class and sequester
+	interface-implementations and NET_2_0 pieces into separate parts.
+
+2008-09-16  brandin claar  <brandin.claar@gmail.com>
+	    Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataTable.cs (BinarySerialize): Handle empty DataTables.
+	(DeserializeRecords): Likewise.
+	(BinaryDeserializeTable): Allow DefaultValue to be set to any value.
+
+2008-09-12  Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataTable.cs (NewRowAdded): Make into partial method.
+	(DataTableClearing, DataTableCleared): New partial methods.
+	(Clear): Use them.
+
+	* DataTable.cs: Sequester ISupportInitializationNotification
+	pieces into separate part.
+	(DataTableInitialized): Turn into a 'partial method' to avoid #ifs.
+
+	* DataTable.cs (AssertNotNullConstraints): Hoist out a more useful
+	loop-invariant by inverting loops.
+	(RowExists): Outdent.  Rewrite for slightly better clarity.
+	(BeginLoadData): Outdent.
+	(GetChanges): Outdent.  Replace GetEnumerator/while with foreach.
+
+	* DataTable.cs: Convert to a partial class, sequester NET_2_0
+	specific and IXmlSerializable specific pieces into separate parts.
+
+2008-09-07  Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataSet.cs: Convert to a partial class and sequester NET_2_0
+	pieces into a separate part.
+
+	* DataRowView.cs: Convert to a partial class, and sequester
+	NET_2_0 parts into a separate part.  Use partial classes instead
+	of ugly #region directives.
+	(Item): Remove redundant attributes.  Cleanup slightly.
+
+2008-09-05  Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataRowCollection.cs (RemoveInternal): Update RowIDs of rows
+	after the deleted row.
+	(IndexOf): Avoid loop to search for a row, since we already know
+	where a row is: its RowID.
+	(Remove): Use IndexOf rather than List.Contains.
+
+	* DataRowCollection.cs (InsertRow): Delegate setting of RowId
+	to the row itself.  Use 'row.AttachAt' instead of 'row.AttachRow'.
+	(AddInternal): Likewise.  Also delegate handling of
+	ChangeCurrentAndOriginal to AttachAt.
+	* DataRow.cs (AttachAt): Rename from AttachRow.  Set rowId from
+	passed-in id.  Handle ChangeCurrentAndOriginal and ChangeOriginal
+	actions.
+
+	* DataRow.cs (_hasParentCollection): Remove.  Implied by _rowId >= 0.
+	(HasParentCollection): Remove.
+	* DataRowCollection.cs (AddInternal, InsertAt): Update to changes.
+
+	* DataTable.cs (NewRowArray): Special case size == 0 to avoid
+	creating a lot of garbage.
+
+	* DataRow.cs (Detach): Rename from DetachRow.  Make private.
+	Simplify code to be more uniform.  Move common prefix code here ...
+	(AcceptChanges) [Deleted]: ... from here ...
+	(Delete) [Added]: ... and here ...
+	(RejectChanges) [Added]: ... and here.
+
+2008-09-04  Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataRow.cs (CheckChildRows) <1-arg variant>: Remove excessive
+	indentation.
+	(CheckChildRows) <3-arg variant>: Likewise.  Move/split loop
+	inside a switch.
+	(EndEdit): Out-dent some code.
+	(IsNullColumns): Simplify slightly.
+
+	* DataRelationCollection.cs (CanRemove): Simplify slightly.
+
+	* DataRelation.cs (CheckStateForProperty): Use the childColumn to
+	get the child table.
+
+	* DataColumn.cs (AllowDBNull.set): Rearrange code to be more readable.
+	(AutoIncrement.set): Likewise.
+	(Caption): Likewise.
+	(SetDefaultValue): Likewise.
+
+2008-08-28  Raja R Harinath  <harinath@hurrynot.org>
+
+	* Constraint.cs (SetExtendedProperties): New internal method.
+	Move here from ...
+	(ExtendedProperties.set): ... here.  Kill a #ifdef.
+	* DataTable.cs (DeserializeConstraints): Update to changes.
+
+2008-08-27  Raja R Harinath  <harinath@hurrynot.org>
+
+	* ConstraintCollection.cs (Item) <string variant>: Don't incur
+	additional check for index that's returned by 'IndexOf'.
+	(_createNewConstraintName): Improve readability of code.
+	(_isDuplicateConstraintName): Perform cheaper test first.
+
+	* ConstraintCollection.cs: Reduce some #ifdef by using partial
+	classes.  Move 'sealed' and '[Serializable]' to appropriate
+	partial class declarations.
+	* DataRowCollection.cs: Likewise.
+
 2008-08-13  Marek Habersack  <mhabersack@novell.com>
 
 	* DataRow.cs: do not check whether a column is read-only when
 	importing a record.
+
+2008-08-08  Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataColumn.cs: Update to changes in DataCollection.
+
+2008-07-29  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	Fixes ##377146
+	* XmlDataReader.cs (ReadElementElement): Handle custom reference types sanely.
+
+2008-07-20  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* DataColumnCollection.cs (IndexOf): Include name of column - for which
+	there are multiple matches in a different case - in the exception
+	message.
+	* DataRow.cs (this [int]): On 2.0 profile, throw ArgumentException if
+	value is null and datatype of column is a value type. On 1.0 profile,
+	only allow null value if datatype of column is string. Do not replace
+	value with DBNull.Value if value is null.
 
 2008-07-04  Gert Driesen  <drieseng@users.sourceforge.net>
 

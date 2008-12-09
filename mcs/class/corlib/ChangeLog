@@ -1,6 +1,34 @@
+2008-11-09  William Holmes  <billholmes54@gmail.com>
+
+	* corlib_test.dll.sources: Add TextReaderTest.cs.
+
+2008-09-04  Robert Jordan  <robertj@gmx.net>
+
+	* corlib_test.dll: Add S.R.S/SerializationTest2.cs
+
+2008-08-27  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Removed disabled global 649 warning.
+
+2008-08-22  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* corlib_test.dll.sources: Add unit tests for ObsoleteAttribute
+
+2008-08-12  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* corlib.dll.sources: Removed ReflectionSerializationHolder.cs.
+
+2008-08-07  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* corlib.dll.sources: Add System.Security/SecurityState.cs
+
+2008-08-05  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* corlib_test.dll.sources: Add SoapHexBinaryTest.cs.
+
 2008-05-12  Gert Driesen  <drieseng@users.sourceforge.net>
 
-	* corlib_test.dll.sources: Addd MethodBaseTest.cs.
+	* corlib_test.dll.sources: Add MethodBaseTest.cs.
 
 2008-05-08  Dick Porter  <dick@ximian.com>
 

@@ -206,7 +206,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			n.Name = name;
 			namespaceStack.Push (n);
 		}
-		
+
 		public int OpenScope (int startOffset)
 		{
 			return msw.OpenScope (startOffset);
@@ -220,11 +220,10 @@ namespace Mono.CompilerServices.SymbolWriter
 			int endLine,
 			int endColumn)
 		{
-#if FIXME
-			SourceMethodImpl sm = new SourceMethodImpl (methodName, currentToken, GetCurrentNamespace (startDoc));
-			msw.OpenMethod (startDoc as ISourceFile, sm, startLine, startColumn, endLine, endColumn);
+			int nsId = GetCurrentNamespace (startDoc);
+			SourceMethodImpl sm = new SourceMethodImpl (methodName, currentToken, nsId);
+			msw.OpenMethod (((ICompileUnit)startDoc).Entry, nsId, sm);
 			methodOpened = true;
-#endif
 		}
 		
 		public void SetScopeRange (int scopeID, int startOffset, int endOffset)
@@ -263,7 +262,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			}
 			ni.UsingClauses.Add (fullName);
 		}
-		
+
 		int GetCurrentNamespace (ISymbolDocumentWriter doc)
 		{
 			if (namespaceStack.Count == 0) {
@@ -286,6 +285,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			}
 			return ni.NamespaceID;
 		}
+
 	}
 	
 	class SymbolDocumentWriterImpl: ISymbolDocumentWriter, ISourceFile, ICompileUnit

@@ -187,22 +187,38 @@ namespace System.Web.UI {
 #endif
 		Type BindingContainerType {
 			get {
-				ControlBuilder cb = (this is TemplateBuilder) ? this : MyNamingContainer;
-				if (cb == null)
+				ControlBuilder cb = (this is TemplateBuilder && !(this is RootBuilder)) ? this : MyNamingContainer;
+				if (cb == null) {
+					if (this is RootBuilder)
+						return typeof (Page);
 					return typeof (Control);
+				}
 
 #if NET_2_0
-				if (cb != this && cb is ContentBuilderInternal)
+				if (cb != this && cb is ContentBuilderInternal && !typeof (INonBindingContainer).IsAssignableFrom (cb.BindingContainerType))
 					return cb.BindingContainerType;
 #endif
 
+				Type ct;
 				if (cb is TemplateBuilder) {
-					Type ct =((TemplateBuilder) cb).ContainerType;
-					if (ct == null)
-						return typeof (Control);
+					ct = ((TemplateBuilder) cb).ContainerType;
+					if (typeof (INonBindingContainer).IsAssignableFrom (ct))
+						return MyNamingContainer.BindingContainerType;
+					
+					if (ct != null)
+						return ct;
+
+					ct = cb.ControlType;
+					if (typeof (INonBindingContainer).IsAssignableFrom (ct) || !typeof (INamingContainer).IsAssignableFrom (ct))
+						return MyNamingContainer.BindingContainerType;
+					
 					return ct;
 				}
 
+				ct = cb.ControlType;
+				if (typeof (INonBindingContainer).IsAssignableFrom (ct) || !typeof (INamingContainer).IsAssignableFrom (ct))
+					return MyNamingContainer.BindingContainerType;
+				
 				return cb.ControlType;
 			}
 		}
@@ -251,13 +267,34 @@ namespace System.Web.UI {
 		{
 			if (children == null)
 				children = new ArrayList ();
-			
+
 			children.Add (child);
-			if (child is TemplateBuilder) {
+			ControlBuilder cb = child as ControlBuilder;
+			if (cb != null && cb is TemplateBuilder) {
 				if (templateChildren == null)
 					templateChildren = new ArrayList ();
 				templateChildren.Add (child);
 			}
+
+#if NET_2_0
+			if (parser == null)
+				return;
+			
+			string tag = cb != null ? cb.TagName : null;
+			if (String.IsNullOrEmpty (tag))
+				return;
+
+			RootBuilder rb = Root;
+			AspComponentFoundry foundry = rb != null ? rb.Foundry : null;
+			if (foundry == null)
+				return;
+			AspComponent component = foundry.GetComponent (tag);
+			if (component == null || !component.FromConfig)
+				return;
+			
+			parser.AddImport (component.Namespace);
+			parser.AddDependency (component.Source);
+#endif
 		}
 		
 		public virtual bool AllowWhitespaceLiterals ()

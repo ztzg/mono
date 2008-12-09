@@ -76,6 +76,8 @@ void  mono_gc_free_fixed             (void* addr) MONO_INTERNAL;
 gboolean mono_gchandle_is_in_domain (guint32 gchandle, MonoDomain *domain) MONO_INTERNAL;
 void     mono_gchandle_free_domain  (MonoDomain *domain) MONO_INTERNAL;
 
+typedef void (*FinalizerThreadCallback) (gpointer user_data);
+
 /* if there are finalizers to run, run them. Returns the number of finalizers run */
 int      mono_gc_invoke_finalizers  (void) MONO_INTERNAL;
 gboolean mono_gc_pending_finalizers (void) MONO_INTERNAL;

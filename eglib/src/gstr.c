@@ -40,7 +40,7 @@ g_strndup (const gchar *str, gsize n)
 	return strndup (str, n);
 #else
 	if (str) {
-		char *retval = malloc(n+1);
+		char *retval = g_malloc(n+1);
 		if (retval) {
 			strncpy(retval, str, n)[n] = 0;
 		}
@@ -815,15 +815,6 @@ g_strescape (const gchar *source, const gchar *exceptions)
 	}
 	*res_ptr = '\0';
 	return result;
-}
-
-gchar *
-g_strdup (const gchar *str)
-{
-	if (str == NULL)
-		return NULL;
-
-	return strdup (str);
 }
 
 gint

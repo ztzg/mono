@@ -14,6 +14,17 @@
 	GC_setspecific define.  Unfold the define into a static inline on all platforms
 	except ppc where it is a static leaf function.
 
+2008-08-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* include/private/gc_locks.h: Add amd64 support so parallel mark works on
+	amd64 too.
+
+2008-08-05  Andreas Färber  <andreas.faerber@web.de>
+
+	* autogen.sh: Suppress arguments warning for NOCONFIGURE.
+	
+	Contributed under MIT/X11 license.
+
 2008-08-03  Zoltan Varga  <vargaz@gmail.com>
 
 	* pthread_support.c (GC_thread_exit_proc): Null out the tls key to prevent the

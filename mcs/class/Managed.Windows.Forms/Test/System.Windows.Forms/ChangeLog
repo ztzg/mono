@@ -1,23 +1,208 @@
-2008-08-01  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+2008-11-23  Jonathan Pobst  <monkey@jpobst.com>
+
+	* FormTest.cs: Add test for bug #447873.
+
+2008-11-07  Jonathan Pobst  <monkey@jpobst.com>
+
+	* DefaultLayoutTest.cs: Add some tests from Jonathan Anderson
+	for bug #439479.
+
+2008-11-06  Jonathan Pobst  <monkey@jpobst.com>
+
+	* DefaultLayoutTest.cs: Add some tests from Jonathan Anderson
+	for bug #439443.
+
+2008-11-03  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ProgressBarTest.cs: Add new tests provided by Andy Hume. See
+	bug #440220.
+
+2008-11-03  Jonathan Pobst  <monkey@jpobst.com>
+
+	* FormTest.cs: Add test for bug #438866.
+
+2008-10-31  Andreia Gaita  <shana@jitted.com>
+
+	* TestHelper.cs: Remove extraneous debug message
+	
+2008-10-31  Andreia Gaita  <shana@jitted.com>
+
+	* TestHelper.cs: Add virtual setup and teardown methods. Any forms left
+	  hanging around after a test will be disposed here so that they don't
+	  clutter up the screen while the tests are running.
+
+	* *.cs: All tests now inherit from TestHelper so that the setup and
+	  teardown routines are always called (barring one or two that already
+	  inherit from swf classes that needs to be fixed)
+
+2008-10-19  Andreia Gaita  <avidigal@novell.com>
+
+	* tests2.sh: Remove extra echos
+
+2008-10-19  Andreia Gaita  <avidigal@novell.com>
+
+	* FormTest.cs: Fix failing test on .NET/Win
+
+2008-10-19  Andreia Gaita  <avidigal@novell.com>
+
+	* FormTest.cs: Forms that get closed without a handle being created are
+	disposed in 2.0. Fixes failing FormTest.FormClose and
+	FormTest.FormClose2 on windows.
+
+2008-10-18  Andreia Gaita  <avidigal@novell.com>
+
+	* tests2.sh: Some useful test options, see usage (default behaviour
+	remains the same)
+
+2008-10-17  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ComboBoxTest.cs: Add test for bug #436328.
+
+2008-10-15  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* TimerTest.cs: Enabling test case for bug #325033, because it's 
+	fixed.
+
+2008-10-14  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ImageListTest.cs: Improved test for ICollection.CopyTo.
+
+2008-09-30  Jonathan Pobst  <monkey@jpobst.com>
+
+	* TreeNodeTest.cs: Test for ImageKey/ImageIndex plus flush some tests
+	sitting in my local tree.
+
+2008-09-28  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* DragAndDropTest.cs: Simplify some of the helper code, as well as
+	adding a new test for dnd operations without mouse movement.
+
+2008-09-24  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ControlTest.cs: Add test for bug #386450.
+
+2008-09-22  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* ListViewItemTest.cs: New test for public ctor of
+	ListViewSubItemCollection.
+
+2008-09-19  Carlos Alberto Cortez <calberto.cortez@gmail.com>	
+
+	* BindingTest.cs: New test for data source looking for a data source
+	property with a *specific* value type, more specific than just the
+	property type.
+
+2008-09-19  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* ListControlTest.cs: New test for testing that FormattingEnabled,
+	FormatString and FormatInfo property changes *actually* cause a call
+	to RefreshItems.
+
+2008-09-18  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* BindingTest.cs: New test for empty string passed as property.
+
+2008-09-16  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* BindingTest.cs: New .ctor asertion for DataSourceNullValue default
+	value.
+
+2008-09-15  Jonathan Pobst  <monkey@jpobst.com>
+
+	* CheckedListBoxTest.cs, ListBoxTest.cs: Add some tests from Andy
+	Hume for bug #426166.
+
+2008-09-11  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ListViewCollectionsTest.cs: Add test for bug #425342.
+
+2008-09-08  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ComboBoxTest.cs: Add test for bug #424270.
+
+2008-09-04  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* BindingTest.cs: New test for nested properties using a DataSet.
+
+2008-09-04  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* BindingTest.cs: New tests for multiple nested properties in the
+	data source, by Andy Hume.
+
+2008-08-26  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ErrorProviderTest.cs: Add test for bug #420305.
+
+2008-08-24  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* ListControlTest.cs: Add a container for a mock item, to test
+	multiple nested properties.
+	* BindingContextTest.cs: New test for the overload of the indexer
+	taking a data source with a data member (including nested properties,
+	or multiple objects, as msdnstates).
+
+2008-08-24  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ListBoxTest.cs: Added tests for SetItemsCore. Added and improved tests
+	for ObjectCollection. Added tests for IntegerCollection.
+
+2008-08-23  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ControlTest.cs: Added .ctor tests.	
+
+2008-08-19  Jonathan Pobst  <monkey@jpobst.com>
+
+	* LinkLabelTest.cs: Add test for bug #410709.
+
+2008-08-02  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* FormEventTest.cs: Modified several tests to no longer require manual
+	intervention. Added/improved tests for Form events.
+
+2008-07-31  Carlos Alberto Cortez <calberto.cortez@gmail.com>
 
 	* ListBindingHelperTest.cs: New test for GetList receiving an IEnumerable
 	object which return instances of ICustomTypeDescriptor instances,
 	instead of actual items.
 
-2008-07-29  Jonathan Pobst  <monkey@jpobst.com>
-
-	* ListBox.cs: Add test for bug #412728.
-
 2008-07-30  Ivan N. Zlatev  <contact@i-nz.net>
 
 	* TableLayoutTest.cs: Add tests for bug #412582
+
+2008-07-29  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ListBox.cs: Make test not font dependent.
+
+2008-07-29  Jonathan Pobst  <monkey@jpobst.com>
+
+	* ListBox.cs: Add test for bug #412728.
 
 2008-07-25  Ivan N. Zlatev  <contact@i-nz.net>
 
 	* TableLayoutTest.cs: Add test for bug #412161
 
+2008-07-23  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ListViewItemTest.cs: Marked SerializeExact_Mono as NotWorking to fix
+	buildbot.
+
+2008-07-22  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ListViewItemTest.cs: Enabled (de)serialization tests.
+	* PictureBoxTest.cs: Enabled tests for bug #378308.
+
+2008-07-20  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ListViewItemTest.cs: Fixed tests.
+
+2008-07-20  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* ListViewItemTest.cs: Added ListViewSubItem (de)serialization tests,
+	added/improved ctor tests and add property tests.
+	* PictureBoxTest.cs: Added tests for Load(Async) argument checks.
+
 2008-07-15  Jonathan Pobst  <monkey@jpobst.com>
-	[Backport to 2.0]
+
 	* ImageListTest.cs: Add test for bug #409169.
 
 2008-07-14  Jonathan Pobst  <monkey@jpobst.com>
@@ -31,7 +216,7 @@
 2008-07-12  Gert Driesen  <drieseng@users.sourceforge.net>
 
 	* PictureBoxTest.cs: Split up ImageLocation test in sync and async
-	tests. Added tests for Load argument checks.
+	tests.
 
 2008-07-11  Gert Driesen  <drieseng@users.sourceforge.net>
 

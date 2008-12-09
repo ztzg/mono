@@ -87,7 +87,7 @@ namespace Mono.CSharp {
 				if (c is EnumConstant)
 					c = ((EnumConstant)c).Child;
 
-				c = c.ImplicitConversionRequired (ParentEnum.UnderlyingType, Location);
+				c = c.ImplicitConversionRequired (ec, ParentEnum.UnderlyingType, Location);
 				if (c == null)
 					return null;
 
@@ -124,18 +124,16 @@ namespace Mono.CSharp {
 	{
 		public static readonly string UnderlyingValueField = "value__";
 
-		FullNamedExpression base_type;
+		TypeExpr base_type;
 
-		public Type UnderlyingType;
-
-		public const int AllowedModifiers =
+		const int AllowedModifiers =
 			Modifiers.NEW |
 			Modifiers.PUBLIC |
 			Modifiers.PROTECTED |
 			Modifiers.INTERNAL |
 			Modifiers.PRIVATE;
 
-		public Enum (NamespaceEntry ns, DeclSpace parent, FullNamedExpression type,
+		public Enum (NamespaceEntry ns, DeclSpace parent, TypeExpr type,
 			     int mod_flags, MemberName name, Attributes attrs)
 			: base (ns, parent, name, attrs, Kind.Enum)
 		{
@@ -166,26 +164,6 @@ namespace Mono.CSharp {
 			if (!base.DefineNestedTypes ())
 				return false;
 
-			if (!(base_type is TypeLookupExpression)) {
-				Error_1008 (Location);
-				return false;
-			}
-
-			TypeExpr ute = base_type.ResolveAsTypeTerminal (this, false);
-			UnderlyingType = ute.Type;
-
-			if (UnderlyingType != TypeManager.int32_type &&
-			    UnderlyingType != TypeManager.uint32_type &&
-			    UnderlyingType != TypeManager.int64_type &&
-			    UnderlyingType != TypeManager.uint64_type &&
-			    UnderlyingType != TypeManager.short_type &&
-			    UnderlyingType != TypeManager.ushort_type &&
-			    UnderlyingType != TypeManager.byte_type  &&
-			    UnderlyingType != TypeManager.sbyte_type) {
-				Error_1008 (Location);
-				return false;
-			}
-
 			//
 			// Call MapToInternalType for corlib
 			//
@@ -196,24 +174,17 @@ namespace Mono.CSharp {
 			return true;
 		}
 
-		protected override bool DoDefineMembers ()
+		public override bool Define ()
 		{
 			member_cache = new MemberCache (TypeManager.enum_type, this);
 			DefineContainerMembers (constants);
 			return true;
 		}
 
-		//
-		// Used for error reporting only
-		//
-		public EnumMember GetDefinition (object value)
-		{
-			foreach (EnumMember e in defined_names.Values) {
-				if (value.Equals (e.Value))
-					return e;
+		public Type UnderlyingType {
+			get {
+				return base_type.Type;
 			}
-
-			throw new ArgumentOutOfRangeException (value.ToString ());
 		}
 
 		protected override bool VerifyClsCompliance ()
@@ -224,7 +195,7 @@ namespace Mono.CSharp {
 			if (UnderlyingType == TypeManager.uint32_type ||
 				UnderlyingType == TypeManager.uint64_type ||
 				UnderlyingType == TypeManager.ushort_type) {
-				Report.Error (3009, Location, "`{0}': base type `{1}' is not CLS-compliant", GetSignatureForError (), TypeManager.CSharpName (UnderlyingType));
+				Report.Warning (3009, 1, Location, "`{0}': base type `{1}' is not CLS-compliant", GetSignatureForError (), TypeManager.CSharpName (UnderlyingType));
 			}
 
 			return true;

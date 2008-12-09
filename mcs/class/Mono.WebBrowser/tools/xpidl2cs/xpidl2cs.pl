@@ -21,13 +21,16 @@
 # Boston, MA 02111-1307, USA.
 ##############################################################
 
-die "Usage: xpidl2cs.pl file.idl [/path/to/idl/]" if scalar(@ARGV) < 1;
 
-my $file = shift;
-my $path = shift if scalar(@ARGV) > 0;
-my $nosig = shift if scalar(@ARGV) > 0;
 
-open FILE, '<', $path.$file or die "Can't open file $path$file";
+
+my $file;
+my $path;
+my $nosig;
+my $_class;
+my %opt=();
+
+#open FILE, '<', $path.$file or die "Can't open file $path$file";
 
 my %interface = (
 		 properties => (), 
@@ -44,11 +47,16 @@ my %methods = {
 
 my %types;
 $types{"short"} = {name => "short", out => "out", marshal => ""};
+$types{"PRUint8"} = {name => "char", out => "out", marshal => ""};
+$types{"PRInt8"} = {name => "char", out => "out", marshal => ""};
 $types{"unsigned,short"} = {name => "ushort", out => "out", marshal => ""};
+$types{"PRUint16"} = {name => "ushort", out => "out", marshal => ""};
+$types{"PRInt16"} = {name => "short", out => "out", marshal => ""};
 $types{"int"} = {name => "int", out => "out", marshal => ""};
 $types{"nsresult"} = {name => "int", out => "out", marshal => ""};
 $types{"unsigned,int"} = {name => "uint", out => "out", marshal => ""};
 $types{"PRUint32"} = {name => "UInt32", out => "out", marshal => ""};
+$types{"PRInt32"} = {name => "Int32", out => "out", marshal => ""};
 $types{"PRInt64"} = {name => "long", out => "out", marshal => ""};
 $types{"long"} = {name => "int", out => "out", marshal => ""};
 $types{"size_t"} = {name => "int", out => "out", marshal => ""};
@@ -58,31 +66,39 @@ $types{"boolean"} = {name => "bool", out => "out", marshal => ""};
 $types{"PRBool"} = {name => "bool", out => "out", marshal => ""};
 $types{"void"} = {name => "", out => "", marshal => ""};
 $types{"octet"} = {name => "byte", out => "out", marshal => ""};
+$types{"octet[]"} = {name => "IntPtr", out => "out", marshal => " "};
 $types{"byte"} = {name => "byte", out => "out", marshal => ""};
 $types{"DOMString"} = {name => "/*DOMString*/ HandleRef", out => "", marshal => ""};
 $types{"AUTF8String"} = {name => "/*AUTF8String*/ HandleRef", out => "", marshal => ""};
 $types{"ACString"} = {name => "/*ACString*/ HandleRef", out => "", marshal => ""};
 $types{"AString"} = {name => "/*AString*/ HandleRef", out => "", marshal => ""};
-$types{"wstring"} = {name => "string", out => "", marshal => "MarshalAs(UnmanagedType.LPWStr) "};
-$types{"nsCIDRef"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct) "};
-$types{"nsIIDRef"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct) "};
-$types{"Guid"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct) "};
-$types{"nsCID"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct) "};
-$types{"nsCIDPtr"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct) "};
-$types{"string"} = {name => "string", out => "ref", marshal => "MarshalAs (UnmanagedType.LPStr) "};
+$types{"wstring"} = {name => "string", out => "", marshal => "MarshalAs(UnmanagedType.LPWStr)"};
+$types{"nsCIDRef"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct)"};
+$types{"nsIIDRef"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct)"};
+$types{"Guid"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct)"};
+$types{"nsCID"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct)"};
+$types{"nsCIDPtr"} = {name => "Guid", out => "out", marshal => "MarshalAs (UnmanagedType.LPStruct)"};
+$types{"string"} = {name => "string", out => "ref", marshal => "MarshalAs (UnmanagedType.LPStr)"};
 $types{"refstring"} = {name => "IntPtr", out => "ref", marshal => ""};
 $types{"charPtr"} = {name => "StringBuilder", out => "", marshal => ""};
 $types{"voidPtr"} = {name => "IntPtr", out => "", marshal => ""};
-$types{"nsISupports"} = {name => "IntPtr", out => "out", marshal =>"MarshalAs (UnmanagedType.Interface) "};
+$types{"nsISupports"} = {name => "IntPtr", out => "out", marshal =>"MarshalAs (UnmanagedType.Interface)"};
 $types{"DOMTimeStamp"} = {name => "int", out => "out", marshal => ""};
 $types{"nsWriteSegmentFun"} = {name => "nsIWriteSegmentFunDelegate", out => "", marshal => ""};
+$types{"nsReadSegmentFun"} = {name => "nsIReadSegmentFunDelegate", out => "", marshal => ""};
+$types{"nsTimerCallbackFunc"} = {name => "nsITimerCallbackDelegate", out => "", marshal => ""};
 $types{"nsLoadFlags"} = {name => "ulong", out => "out", marshal => ""};
 $types{"nsQIResult"} = {name => "IntPtr", out => "out", marshal => ""};
 $types{"nsIIDPtr[]"} = {name => "IntPtr", out => "out", marshal => ""};
 $types{"PRFileDescStar"} = {name => "IntPtr", out => "out", marshal => ""};
 $types{"PRLibraryStar"} = {name => "IntPtr", out => "out", marshal => ""};
 $types{"FILE"} = {name => "IntPtr", out => "out", marshal => ""};
-$types{"others"} = {name => "", out => "out", marshal => "MarshalAs (UnmanagedType.Interface) "};
+$types{"nsIPresShell"} = {name => "/*nsIPresShell*/ IntPtr", out => "out", marshal => ""};
+$types{"nsIDocument"} = {name => "/*nsIDocument*/ IntPtr", out => "out", marshal => ""};
+$types{"nsIFrame"} = {name => "/*nsIFrame*/ IntPtr", out => "out", marshal => ""};
+$types{"nsObjectFrame"} = {name => "/*nsObjectFrame*/ IntPtr", out => "out", marshal => ""};
+$types{"nsIContent"} = {name => "/*nsIContent*/ IntPtr", out => "out", marshal => ""};
+$types{"others"} = {name => "", out => "out", marshal => "MarshalAs (UnmanagedType.Interface)"};
 
 my %returnvalues;
 $returnvalues{"short"} = {value => "0"};
@@ -114,13 +130,48 @@ my %dependents;
    
 my $class_implementation;
 
+
+
+sub usage ()
+{
+	print STDERR << "EOF";
+    Usage: xpidl2cs.pl -f file -p path/to/idl [-nh -c class]
+    -h		: this help
+    -f		: idl file to parse, with extension
+    -p		: path to the idl file directory
+    -n		: generate files with no PreserveSig attribute (optional, defaults to adding the attribute)
+    -c		: specific class to use inside the idl file (optional)
+EOF
+	exit;
+}
+
+sub init ()
+{
+	use Getopt::Std;
+	my $opts = 'f:p:c:n';
+	getopts( "$opts", \%opt ) or usage();
+	usage if $opt{h};
+
+	usage() if !$opt{f} or !$opt{p};
+
+	$file = $opt{f};
+	$path = $opt{p};
+	open FILE, '<', $path.$file or die "Can't open file $path$file";
+	
+	$nosig = 1 if $opt{n};
+	$_class = $opt{c};
+}
+
+
 sub trim{
+#print "trim\n";
     $_[0]=~s/^\s+//;
     $_[0]=~s/\s+$//;
     return;
 }
 
 sub parse_parent {
+#print "parse_parent\n";
     my $x = shift;
 
 	print "Parsing parent $x\n";
@@ -149,11 +200,13 @@ sub parse_parent {
 }
 
 sub has_setter {
+#print "has_setter\n";
     my $x = shift;
     return !$properties{$x}->{"setter"};
 }
 
 sub get_name {
+#print "get_name\n";
     my $x = shift;
 
     if (exists $names{$x}) {
@@ -163,6 +216,7 @@ sub get_name {
 }
 
 sub get_type {
+#print "get_type\n";
     my $x = shift;
     my $out = shift;
     my $arr = shift;
@@ -192,6 +246,7 @@ sub get_type {
 }
 
 sub get_out {
+#print "get_out\n";
     my $x = shift;
     if (exists $types{$x}) {
 		return $types{$x}->{"out"};
@@ -200,6 +255,7 @@ sub get_out {
 }
 
 sub get_marshal {
+#print "get_marshal\n";
     my $x = shift;
     my $out = shift;
     my $arr = shift;
@@ -224,6 +280,7 @@ sub get_marshal {
 }
 
 sub get_return_value {
+#print "get_return_value\n";
     my $x = shift;
     if (exists $returnvalues{$x}) {
 		return $returnvalues{$x}->{"value"};
@@ -233,11 +290,13 @@ sub get_return_value {
 
 		
 sub is_property {
+#print "is_property\n";
     my $x = shift;
     return (exists $properties{$x});
 }
 
 sub add_external {
+#print "add_external\n";
     my $x = shift;
     if ($x !~ /nsISupports/ && !exists $types{$x} && !exists $dependents{$x}) {
 		$dependents{$x} = $x;
@@ -246,6 +305,7 @@ sub add_external {
 }
 
 sub get_params {
+#print "get_params\n";
     my $x = shift;
     my %list;
 #print $methods{$x}->{"params"}."\n";
@@ -338,23 +398,28 @@ sub get_params {
 
 		$marshal = "" if $marshal eq " ";
 
-		my $tmp = "\n\t\t\t\t";
+#		my $tmp = "\n\t\t\t\t";
+		my $tmp = "";
 		$tmp .= "[$marshal] " if $marshal;
 		$tmp .= "$out $type $name";
 		push (@ret, $tmp);
 		$lastoutparam = $name if $isout;
+#print "tmp:$tmp\n";
     }
 
 #print "$methods{$x}->{\"type\"}\n";
+#print "nosig:$nosig;x:$x;type:" . &get_type ($methods{$x}->{"type"}) . ";\n";
 	if (!$nosig && $x !~ /void/ && &get_type ($methods{$x}->{"type"}) ne "") {
 		$type = $methods{$x}->{"type"};
 		$type =~ s/\[.*\],//;
 		$marshal = &get_marshal ($type);
 
-		my $tmp = "[$marshal] " if $marshal;
+		my $tmp = "";
+		$tmp = "[$marshal] " if $marshal;
 		$tmp .= &get_out($type);
 		$tmp .= " " . &get_type ($type);
 		$tmp .= " ret";
+#print "tmp 2:$tmp\n";
 		push (@ret, $tmp);
 		
 		&add_external ($type);
@@ -364,12 +429,13 @@ sub get_params {
 		$methods{$x}->{"type"} = $list{$lastoutparam}->{"type"};
 		pop (@ret);
 	}
-print "@ret\n";
+#print "@ret\n";
 	
-	return join (",", @ret);
+	return join (",\n\t\t\t\t", @ret);
 }
 
 sub parse_file {
+#print "parse_file\n";
     my $method = 0;
     my $mname = '';
     my $mtype = '';
@@ -411,6 +477,19 @@ sub parse_file {
 				my $class = $line;
 				$class =~ s/interface ([^\:|\s]+)\s*:\s*(.*)/\1/;
 #		print "\t\tclass:$class\n";
+#		print "\t\t_class:$_class\n";
+				if ($_class && $_class !~ $class) {
+					$uuid = '';
+					$class = '';
+					$method = 0;
+					$mname = '';
+					$mtype = '';
+					$mparams = '';
+					$start = 0;
+					$comment = 0;
+					next;
+				}
+
 				my $parent = $line;
 				$parent =~ s/([^\:]+):\s*(.*)[\s|\{]/\2/;
 #		print "\t\tparent:$parent\n";
@@ -494,7 +573,7 @@ sub parse_file {
 
 
 sub output {
-
+#print "output\n";
     my $name = $interface->{"class"};
     print "$name.cs\n";
     open X, ">$name.cs";
@@ -646,17 +725,20 @@ sub output {
 }
 
 sub generate_dependents {
-    for my $file (keys %dependents) {
-		if (! (-e "$file.cs") && -e "$path$file.idl") {
-			print "generating $path$file.idl\n";
-			my $ret = `perl xpidl2cs.pl $file.idl $path $nosig`;
+#print "generate_dependents\n";
+    for my $dependent (keys %dependents) {
+		if (! (-e "$dependent.cs") && -e "$path$dependent.idl" && $file != $dependent) {
+			print "generating $path$dependent.idl\n";
+			my $cmd = "perl xpidl2cs.pl -f $dependent.idl -p $path";
+			$cmd .= "-n" if $nosig;
+			my $ret = `$cmd`;
 			print "\n$ret";
 		}
     }
 }
 
 sub generate_class_implementation_example {
-
+#print "generate_class_implementation_example\n";
     my $name = $interface->{"class"};
 	my $interfacename = $interface->{"class"};
     my $helpername = $name;
@@ -771,7 +853,7 @@ sub generate_class_implementation_example {
 	
 }
 
-
+&init();
 &parse_file ();
 &output ();
 &generate_dependents ();

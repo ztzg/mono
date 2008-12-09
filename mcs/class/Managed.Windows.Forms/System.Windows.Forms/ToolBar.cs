@@ -218,8 +218,6 @@ namespace System.Windows.Forms
 		public 
 #if NET_2_0
 		override
-#else
-		new
 #endif
 		bool AutoSize {
 			get { return autosize; }
@@ -404,7 +402,7 @@ namespace System.Windows.Forms
 
 		// XXX this should probably go away and it should call
 		// into Control.ImeMode instead.
-		new ImeMode ime_mode = ImeMode.Disable;
+		ImeMode ime_mode = ImeMode.Disable;
 
 		[Browsable (false)]
 		[EditorBrowsable (EditorBrowsableState.Never)]

@@ -23,6 +23,8 @@
 #include "cpu-mips.h"
 #include "trace.h"
 
+#error "The mips backend has not been ported to linear IR."
+
 #define SAVE_FP_REGS		0
 #define SAVE_ALL_REGS		0
 #define EXTRA_STACK_SPACE	0	/* suppresses some s-reg corruption issues */
@@ -122,12 +124,16 @@ mono_arch_flush_icache (guint8 *code, gint size)
 	cacheflush (code, size, BCACHE);
 }
 
-#ifndef CUSTOM_STACK_WALK
 void
 mono_arch_flush_register_windows (void)
 {
 }
-#endif
+
+gboolean 
+mono_arch_is_inst_imm (gint64 imm)
+{
+	return TRUE;
+}
 
 static guint8 *
 mips_emit_exc_by_name(guint8 *code, const char *name)
@@ -388,11 +394,7 @@ mono_arch_get_argument_info (MonoMethodSignature *csig, int param_count, MonoJit
 	arg_info [0].size = frame_size;
 
 	for (k = 0; k < param_count; k++) {
-		
-		if (csig->pinvoke)
-			size = mono_type_native_stack_size (csig->params [k], &align);
-		else
-			size = mini_type_stack_size (NULL, csig->params [k], &align);
+		size = mini_type_stack_size_full (NULL, csig->params [k], &align, csig->pinvoke);
 
 		/* ignore alignment for now */
 		align = 1;
@@ -1207,7 +1209,10 @@ mono_arch_call_opcode (MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call,
 			MONO_INST_NEW (cfg, arg, OP_OUTARG);
 			arg->inst_imm = cinfo->sig_cookie.offset;
 			arg->inst_left = sig_arg;
-			MONO_INST_LIST_ADD_TAIL (&arg->node, &call->out_args);
+			
+			/* prepend, so they get reversed */
+			arg->next = call->out_args;
+			call->out_args = arg;
 		}
 		if (is_virtual && i == 0) {
 			/* the argument will be attached to the call instrucion */
@@ -1220,7 +1225,9 @@ mono_arch_call_opcode (MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call,
 			arg->inst_left = in;
 			arg->inst_call = call;
 			arg->type = in->type;
-			MONO_INST_LIST_ADD_TAIL (&arg->node, &call->out_args);
+			/* prepend, we'll need to reverse them later */
+			arg->next = call->out_args;
+			call->out_args = arg;
 			if (ainfo->regtype == RegTypeGeneral) {
 				arg->backend.reg3 = ainfo->reg;
 				call->used_iregs |= 1 << ainfo->reg;
@@ -1272,6 +1279,19 @@ mono_arch_call_opcode (MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call,
 			}
 		}
 	}
+	/*
+	 * Reverse the call->out_args list.
+	 */
+	{
+		MonoInst *prev = NULL, *list = call->out_args, *next;
+		while (list) {
+			next = list->next;
+			list->next = prev;
+			prev = list;
+			list = next;
+		}
+		call->out_args = prev;
+	}
 	call->stack_usage = cinfo->stack_usage;
 	cfg->param_area = MAX (cfg->param_area, cinfo->stack_usage);
 	cfg->param_area = MAX (cfg->param_area, 16); /* a0-a3 always present */
@@ -1287,6 +1307,24 @@ mono_arch_call_opcode (MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call,
 }
 
 void
+mono_arch_emit_call (MonoCompile *cfg, MonoCallInst *call)
+{
+	NOT_IMPLEMENTED;
+}
+
+void
+mono_arch_emit_outarg_vt (MonoCompile *cfg, MonoInst *ins, MonoInst *src)
+{
+	NOT_IMPLEMENTED;
+}
+
+void
+mono_arch_emit_setret (MonoCompile *cfg, MonoMethod *method, MonoInst *val)
+{
+	NOT_IMPLEMENTED;
+}
+
+void
 mono_arch_peephole_pass_1 (MonoCompile *cfg, MonoBasicBlock *bb)
 {
 }
@@ -1294,10 +1332,11 @@ mono_arch_peephole_pass_1 (MonoCompile *cfg, MonoBasicBlock *bb)
 void
 mono_arch_peephole_pass_2 (MonoCompile *cfg, MonoBasicBlock *bb)
 {
-	MonoInst *ins, *n;
+	MonoInst *ins, *n, *last_ins = NULL;
+	ins = bb->code;
 
 	MONO_BB_FOR_EACH_INS_SAFE (bb, n, ins) {
-		MonoInst *last_ins = mono_inst_list_prev (&ins->node, &bb->ins_list);
+		MonoInst *last_ins = ins->prev;
 
 		switch (ins->opcode) {
 		case OP_MUL_IMM: 
@@ -1423,13 +1462,41 @@ mono_arch_peephole_pass_2 (MonoCompile *cfg, MonoBasicBlock *bb)
 			}
 			break;
 		}
+		last_ins = ins;
+		ins = ins->next;
+	}
+	bb->last_ins = last_ins;
+}
+
+static inline InstList*
+inst_list_prepend (MonoMemPool *pool, InstList *list, MonoInst *data)
+{
+	InstList *item = mono_mempool_alloc (pool, sizeof (InstList));
+	item->data = data;
+	item->prev = NULL;
+	item->next = list;
+	if (list)
+		list->prev = item;
+	return item;
+}
+
+static void
+insert_after_ins (MonoBasicBlock *bb, MonoInst *ins, MonoInst *to_insert)
+{
+	if (ins == NULL) {
+		ins = bb->code;
+		bb->code = to_insert;
+		to_insert->next = ins;
+	} else {
+		to_insert->next = ins->next;
+		ins->next = to_insert;
 	}
 }
 
-#define NEW_INS(cfg,ins,dest,op) do {					\
+#define NEW_INS(cfg,dest,op) do {       \
 		(dest) = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoInst));       \
 		(dest)->opcode = (op);  \
-		MONO_INST_LIST_ADD_TAIL (&(dest)->node, &(ins)->node); \
+		insert_after_ins (bb, last_ins, (dest)); \
 	} while (0)
 
 static int
@@ -1508,7 +1575,7 @@ map_to_reg_reg_op (int op)
 void
 mono_arch_lowering_pass (MonoCompile *cfg, MonoBasicBlock *bb)
 {
-	MonoInst *ins, *next, *temp;
+	MonoInst *ins, *next, *temp, *last_ins = NULL;
 	int imm;
 
 	/* setup the virtual reg allocator */
@@ -1521,7 +1588,7 @@ loop_start:
 		case OP_ADD_IMM:
 		case OP_ADDCC_IMM:
 			if (!mips_is_imm16 (ins->inst_imm)) {
-				NEW_INS (cfg, ins, temp, OP_ICONST);
+				NEW_INS (cfg, temp, OP_ICONST);
 				temp->inst_c0 = ins->inst_imm;
 				temp->dreg = mono_regstate_next_int (cfg->rs);
 				ins->sreg2 = temp->dreg;
@@ -1531,7 +1598,7 @@ loop_start:
 #if 0
 		case OP_SUB_IMM:
 			if (!mips_is_imm16 (-ins->inst_imm)) {
-				NEW_INS (cfg, ins, temp, OP_ICONST);
+				NEW_INS (cfg, temp, OP_ICONST);
 				temp->inst_c0 = ins->inst_imm;
 				temp->dreg = mono_regstate_next_int (cfg->rs);
 				ins->sreg2 = temp->dreg;
@@ -1544,7 +1611,7 @@ loop_start:
 		case OP_OR_IMM:
 		case OP_XOR_IMM:
 			if ((ins->inst_imm & 0xffff0000) && (ins->inst_imm & 0xffff)) {
-				NEW_INS (cfg, ins, temp, OP_ICONST);
+				NEW_INS (cfg, temp, OP_ICONST);
 				temp->inst_c0 = ins->inst_imm;
 				temp->dreg = mono_regstate_next_int (cfg->rs);
 				ins->sreg2 = temp->dreg;
@@ -1556,7 +1623,7 @@ loop_start:
 		case OP_SBB_IMM:
 		case OP_SUBCC_IMM:
 		case OP_ADC_IMM:
-			NEW_INS (cfg, ins, temp, OP_ICONST);
+			NEW_INS (cfg, temp, OP_ICONST);
 			temp->inst_c0 = ins->inst_imm;
 			temp->dreg = mono_regstate_next_int (cfg->rs);
 			ins->sreg2 = temp->dreg;
@@ -1565,11 +1632,9 @@ loop_start:
 #endif
 #if 0
 		case OP_COMPARE_IMM:
-			next = mono_inst_list_next (&ins->node, &bb->ins_list);
-			g_assert(next);
-			if (compare_opcode_is_unsigned (next->opcode)) {
+			if (compare_opcode_is_unsigned (ins->next->opcode)) {
 				if (!ppc_is_uimm16 (ins->inst_imm)) {
-					NEW_INS (cfg, ins, temp, OP_ICONST);
+					NEW_INS (cfg, temp, OP_ICONST);
 					temp->inst_c0 = ins->inst_imm;
 					temp->dreg = mono_regstate_next_int (cfg->rs);
 					ins->sreg2 = temp->dreg;
@@ -1577,7 +1642,7 @@ loop_start:
 				}
 			} else {
 				if (!ppc_is_imm16 (ins->inst_imm)) {
-					NEW_INS (cfg, ins, temp, OP_ICONST);
+					NEW_INS (cfg, temp, OP_ICONST);
 					temp->inst_c0 = ins->inst_imm;
 					temp->dreg = mono_regstate_next_int (cfg->rs);
 					ins->sreg2 = temp->dreg;
@@ -1604,7 +1669,7 @@ loop_start:
 				break;
 			}
 			if (!ppc_is_imm16 (ins->inst_imm)) {
-				NEW_INS (cfg, ins, temp, OP_ICONST);
+				NEW_INS (cfg, temp, OP_ICONST);
 				temp->inst_c0 = ins->inst_imm;
 				temp->dreg = mono_regstate_next_int (cfg->rs);
 				ins->sreg2 = temp->dreg;
@@ -1635,7 +1700,7 @@ loop_start:
 			 */
 			if (ppc_is_imm16 (ins->inst_offset))
 				break;
-			NEW_INS (cfg, ins, temp, OP_ICONST);
+			NEW_INS (cfg, temp, OP_ICONST);
 			temp->inst_c0 = ins->inst_offset;
 			temp->dreg = mono_regstate_next_int (cfg->rs);
 			ins->sreg2 = temp->dreg;
@@ -1651,16 +1716,19 @@ loop_start:
 				ins->opcode = map_to_reg_reg_op (ins->opcode);
 			}
 #if 0
-			NEW_INS (cfg, ins, temp, OP_ICONST);
+			NEW_INS (cfg, temp, OP_ICONST);
 			temp->inst_c0 = ins->inst_imm;
 			temp->dreg = mono_regstate_next_int (cfg->rs);
 			ins->sreg1 = temp->dreg;
 			ins->opcode = map_to_reg_reg_op (ins->opcode);
+			last_ins = temp;
 			goto loop_start; /* make it handle the possibly big ins->inst_offset */
 #endif
 			break;
 		}
+		last_ins = ins;
 	}
+	bb->last_ins = last_ins;
 	bb->max_vreg = cfg->rs->next_vreg;
 }
 
@@ -1791,6 +1859,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 	MonoCallInst *call;
 	guint offset;
 	guint8 *code = cfg->native_code + cfg->code_len;
+	MonoInst *last_ins = NULL;
 	guint last_offset = 0;
 	int max_len, cpos;
 	int ins_cnt = 0;
@@ -1849,6 +1918,8 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			mips_multu (code, ins->sreg1, ins->sreg2);
 			mips_mflo (code, ins->dreg);
 			mips_mfhi (code, ins->dreg+1);
+			break;
+		case OP_RELAXED_NOP:
 			break;
 		case OP_MEMORY_BARRIER:
 #if 0
@@ -3014,6 +3085,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 	       
 		cpos += max_len;
 
+		last_ins = ins;
 		last_offset = offset;
 	}
 
@@ -3998,6 +4070,12 @@ mono_arch_get_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethod
 	MonoInst *ins = NULL;
 
 	return ins;
+}
+
+MonoInst*
+mono_arch_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
+{
+	return NULL;
 }
 
 gboolean

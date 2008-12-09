@@ -50,7 +50,7 @@ namespace System.Xml.Xsl
 		object debugger;
 		CompiledStylesheet s;
 #if !TARGET_JVM
-		TempFileCollection temporary_files;
+//		TempFileCollection temporary_files;
 #endif
 		XmlWriterSettings output_settings = new XmlWriterSettings ();
 
@@ -75,7 +75,7 @@ namespace System.Xml.Xsl
 #if !TARGET_JVM
 		[MonoTODO]
 		public TempFileCollection TemporaryFiles {
-			get { return temporary_files; }
+			get { return null; /*temporary_files;*/ }
 		}
 #endif
 
@@ -248,12 +248,13 @@ namespace System.Xml.Xsl
 			{
 				//ShowLocationInTrace (style);
 			}
-
+/*
 			string ShowLocationInTrace (XPathNavigator style)
 			{
 				IXmlLineInfo li = style as IXmlLineInfo;
 				return li != null ? String.Format ("at {0} ({1},{2})", style.BaseURI, li.LineNumber, li.LinePosition) : "(no debug info available)";
 			}
+*/
 		}
 }
 #endif

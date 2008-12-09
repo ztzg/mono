@@ -1,3 +1,134 @@
+2008-11-06  Marek Habersack  <mhabersack@novell.com>
+
+	* ListView.cs: implemented the sorting capability.
+
+	* ListViewSortEventArgs.cs: implemented all the methods and
+	properties. 
+
+2008-11-01  Marek Habersack  <mhabersack@novell.com>
+
+	* ListView.cs: do not instantiate the layout template more than
+	necessary.
+
+	* NextPreviousPagerField.cs: moved some common code to the base
+	class (the GetQueryModeStartRowIndex method)
+
+	* DataPager.cs: do not call SetPageProperties more than
+	necessary.
+
+	* NumericPagerField.cs: implemented
+
+	* DataPagerField.cs: added a helper method,
+	GetQueryModeStartRowIndex, to be used by all the concrete
+	implementations to calculate the starting row index in the query
+	mode.
+
+2008-10-31  Marek Habersack  <mhabersack@novell.com>
+
+	* ListView.cs: use StartRowIndex and MaximumRows properties when
+	calculating the total row count server paging case and when
+	assigning to corresponding properties of the paged data source.
+
+2008-10-30  Marek Habersack  <mhabersack@novell.com>
+
+	* DataPagerFieldCollection.cs: implemented most of the methods and
+	properties, so that using the DataPager is possible now.
+
+	* PagePropertiesChangingEventArgs.cs: implemented all the methods
+	and properties.
+
+	* ListView.cs: {Save,Load}ControlState now uses constants to index
+	state arrays. Total row count is stored in the control state.
+	CreateChildControls () now uses dummy data to initialize child
+	controls if no items were found after postback.
+	CreateChildControls (IEnumerable, bool) now properly calculates
+	total row count, calls OnTotalRowCountAvailable after creating the
+	child controls and returns the total row count instead of the
+	number of created child controls. This makes pager work
+	correctly.
+	Implemented SetPageProperties () to support paging.
+
+	* NextPreviousPagerField.cs: Correctly order the Next/Previous
+	buttons.
+	When creating buttons, cast the new control properly before
+	assigning properties.
+
+	* TemplatePagerField.cs: added (stub)
+
+	* DataPager.cs: added missing class attributes (ParseChildren,
+	PersistChildren and SupportsEventValidation).
+	{Save,Load}ControlState now use constants to index the state
+	arrays.
+	Properly implemented FindPageableItemContainer - it now looks for
+	the container up the parenthood chain, querying all the naming
+	containers for the named control.
+	SetUpForNewContainer now accepts an additional parameter, so that
+	the SetPageProperties method is called on the container whenever
+	necessary.
+
+	* NumericPagerField.cs: implemented the CreateField method.
+
+	* ListViewPagedDataSource.cs: implemented data source
+	enumerators.
+
+	* DataPagerFieldItem.cs: implemented all the methods and properties.
+
+2008-10-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* LinqDataSource.cs : set ContextTypeName too when ContextType is set.
+
+2008-10-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* LinqDataSource.cs : implement ContextType/ContextTypeName.
+	* LinqDataSourceView.cs : some ExecuteSelect() implementation.
+	  Cache type members which are from reflection.
+
+2008-10-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* LinqDataSource.cs, LinqDataSourceView.cs :
+	  some more implementation.
+
+2008-09-30  Marek Habersack  <mhabersack@novell.com>
+
+	* ListView.cs: implemented all the events.
+	CreateChildControls works with non-ICollection data sources now.
+	CreateItemsWithoutGroups now counts items placed in the container
+	and stores the container in a field, so that RemoveItems can
+	properly delete the child controls.
+	Implemented the RemoveItems method.
+	Implemented Load/SaveControlState.
+	Implemented LoadViewState.
+	Implemented OnBubbleEvent.
+	Implemented all the On* methods.
+
+	* ListViewCommandEventArgs.cs: implemented the CommandSource and
+	Item properties.
+
+	* ListViewItemEventArgs.cs: implemented the Item property.
+
+2008-09-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* LinqDataSource.cs, LinqDataSourceView.cs
+	  LinqDataSourceContextEventArgs.cs
+	  LinqDataSourceDeleteEventArgs.cs
+	  LinqDataSourceDisposeEventArgs.cs
+	  LinqDataSourceInsertEventArgs.cs
+	  LinqDataSourceSelectEventArgs.cs
+	  LinqDataSourceStatusEventArgs.cs
+	  LinqDataSourceUpdateEventArgs.cs : easy implementation parts.
+
+2008-09-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* LinqDataSource.cs, LinqDataSourceView.cs
+	  LinqDataSourceContextEventArgs.cs
+	  LinqDataSourceDeleteEventArgs.cs
+	  LinqDataSourceDisposeEventArgs.cs
+	  LinqDataSourceInsertEventArgs.cs
+	  LinqDataSourceSelectEventArgs.cs
+	  LinqDataSourceStatusEventArgs.cs
+	  LinqDataSourceUpdateEventArgs.cs
+	  LinqDataSourceValidationException.cs : stubbed out.
+
 2008-05-08  Marek Habersack  <mhabersack@novell.com>
 
 	* DataPager.cs, DataPager.cs, DataPagerFieldCollection.cs,

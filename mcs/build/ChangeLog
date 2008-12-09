@@ -1,3 +1,58 @@
+2008-10-18  Jonathan Pryor  <jpryor@novell.com>
+
+	* rules.make (dist-default): Distribute the Documentation directory, 
+	  if present.
+
+2008-10-18  Jonathan Pryor  <jpryor@novell.com>
+
+	* rules.make (MDOC): MONO_PATH needs to include net_1_1 so monodoc.dll
+	  can be found.
+
+2008-10-17  Jonathan Pryor  <jpryor@novell.com>
+
+	* README.makefiles: Add documentation about the new doc-update target.
+
+2008-10-18  Raja R Harinath  <harinath@hurrynot.org>
+
+	* rules.make (MDOC): Pass a proper MONO_PATH.
+
+2008-10-17  Jonathan Pryor  <jpryor@novell.com>
+
+	* build.rules: doc-update is now a standard target; provide a $(MDOC)
+	  variable to simplify running the `mdoc` updater program.
+	* executable.make: Add doc-update target support (does nothing).
+	* library.make: Add doc-update target support; runs `mdoc update` on
+	  the assembly, updating the documentation within Documentation/en.
+	* Makefile: Add doc-update target support.
+
+2008-09-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* library.make: Allow FIXTURE make variable to be passed to nunit.
+
+2008-08-29  Raja R Harinath  <harinath@hurrynot.org>
+
+	* rules.make (do-%): Revert change below.  We need the recursion
+	to ensure ordering of %-local after %-recursive.  IOW, we
+	want to ensure strict linearity even with a 'make -j'.
+
+2008-08-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* rules.make (Q_MCS): Use 5 spaces instead of -e '\\t'.
+
+	* library.make: Make some command quiet.
+
+	* rules.make: Avoid some needless recursive make invocations.
+	
+	* rules.make: Print the profile in the quiet commands.
+
+	* rules.make: Make the build process quiet similarly to the runtime build
+	process. Use the V=1 argument to make to make it verbose again.
+
+2008-08-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* rules.make (PROFILE): If no profile is passed on the command line, make
+	net_2_0 the default.
+
 2008-06-30  Marek Safar  <marek.safar@gmail.com>
 
 	* platforms/linux.make: Enable mcs optimizations.

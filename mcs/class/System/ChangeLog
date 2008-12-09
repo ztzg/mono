@@ -1,3 +1,49 @@
+
+2008-11-03 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* System_test.dll.sources: add FtpWebRequestTest.cs
+
+2008-10-17  Raja R Harinath  <harinath@hurrynot.org>
+
+	Make robust to 'make clean; make'
+	* Makefile (CYCLIC_DEPS): If we're using BOOT_COMPILE, don't
+	bother looking for cyclic dependencies -- they'll fail to load
+	even if the dlls exist.
+	(handle-missing-deps): Rename from 'echo-warning'.  Remove cyclic
+	dependencies for real, if they exist.
+	Reported by Jonathan Pryor.
+
+2008-09-14  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* System_test.dll.sources: Added ConfigXmlDocumentTest.cs.
+
+2008-09-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* Makefile (regex-check): New helper target to run the perl regex test suite.
+
+2008-08-16  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* System_test.dll.sources: Added SmtpExceptionTest.cs.
+
+2008-08-07  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* net_2_1_raw_System.dll.sources: Add existing System/UriIdnScope.cs
+	* System_test.dll.sources: Add System.ComponentModel/
+	DefaultValueAttributeTest.cs to the test suite
+
+2008-08-06  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* net_2_1_raw_System.dll.sources: Add System.CodeDom.Compiler/
+	GeneratedCodeAttribute.cs since it's part of SL2 beta 2.
+
+2008-07-31  Jb Evain  <jbevain@novell.com>
+
+	* net_2_1_raw_System.dll.sources: fine tune.
+
+2008-07-25  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* System_test.dll.sources: Added HttpWebResponseTest.cs.
+
 2008-07-14  Marek Habersack  <mhabersack@novell.com>
 
 	* System.dll.sources: added

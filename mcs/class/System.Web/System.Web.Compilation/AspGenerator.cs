@@ -361,7 +361,7 @@ namespace System.Web.Compilation
 					throw new HttpException ("No current context, cannot compile.");
 
 				for (int i = 0; i < deps.Length; i++)
-					deps [i] = req.MapPath (deps [i]);			
+					deps [i] = req.MapPath (deps [i]);
 
 				HttpRuntime.InternalCache.Insert ("@@Type" + inputFile, type, new CacheDependency (deps));
 			} else
@@ -477,7 +477,6 @@ namespace System.Web.Compilation
 			case TagType.CodeRenderExpression:
 				goto case TagType.CodeRender;
 			case TagType.CodeRender:
-				lastTag = TagType.CodeRender;
 				if (isApplication)
 					throw new ParseException (location, "Invalid content for application file.");
 			

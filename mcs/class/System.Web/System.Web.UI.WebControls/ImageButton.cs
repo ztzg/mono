@@ -46,9 +46,9 @@ namespace System.Web.UI.WebControls {
 #else
 	public class ImageButton : Image, IPostBackDataHandler, IPostBackEventHandler {
 #endif
-		private static readonly object ClickEvent = new object ();
-		private static readonly object CommandEvent = new object ();
-		private int pos_x, pos_y;
+		static readonly object ClickEvent = new object ();
+		static readonly object CommandEvent = new object ();
+		int pos_x, pos_y;
 
 		public ImageButton ()
 		{
@@ -247,8 +247,8 @@ namespace System.Web.UI.WebControls {
 #endif
 				: null);
 			options.ValidationGroup = null;
-			options.Argument = "";
-			options.ClientSubmit = false;
+			options.Argument = String.Empty;
+			options.ClientSubmit = true;
 			options.RequiresJavaScriptProtocol = false;
 			options.PerformValidation = CausesValidation && Page != null && Page.AreValidatorsUplevel (ValidationGroup);
 			if (options.PerformValidation)
@@ -297,6 +297,9 @@ namespace System.Web.UI.WebControls {
 #endif
 		void RaisePostBackEvent (string eventArgument)
 		{
+#if NET_2_0
+			ValidateEvent (UniqueID, eventArgument);
+#endif
 			if (CausesValidation)
 #if NET_2_0
 				Page.Validate (ValidationGroup);

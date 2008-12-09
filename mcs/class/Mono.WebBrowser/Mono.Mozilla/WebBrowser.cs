@@ -148,13 +148,22 @@ namespace Mono.Mozilla
 				return events;
 			}
 		}
-		
+
+		Mono.Mozilla.DOM.ContentListener contentListener;
+		Mono.Mozilla.DOM.ContentListener ContentListener {
+			get {
+				if (contentListener == null)
+					contentListener = new Mono.Mozilla.DOM.ContentListener (this);
+				return contentListener;
+			}
+		}
 		
 		nsIServiceManager servMan;
 		internal nsIServiceManager ServiceManager {
 			get {
-				if (servMan == null)
-					servMan = Base.gluezilla_getServiceManager ();
+				if (servMan == null) {
+					servMan = Base.GetServiceManager (this);
+				}
 				return servMan;
 			}
 		}
@@ -165,10 +174,7 @@ namespace Mono.Mozilla
 				if (ioService == null) {
 					IntPtr ioServicePtr = IntPtr.Zero;
 
-					
-
-					if (ioServicePtr == IntPtr.Zero)
-						ServiceManager.getServiceByContractID ("@mozilla.org/network/io-service;1", typeof (nsIIOService).GUID, out ioServicePtr);
+					ioServicePtr = ServiceManager.getServiceByContractID ("@mozilla.org/network/io-service;1", typeof (nsIIOService).GUID);
 					if (ioServicePtr == IntPtr.Zero)
 						throw new Mono.WebBrowser.Exception (Mono.WebBrowser.Exception.ErrorCodes.IOService);
 
@@ -179,6 +185,56 @@ namespace Mono.Mozilla
 					}
 				}
 				return ioService;
+			}
+		}
+
+		nsIAccessibilityService accessibilityService;
+		internal nsIAccessibilityService AccessibilityService {
+			get {
+				if (accessibilityService == null) {
+					IntPtr accessibilityServicePtr = IntPtr.Zero;
+					accessibilityServicePtr = ServiceManager.getServiceByContractID ("@mozilla.org/accessibilityService;1", typeof (nsIAccessibilityService).GUID);
+					if (accessibilityServicePtr == IntPtr.Zero) {
+						throw new Mono.WebBrowser.Exception (Mono.WebBrowser.Exception.ErrorCodes.AccessibilityService);
+					}
+
+					try {
+						accessibilityService = (nsIAccessibilityService)Marshal.GetObjectForIUnknown (accessibilityServicePtr);
+					} catch (System.Exception ex) {
+						throw new Mono.WebBrowser.Exception (Mono.WebBrowser.Exception.ErrorCodes.AccessibilityService, ex);
+					}
+				}
+				return accessibilityService;
+			}
+		}
+
+		nsIErrorService errorService;
+		internal nsIErrorService ErrorService {
+			get {
+				if (errorService == null) {
+					IntPtr errorServicePtr = IntPtr.Zero;
+
+					errorServicePtr = ServiceManager.getServiceByContractID ("@mozilla.org/xpcom/error-service;1", typeof (nsIErrorService).GUID);
+					if (errorServicePtr == IntPtr.Zero)
+						return null;
+
+					try {
+						errorService = (nsIErrorService)Marshal.GetObjectForIUnknown (errorServicePtr);
+					} catch (System.Exception ex) {
+						return null;
+					}
+				}
+				return errorService;
+			}
+		}
+		
+		DocumentEncoder docEncoder;
+		internal DocumentEncoder DocEncoder {
+			get {
+				if (docEncoder == null) {
+					docEncoder = new DocumentEncoder (this);
+				}
+				return docEncoder;
 			}
 		}		
 		
@@ -246,7 +302,10 @@ namespace Mono.Mozilla
 			stream.closeStream ();
 
 		}
-		
+
+		public void ExecuteScript (string script) {
+			Base.EvalScript (this, script);
+		}
 				
 		internal void AttachEvent (INode node, string eve, EventHandler handler) {
 			string key = String.Intern (node.GetHashCode() + ":" + eve);
@@ -294,6 +353,7 @@ namespace Mono.Mozilla
 		internal static object ProgressEvent = new object ();
 		internal static object ContextMenuEvent = new object ();
 		
+		internal static object NavigationRequestedEvent = new object ();
 		
 		public event NodeEventHandler KeyDown
 		{
@@ -419,6 +479,12 @@ namespace Mono.Mozilla
 			remove { Events.RemoveHandler (ContextMenuEvent, value); }
 		}
 
+		public event NavigationRequestedEventHandler NavigationRequested
+		{
+			add { ContentListener.AddHandler (value); }
+			remove { ContentListener.RemoveHandler (value); }
+		}
+
 		internal static object GenericEvent = new object ();
 		internal event EventHandler Generic
 		{
@@ -427,7 +493,5 @@ namespace Mono.Mozilla
 		}
 
 		#endregion
-
-
 	}
 }

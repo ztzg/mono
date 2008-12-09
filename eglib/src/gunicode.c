@@ -35,6 +35,7 @@
  */
 #include <stdio.h>
 #include <glib.h>
+#include <unicode-data.h>
 #include <errno.h>
 #ifdef _MSC_VER
 /* FIXME */
@@ -50,18 +51,127 @@ typedef int iconv_t;
 static char *my_charset;
 static gboolean is_utf8;
 
+/*
+ * Character set conversion
+ */
+/*
+* Index into the table below with the first byte of a UTF-8 sequence to
+* get the number of trailing bytes that are supposed to follow it.
+* Note that *legal* UTF-8 values can't have 4 or 5-bytes. The table is
+* left as-is for anyone who may want to do such conversion, which was
+* allowed in earlier algorithms.
+*/
+const gchar g_trailingBytesForUTF8 [256] = {
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,0,0
+};
+
+/*
+* Magic values subtracted from a buffer value during UTF8 conversion.
+* This table contains as many values as there might be trailing bytes
+* in a UTF-8 sequence.
+*/
+static const gulong offsetsFromUTF8[6] = { 0x00000000UL, 0x00003080UL, 0x000E2080UL,
+0x03C82080UL, 0xFA082080UL, 0x82082080UL };
+
 GUnicodeType 
 g_unichar_type (gunichar c)
 {
-	g_error ("%s", "g_unichar_type is not implemented");
+int i;
+
+	guint16 cp = (guint16) c;
+	for (i = 0; i < unicode_category_ranges_count; i++) {
+		if (cp < unicode_category_ranges [i].start)
+			continue;
+		if (unicode_category_ranges [i].end <= cp)
+			continue;
+		return unicode_category [i] [cp - unicode_category_ranges [i].start];
+	}
+
+	/*
+	// 3400-4DB5: OtherLetter
+	// 4E00-9FC3: OtherLetter
+	// AC00-D7A3: OtherLetter
+	// D800-DFFF: OtherSurrogate
+	// E000-F8FF: OtherPrivateUse
+	// 20000-2A6D6 OtherLetter
+	// F0000-FFFFD OtherPrivateUse
+	// 100000-10FFFD OtherPrivateUse
+	*/
+	if (0x3400 <= cp && cp < 0x4DB5)
+		return G_UNICODE_OTHER_LETTER;
+	if (0x4E00 <= cp && cp < 0x9FC3)
+		return G_UNICODE_OTHER_LETTER;
+	if (0xAC00<= cp && cp < 0xD7A3)
+		return G_UNICODE_OTHER_LETTER;
+	if (0xD800 <= cp && cp < 0xDFFF)
+		return G_UNICODE_SURROGATE;
+	if (0xE000 <= cp && cp < 0xF8FF)
+		return G_UNICODE_PRIVATE_USE;
+	/* since the argument is UTF-16, we cannot check beyond FFFF */
+
+	/* It should match any of above */
 	return 0;
+}
+
+gunichar
+g_unichar_case (gunichar c, gboolean upper)
+{
+	gint8 i, i2;
+	guint32 cp = (guint32) c, v;
+
+	for (i = 0; i < simple_case_map_ranges_count; i++) {
+		if (cp < simple_case_map_ranges [i].start)
+			return c;
+		if (simple_case_map_ranges [i].end <= cp)
+			continue;
+		if (c < 0x10000) {
+			const guint16 *tab = upper ? simple_upper_case_mapping_lowarea [i] : simple_lower_case_mapping_lowarea [i];
+			v = tab [cp - simple_case_map_ranges [i].start];
+		} else {
+			const guint32 *tab;
+			i2 = (gint8)(i - (upper ? simple_upper_case_mapping_lowarea_table_count : simple_lower_case_mapping_lowarea_table_count));
+			tab = upper ? simple_upper_case_mapping_higharea [i2] : simple_lower_case_mapping_higharea [i2];
+			v = tab [cp - simple_case_map_ranges [i].start];
+		}
+		return v != 0 ? (gunichar) v : c;
+	}
+	return c;
+}
+
+gunichar
+g_unichar_toupper (gunichar c)
+{
+	return g_unichar_case (c, TRUE);
 }
 
 gunichar
 g_unichar_tolower (gunichar c)
 {
-	g_error ("%s", "g_unichar_type is not implemented");
-	return 0;
+	return g_unichar_case (c, FALSE);
+}
+
+gunichar
+g_unichar_totitle (gunichar c)
+{
+	guint8 i;
+	guint32 cp;
+
+	cp = (guint32) c;
+	for (i = 0; i < simple_titlecase_mapping_count; i++) {
+		if (simple_titlecase_mapping [i].codepoint == cp)
+			return simple_titlecase_mapping [i].title;
+		if (simple_titlecase_mapping [i].codepoint > cp)
+			/* it is ordered, hence no more match */
+			break;
+	}
+	return g_unichar_toupper (c);
 }
 
 gboolean
@@ -225,61 +335,105 @@ g_locale_from_utf8 (const gchar *utf8string, gssize len, gsize *bytes_read, gsiz
  * Return value: true if @utf is valid.
  **/
 gboolean
-g_utf8_validate (const gchar *utf, gssize max_len, const gchar **end)
+g_utf8_validate (const gchar *str, gssize max_len, const gchar **end)
 {
-	int ix;
-	
-	g_return_val_if_fail (utf != NULL, FALSE);
+	gssize byteCount = 0;
+	gboolean retVal = TRUE;
+	gboolean lastRet = TRUE;
+	guchar* ptr = (guchar*) str;
+	guint length;
+	guchar a;
+	guchar* srcPtr;
+	if (max_len == 0)
+		return 0;
+	else if (max_len < 0)
+		byteCount = max_len;
+	while (*ptr != 0 && byteCount <= max_len) {
+		length = g_trailingBytesForUTF8 [*ptr] + 1;
+		srcPtr = (guchar*) ptr + length;
+		switch (length) {
+		default: retVal = FALSE;
+		/* Everything else falls through when "TRUE"... */
+		case 4: if ((a = (*--srcPtr)) < (guchar) 0x80 || a > (guchar) 0xBF) retVal = FALSE;
+				if ((a == (guchar) 0xBF || a == (guchar) 0xBE) && *(srcPtr-1) == (guchar) 0xBF) {
+				if (*(srcPtr-2) == (guchar) 0x8F || *(srcPtr-2) == (guchar) 0x9F ||
+					*(srcPtr-2) == (guchar) 0xAF || *(srcPtr-2) == (guchar) 0xBF)
+					retVal = FALSE;
+				}
+		case 3: if ((a = (*--srcPtr)) < (guchar) 0x80 || a > (guchar) 0xBF) retVal = FALSE;
+		case 2: if ((a = (*--srcPtr)) < (guchar) 0x80 || a > (guchar) 0xBF) retVal = FALSE;
 
-	if (max_len == -1)
-		max_len = strlen (utf);
-	
-	/*
-	 * utf is a string of 1, 2, 3 or 4 bytes.  The valid strings
-	 * are as follows (in "bit format"):
-	 *    0xxxxxxx                                      valid 1-byte
-	 *    110xxxxx 10xxxxxx                             valid 2-byte
-	 *    1110xxxx 10xxxxxx 10xxxxxx                    valid 3-byte
-	 *    11110xxx 10xxxxxx 10xxxxxx 10xxxxxx           valid 4-byte
-	 */
-	for (ix = 0; ix < max_len;) {      /* string is 0-terminated */
-		unsigned char c;
-		
-		c = utf[ix];
-		if ((c & 0x80) == 0x00) {	/* 1-byte code, starts with 10 */
-			ix++;
-		} else if ((c & 0xe0) == 0xc0) {/* 2-byte code, starts with 110 */
-			if (((ix+1) >= max_len) || (utf[ix+1] & 0xc0 ) != 0x80){
-				if (end != NULL)
-					*end = &utf [ix];
-				return FALSE;
-			}
-			ix += 2;
-		} else if ((c & 0xf0) == 0xe0) {/* 3-byte code, starts with 1110 */
-			if (((ix + 2) >= max_len) || 
-			    ((utf[ix+1] & 0xc0) != 0x80) ||
-			    ((utf[ix+2] & 0xc0) != 0x80)){
-				if (end != NULL)
-					*end = &utf [ix];
-				return FALSE;
-			}
-			ix += 3;
-		} else if ((c & 0xf8) == 0xf0) {/* 4-byte code, starts with 11110 */
-			if (((ix + 3) >= max_len) ||
-			    ((utf[ix+1] & 0xc0) != 0x80) ||
-			    ((utf[ix+2] & 0xc0) != 0x80) ||
-			    ((utf[ix+3] & 0xc0) != 0x80)){
-				if (end != NULL)
-					*end = &utf [ix];
-				return FALSE;
-			}
-			ix += 4;
-		} else {/* unknown encoding */
-			if (end != NULL)
-				*end = &utf [ix];
-			return FALSE;
+		switch (*ptr) {
+		/* no fall-through in this inner switch */
+		case 0xE0: if (a < (guchar) 0xA0) retVal = FALSE; break;
+		case 0xED: if (a > (guchar) 0x9F) retVal = FALSE; break;
+		case 0xEF: if (a == (guchar)0xB7 && (*(srcPtr+1) > (guchar) 0x8F && *(srcPtr+1) < 0xB0)) retVal = FALSE;
+				   if (a == (guchar)0xBF && (*(srcPtr+1) == (guchar) 0xBE || *(srcPtr+1) == 0xBF)) retVal = FALSE; break;
+		case 0xF0: if (a < (guchar) 0x90) retVal = FALSE; break;
+		case 0xF4: if (a > (guchar) 0x8F) retVal = FALSE; break;
+		default:   if (a < (guchar) 0x80) retVal = FALSE;
 		}
+
+		case 1: if (*ptr >= (guchar ) 0x80 && *ptr < (guchar) 0xC2) retVal = FALSE;
+		}
+		if (*ptr > (guchar) 0xF4)
+			retVal = FALSE;
+		//If the string is invalid, set the end to the invalid byte.
+		if (!retVal && lastRet) {
+			if (end != NULL)
+				*end = (gchar*) ptr;
+			lastRet = FALSE;
+		}
+		ptr += length;
+		if(max_len > 0)
+			byteCount += length;
 	}
-	
-	return TRUE;
+	if (retVal && end != NULL)
+		*end = (gchar*) ptr;
+	return retVal;
+}
+/**
+ * g_utf8_get_char
+ * @src: Pointer to UTF-8 encoded character.
+ *
+ * Return value: UTF-16 value of @src
+ **/
+gunichar
+g_utf8_get_char (const gchar *src)
+{
+	gunichar ch = 0;
+	guchar* ptr = (guchar*) src;
+	gushort extraBytesToRead = g_trailingBytesForUTF8 [*ptr];
+
+	switch (extraBytesToRead) {
+	case 5: ch += *ptr++; ch <<= 6; // remember, illegal UTF-8
+	case 4: ch += *ptr++; ch <<= 6; // remember, illegal UTF-8
+	case 3: ch += *ptr++; ch <<= 6;
+	case 2: ch += *ptr++; ch <<= 6;
+	case 1: ch += *ptr++; ch <<= 6;
+	case 0: ch += *ptr;
+	}
+	ch -= offsetsFromUTF8 [extraBytesToRead];
+	return ch;
+}
+glong
+g_utf8_strlen (const gchar *str, gssize max)
+{
+	gssize byteCount = 0;
+	guchar* ptr = (guchar*) str;
+	glong length = 0;
+	if (max == 0)
+		return 0;
+	else if (max < 0)
+		byteCount = max;
+	while (*ptr != 0 && byteCount <= max) {
+		gssize cLen = g_trailingBytesForUTF8 [*ptr] + 1;
+		if (max > 0 && (byteCount + cLen) > max)
+			return length;
+		ptr += cLen;
+		length++;
+		if (max > 0)
+			byteCount += cLen;
+	}
+	return length;
 }

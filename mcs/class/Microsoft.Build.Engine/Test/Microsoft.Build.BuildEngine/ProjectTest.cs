@@ -28,11 +28,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Xml;
 using Microsoft.Build.BuildEngine;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using NUnit.Framework;
+using System.Text;
 
 namespace MonoTests.Microsoft.Build.BuildEngine {
 
@@ -1142,6 +1144,217 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 			project.SetProjectExtensions ("name", "1");
 			Assert.AreEqual ("1", project.GetProjectExtensions ("name"), "A1");
 			Assert.IsTrue (project.IsDirty, "A2");
+		}
+
+		[Test]
+		public void TestBuildProjectError1 ()
+		{
+			Engine engine = new Engine (Consts.BinPath);
+			Project project = engine.CreateNewProject ();
+
+			Assert.IsFalse (project.Build ((string) null), "A1");
+			Assert.IsFalse (project.Build ((string[]) null), "A2");
+			Assert.IsFalse (project.Build ((string []) null, null), "A3");
+			Assert.IsFalse (project.Build ((string []) null, null, BuildSettings.None), "A4");
+		}
+
+		[Test]
+		public void TestBuildProjectError2 ()
+		{
+			Engine engine = new Engine (Consts.BinPath);
+			Project project = engine.CreateNewProject ();
+
+			try {
+				project.Build (new string [] { null });
+			} catch {
+				return;
+			}
+			Assert.Fail ("Expected exception for project.Build, null string in targetNames []");
+		}
+
+		[Test]
+		public void TestBuildProjectFile1 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", false, new string [] { "1", "2" }, new bool [] { true, true }, "TBPF1");
+			CheckProjectBuild (project, new string [] { "main" }, true, new string [] { "main" }, "TBPF1");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml1 ()
+		{
+			Project project = CreateAndLoadProject (null, false, new string [] { "1", "2" }, new bool [] { true, true }, "TBPFX1");
+			CheckProjectBuild (project, new string [] { "main" }, true, new string [] { "main" }, "TBPFX1");
+		}
+
+		[Test]
+		public void TestBuildProjectFile2 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", false, new string [] { "1", "2", "3" }, new bool [] { true, false, true }, "TBPF2");
+			CheckProjectBuild (project, new string [] { "main" }, false, new string [0], "TBPF2");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml2 ()
+		{
+			Project project = CreateAndLoadProject (null, false, new string [] { "1", "2", "3" }, new bool [] { true, false, true }, "TBPFX2");
+			CheckProjectBuild (project, new string [] { "main" }, false, new string [0], "TBPFX2");
+		}
+
+		[Test]
+		public void TestBuildProjectFile3 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", false, new string [] { "1", "2", "3" }, new bool [] { true, true, true }, "TBPF3");
+			CheckProjectBuild (project, new string [] { "1", "2" }, true, new string [] { "1", "2" }, "TBPF3");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml3 ()
+		{
+			Project project = CreateAndLoadProject (null, false, new string [] { "1", "2", "3" }, new bool [] { true, true, true }, "TBPFX3");
+			CheckProjectBuild (project, new string [] { "1", "2" }, true, new string [] { "1", "2" }, "TBPFX3");
+		}
+
+		[Test]
+		public void TestBuildProjectFile4 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", false, new string [] { "1", "2", "3" }, new bool [] { true, false, true }, "TBPF4");
+			CheckProjectBuild (project, new string [] { "main" }, false, new string [0], "TBPF4");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml4 ()
+		{
+			Project project = CreateAndLoadProject (null, false, new string [] { "1", "2", "3" }, new bool [] { true, false, true }, "TBPFX4");
+			CheckProjectBuild (project, new string [] { "main" }, false, new string [0], "TBPFX4");
+		}
+
+		//Run separate tests
+
+		//Run single target
+		[Test]
+		public void TestBuildProjectFile5 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", true, new string [] { "1", "2", "3" }, new bool [] { true, false, true }, "TBPF5");
+			CheckProjectBuild (project, new string [] { "main" }, false, new string [0], "TBPF5");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml5 ()
+		{
+			Project project = CreateAndLoadProject (null, true, new string [] { "1", "2", "3" }, new bool [] { true, false, true }, "TBPFX5");
+			CheckProjectBuild (project, new string [] { "main" }, false, new string [0], "TBPFX5");
+		}
+
+		[Test]
+		public void TestBuildProjectFile6 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", true, new string [] { "1", "2", "3" }, new bool [] { true, true, true }, "TBPF6");
+			CheckProjectBuild (project, new string [] { "main" }, true, new string [] { "main" }, "TBPF6");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml6 ()
+		{
+			Project project = CreateAndLoadProject (null, true, new string [] { "1", "2", "3" }, new bool [] { true, true, true }, "TBPFX6");
+			CheckProjectBuild (project, new string [] { "main" }, true, new string [] { "main" }, "TBPFX6");
+		}
+
+		// run multiple targets
+		[Test]
+		public void TestBuildProjectFile7 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", true, new string [] { "1", "2", "3" }, new bool [] { true, true, true }, "TBPF7");
+			CheckProjectBuild (project, new string [] { "1", "2", "3" }, true, new string [] { "1", "2", "3" }, "TBPF7");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml7 ()
+		{
+			Project project = CreateAndLoadProject (null, true, new string [] { "1", "2", "3" }, new bool [] { true, true, true }, "TBPFX7");
+			CheckProjectBuild (project, new string [] { "1", "2", "3" }, true, new string [] { "1", "2", "3" }, "TBPFX7");
+		}
+
+		[Test]
+		public void TestBuildProjectFile8 ()
+		{
+			Project project = CreateAndLoadProject ("foo.proj", true, new string [] { "1", "2", "3" }, new bool [] { true, true, false }, "TBPF8");
+			CheckProjectBuild (project, new string [] { "1", "2", "3" }, false, new string [] { "1", "2"}, "TBPF8");
+		}
+
+		[Test]
+		public void TestBuildProjectFileXml8 ()
+		{
+			Project project = CreateAndLoadProject (null, true, new string [] { "1", "2", "3" }, new bool [] { true, true, false }, "TBPFX8");
+			CheckProjectBuild (project, new string [] { "1", "2", "3" }, false, new string [] { "1", "2"}, "TBPFX8");
+		}
+
+		void CheckProjectBuild (Project project, string [] targetNames, bool result, string [] outputNames, string prefix)
+		{
+			IDictionary targetOutputs = new Hashtable ();
+
+			Assert.AreEqual (result, project.Build (targetNames, targetOutputs), prefix + "A1");
+			Assert.AreEqual (outputNames.Length, targetOutputs.Keys.Count, prefix + "A2");
+
+			foreach (string outputName in outputNames) {
+				Assert.IsTrue (targetOutputs.Contains (outputName), prefix + " A3: target " + outputName);
+
+				object o = targetOutputs [outputName];
+				Assert.IsTrue (typeof (ITaskItem []).IsAssignableFrom (o.GetType ()), prefix + " A4: target " + outputName);
+
+				ITaskItem [] items = (ITaskItem [])o;
+				Assert.AreEqual (0, items.Length, prefix + "A5: target " + outputName);
+			}
+		}
+
+		string CreateProjectString (bool run_separate, string [] targets, bool [] results, string prefix)
+		{
+			StringBuilder sb = new StringBuilder ();
+			sb.Append (@"<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">");
+			sb.AppendFormat ("<Target Name = \"{0}\"><Message Text = \"#Target {1}:{0} called\" />", "main", prefix);
+
+			sb.AppendFormat ("<CallTarget Targets=\"");
+			for (int i = 0; i < targets.Length; i++)
+				sb.AppendFormat ("{0};", targets [i]);
+			sb.AppendFormat ("\" ");
+
+			if (run_separate)
+				sb.AppendFormat (" RunEachTargetSeparately=\"true\" ");
+			sb.AppendFormat ("/></Target>\n");
+
+			for (int i = 0; i < targets.Length; i++) {
+				sb.AppendFormat ("<Target Name = \"{0}\"><Message Text = \"#Target {1}:{0} called\" />", targets [i], prefix);
+				if (!results [i])
+					sb.AppendFormat ("<Error Text = \"#Error message for target {0}:{1}\"/>", prefix, targets [i]);
+				sb.Append ("</Target>\n");
+			}
+
+			sb.Append ("</Project>");
+
+			return sb.ToString ();
+		}
+
+		void CreateProjectFile (string fname, bool run_separate, string [] targets, bool [] results, string prefix)
+		{
+			using (StreamWriter sw = new StreamWriter (fname))
+				sw.Write (CreateProjectString (run_separate, targets, results, prefix));
+		}
+
+		Project CreateAndLoadProject (string fname, bool run_separate, string [] targets, bool [] results, string prefix)
+		{
+			Engine engine = new Engine (Consts.BinPath);
+			Project project = engine.CreateNewProject ();
+
+			string projectXml = CreateProjectString (run_separate, targets, results, prefix);
+			if (fname == null) {
+				project.LoadXml (projectXml);
+			} else {
+				using (StreamWriter sw = new StreamWriter (fname))
+					sw.Write (projectXml);
+				project.Load (fname);
+				File.Delete (project.FullFileName);
+			}
+
+			return project;
 		}
 	}
 }

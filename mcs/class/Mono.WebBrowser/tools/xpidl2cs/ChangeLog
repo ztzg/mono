@@ -1,3 +1,22 @@
+2008-10-14  Andreia Gaita  <avidigal@novell.com>
+
+	* xpidl2cs.pl: add option parsing. add support for choosing a specific
+	interface to process inside an idl which defines several interfaces
+
+2008-09-23  Andreia Gaita <avidigal@novell.com> 
+
+	* xpidl2cs.pl: whitespace clean up
+
+2008-09-23  Andreia Gaita <avidigal@novell.com> 
+
+	* xpidl2cs.pl: fix parameter duplication. Add more type conversions
+
+2008-09-22  Andreia Gaita <avidigal@novell.com> 
+
+	* xpidl2cs.pl: fix infinite loop for generate_dependents, conflict 
+	between global variable $file and local one. Add some more prints
+	for debugging purposes.
+
 2008-06-10  Andreia Gaita <avidigal@novell.com> 
 
 	* xpidl2cs.pl: Added generate_class_implementation, to output a class

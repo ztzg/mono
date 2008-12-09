@@ -215,6 +215,7 @@ namespace System.Net.NetworkInformation {
 									
 									case LinuxArpHardware.LOOPBACK:
 										type = NetworkInterfaceType.Loopback;
+										macAddress = null;
 										break;
 
 									case LinuxArpHardware.FDDI:
@@ -242,7 +243,7 @@ namespace System.Net.NetworkInformation {
 					if (!address.Equals (IPAddress.None))
 						iface.AddAddress (address);
 
-					if (macAddress != null)
+					if (macAddress != null || type == NetworkInterfaceType.Loopback)
 						iface.SetLinkLayerInfo (index, macAddress, type);
 
 					next = addr.ifa_next;
@@ -278,6 +279,11 @@ namespace System.Net.NetworkInformation {
 		{
 			this.index = index;
 			this.macAddress = macAddress;
+			if (type == NetworkInterfaceType.Ethernet) {
+				if (Directory.Exists(iface_path + "wireless")) {
+					type = NetworkInterfaceType.Wireless80211;
+				}
+			}
 			this.type = type;
 		}
 

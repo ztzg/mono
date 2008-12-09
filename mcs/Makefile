@@ -5,7 +5,7 @@ SUBDIRS := build jay mcs class nunit20 ilasm tools tests errors docs
 basic_SUBDIRS := build jay mcs class
 net_1_1_bootstrap_SUBDIRS := build jay mcs class ilasm tools
 net_2_0_bootstrap_SUBDIRS := build jay mcs class ilasm tools
-net_2_0_SUBDIRS := build jay mcs class nunit20 ilasm tools tests errors
+net_2_0_SUBDIRS := build jay mcs class nunit20 ilasm tools tests errors docs
 net_2_1_bootstrap_SUBDIRS := build mcs class
 net_2_1_raw_SUBDIRS := build mcs class tools
 net_2_1_SUBDIRS := tools tests errors
@@ -49,7 +49,7 @@ net_2_0_centum_tests := \
 	class/Microsoft.Build.Utilities		\
 	class/Microsoft.Build.Engine		\
 	class/Mono.C5
-	
+
 #	class/System.Web.Extensions
 #	class/Microsoft.Build.Tasks	
 
@@ -78,7 +78,7 @@ dir-check:
 
 # fun specialty targets
 
-PROFILES = default net_2_0 net_3_5
+PROFILES = net_1_1 net_2_0 net_3_5
 
 .PHONY: all-profiles $(STD_TARGETS:=-profiles)
 all-profiles $(STD_TARGETS:=-profiles): %-profiles: profiles-do--%
@@ -102,8 +102,8 @@ $(_boot_:%=profile-do--net_2_1--%):           profile-do--net_2_1--%:           
 $(_boot_:%=profile-do--net_2_1_raw--%):       profile-do--net_2_1_raw--%:       profile-do--net_2_1_bootstrap--%
 $(_boot_:%=profile-do--net_2_1_bootstrap--%): profile-do--net_2_1_bootstrap--%: profile-do--net_2_0--%
 $(_boot_:%=profile-do--net_2_0--%):           profile-do--net_2_0--%:           profile-do--net_2_0_bootstrap--%
-$(_boot_:%=profile-do--net_2_0_bootstrap--%): profile-do--net_2_0_bootstrap--%: profile-do--default--%
-$(_boot_:%=profile-do--default--%):           profile-do--default--%:           profile-do--net_1_1_bootstrap--%
+$(_boot_:%=profile-do--net_2_0_bootstrap--%): profile-do--net_2_0_bootstrap--%: profile-do--net_1_1--%
+$(_boot_:%=profile-do--net_1_1--%):           profile-do--net_1_1--%:           profile-do--net_1_1_bootstrap--%
 $(_boot_:%=profile-do--net_1_1_bootstrap--%): profile-do--net_1_1_bootstrap--%: profile-do--basic--%
 
 testcorlib:
@@ -113,7 +113,7 @@ compiler-tests:
 	$(MAKE) TEST_SUBDIRS="tests errors" run-test-profiles
 
 test-installed-compiler:
-	$(MAKE) TEST_SUBDIRS="tests errors" PROFILE=default TEST_RUNTIME=mono MCS=mcs run-test
+	$(MAKE) TEST_SUBDIRS="tests errors" PROFILE=net_1_1 TEST_RUNTIME=mono MCS=mcs run-test
 	$(MAKE) TEST_SUBDIRS="tests errors" PROFILE=net_2_0 TEST_RUNTIME=mono MCS=gmcs run-test
 
 package := mcs-$(VERSION)

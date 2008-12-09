@@ -453,6 +453,10 @@ namespace System.Windows.Forms
 					CalcThumbArea ();
 					UpdatePos (Value, true);
 					InvalidateDirty ();
+#if NET_2_0
+					// UIA Framework: Generate UIA Event to indicate LargeChange change
+					OnUIAValueChanged (new ScrollEventArgs (ScrollEventType.LargeIncrement, value));
+#endif
 				}
 			}
 		}
@@ -467,6 +471,11 @@ namespace System.Windows.Forms
 					return;
 
 				maximum = value;
+
+#if NET_2_0
+				// UIA Framework: Generate UIA Event to indicate Maximum change
+				OnUIAValueChanged (new ScrollEventArgs (ScrollEventType.Last, value));
+#endif
 
 				if (maximum < minimum)
 					minimum = maximum;
@@ -539,6 +548,11 @@ namespace System.Windows.Forms
 
 				minimum = value;
 
+#if NET_2_0
+				// UIA Framework: Generate UIA Event to indicate Minimum change
+				OnUIAValueChanged (new ScrollEventArgs (ScrollEventType.First, value));
+#endif
+
 				if (minimum > maximum)
 					maximum = minimum;
 
@@ -566,6 +580,10 @@ namespace System.Windows.Forms
 					small_change = value;
 					UpdatePos (Value, true);
 					InvalidateDirty ();
+#if NET_2_0
+					// UIA Framework: Generate UIA Event to indicate SmallChange change
+					OnUIAValueChanged (new ScrollEventArgs (ScrollEventType.SmallIncrement, value));
+#endif
 				}
 			}
 		}
@@ -783,6 +801,13 @@ namespace System.Windows.Forms
 			event_args = new ScrollEventArgs (ScrollEventType.EndScroll, Value);
 			OnScroll (event_args);
     			Value = event_args.NewValue;
+		
+#if NET_2_0
+			// UIA Framework event invoked when the "LargeIncrement 
+			// Button" is "clicked" either by using the Invoke Pattern
+			// or the space between the thumb and the bottom/right button
+			OnUIAScroll (new ScrollEventArgs (ScrollEventType.LargeIncrement, Value));
+#endif
     		}
 
     		private void LargeDecrement ()
@@ -797,6 +822,13 @@ namespace System.Windows.Forms
 			event_args = new ScrollEventArgs (ScrollEventType.EndScroll, Value);
 			OnScroll (event_args);
     			Value = event_args.NewValue;
+    			
+#if NET_2_0
+			// UIA Framework event invoked when the "LargeDecrement 
+			// Button" is "clicked" either by using the Invoke Pattern
+			// or the space between the thumb and the top/left button
+			OnUIAScroll (new ScrollEventArgs (ScrollEventType.LargeDecrement, Value));
+#endif
     		}
 
     		private void OnResizeSB (Object o, EventArgs e)
@@ -1291,6 +1323,13 @@ namespace System.Windows.Forms
 			event_args = new ScrollEventArgs (ScrollEventType.EndScroll, Value);
 			OnScroll (event_args);
 			Value = event_args.NewValue;
+			
+#if NET_2_0
+			// UIA Framework event invoked when the "SmallIncrement 
+			// Button" (a.k.a bottom/right button) is "clicked" either
+			// by using the Invoke Pattern or the button itself
+			OnUIAScroll (new ScrollEventArgs (ScrollEventType.SmallIncrement, Value));
+#endif
     		}
 
     		private void SmallDecrement ()
@@ -1305,6 +1344,13 @@ namespace System.Windows.Forms
 			event_args = new ScrollEventArgs (ScrollEventType.EndScroll, Value);
 			OnScroll (event_args);
 			Value = event_args.NewValue;
+			
+#if NET_2_0
+			// UIA Framework event invoked when the "SmallDecrement 
+			// Button" (a.k.a top/left button) is "clicked" either
+			// by using the Invoke Pattern or the button itself
+			OnUIAScroll (new ScrollEventArgs (ScrollEventType.SmallDecrement, Value));
+#endif			
     		}
 
     		private void SetHoldButtonClickTimer ()
@@ -1528,6 +1574,87 @@ namespace System.Windows.Forms
 			base.OnMouseWheel (e);
 		}
 #endif
+
+		#region UIA Framework Section: Events, Methods and Properties.
+
+#if NET_2_0
+		//NOTE:
+		//	We are using Reflection to add/remove internal events.
+		//	Class ScrollBarButtonInvokePatternInvokeEvent uses the events.
+		//
+    		// Types used to generate UIA InvokedEvent
+		// * args.Type = ScrollEventType.LargeIncrement. Space between Thumb and bottom/right Button
+		// * args.Type = ScrollEventType.LargeDecrement. Space between Thumb and top/left Button
+		// * args.Type = ScrollEventType.SmallIncrement. Small increment UIA Button (bottom/right Button)
+    		// * args.Type = ScrollEventType.SmallDecrement. Small decrement UIA Button (top/left Button)
+		// Types used to generate RangeValue-related events
+		// * args.Type = ScrollEventType.LargeIncrement. LargeChange event
+		// * args.Type = ScrollEventType.Last. Maximum event
+		// * args.Type = ScrollEventType.First. Minimum event
+		// * args.Type = ScrollEventType.SmallIncrement. SmallChange event
+		static object UIAScrollEvent = new object ();
+		static object UIAValueChangeEvent = new object ();
+
+		internal event ScrollEventHandler UIAScroll {
+			add { Events.AddHandler (UIAScrollEvent, value); }
+			remove { Events.RemoveHandler (UIAScrollEvent, value); }
+		}
+
+		internal event ScrollEventHandler UIAValueChanged {
+			add { Events.AddHandler (UIAValueChangeEvent, value); }
+			remove { Events.RemoveHandler (UIAValueChangeEvent, value); }
+		}
+
+		internal void OnUIAScroll (ScrollEventArgs args)
+		{
+			ScrollEventHandler eh = (ScrollEventHandler) Events [UIAScrollEvent];
+			if (eh != null)
+				eh (this, args);
+		}
+
+		internal void OnUIAValueChanged (ScrollEventArgs args)
+		{
+			ScrollEventHandler eh = (ScrollEventHandler) Events [UIAValueChangeEvent];
+			if (eh != null)
+				eh (this, args);
+		}
+
+		//NOTE:
+		//	Wrapper methods used by the Reflection.
+		//	Class ScrollBarButtonInvokeProviderBehavior uses the events.
+		//
+		internal void UIALargeIncrement ()
+		{
+			LargeIncrement ();
+		}
+
+		internal void UIALargeDecrement ()
+		{
+			LargeDecrement ();
+		}
+
+		internal void UIASmallIncrement ()
+		{
+			SmallIncrement ();
+		}
+
+		internal void UIASmallDecrement ()
+		{
+			SmallDecrement ();
+		}
+
+		internal Rectangle UIAThumbArea {
+			get { return thumb_area; }
+		}
+
+		internal Rectangle UIAThumbPosition {
+			get { return thumb_pos; }
+		}
+
+#endif
+
+		#endregion UIA Framework Section: Events, Methods and Properties.
+
 	 }
 }
 

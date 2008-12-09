@@ -43,7 +43,19 @@ namespace System.Web.UI.WebControls
 		{
 		}
 
-		
+		public override void CreateDataPagers (DataPagerFieldItem container, int startRowIndex, int maximumRows,
+						       int totalRowCount, int fieldIndex)
+		{
+		}
+
+		protected override DataPagerField CreateField ()
+		{
+			throw new NotImplementedException ();
+		}
+
+		public override void HandleEvent (CommandEventArgs e)
+		{
+		}
 	}
 }
 #endif

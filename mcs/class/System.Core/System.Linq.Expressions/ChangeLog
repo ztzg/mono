@@ -1,3 +1,13 @@
+2008-10-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Expression.cs : give us information about which type does not
+	  implement Emit().
+
+2008-10-03  Jb Evain  <jbevain@novell.com>
+
+	* Expression.cs: make sure we properly test complex generic methods
+	as a Call candidate.
+
 2008-09-22  Jb Evain  <jbevain@novell.com>
 
 	* TypeBinaryExpression.cs: protect against testing void expressions.
@@ -5,11 +15,15 @@
 
 2008-09-01  Jb Evain  <jbevain@novell.com>
 
-	* MemberBinding.cs: make .ctor protected.
+	* MemberBinding.cs: make .ctor protected instead of public.
 
 2008-09-01  Jb Evain  <jbevain@novell.com>
 
 	* Expression.cs: guard against null parameters passed to Lambda.
+
+2008-08-30  Marek Safar  <marek.safar@gmail.com>
+
+	* MemberBinding.cs: Made MemberBinding ctor public
 
 2008-08-07  Jb Evain  <jbevain@novell.com>
 

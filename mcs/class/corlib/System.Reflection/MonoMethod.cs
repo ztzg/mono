@@ -65,9 +65,11 @@ namespace System.Reflection {
 	[Serializable()]
 	internal class MonoMethod : MethodInfo, ISerializable
 	{
+#pragma warning disable 649
 		internal IntPtr mhandle;
 		string name;
 		Type reftype;
+#pragma warning restore 649
 
 		internal MonoMethod () {
 		}
@@ -378,9 +380,11 @@ namespace System.Reflection {
 	
 	internal class MonoCMethod : ConstructorInfo, ISerializable
 	{
+#pragma warning disable 649		
 		internal IntPtr mhandle;
 		string name;
 		Type reftype;
+#pragma warning restore 649		
 		
 		public override MethodImplAttributes GetMethodImplementationFlags() {
 			MonoMethodInfo info;
@@ -419,6 +423,10 @@ namespace System.Reflection {
 				throw new MemberAccessException ("Cannot create an instance of " + DeclaringType + " because Type.ContainsGenericParameters is true.");
 #endif
 
+			if ((invokeAttr & BindingFlags.CreateInstance) != 0 && DeclaringType.IsAbstract) {
+				throw new MemberAccessException (String.Format ("Cannot create an instance of {0} because it is an abstract class", DeclaringType));
+			}
+
 			Exception exc = null;
 			object o = null;
 
@@ -434,7 +442,7 @@ namespace System.Reflection {
 
 			if (exc != null)
 				throw exc;
-			return o;
+			return (obj == null) ? o : null;
 		}
 
 		public override Object Invoke (BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture) {

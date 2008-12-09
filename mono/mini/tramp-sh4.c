@@ -356,13 +356,6 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	return code;
 }
 
-guint32 mono_arch_get_rgctx_lazy_fetch_offset(gpointer *registers)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return 0;
-}
-
 gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMethod *m, gpointer addr)
 {
 	/* TODO - CV */

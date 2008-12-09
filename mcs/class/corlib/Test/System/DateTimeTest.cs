@@ -1557,9 +1557,6 @@ namespace MonoTests.System
 		}
 
 		[Test]
-#if NET_2_0
-		[Category ("NotWorking")]
-#endif
 		public void ZLiteral ()
 		{
 			// However, "Z" and "'Z'" are different.
@@ -2092,6 +2089,21 @@ namespace MonoTests.System
 				Assert.Fail ("H4");
 #endif
 			}
+		}
+
+		[Test]
+		public void Bug377042 ()
+		{
+			string [] f = new string [] {
+				"yyyy-MM-ddTHH:mm:ssZ",
+				"yyyy-MM-ddTHH:mm:sszzzz",
+				"yyyy-MM-dd"
+				};
+			DateTimeStyles dts = DateTimeStyles.AdjustToUniversal;
+#if NET_2_0
+			dts |= DateTimeStyles.AssumeUniversal;
+#endif
+			DateTime result = DateTime.ParseExact ("2005-01-01T01:11:11+8:00", f, new DateTimeFormatInfo (), dts);
 		}
 
 #if NET_2_0

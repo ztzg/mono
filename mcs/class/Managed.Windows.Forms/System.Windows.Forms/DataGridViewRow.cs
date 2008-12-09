@@ -16,7 +16,6 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-//
 // Copyright (c) 2005 Novell, Inc. (http://www.novell.com)
 //
 // Author:
@@ -46,15 +45,18 @@ namespace System.Windows.Forms
 		private DataGridViewRowHeaderCell headerCell;
 		private int height;
 		private int minimumHeight;
+		private int explicit_height;
 
 		public DataGridViewRow ()
 		{
 			cells = new DataGridViewCellCollection(this);
 			minimumHeight = 3;
 			height = -1;
+			explicit_height = -1;
 			headerCell = new DataGridViewRowHeaderCell();
 			headerCell.SetOwningRow (this);
 			accessibilityObject = new AccessibleObject ();
+			dataBoundItem = null;
 			SetState (DataGridViewElementStates.Visible);
 		}
 
@@ -188,12 +190,15 @@ namespace System.Windows.Forms
 				return height;
 			}
 			set {
+				explicit_height = value;
+				
 				if (height != value) {
 					if (value < minimumHeight) {
 						throw new ArgumentOutOfRangeException("Height can't be less than MinimumHeight.");
 					}
 					height = value;
 					if (DataGridView != null) {
+						DataGridView.Invalidate ();
 						DataGridView.OnRowHeightChanged(new DataGridViewRowEventArgs(this));
 					}
 				}
@@ -402,11 +407,15 @@ namespace System.Windows.Forms
 				row = DataGridView.Rows.SharedRow (rowIndex);
 			else
 				row = this;
-				
+
 			int height = 0;
-			
-			foreach (DataGridViewCell cell in row.Cells)
-				height = Math.Max (height, cell.PreferredSize.Height);
+
+			if (autoSizeRowMode == DataGridViewAutoSizeRowMode.AllCells || autoSizeRowMode == DataGridViewAutoSizeRowMode.RowHeader)
+				height = Math.Max (height, row.HeaderCell.PreferredSize.Height);
+
+			if (autoSizeRowMode == DataGridViewAutoSizeRowMode.AllCells || autoSizeRowMode == DataGridViewAutoSizeRowMode.AllCellsExceptHeader)
+				foreach (DataGridViewCell cell in row.Cells)
+					height = Math.Max (height, cell.PreferredSize.Height);
 			
 			return height;
 		}
@@ -547,7 +556,8 @@ namespace System.Windows.Forms
 				bounds.Width = col.Width;
 				DataGridViewCell cell = Cells[col.Index];
 				
-				graphics.FillRectangle (Brushes.White, bounds);
+				if ((paintParts & DataGridViewPaintParts.Background) == DataGridViewPaintParts.Background)
+					graphics.FillRectangle (Brushes.White, bounds);
 				
 				DataGridViewCellStyle style;
 
@@ -610,7 +620,28 @@ namespace System.Windows.Forms
 				}
 			}
 		}
+		
+		// Set the row's height without overwriting the explicit_height, so we
+		// can go back to the user's requested height when they turn off AutoSize
+		internal void SetAutoSizeHeight (int height)
+		{
+			this.height = height;
+			
+			if (DataGridView != null) {
+				DataGridView.Invalidate ();
+				DataGridView.OnRowHeightChanged (new DataGridViewRowEventArgs (this));
+			}
+		}
 
+		// If the user sets AutoSizeRowMode to None, reset every row to its explicit height
+		internal void ResetToExplicitHeight ()
+		{
+			this.height = explicit_height;
+
+			if (DataGridView != null)
+				DataGridView.OnRowHeightChanged (new DataGridViewRowEventArgs (this));
+		}
+		
 		[ComVisibleAttribute(true)]
 		protected class DataGridViewRowAccessibleObject : AccessibleObject {
 

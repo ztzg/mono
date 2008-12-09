@@ -52,6 +52,12 @@ static gpointer restore_context_func, call_filter_func;
 static gpointer throw_exception_func, rethrow_exception_func;
 static gpointer throw_exception_by_name_func, throw_corlib_exception_func;
 
+static gpointer try_more_restore_tramp = NULL;
+static gpointer restore_stack_protection_tramp = NULL;
+
+static void try_more_restore (void);
+static void restore_stack_protection (void);
+
 void
 mono_exceptions_init (void)
 {
@@ -71,12 +77,14 @@ mono_exceptions_init (void)
 		rethrow_exception_func = mono_arch_get_rethrow_exception_full (&code_size, &ji, FALSE);
 	}
 #else
-#ifndef CUSTOM_EXCEPTION_HANDLING
 	restore_context_func = mono_arch_get_restore_context ();
 	call_filter_func = mono_arch_get_call_filter ();
-#endif
 	throw_exception_func = mono_arch_get_throw_exception ();
 	rethrow_exception_func = mono_arch_get_rethrow_exception ();
+#endif
+#ifdef MONO_ARCH_HAVE_RESTORE_STACK_SUPPORT
+	try_more_restore_tramp = mono_create_specific_trampoline (try_more_restore, MONO_TRAMPOLINE_RESTORE_STACK_PROT, mono_domain_get (), NULL);
+	restore_stack_protection_tramp = mono_create_specific_trampoline (restore_stack_protection, MONO_TRAMPOLINE_RESTORE_STACK_PROT, mono_domain_get (), NULL);
 #endif
 }
 
@@ -170,8 +178,6 @@ mono_get_throw_corlib_exception (void)
 	return throw_corlib_exception_func;
 }
 
-#ifndef mono_find_jit_info
-
 /* mono_find_jit_info:
  *
  * This function is used to gather information from @ctx. It return the 
@@ -181,7 +187,7 @@ mono_get_throw_corlib_exception (void)
  * the @lmf if necessary. @native_offset return the IP offset from the 
  * start of the function or -1 if that info is not available.
  */
-static MonoJitInfo *
+MonoJitInfo *
 mono_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *res, MonoJitInfo *prev_ji, MonoContext *ctx, 
 		    MonoContext *new_ctx, char **trace, MonoLMF **lmf, int *native_offset,
 		    gboolean *managed)
@@ -199,7 +205,7 @@ mono_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *re
 	if (managed)
 		*managed = FALSE;
 
-	ji = mono_arch_find_jit_info (domain, jit_tls, res, prev_ji, ctx, new_ctx, NULL, lmf, NULL, &managed2);
+	ji = mono_arch_find_jit_info (domain, jit_tls, res, prev_ji, ctx, new_ctx, lmf, &managed2);
 
 	if (ji == (gpointer)-1)
 		return ji;
@@ -239,8 +245,6 @@ mono_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *re
 
 	return ji;
 }
-
-#endif /* mono_find_jit_info */
 
 MonoString *
 ves_icall_System_Exception_get_trace (MonoException *ex)
@@ -399,8 +403,6 @@ mono_walk_stack (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoContext *start
 	}
 }
 
-#ifndef CUSTOM_STACK_WALK
-
 void
 mono_jit_walk_stack_from_ctx (MonoStackWalk func, MonoContext *start_ctx, gboolean do_il_offset, gpointer user_data)
 {
@@ -534,8 +536,6 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 
 	return TRUE;
 }
-
-#endif /* CUSTOM_STACK_WALK */
 
 typedef struct {
 	guint32 skips;
@@ -711,8 +711,6 @@ ves_icall_System_Security_SecurityFrame_GetSecurityStack (gint32 skip)
 	return ss.stack;
 }
 
-#ifndef CUSTOM_EXCEPTION_HANDLING
-
 static MonoClass*
 get_exception_catch_class (MonoJitExceptionInfo *ei, MonoJitInfo *ji, MonoContext *ctx)
 {
@@ -736,7 +734,7 @@ get_exception_catch_class (MonoJitExceptionInfo *ei, MonoJitInfo *ji, MonoContex
 	if (gi->this_in_reg)
 		info = mono_arch_context_get_int_reg (ctx, gi->this_reg);
 	else
-		info = *(gpointer*)((char*)mono_arch_context_get_int_reg (ctx, gi->this_reg) +
+		info = *(gpointer*)(gpointer)((char*)mono_arch_context_get_int_reg (ctx, gi->this_reg) +
 				gi->this_offset);
 
 	g_assert (ji->method->is_inflated);
@@ -747,7 +745,7 @@ get_exception_catch_class (MonoJitExceptionInfo *ei, MonoJitInfo *ji, MonoContex
 		class = mrgctx->class_vtable->klass;
 		context.method_inst = mrgctx->method_inst;
 		g_assert (context.method_inst);
-	} else if (ji->method->flags & METHOD_ATTRIBUTE_STATIC) {
+	} else if ((ji->method->flags & METHOD_ATTRIBUTE_STATIC) || ji->method->klass->valuetype) {
 		MonoVTable *vtable = info;
 
 		class = vtable->klass;
@@ -821,7 +819,10 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 	 * Allocate a new exception object instead of the preconstructed ones.
 	 */
 	if (obj == domain->stack_overflow_ex) {
-		obj = mono_get_exception_stack_overflow ();
+		/*
+		 * It is not a good idea to try and put even more pressure on the little stack available.
+		 * obj = mono_get_exception_stack_overflow ();
+		 */
 		stack_overflow = TRUE;
 	}
 	else if (obj == domain->null_reference_ex) {
@@ -945,7 +946,12 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 					MonoJitExceptionInfo *ei = &ji->clauses [i];
 					gboolean filtered = FALSE;
 
-#ifdef __s390__
+#if defined(__s390__)
+					/* 
+					 * This is required in cases where a try block starts immediately after
+					 * a call which causes an exception. Testcase: tests/exception8.cs.
+					 * FIXME: Clean this up.
+					 */
 					if (ei->try_start < MONO_CONTEXT_GET_IP (ctx) && 
 #else
 					if (ei->try_start <= MONO_CONTEXT_GET_IP (ctx) && 
@@ -962,6 +968,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 						if (ei->flags == MONO_EXCEPTION_CLAUSE_FILTER) {
 							// mono_debugger_handle_exception (ei->data.filter, MONO_CONTEXT_GET_SP (ctx), obj);
 							if (test_only) {
+								mono_perfcounters->exceptions_filters++;
 								filtered = call_filter (ctx, ei->data.filter);
 								if (filtered && out_filter_idx)
 									*out_filter_idx = filter_idx;
@@ -996,6 +1003,9 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 							mono_debugger_handle_exception (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
 							MONO_CONTEXT_SET_IP (ctx, ei->handler_start);
 							*(mono_get_lmf_addr ()) = lmf;
+							mono_perfcounters->exceptions_depth += frame_count;
+							if (obj == domain->stack_overflow_ex)
+								jit_tls->handling_stack_ovf = FALSE;
 
 							return 0;
 						}
@@ -1015,6 +1025,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 								g_print ("EXCEPTION: finally clause %d of %s\n", i, mono_method_full_name (ji->method, TRUE));
 							mono_profiler_exception_clause_handler (ji->method, ei->flags, i);
 							mono_debugger_handle_exception (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
+							mono_perfcounters->exceptions_finallys++;
 							call_filter (ctx, ei->handler_start);
 						}
 						
@@ -1102,10 +1113,10 @@ mono_debugger_run_finally (MonoContext *start_ctx)
 gboolean
 mono_handle_exception (MonoContext *ctx, gpointer obj, gpointer original_ip, gboolean test_only)
 {
+	if (!test_only)
+		mono_perfcounters->exceptions_thrown++;
 	return mono_handle_exception_internal (ctx, obj, original_ip, test_only, NULL);
 }
-
-#endif /* CUSTOM_EXCEPTION_HANDLING */
 
 #ifdef MONO_ARCH_SIGSEGV_ON_ALTSTACK
 
@@ -1149,7 +1160,7 @@ mono_setup_altstack (MonoJitTlsData *tls)
 	tls->stack_size = stsize + mono_pagesize ();
 
 	/* Setup an alternate signal stack */
-	tls->signal_stack = mono_valloc (0, MONO_ARCH_SIGNAL_STACK_SIZE, MONO_MMAP_READ|MONO_MMAP_WRITE|MONO_MMAP_EXEC|MONO_MMAP_PRIVATE|MONO_MMAP_ANON);
+	tls->signal_stack = mono_valloc (0, MONO_ARCH_SIGNAL_STACK_SIZE, MONO_MMAP_READ|MONO_MMAP_WRITE|MONO_MMAP_PRIVATE|MONO_MMAP_ANON);
 	tls->signal_stack_size = MONO_ARCH_SIGNAL_STACK_SIZE;
 
 	g_assert (tls->signal_stack);
@@ -1191,6 +1202,107 @@ mono_free_altstack (MonoJitTlsData *tls)
 #endif /* MONO_ARCH_SIGSEGV_ON_ALTSTACK */
 
 static gboolean
+try_restore_stack_protection (MonoJitTlsData *jit_tls, int extra_bytes)
+{
+	gint32 unprotect_size = jit_tls->stack_ovf_guard_size;
+	/* we need to leave some room for throwing the exception */
+	while (unprotect_size >= 0 && (char*)jit_tls->stack_ovf_guard_base + unprotect_size > ((char*)&unprotect_size - extra_bytes))
+		unprotect_size -= mono_pagesize ();
+	/* at this point we could try and build a new domain->stack_overflow_ex, but only if there
+	 * is sufficient stack
+	 */
+	//fprintf (stderr, "restoring stack protection: %p-%p (%d)\n", jit_tls->stack_ovf_guard_base, (char*)jit_tls->stack_ovf_guard_base + unprotect_size, unprotect_size);
+	if (unprotect_size)
+		mono_mprotect (jit_tls->stack_ovf_guard_base, unprotect_size, MONO_MMAP_NONE);
+	return unprotect_size == jit_tls->stack_ovf_guard_size;
+}
+
+static void
+try_more_restore (void)
+{
+	MonoJitTlsData *jit_tls = TlsGetValue (mono_jit_tls_id);
+	if (try_restore_stack_protection (jit_tls, 500))
+		jit_tls->restore_stack_prot = NULL;
+}
+
+static void
+restore_stack_protection (void)
+{
+	MonoJitTlsData *jit_tls = TlsGetValue (mono_jit_tls_id);
+	MonoException *ex = mono_domain_get ()->stack_overflow_ex;
+	/* if we can't restore the stack protection, keep a callback installed so
+	 * we'll try to restore as much stack as we can at each return from unmanaged
+	 * code.
+	 */
+	if (try_restore_stack_protection (jit_tls, 4096))
+		jit_tls->restore_stack_prot = NULL;
+	else
+		jit_tls->restore_stack_prot = try_more_restore_tramp;
+	/* here we also throw a stack overflow exception */
+	ex->trace_ips = NULL;
+	ex->stack_trace = NULL;
+	mono_raise_exception (ex);
+}
+
+gpointer
+mono_altstack_restore_prot (gssize *regs, guint8 *code, gpointer *tramp_data, guint8* tramp)
+{
+	void (*func)(void) = (gpointer)tramp_data;
+	func ();
+	return NULL;
+}
+
+gboolean
+mono_handle_soft_stack_ovf (MonoJitTlsData *jit_tls, MonoJitInfo *ji, void *ctx, guint8* fault_addr)
+{
+	/* we got a stack overflow in the soft-guard pages
+	 * There are two cases:
+	 * 1) managed code caused the overflow: we unprotect the soft-guard page
+	 * and let the arch-specific code trigger the exception handling mechanism
+	 * in the thread stack. The soft-guard pages will be protected again as the stack is unwound.
+	 * 2) unmanaged code caused the overflow: we unprotect the soft-guard page
+	 * and hope we can continue with those enabled, at least until the hard-guard page
+	 * is hit. The alternative to continuing here is to just print a message and abort.
+	 * We may add in the future the code to protect the pages again in the codepath
+	 * when we return from unmanaged to managed code.
+	 */
+	if (jit_tls->stack_ovf_guard_size && fault_addr >= (guint8*)jit_tls->stack_ovf_guard_base &&
+			fault_addr < (guint8*)jit_tls->stack_ovf_guard_base + jit_tls->stack_ovf_guard_size) {
+		/* we unprotect the minimum amount we can */
+		guint32 guard_size;
+		gboolean handled = FALSE;
+
+		guard_size = jit_tls->stack_ovf_guard_size - (mono_pagesize () * SIZEOF_VOID_P / 4);
+		while (guard_size && fault_addr < (guint8*)jit_tls->stack_ovf_guard_base + guard_size) {
+			guard_size -= mono_pagesize ();
+		}
+		guard_size = jit_tls->stack_ovf_guard_size - guard_size;
+		/*fprintf (stderr, "unprotecting: %d\n", guard_size);*/
+		mono_mprotect ((char*)jit_tls->stack_ovf_guard_base + jit_tls->stack_ovf_guard_size - guard_size, guard_size, MONO_MMAP_READ|MONO_MMAP_WRITE);
+#ifdef MONO_ARCH_SIGSEGV_ON_ALTSTACK
+		if (ji) {
+			mono_arch_handle_altstack_exception (ctx, fault_addr, TRUE);
+			handled = TRUE;
+		}
+#endif
+		if (!handled) {
+			/* We print a message: after this even managed stack overflows
+			 * may crash the runtime
+			 */
+			fprintf (stderr, "Stack overflow in unmanaged: IP: %p, fault addr: %p\n", mono_arch_ip_from_context (ctx), fault_addr);
+			if (!jit_tls->handling_stack_ovf) {
+				jit_tls->restore_stack_prot = restore_stack_protection_tramp;
+				jit_tls->handling_stack_ovf = 1;
+			} else {
+				/*fprintf (stderr, "Already handling stack overflow\n");*/
+			}
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
 print_stack_frame (MonoMethod *method, gint32 native_offset, gint32 il_offset, gboolean managed, gpointer data)
 {
 	FILE *stream = (FILE*)data;
@@ -1205,7 +1317,7 @@ print_stack_frame (MonoMethod *method, gint32 native_offset, gint32 il_offset, g
 	return FALSE;
 }
 
-static gboolean
+static G_GNUC_UNUSED gboolean
 print_stack_frame_to_string (MonoMethod *method, gint32 native_offset, gint32 il_offset, gboolean managed,
 			     gpointer data)
 {
@@ -1388,6 +1500,8 @@ mono_print_thread_dump (void *sigctx)
 		g_string_append_printf (text, "\n\"%s\"", name);
 		g_free (name);
 	}
+	else if (thread->threadpool_thread)
+		g_string_append (text, "\n\"<threadpool thread>\"");
 	else
 		g_string_append (text, "\n\"\"");
 

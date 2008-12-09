@@ -1,3 +1,31 @@
+
+2008-11-22 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConfigurationManager.cs: fix nullref.
+
+2008-11-19 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConfigurationManager.cs: don't keep configuration sections for
+	files that don't exist on disk.
+	Bug #443569 fixed.
+
+2008-10-21  Marek Habersack  <mhabersack@novell.com>
+
+	* CapabilitiesChecksum.cs: implement Hex and MapToHex more efficiently.
+
+2008-10-09  Marek Habersack  <mhabersack@novell.com>
+
+	* MonoSettingsSection.cs: added - a section for mono-specific
+	settings.
+
+2008-10-01  Marek Habersack  <mhabersack@novell.com>
+
+	* CapabilitiesResult.cs: added support for the "browsers"
+	capability - a collection of matching browser ids.
+
+	* nBrowser/Node.cs: store matching browser ids in the capabilities
+	collection (to support IsBrowser correctly)
+
 2008-07-25  Dean Brettle <dean@brettle.com>
 
 	* nBrowser/Node.cs nBrowser/Build.cs nBrowser/Identification.cs: Fixed race

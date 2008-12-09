@@ -41,14 +41,13 @@ namespace System.Windows.Forms {
 		IList, ISupportInitializeNotification, ICollection,
 		IComponent, ICurrencyManagerProvider, IEnumerable 
 	{
-		ISite site;
 		bool is_initialized = true;
 
 		IList list;
 		CurrencyManager currency_manager;
 		Dictionary<string,CurrencyManager> related_currency_managers = new Dictionary<string,CurrencyManager> ();
 		//bool list_defaulted;
-		Type item_type;
+		internal Type item_type;
 		bool item_has_default_ctor;
 		bool list_is_ibinding;
 

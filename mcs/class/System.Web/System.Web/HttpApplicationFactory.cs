@@ -128,6 +128,22 @@ namespace System.Web {
 
 			list.Add (method);
 		}
+
+		ArrayList GetMethodsDeep (Type type)
+		{
+			ArrayList al = new ArrayList ();
+			MethodInfo[] methods = type.GetMethods (BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance  | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+			al.AddRange (methods);
+
+			Type t = type.BaseType;
+			while (t != null) {
+				methods = t.GetMethods (BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+				al.AddRange (methods);
+				t = t.BaseType;
+			}
+
+			return al;
+		}
 		
 		Hashtable GetApplicationTypeEvents (Type type)
 		{
@@ -136,14 +152,24 @@ namespace System.Web {
 					return app_event_handlers;
 
 				app_event_handlers = new Hashtable ();
-				BindingFlags flags = BindingFlags.Public    | BindingFlags.NonPublic | 
-					BindingFlags.Instance  | BindingFlags.Static;
-
-				MethodInfo [] methods = type.GetMethods (flags);
-				foreach (MethodInfo m in methods) {
-					if (m.DeclaringType != typeof (HttpApplication) && IsEventHandler (m))
+				ArrayList methods = GetMethodsDeep (type);
+				Hashtable used = null;
+				MethodInfo m;
+				string mname;
+				
+				foreach (object o in methods) {
+					m = o as MethodInfo;
+					if (m.DeclaringType != typeof (HttpApplication) && IsEventHandler (m)) {
+						mname = m.ToString ();
+						if (used == null)
+							used = new Hashtable ();
+						else if (used.ContainsKey (mname))
+							continue;
+						used.Add (mname, m);
 						AddEvent (m, app_event_handlers);
+					}
 				}
+				used = null;
 			}
 
 			return app_event_handlers;

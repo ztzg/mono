@@ -47,7 +47,9 @@ using System.Text;
 #if NET_2_0
 using System.Collections.Generic;
 using System.Net.NetworkInformation;
+#if !NET_2_1
 using System.Timers;
+#endif
 #endif
 
 namespace System.Net.Sockets 
@@ -136,11 +138,14 @@ namespace System.Net.Sockets
 			public void CheckIfThrowDelayedException ()
 			{
 				if (delayedException != null) {
+					Sock.connected = false;
 					throw delayedException;
 				}
 
-				if (error != 0)
+				if (error != 0) {
+					Sock.connected = false;
 					throw new SocketException (error);
+				}
 			}
 
 			void CompleteAllOnDispose (Queue queue)
@@ -1390,7 +1395,9 @@ namespace System.Net.Sockets
 				sock = Accept_internal(socket, out error);
 			} catch (ThreadAbortException) {
 				if (disposed) {
+#if !NET_2_1
 					Thread.ResetAbort ();
+#endif
 					error = (int) SocketError.Interrupted;
 				}
 			} finally {
@@ -1421,7 +1428,9 @@ namespace System.Net.Sockets
 				sock = Accept_internal (socket, out error);
 			} catch (ThreadAbortException) {
 				if (disposed) {
+#if !NET_2_1
 					Thread.ResetAbort ();
+#endif
 					error = (int)SocketError.Interrupted;
 				}
 			} finally {
@@ -2046,7 +2055,7 @@ namespace System.Net.Sockets
 			((IDisposable) this).Dispose ();
 		}
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 		public void Close (int timeout) 
 		{
 			System.Timers.Timer close_timer = new System.Timers.Timer ();

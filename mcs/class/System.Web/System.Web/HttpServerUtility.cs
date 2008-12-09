@@ -342,24 +342,32 @@ namespace System.Web {
 
 		public string UrlDecode (string s)
 		{
-			return HttpUtility.UrlDecode (s);
+			HttpRequest request = context.Request;
+			if(request != null)
+				return HttpUtility.UrlDecode (s, request.ContentEncoding);
+			else
+				return HttpUtility.UrlDecode (s);
 		}
 
 		public void UrlDecode (string s, TextWriter output)
 		{
 			if (s != null)
-				output.Write (HttpUtility.UrlDecode (s));
+				output.Write (UrlDecode (s));
 		}
 
 		public string UrlEncode (string s)
 		{
-			return HttpUtility.UrlEncode (s);
+			HttpResponse response = context.Response;
+			if (response != null)
+				return HttpUtility.UrlEncode (s, response.ContentEncoding);
+			else
+				return HttpUtility.UrlEncode (s);
 		}
 
 		public void UrlEncode (string s, TextWriter output)
 		{
 			if (s != null)
-				output.Write (HttpUtility.UrlEncode (s));
+				output.Write (UrlEncode (s));
 		}
 
 		public string UrlPathEncode (string s)

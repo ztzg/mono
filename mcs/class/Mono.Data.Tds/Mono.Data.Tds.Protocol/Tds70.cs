@@ -33,9 +33,11 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-using Mono.Security.Protocol.Ntlm;
 using System;
+using System.Globalization;
 using System.Text;
+
+using Mono.Security.Protocol.Ntlm;
 
 namespace Mono.Data.Tds.Protocol
 {
@@ -44,6 +46,8 @@ namespace Mono.Data.Tds.Protocol
 		#region Fields
 
 		public readonly static TdsVersion Version = TdsVersion.tds70;
+		static readonly decimal SMALLMONEY_MIN = -214748.3648m;
+		static readonly decimal SMALLMONEY_MAX = 214748.3647m;
 
 		#endregion // Fields
 
@@ -79,14 +83,15 @@ namespace Mono.Data.Tds.Protocol
 
 			StringBuilder result = new StringBuilder ();
 			foreach (TdsMetaParameter p in Parameters) {
-				string includeAt = "@";
-				if (p.ParameterName [0] == '@')
-					includeAt = string.Empty;
+				string parameterName = p.ParameterName;
+				if (parameterName [0] == '@') {
+					parameterName = parameterName.Substring (1);
+				}
 				if (p.Direction != TdsParameterDirection.ReturnValue) {
 					if (result.Length > 0)
 						result.Append (", ");
 					if (p.Direction == TdsParameterDirection.InputOutput)
-						result.Append (String.Format("{0}{1}={1} output", includeAt, p.ParameterName));
+						result.AppendFormat ("@{0}={0} output", parameterName);
 					else
 						result.Append (FormatParameter (p));
 				}
@@ -353,18 +358,15 @@ namespace Mono.Data.Tds.Protocol
 
 		public override bool Reset ()
 		{
-			try {
-				ExecProc ("sp_reset_connection");
-				base.Reset ();
-			} catch (Exception e) {
-				System.Reflection.PropertyInfo pinfo = e.GetType ().GetProperty ("Class");
-				if (pinfo != null && pinfo.PropertyType == typeof (byte)) {
-					byte klass = (byte) pinfo.GetValue (e, null);
-					// 11 to 16 indicates error that can be fixed by the user such as 'Invalid object name'
-					if (klass < 11 || klass > 16)
-						return false;
-				}
-			}
+			// Check validity of the connection - a false removes
+			// the connection from the pool
+			// NOTE: MS implementation will throw a connection-reset error as it will
+			// try to use the same connection
+			if (!Comm.IsConnected ())
+				return false;
+
+			// Set "reset-connection" bit for the next message packet
+			Comm.ResetConnection = true;
 
 			return true;
 		}
@@ -395,8 +397,14 @@ namespace Mono.Data.Tds.Protocol
 				foreach (TdsMetaParameter param in parameters) {
 					if (param.Direction == TdsParameterDirection.ReturnValue) 
 						continue;
-					Comm.Append ( (byte) param.ParameterName.Length );
-					Comm.Append (param.ParameterName);
+					string pname = param.ParameterName;
+					if (pname != null && pname.Length > 0 && pname [0] == '@') {
+						Comm.Append ( (byte) pname.Length);
+						Comm.Append (pname);
+					} else {
+						Comm.Append ( (byte) (pname.Length + 1));
+						Comm.Append ("@" + pname);
+					}
 					short status = 0; // unused
 					if (param.Direction != TdsParameterDirection.Input)
 						status |= 0x01; // output
@@ -458,13 +466,30 @@ namespace Mono.Data.Tds.Protocol
 				case "money" : {
 					Decimal val = (decimal) param.Value;
 					int[] arr = Decimal.GetBits (val);
-					int sign = (val>0 ? 1: -1);
-					Comm.Append (sign * arr[1]);
-					Comm.Append (sign * arr[0]);
+
+					if (val >= 0) {
+						Comm.Append (arr[1]);
+						Comm.Append (arr[0]);
+					} else {
+						Comm.Append (~arr[1]);
+						Comm.Append (~arr[0] + 1);
+					}
 					break;
 				}
 				case "smallmoney": {
 					Decimal val = (decimal) param.Value;
+					if (val < SMALLMONEY_MIN || val > SMALLMONEY_MAX)
+						throw new OverflowException (string.Format (
+							CultureInfo.InvariantCulture,
+							"Value '{0}' is not valid for SmallMoney."
+							+ "  Must be between {1:N4} and {2:N4}.",
+#if NET_2_0
+							val,
+#else
+							val.ToString (CultureInfo.CurrentCulture),
+#endif
+							SMALLMONEY_MIN, SMALLMONEY_MAX));
+
 					int[] arr = Decimal.GetBits (val);
 					int sign = (val>0 ? 1: -1);
 					Comm.Append (sign * arr[0]);
@@ -507,11 +532,12 @@ namespace Mono.Data.Tds.Protocol
 
 		private string FormatParameter (TdsMetaParameter parameter)
 		{
-			string includeAt = "@";
-			if (parameter.ParameterName [0] == '@')
-				includeAt = string.Empty;
+			string parameterName = parameter.ParameterName;
+			if (parameterName [0] == '@') {
+				parameterName = parameterName.Substring (1);
+			}
 			if (parameter.Direction == TdsParameterDirection.Output)
-				return String.Format ("{0}{1}={1} output", includeAt, parameter.ParameterName);
+				return String.Format ("@{0}={0} output", parameterName);
 			if (parameter.Value == null || parameter.Value == DBNull.Value)
 				return parameter.ParameterName + "=NULL";
 
@@ -568,7 +594,7 @@ namespace Mono.Data.Tds.Protocol
 				break;
 			}
 
-			return includeAt + parameter.ParameterName + "=" + value;
+			return "@" + parameterName + "=" + value;
 		}
 
 		public override string Prepare (string commandText, TdsMetaParameterCollection parameters)

@@ -225,7 +225,7 @@ namespace System.Linq
 		{
 			Check.Source (source);
 
-			return source.AverageNullable<long, long, double> ((a, b) => a + b, (a, b) => a / b);
+			return source.AverageNullable<long, long, double> ((a, b) => a + b, (a, b) => (double) a / b);
 		}
 
 		public static double? Average (this IEnumerable<double?> source)
@@ -332,8 +332,8 @@ namespace System.Linq
 
 		static IEnumerable<TResult> CreateCastIterator<TResult> (IEnumerable source)
 		{
-			foreach (object element in source)
-				yield return (TResult) element;
+			foreach (TResult element in source)
+				yield return element;
 		}
 
 		#endregion
@@ -579,7 +579,20 @@ namespace System.Linq
 		{
 			Check.Source (source);
 
-			return source.First (PredicateOf<TSource>.Always, Fallback.Throw);
+			var list = source as IList<TSource>;
+			if (list != null) {
+				if (list.Count != 0)
+					return list [0];
+
+				throw new InvalidOperationException ();
+			} else {
+				using (var enumerator = source.GetEnumerator ()) {
+					if (enumerator.MoveNext ())
+						return enumerator.Current;
+				}
+			}
+
+			throw new InvalidOperationException ();
 		}
 
 		public static TSource First<TSource> (this IEnumerable<TSource> source, Func<TSource, bool> predicate)
@@ -1056,7 +1069,7 @@ namespace System.Linq
 
 		static T? IterateNullable<T> (IEnumerable<T?> source, T initValue, Func<T?, T?, bool> selector) where T : struct
 		{
-			int counter = 0;
+			bool empty = true;
 			T? value = initValue;
 			foreach (var element in source) {
 				if (!element.HasValue)
@@ -1064,10 +1077,11 @@ namespace System.Linq
 
 				if (selector (element.Value, value))
 					value = element;
-				++counter;
+
+				empty = false;
 			}
 
-			if (counter == 0)
+			if (empty)
 				return null;
 
 			return value;
@@ -1142,13 +1156,13 @@ namespace System.Linq
 
 		static U Iterate<T, U> (IEnumerable<T> source, U initValue, Func<T, U, U> selector)
 		{
-			int counter = 0;
+			bool empty = true;
 			foreach (var element in source) {
 				initValue = selector (element, initValue);
-				++counter;
+				empty = false;
 			}
 
-			if (counter == 0)
+			if (empty)
 				throw new InvalidOperationException ();
 
 			return initValue;
@@ -1156,17 +1170,17 @@ namespace System.Linq
 
 		static U? IterateNullable<T, U> (IEnumerable<T> source, U initialValue, Func<T, U?, U?> selector) where U : struct
 		{
-			int counter = 0;
+			bool empty = true;
 			U? value = initialValue;
 			foreach (var element in source) {
 				value = selector (element, value);
 				if (!value.HasValue)
 					continue;
 
-				++counter;
+				empty = false;
 			}
 
-			if (counter == 0)
+			if (empty)
 				return null;
 
 			return value;

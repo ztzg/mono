@@ -1,3 +1,34 @@
+2008-10-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Ping.cs : use privileged mode for non-unix. On Windows there is
+	  no /usr/bin/ping.
+
+2008-10-04 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* NetworkInterface.cs: detect wireless 802.11 on linux.
+
+2008-09-28 Gonzalo Paniagua Javier <gonzalo.mono@gmail.com>
+
+	* NetworkInterface.cs: special case for loopback interfaces so that
+	their a physical interface address is PhysicalInterfaceAddress.None.
+	Fixes bug #422118.
+
+2008-08-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* IPInterfaceProperties.cs, UnicastIPAddressInformation.cs,
+	  UnicastIPAddressInformationCollection.cs : fixed bug #416526, based
+	  on the patch by Fredrik Kling. support UnicastIPAddressInformation
+	  on win32.
+
+2008-08-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* IPGlobalProperties.cs : fixed ToEndPoint() to not bork at 
+	  parsing IPv6 string. Fixed bug #410006.
+
+2008-07-31  Jb Evain  <jbevain@novell.com>
+
+	* NetworkInformationException.cs: cleanup for NET_2_1.
+
 2008-07-17  Marek Habersack  <mhabersack@novell.com>
 
 	* IPInterfaceProperties.cs: implemented UnicastAddresses

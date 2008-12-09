@@ -1523,7 +1523,7 @@ namespace System
 					else if (num == 1)
 						tzoffset = _ParseNumber (s, valuePos, 1, 2, true, sloppy_parsing, out num_parsed);
 					else {
-						tzoffset = _ParseNumber (s, valuePos, 1, 2, true, sloppy_parsing, out num_parsed);
+						tzoffset = _ParseNumber (s, valuePos, 1, 2, true, /*sloppy_parsing*/true, out num_parsed);
 						valuePos += num_parsed;
 						if (num_parsed < 0)
 							return false;
@@ -2125,10 +2125,17 @@ namespace System
 			throw new InvalidCastException();
 		}
 
+#if ONLY_1_1
+#pragma warning disable 3019
+		[CLSCompliant (false)]
+#endif
 		SByte IConvertible.ToSByte(IFormatProvider provider)
 		{
 			throw new InvalidCastException();
 		}
+#if ONLY_1_1
+#pragma warning restore 3019
+#endif
 
 		Single IConvertible.ToSingle(IFormatProvider provider)
 		{
@@ -2150,19 +2157,40 @@ namespace System
 				throw new InvalidCastException();
 		}
 
+#if ONLY_1_1
+#pragma warning disable 3019
+		[CLSCompliant (false)]
+#endif
 		UInt16 IConvertible.ToUInt16(IFormatProvider provider)
 		{
 			throw new InvalidCastException();
 		}
-		
+#if ONLY_1_1
+#pragma warning restore 3019
+#endif
+
+#if ONLY_1_1
+#pragma warning disable 3019
+		[CLSCompliant (false)]
+#endif
 		UInt32 IConvertible.ToUInt32(IFormatProvider provider)
 		{
 			throw new InvalidCastException();
 		}
+#if ONLY_1_1
+#pragma warning restore 3019
+#endif
 
+#if ONLY_1_1
+#pragma warning disable 3019
+		[CLSCompliant (false)]
+#endif
 		UInt64 IConvertible.ToUInt64(IFormatProvider provider)
 		{
 			throw new InvalidCastException();
 		}
+#if ONLY_1_1
+#pragma warning restore 3019
+#endif
 	}
 }

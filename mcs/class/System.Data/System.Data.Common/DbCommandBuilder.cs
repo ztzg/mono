@@ -179,14 +179,12 @@ namespace System.Data.Common {
 			CreateNewCommand (ref _deleteCommand);
 
 			string command = String.Format ("DELETE FROM {0}", QuotedTableName);
-			StringBuilder columns = new StringBuilder ();
 			StringBuilder whereClause = new StringBuilder ();
-			string dsColumnName = String.Empty;
 			bool keyFound = false;
 			int parmIndex = 1;
 
 			foreach (DataRow schemaRow in _dbSchemaTable.Rows) {
-				if ((bool)schemaRow["IsExpression"] == true)
+				if (!schemaRow.IsNull ("IsExpression") && (bool)schemaRow["IsExpression"] == true)
 					continue;
 				if (!IncludedInWhereClause (schemaRow)) 
 					continue;
@@ -221,13 +219,7 @@ namespace System.Data.Common {
 					whereClause.Append (" OR ");
 				}
 
-				int index = 0;
-				if (option) {
-					index = CreateParameter (_deleteCommand, schemaRow);
-				} else {
-					index = CreateParameter (_deleteCommand, parmIndex++, schemaRow);
-				}
-				parameter = _deleteCommand.Parameters [index];
+				parameter = CreateParameter (_deleteCommand, String.Format ("@{0}", option ? schemaRow ["BaseColumnName"] : "p" + parmIndex++), schemaRow);
 				parameter.SourceVersion = DataRowVersion.Original;
 
 				whereClause.Append (String.Format (clause2, GetQuotedString (parameter.SourceColumn), parameter.ParameterName));
@@ -256,25 +248,18 @@ namespace System.Data.Common {
 			string sql;
 			StringBuilder columns = new StringBuilder ();
 			StringBuilder values = new StringBuilder ();
-			string dsColumnName = String.Empty;
 
 			int parmIndex = 1;
 			foreach (DataRow schemaRow in _dbSchemaTable.Rows) {
 				if (!IncludedInInsert (schemaRow))
 					continue;
 
-				if (parmIndex > 1) {
+				if (columns.Length > 0) {
 					columns.Append (", ");
 					values.Append (", ");
 				}
 
-				int index = -1;
-				if (option) {
-					index = CreateParameter (_insertCommand, schemaRow);
-				} else {
-					index = CreateParameter (_insertCommand, parmIndex++, schemaRow);
-				}
-				DbParameter parameter = _insertCommand.Parameters [index];
+				DbParameter parameter = CreateParameter (_insertCommand, String.Format ("@{0}", option ? schemaRow ["BaseColumnName"] : "p" + parmIndex++), schemaRow);
 				parameter.SourceVersion = DataRowVersion.Current;
 
 				columns.Append (GetQuotedString (parameter.SourceColumn));
@@ -312,7 +297,6 @@ namespace System.Data.Common {
 			StringBuilder columns = new StringBuilder ();
 			StringBuilder whereClause = new StringBuilder ();
 			int parmIndex = 1;
-			string dsColumnName = String.Empty;
 			bool keyFound = false;
 
 			// First, create the X=Y list for UPDATE
@@ -322,14 +306,7 @@ namespace System.Data.Common {
 				if (columns.Length > 0) 
 					columns.Append (", ");
 
-
-				int index = -1;
-				if (option) {
-					index = CreateParameter (_updateCommand, schemaRow);
-				} else {
-					index = CreateParameter (_updateCommand, parmIndex++, schemaRow);
-				}
-				DbParameter parameter = _updateCommand.Parameters [index];
+				DbParameter parameter = CreateParameter (_updateCommand, String.Format ("@{0}", option ? schemaRow ["BaseColumnName"] : "p" + parmIndex++), schemaRow);
 				parameter.SourceVersion = DataRowVersion.Current;
 
 				columns.Append (String.Format ("{0} = {1}", GetQuotedString (parameter.SourceColumn), parameter.ParameterName));
@@ -338,7 +315,7 @@ namespace System.Data.Common {
 			// Now, create the WHERE clause.  This may be optimizable, but it would be ugly to incorporate
 			// into the loop above.  "Premature optimization is the root of all evil." -- Knuth
 			foreach (DataRow schemaRow in _dbSchemaTable.Rows) {
-				if ((bool) schemaRow ["IsExpression"] == true)
+				if (!schemaRow.IsNull ("IsExpression") && (bool) schemaRow ["IsExpression"] == true)
 					continue;
 
 				if (!IncludedInWhereClause (schemaRow)) 
@@ -357,11 +334,10 @@ namespace System.Data.Common {
 				//while ms.net 2.0 does not. Anyways, since both forms are logically equivalent
 				//following the 2.0 approach
 				bool allowNull = (bool) schemaRow ["AllowDBNull"];
-				int index;
 				if (!isKey && allowNull) {
 					parameter = _updateCommand.CreateParameter ();
 					if (option) {
-						parameter.ParameterName = String.Format ("@{0}",
+						parameter.ParameterName = String.Format ("@{0} IS NULL",
 											 schemaRow ["BaseColumnName"]);
 					} else {
 						parameter.ParameterName = String.Format ("@p{0}", parmIndex++);
@@ -373,12 +349,10 @@ namespace System.Data.Common {
 					whereClause.Append (" OR ");
 				}
 
-				if (option) {
-					index = CreateParameter (_updateCommand, schemaRow);
-				} else {
-					index = CreateParameter (_updateCommand, parmIndex++, schemaRow);
-				}
-				parameter = _updateCommand.Parameters [index];
+				if (option)
+					parameter = CreateParameter (_updateCommand, String.Format ("@Original_{0}", schemaRow ["BaseColumnName"]), schemaRow);
+				else
+					parameter = CreateParameter (_updateCommand, String.Format ("@p{0}", parmIndex++), schemaRow);
 				parameter.SourceVersion = DataRowVersion.Original;
 
 				whereClause.Append (String.Format (clause2, GetQuotedString (parameter.SourceColumn), parameter.ParameterName));
@@ -396,23 +370,14 @@ namespace System.Data.Common {
 			return _updateCommand;
 		}
 
-		private int CreateParameter (DbCommand _dbCommand, int parmIndex, DataRow schemaRow)
+		private DbParameter CreateParameter (DbCommand _dbCommand, string parameterName, DataRow schemaRow)
 		{
 			DbParameter parameter = _dbCommand.CreateParameter ();
-			parameter.ParameterName = String.Format ("@p{0}", parmIndex);
+			parameter.ParameterName = parameterName;
 			parameter.SourceColumn = (string) schemaRow ["BaseColumnName"];
 			parameter.Size = (int) schemaRow ["ColumnSize"];
-			return _dbCommand.Parameters.Add (parameter);
-		}
-
-		private int CreateParameter (DbCommand _dbCommand, DataRow schemaRow)
-		{
-			DbParameter parameter = _dbCommand.CreateParameter ();
-			parameter.ParameterName = String.Format ("@{0}",
-								 schemaRow ["BaseColumnName"]);
-			parameter.SourceColumn = (string) schemaRow ["BaseColumnName"];
-			parameter.Size = (int) schemaRow ["ColumnSize"];
-			return _dbCommand.Parameters.Add (parameter);
+			_dbCommand.Parameters.Add (parameter);
+			return parameter;
 		}
 
 		[DefaultValue (CatalogLocation.Start)]
@@ -586,9 +551,9 @@ namespace System.Data.Common {
 		{
 			_tableName = String.Empty;
 			_dbSchemaTable = null;
-			CreateNewCommand (ref _deleteCommand);
-			CreateNewCommand (ref _updateCommand);
-			CreateNewCommand (ref _insertCommand);
+			_deleteCommand = null;
+			_updateCommand = null;
+			_insertCommand = null;
 		}
 
 		protected void RowUpdatingHandler (RowUpdatingEventArgs args)

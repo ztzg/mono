@@ -38,6 +38,7 @@ typedef const void *   gconstpointer;
 typedef char           gchar;
 typedef unsigned char  guchar;
 
+#if !G_TYPES_DEFINED
 #ifdef _MSC_VER
 typedef __int8				gint8;
 typedef unsigned __int8		guint8;
@@ -64,6 +65,8 @@ typedef float          gfloat;
 typedef double         gdouble;
 typedef uint16_t       gunichar2;
 #endif
+#endif
+
 
 /*
  * Macros
@@ -122,7 +125,7 @@ static inline gpointer g_malloc0 (gsize x) {if (x) return calloc(1,x); else retu
 #define g_alloca(size)		alloca (size)
 
 gpointer g_memdup (gconstpointer mem, guint byte_size);
-gchar   *g_strdup (const gchar *str);
+static inline gchar   *g_strdup (const gchar *str) { if (str) {return strdup (str);} return NULL; }
 
 typedef struct {
 	gpointer (*malloc)      (gsize    n_bytes);
@@ -528,10 +531,41 @@ gpointer g_convert_error_quark(void);
 typedef guint32 gunichar;
 
 typedef enum {
+	G_UNICODE_CONTROL,
+	G_UNICODE_FORMAT,
+	G_UNICODE_UNASSIGNED,
+	G_UNICODE_PRIVATE_USE,
+	G_UNICODE_SURROGATE,
 	G_UNICODE_LOWERCASE_LETTER,
+	G_UNICODE_MODIFIER_LETTER,
+	G_UNICODE_OTHER_LETTER,
+	G_UNICODE_TITLECASE_LETTER,
+	G_UNICODE_UPPERCASE_LETTER,
+	G_UNICODE_COMBINING_MARK,
+	G_UNICODE_ENCLOSING_MARK,
+	G_UNICODE_NON_SPACING_MARK,
+	G_UNICODE_DECIMAL_NUMBER,
+	G_UNICODE_LETTER_NUMBER,
+	G_UNICODE_OTHER_NUMBER,
+	G_UNICODE_CONNECT_PUNCTUATION,
+	G_UNICODE_DASH_PUNCTUATION,
+	G_UNICODE_CLOSE_PUNCTUATION,
+	G_UNICODE_FINAL_PUNCTUATION,
+	G_UNICODE_INITIAL_PUNCTUATION,
+	G_UNICODE_OTHER_PUNCTUATION,
+	G_UNICODE_OPEN_PUNCTUATION,
+	G_UNICODE_CURRENCY_SYMBOL,
+	G_UNICODE_MODIFIER_SYMBOL,
+	G_UNICODE_MATH_SYMBOL,
+	G_UNICODE_OTHER_SYMBOL,
+	G_UNICODE_LINE_SEPARATOR,
+	G_UNICODE_PARAGRAPH_SEPARATOR,
+	G_UNICODE_SPACE_SEPARATOR
 } GUnicodeType;
 
+gunichar       g_unichar_toupper (gunichar c);
 gunichar       g_unichar_tolower (gunichar c);
+gunichar       g_unichar_totitle (gunichar c);
 GUnicodeType   g_unichar_type    (gunichar c);
 gboolean       g_unichar_isxdigit (gunichar c);
 gint           g_unichar_xdigit_value (gunichar c);
@@ -567,6 +601,8 @@ typedef enum {
 	G_CONVERT_ERROR_NOT_ABSOLUTE_PATH
 } GConvertError;
 
+gchar* g_utf8_strup (const gchar *str, gssize len);
+gchar* g_utf8_strdown (const gchar *str, gssize len);
 gunichar2 *g_utf8_to_utf16 (const gchar *str, glong len, glong *items_read, glong *items_written, GError **error);
 gchar     *g_utf16_to_utf8 (const gunichar2 *str, glong len, glong *items_read, glong *items_written, GError **error);
 gunichar2 *g_ucs4_to_utf16 (const gunichar *str, glong len, glong *items_read, glong *items_written, GError **error);
@@ -765,6 +801,15 @@ gboolean         g_markup_parse_context_end_parse (GMarkupParseContext *context,
 /*
  * Character set conversion
  */
+/*
+* Index into the table below with the first byte of a UTF-8 sequence to
+* get the number of trailing bytes that are supposed to follow it.
+* Note that *legal* UTF-8 values can't have 4 or 5-bytes. The table is
+* left as-is for anyone who may want to do such conversion, which was
+* allowed in earlier algorithms.
+*/
+extern const gchar g_trailingBytesForUTF8[256];
+
 gboolean  g_get_charset        (G_CONST_RETURN char **charset);
 gchar    *g_locale_to_utf8     (const gchar *opsysstring, gssize len,
 				gsize *bytes_read, gsize *bytes_written,
@@ -777,6 +822,9 @@ gchar    *g_convert            (const gchar *str, gssize len,
 				const gchar *to_codeset, const gchar *from_codeset,
 				gsize *bytes_read, gsize *bytes_written, GError **error);
 gboolean  g_utf8_validate      (const gchar *str, gssize max_len, const gchar **end);
+gunichar  g_utf8_get_char      (const gchar *src);
+glong     g_utf8_strlen        (const gchar *str, gssize max);
+#define   g_utf8_next_char(p) p + (g_trailingBytesForUTF8[(guchar)(*p)] + 1)
 
 /*
  * Empty thread functions, not used by eglib
@@ -827,5 +875,6 @@ gboolean  g_utf8_validate      (const gchar *str, gssize max_len, const gchar **
 #define GLIB_CHECK_VERSION(a,b,c) ((a < _EGLIB_MAJOR) || (a == _EGLIB_MAJOR && (b < _EGLIB_MIDDLE || (b == _EGLIB_MIDDLE && c <= _EGLIB_MINOR))))
  
 #endif
+
 
 

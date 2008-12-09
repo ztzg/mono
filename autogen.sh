@@ -82,7 +82,7 @@ if test "$DIE" -eq 1; then
   exit 1
 fi
 
-if test -z "$*"; then
+if test x$NOCONFIGURE = x && test -z "$*"; then
   echo "**Warning**: I am going to run \`configure' with no arguments."
   echo "If you wish to pass any to it, please specify them on the"
   echo \`$0\'" command line."
@@ -103,8 +103,8 @@ if grep "^AM_PROG_LIBTOOL" configure.in >/dev/null; then
   fi
 fi
 
-echo "Running aclocal $ACLOCAL_FLAGS ..."
-aclocal $ACLOCAL_FLAGS || {
+echo "Running aclocal -I . $ACLOCAL_FLAGS ..."
+aclocal -I . $ACLOCAL_FLAGS || {
   echo
   echo "**Error**: aclocal failed. This may mean that you have not"
   echo "installed all of the packages you need, or you may need to"

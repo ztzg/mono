@@ -92,7 +92,7 @@ call_reg: dest:z src1:i clob:c len:18
 throw: src1:i len:20
 move: dest:i src1:i len:2
 start_handler: clob:t len:6
-endfilter: src1:i dest:z clob:t len:12
+endfilter: src1:i clob:t len:12
 endfinally: clob:t len:10
 br: clob:t len:16
 sh4_bt: clob:t len:18

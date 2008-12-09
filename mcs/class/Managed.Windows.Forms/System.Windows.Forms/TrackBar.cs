@@ -174,7 +174,7 @@ namespace System.Windows.Forms
 		}
 
 #if NET_2_0
-		public new event EventHandler RightToLeftLayoutChanged {
+		public event EventHandler RightToLeftLayoutChanged {
 			add {Events.AddHandler (RightToLeftLayoutChangedEvent, value);}
 			remove {Events.RemoveHandler (RightToLeftLayoutChangedEvent, value);}
 		}
@@ -277,7 +277,7 @@ namespace System.Windows.Forms
 #if NET_2_0
 		public override bool AutoSize {
 #else
-		public new bool AutoSize {
+		public bool AutoSize {
 #endif
 			get { return autosize; }
 			set { autosize = value;}

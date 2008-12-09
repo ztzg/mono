@@ -682,7 +682,7 @@ namespace Mono.Cecil {
 			} else
 				et = GetCorrespondingType (type.FullName);
 
-			if (et == ElementType.Object || et == ElementType.Type)
+			if (et == ElementType.Object || et == ElementType.Type || et == ElementType.String)
 				et = hc.Constant == null ?
 					ElementType.Class :
 					GetCorrespondingType (hc.Constant.GetType ().FullName);
@@ -1502,22 +1502,7 @@ namespace Mono.Cecil {
 			if (!meth.HasBody)
 				return;
 
-			m_symbolWriter.Write (meth.Body, GetVariablesSig (meth));
-		}
-
-		byte [][] GetVariablesSig (MethodDefinition meth)
-		{
-			VariableDefinitionCollection variables = meth.Body.Variables;
-			byte [][] signatures = new byte [variables.Count][];
-			for (int i = 0; i < variables.Count; i++) {
-				signatures [i] = GetVariableSig (variables [i]);
-			}
-			return signatures;
-		}
-
-		byte [] GetVariableSig (VariableDefinition var)
-		{
-			return m_sigWriter.CompressLocalVar (m_codeWriter.GetLocalVariableSig (var));
+			m_symbolWriter.Write (meth.Body);
 		}
 	}
 }

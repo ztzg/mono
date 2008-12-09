@@ -1,3 +1,99 @@
+2008-11-20  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r119444.
+	
+	* arm/Makefile.am (libmonoarch_arm_la_SOURCES): Don't build tramp.c, it is only
+	used by the interpreter.
+
+2008-11-04  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add store nta.
+
+2008-11-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add prefetch instruction
+	and x86_sse_alu_reg_membase macro.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add long version of the packed integer
+	ops.
+
+2008-10-27  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add movddup.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add signed pack with saturation.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add signed packed mul high.
+
+2008-10-23  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add signed packed max, min, add/sub with saturation
+	and compare greater.
+
+2008-10-20  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add multiply and store high.
+
+2008-10-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add packed int shuffle.
+
+2008-10-16  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add packed int compare equals and
+	psabw.
+
+2008-10-15  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add packed int max/min/avg/shuffle and extract mask.
+
+2008-10-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add movsldup and movshdup.
+
+2008-10-13  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add remaining FP sse1 ops.
+	Add sse ps encoding with imm operand.
+	Add remaining sse1 ops.
+
+2008-10-12  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add macro for sse41 ops.
+	Add defined for pack ops, dword shifts/mul/pack.
+
+2008-10-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* amd64/amd64-codegen.h (amd64_jump_code_size): Fix the 64 bit support.
+
+2008-10-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* amd64/amd64-codegen.h (amd64_jump_code_size): Handle non 32-bit targets.
+
+2008-10-09  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add macros for sse shift, pack, unpack,
+	saturated math and packed byte/word/dword math.
+
+2008-10-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add macros for SSE instructions.
+
+2008-09-27  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: A few typecasts to fix compiler warnings.
+
+2008-09-07  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h (ppc_load): Inserted cast to fix some
+	warnings.
+
 2008-06-16  Mark Probst  <mark.probst@gmail.com>
 
 	* amd64/amd64-codegen.h: Removed extraneous parenthesis in a macro

@@ -1,8 +1,17 @@
+2008-11-06  Jonathan Chambers  <joncham@gmail.com>
+
+	* MonoIO.cs : Add DuplicateHandle.
+
+2008-10-02 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* InotifyWatcher.cs: IN_CLOSE_WRITE is triggered when a writable file is
+	closed, but that does not mean that the file was actually modified.
+	Fixes bug #323188.
+
 2008-09-08  Rodrigo Kumpera  <rkumpera@novell.com>
 
 	* InotifyWatcher.cs: Really fix #359181.
-	(Ported from trunk)
-	
+
 2008-09-01  Dick Porter  <dick@ximian.com>
 
 	* InotifyWatcher.cs: Revert fix for bug 322330, as it is somehow

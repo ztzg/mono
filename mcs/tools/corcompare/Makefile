@@ -4,7 +4,7 @@ include ../../build/rules.make
 
 ALL_PROGRAMS = $(topdir)/class/lib/$(PROFILE)/mono-api-info.exe
 
-ifeq (default, $(PROFILE))
+ifeq (net_1_1, $(PROFILE))
 ALL_PROGRAMS += CorCompare.exe mono-api-info.exe mono-api-diff.exe transform.exe
 endif
 
@@ -33,6 +33,8 @@ APIDIFF_SOURCES = mono-api-diff.cs
 DISTFILES= $(CORCOMPARE_SOURCES) $(APIINFO_SOURCES) $(APIDIFF_SOURCES) cormissing.xsl mono-api.xsl transform.cs
 
 all-local: $(ALL_PROGRAMS)
+
+doc-update-local:
 
 install-local: $(ALL_PROGRAMS)
 	$(MKINSTALLDIRS) $(DESTDIR)$(PROGRAM_INSTALL_DIR)
@@ -66,7 +68,7 @@ $(topdir)/class/lib/$(PROFILE)/mono-api-info.exe: $(APIINFO_SOURCES)
 mono-api-info.exe: $(topdir)/class/lib/$(PROFILE)/mono-api-info.exe
 	cp $< $@
 	-cp $<.mdb $@.mdb
-	
+
 transform.exe: transform.cs
 	$(CSCOMPILE) -out:$@ $^
-	
+

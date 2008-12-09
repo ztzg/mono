@@ -132,6 +132,7 @@ struct MonoLMF {
 typedef struct ucontext MonoContext;
 
 typedef struct MonoCompileArch {
+	int bkchain_reg;
 } MonoCompileArch;
 
 typedef struct
@@ -159,14 +160,13 @@ typedef struct
 #define MONO_ARCH_HAVE_ATOMIC_ADD 1
 #define MONO_ARCH_HAVE_ATOMIC_EXCHANGE 1
 #define MONO_ARCH_ENABLE_NORMALIZE_OPCODES 1
+#define MONO_ARCH_HAVE_DECOMPOSE_OPTS 1
+#define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 // #define MONO_ARCH_SIGSEGV_ON_ALTSTACK		1
 // #define MONO_ARCH_SIGNAL_STACK_SIZE		65536
 // #define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION	1
 
 #define MONO_ARCH_USE_SIGACTION 	1
-// #define CUSTOM_STACK_WALK 		1
-// #define CUSTOM_EXCEPTION_HANDLING 	1
-// #define mono_find_jit_info 		mono_arch_find_jit_info
 
 #define S390_STACK_ALIGNMENT		 8
 #define S390_FIRST_ARG_REG 		s390_r2
@@ -183,12 +183,13 @@ typedef struct
 /* Definitions used by mini-codegen.c            */
 /*===============================================*/
 
-/*--------------------------------------------*/
-/* use s390_r2-s390_r6 as parm registers      */
-/* s390_r0, s390_r1, s390_r13 used internally */
-/* s390_r15 is the stack pointer              */
-/*--------------------------------------------*/
-#define MONO_ARCH_CALLEE_REGS (0x1ffc)
+/*-----------------------------------------------------*/
+/* use s390_r2-s390_r6 as parm registers               */
+/* s390_r0, s390_r1, s390_r12, s390_r13 used internally*/
+/* s390_r8..s390_r11 are used for global regalloc      */
+/* s390_r15 is the stack pointer                       */
+/*-----------------------------------------------------*/
+#define MONO_ARCH_CALLEE_REGS (0xfc)
 
 #define MONO_ARCH_CALLEE_SAVED_REGS 0xff80
 
@@ -221,7 +222,6 @@ typedef struct
 #define MONO_ARCH_FRAME_ALIGNMENT 4
 #define MONO_ARCH_CODE_ALIGNMENT 32
 
-#define MONO_ARCH_BASEREG s390_r15
 #define MONO_ARCH_RETREG1 s390_r2
 
 /*-----------------------------------------------*/

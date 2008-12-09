@@ -80,6 +80,13 @@ endif
 mono_SOURCES = \
 	main.c
 
+# We build this after libmono was built so it contains the date when the final
+# link was done
+buildver.h: libmono-static.la
+	@echo "const char *build_date = \"`date`\";" > buildver.h
+
+main.$(OBJEXT): buildver.h
+
 if DTRACE_G_REQUIRED
 LIBMONO_DTRACE_OBJECT = .libs/mono-dtrace.$(OBJEXT)
 if STATIC_MONO
@@ -213,6 +220,9 @@ sh4_sources = \
 
 common_sources = \
 	mini.c		\
+	ir-emit.h	\
+	method-to-ir.c	\
+	decompose.c	\
 	mini.h		\
 	version.h	\
 	optflags-def.h		\
@@ -253,7 +263,16 @@ common_sources = \
 	declsec.h	\
 	wapihandles.c	\
 	branch-opts.c	\
-	generic-sharing.c
+	generic-sharing.c	\
+	ssa2.c	\
+	abcremoval2.c	\
+	regalloc2.c	\
+	simd-methods.h	\
+	simd-intrinsics.c \
+	trivial-return_int.cs	\
+	trivial-add_int.cs	\
+	trivial-fibonacci.cs	\
+	trivial-outarg.cs
 
 test_sources = 		\
 	basic-calls.cs 	\
@@ -269,11 +288,8 @@ test_sources = 		\
 	iltests.il.in		\
 	test.cs			\
 	generics.cs	\
-	generics-variant-types.il \
-	trivial-return_int.cs	\
-	trivial-add_int.cs	\
-	trivial-fibonacci.cs	\
-	trivial-outarg.cs
+	generics-variant-types.il	\
+	basic-simd.cs
 
 if MONO_DEBUGGER_SUPPORTED
 if AMD64
@@ -288,7 +304,7 @@ else
 mono_debugger_sources =
 endif
 
-regtests=basic.exe basic-float.exe basic-long.exe basic-calls.exe objects.exe arrays.exe basic-math.exe exceptions.exe iltests.exe devirtualization.exe generics.exe bench.exe
+regtests=basic.exe basic-float.exe basic-long.exe basic-calls.exe objects.exe arrays.exe basic-math.exe exceptions.exe iltests.exe devirtualization.exe generics.exe basic-simd.exe
 
 common_BURGSRC= $(srcdir)/inssel.brg $(srcdir)/inssel-float.brg
 
@@ -310,6 +326,13 @@ if POWERPC
 arch_sources = $(ppc_sources)
 arch_BURGSRC= $(srcdir)/inssel-long32.brg $(srcdir)/inssel-ppc.brg
 arch_built=cpu-ppc.h
+arch_define=__ppc__
+endif
+
+if POWERPC64
+arch_sources = $(ppc_sources)
+arch_BURGSRC= $(srcdir)/inssel-long.brg $(srcdir)/inssel-ppc.brg
+arch_built=cpu-ppc64.h
 arch_define=__ppc__
 endif
 
@@ -388,7 +411,11 @@ endif
 
 libmono_la_SOURCES = $(common_sources) $(arch_sources)
 
+if DISABLE_JIT
+nodist_libmono_la_SOURCES = inssel.h
+else
 nodist_libmono_la_SOURCES = inssel.c inssel.h
+endif
 
 libmono_static_la_SOURCES = $(libmono_la_SOURCES)
 nodist_libmono_static_la_SOURCES = $(nodist_libmono_la_SOURCES)
@@ -403,6 +430,9 @@ libmonoinclude_HEADERS = jit.h
 
 libmono_la_LIBADD = \
 	$(libs) $(LIBMONO_DTRACE_OBJECT)
+
+basic-simd.exe: basic-simd.cs
+	$(MCS) -out:$@ $< -r:TestDriver.dll -r:Mono.Simd.dll
 
 generics.exe: generics.cs TestDriver.dll generics-variant-types.dll
 	$(MCS) -out:$@ $< -r:TestDriver.dll -r:generics-variant-types.dll
@@ -431,7 +461,7 @@ generics-variant-types.dll: generics-variant-types.il
 # $(arch_define) is the preprocessor symbol that enables all the opcodes
 # for the specific platform in mini-ops.h
 if CROSS_COMPILING
-GENMDESC_PRG=perl genmdesc.pl $(arch_define) $(srcdir)
+GENMDESC_PRG=perl $(srcdir)/genmdesc.pl $(arch_define) $(srcdir)
 else !CROSS_COMPILING
 GENMDESC_PRG=./genmdesc
 endif !CROSS_COMPILING
@@ -444,6 +474,9 @@ cpu-amd64.h: cpu-amd64.md genmdesc$(EXEEXT)
 
 cpu-ppc.h: cpu-ppc.md genmdesc$(EXEEXT)
 	$(GENMDESC_PRG) $(srcdir)/cpu-ppc.md cpu-ppc.h ppcg4
+
+cpu-ppc64.h: cpu-ppc64.md genmdesc$(EXEEXT)
+	$(GENMDESC_PRG) $(srcdir)/cpu-ppc64.md cpu-ppc64.h ppcg4
 
 cpu-arm.h: cpu-arm.md genmdesc$(EXEEXT)
 	$(GENMDESC_PRG) $(srcdir)/cpu-arm.md cpu-arm.h arm_cpu_desc
@@ -489,7 +522,8 @@ rcheck: mono $(regtests)
 	$(RUNTIME) --regression $(regtests)
 
 aotcheck: mono $(regtests)
-	for i in $(regtests); do $(RUNTIME) --aot $$i || exit 1; done
+	rm -f *.exe.so
+	$(RUNTIME) --aot $(regtests) || exit 1
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
 
@@ -542,7 +576,7 @@ docu: mini.sgm
 check-local: rcheck
 
 clean-local:
-	rm -f mono a.out gmon.out *.o test.exe
+	rm -f mono a.out gmon.out *.o buildver.h test.exe
 
 pkgconfigdir = $(libdir)/pkgconfig
 

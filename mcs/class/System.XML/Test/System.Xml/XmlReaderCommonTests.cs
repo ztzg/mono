@@ -2054,6 +2054,59 @@ namespace MonoTests.System.Xml
 			AssertEquals ("#1", XmlNodeType.EndElement, reader.NodeType);
 			AssertEquals ("#2", "item-list", reader.Name);
 		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))]
+		public void ReadSubtreeOnNonElement ()
+		{
+			string xml = @"<x> <y/></x>";
+			XmlReader r = XmlReader.Create (new StringReader (xml));
+			r.Read (); // x
+			r.Read (); // ws
+			r.ReadSubtree ();
+		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))]
+		public void ReadSubtreeOnNonElement2 ()
+		{
+			string xml = @"<x> <y/></x>";
+			XmlReader r = XmlReader.Create (new StringReader (xml));
+			r.ReadSubtree ();
+		}
+
+		public void ReadSubtreeEmptyElement ()
+		{
+			string xml = @"<x/>";
+			XmlReader r = XmlReader.Create (new StringReader (xml));
+			r.Read ();
+			XmlReader s = r.ReadSubtree ();
+			Assert ("#1", s.Read ());
+			AssertEquals ("#2", XmlNodeType.Element, s.NodeType);
+			Assert ("#3", !s.Read ());
+			AssertEquals ("#4", XmlNodeType.None, s.NodeType);
+		}
+
+		public void ReadSubtreeEmptyElementWithAttribute ()
+		{
+			string xml = @"<root><x a='b'/></root>";
+			XmlReader r = XmlReader.Create (new StringReader (xml));
+			r.Read ();
+			r.Read ();
+			XmlReader r2 = r.ReadSubtree ();
+			Console.WriteLine ("X");
+			r2.Read ();
+			XmlReader r3 = r2.ReadSubtree ();
+			r2.MoveToFirstAttribute ();
+			Assert ("#1", !r.IsEmptyElement);
+			Assert ("#2", !r2.IsEmptyElement);
+			r3.Close ();
+			Assert ("#3", r.IsEmptyElement);
+			Assert ("#4", r2.IsEmptyElement);
+			r2.Close ();
+			Assert ("#5", r.IsEmptyElement);
+			Assert ("#6", r2.IsEmptyElement);
+		}
 #endif
 	}
 }

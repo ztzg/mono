@@ -195,6 +195,7 @@ namespace System.Windows.Forms {
 			updown_timer.Tick += new EventHandler (UpDownTimerTick);
 			KeyPress += new KeyPressEventHandler (KeyPressHandler);
 			KeyDown += new KeyEventHandler (KeyDownHandler);
+			GotFocus += new EventHandler (GotFocusHandler);
 			LostFocus += new EventHandler (LostFocusHandler);
 			MouseDown += new MouseEventHandler (MouseDownHandler);			
 			MouseUp += new MouseEventHandler (MouseUpHandler);
@@ -1276,7 +1277,9 @@ namespace System.Windows.Forms {
 			if (selected_index == -1) {
 				return;
 			}
-			
+
+			EndDateEdit (false);
+
 			DateTimePart dt_part = part_data [selected_index].date_time_part;
 			switch (dt_part)
 			{
@@ -1296,6 +1299,7 @@ namespace System.Windows.Forms {
 				case DateTimePart.DayName:
 					Value = Value.AddDays(delta);
 					break;
+				case DateTimePart.AMPMHour:
 				case DateTimePart.Hour:
 					SetPart(Value.Hour + delta, dt_part);
 					break;
@@ -1309,7 +1313,9 @@ namespace System.Windows.Forms {
 					SetPart(Value.Second + delta, dt_part);
 					break;
 				case DateTimePart.AMPMSpecifier:
-					SetPart(Value.Hour + delta * 12, dt_part);
+					int hour = Value.Hour;
+					hour = hour >= 0 && hour <= 11 ? hour + 12 : hour - 12;
+					SetPart (hour, DateTimePart.Hour);
 					break;
 				case DateTimePart.Year:
 					SetPart(Value.Year + delta, dt_part);
@@ -1477,10 +1483,8 @@ namespace System.Windows.Forms {
 		{
 			switch (e.KeyChar) {
 				case ' ':
-					if (is_checkbox_selected)
-					{
+					if (show_check_box && is_checkbox_selected)
 						Checked = !Checked;
-					}
 					break;
 				case '0':
 				case '1':
@@ -1514,6 +1518,7 @@ namespace System.Windows.Forms {
 						case DateTimePart.Month:
 						case DateTimePart.Seconds:
 						case DateTimePart.Minutes:
+						case DateTimePart.AMPMHour:
 						case DateTimePart.Hour:
 							date_part_max_length = 2;
 							break;
@@ -1539,11 +1544,7 @@ namespace System.Windows.Forms {
 			if (editing_part_index == -1)
 				return;
 
-			int prev_selected_idx = GetSelectedPartIndex ();
-			if (prev_selected_idx == -1)
-				return;
-
-			PartData part = part_data [prev_selected_idx];
+			PartData part = part_data [editing_part_index];
 			if (part.date_time_part == DateTimePart.Year) { // Special case
 				// Infer, like .Net does
 				if (editing_number > 0 && editing_number < 30)
@@ -1576,6 +1577,16 @@ namespace System.Windows.Forms {
 						value = 59;
 					if (value >= 0 && value <= 59)
 						Value = new DateTime(Value.Year, Value.Month, Value.Day, Value.Hour, value, Value.Second, Value.Millisecond);
+					break;
+				case DateTimePart.AMPMHour:
+					if (value == -1)
+						value = 23;
+					if (value >= 0 && value <= 23) {
+						int prev_hour = Value.Hour;
+						if ((prev_hour >= 12 && prev_hour <= 23) && value < 12) // Adjust to p.m.
+							value += 12;
+						Value = new DateTime (Value.Year, Value.Month, Value.Day, value, Value.Minute, Value.Second, Value.Millisecond);
+					}
 					break;
 				case DateTimePart.Hour:
 					if (value == -1)
@@ -1614,6 +1625,14 @@ namespace System.Windows.Forms {
 							Value = new DateTime (value, Value.Month, Value.Day, Value.Hour, Value.Minute, Value.Second, Value.Millisecond);
 					}
 					break;
+			}
+		}
+
+		private void GotFocusHandler (object sender, EventArgs e)
+		{
+			if (ShowCheckBox) {
+				is_checkbox_selected = true;
+				Invalidate (CheckBoxRect);
 			}
 		}
 
@@ -1682,8 +1701,6 @@ namespace System.Windows.Forms {
 			if (e.Button != MouseButtons.Left)
 				return;
 
-			is_checkbox_selected = false;
-
 			if (ShowCheckBox && CheckBoxRect.Contains(e.X, e.Y))
 			{
 				is_checkbox_selected = true;
@@ -1691,6 +1708,10 @@ namespace System.Windows.Forms {
 				return;
 			}
 
+			// Deselect the checkbox only if the pointer is not on it
+			// *and* the other parts are enabled (Checked as true)
+			if (Checked)
+				is_checkbox_selected = false;
 
 			if (ShowUpDown && drop_down_arrow_rect.Contains (e.X, e.Y))
 			{
@@ -1783,6 +1804,7 @@ namespace System.Windows.Forms {
 		internal enum DateTimePart {
 			Seconds,
 			Minutes,
+			AMPMHour,
 			Hour,
 			Day,
 			DayName,
@@ -1849,9 +1871,7 @@ namespace System.Windows.Forms {
 					if (value == is_selected)
 						return;
 
-					if (is_selected)
-						owner.EndDateEdit (false);
-
+					owner.EndDateEdit (false);
 					is_selected = value;
 				}
 			}
@@ -1877,6 +1897,7 @@ namespace System.Windows.Forms {
 						return DateTimePart.Minutes;
 					case "h":
 					case "hh":
+						return DateTimePart.AMPMHour;
 					case "H":
 					case "HH":
 						return DateTimePart.Hour;

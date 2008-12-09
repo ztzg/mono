@@ -514,8 +514,8 @@ namespace System.Web {
 				return ret;
 			
 			if (AppGlobalResourcesAssembly == null)
-				throw new MissingManifestResourceException ();
-			
+				return null;
+
 			return GetResourceObject ("Resources." + classKey, resourceKey, culture, AppGlobalResourcesAssembly);
 		}
 
@@ -547,7 +547,7 @@ namespace System.Web {
 			return WebConfigurationManager.GetSection (name);
 		}
 
-		private sealed class ResourceManagerCacheKey
+		sealed class ResourceManagerCacheKey
 		{
 			readonly string _name;
 			readonly Assembly _asm;
@@ -652,12 +652,18 @@ namespace System.Web {
 #endif
 		void RewritePath (string filePath, string pathInfo, string queryString, bool setClientFilePath)
 		{
-			if (UrlUtils.IsRooted (filePath))
-				filePath = UrlUtils.Combine (Request.BaseVirtualDir, UrlUtils.Canonic (filePath).Substring (1));
+			if (filePath == null)
+				throw new ArgumentNullException ("filePath");
+			if (!VirtualPathUtility.IsValidVirtualPath (filePath))
+				throw new HttpException ("'" + HttpUtility.HtmlEncode (filePath) + "' is not a valid virtual path.");
+
+			if (VirtualPathUtility.IsRooted (filePath))
+				filePath = VirtualPathUtility.Combine (Request.BaseVirtualDir, VirtualPathUtility.Canonize (filePath).Substring (1));
 			else
-				filePath = UrlUtils.Combine (UrlUtils.GetDirectory (Request.FilePath), filePath);
+				filePath = VirtualPathUtility.Combine (VirtualPathUtility.GetDirectory (Request.FilePath), filePath);
+
 			if (!StrUtils.StartsWith (filePath, HttpRuntime.AppDomainAppVirtualPath))
-				throw new HttpException (404, "The virtual path '" + filePath + "' maps to another application.", filePath);
+				throw new HttpException (404, "The virtual path '" + HttpUtility.HtmlEncode (filePath) + "' maps to another application.", filePath);
 
 			Request.SetCurrentExePath (filePath);
 			if (setClientFilePath)

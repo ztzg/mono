@@ -34,6 +34,7 @@ System.Web/CapabilitiesLoader.cs
 System.Web/BrowserCapabilities.cs
 System.Web.Compilation/ApplicationFileBuildProvider.cs
 System.Web.Compilation/AppSettingsExpressionBuilder.cs
+System.Web.Compilation/AspComponent.cs
 System.Web.Compilation/AspComponentFoundry.cs
 System.Web.Compilation/AppCodeCompiler.cs
 System.Web.Compilation/AppResourceFileInfo.cs
@@ -48,6 +49,7 @@ System.Web.Compilation/AssemblyBuilder.cs
 System.Web.Compilation/BaseCompiler.cs
 System.Web.Compilation/BuildDependencySet.cs
 System.Web.Compilation/BuildManager.cs
+System.Web.Compilation/BuildManagerRemoveEntryEventHandler.cs
 System.Web.Compilation/BuildManagerHostUnloadEventArgs.cs
 System.Web.Compilation/BuildManagerHostUnloadEventHandler.cs
 System.Web.Compilation/BuildProviderAppliesToAttribute.cs
@@ -194,6 +196,7 @@ System.Web.Configuration_2.0/MachineKeySection.cs
 System.Web.Configuration_2.0/MachineKeySectionUtils.cs
 System.Web.Configuration_2.0/MachineKeyValidationConverter.cs
 System.Web.Configuration_2.0/MembershipSection.cs
+System.Web.Configuration_2.0/MonoSettingsSection.cs
 System.Web.Configuration_2.0/NamespaceCollection.cs
 System.Web.Configuration_2.0/NamespaceInfo.cs
 System.Web.Configuration_2.0/NullableStringValidator.cs
@@ -527,6 +530,7 @@ System.Web.UI/Control.cs
 System.Web.UI/ControlSkin.cs
 System.Web.UI/ControlSkinDelegate.cs
 System.Web.UI/ControlValuePropertyAttribute.cs
+System.Web.UI/CssClassPropertyAttribute.cs
 System.Web.UI/CssStyleCollection.cs
 System.Web.UI/DataBinder.cs
 System.Web.UI/DataBindingBuilder.cs
@@ -594,6 +598,8 @@ System.Web.UI/HtmlTextWriter.cs
 System.Web.UI/HtmlTextWriterStyle.cs
 System.Web.UI/HtmlTextWriterTag.cs
 System.Web.UI/IAttributeAccessor.cs
+System.Web.UI/IAutoFieldGenerator.cs
+System.Web.UI/IBindableControl.cs
 System.Web.UI/IBindableTemplate.cs
 System.Web.UI/ICallbackEventHandler.cs
 System.Web.UI/ICheckBoxControl.cs
@@ -614,6 +620,7 @@ System.Web.UI/IHierarchyData.cs
 System.Web.UI/ImageClickEventArgs.cs
 System.Web.UI/ImageClickEventHandler.cs
 System.Web.UI/INamingContainer.cs
+System.Web.UI/INonBindingContainer.cs
 System.Web.UI/INavigateUIData.cs
 System.Web.UI/IParserAccessor.cs
 System.Web.UI/IPostBackDataHandler.cs
@@ -771,6 +778,7 @@ System.Web.UI.WebControls/CreateUserWizard.cs
 System.Web.UI.WebControls/CreateUserWizardStep.cs
 System.Web.UI.WebControls/CustomValidator.cs
 System.Web.UI.WebControls/DataBoundControl.cs
+System.Web.UI.WebControls/DataBoundControlMode.cs
 System.Web.UI.WebControls/DataControlButton.cs
 System.Web.UI.WebControls/DataControlCellType.cs
 System.Web.UI.WebControls/DataControlCommands.cs
@@ -912,6 +920,7 @@ System.Web.UI.WebControls/ImageField.cs
 System.Web.UI.WebControls/ImageMap.cs
 System.Web.UI.WebControls/ImageMapEventArgs.cs
 System.Web.UI.WebControls/ImageMapEventHandler.cs
+System.Web.UI.WebControls/IPersistedSelector.cs
 System.Web.UI.WebControls/IPostBackContainer.cs
 System.Web.UI.WebControls/IRepeatInfoUser.cs
 System.Web.UI.WebControls/LabelControlBuilder.cs

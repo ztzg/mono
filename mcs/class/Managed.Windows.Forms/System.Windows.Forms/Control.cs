@@ -108,6 +108,7 @@ namespace System.Windows.Forms
 		internal                BorderStyle		border_style;		// Border style of control
 		bool                    show_keyboard_cues; // Current keyboard cues 
 		internal bool           show_focus_cues; // Current focus cues 
+		internal bool		force_double_buffer;	// Always doublebuffer regardless of ControlStyle
 
 		// Layout
 		internal enum LayoutType {
@@ -811,9 +812,6 @@ namespace System.Windows.Forms
 				owner.UpdateChildrenZOrder ();
 			}
 
-#if NET_2_0
-			new
-#endif
 			public void RemoveAt (int index)
 			{
 				if (index < 0 || index >= list.Count)
@@ -982,7 +980,7 @@ namespace System.Windows.Forms
 
 			#endregion // ControlCollection Interface Methods
 		
-			private class ControlCollectionEnumerator : IEnumerator
+			internal class ControlCollectionEnumerator : IEnumerator
 			{
 				private ArrayList list;
 				int position = -1;
@@ -1055,6 +1053,7 @@ namespace System.Windows.Forms
 			use_compatible_text_rendering = true;
 			show_keyboard_cues = false;
 			show_focus_cues = SystemInformation.MenuAccessKeysUnderlined;
+			use_wait_cursor = false;
 
 #if NET_2_0
 			backgroundimage_layout = ImageLayout.Tile;
@@ -1097,10 +1096,6 @@ namespace System.Windows.Forms
 		public Control (Control parent, string text, int left, int top, int width, int height) : this()
 		{
 			Parent=parent;
-			bounds.X=left;
-			bounds.Y=top;
-			bounds.Width=width;
-			bounds.Height=height;
 			SetBounds(left, top, width, height, BoundsSpecified.All);
 			Text=text;
 		}
@@ -1112,10 +1107,6 @@ namespace System.Windows.Forms
 
 		public Control (string text, int left, int top, int width, int height) : this()
 		{
-			bounds.X=left;
-			bounds.Y=top;
-			bounds.Width=width;
-			bounds.Height=height;
 			SetBounds(left, top, width, height, BoundsSpecified.All);
 			Text=text;
 		}
@@ -1153,7 +1144,22 @@ namespace System.Windows.Forms
 		#endregion 	// Public Constructors
 
 		#region Internal Properties
-		
+
+		internal Rectangle PaddingClientRectangle
+		{
+			get {
+#if NET_2_0
+				return new Rectangle (
+					ClientRectangle.Left   + padding.Left,
+					ClientRectangle.Top    + padding.Top, 
+					ClientRectangle.Width  - padding.Horizontal, 
+					ClientRectangle.Height - padding.Vertical);
+#else
+				return ClientRectangle;
+#endif
+			}
+		}
+
 		private MenuTracker active_tracker;
 		
 		internal MenuTracker ActiveTracker {
@@ -1445,6 +1451,8 @@ namespace System.Windows.Forms
 			container = GetContainerControl();
 			if (container != null && (Control)container != control) {
 				container.ActiveControl = control;
+				if (container.ActiveControl == control && !control.has_focus && control.IsHandleCreated)
+					XplatUI.SetFocus(control.window.Handle);
 			}
 			else if (control.IsHandleCreated) {
 				XplatUI.SetFocus(control.window.Handle);
@@ -2010,6 +2018,12 @@ namespace System.Windows.Forms
 				if (!ThemeEngine.Current.DoubleBufferingSupported)
 					return false;
 
+				// Since many of .Net's controls are unmanaged, they are doublebuffered
+				// even though their bits may not be set in managed land.  This allows
+				// us to doublebuffer as well without affecting public style bits.
+				if (force_double_buffer)
+					return true;
+					
 #if NET_2_0
 				if (DoubleBuffered)
 					return true;
@@ -2735,15 +2749,25 @@ namespace System.Windows.Forms
 		
 		public void DrawToBitmap (Bitmap bitmap, Rectangle targetBounds)
 		{
-			Bitmap b = new Bitmap (Width, Height);
-			Graphics g = Graphics.FromImage (b);
+			Graphics g = Graphics.FromImage (bitmap);
 			
-			OnPaint (new PaintEventArgs (g, targetBounds));
+			// Only draw within the target bouds, and up to the size of the control
+			g.IntersectClip (targetBounds);
+			g.IntersectClip (Bounds);
 			
-			using (Graphics g2 = Graphics.FromImage (bitmap))
-				g2.DrawImage (b, targetBounds);
+			// Logic copied from WmPaint
+			PaintEventArgs pea = new PaintEventArgs (g, targetBounds);
 			
-			b.Dispose ();
+			if (!GetStyle (ControlStyles.Opaque))
+				OnPaintBackground (pea);
+
+			OnPaintBackgroundInternal (pea);
+
+			OnPaintInternal (pea);
+
+			if (!pea.Handled)
+				OnPaint (pea);
+			
 			g.Dispose ();
 		}
 #endif
@@ -2820,7 +2844,7 @@ namespace System.Windows.Forms
 
 			[param:MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef=typeof(Font))]
 			set {
-				if (font != null && font.Equals (value)) {
+				if (font != null && font == value) {
 					return;
 				}
 
@@ -5240,7 +5264,16 @@ namespace System.Windows.Forms
 			// basically what we need to guard against is
 			// calling XplatUI.SetZOrder on an hwnd that
 			// corresponds to an unmapped X window.
-			controls = child_controls.GetAllControls ();
+			//
+			// Also, explicitly send implicit controls to the back.
+			if (child_controls.ImplicitControls == null) {
+				controls = new Control [child_controls.Count];
+				child_controls.CopyTo (controls, 0);
+			} else {
+				controls = new Control [child_controls.Count + child_controls.ImplicitControls.Count];
+				child_controls.CopyTo (controls, 0);
+				child_controls.ImplicitControls.CopyTo (controls, child_controls.Count);
+			}
 
 			ArrayList children_to_order = new ArrayList ();
 
@@ -5520,7 +5553,12 @@ namespace System.Windows.Forms
 				//}
 				current_buffer.Start (paint_event);
 			}
-				
+#if NET_2_0
+			// If using OptimizedDoubleBuffer, ensure the clip region gets set
+			if (GetStyle (ControlStyles.OptimizedDoubleBuffer))
+				paint_event.Graphics.SetClip (Rectangle.Intersect (paint_event.ClipRectangle, this.ClientRectangle));
+#endif
+
 			if (!GetStyle(ControlStyles.Opaque)) {
 				OnPaintBackground (paint_event);
 			}
@@ -5786,12 +5824,12 @@ namespace System.Windows.Forms
 				
 					// Make sure all our children are properly parented to us
 					Control [] controls = child_controls.GetAllControls ();
-					bool parented = false;
+//					bool parented = false;
 					for (int i=0; i<controls.Length; i++) {
 						if (controls [i].is_visible && controls[i].IsHandleCreated)
 							if (XplatUI.GetParent (controls[i].Handle) != window.Handle) {
 								XplatUI.SetParent(controls[i].Handle, window.Handle);
-								parented = true;
+//								parented = true;
 							}
 
 					}
@@ -6120,9 +6158,8 @@ namespace System.Windows.Forms
 			if (eh != null)
 				eh (this, e);
 
-			for (int i=0; i<child_controls.Count; i++) {
-				child_controls[i].OnParentEnabledChanged(e);
-			}
+			foreach (Control c in Controls.GetAllControls ())
+				c.OnParentEnabledChanged (e);
 		}
 
 		[EditorBrowsable(EditorBrowsableState.Advanced)]

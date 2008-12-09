@@ -120,7 +120,9 @@ namespace System.Windows.Forms
 		}
 
 		public override int GetHashCode () 
-		{ 
+		{
+			if (document == null)
+				return 0;			
 			return document.GetHashCode (); 
 		}
 
@@ -147,7 +149,7 @@ namespace System.Windows.Forms
 				return false;
 			}
 
-			return left.Equals (right); 
+			return left.document.Equals (right.document); 
 		}
 
 		public static bool operator !=(HtmlDocument left, HtmlDocument right) {

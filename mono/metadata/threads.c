@@ -419,9 +419,8 @@ static void
 try_free_delayed_free_item (int index)
 {
 	if (delayed_free_table->len > index) {
-		DelayedFreeItem item;
+		DelayedFreeItem item = { NULL, NULL };
 
-		item.p = NULL;
 		EnterCriticalSection (&delayed_free_table_mutex);
 		/* We have to check the length again because another
 		   thread might have freed an item before we acquired
@@ -593,7 +592,7 @@ static guint32 WINAPI start_wrapper(void *data)
 
 	/* On 2.0 profile (and higher), set explicitly since state might have been
 	   Unknown */
-	if (mono_get_runtime_info ()->framework_version [0] != '1') {
+	if (mono_framework_version () != 1) {
 		if (thread->apartment_state == ThreadApartmentState_Unknown)
 			thread->apartment_state = ThreadApartmentState_MTA;
 	}
@@ -733,6 +732,8 @@ void mono_thread_create_internal (MonoDomain *domain, gpointer func, gpointer ar
 	InitializeCriticalSection (thread->synch_cs);
 
 	thread->threadpool_thread = threadpool_thread;
+	if (threadpool_thread)
+		mono_thread_set_state (thread, ThreadState_Background);
 
 	if (handle_store (thread))
 		ResumeThread (thread_handle);
@@ -1054,16 +1055,8 @@ void ves_icall_System_Threading_Thread_Sleep_internal(gint32 ms)
 	mono_thread_clr_state (thread, ThreadState_WaitSleepJoin);
 }
 
-void ves_icall_System_Threading_Thread_SpinWait_internal (gint32 iterations)
+void ves_icall_System_Threading_Thread_SpinWait_nop (void)
 {
-	gint32 i;
-	
-	for(i = 0; i < iterations; i++) {
-		/* We're busy waiting, but at least we can tell the
-		 * scheduler to let someone else have a go...
-		 */
-		Sleep (0);
-	}
 }
 
 gint32

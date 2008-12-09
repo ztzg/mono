@@ -16,7 +16,7 @@ using NUnit.Framework;
 namespace MonoTests.System.Text.RegularExpressions
 {
 	[TestFixture]
-	public class RegexBugsn
+	public class RegexBugs
 	{
 		[Test] // bug #51146
 		public void SplitGroup ()
@@ -118,6 +118,14 @@ namespace MonoTests.System.Text.RegularExpressions
 			Assert.IsTrue (r.Match(" \0").Success);
 		}
 
+		[Test] // bug #432172
+		public void NoBitmap ()
+		{
+			Regex rx =
+				new Regex ("([^a-zA-Z_0-9])+", RegexOptions.Compiled);
+			Assert.AreEqual ("--", rx.Match ("A--B-").Value);
+		}
+		
 		[Test]
 		public void MultipleMatches()
 		{
@@ -385,6 +393,17 @@ namespace MonoTests.System.Text.RegularExpressions
 		}
 
 		[Test]
+		public void Bug439947 ()
+		{
+			Regex r;
+			r = new Regex ("(?<=^|/)[^/]*\\.cs$", RegexOptions.None);
+			Assert.IsTrue (r.IsMatch ("z/text2.cs"));
+
+			r = new Regex ("(?<=^|/)[^/]*\\.cs$", RegexOptions.Compiled);
+			Assert.IsTrue (r.IsMatch ("z/text2.cs"));
+		}
+
+		[Test]
 		public void CharClassWithIgnoreCase ()
 		{
 			string str = "Foobar qux";
@@ -415,6 +434,13 @@ namespace MonoTests.System.Text.RegularExpressions
 			GroupNumbers_1 ("(a)(b)", 3);
 			GroupNumbers_1 ("(a)|(b)", 3);
 			GroupNumbers_1 ("((a)(b))(c)", 5);
+		}
+
+		[Test]
+		public void Trials ()
+		{
+			foreach (RegexTrial trial in trials)
+				trial.Execute ();
 		}
 
 		[Test]
@@ -491,5 +517,9 @@ namespace MonoTests.System.Text.RegularExpressions
 			new RegexTrial (bug80554_s, RegexOptions.None, "statics", "Pass. Group[0]=(0,6) Group[1]= Group[2]=(0,6)"),
 			new RegexTrial (bug80554_s, RegexOptions.None, "dynamic", "Fail.")
 		};
+
+		static RegexTrial[] trials = {
+			new RegexTrial (@"^[^.\d]*(\d+)(?:\D+(\d+))?", RegexOptions.None, "MD 9.18", "Pass. Group[0]=(0,7) Group[1]=(3,1) Group[2]=(5,2)")
+	    };
 	}
 }

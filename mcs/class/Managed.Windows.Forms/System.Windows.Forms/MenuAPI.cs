@@ -93,7 +93,8 @@ namespace System.Windows.Forms {
 			active = false;
 			popup_active = false;
 			hotkey_active = false;
-			GrabControl.ActiveTracker = null;
+			if (GrabControl != null)
+				GrabControl.ActiveTracker = null;
 			keynav_state = KeyNavState.Idle;
 			if (TopMenu is ContextMenu) {
 				PopUpWindow puw = TopMenu.Wnd as PopUpWindow;
@@ -678,7 +679,9 @@ namespace System.Windows.Forms {
 			// If we get Alt-F4, Windows will ignore it because we have a capture,
 			// release the capture and the program will exit.  (X11 doesn't care.)
 			if ((keyData & Keys.Alt) == Keys.Alt && (keyData & Keys.F4) == Keys.F4) {
-				GrabControl.ActiveTracker = null;
+				if (GrabControl != null)
+					GrabControl.ActiveTracker = null;
+					
 				return false;
 			}
 			
@@ -784,20 +787,17 @@ namespace System.Windows.Forms {
 				break;
 
 			case Keys.Return:
-				if (CurrentMenu is MainMenu) {
-					if (CurrentMenu.SelectedItem != null && CurrentMenu.SelectedItem.IsPopup) {
-						keynav_state = KeyNavState.Navigating;
-						item = CurrentMenu.SelectedItem;
-						ShowSubPopup (CurrentMenu, item);
-						SelectItem (item, item.MenuItems [0], false);
-						CurrentMenu = item;
-						active = true;
-						GrabControl.ActiveTracker = this;
-					}
-					return true;
+				if (CurrentMenu.SelectedItem != null && CurrentMenu.SelectedItem.IsPopup) {
+					keynav_state = KeyNavState.Navigating;
+					item = CurrentMenu.SelectedItem;
+					ShowSubPopup (CurrentMenu, item);
+					SelectItem (item, item.MenuItems [0], false);
+					CurrentMenu = item;
+					active = true;
+					GrabControl.ActiveTracker = this;
+				} else {
+					ExecFocusedItem (CurrentMenu, CurrentMenu.SelectedItem);
 				}
-			
-				ExecFocusedItem (CurrentMenu, CurrentMenu.SelectedItem);
 				break;
 				
 			case Keys.Escape:

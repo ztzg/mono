@@ -297,7 +297,9 @@ static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, s
 		g_assert_not_reached();
 	}
 
-	MONO_INST_LIST_ADD_TAIL(&arg->node, &call->out_args);
+	/* prepend, so they get reversed */
+	arg->next = call->out_args;
+	call->out_args = arg;
 
 	return;
 }
@@ -404,7 +406,9 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 			break;
 		}
 
-		MONO_INST_LIST_ADD_TAIL(&arg->node, &call->out_args);
+		/* prepend, so they get reversed */
+		arg->next = call->out_args;
+		call->out_args = arg;
 	}
 
 	/* Emit the signature cookie in case no implicit arguments are specified. */
@@ -415,6 +419,18 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 
 	if (call_info->stack_align_amount != 0) {
 		; /* TODO - CV */
+	}
+
+	/* Reverse the call->out_args list. */
+	{
+		MonoInst *prev = NULL, *list = call->out_args, *next;
+		while (list) {
+			next = list->next;
+			list->next = prev;
+			prev = list;
+			list = next;
+		}
+		call->out_args = prev;
 	}
 
 	call->stack_usage = call_info->stack_usage;
@@ -1636,7 +1652,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ICOMPARE:
 		case OP_COMPARE_IMM:
 		case OP_ICOMPARE_IMM:
-			next_inst = mono_inst_list_next(&inst->node, &basic_block->ins_list);
+			next_inst = inst->next;
 			g_assert(next_inst != NULL);
 
 			convert_comparison_to_sh4(inst, next_inst);
@@ -1657,7 +1673,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				MONO_INST_NEW(cfg, new_inst, OP_ICONST);
 				new_inst->inst_c0 = inst->inst_imm;
 				new_inst->dreg = mono_regstate_next_int(cfg->rs);
-				MONO_INST_LIST_ADD_TAIL(&(new_inst)->node, &(inst)->node);
+				mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 				inst->sreg2 = new_inst->dreg;
 			}
 			break;
@@ -1665,7 +1681,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ADD_IMM:
 		case OP_IADD_IMM:
 			if(!SH4_CHECK_RANGE_add_imm(inst->inst_imm)) {
-				mono_decompose_op_imm(cfg, inst);
+				mono_decompose_op_imm(cfg, basic_block, inst);
 			}
 			break;
 
@@ -1681,7 +1697,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				 * called by mono_decompose_op_imm().
 				 */
 				inst->opcode = OP_ISUB_IMM;
-				mono_decompose_op_imm(cfg, inst);
+				mono_decompose_op_imm(cfg, basic_block, inst);
 			}
 			break;
 
@@ -1693,7 +1709,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			} else {
 				/* Hack!! See previous comment. */
 				inst->opcode = OP_IOR_IMM;
-				mono_decompose_op_imm(cfg, inst);
+				mono_decompose_op_imm(cfg, basic_block, inst);
 			}
 			break;
 
@@ -1705,7 +1721,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			} else {
 				/* Hack!! See previous comment. */
 				inst->opcode = OP_IXOR_IMM;
-				mono_decompose_op_imm(cfg, inst);
+				mono_decompose_op_imm(cfg, basic_block, inst);
 			}
 			break;
 
@@ -1716,7 +1732,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				inst->opcode = OP_SH4_AND_IMM_R0;
 			}
 			else {
-				mono_decompose_op_imm(cfg, inst);
+				mono_decompose_op_imm(cfg, basic_block, inst);
 			}
 			break;
 
@@ -1731,7 +1747,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				 * called by mono_decompose_op_imm().
 				 */
 				inst->opcode = OP_ISHL_IMM;
-				mono_decompose_op_imm(cfg, inst);
+				mono_decompose_op_imm(cfg, basic_block, inst);
 			}
 			break;
 
@@ -1774,7 +1790,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			MONO_INST_NEW(cfg,new_inst,OP_ICONST);
 			new_inst->inst_c0 = inst->inst_imm;
 			new_inst->dreg = mono_regstate_next_int (cfg->rs);
-			MONO_INST_LIST_ADD_TAIL (&(new_inst)->node, &(inst)->node);
+			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 			inst->opcode = OP_IMUL;
 			inst->sreg2 = new_inst->dreg;
 			break;
@@ -1790,7 +1806,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			MONO_INST_NEW (cfg, new_inst, OP_ICONST);
 			new_inst->inst_c0 = inst->inst_imm;
 			new_inst->dreg = mono_regstate_next_int (cfg->rs);
-			MONO_INST_LIST_ADD_TAIL (&(new_inst)->node, &(inst)->node);
+			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 
 			/* We merge the case STORE_MEMBASE and STOREI4_MEMBASE. */
 			inst->opcode = OP_STORE_MEMBASE_REG;
@@ -1822,8 +1838,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			new_inst2->sreg2 = new_inst->dreg;
 			new_inst2->dreg = new_inst->dreg;
 
-			MONO_INST_LIST_ADD_TAIL(&new_inst2->node, &inst->node);
-			MONO_INST_LIST_ADD_TAIL(&new_inst->node, &new_inst2->node);
+			mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
+			mono_bblock_insert_before_ins(basic_block, new_inst2, new_inst);
 
 			/* We merge the case OP_LOAD_MEMBASE,
 			   OP_LOADU4_MEMBASE and  OP_LOADI4_MEMBASE. */
@@ -1846,7 +1862,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* The opcodes call*_membase are splitted into
 			   load_membase + call*_reg. */
 			MONO_INST_NEW(cfg, new_inst, OP_LOAD_MEMBASE);
-			MONO_INST_LIST_ADD_TAIL(&new_inst->node, &inst->node);
+			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 
 			/* Link the new opcodes together. */
 			new_inst->inst_basereg = inst->inst_basereg;
@@ -2396,8 +2412,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
-			/* MD: endfilter: src1:i dest:z clob:t len:12 */
-			sh4_mov(cfg, &buffer, inst->sreg1, sh4_r0);
+			/* MD: endfilter: src1:i clob:t len:12 */
+			/* The local allocator will put the result into sh4_r0. */
 		case OP_ENDFINALLY: {
 			/* MD: endfinally: clob:t len:10 */
 			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
@@ -2709,5 +2725,37 @@ const char *mono_arch_regname(int reg)
 void mono_arch_setup_jit_tls_data(MonoJitTlsData *tls)
 {
 	/* TODO - CV */
+	return;
+}
+
+void mono_arch_emit_call (MonoCompile *cfg, MonoCallInst *call)
+{
+	/* TODO - CV */
+	NOT_IMPLEMENTED;
+	return;
+}
+
+/* Check for opcodes we can handle directly in hardware, but also emits the instructions. */
+MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
+					 MonoMethodSignature *signature, MonoInst **args)
+{
+	/* TODO - CV */
+	NOT_IMPLEMENTED;
+	return NULL;
+}
+
+/* Emits IR to move its argument to the proper return register. */
+void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
+{
+	/* TODO - CV */
+	NOT_IMPLEMENTED;
+	return;
+}
+
+/* Emits IR to push a vtype to the stack. */
+void mono_arch_emit_outarg_vt(MonoCompile *cfg, MonoInst *inst, MonoInst *src)
+{
+	/* TODO - CV */
+	NOT_IMPLEMENTED;
 	return;
 }

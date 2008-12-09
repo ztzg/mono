@@ -8,8 +8,12 @@
  */
 #include <string.h>
 #include <mono/metadata/debug-helpers.h>
+#include <mono/metadata/mempool.h>
+#include <mono/metadata/mempool-internals.h>
 
 #include "mini.h"
+
+#ifndef DISABLE_JIT
 
 #ifndef DISABLE_SSA
 
@@ -30,17 +34,6 @@
 		(dest)->inst_c0 = (val);	\
 		(dest)->type = STACK_I4;	\
 	} while (0)
-
-
-static GList*
-g_list_prepend_mempool (GList* l, MonoMemPool* mp, gpointer datum)
-{
-	GList* n = mono_mempool_alloc (mp, sizeof (GList));
-	n->next = l;
-	n->prev = NULL;
-	n->data = datum;
-	return n;
-}
 
 static void 
 unlink_target (MonoBasicBlock *bb, MonoBasicBlock *target)
@@ -312,7 +305,6 @@ mono_ssa_compute (MonoCompile *cfg)
 	/* insert phi functions */
 	for (i = 0; i < cfg->num_varinfo; ++i) {
 		set = mono_compile_iterated_dfrontier (cfg, vinfo [i].def_in);
-		vinfo [i].dfrontier = set;
 		mono_bitset_foreach_bit (set, idx, cfg->num_bblocks) {
 			MonoBasicBlock *bb = cfg->bblocks [idx];
 
@@ -340,7 +332,10 @@ mono_ssa_compute (MonoCompile *cfg)
 			store->inst_i1 = inst;
 			store->klass = store->inst_i0->klass;
 	     
-			MONO_INST_LIST_ADD (&store->node, &bb->ins_list);
+			store->next = bb->code;
+			bb->code = store;
+			if (!bb->last_ins)
+				bb->last_ins = bb->code;
 
 #ifdef DEBUG_SSA
 			printf ("ADD PHI BB%d %s\n", cfg->bblocks [idx]->block_num, mono_method_full_name (cfg->method, TRUE));
@@ -435,7 +430,7 @@ mono_ssa_replace_copies (MonoCompile *cfg, MonoBasicBlock *bb, MonoInst *inst, c
 			printf ("REPLACE COPY BB%d %d %d\n", bb->block_num, idx, new_var->inst_c0);
 			g_assert (cfg->varinfo [mv->reg]->inst_vtype == cfg->varinfo [idx]->inst_vtype);
 #endif
-			inst->inst_i0 = new_var;
+			inst->inst_p0 = new_var;
 		} else {
 			is_live [mv->idx] = 1;
 		}
@@ -638,7 +633,7 @@ analyze_dev_use (MonoCompile *cfg, MonoBasicBlock *bb, MonoInst *root, MonoInst 
 				//printf ("FOUND %d\n", idx);
 				ui->bb = bb;
 				ui->inst = root;
-				info->uses = g_list_prepend_mempool (info->uses, cfg->mempool, ui);
+				info->uses = g_list_prepend_mempool (cfg->mempool, info->uses, ui);
 			}
 		}
 	}
@@ -651,7 +646,7 @@ analyze_dev_use (MonoCompile *cfg, MonoBasicBlock *bb, MonoInst *root, MonoInst 
 		//printf ("FOUND %d\n", idx);
 		ui->bb = bb;
 		ui->inst = root;
-		info->uses = g_list_prepend_mempool (info->uses, cfg->mempool, ui);
+		info->uses = g_list_prepend_mempool (cfg->mempool, info->uses, ui);
 	} else {
 		if (arity) {
 			//if (inst->ssa_op != MONO_SSA_STORE)
@@ -704,7 +699,7 @@ mono_ssa_avoid_copies (MonoCompile *cfg)
 					}
 				}
 #endif			
-				next = mono_inst_list_next (&inst->node, &bb->ins_list);
+				next = inst->next;
 				if (next && next->ssa_op == MONO_SSA_STORE &&
 						next->inst_i0->opcode == OP_LOCAL &&
 						next->inst_i1->ssa_op == MONO_SSA_LOAD &&
@@ -1285,3 +1280,4 @@ mono_ssa_strength_reduction (MonoCompile *cfg)
 
 #endif /* DISABLE_SSA */
 
+#endif /* DISABLE_JIT */

@@ -217,10 +217,19 @@ namespace System.Web.Configuration {
 			_Configuration conf;
 
 			conf = (_Configuration) configurations [path];
+			bool store_cache = true;
+			if (conf == null && HttpContext.Current != null) {
+				string realpath = HttpContext.Current.Request.MapPath (path);
+				if (!File.Exists (realpath) && !Directory.Exists (realpath)) {
+					store_cache = false;
+				}
+			}
+
 			if (conf == null) {
 				try {
 					conf = ConfigurationFactory.Create (typeof (WebConfigurationHost), null, path, site, locationSubPath, server, userName, password);
-					configurations [path] = conf;
+					if (store_cache)
+						configurations [path] = conf;
 				} catch (Exception ex) {
 					lock (hasConfigErrorsLock) {
 						hasConfigErrors = true;
@@ -312,7 +321,11 @@ namespace System.Web.Configuration {
 #else
 			object value = null;
 #endif
-			AddSectionToCache (GetSectionCacheKey (sectionName, path), value);
+			if (path != null && configurations [path] != null) {
+				lock (sectionCache) {
+					sectionCache [GetSectionCacheKey (sectionName, path)] = value;
+				}
+			}
 			return value;
 #endif
 		}
@@ -327,7 +340,9 @@ namespace System.Web.Configuration {
 			configurations.Remove (GetCurrentPath (ctx));
 		}
 
+#if TARGET_J2EE || MONOWEB_DEP
 		readonly static MethodInfo get_runtime_object = typeof (ConfigurationSection).GetMethod ("GetRuntimeObject", BindingFlags.NonPublic | BindingFlags.Instance);
+#endif		
 
 		public static object GetWebApplicationSection (string sectionName)
 		{
@@ -352,6 +367,7 @@ namespace System.Web.Configuration {
 			get { return configFactory; }
 		}
 
+#if TARGET_J2EE
 		static void AddSectionToCache (string key, object section)
 		{
 			if (sectionCache [key] != null)
@@ -364,6 +380,7 @@ namespace System.Web.Configuration {
 			tmpTable.Add (key, section);
 			sectionCache = tmpTable;
 		}
+#endif
 
 		static string GetSectionCacheKey (string sectionName, string path)
 		{
@@ -382,7 +399,7 @@ namespace System.Web.Configuration {
 			}
 		}
 
-		static private Web20DefaultConfig config {
+		static Web20DefaultConfig config {
 			get {
 				return (Web20DefaultConfig) AppDomain.CurrentDomain.GetData ("Web20DefaultConfig.config");
 			}
@@ -391,7 +408,7 @@ namespace System.Web.Configuration {
 			}
 		}
 
-		static private IInternalConfigSystem configSystem {
+		static IInternalConfigSystem configSystem {
 			get {
 				return (IInternalConfigSystem) AppDomain.CurrentDomain.GetData ("IInternalConfigSystem.configSystem");
 			}
@@ -451,7 +468,7 @@ namespace System.Web.Configuration {
 	class Web20DefaultConfig : IConfigurationSystem
 	{
 #if TARGET_J2EE
-		static private Web20DefaultConfig instance {
+		static Web20DefaultConfig instance {
 			get {
 				Web20DefaultConfig val = (Web20DefaultConfig)AppDomain.CurrentDomain.GetData("Web20DefaultConfig.instance");
 				if (val == null) {

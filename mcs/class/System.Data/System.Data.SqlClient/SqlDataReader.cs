@@ -43,6 +43,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlTypes;
+using System.Xml;
 
 namespace System.Data.SqlClient
 {
@@ -62,7 +63,6 @@ namespace System.Data.SqlClient
 		int resultsRead;
 		int rowsRead;
 		DataTable schemaTable;
-		bool hasRows;
 		bool haveRead;
 		bool readResult;
 		bool readResultUsed;
@@ -211,7 +211,7 @@ namespace System.Data.SqlClient
 			while (NextResult ())
 				;
 			isClosed = true;
-			command.CloseDataReader (moreResults);
+			command.CloseDataReader ();
 		}
 
 		private static DataTable ConstructSchemaTable ()
@@ -893,8 +893,8 @@ namespace System.Data.SqlClient
 				csize = (int) schema ["ColumnSize"];
 #endif
 
-				GetSchemaRowType (ctype, csize, out dbType,
-				                  out fieldType, out isLong, out typeName);
+				GetSchemaRowType (ctype, csize, out dbType, 
+									out fieldType, out isLong, out typeName);
 				
 				dataTypeNames.Add (typeName);
 				row [PROVIDER_TYPE_IDX] = dbType;
@@ -919,6 +919,7 @@ namespace System.Data.SqlClient
 				return DBNull.Value;
 		}
 
+#if NET_2_0
 		static object GetSchemaValue (object value)
 		{
 			if (value == null)
@@ -926,6 +927,7 @@ namespace System.Data.SqlClient
 
 			return value;
 		}
+#endif		
 		
 		public
 #if NET_2_0
@@ -1103,8 +1105,20 @@ namespace System.Data.SqlClient
 		{
 			object value = GetSqlValue (i);
 			if (!(value is SqlXml)) {
-				if (value is DBNull) throw new SqlNullValueException ();
-				throw new InvalidCastException ("Type is " + value.GetType ().ToString ());
+				if (value is DBNull) {
+					throw new SqlNullValueException ();
+				} else if (command.Tds.TdsVersion == TdsVersion.tds70 && value is SqlString) {
+					// Workaround for TDS 7 clients
+					// Xml column types are supported only from Sql Server 2005 / TDS 8, however
+					// when a TDS 7 client requests for Xml column data, Sql Server 2005 returns
+					// it as NTEXT
+					MemoryStream stream = null;
+					if (!((SqlString) value).IsNull)
+						stream = new MemoryStream (Encoding.Unicode.GetBytes (value.ToString()));
+					value = new SqlXml (stream);
+				} else {
+					throw new InvalidCastException ("Type is " + value.GetType ().ToString ());
+				}
 			}
 			return (SqlXml) value;
 		}

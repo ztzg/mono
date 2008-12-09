@@ -123,6 +123,7 @@ System.ComponentModel/CultureInfoConverterTest.cs
 System.ComponentModel/DataObjectMethodAttributeTests.cs
 System.ComponentModel/DateTimeConverterTests.cs
 System.ComponentModel/DefaultBindingPropertyAttributeTest.cs
+System.ComponentModel/DefaultValueAttributeTest.cs
 System.ComponentModel/DecimalConverterTests.cs
 System.ComponentModel/DesignerAttributeTest.cs
 System.ComponentModel/DisplayNameAttributeTests.cs
@@ -155,6 +156,7 @@ System.ComponentModel.Design.Serialization/ContextStackTest.cs
 System.ComponentModel.Design.Serialization/InstanceDescriptorTest.cs
 System.Configuration/ApplicationSettingsBaseTest.cs
 System.Configuration/ConfigurationExceptionTest.cs
+System.Configuration/ConfigXmlDocumentTest.cs
 System.Configuration/LocalFileSettingsProviderTest.cs
 System.Configuration/SettingsBaseTest.cs
 System.Configuration/SettingElementTest.cs
@@ -193,7 +195,9 @@ System.Net/DnsPermissionTest.cs
 System.Net/DnsTest.cs
 System.Net/FileWebRequestTest.cs
 System.Net/FileWebResponseTest.cs
+System.Net/FtpWebRequestTest.cs
 System.Net/HttpWebRequestTest.cs
+System.Net/HttpWebResponseTest.cs
 System.Net/HttpListenerTest.cs
 System.Net/HttpListenerBasicIdentityTest.cs
 System.Net/HttpListenerPrefixCollectionTest.cs
@@ -230,6 +234,7 @@ System.Net.Mail/AttachmentTest.cs
 System.Net.Mail/AlternateViewTest.cs
 System.Net.Mail/LinkedResourceCollectionTest.cs
 System.Net.Mail/SmtpClientTest.cs
+System.Net.Mail/SmtpExceptionTest.cs
 System.Net.Mail/SmtpPermissionTest.cs
 System.Net.Mail/SmtpPermissionAttributeTest.cs
 System.Net.Mime/ContentDispositionTest.cs

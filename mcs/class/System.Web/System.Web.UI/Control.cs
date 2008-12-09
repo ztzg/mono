@@ -200,8 +200,9 @@ namespace System.Web.UI
 		public Control BindingContainer {
 			get {
 				Control container = NamingContainer;
-				if (container != null && (container.stateMask & BINDING_CONTAINER) == 0)
+				if (container != null && container is INonBindingContainer || (stateMask & BINDING_CONTAINER) == 0)
 					container = container.BindingContainer;
+
 				return container;
 			}
 		}
@@ -576,7 +577,7 @@ namespace System.Web.UI
 			get { return (stateMask & AUTO_EVENT_WIREUP) != 0; }
 			set { SetMask (AUTO_EVENT_WIREUP, value); }
 		}
-
+		
 		internal void SetBindingContainer (bool isBC)
 		{
 			SetMask (BINDING_CONTAINER, isBC);
@@ -1571,9 +1572,6 @@ namespace System.Web.UI
 
 		internal object SaveViewStateRecursive ()
 		{
-			if (!EnableViewState)
-				return null;
-
 			TraceContext trace = (Context != null && Context.Trace.IsEnabled) ? Context.Trace : null;
 #if MONO_TRACE
 			string type_name = null;
@@ -1637,7 +1635,7 @@ namespace System.Web.UI
 
 		internal void LoadViewStateRecursive (object savedState)
 		{
-			if (!EnableViewState || savedState == null)
+			if (savedState == null)
 				return;
 
 #if MONO_TRACE
@@ -1855,6 +1853,34 @@ namespace System.Web.UI
 
 		internal bool IsPrerendered {
 			get { return (stateMask & PRERENDERED) != 0; }
+		}
+
+		bool CheckForValidationSupport ()
+		{
+			return GetType ().GetCustomAttributes (typeof (SupportsEventValidationAttribute), false).Length > 0;
+		}
+
+		//
+		// Apparently this is where .NET routes validation from all the controls which
+		// support it. See:
+		//
+		//  http://odetocode.com/Blogs/scott/archive/2006/03/20/3145.aspx
+		//    Sample in here contains ValidateEvent in the stack trace
+		//
+		//  http://odetocode.com/blogs/scott/archive/2006/03/21/3153.aspx
+		//
+		//  http://www.alexthissen.nl/blogs/main/archive/2005/12/13/event-validation-of-controls-in-asp-net-2-0.aspx
+		//
+		// It also seems that it's the control's responsibility to call this method or
+		// validation won't take place. Also, the SupportsEventValidation attribute must be
+		// present on the control for validation to take place.
+		//
+		internal void ValidateEvent (String uniqueId, String argument)
+		{
+			Page page = Page;
+			
+			if (page != null && CheckForValidationSupport ())
+				page.ClientScript.ValidateEvent (uniqueId, argument);
 		}
 #endif
 		void IParserAccessor.AddParsedSubObject (object obj)

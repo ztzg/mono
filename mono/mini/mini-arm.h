@@ -8,6 +8,28 @@
 #define MONO_ARCH_SOFT_FLOAT 1
 #endif
 
+#if defined(__ARM_EABI__)
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+#define ARM_ARCHITECTURE "armel"
+#else
+#define ARM_ARCHITECTURE "armeb"
+#endif
+#else
+#define ARM_ARCHITECTURE "arm"
+#endif
+
+#if defined(ARM_FPU_FPA)
+#define ARM_FP_MODEL "fpa"
+#elif defined(ARM_FPU_VFP)
+#define ARM_FP_MODEL "vfp"
+#elif defined(ARM_FPU_NONE)
+#define ARM_FP_MODEL "soft-float"
+#else
+#error "At least one of ARM_FPU_NONE or ARM_FPU_FPA or ARM_FPU_VFP must be defined."
+#endif
+
+#define MONO_ARCH_ARCHITECTURE ARM_ARCHITECTURE "," ARM_FP_MODEL
+
 #define MONO_ARCH_CPU_SPEC arm_cpu_desc
 
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
@@ -41,11 +63,11 @@
 #define MONO_ARCH_INST_SREG2_MASK(ins) (0)
 
 #ifdef MONO_ARCH_SOFT_FLOAT
-#define MONO_ARCH_INST_FIXED_REG(desc) (((desc) == 'l' || (desc == 'f') || (desc == 'g'))? ARM_LSW_REG: -1)
+#define MONO_ARCH_INST_FIXED_REG(desc) (((desc) == 'l' || (desc == 'f') || (desc == 'g')) ? ARM_LSW_REG: (((desc) == 'a') ? ARMREG_R0 : -1))
 #define MONO_ARCH_INST_IS_REGPAIR(desc) ((desc) == 'l' || (desc) == 'L' || (desc) == 'f' || (desc) == 'g')
 #define MONO_ARCH_INST_IS_FLOAT(desc) (FALSE)
 #else
-#define MONO_ARCH_INST_FIXED_REG(desc) (((desc) == 'l')? ARM_LSW_REG: -1)
+#define MONO_ARCH_INST_FIXED_REG(desc) (((desc) == 'l')? ARM_LSW_REG: (((desc) == 'a') ? ARMREG_R0 : -1))
 #define MONO_ARCH_INST_IS_REGPAIR(desc) (desc == 'l' || desc == 'L')
 #define MONO_ARCH_INST_IS_FLOAT(desc) ((desc == 'f') || (desc == 'g'))
 #endif
@@ -59,9 +81,7 @@
 
 void arm_patch (guchar *code, const guchar *target);
 guint8* mono_arm_emit_load_imm (guint8 *code, int dreg, guint32 val);
-
-void
-mono_arm_throw_exception (MonoObject *exc, unsigned long eip, unsigned long esp, gulong *int_regs, gdouble *fp_regs);
+int mono_arm_is_rotated_imm8 (guint32 val, gint *rot_amount);
 
 /* keep the size of the structure a multiple of 8 */
 struct MonoLMF {
@@ -126,6 +146,11 @@ typedef struct MonoCompileArch {
 
 #define MONO_ARCH_AOT_SUPPORTED 1
 
+/* ARM doesn't have too many registers, so we have to use a callee saved one */
+#define MONO_ARCH_RGCTX_REG ARMREG_V5
+/* First argument reg */
+#define MONO_ARCH_VTABLE_REG ARMREG_R0
+
 /* we have the stack pointer, not the base pointer in sigcontext */
 #define MONO_CONTEXT_SET_IP(ctx,ip) do { (ctx)->eip = (int)ip; } while (0); 
 #define MONO_CONTEXT_SET_BP(ctx,bp) do { (ctx)->ebp = (int)bp; } while (0); 
@@ -150,6 +175,9 @@ typedef struct MonoCompileArch {
 	#define UCONTEXT_REG_SP(ctx) ((ctx)->sig_ctx.arm_sp)
 	#define UCONTEXT_REG_R4(ctx) ((ctx)->sig_ctx.arm_r4)
 #endif
+
+void
+mono_arm_throw_exception (MonoObject *exc, unsigned long eip, unsigned long esp, gulong *int_regs, gdouble *fp_regs);
 
 #endif /* __MONO_MINI_ARM_H__ */
 

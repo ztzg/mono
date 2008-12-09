@@ -105,6 +105,8 @@ namespace System.Net
 				throw GetMustImplement ();
 			}
 			set {
+				if (value != null && value.Level == RequestCacheLevel.NoCacheNoStore)
+					return;
 				throw GetMustImplement ();
 			}
 		}
@@ -188,7 +190,7 @@ namespace System.Net
 			}
 		}
 		
-		volatile static IWebProxy proxy;
+//		volatile static IWebProxy proxy;
 		static readonly object lockobj = new object ();
 		
 		public static IWebProxy DefaultWebProxy {

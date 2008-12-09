@@ -1,3 +1,107 @@
+2008-12-01  Marek Habersack  <mhabersack@novell.com>
+
+	* Style.cs: WriteStyleAttributes must not use the fontinfo field
+	directly, it has to be done via the Font property. Fixes bug
+	#449793
+
+2008-11-15  Marek Habersack  <mhabersack@novell.com>
+
+	* ContentPlaceHolder.cs, Content.cs, FormViewPagerRow.cs,
+	ChangePassword.cs, DetailsViewPagerRow.cs: implements
+	INonBindingContainer interface.
+
+	* Wizard.cs: implement INonBindingContainer interface for several
+	private/internal classes.
+
+2008-10-24 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ImageButton.cs: clicking an image causes a postback.
+	Bug #439004 fixed.
+
+2008-10-24  Marek Habersack  <mhabersack@novell.com>
+
+	* CheckBox.cs: register for event validation in Render ().
+
+2008-10-21  Marek Habersack  <mhabersack@novell.com>
+
+	* XmlDataSource.cs: DataFile may be an URL.
+
+2008-10-17  Marek Habersack  <mhabersack@novell.com>
+
+	* ImageMap.cs: added the SupportsEventValidation attribute to the
+	class.
+	Validate the event in RaisePostBackEvent ().
+	Register for event validation in Render ().
+
+	* DropDownList.cs, ListBox.cs: validate the event in LoadPostData ().
+
+	* TextBox.cs: validate the event in LoadPostData ().
+	Register for event validation in AddAttributesToRender ().
+
+	* HiddenField.cs: validate the event in RaisePostDataChangedEvent.
+	Register for event validation in Render ().
+
+	* RadioButton.cs: validate the event in LoadPostData ().
+	Register for event validation in InternalAddAttributesToRender.
+
+	* CheckBox.cs, RadioButtonList.cs: validate the event in
+	RaisePostDataChangedEvent.
+
+	* Menu.cs: added the SupportsEventValidation attribute to the
+	class.
+	Validate the event in RaisePostBackEvent ().
+	Register for event validation in GetClientEvent ().
+
+	* DetailsView.cs, GridView.cs: validate the event in
+	RaisePostBackEvent ().
+	Register for validation in GetCallbackScript () and in OnPreRender
+
+	* Button.cs, Table.cs, BulletedList.cs, Calendar.cs, LinkButton.cs,
+	ImageButton.cs, TreeView.cs: validate the event in RaisePostBackEvent ().
+
+2008-10-14  Marek Habersack  <mhabersack@novell.com>
+
+	* CompositeDataBoundControl.cs: renamed the itemcount ViewState
+	item from "_ItemCount" to "_!ItemCount" for .NET
+	compatibility. This item is accessed and used by some commercial
+	ASP.NET controls.
+
+	* DataBoundControl.cs: OnPagePreLoad must force databinding also
+	when the request is not a postback.
+
+2008-10-13  Marek Habersack  <mhabersack@novell.com>
+
+	* Table.cs, TableRowCollection.cs, TableRow.cs: render table
+	sections when necessary. Fixes bug #434555
+
+2008-10-08  Marek Habersack  <mhabersack@novell.com>
+
+	* ControlParameter.cs: Evaluate calls DataBinder.Eval to do the
+	evaluation now. This makes it support complex expressions.
+
+2008-09-30  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* RoleGroupCollection.cs: Fix recursive calls (wrong target)
+	[Found using Gendarme's BadRecursiveInvocationRule]
+
+2008-09-28  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* XmlDataSource.cs: Make sure the result of the multiplication is a
+	long (not an integer casted into a long since it could overflow).
+	[Found using Gendarme's ReviewCastOnIntegerMultiplicationRule]
+
+2008-09-17  Juraj Skripsky  <js@hotfeet.ch>
+
+	* RadioButton.cs (ValueAttribute, LoadPostData): Fixes bug #426959.
+
+2008-09-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* IPersistedSelector.cs : new in 3.5 SP1.
+
+2008-09-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataBoundControlMode.cs : new 3.5 SP1 type.
+
 2008-08-25  Marek Habersack  <mhabersack@novell.com>
 
 	* DataBoundControl.cs: set RequiresDataBinding to true in

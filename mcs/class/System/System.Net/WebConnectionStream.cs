@@ -76,7 +76,7 @@ namespace System.Net
 
 				try {
 					contentLength = Int32.Parse (clength);
-					if (contentLength == 0) {
+					if (contentLength == 0 && !IsNtlmAuth ()) {
 						ReadAll ();
 					}
 				} catch {
@@ -103,6 +103,26 @@ namespace System.Net
 
 			if (sendChunked)
 				pending = new ManualResetEvent (true);
+		}
+
+		bool IsNtlmAuth ()
+		{
+			bool isProxy = (request.Proxy != null && !request.Proxy.IsBypassed (request.Address));
+			string header_name = (isProxy) ? "Proxy-Authenticate" : "WWW-Authenticate";
+			string authHeader = cnc.Data.Headers [header_name];
+			return (authHeader != null && authHeader.IndexOf ("NTLM") != -1);
+		}
+
+		internal void CheckResponseInBuffer ()
+		{
+			if (contentLength > 0 && (readBufferSize - readBufferOffset) >= contentLength) {
+				if (!IsNtlmAuth ())
+					ReadAll ();
+			}
+		}
+
+		internal WebConnection Connection {
+			get { return cnc; }
 		}
 #if NET_2_0
 		public override bool CanTimeout {
@@ -543,26 +563,49 @@ namespace System.Net
 			request.InternalContentLength = length;
 			request.SendRequestHeaders ();
 			requestWritten = true;
-			if (!cnc.Write (headers, 0, headers.Length))
-				throw new WebException ("Error writing request.", null, WebExceptionStatus.SendFailure, null);
 
-			headersSent = true;
-			if (cnc.Data.StatusCode != 0 && cnc.Data.StatusCode != 100)
-				return;
+			//
+			// For small requests, make a copy, it will reduce the traffic, for large
+			// requests, the NoDelay bit on the socket should take effect (set in WebConnection).
+			//
+			if (headers.Length + length < 8192){
+				byte[] b = new byte [headers.Length + length];
 
-			IAsyncResult result = null;
-			if (length > 0)
-				result = cnc.BeginWrite (bytes, 0, length, null, null);
-
-			if (!initRead) {
-				initRead = true;
-				WebConnection.InitRead (cnc);
-			}
-
-			if (length > 0) 
-				complete_request_written = cnc.EndWrite (result);
-			else
+				Buffer.BlockCopy (headers, 0, b, 0, headers.Length);
+				Buffer.BlockCopy (bytes, 0, b, headers.Length, length);
+				
+				if (!cnc.Write (b, 0, b.Length))
+					throw new WebException ("Error writing request.", null, WebExceptionStatus.SendFailure, null);
+				
+				headersSent = true;
 				complete_request_written = true;
+				
+				if (!initRead) {
+					initRead = true;
+					WebConnection.InitRead (cnc);
+				}				
+			} else {
+				if (!cnc.Write (headers, 0, headers.Length))
+					throw new WebException ("Error writing request.", null, WebExceptionStatus.SendFailure, null);
+				
+				headersSent = true;
+				if (cnc.Data.StatusCode != 0 && cnc.Data.StatusCode != 100)
+					return;
+				
+				IAsyncResult result = null;
+				if (length > 0)
+					result = cnc.BeginWrite (bytes, 0, length, null, null);
+				
+				if (!initRead) {
+					initRead = true;
+					WebConnection.InitRead (cnc);
+				}
+				
+				if (length > 0) 
+					complete_request_written = cnc.EndWrite (result);
+				else
+					complete_request_written = true;
+			}
 		}
 
 		internal void InternalClose ()
@@ -615,6 +658,11 @@ namespace System.Net
 
 			WriteRequest ();
 			disposed = true;
+		}
+
+		internal void KillBuffer ()
+		{
+			writeBuffer = null;
 		}
 
 		public override long Seek (long a, SeekOrigin b)

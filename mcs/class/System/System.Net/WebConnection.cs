@@ -66,6 +66,12 @@ namespace System.Net
 		bool reused;
 		int position;
 		bool busy;
+		HttpWebRequest priority_request;
+		NetworkCredential ntlm_credentials;
+		bool ntlm_authenticated;
+#if NET_1_1
+		bool unsafe_sharing;
+#endif
 
 		bool ssl;
 		bool certsAvailable;
@@ -125,6 +131,7 @@ namespace System.Net
 					IPEndPoint remote = new IPEndPoint (address, sPoint.Address.Port);
 
 #if NET_2_0
+					socket.NoDelay = true;
 					if (!sPoint.CallEndPointDelegate (socket, remote)) {
 						socket.Close ();
 						socket = null;
@@ -403,6 +410,7 @@ namespace System.Net
 				stream.ReadBuffer = cnc.buffer;
 				stream.ReadBufferOffset = pos;
 				stream.ReadBufferSize = nread;
+				stream.CheckResponseInBuffer ();
 			} else if (cnc.chunkStream == null) {
 				try {
 					cnc.chunkStream = new ChunkStream (cnc.buffer, pos, nread, data.Headers);
@@ -639,7 +647,12 @@ namespace System.Net
 				}
 
 				busy = false;
-				SendNext ();
+				if (priority_request != null) {
+					SendRequest (priority_request);
+					priority_request = null;
+				} else {
+					SendNext ();
+				}
 			}
 		}
 		
@@ -940,6 +953,13 @@ namespace System.Net
 			}
 		}
 
+		internal void ResetNtlm ()
+		{
+			ntlm_authenticated = false;
+			ntlm_credentials = null;
+			unsafe_sharing = false;
+		}
+
 		internal bool Busy {
 			get { lock (this) return busy; }
 		}
@@ -951,6 +971,29 @@ namespace System.Net
 				}
 			}
 		}
+
+		// -Used for NTLM authentication
+		internal HttpWebRequest PriorityRequest {
+			set { priority_request = value; }
+		}
+
+		internal bool NtlmAuthenticated {
+			get { return ntlm_authenticated; }
+			set { ntlm_authenticated = value; }
+		}
+
+		internal NetworkCredential NtlmCredential {
+			get { return ntlm_credentials; }
+			set { ntlm_credentials = value; }
+		}
+
+#if NET_1_1
+		internal bool UnsafeAuthenticatedConnectionSharing {
+			get { return unsafe_sharing; }
+			set { unsafe_sharing = value; }
+		}
+#endif
+		// -
 	}
 }
 

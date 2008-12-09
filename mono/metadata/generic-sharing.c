@@ -21,6 +21,7 @@
 #include "class-internals.h"
 #include "marshal.h"
 #include "debug-helpers.h"
+#include "tabledefs.h"
 
 static int
 type_check_context_used (MonoType *type, gboolean recursive)
@@ -370,7 +371,7 @@ alloc_template (MonoClass *class)
 	num_allocted++;
 	num_bytes += size;
 
-	return mono_mempool_alloc0 (class->image->mempool, size);
+	return mono_image_alloc0 (class->image, size);
 }
 
 /*
@@ -394,7 +395,7 @@ alloc_oti (MonoImage *image)
 	num_allocted++;
 	num_bytes += size;
 
-	return mono_mempool_alloc0 (image->mempool, size);
+	return mono_image_alloc0 (image, size);
 }
 
 #define MONO_RGCTX_SLOT_USED_MARKER	((gpointer)&mono_defaults.object_class->byval_arg)
@@ -491,16 +492,22 @@ mono_class_get_method_generic (MonoClass *klass, MonoMethod *method)
 	else
 		declaring = method;
 
-	mono_class_setup_methods (klass);
-	for (i = 0; i < klass->method.count; ++i) {
-		m = klass->methods [i];
-		if (m == declaring)
-			break;
-		if (m->is_inflated && mono_method_get_declaring_generic_method (m) == declaring)
-			break;
+	m = NULL;
+	if (klass->generic_class)
+		m = mono_class_get_inflated_method (klass, declaring);
+
+	if (!m) {
+		mono_class_setup_methods (klass);
+		for (i = 0; i < klass->method.count; ++i) {
+			m = klass->methods [i];
+			if (m == declaring)
+				break;
+			if (m->is_inflated && mono_method_get_declaring_generic_method (m) == declaring)
+				break;
+		}
+		if (i >= klass->method.count)
+			return NULL;
 	}
-	if (i >= klass->method.count)
-		return NULL;
 
 	if (method != declaring) {
 		MonoGenericContext context;
@@ -515,7 +522,7 @@ mono_class_get_method_generic (MonoClass *klass, MonoMethod *method)
 }
 
 static gpointer
-inflate_other_data (gpointer data, int info_type, MonoGenericContext *context)
+inflate_other_data (gpointer data, int info_type, MonoGenericContext *context, MonoClass *class, gboolean temporary)
 {
 	g_assert (data);
 
@@ -529,15 +536,19 @@ inflate_other_data (gpointer data, int info_type, MonoGenericContext *context)
 	case MONO_RGCTX_INFO_VTABLE:
 	case MONO_RGCTX_INFO_TYPE:
 	case MONO_RGCTX_INFO_REFLECTION_TYPE:
-		return mono_class_inflate_generic_type (data, context);
+		return mono_class_inflate_generic_type_with_mempool (temporary ? NULL : class->image->mempool,
+			data, context);
 
 	case MONO_RGCTX_INFO_METHOD:
 	case MONO_RGCTX_INFO_GENERIC_METHOD_CODE:
-	case MONO_RGCTX_INFO_METHOD_RGCTX: {
+	case MONO_RGCTX_INFO_METHOD_RGCTX:
+	case MONO_RGCTX_INFO_METHOD_CONTEXT: {
 		MonoMethod *method = data;
 		MonoMethod *inflated_method;
 		MonoType *inflated_type = mono_class_inflate_generic_type (&method->klass->byval_arg, context);
 		MonoClass *inflated_class = mono_class_from_mono_type (inflated_type);
+
+		mono_metadata_free_type (inflated_type);
 
 		mono_class_init (inflated_class);
 
@@ -563,6 +574,8 @@ inflate_other_data (gpointer data, int info_type, MonoGenericContext *context)
 		int i = field - field->parent->fields;
 		gpointer dummy = NULL;
 
+		mono_metadata_free_type (inflated_type);
+
 		mono_class_get_fields (inflated_class, &dummy);
 		g_assert (inflated_class->fields);
 
@@ -575,13 +588,33 @@ inflate_other_data (gpointer data, int info_type, MonoGenericContext *context)
 }
 
 static gpointer
-inflate_other_info (MonoRuntimeGenericContextOtherInfoTemplate *oti, MonoGenericContext *context)
+inflate_other_info (MonoRuntimeGenericContextOtherInfoTemplate *oti,
+	MonoGenericContext *context, MonoClass *class, gboolean temporary)
 {
-	return inflate_other_data (oti->data, oti->info_type, context);
+	return inflate_other_data (oti->data, oti->info_type, context, class, temporary);
+}
+
+static void
+free_inflated_info (int info_type, gpointer info)
+{
+	if (!info)
+		return;
+
+	switch (info_type) {
+	case MONO_RGCTX_INFO_STATIC_DATA:
+	case MONO_RGCTX_INFO_KLASS:
+	case MONO_RGCTX_INFO_VTABLE:
+	case MONO_RGCTX_INFO_TYPE:
+	case MONO_RGCTX_INFO_REFLECTION_TYPE:
+		mono_metadata_free_type (info);
+		break;
+	default:
+		break;
+	}
 }
 
 static MonoRuntimeGenericContextOtherInfoTemplate
-class_get_rgctx_template_oti (MonoClass *class, int type_argc, guint32 slot);
+class_get_rgctx_template_oti (MonoClass *class, int type_argc, guint32 slot, gboolean temporary, gboolean *do_free);
 
 /*
  * mono_class_get_runtime_generic_context_template:
@@ -634,7 +667,7 @@ mono_class_get_runtime_generic_context_template (MonoClass *class)
 				for (i = 0; i < num_entries; ++i) {
 					MonoRuntimeGenericContextOtherInfoTemplate oti;
 
-					oti = class_get_rgctx_template_oti (class->parent, type_argc, i);
+					oti = class_get_rgctx_template_oti (class->parent, type_argc, i, FALSE, NULL);
 					if (oti.data && oti.data != MONO_RGCTX_SLOT_USED_MARKER) {
 						rgctx_template_set_other_slot (class->image, template, type_argc, i,
 							oti.data, oti.info_type);
@@ -676,15 +709,32 @@ mono_class_get_runtime_generic_context_template (MonoClass *class)
 	return template;
 }
 
+/*
+ * temporary signifies whether the inflated info (oti.data) will be
+ * used temporarily, in which case it might be heap-allocated, or
+ * permanently, in which case it will be mempool-allocated.  If
+ * temporary is set then *do_free will return whether the returned
+ * data must be freed.
+ */
 static MonoRuntimeGenericContextOtherInfoTemplate
-class_get_rgctx_template_oti (MonoClass *class, int type_argc, guint32 slot)
+class_get_rgctx_template_oti (MonoClass *class, int type_argc, guint32 slot, gboolean temporary, gboolean *do_free)
 {
+	g_assert ((temporary && do_free) || (!temporary && !do_free));
+
 	if (class->generic_class) {
 		MonoRuntimeGenericContextOtherInfoTemplate oti;
+		gboolean tmp_do_free;
 
-		oti = class_get_rgctx_template_oti (class->generic_class->container_class, type_argc, slot);
-		if (oti.data)
-			oti.data = inflate_other_info (&oti, &class->generic_class->context);
+		oti = class_get_rgctx_template_oti (class->generic_class->container_class,
+			type_argc, slot, TRUE, &tmp_do_free);
+		if (oti.data) {
+			gpointer info = oti.data;
+			oti.data = inflate_other_info (&oti, &class->generic_class->context, class, temporary);
+			if (tmp_do_free)
+				free_inflated_info (oti.info_type, info);
+		}
+		if (temporary)
+			*do_free = TRUE;
 
 		return oti;
 	} else {
@@ -694,6 +744,9 @@ class_get_rgctx_template_oti (MonoClass *class, int type_argc, guint32 slot)
 		template = mono_class_get_runtime_generic_context_template (class);
 		oti = rgctx_template_get_other_slot (template, type_argc, slot);
 		g_assert (oti);
+
+		if (temporary)
+			*do_free = FALSE;
 
 		return *oti;
 	}
@@ -723,14 +776,26 @@ class_type_info (MonoDomain *domain, MonoClass *class, int info_type)
 }
 
 static gpointer
-instantiate_other_info (MonoDomain *domain, MonoRuntimeGenericContextOtherInfoTemplate *oti, MonoGenericContext *context)
+instantiate_other_info (MonoDomain *domain, MonoRuntimeGenericContextOtherInfoTemplate *oti,
+	MonoGenericContext *context, MonoClass *class)
 {
 	gpointer data;
+	gboolean temporary;
 
 	if (!oti->data)
 		return NULL;
 
-	data = inflate_other_info (oti, context);
+	switch (oti->info_type) {
+	case MONO_RGCTX_INFO_STATIC_DATA:
+	case MONO_RGCTX_INFO_KLASS:
+	case MONO_RGCTX_INFO_VTABLE:
+		temporary = TRUE;
+		break;
+	default:
+		temporary = FALSE;
+	}
+
+	data = inflate_other_info (oti, context, class, temporary);
 
 	switch (oti->info_type) {
 	case MONO_RGCTX_INFO_STATIC_DATA:
@@ -738,6 +803,7 @@ instantiate_other_info (MonoDomain *domain, MonoRuntimeGenericContextOtherInfoTe
 	case MONO_RGCTX_INFO_VTABLE: {
 		MonoClass *arg_class = mono_class_from_mono_type (data);
 
+		free_inflated_info (oti->info_type, data);
 		g_assert (arg_class);
 
 		return class_type_info (domain, arg_class, oti->info_type);
@@ -761,6 +827,14 @@ instantiate_other_info (MonoDomain *domain, MonoRuntimeGenericContextOtherInfoTe
 		return mono_method_lookup_rgctx (mono_class_vtable (domain, method->method.method.klass),
 			method->context.method_inst);
 	}
+	case MONO_RGCTX_INFO_METHOD_CONTEXT: {
+		MonoMethodInflated *method = data;
+
+		g_assert (method->method.method.is_inflated);
+		g_assert (method->context.method_inst);
+
+		return method->context.method_inst;
+	}
 	default:
 		g_assert_not_reached ();
 	}
@@ -774,24 +848,10 @@ fill_in_rgctx_template_slot (MonoClass *class, int type_argc, int index, gpointe
 {
 	MonoRuntimeGenericContextTemplate *template = mono_class_get_runtime_generic_context_template (class);
 	MonoClass *subclass;
-	int old_length, new_length;
-	int old_instances_length = -1;
 
 	g_assert (!class->generic_class);
 
-	old_length = rgctx_template_num_other_infos (template, type_argc);
 	rgctx_template_set_other_slot (class->image, template, type_argc, index, data, info_type);
-	new_length = rgctx_template_num_other_infos (template, type_argc);
-
-	if (old_instances_length < 0)
-		old_instances_length = old_length;
-
-	/* The reason why the instance's other_infos list can be
-	 * shorter than the uninstanted class's is that when we mark
-	 * slots as used in superclasses we only do that in the
-	 * uninstantiated classes, not in the instances.
-	 */
-	g_assert (old_instances_length <= old_length);
 
 	/* Recurse for all subclasses */
 	if (generic_subclass_hash)
@@ -806,7 +866,7 @@ fill_in_rgctx_template_slot (MonoClass *class, int type_argc, int index, gpointe
 		g_assert (!subclass->generic_class);
 		g_assert (subclass_template);
 
-		subclass_oti = class_get_rgctx_template_oti (subclass->parent, type_argc, index);
+		subclass_oti = class_get_rgctx_template_oti (subclass->parent, type_argc, index, FALSE, NULL);
 		g_assert (subclass_oti.data);
 
 		fill_in_rgctx_template_slot (subclass, type_argc, index, subclass_oti.data, info_type);
@@ -876,6 +936,7 @@ other_info_equal (gpointer data1, gpointer data2, int info_type)
 	case MONO_RGCTX_INFO_GENERIC_METHOD_CODE:
 	case MONO_RGCTX_INFO_CLASS_FIELD:
 	case MONO_RGCTX_INFO_METHOD_RGCTX:
+	case MONO_RGCTX_INFO_METHOD_CONTEXT:
 		return data1 == data2;
 	default:
 		g_assert_not_reached ();
@@ -905,12 +966,14 @@ lookup_or_register_other_info (MonoClass *class, int type_argc, gpointer data, i
 		if (!oti || oti->info_type != info_type || !oti->data)
 			continue;
 
-		inflated_data = inflate_other_info (oti, generic_context);
+		inflated_data = inflate_other_info (oti, generic_context, class, TRUE);
 
 		if (other_info_equal (data, inflated_data, info_type)) {
 			templates_unlock ();
+			free_inflated_info (oti->info_type, inflated_data);
 			return i;
 		}
+		free_inflated_info (info_type, inflated_data);
 	}
 
 	i = register_other_info (class, type_argc, data, info_type);
@@ -999,7 +1062,7 @@ alloc_rgctx_array (MonoDomain *domain, int n, gboolean is_mrgctx)
 	static int mrgctx_bytes_alloced = 0;
 
 	int size = mono_class_rgctx_get_array_size (n, is_mrgctx) * sizeof (gpointer);
-	gpointer array = mono_mempool_alloc0 (domain->mp, size);
+	gpointer array = mono_domain_alloc0 (domain, size);
 
 	if (!inited) {
 		mono_counters_register ("RGCTX num arrays alloced", MONO_COUNTER_GENERICS | MONO_COUNTER_INT, &rgctx_num_alloced);
@@ -1035,6 +1098,7 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 	MonoRuntimeGenericContextOtherInfoTemplate oti;
 	MonoGenericContext context = { class_context ? class_context->class_inst : NULL, method_inst };
 	int rgctx_index;
+	gboolean do_free;
 
 	g_assert (rgctx);
 
@@ -1070,14 +1134,17 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 	g_assert (!rgctx [rgctx_index]);
 
 	oti = class_get_rgctx_template_oti (class_uninstantiated (class),
-			method_inst ? method_inst->type_argc : 0, slot);
+			method_inst ? method_inst->type_argc : 0, slot, TRUE, &do_free);
 
 	/*
 	if (method_inst)
 		g_print ("filling mrgctx slot %d table %d index %d\n", slot, i, rgctx_index);
 	*/
 
-	info = rgctx [rgctx_index] = instantiate_other_info (domain, &oti, &context);
+	info = rgctx [rgctx_index] = instantiate_other_info (domain, &oti, &context, class);
+
+	if (do_free)
+		free_inflated_info (oti.info_type, oti.data);
 
 	return info;
 }
@@ -1210,4 +1277,139 @@ mono_method_lookup_rgctx (MonoVTable *class_vtable, MonoGenericInst *method_inst
 	g_assert (mrgctx);
 
 	return mrgctx;
+}
+
+static gboolean
+generic_inst_is_sharable (MonoGenericInst *inst, gboolean allow_type_vars)
+{
+	int i;
+
+	for (i = 0; i < inst->type_argc; ++i) {
+		MonoType *type = inst->type_argv [i];
+		int type_type;
+
+		if (MONO_TYPE_IS_REFERENCE (type))
+			continue;
+
+		type_type = mono_type_get_type (type);
+		if (allow_type_vars && (type_type == MONO_TYPE_VAR || type_type == MONO_TYPE_MVAR))
+			continue;
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/*
+ * mono_generic_context_is_sharable:
+ * @context: a generic context
+ *
+ * Returns whether the generic context is sharable.  A generic context
+ * is sharable iff all of its type arguments are reference type.
+ */
+gboolean
+mono_generic_context_is_sharable (MonoGenericContext *context, gboolean allow_type_vars)
+{
+	g_assert (context->class_inst || context->method_inst);
+
+	if (context->class_inst && !generic_inst_is_sharable (context->class_inst, allow_type_vars))
+		return FALSE;
+
+	if (context->method_inst && !generic_inst_is_sharable (context->method_inst, allow_type_vars))
+		return FALSE;
+
+	return TRUE;
+}
+
+/*
+ * mono_method_is_generic_impl:
+ * @method: a method
+ *
+ * Returns whether the method is either generic or part of a generic
+ * class.
+ */
+gboolean
+mono_method_is_generic_impl (MonoMethod *method)
+{
+	if (method->is_inflated) {
+		g_assert (method->wrapper_type == MONO_WRAPPER_NONE);
+		return TRUE;
+	}
+	/* We don't treat wrappers as generic code, i.e., we never
+	   apply generic sharing to them.  This is especially
+	   important for static rgctx invoke wrappers, which only work
+	   if not compiled with sharing. */
+	if (method->wrapper_type != MONO_WRAPPER_NONE)
+		return FALSE;
+	if (method->klass->generic_container)
+		return TRUE;
+	return FALSE;
+}
+
+/*
+ * mono_method_is_generic_sharable_impl:
+ * @method: a method
+ * @allow_type_vars: whether to regard type variables as reference types
+ *
+ * Returns TRUE iff the method is inflated or part of an inflated
+ * class, its context is sharable and it has no constraints on its
+ * type parameters.  Otherwise returns FALSE.
+ */
+gboolean
+mono_method_is_generic_sharable_impl (MonoMethod *method, gboolean allow_type_vars)
+{
+	if (!mono_method_is_generic_impl (method))
+		return FALSE;
+
+	if (method->is_inflated) {
+		MonoMethodInflated *inflated = (MonoMethodInflated*)method;
+		MonoGenericContext *context = &inflated->context;
+
+		if (!mono_generic_context_is_sharable (context, allow_type_vars))
+			return FALSE;
+
+		g_assert (inflated->declaring);
+
+		if (inflated->declaring->is_generic) {
+			g_assert (mono_method_get_generic_container (inflated->declaring)->type_params);
+
+			if (mono_method_get_generic_container (inflated->declaring)->type_params->constraints)
+				return FALSE;
+		}
+	}
+
+	if (method->klass->generic_class) {
+		if (!mono_generic_context_is_sharable (&method->klass->generic_class->context, allow_type_vars))
+			return FALSE;
+
+		g_assert (method->klass->generic_class->container_class &&
+				method->klass->generic_class->container_class->generic_container &&
+				method->klass->generic_class->container_class->generic_container->type_params);
+
+		if (method->klass->generic_class->container_class->generic_container->type_params->constraints)
+			return FALSE;
+	}
+
+	if (method->klass->generic_container && !allow_type_vars)
+		return FALSE;
+
+	return TRUE;
+}
+
+gboolean
+mono_method_needs_static_rgctx_invoke (MonoMethod *method, gboolean allow_type_vars)
+{
+	if (!mono_class_generic_sharing_enabled (method->klass))
+		return FALSE;
+
+	if (!mono_method_is_generic_sharable_impl (method, allow_type_vars))
+		return FALSE;
+
+	if (method->is_inflated && mono_method_get_context (method)->method_inst)
+		return TRUE;
+
+	return ((method->flags & METHOD_ATTRIBUTE_STATIC) ||
+			method->klass->valuetype) &&
+		(method->klass->generic_class || method->klass->generic_container);
 }

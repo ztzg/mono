@@ -251,6 +251,19 @@ namespace MonoTests.System.Collections.Generic {
 			Assert.AreEqual (0, _dictionary.Count, "Clear method failed!");
 			Assert.IsFalse (_dictionary.ContainsKey ("key2"));
 		}
+	
+		[Test] // bug 432441
+		public void Clear_Iterators ()
+		{
+			Dictionary<object, object> d = new Dictionary <object, object> ();
+
+			d [new object ()] = new object ();
+			d.Clear ();
+			int hash = 0;
+			foreach (object o in d) {
+				hash += o.GetHashCode ();
+			}
+		}
 
 		[Test]
 		[Category ("NotWorking")]
@@ -286,6 +299,12 @@ namespace MonoTests.System.Collections.Generic {
 			Assert.IsTrue (contains, "ContainsKey does not return correct value!");
 			contains = _dictionary.ContainsKey ("key5");
 			Assert.IsFalse (contains, "ContainsKey for non existant does not return correct value!");
+		}
+
+		[Test, ExpectedException (typeof (ArgumentNullException))]
+		public void ContainsKeyTest2 ()
+		{
+			_dictionary.ContainsKey (null);
 		}
 	
 		[Test]
@@ -712,6 +731,25 @@ namespace MonoTests.System.Collections.Generic {
 		}
 
 		[Test]
+		public void IDictionary_Add_Null ()
+		{
+			IDictionary d = new Dictionary<int, string> ();
+			d.Add (1, null);
+			d [2] = null;
+
+			Assert.IsNull (d [1]);
+			Assert.IsNull (d [2]);
+		}
+
+		[Test]
+		[ExpectedException (typeof (ArgumentException))]
+		public void IDictionary_Add_Null_2 ()
+		{
+			IDictionary d = new Dictionary<int, int> ();
+			d.Add (1, null);
+		}
+
+		[Test]
 		public void IDictionary_Remove1 ()
 		{
 			IDictionary d = new Dictionary<int, int> ();
@@ -777,6 +815,69 @@ namespace MonoTests.System.Collections.Generic {
 			foreach (String s in d.Keys)
 				comp = s;
 			Assert.IsTrue (Object.ReferenceEquals (s1, comp));
+		}
+
+		[Test]
+		public void ResetKeysEnumerator ()
+		{
+			Dictionary<string, string> test = new Dictionary<string, string> ();
+			test.Add ("monkey", "singe");
+			test.Add ("singe", "mono");
+			test.Add ("mono", "monkey");
+
+			IEnumerator enumerator = test.Keys.GetEnumerator ();
+
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+
+			enumerator.Reset ();
+
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsFalse (enumerator.MoveNext ());
+		}
+
+		[Test]
+		public void ResetValuesEnumerator ()
+		{
+			Dictionary<string, string> test = new Dictionary<string, string> ();
+			test.Add ("monkey", "singe");
+			test.Add ("singe", "mono");
+			test.Add ("mono", "monkey");
+
+			IEnumerator enumerator = test.Values.GetEnumerator ();
+
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+
+			enumerator.Reset ();
+
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsFalse (enumerator.MoveNext ());
+		}
+
+		[Test]
+		public void ResetShimEnumerator ()
+		{
+			IDictionary test = new Dictionary<string, string> ();
+			test.Add ("monkey", "singe");
+			test.Add ("singe", "mono");
+			test.Add ("mono", "monkey");
+
+			IEnumerator enumerator = test.GetEnumerator ();
+
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+
+			enumerator.Reset ();
+
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsTrue (enumerator.MoveNext ());
+			Assert.IsFalse (enumerator.MoveNext ());
 		}
 	}
 }

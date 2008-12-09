@@ -1,3 +1,103 @@
+
+2008-11-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpContext.cs: MS does not throw. They just return null.
+
+2008-11-24  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpRuntime.cs: take PlatformID.MacOSX into account when
+	determining whether we're running on Windows or not. Possible fix
+	for #447874
+
+2008-11-21  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpParseException.cs, HtmlizedException.cs: added
+	deserialization constructor.
+
+2008-10-31  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpContext.cs: RewritePath correctly rewrites paths for cases
+	when application is running under a virtual directory different to
+	'/'. Fixes bug #371581
+	RewritePath checks the passed virtual path for validity.
+
+	* HttpRequest.cs: MapPath now uses
+	VirtualPathUtility.IsValidVirtualPath.
+
+	* VirtualPathUtility.cs: made Canonize () internal.
+	Added a new method - IsValidVirtualPath () which checks whether a
+	passed path contains only characters allowed for virtual paths.
+
+2008-10-22  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpApplicationFactory.cs: use only the first matching method in
+	GetApplicationTypeEvents, since it will be the one coming from the
+	topmost type. Partial fix for bug #437691
+
+2008-10-21  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpApplication.cs: if context.Session is null in get_Session,
+	throw an exception. Fixes bug #437289
+
+	* CapabilitiesLoader.cs: seal BrowserData.
+	Seal CapabilitiesLoader.
+	Do not lock on typeof (CapabilitiesLoader) in GetCapabilities ().
+
+2008-10-16  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpApplicationFactory.cs: when looking up application type
+	event handlers (the Application_* methods), look deep in the
+	parent chain - we must support private handler methods in base
+	types as well.
+
+2008-10-15  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpResponse.cs: CacheabilityUpdatedEvent is no longer
+	used. cached_response is allocated only when the IsCached property
+	is assigned the 'true' value. 
+
+	* HttpCachePolicy.cs: CacheabilityUpdatedEvent is no longer used,
+	removed all the traces of it. SetCacheability should not switch
+	output caching on.
+
+2008-10-12  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* HttpResponse.cs: Simplify code for outputting ASP.NET version, as
+	version header cannot be configured. MS corrected this documenation
+	error in .NET 2.0 SDK.
+
+2008-10-03 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpApplication.cs: make sure we release the resources used by the
+	request and/or the response at the end of the request.
+	Fixes bug #430040.
+
+2008-10-01  Marek Habersack  <mhabersack@novell.com>
+
+	* BrowserCapabilities.cs: IsBrowser needs to compare browser names
+	case insensitively.
+
+2008-09-29  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpApplication.cs: do not assume the passed IAsyncResult is a
+	is a valid object in async_handler_complete_cb. Fixes bug #430488
+
+2008-09-28  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* HttpRequest.cs: Make sure the result of the multiplications are
+	longs (not integers casted into longs since they could overflow).
+	[Found using Gendarme's ReviewCastOnIntegerMultiplicationRule]
+
+2008-09-23  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpWorkerRequest.cs: implemented a SendCalculatedContentLength
+	overload. This method apparently does nothing in MS.NET.
+
+2008-09-16  Juraj Skripsky  <js@hotfeet.ch>
+
+	* HttpServerUtility.cs (UrlDecode, UrlEncode): Respect request/response
+	encoding. Fixes bug #426539.
+
 2008-08-29  Marek Habersack  <mhabersack@novell.com>
 
 	* HttpApplication.cs: do not cache handlers which aren't
@@ -34,6 +134,11 @@
 	Do not add the root node retrieved from BuildSiteMapRecursive in
 	BuildMap, if the node is already the current root node. Fixes bug
 	#412495
+
+2008-07-26  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* HttpCachePolicy.cs: Only add Expires header if expire date is
+	actually set. Removed extra tabs and regions. Code formatting.
 
 2008-07-23  Marek Habersack  <mhabersack@novell.com>
 

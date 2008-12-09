@@ -1,0 +1,250 @@
+2008-11-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2l.cs (CompareGreaterThan): This method requires sse 4.2
+	and 4.1.
+
+	Backported from trunk.
+
+2008-11-04  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector*.cs: Use a better name for the prefetch
+	instructions.
+
+2008-11-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector*.cs: Added prefetch operations.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector*.cs: Added casting between all types.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4i.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4ui.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16sb.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8s.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2ul.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2l.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2d.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4f.cs: Fix acceleration attribute of Shuffle.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4f.cs: Add Acceleration attribute to all methods.
+
+2008-10-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* AccelMode.cs: 
+	* AccelerationAttribute.cs: 
+	* SimdRuntime.cs: Support files to provide runtime capabilities querying.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2ul.cs: New vector type.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2l.cs : Remove useless comments.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2l.cs (operator ^): Simplify and fix the implementation.
+
+2008-10-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2l.cs: New vector type.
+
+2008-10-27  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector2d.cs: New vector type.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b: Mark type as CLS compliant (remove attribute) and
+	mark the methods which are not.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4i.cs: New vector type.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4ui.cs: Add missing SSE 4.1 comments.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16sb.cs: Fix a warning.
+
+	* Vector4f.cs: Add some missing CLSCompliant attributes.
+
+	* Vector8s.cs: Add CompareGreaterThan and a missing
+	CLSCompliant attribute.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs: Add some missing SSE 4.1 comments.
+
+2008-10-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8s.cs: New vector type.
+
+2008-10-23  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b.cs: Remove methods without sse equivalent.
+	* Vector16b.cs (SumOfAbsoluteDifferences) Fix the signature.
+
+2008-10-23  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16sb.cs: New vector type.
+
+2008-10-21  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b.cs: Added Load/StoreAligned with pointer args.
+
+	* Vector4f.cs: Added Load/StoreAligned with pointer args.
+
+	* Vector4ui.cs: Added Load/StoreAligned with pointer args.
+
+	* Vector8us.cs: Added Load/StoreAligned with pointer args.
+
+2008-10-21  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4f.cs: Renamed CompareEquals to CompareEqual.
+
+2008-10-21  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4ui.cs: Added SignedPackWithUnsignedSaturation.
+
+2008-10-21  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs: Added SignedPackWithUnsignedSaturation.
+
+2008-10-20  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b.cs: Added casts to Vector4ui and Vector8us
+
+	* Vector4f.cs: Added casts to Vector8us and Vector16b
+
+	* Vector4ui.cs: Added casts to Vector8us and Vector16b
+
+	* Vector8us.cs: Added casts to Vector4ui and Vector16b
+
+2008-10-20  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs: Added CompareEqual and MultiplyStoreHigh.
+
+2008-10-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4ui.cs: Remove Average as there is no sse instruction for that.
+
+2008-10-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4ui.cs: Added Min, Max, Average, ExtractByteMask,
+	Shuffle and CompareEqual.
+
+2008-10-16  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b.cs: Added Min, Max, Average, ExtractByteMask,
+	SumOfAbsoluteDifferences and CompareEqual.
+
+2008-10-15  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs: Added Min, Max, Average, ExtractByteMask and
+	ShuffleLow/ShuffleHigh.
+
+2008-10-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4f.cs: Added DuplicateLow and DuplicateHigh.
+
+2008-10-13  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4f.cs: Added bitwise ops, reciprocal, interleave
+	and all flavors of compare.
+	Optimized Shuffle.
+
+	* Vector8us.cs: It turns out that packuswb doesn't work with unsigned
+	numbers that binary equivalent to negative numbers in signed form.
+	Removed PackWithUnsignedSaturation.
+
+	* Vector4ui.cs: Added SSE4.1 comment to relevant method. Removed
+	PackWithUnsignedSaturation for the same reason as above.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4ui.cs: Added common operations found in 
+	other unsigned int vector types.
+
+	* Vector8us.cs (ShiftRightArithmetic): Do proper sign extention.
+
+	* Vector8us.cs: Fix conversion operators.
+
+	* Vector16b.cs (ShiftRightArithmetic): Do proper sign extention.
+
+	* Vector16b.cs: Fix conversion operators.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector16b.cs, Vector4f.cs, Vector4ui.cs,Vector8us.cs:
+	Type renaming adjustments.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4u.cs: Renamed to Vector4ui.cs.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs: Use Math.Min/Max instead of ?:.
+	Fixed PackWithUnsignedSaturation.
+
+	* Vector16b.cs: Use Math.Min/Max instead of ?:.
+	Removed unused PackWithUnsignedSaturation.
+
+2008-10-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector8us.cs
+	* Vector16b.cs: Added.
+
+2008-10-07  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4f.cs (ShuffleSel): Better naming for the constants.
+	Added some helper constants.
+
+2008-10-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Vector4u.cs: Mask type as not CLS compliant.
+
+	* Vector4c.cs: Mask methods returning Vector4u as not CLS compliant.
+
+2008-10-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Initial checking of the file layout

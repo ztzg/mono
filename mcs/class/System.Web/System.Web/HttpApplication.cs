@@ -328,7 +328,12 @@ namespace System.Web {
 
 				if (context == null)
 					throw new HttpException (Locale.GetText ("No context is available."));
-				return context.Session;
+
+				HttpSessionState ret = context.Session;
+				if (ret == null)
+					throw new HttpException (Locale.GetText ("Session state is not available in the context."));
+				
+				return ret;
 			}
 		}
 
@@ -967,10 +972,11 @@ namespace System.Web {
 
 		void async_handler_complete_cb (IAsyncResult ar)
 		{
-			IHttpAsyncHandler async_handler = ((IHttpAsyncHandler) ar.AsyncState);
+			IHttpAsyncHandler async_handler = ar != null ? ar.AsyncState as IHttpAsyncHandler : null;
 
 			try {
-				async_handler.EndProcessRequest (ar);
+				if (async_handler != null)
+					async_handler.EndProcessRequest (ar);
 			} catch (Exception e){
 				ProcessError (e);
 			}
@@ -1425,6 +1431,8 @@ namespace System.Web {
 				context = HttpContext.Current;
 			context.StopTimeoutTimer ();
 #endif
+			context.Request.ReleaseResources ();
+			context.Response.ReleaseResources ();
 			context = null;
 			session = null;
 			HttpContext.Current = null;

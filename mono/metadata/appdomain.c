@@ -41,6 +41,8 @@
 #include <mono/metadata/monitor.h>
 #include <mono/metadata/threadpool.h>
 #include <mono/metadata/mono-debug.h>
+#include <mono/metadata/attach.h>
+#include <mono/metadata/file-io.h>
 #include <mono/utils/mono-uri.h>
 #include <mono/utils/mono-logger.h>
 #include <mono/utils/mono-path.h>
@@ -61,7 +63,7 @@
  * Changes which are already detected at runtime, like the addition
  * of icalls, do not require an increment.
  */
-#define MONO_CORLIB_VERSION 68
+#define MONO_CORLIB_VERSION 69
 
 typedef struct
 {
@@ -214,6 +216,8 @@ mono_runtime_init (MonoDomain *domain, MonoThreadStartCB start_cb,
 
 	mono_network_init ();
 
+	mono_attach_init ();
+
 	/* mscorlib is loaded before we install the load hook */
 	mono_domain_fire_assembly_load (mono_defaults.corlib->assembly, NULL);
 	
@@ -274,6 +278,8 @@ void
 mono_runtime_cleanup (MonoDomain *domain)
 {
 	shutting_down = TRUE;
+
+	mono_attach_cleanup ();
 
 	/* This ends up calling any pending pending (for at most 2 seconds) */
 	mono_gc_cleanup ();
@@ -619,7 +625,7 @@ mono_parser = {
 	NULL
 };
 
-static void
+void
 mono_set_private_bin_path_from_config (MonoDomain *domain)
 {
 	gchar *config_file, *text;
@@ -893,15 +899,15 @@ set_domain_search_path (MonoDomain *domain)
 	 */
 	mono_domain_assemblies_lock (domain);
 
-	if ((domain->search_path != NULL) && !domain->setup->path_changed) {
-		mono_domain_assemblies_unlock (domain);
-		return;
-	}
 	if (!domain->setup) {
 		mono_domain_assemblies_unlock (domain);
 		return;
 	}
 
+	if ((domain->search_path != NULL) && !domain->setup->path_changed) {
+		mono_domain_assemblies_unlock (domain);
+		return;
+	}
 	setup = domain->setup;
 	if (!setup->application_base) {
 		mono_domain_assemblies_unlock (domain);
@@ -1087,16 +1093,39 @@ get_shadow_assembly_location (const char *filename)
 	char path_hash [30];
 	char *bname = g_path_get_basename (filename);
 	char *dirname = g_path_get_dirname (filename);
-	char *location, *dyn_base;
+	char *location;
 	MonoDomain *domain = mono_domain_get ();
+	MonoAppDomainSetup *setup;
+	char *cache_path, *appname;
+	char *userdir;
 	
 	hash = get_cstring_hash (bname);
 	hash2 = get_cstring_hash (dirname);
 	g_snprintf (name_hash, sizeof (name_hash), "%08x", hash);
 	g_snprintf (path_hash, sizeof (path_hash), "%08x_%08x_%08x", hash ^ hash2, hash2, domain->shadow_serial);
-	dyn_base = mono_string_to_utf8 (domain->setup->dynamic_base);
-	location = g_build_filename (dyn_base, "assembly", "shadow", name_hash, path_hash, bname, NULL);
-	g_free (dyn_base);
+	setup = domain->setup;
+	if (setup->cache_path != NULL && setup->application_name != NULL) {
+		cache_path = mono_string_to_utf8 (setup->cache_path);
+#ifndef PLATFORM_WIN32
+		{
+			gint i;
+			for (i = strlen (cache_path) - 1; i >= 0; i--)
+				if (cache_path [i] == '\\')
+					cache_path [i] = '/';
+		}
+#endif
+
+		appname = mono_string_to_utf8 (setup->application_name);
+		location = g_build_filename (cache_path, appname, "assembly", "shadow",
+						name_hash, path_hash, bname, NULL);
+		g_free (appname);
+		g_free (cache_path);
+	} else {
+		userdir = g_strdup_printf ("%s-mono-cachepath", g_get_user_name ());
+		location = g_build_filename (g_get_tmp_dir (), userdir, "assembly", "shadow",
+						name_hash, path_hash, bname, NULL);
+		g_free (userdir);
+	}
 	g_free (bname);
 	g_free (dirname);
 	return location;
@@ -1209,6 +1238,86 @@ private_file_needs_copying (const char *src, struct stat *sbuf_src, char *dest)
 	return TRUE;
 }
 
+static gboolean
+shadow_copy_create_ini (const char *shadow, const char *filename)
+{
+	char *dir_name;
+	char *ini_file;
+	guint16 *u16_ini;
+	gboolean result;
+	guint32 n;
+	HANDLE *handle;
+
+	dir_name = g_path_get_dirname (shadow);
+	ini_file = g_build_filename (dir_name, "__AssemblyInfo__.ini", NULL);
+	g_free (dir_name);
+	if (g_file_test (ini_file, G_FILE_TEST_IS_REGULAR)) {
+		g_free (ini_file);
+		return TRUE;
+	}
+
+	u16_ini = g_utf8_to_utf16 (ini_file, strlen (ini_file), NULL, NULL, NULL);
+	g_free (ini_file);
+	if (!u16_ini) {
+		return FALSE;
+	}
+	handle = CreateFile (u16_ini, GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
+				NULL, CREATE_NEW, FileAttributes_Normal, NULL);
+	g_free (u16_ini);
+	if (handle == INVALID_HANDLE_VALUE) {
+		return FALSE;
+	}
+
+	result = WriteFile (handle, filename, strlen (filename), &n, NULL);
+	CloseHandle (handle);
+	return result;
+}
+
+gboolean
+mono_is_shadow_copy_enabled (MonoDomain *domain, const gchar *dir_name)
+{
+	const char *version;
+	MonoAppDomainSetup *setup;
+	gchar *all_dirs;
+	gchar **dir_ptr;
+	gchar **directories;
+	gchar *shadow_status_string;
+	gboolean shadow_enabled;
+	gboolean found = FALSE;
+
+	if (domain == NULL)
+		return FALSE;
+
+	setup = domain->setup;
+	if (setup == NULL || setup->shadow_copy_files == NULL)
+		return FALSE;
+
+	version = mono_get_runtime_info ()->framework_version;
+	shadow_status_string = mono_string_to_utf8 (setup->shadow_copy_files);
+	/* For 1.x, not NULL is enough. In 2.0 it has to be "true" */
+	shadow_enabled = (*version <= '1' || !g_ascii_strncasecmp (shadow_status_string, "true", 4));
+	g_free (shadow_status_string);
+	if (!shadow_enabled)
+		return FALSE;
+
+	if (setup->shadow_copy_directories == NULL)
+		return TRUE;
+
+	all_dirs = mono_string_to_utf8 (setup->shadow_copy_directories);
+	directories = g_strsplit (all_dirs, G_SEARCHPATH_SEPARATOR_S, 1000);
+	dir_ptr = directories;
+	while (*dir_ptr) {
+		if (**dir_ptr != '\0' && !strcmp (*dir_ptr, dir_name)) {
+			found = TRUE;
+			break;
+		}
+		dir_ptr++;
+	}
+	g_strfreev (directories);
+	g_free (all_dirs);
+	return found;
+}
+
 char *
 mono_make_shadow_copy (const char *filename)
 {
@@ -1217,42 +1326,22 @@ mono_make_shadow_copy (const char *filename)
 	guint16 *orig, *dest;
 	char *shadow;
 	gboolean copy_result;
-	gboolean is_private = FALSE;
-	gboolean do_copy = FALSE;
 	MonoException *exc;
-	gchar **path;
 	struct stat src_sbuf;
 	struct utimbuf utbuf;
 	char *dir_name = g_path_get_dirname (filename);
 	MonoDomain *domain = mono_domain_get ();
 	set_domain_search_path (domain);
 
-	if (!domain->search_path) {
+	if (!mono_is_shadow_copy_enabled (domain, dir_name)) {
 		g_free (dir_name);
-		return (char*) filename;
-	}
-	
-	for (path = domain->search_path; *path; path++) {
-		if (**path == '\0') {
-			is_private = TRUE;
-			continue;
-		}
-		
-		if (!is_private)
-			continue;
-
-		if (strstr (dir_name, *path) == dir_name) {
-			do_copy = TRUE;
-			break;
-		}
+		return (char *) filename;
 	}
 	g_free (dir_name);
-
-	if (!do_copy)
-		return (char*) filename;
 	
 	shadow = get_shadow_assembly_location (filename);
 	if (ensure_directory_exists (shadow) == FALSE) {
+		g_free (shadow);
 		exc = mono_get_exception_execution_engine ("Failed to create shadow copy (ensure directory exists).");
 		mono_raise_exception (exc);
 	}	
@@ -1289,6 +1378,13 @@ mono_make_shadow_copy (const char *filename)
 	if (copy_result == FALSE)  {
 		g_free (shadow);
 		exc = mono_get_exception_execution_engine ("Failed to create shadow copy of sibling data (CopyFile).");
+		mono_raise_exception (exc);
+	}
+
+	/* Create a .ini file containing the original assembly location */
+	if (!shadow_copy_create_ini (shadow, filename)) {
+		g_free (shadow);
+		exc = mono_get_exception_execution_engine ("Failed to create shadow copy .ini file.");
 		mono_raise_exception (exc);
 	}
 
@@ -1762,6 +1858,7 @@ typedef struct unload_data {
 	char *failure_reason;
 } unload_data;
 
+
 static guint32 WINAPI
 unload_thread_main (void *arg)
 {
@@ -1777,6 +1874,11 @@ unload_thread_main (void *arg)
 	 */
 	if (!mono_threads_abort_appdomain_threads (domain, -1)) {
 		data->failure_reason = g_strdup_printf ("Aborting of threads in domain %s timed out.", domain->friendly_name);
+		return 1;
+	}
+
+	if (!mono_thread_pool_remove_domain_jobs (domain, -1)) {
+		data->failure_reason = g_strdup_printf ("Cleanup of threadpool jobs of domain %s timed out.", domain->friendly_name);
 		return 1;
 	}
 

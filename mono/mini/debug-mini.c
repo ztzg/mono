@@ -123,6 +123,8 @@ write_variable (MonoInst *inst, MonoDebugVarInfo *var)
 
 	if (inst->opcode == OP_REGVAR)
 		var->index = inst->dreg | MONO_DEBUG_VAR_ADDRESS_MODE_REGISTER;
+	else if (inst->flags & MONO_INST_IS_DEAD)
+		var->index = MONO_DEBUG_VAR_ADDRESS_MODE_DEAD;
 	else {
 		/* the debug interface needs fixing to allow 0(%base) address */
 		var->index = inst->inst_basereg | MONO_DEBUG_VAR_ADDRESS_MODE_REGOFFSET;
@@ -265,15 +267,15 @@ mono_debug_close_method (MonoCompile *cfg)
 	jit->params = g_new0 (MonoDebugVarInfo, jit->num_params);
 
 	for (i = 0; i < jit->num_locals; i++)
-		write_variable (cfg->varinfo [cfg->locals_start + i], &jit->locals [i]);
+		write_variable (cfg->locals [i], &jit->locals [i]);
 
-	if (sig->hasthis && !(cfg->varinfo [0]->flags & MONO_INST_IS_DEAD)) {
+	if (sig->hasthis) {
 		jit->this_var = g_new0 (MonoDebugVarInfo, 1);
 		write_variable (cfg->args [0], jit->this_var);
 	}
 
 	for (i = 0; i < jit->num_params; i++)
-		write_variable (cfg->varinfo [i + sig->hasthis], &jit->params [i]);
+		write_variable (cfg->args [i + sig->hasthis], &jit->params [i]);
 
 	jit->num_line_numbers = info->line_numbers->len;
 	jit->line_numbers = g_new0 (MonoDebugLineNumberEntry, jit->num_line_numbers);
@@ -420,13 +422,15 @@ serialize_variable (MonoDebugVarInfo *var, guint8 *p, guint8 **endbuf)
 {
 	guint32 flags = var->index & MONO_DEBUG_VAR_ADDRESS_MODE_FLAGS;
 
+	encode_value (var->index, p, &p);
+
 	switch (flags) {
 	case MONO_DEBUG_VAR_ADDRESS_MODE_REGISTER:
-		encode_value (var->index, p, &p);
 		break;
 	case MONO_DEBUG_VAR_ADDRESS_MODE_REGOFFSET:
-		encode_value (var->index, p, &p);
 		encode_value (var->offset, p, &p);
+		break;
+	case MONO_DEBUG_VAR_ADDRESS_MODE_DEAD:
 		break;
 	default:
 		g_assert_not_reached ();
@@ -458,12 +462,8 @@ mono_debug_serialize_debug_info (MonoCompile *cfg, guint8 **out_buf, guint32 *bu
 	for (i = 0; i < jit->num_params; ++i)
 		serialize_variable (&jit->params [i], p, &p);
 
-	if (jit->this_var) {
-		encode_value (1, p, &p);
+	if (mono_method_signature (cfg->method)->hasthis)
 		serialize_variable (jit->this_var, p, &p);
-	} else {
-		encode_value (0, p, &p);
-	}
 
 	for (i = 0; i < jit->num_locals; i++)
 		serialize_variable (&jit->locals [i], p, &p);
@@ -502,6 +502,8 @@ deserialize_variable (MonoDebugVarInfo *var, guint8 *p, guint8 **endbuf)
 	case MONO_DEBUG_VAR_ADDRESS_MODE_REGOFFSET:
 		var->offset = decode_value (p, &p);
 		break;
+	case MONO_DEBUG_VAR_ADDRESS_MODE_DEAD:
+		break;
 	default:
 		g_assert_not_reached ();
 	}
@@ -515,7 +517,7 @@ deserialize_debug_info (MonoMethod *method, guint8 *code_start, guint8 *buf, gui
 	gint32 offset, native_offset, prev_offset, prev_native_offset;
 	MonoDebugMethodJitInfo *jit;
 	guint8 *p;
-	int i, has_this;
+	int i;
 
 	header = mono_method_get_header (method);
 	g_assert (header);
@@ -535,8 +537,7 @@ deserialize_debug_info (MonoMethod *method, guint8 *code_start, guint8 *buf, gui
 	for (i = 0; i < jit->num_params; ++i)
 		deserialize_variable (&jit->params [i], p, &p);
 
-	has_this = decode_value (p, &p);
-	if (has_this) {
+	if (mono_method_signature (method)->hasthis) {
 		jit->this_var = g_new0 (MonoDebugVarInfo, 1);
 		deserialize_variable (jit->this_var, p, &p);
 	}

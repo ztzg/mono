@@ -15,13 +15,17 @@ topdir := $(dots)
 
 VERSION = 0.93
 
+Q=$(if $(V),,@)
+# echo -e "\\t" does not work on some systems, so use 5 spaces
+Q_MCS=$(if $(V),,@echo "MCS     [$(PROFILE)] $(notdir $(@))";)
+
 USE_MCS_FLAGS = /codepage:$(CODEPAGE) $(LOCAL_MCS_FLAGS) $(PLATFORM_MCS_FLAGS) $(PROFILE_MCS_FLAGS) $(MCS_FLAGS)
 USE_MBAS_FLAGS = /codepage:$(CODEPAGE) $(LOCAL_MBAS_FLAGS) $(PLATFORM_MBAS_FLAGS) $(PROFILE_MBAS_FLAGS) $(MBAS_FLAGS)
 USE_CFLAGS = $(LOCAL_CFLAGS) $(CFLAGS)
-CSCOMPILE = $(MCS) $(USE_MCS_FLAGS)
+CSCOMPILE = $(Q_MCS) $(MCS) $(USE_MCS_FLAGS)
 BASCOMPILE = $(MBAS) $(USE_MBAS_FLAGS)
 CCOMPILE = $(CC) $(USE_CFLAGS)
-BOOT_COMPILE = $(BOOTSTRAP_MCS) $(USE_MCS_FLAGS)
+BOOT_COMPILE = $(Q_MCS) $(BOOTSTRAP_MCS) $(USE_MCS_FLAGS)
 INSTALL = $(SHELL) $(topdir)/../mono/install-sh
 INSTALL_DATA = $(INSTALL) -c -m 644
 INSTALL_BIN = $(INSTALL) -c -m 755
@@ -89,7 +93,7 @@ endif
 # Rest of the configuration
 
 ifndef PROFILE
-PROFILE = default
+PROFILE = net_2_0
 endif
 
 include $(topdir)/build/profiles/$(PROFILE).make
@@ -108,7 +112,7 @@ gacutil = $(topdir)/class/lib/net_1_1_bootstrap/gacutil.exe
 GACUTIL = MONO_PATH="$(topdir)/class/lib/net_1_1_bootstrap$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(RUNTIME) $(RUNTIME_FLAGS) $(gacutil)
 endif
 
-STD_TARGETS = test run-test run-test-ondotnet clean install uninstall
+STD_TARGETS = test run-test run-test-ondotnet clean install uninstall doc-update
 
 $(STD_TARGETS): %: do-%
 
@@ -168,6 +172,11 @@ dist-default:
 	    dest=`dirname $(distdir)/$$f` ; \
 	    $(MKINSTALLDIRS) $$dest && cp -p $$f $$dest || exit 1 ; \
 	done
+	if test -d Documentation ; then \
+		find . -name '*.xml' > .files ; \
+		tar cTf .files - | (cd $(distdir); tar xf -) ; \
+		rm .files ; \
+	fi
 
 %/.stamp:
 	$(MKINSTALLDIRS) $(@D)
@@ -177,3 +186,9 @@ dist-default:
 
 withmcs:
 	$(MAKE) MCS='$(INTERNAL_MCS)' BOOTSTRAP_MCS='$(INTERNAL_MCS)' all
+
+## Documentation stuff
+
+Q_MDOC =$(if $(V),,@echo "MDOC    [$(PROFILE)] $(notdir $(@))";)
+MDOC   =$(Q_MDOC) MONO_PATH="$(topdir)/class/lib/net_2_0$(PLATFORM_PATH_SEPARATOR)$(topdir)/class/lib/net_1_1$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(RUNTIME) $(topdir)/tools/mdoc/mdoc.exe
+

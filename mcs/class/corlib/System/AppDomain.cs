@@ -169,12 +169,18 @@ namespace System {
 					// ... we will provide our own
 					lock (this) {
 						// the executed assembly from the "default" appdomain
-						// or null if we're not in the default appdomain
+						// or null if we're not in the default appdomain or
+						// if there is no entry assembly (embedded mono)
 						Assembly a = Assembly.GetEntryAssembly ();
-						if (a == null)
-							_evidence = AppDomain.DefaultDomain.Evidence;
-						else
+						if (a == null) {
+							if (this == DefaultDomain)
+								// mono is embedded
+								return new Evidence ();
+							else
+								_evidence = AppDomain.DefaultDomain.Evidence;
+						} else {
 							_evidence = Evidence.GetDefaultHostEvidence (a);
+						}
 					}
 				}
 				return new Evidence (_evidence);	// return a copy
@@ -579,15 +585,51 @@ namespace System {
 					throw new ArgumentException (Locale.GetText ("assemblyRef.Name cannot be empty."), "assemblyRef");
 			}
 
-			return LoadAssembly (assemblyRef.FullName, assemblySecurity, false);
+			FileNotFoundException exc = null;
+			try {
+				return LoadAssembly (assemblyRef.FullName, assemblySecurity, false);
+			} catch (FileNotFoundException e) {
+				if (assemblyRef.CodeBase == null)
+					throw;
+				exc = e;
+			}
+
+			Assembly assembly = null;
+			string cb = assemblyRef.CodeBase;
+			if (cb.ToLower (CultureInfo.InvariantCulture).StartsWith ("file://"))
+				cb = new Mono.Security.Uri (cb).LocalPath;
+
+			try {
+				assembly = Assembly.LoadFrom (cb, assemblySecurity);
+			} catch {
+				throw exc;
+			}
+			AssemblyName aname = assembly.GetName ();
+			// Name, version, culture, publickeytoken. Anything else?
+			if (assemblyRef.Name != aname.Name)
+				throw exc;
+
+			if (assemblyRef.Version != new Version () && assemblyRef.Version != aname.Version)
+				throw exc;
+
+			if (assemblyRef.CultureInfo != null && assemblyRef.CultureInfo.Equals (aname))
+				throw exc;
+
+			byte [] pt = assemblyRef.GetPublicKeyToken ();
+			if (pt != null) {
+				byte [] loaded_pt = aname.GetPublicKeyToken ();
+				if (loaded_pt == null || (pt.Length != loaded_pt.Length))
+					throw exc;
+				for (int i = pt.Length - 1; i >= 0; i--)
+					if (loaded_pt [i] != pt [i])
+						throw exc;
+			}
+			return assembly;
 		}
 
 		public Assembly Load (string assemblyString)
 		{
-			if (assemblyString == null)
-				throw new ArgumentNullException ("assemblyString");
-
-			return LoadAssembly (assemblyString, null, false);
+			return Load (assemblyString, null, false);
 		}
 
 		public Assembly Load (string assemblyString, Evidence assemblySecurity)
@@ -599,6 +641,9 @@ namespace System {
 		{
 			if (assemblyString == null)
 				throw new ArgumentNullException ("assemblyString");
+				
+			if (assemblyString.Length == 0)
+				throw new ArgumentException ("assemblyString cannot have zero length");
 
 			return LoadAssembly (assemblyString, assemblySecurity, refonly);
 		}
@@ -841,17 +886,66 @@ namespace System {
 
 #if NET_2_0
 			if (info.AppDomainInitializer != null) {
-				if ((info.AppDomainInitializer.Method.Attributes & MethodAttributes.Static) == 0)
+				if (!info.AppDomainInitializer.Method.IsStatic)
 					throw new ArgumentException ("Non-static methods cannot be invoked as an appdomain initializer");
-				info.AppDomainInitializer (info.AppDomainInitializerArguments);
+
+				Loader loader = new Loader (
+					info.AppDomainInitializer.Method.DeclaringType.Assembly.Location);
+				ad.DoCallBack (loader.Load);
+
+				Initializer initializer = new Initializer (
+					info.AppDomainInitializer,
+					info.AppDomainInitializerArguments);
+				ad.DoCallBack (initializer.Initialize);
 			}
 #endif
 
 			return ad;
 		}
 
+#if NET_2_0
+		[Serializable]
+		class Loader {
+
+			string assembly;
+
+			public Loader (string assembly)
+			{
+				this.assembly = assembly;
+			}
+
+			public void Load ()
+			{
+				Assembly.LoadFrom (assembly);
+			}
+		}
+
+		[Serializable]
+		class Initializer {
+
+			AppDomainInitializer initializer;
+			string [] arguments;
+
+			public Initializer (AppDomainInitializer initializer, string [] arguments)
+			{
+				this.initializer = initializer;
+				this.arguments = arguments;
+			}
+
+			public void Initialize ()
+			{
+				initializer (arguments);
+			}
+		}
+#endif
+
 		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo,string appBasePath,
 		                                      string appRelativeSearchPath, bool shadowCopyFiles)
+		{
+			return CreateDomain (friendlyName, securityInfo, CreateDomainSetup (appBasePath, appRelativeSearchPath, shadowCopyFiles));
+		}
+
+		static AppDomainSetup CreateDomainSetup (string appBasePath, string appRelativeSearchPath, bool shadowCopyFiles)
 		{
 			AppDomainSetup info = new AppDomainSetup ();
 
@@ -863,7 +957,7 @@ namespace System {
 			else
 				info.ShadowCopyFiles = "false";
 
-			return CreateDomain (friendlyName, securityInfo, info);
+			return info;
 		}
 
 #if NET_2_0
@@ -976,6 +1070,7 @@ namespace System {
 		}
 
 		// The following methods are called from the runtime. Don't change signatures.
+#pragma warning disable 169		
 		private void DoAssemblyLoad (Assembly assembly)
 		{
 			if (AssemblyLoad == null)
@@ -1099,6 +1194,7 @@ namespace System {
 			else
 				arrResponse = null;
 		}
+#pragma warning restore 169
 
 		// End of methods called from the runtime
 		
@@ -1141,13 +1237,6 @@ namespace System {
 		[method: SecurityPermission (SecurityAction.LinkDemand, ControlAppDomain = true)]
 		public event UnhandledExceptionEventHandler UnhandledException;
 #endif
-
-		/* Avoid warnings for events used only by the runtime */
-		private void DummyUse () {
-			ProcessExit += (EventHandler)null;
-			ResourceResolve += (ResolveEventHandler)null;
-			UnhandledException += (UnhandledExceptionEventHandler)null;
-		}
 
 #if NET_2_0
 
@@ -1192,11 +1281,15 @@ namespace System {
 
 		// static methods
 
-		[MonoTODO ("add support for new delegate")]
 		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo, string appBasePath,
 			string appRelativeSearchPath, bool shadowCopyFiles, AppDomainInitializer adInit, string[] adInitArgs)
 		{
-			return CreateDomain (friendlyName, securityInfo, appBasePath, appRelativeSearchPath, shadowCopyFiles);
+			AppDomainSetup info = CreateDomainSetup (appBasePath, appRelativeSearchPath, shadowCopyFiles);
+
+			info.AppDomainInitializerArguments = adInitArgs;
+			info.AppDomainInitializer = adInit;
+
+			return CreateDomain (friendlyName, securityInfo, info);
 		}
 
 		public int ExecuteAssemblyByName (string assemblyName)

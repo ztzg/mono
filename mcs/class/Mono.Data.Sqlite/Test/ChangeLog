@@ -1,6 +1,6 @@
-2008-07-30  Zoltan Varga  <vargaz@gmail.com>
+2008-08-04  Zoltan Varga  <vargaz@gmail.com>
 
-	* SqliteParameterUnitTests.cs: Disable the random value insertion
+	* SqliteParameterUnitTests.cs: Disable the InsertRandomValuesWithParameter
 	test as it fails randomly.
 
 2008-07-15  Marek Habersack  <mhabersack@novell.com>

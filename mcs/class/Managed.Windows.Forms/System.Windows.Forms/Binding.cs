@@ -56,7 +56,7 @@ namespace System.Windows.Forms {
 #if NET_2_0
 		private DataSourceUpdateMode datasource_update_mode;
 		private ControlUpdateMode control_update_mode;
-		private object datasource_null_value;
+		private object datasource_null_value = Convert.DBNull;
 		private object null_value;
 		private IFormatProvider format_info;
 		private string format_string;
@@ -99,10 +99,6 @@ namespace System.Windows.Forms {
 			null_value = nullValue;
 			format_string = formatString;
 			format_info = formatInfo;
-
-			EventDescriptor prop_changed_event = GetPropertyChangedEvent (data_source, binding_member_info.BindingField);
-			if (prop_changed_event != null)
-				prop_changed_event.AddEventHandler (data_source, new EventHandler (SourcePropertyChangedHandler));
 		}
 #else
 		public Binding (string propertyName, object dataSource, string dataMember)
@@ -111,10 +107,6 @@ namespace System.Windows.Forms {
 			data_source = dataSource;
 			data_member = dataMember;
 			binding_member_info = new BindingMemberInfo (dataMember);
-				
-			EventDescriptor prop_changed_event = GetPropertyChangedEvent (data_source, binding_member_info.BindingField);
-			if (prop_changed_event != null)
-				prop_changed_event.AddEventHandler (data_source, new EventHandler (SourcePropertyChangedHandler));
 		}		
 #endif
 		#endregion	// Public Constructors
@@ -346,9 +338,21 @@ namespace System.Windows.Forms {
 				return;
 
 			if (manager == null) {
-				manager = control.BindingContext [data_source];
+				manager = control.BindingContext [data_source, binding_member_info.BindingPath];
+
+				if (manager.Position > -1 && binding_member_info.BindingField != String.Empty &&
+					TypeDescriptor.GetProperties (manager.Current).Find (binding_member_info.BindingField, true) == null)
+					throw new ArgumentException ("Cannot bind to property '" + binding_member_info.BindingField + "' on DataSource.", 
+							"dataMember");
+
 				manager.AddBinding (this);
 				manager.PositionChanged += new EventHandler (PositionChangedHandler);
+
+				if (manager is PropertyManager) { // Match .net, which only watchs simple objects
+					EventDescriptor prop_changed_event = GetPropertyChangedEvent (manager.Current, binding_member_info.BindingField);
+					if (prop_changed_event != null)
+						prop_changed_event.AddEventHandler (manager.Current, new EventHandler (SourcePropertyChangedHandler));
+				}
 			}
 
 			if (manager.Position == -1)
@@ -559,8 +563,11 @@ namespace System.Windows.Forms {
 			if (e.Value == Convert.DBNull)
 				return e.Value;
 #if NET_2_0
-			if (e.Value == null)
-				return data_type.IsByRef ? null : Convert.DBNull;
+			if (e.Value == null) {
+				bool nullable = data_type.IsGenericType && !data_type.ContainsGenericParameters &&
+					data_type.GetGenericTypeDefinition () == typeof (Nullable<>);
+				return data_type.IsValueType && !nullable ? Convert.DBNull : null;
+			}
 #endif
 
 			return ConvertData (e.Value, data_type);
@@ -576,9 +583,8 @@ namespace System.Windows.Forms {
 
 #if NET_2_0
 			if (formatting_enabled) {
-				if (e.Value == null || e.Value == Convert.DBNull) {
+				if ((e.Value == null || e.Value == Convert.DBNull) && null_value != null)
 					return null_value;
-				}
 				
 				if (e.Value is IFormattable && data_type == typeof (string)) {
 					IFormattable formattable = (IFormattable) e.Value;
