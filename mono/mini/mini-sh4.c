@@ -571,7 +571,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	/* The stack size is now fully known so specify how to access parameters. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
-		MonoInst *inst = cfg->varinfo[i];
+		MonoInst *inst = cfg->args[i];
 		struct arg_info *arg_info = &call_info->args[i];
 
 		/* Nothing to do if the variable is already allocated to a register.
