@@ -7,26 +7,31 @@
 #
 
 stmt: OP_START_HANDLER {
+	g_assert(s->new_ir == FALSE);
 	mono_bblock_add_inst (s->cbb, tree);
 }
 
 stmt: OP_ENDFINALLY {
+	g_assert(s->new_ir == FALSE);
 	mono_bblock_add_inst (s->cbb, tree);
 }
 
 stmt: OP_ENDFILTER (reg) {
+	g_assert(s->new_ir == FALSE);
 	tree->sreg1 = state->left->reg1;
 	mono_bblock_add_inst (s->cbb, tree);
 }
 
 # Describes how to pass a parameter into a register.
 stmt: OP_OUTARG (reg) {
+	g_assert(s->new_ir == FALSE);
 	MONO_EMIT_UNALU(s, tree, OP_MOVE, mono_regstate_next_int(s->rs), state->left->reg1);
 	mono_call_inst_add_outarg_reg (s, (MonoCallInst*)tree->inst_right, tree->dreg, tree->backend.reg3, FALSE);
 }
 
 # Describes how to pass a parameter onto the stack.
 stmt: OP_OUTARG_MEMBASE (reg) {
+	g_assert(s->new_ir == FALSE);
 	tree->sreg1 = state->left->reg1;
 	/* tree->dreg = sh4_sp; Obvious and useless. */
 	mono_bblock_add_inst(s->cbb, tree);
@@ -34,6 +39,7 @@ stmt: OP_OUTARG_MEMBASE (reg) {
 
 # Describes how to return a result into a register.
 stmt: OP_SETRET (reg) {
+	g_assert(s->new_ir == FALSE);
 	MONO_EMIT_UNALU(s, tree, OP_MOVE, sh4_r0, state->left->reg1);
 }
 

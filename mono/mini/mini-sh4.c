@@ -3,6 +3,7 @@
  *
  * Authors:
  *   Cedric VINCENT (cedric.vincent@st.com)
+ *   Yves JANIN (yves.janin@st.com)
  *   Denis FERRANTI (denis.ferranti@st.com)
  *   Yvan Roux (yvan.roux@st.com)
  *   Julien Villette (julien.villette@st.com)
@@ -13,6 +14,7 @@
 #include <glib.h>
 
 #include "mini.h"
+#include "inssel.h"
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
@@ -40,8 +42,6 @@ struct arg_info {
 };
 
 struct call_info {
-	int nargs;
-	guint32 reg_usage;
 	guint32 stack_usage;
 	guint32 stack_align_amount;
 	struct arg_info ret;
@@ -255,7 +255,6 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 	/* Align the stack frame on a 4-bytes boundary. */
 	call_info->stack_usage = (stack_size + 0x3) & ~0x3;
 	call_info->stack_align_amount = call_info->stack_usage - stack_size;
-	call_info->reg_usage = arg_reg;
 
 	return call_info;
 }
@@ -267,6 +266,8 @@ static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, s
 {
 	MonoInst *arg = NULL;
 	MonoInst *signature = NULL;
+
+	g_assert(cfg->new_ir == FALSE);
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p, %p", cfg, call, arg_info);
 
@@ -315,6 +316,8 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 	int sentinelpos = -1;
 	int arg_count = 0;
 	int i = 0;
+
+	g_assert(cfg->new_ir == FALSE);
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p, %p, %d", cfg, bb, call, is_virtual);
 
@@ -1302,6 +1305,8 @@ void mono_arch_emit_this_vret_args(MonoCompile *cfg, MonoCallInst *inst, int thi
 {
 	int this_dreg = -1;
 
+	g_assert(cfg->new_ir == FALSE);
+
 	/* Keep in sync with get_call_info(). */
 	if (vt_reg == -1)
 		this_dreg = sh4_r4;
@@ -1789,7 +1794,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* Now, the general case */
 			MONO_INST_NEW(cfg,new_inst,OP_ICONST);
 			new_inst->inst_c0 = inst->inst_imm;
-			new_inst->dreg = mono_regstate_next_int (cfg->rs);
+			new_inst->dreg = mono_regstate_next_int(cfg->rs);
 			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 			inst->opcode = OP_IMUL;
 			inst->sreg2 = new_inst->dreg;
@@ -1803,9 +1808,9 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
 				break;
 
-			MONO_INST_NEW (cfg, new_inst, OP_ICONST);
+			MONO_INST_NEW(cfg, new_inst, OP_ICONST);
 			new_inst->inst_c0 = inst->inst_imm;
-			new_inst->dreg = mono_regstate_next_int (cfg->rs);
+			new_inst->dreg = mono_regstate_next_int(cfg->rs);
 			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 
 			/* We merge the case STORE_MEMBASE and STOREI4_MEMBASE. */
@@ -2412,7 +2417,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
-			/* MD: endfilter: src1:i clob:t len:12 */
+			/* MD: endfilter: src1:z clob:t len:12 */
 			/* The local allocator will put the result into sh4_r0. */
 		case OP_ENDFINALLY: {
 			/* MD: endfinally: clob:t len:10 */

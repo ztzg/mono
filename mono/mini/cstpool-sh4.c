@@ -2,7 +2,9 @@
  * cstpool-sh4.c: SH4 backend for the Mono code generator
  *
  * Authors:
- *   Yves   JANIN   (yves.janin@st.com)
+ *   Yves JANIN (yves.janin@st.com)
+ *   Denis FERRANTI (denis.ferranti@st.com)
+ *   Cedric VINCENT (cedric.vincent@st.com)
  *
  * (C) 2008 STMicroelectronics.
  */
@@ -64,6 +66,9 @@
  * Note that these two sequences of instructions are to be used only when
  * immediate versions of conditional/unconditionals branch and jump
  * instructions can't be used (*1).
+ *
+ * Warning: The constant pool should not be emitted between an
+ * instruction and its delay slot.
  *
  * Float and double constants
  * --------------------------

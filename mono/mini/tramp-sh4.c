@@ -3,6 +3,8 @@
  *
  * Authors:
  *   Cedric VINCENT (cedric.vincent@st.com)
+ *   Denis FERRANTI (denis.ferranti@st.com)
+ *   Yvan Roux (yvan.roux@st.com)
  *
  * (C) 2008 STMicroelectronics.
  */

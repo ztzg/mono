@@ -15,12 +15,10 @@
 #include "mono/arch/sh4/sh4-codegen.h"
 
 /**
- * This function is used to gather information from 'ctx'. It returns the 
- * MonoJitInfo of the corresponding function, unwinds one stack frame and
- * stores the resulting context into 'new_ctx'. It also stores a string 
- * describing the stack location into 'trace' (if not NULL), and modifies
- * the 'lmf' if necessary. 'native_offset' is used to return the PC offset
- * from the start of the function or -1 if that info is not available.
+ * This function is used to gather information from 'ctx'. It returns
+ * the MonoJitInfo of the corresponding function, unwinds one stack
+ * frame and stores the resulting context into 'new_ctx'. It modifies
+ * the 'lmf' if necessary.
  */
 MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *result,
 				     MonoJitInfo *previous_jit_info, MonoContext *context, MonoContext *new_context,
@@ -30,8 +28,8 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 	gpointer pc = MONO_CONTEXT_GET_IP(context);
 
 	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %p, %p, %p, %p",
-		  domain, jit_tls, result, previous_jit_info, context,
-		  new_context, lmf, managed);
+			domain, jit_tls, result, previous_jit_info, context,
+			new_context, lmf, managed);
 
 	/* Avoid costly table lookup during stack overflow. */
 	if (previous_jit_info != NULL &&
