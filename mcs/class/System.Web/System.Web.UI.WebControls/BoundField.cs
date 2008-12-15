@@ -142,10 +142,10 @@ namespace System.Web.UI.WebControls {
 			if (editable) {
 				if (cell.Controls.Count > 0) {
 					TextBox box = (TextBox) cell.Controls [0];
-					dictionary [DataField] = box.Text;
+					dictionary [DataField] = string.IsNullOrEmpty (box.Text) ? null : box.Text;
 				}
 			} else if (includeReadOnly) {
-				dictionary [DataField] = cell.Text;
+				dictionary [DataField] = string.IsNullOrEmpty (cell.Text) ? null : cell.Text;
 			}
 		}
 
