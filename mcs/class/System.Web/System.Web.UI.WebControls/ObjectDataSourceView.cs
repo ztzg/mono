@@ -1105,13 +1105,24 @@ namespace System.Web.UI.WebControls
 		
 		object ConvertParameter (Type targetType, object value)
 		{
-			return ConvertParameter (Type.GetTypeCode (targetType), value);
+			TypeCode typeCode = Type.GetTypeCode (targetType);
+
+			if (targetType.IsGenericType && targetType.GetGenericTypeDefinition ().Equals (typeof (Nullable<>))) {
+				if (value == null)
+					return null;
+
+				typeCode = Type.GetTypeCode (targetType.GetGenericArguments () [0]);
+			}
+
+			return ConvertParameter (typeCode, value);
 		}
 		
 		object ConvertParameter (TypeCode targetType, object value)
 		{
 			if (value == null) {
-				if (targetType != TypeCode.Object && targetType != TypeCode.String)
+				if (targetType == TypeCode.DateTime)
+					value = new DateTime ();
+				else if (targetType != TypeCode.Object && targetType != TypeCode.String)
 					value = 0;
 				else if (ConvertNullToDBNull)
 					return DBNull.Value;
