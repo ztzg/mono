@@ -1,18 +1,34 @@
 /* -*- c-set-style: "K&R"; c-basic-offset: 8 -*-
- * cstpool-sh4.c: SH4 backend for the Mono code generator
+ * cstpool-sh4.c: constant pool service for the SH4 backend.
+ *
+ * Copyright (c) 2009 STMicroelectronics
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  *
  * Authors:
  *   Yves JANIN (yves.janin@st.com)
  *   Denis FERRANTI (denis.ferranti@st.com)
  *   Cedric VINCENT (cedric.vincent@st.com)
- *
- * (C) 2008 STMicroelectronics.
  */
 
 #include <glib.h>
-
 #include "cstpool-sh4.h"
-
 
 /**
  * Constant pool management
@@ -45,11 +61,11 @@
  *  |      0x08
  *  |      0x0A
  *  |      0x0C
- ...|............
+ * ...|............
  *  |      0x10             // Beginning of the constant pool
- ...|............
+ * ...|............
  *  |----> 0x18 0xdeadbeef  // Value of the loaded constant
- ................
+ * ................
  *         0x30             // Beginning of the next basic block (code).
  *
  * Loading a constant is an operation that can be followed by
@@ -191,24 +207,19 @@ static inline guint32  sh4_get_int_from_float(CstPool_Const_Values *g);
 static inline guint32  sh4_get_32low_from_double(CstPool_Const_Values* g);
 static inline guint32  sh4_get_32high_from_double(CstPool_Const_Values* g);
 
-static inline CstPool_Const_Values *sh4_build_cst_int(MonoMemPool *pool, 
-                                                      guint32 i);
-static inline CstPool_Const_Values *sh4_build_cst_float(MonoMemPool *pool,
-                                                        float f);
-static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, 
-                                                        double d);
+static inline CstPool_Const_Values *sh4_build_cst_int(MonoMemPool *pool, guint32 i);
+static inline CstPool_Const_Values *sh4_build_cst_float(MonoMemPool *pool, float f);
+static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, double d);
 
-static void         sh4_cstpool_decide_emission(MonoCompile*, gboolean, 
-                                                MonoBasicBlock*, 
-                                                guint8 **pcval);
 static inline void  sh4_cstpool_addpool(MonoCompile*);
-static void         sh4_emit_current_pool(MonoCompile*, MonoSH4CstPool*,
-                                          gboolean, guint8 **pcval);
-static void         sh4_cstpool_add_internal(MonoCompile *cfg, 
+
+static void         sh4_cstpool_decide_emission(MonoCompile*, gboolean, MonoBasicBlock*, guint8 **pcval);
+static void         sh4_emit_current_pool(MonoCompile*, MonoSH4CstPool*, gboolean, guint8 **pcval);
+static void         sh4_cstpool_add_internal(MonoCompile *cfg,
                                              guint8 **pcval,
-				             MonoJumpInfoType type, 
+				             MonoJumpInfoType type,
                                              gconstpointer target,
-                                             guint32  reg, 
+                                             guint32  reg,
                                              CstPool_Const_Values *g);
 
 /* We don't want to call recursively sh4_cstpool_check in
@@ -227,301 +238,286 @@ static void         sh4_cstpool_add_internal(MonoCompile *cfg,
 static inline void*
 sh4_cstpool_malloc(MonoMemPool *pool, guint32 size)
 {
-   if(pool==NULL)
-     return g_malloc0(size);
-   else
-     return mono_mempool_alloc0(pool,size);
+	if(pool==NULL)
+		return g_malloc0(size);
+	else
+		return mono_mempool_alloc0(pool,size);
 }
 
 static inline gboolean
 sh4_is_valid_offset(guint32 offset)
-{ 
-  return (offset&0x1)==0 ? TRUE : FALSE;
+{
+	return (offset&0x1)==0 ? TRUE : FALSE;
 }
 
 /* Access routines for CstPool_Const_Values structure. */
-static inline guint32 
-sh4_cst_type(CstPool_Const_Values *g)
+static inline guint32 sh4_cst_type(CstPool_Const_Values *g)
 {
-   return g->const_type;
+	return g->const_type;
 }
 
-static inline CstPool_Const_Values*
-sh4_build_cst_int(MonoMemPool *pool, guint32 i)
+static inline CstPool_Const_Values *sh4_build_cst_int(MonoMemPool *pool, guint32 i)
 {
-    CstPool_Const_Values *g;
+	CstPool_Const_Values *g;
 
-    g = sh4_cstpool_malloc(pool, sizeof(CstPool_Const_Values));
-    g->const_type = cstpool_type_int;
-    g->u1.u2.i = i;
+	g = sh4_cstpool_malloc(pool, sizeof(CstPool_Const_Values));
+	g->const_type = cstpool_type_int;
+	g->u1.u2.i = i;
 
-    return g;
+	return g;
 }
 
-static inline CstPool_Const_Values*
-sh4_build_cst_float(MonoMemPool *pool, float f)
+static inline CstPool_Const_Values *sh4_build_cst_float(MonoMemPool *pool, float f)
 {
-    CstPool_Const_Values *g;
+	CstPool_Const_Values *g;
 
-    g = sh4_cstpool_malloc(pool, sizeof(CstPool_Const_Values));
-    g->const_type = cstpool_type_float;
-    g->u1.u2.f = f;
+	g = sh4_cstpool_malloc(pool, sizeof(CstPool_Const_Values));
+	g->const_type = cstpool_type_float;
+	g->u1.u2.f = f;
 
-    return g;
+	return g;
 }
 
-static inline CstPool_Const_Values*
-sh4_build_cst_double(MonoMemPool *pool, double d)
+static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, double d)
 {
-    CstPool_Const_Values *g;
+	CstPool_Const_Values *g;
 
-    g = sh4_cstpool_malloc(pool, sizeof(CstPool_Const_Values));
-    g->const_type = cstpool_type_double;
-    g->u1.u3.d = d;
+	g = sh4_cstpool_malloc(pool, sizeof(CstPool_Const_Values));
+	g->const_type = cstpool_type_double;
+	g->u1.u3.d = d;
 
-    return g;
+	return g;
 }
 
-static inline gboolean
-sh4_cst_is_double(CstPool_Const_Values *g)
+static inline gboolean sh4_cst_is_double(CstPool_Const_Values *g)
 {
-   return g->const_type == cstpool_type_double ? TRUE : FALSE;
+	return g->const_type == cstpool_type_double ? TRUE : FALSE;
 }
 
-static inline guint32 
-sh4_get_int(CstPool_Const_Values* g)
+static inline guint32 sh4_get_int(CstPool_Const_Values* g)
 {
-   return g->u1.u2.i;
+	return g->u1.u2.i;
 }
 
-static inline guint32
-sh4_get_int_from_float(CstPool_Const_Values* g)
+static inline guint32 sh4_get_int_from_float(CstPool_Const_Values* g)
 {
-   return g->u1.u2.i;
+	return g->u1.u2.i;
 }
 
 /* Warning, depends on endianness! */
-static inline guint32
-sh4_get_32low_from_double(CstPool_Const_Values* g)
+static inline guint32 sh4_get_32low_from_double(CstPool_Const_Values* g)
 {
-   return g->u1.u3.tabint[0];
+	return g->u1.u3.tabint[0];
 }
 
 /* Warning, depends on endianness! */
-static inline guint32
-sh4_get_32high_from_double(CstPool_Const_Values* g)
+static inline guint32 sh4_get_32high_from_double(CstPool_Const_Values* g)
 {
-   return g->u1.u3.tabint[1];
+	return g->u1.u3.tabint[1];
 }
 
 /**
  * Adding a constant pool in the environement
  */
-static inline void
-sh4_cstpool_addpool(MonoCompile *cfg)
+static inline void sh4_cstpool_addpool(MonoCompile *cfg)
 {
-   MonoSH4CstPool_Env *env = cfg->arch.poolenv;
-   MonoSH4CstPool     *tmp;
+	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
+	MonoSH4CstPool     *tmp;
 
-   tmp = sh4_cstpool_malloc(env->mempool,sizeof(MonoSH4CstPool));
+	tmp = sh4_cstpool_malloc(env->mempool,sizeof(MonoSH4CstPool));
 
-   SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p -- Create pool %d", cfg, env->nbpool);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p -- Create pool %d", cfg, env->nbpool);
 
-   /* Initialize pool */
-   tmp->next            = NULL;
-   tmp->state           = cstpool_filling;
-   tmp->pool_nbcst      = 0;
-   tmp->pool_off        = 0xFFFFFFFF;
-   tmp->pool_off0_start = 0xFFFFFFFF;
-   tmp->pool_nbcst_emitted = 0;
+	/* Initialize pool */
+	tmp->next            = NULL;
+	tmp->state           = cstpool_filling;
+	tmp->pool_nbcst      = 0;
+	tmp->pool_off        = 0xFFFFFFFF;
+	tmp->pool_off0_start = 0xFFFFFFFF;
+	tmp->pool_nbcst_emitted = 0;
 
-   /* Initialize linked list */
-   env->last = tmp;
-   if(env->start==NULL) {
-     env->start=tmp;
-   }
- 
-   ++(env->nbpool);   /* One more pool */
-   return; 
+	/* Initialize linked list */
+	env->last = tmp;
+	if(env->start==NULL) {
+		env->start=tmp;
+	}
+
+	++(env->nbpool);   /* One more pool */
+	return;
 }
 
 /**
  * Overall initialization
  */
-void
-sh4_cstpool_init(MonoCompile *cfg)
+void sh4_cstpool_init(MonoCompile *cfg)
 {
- 
-   MonoSH4CstPool_Env *env ;
-   MonoMemPool        *mempool;
-   int i;
+	MonoSH4CstPool_Env *env ;
+	MonoMemPool        *mempool;
+	int i;
 
-   SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-   mempool = mono_mempool_new();
+	mempool = mono_mempool_new();
 
-   /* Deal with constant pools.
-    */
-   cfg->arch.poolenv = sh4_cstpool_malloc(mempool,sizeof(MonoSH4CstPool_Env));
-   env = cfg->arch.poolenv;
-   env->mempool = mempool;
+	/* Deal with constant pools.
+	 */
+	cfg->arch.poolenv = sh4_cstpool_malloc(mempool,sizeof(MonoSH4CstPool_Env));
+	env = cfg->arch.poolenv;
+	env->mempool = mempool;
 
-   env->nbcst = 0;
-   env->nbpool= 0;
-   env->start = env->last = NULL;
+	env->nbcst = 0;
+	env->nbpool= 0;
+	env->start = env->last = NULL;
 
-   /* Deal with basic blocks */
-   env->nb_bblocks = cfg->num_bblocks;
-   if(env->nb_bblocks) {
-     guint32 size = sizeof(guint32) * env->nb_bblocks;
-     env->tab_bb_offset = sh4_cstpool_malloc(mempool,size);
+	/* Deal with basic blocks */
+	env->nb_bblocks = cfg->num_bblocks;
+	if(env->nb_bblocks) {
+		guint32 size = sizeof(guint32) * env->nb_bblocks;
+		env->tab_bb_offset = sh4_cstpool_malloc(mempool,size);
 
-     for(i=0;i<env->nb_bblocks;++i) {
-       env->tab_bb_offset[i] = 0xFFFFFFFF;   /* Invalid offset */
-     }
-   } else {
-     env->tab_bb_offset = NULL;
-   }
+		for(i=0;i<env->nb_bblocks;++i) {
+			env->tab_bb_offset[i] = 0xFFFFFFFF;   /* Invalid offset */
+		}
+	} else {
+		env->tab_bb_offset = NULL;
+	}
 
-   return;
+	return;
 }
 
 /**
  * Called at the end of each compilation unit.
  */
-void
-sh4_cstpool_end(MonoCompile *cfg)
+void sh4_cstpool_end(MonoCompile *cfg)
 {
-   MonoSH4CstPool_Env *env = cfg->arch.poolenv;
+	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
 
-   SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-   /* (parts of) this code will be removed when memory pools are used */
-   if(env!=NULL) {
-     SH4_CFG_DEBUG(4) SH4_DEBUG("nb of cst pools %d, overall nb of cst %d",
-				env->nbpool, env->nbcst);
+	/* (parts of) this code will be removed when memory pools are used */
+	if(env!=NULL) {
+		SH4_CFG_DEBUG(4) SH4_DEBUG("nb of cst pools %d, overall nb of cst %d",
+					   env->nbpool, env->nbcst);
 
-     mono_mempool_destroy(env->mempool);
-     cfg->arch.poolenv = NULL;
-   }
+		mono_mempool_destroy(env->mempool);
+		cfg->arch.poolenv = NULL;
+	}
 
-   return;
+	return;
 }
 
-static void
-sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
-                      gboolean end_bb, guint8 **pcval)
+static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
+				  gboolean end_bb, guint8 **pcval)
 {
-   MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
+	MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
 
-   guint32 index;        /* Index of current item in data pool */
-   CstPool_Const_Values *g;
-   
+	guint32 index;        /* Index of current item in data pool */
+	CstPool_Const_Values *g;
+
 /* This piece of code is very temporary. Adapted from Denis' work......*/
-   guint8   *patch0;
-   guint8   *patch1;
-   guint8   *dest;
-   guint32   offset;
-   guint32   length_max;
-   guint32   value1, 
-             value2;
-   guint32   nb_int_const;
-   gboolean  is_float_or_double;
+	guint8   *patch0;
+	guint8   *patch1;
+	guint8   *dest;
+	guint32   offset;
+	guint32   length_max;
+	guint32   value1, value2;
+	guint32   nb_int_const;
+	gboolean  is_float_or_double;
 
-   index  = cur_pool->pool_nbcst_emitted;
-   SH4_CFG_DEBUG(4) SH4_DEBUG("emit constant nr %d (cfg %p)",index,cfg);
+	index  = cur_pool->pool_nbcst_emitted;
+	SH4_CFG_DEBUG(4) SH4_DEBUG("emit constant nr %d (cfg %p)",index,cfg);
 
-   /* Evaluate if we have enough space. If not, reassign a buffer.   */
-   /* Following sequence generates at most 14 bytes.                 */
-   offset    = *pcval - cfg->native_code;
-   length_max = offset + 14U;
-   sh4_realloc_buf_if_needed(cfg,offset,length_max,pcval);
+	/* Evaluate if we have enough space. If not, reassign a buffer.   */
+	/* Following sequence generates at most 14 bytes.                 */
+	offset    = *pcval - cfg->native_code;
+	length_max = offset + 14U;
+	sh4_realloc_buf_if_needed(cfg,offset,length_max,pcval);
 
-   patch1 = *pcval;
+	patch1 = *pcval;
 
-   sh4_bra(NO_recur,pcval, 0x0); /* 0x0 to be patched   */
-   sh4_nop(NO_recur,pcval);      /* delay slot          */
+	sh4_bra(NO_recur,pcval, 0x0); /* 0x0 to be patched   */
+	sh4_nop(NO_recur,pcval);      /* delay slot          */
 
-   if(((guint32)*pcval & 0x3)) {
-     sh4_nop(NO_recur,pcval);    /* Align constant pool */
-   }
+	if(((guint32)*pcval & 0x3)) {
+		sh4_nop(NO_recur,pcval);    /* Align constant pool */
+	}
 
-   /* constant pool is here. */
-   dest = *pcval;
+	/* constant pool is here. */
+	dest = *pcval;
 
-   is_float_or_double = FALSE;       /* Default value */
+	is_float_or_double = FALSE;       /* Default value */
 
-   if(cur_pool->type[index] != MONO_PATCH_INFO_NONE) {
-     mono_add_patch_info(cfg,
-                        *pcval - cfg->native_code,
-                         cur_pool->type[index],
-                         cur_pool->pool_cst[index]);
-     sh4_emit32(pcval,0U);        /* constant pool allocation  - patched later*/
-     nb_int_const = 1U;
-   } else {
-     g = (CstPool_Const_Values*) (cur_pool->pool_cst[index]);
+	if(cur_pool->type[index] != MONO_PATCH_INFO_NONE) {
+		mono_add_patch_info(cfg,
+				    *pcval - cfg->native_code,
+				    cur_pool->type[index],
+				    cur_pool->pool_cst[index]);
+		sh4_emit32(pcval,0U);        /* constant pool allocation  - patched later*/
+		nb_int_const = 1U;
+	} else {
+		g = (CstPool_Const_Values*) (cur_pool->pool_cst[index]);
 
-     g_assert(g!=NULL);
+		g_assert(g!=NULL);
 
-     switch(sh4_cst_type(g)) {
-       case cstpool_type_int:
-         value1 = sh4_get_int(g);
-         sh4_emit32(pcval,value1);   /* constant pool allocation */
-         nb_int_const = 1U;
+		switch(sh4_cst_type(g)) {
+		case cstpool_type_int:
+			value1 = sh4_get_int(g);
+			sh4_emit32(pcval,value1);   /* constant pool allocation */
+			nb_int_const = 1U;
 
-         SH4_CFG_DEBUG(4) SH4_DEBUG("constant value 0x%08x\n",value1);
-       break;
+			SH4_CFG_DEBUG(4) SH4_DEBUG("constant value 0x%08x\n",value1);
+			break;
 
-       case cstpool_type_float:
-         value1 = sh4_get_int_from_float(g);
-         sh4_emit32(pcval,value1);    /* constant pool allocation */
-         nb_int_const = 1U;
-         is_float_or_double = TRUE;   /* Default value */
+		case cstpool_type_float:
+			value1 = sh4_get_int_from_float(g);
+			sh4_emit32(pcval,value1);    /* constant pool allocation */
+			nb_int_const = 1U;
+			is_float_or_double = TRUE;   /* Default value */
 
-         SH4_CFG_DEBUG(4) SH4_DEBUG("constant float value 0x%08x\n",value1);
-       break;
+			SH4_CFG_DEBUG(4) SH4_DEBUG("constant float value 0x%08x\n",value1);
+			break;
 
-       case cstpool_type_double:
-         value1 = sh4_get_32low_from_double(g);
-         value2 = sh4_get_32high_from_double(g);
-         sh4_emit32(pcval,value1);    /* constant pool allocation */
-         sh4_emit32(pcval,value2);    /* constant pool allocation */
-         nb_int_const = 2U;
-         is_float_or_double = TRUE;
+		case cstpool_type_double:
+			value1 = sh4_get_32low_from_double(g);
+			value2 = sh4_get_32high_from_double(g);
+			sh4_emit32(pcval,value1);    /* constant pool allocation */
+			sh4_emit32(pcval,value2);    /* constant pool allocation */
+			nb_int_const = 2U;
+			is_float_or_double = TRUE;
 
-         SH4_CFG_DEBUG(4) SH4_DEBUG("constant double value 0x%08x%08x\n",
-                                   value2,value1);
-       break;
+			SH4_CFG_DEBUG(4) SH4_DEBUG("constant double value 0x%08x%08x\n",
+						   value2,value1);
+			break;
 
-       default:                   /* Should never happen */
-       g_assert(FALSE);
-       nb_int_const = 0U;         /* Prevent compilation warnings */
-       break;
-     }
-   }
+		default:                   /* Should never happen */
+			g_assert(FALSE);
+			nb_int_const = 0U;         /* Prevent compilation warnings */
+			break;
+		}
+	}
 
-   /* patch sh4_movl_dispPC instruction emitted previously. */
-   patch0 = cfg->native_code + cur_pool->off_inst[index];
-   if(is_float_or_double) {
-     sh4_mova_PCrel_R0(NO_recur,&patch0,dest);
-   } else {
-     sh4_movl_PCrel(NO_recur,&patch0, dest, cur_pool->reg[index]);
-   }
+	/* patch sh4_movl_dispPC instruction emitted previously. */
+	patch0 = cfg->native_code + cur_pool->off_inst[index];
+	if(is_float_or_double) {
+		sh4_mova_PCrel_R0(NO_recur,&patch0,dest);
+	} else {
+		sh4_movl_PCrel(NO_recur,&patch0, dest, cur_pool->reg[index]);
+	}
 
-   /* patch instruction at patch1 */
-   sh4_bra_label(NO_recur,&patch1, *pcval);
+	/* patch instruction at patch1 */
+	sh4_bra_label(NO_recur,&patch1, *pcval);
 
-   /* A double requires two inputs in tables (second entry is a
-    * dummy one).
-    */
-   cur_pool->pool_nbcst_emitted += nb_int_const;
+	/* A double requires two inputs in tables (second entry is a
+	 * dummy one).
+	 */
+	cur_pool->pool_nbcst_emitted += nb_int_const;
 
-   if(cur_pool->pool_nbcst_emitted > SH4_MAX_CSTPOOL -2U) {
-     current->state = cstpool_allocated;
-   }
+	if(cur_pool->pool_nbcst_emitted > SH4_MAX_CSTPOOL -2U) {
+		current->state = cstpool_allocated;
+	}
 /* End of temporary code ...........................................*/
 
-   return;
+	return;
 }
 
 /**
@@ -535,158 +531,153 @@ sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
  * the constant pool. In other cases, we use some heuristics
  */
 static void
-sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb,
-                            MonoBasicBlock *bb, guint8 **pcval)
+sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb, MonoBasicBlock *bb, guint8 **pcval)
 {
-   MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
+	MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
 
-   /* No pool, no constant pool or pool already emitted */
-   if(cur_pool == NULL              || 
-      cur_pool->pool_nbcst == 0     ||
-      cur_pool->state != cstpool_filling)
-        return;
+	/* No pool, no constant pool or pool already emitted */
+	if(cur_pool == NULL              ||
+	   cur_pool->pool_nbcst == 0     ||
+	   cur_pool->state != cstpool_filling)
+		return;
 
-   /* Temporary */
-   if(cur_pool->pool_nbcst_emitted==cur_pool->pool_nbcst)
-        return;
+	/* Temporary */
+	if(cur_pool->pool_nbcst_emitted==cur_pool->pool_nbcst)
+		return;
 
 
-   /* TODO */
+	/* TODO */
 #if 0
-     if(cur_pool->pool_nbcst == SH4_MAX_CSTPOOL)
+	if(cur_pool->pool_nbcst == SH4_MAX_CSTPOOL)
 #endif
-       sh4_emit_current_pool(cfg, cur_pool,end_bb,pcval);
+		sh4_emit_current_pool(cfg, cur_pool,end_bb,pcval);
 
-   return;
+	return;
 }
 
 /* API routine for float constants */
-void
-sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f)
+void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f)
 {
-   MonoSH4CstPool_Env   *env = cfg->arch.poolenv;
-   CstPool_Const_Values *g;
+	MonoSH4CstPool_Env   *env = cfg->arch.poolenv;
+	CstPool_Const_Values *g;
 
-   g_assert(env!=NULL);
-   g = sh4_build_cst_float(env->mempool, f);
+	g_assert(env!=NULL);
+	g = sh4_build_cst_float(env->mempool, f);
 
-   sh4_cstpool_add_internal(cfg, pcval, MONO_PATCH_INFO_NONE,
-                            NULL,sh4_r0,g);
+	sh4_cstpool_add_internal(cfg, pcval, MONO_PATCH_INFO_NONE,
+				 NULL,sh4_r0,g);
 
-   return;
+	return;
 }
 
 /* API routine for double constants */
-void
-sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d)
+void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d)
 {
-   MonoSH4CstPool_Env   *env = cfg->arch.poolenv;
-   CstPool_Const_Values *g;
+	MonoSH4CstPool_Env   *env = cfg->arch.poolenv;
+	CstPool_Const_Values *g;
 
-   g_assert(env!=NULL);
-   g = sh4_build_cst_double(env->mempool, d);
+	g_assert(env!=NULL);
+	g = sh4_build_cst_double(env->mempool, d);
 
-   sh4_cstpool_add_internal(cfg, pcval, MONO_PATCH_INFO_NONE,
-                            NULL, sh4_r0, g);
+	sh4_cstpool_add_internal(cfg, pcval, MONO_PATCH_INFO_NONE,
+				 NULL, sh4_r0, g);
 
-   return;
+	return;
 }
 
-void
-sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval,
-                MonoJumpInfoType type, gconstpointer target,
-                guint32  reg)
+void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval,
+		     MonoJumpInfoType type, gconstpointer target,
+		     guint32  reg)
 {
-   MonoSH4CstPool_Env *env = cfg->arch.poolenv;
-   CstPool_Const_Values *g;       /* Default value */
+	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
+	CstPool_Const_Values *g;       /* Default value */
 
-   g_assert(env!=NULL);
+	g_assert(env!=NULL);
 
-   if(type == MONO_PATCH_INFO_NONE) {
-      g = sh4_build_cst_int(env->mempool,*(guint32*)target);
-   } else {
-      g = NULL;
-   }
+	if(type == MONO_PATCH_INFO_NONE) {
+		g = sh4_build_cst_int(env->mempool,*(guint32*)target);
+	} else {
+		g = NULL;
+	}
 
-   sh4_cstpool_add_internal(cfg, pcval, type, target, reg, g); 
+	sh4_cstpool_add_internal(cfg, pcval, type, target, reg, g); 
 
-   return;
+	return;
 }
 
-static void
-sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
-                         MonoJumpInfoType type, gconstpointer target,
-                         guint32  reg, CstPool_Const_Values *g)
+static void sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
+				     MonoJumpInfoType type, gconstpointer target,
+				     guint32  reg, CstPool_Const_Values *g)
 {
-   MonoSH4CstPool_Env *env = cfg->arch.poolenv;
-   MonoSH4CstPool     *tmp;
-   guint32             offset;
-   guint32             index;
-   guint32             nb_int_const;  /* 8 bytes ~= 2 int constants for a double */ 
+	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
+	MonoSH4CstPool     *tmp;
+	guint32             offset;
+	guint32             index;
+	guint32             nb_int_const;  /* 8 bytes ~= 2 int constants for a double */ 
 
-   offset = *pcval - cfg->native_code;
+	offset = *pcval - cfg->native_code;
 
-   /* Add an other pool of constants if necessary*/
-   if(env->last==NULL ||
-      env->last->state!=cstpool_filling) {
-        sh4_cstpool_addpool(cfg);
-      }
-   tmp = env->last;
+	/* Add an other pool of constants if necessary*/
+	if(env->last==NULL ||
+	   env->last->state!=cstpool_filling) {
+		sh4_cstpool_addpool(cfg);
+	}
+	tmp = env->last;
 
-   /* Fill in data */
-   index  = tmp->pool_nbcst;
-   if(index==0U) {
-    tmp->pool_off0_start = offset & ~0x3U;
-   }
+	/* Fill in data */
+	index  = tmp->pool_nbcst;
+	if(index==0U) {
+		tmp->pool_off0_start = offset & ~0x3U;
+	}
 
-   /* For actual constants, we refer to the CstPool_Const_Values.
-    * Since a double takes the place of two integers, we fill in
-    * two entries in tables for a single double constant. This makes
-    * it possible to maintain a linear relation between the number
-    * of constants and the size of the memory pool.
-    */
-   nb_int_const = 1U;    /* Default value */
-   if (type == MONO_PATCH_INFO_NONE) {
-	 g_assert(g!=NULL);
-	 tmp->pool_cst[index] = (gpointer)g;
-         if(sh4_cst_is_double(g)) {
-            nb_int_const = 2U;
-         }
-   } else {
-	 g_assert(target != NULL);
-	 tmp->pool_cst[index] = target;
-   }
-	   
-   tmp->type    [index] = (gint16)type;
-   tmp->off_inst[index] = offset;
-   tmp->reg     [index] = (guint16)reg;
+	/* For actual constants, we refer to the CstPool_Const_Values.
+	 * Since a double takes the place of two integers, we fill in
+	 * two entries in tables for a single double constant. This makes
+	 * it possible to maintain a linear relation between the number
+	 * of constants and the size of the memory pool.
+	 */
+	nb_int_const = 1U;    /* Default value */
+	if (type == MONO_PATCH_INFO_NONE) {
+		g_assert(g!=NULL);
+		tmp->pool_cst[index] = (gpointer)g;
+		if(sh4_cst_is_double(g)) {
+			nb_int_const = 2U;
+		}
+	} else {
+		g_assert(target != NULL);
+		tmp->pool_cst[index] = target;
+	}
 
-   if(nb_int_const==2U) {   /* Double: add a dummy entry */
-      tmp->pool_cst[index+1U] = (gpointer)g;
-      tmp->type    [index+1U] = (gint16)type;
-      tmp->off_inst[index+1U] = offset;
-      tmp->reg     [index+1U] = (guint16)reg;
-   }
-  
-   tmp->pool_nbcst += nb_int_const;
-   env->nbcst      += nb_int_const;
+	tmp->type    [index] = (gint16)type;
+	tmp->off_inst[index] = offset;
+	tmp->reg     [index] = (guint16)reg;
 
-   /* Check that we have enough space in code buffer */
-   sh4_realloc_buf_if_needed(cfg,offset, offset+2U,pcval);
+	if(nb_int_const==2U) {   /* Double: add a dummy entry */
+		tmp->pool_cst[index+1U] = (gpointer)g;
+		tmp->type    [index+1U] = (gint16)type;
+		tmp->off_inst[index+1U] = offset;
+		tmp->reg     [index+1U] = (guint16)reg;
+	}
 
-   /* Allocate space in code buffer. We know that emission of the
-    * current constant pool might be delayed.
-    * Note that we don't care if the real instruction is a
-    * movl_disPC or a mova instruction (for float and double): 
-    * in both case, we allocate 2 bytes.
-    */
-   sh4_movl_dispPC(NO_recur,pcval, 0, reg);   /* 0 to be patched       */
+	tmp->pool_nbcst += nb_int_const;
+	env->nbcst      += nb_int_const;
 
-   sh4_cstpool_decide_emission(cfg,
-                               FALSE /* not at the end of a bb */,
-                               NULL,
-                               pcval);
-   return;
+	/* Check that we have enough space in code buffer */
+	sh4_realloc_buf_if_needed(cfg,offset, offset+2U,pcval);
+
+	/* Allocate space in code buffer. We know that emission of the
+	 * current constant pool might be delayed.
+	 * Note that we don't care if the real instruction is a
+	 * movl_disPC or a mova instruction (for float and double): 
+	 * in both case, we allocate 2 bytes.
+	 */
+	sh4_movl_dispPC(NO_recur,pcval, 0, reg);   /* 0 to be patched       */
+
+	sh4_cstpool_decide_emission(cfg,
+				    FALSE /* not at the end of a bb */,
+				    NULL,
+				    pcval);
+	return;
 }
 
 /**
@@ -694,51 +685,46 @@ sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
  * has to be reproduced in header file sh4-codegen.h and thus in
  * gbu2mono!!!!!!!
  */
-void
-sh4_cstpool_check(void *cfg, guint8 **pcval)
+void sh4_cstpool_check(void *cfg, guint8 **pcval)
 {
-   /* Unsafe cast, but we have to avoid circular dependencies in
-    * header files.
-    */
-   MonoCompile *cfg2 = (MonoCompile*) cfg;
+	/* Unsafe cast, but we have to avoid circular dependencies in
+	 * header files.
+	 */
+	MonoCompile *cfg2 = (MonoCompile*) cfg;
 
-   sh4_cstpool_decide_emission(cfg2,
-                               FALSE /* not at the end of a bb */,
-                               NULL,
-                               pcval);
-   return;
+	sh4_cstpool_decide_emission(cfg2,
+				    FALSE /* not at the end of a bb */,
+				    NULL,
+				    pcval);
+	return;
 }
 
-void
-sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb,
-                           guint8 **pcval)
+void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **pcval)
 {
-   MonoSH4CstPool_Env *env = cfg->arch.poolenv;
-   guint32             bb_id = bb->block_num;
-   guint32             offset;
+	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
+	guint32             bb_id = bb->block_num;
+	guint32             offset;
 
-   g_assert(env!=NULL);
+	g_assert(env!=NULL);
 
-   if(env->nb_bblocks!=0 && bb_id<env->nb_bblocks) {
-       offset = *pcval - cfg->native_code;
+	if(env->nb_bblocks!=0 && bb_id<env->nb_bblocks) {
+		offset = *pcval - cfg->native_code;
 
-       g_assert(sh4_is_valid_offset(offset));
+		g_assert(sh4_is_valid_offset(offset));
 
-       env->tab_bb_offset[bb_id] = offset;
-   }
+		env->tab_bb_offset[bb_id] = offset;
+	}
 
-   return;
+	return;
 }
 
-void
-sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb,
-                         guint8 **pcval)
+void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **pcval)
 {
-   sh4_cstpool_decide_emission(cfg,
-                               TRUE, /* not at the end of a bb */
-                               bb,
-                               pcval);
-   return;
+	sh4_cstpool_decide_emission(cfg,
+				    TRUE, /* not at the end of a bb */
+				    bb,
+				    pcval);
+	return;
 }
 
 /**
@@ -754,61 +740,56 @@ sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb,
  *   Note: this routine is not strictly related to constant pools.
  *   It is also called by mono_arch_output_basic_block.
  */
-void
-sh4_realloc_buf_if_needed(MonoCompile *cfg, guint32 offset,
-                          guint32 length_max, guint8 **pcval)
+void sh4_realloc_buf_if_needed(MonoCompile *cfg, guint32 offset, guint32 length_max, guint8 **pcval)
 {
 #ifndef NDEBUG
-   guint8 *oldpcval = *pcval;
+	guint8 *oldpcval = *pcval;
 #endif
 
-   g_assert(offset<=length_max);
+	g_assert(offset<=length_max);
 
-   if(length_max <= cfg->code_size)
-      return;
+	if(length_max <= cfg->code_size)
+		return;
 
-   /* Get the correct size */
-   while (length_max > cfg->code_size) {
-          cfg->code_size *= 2U;
-   }
+	/* Get the correct size */
+	while (length_max > cfg->code_size) {
+		cfg->code_size *= 2U;
+	}
 
-   cfg->native_code = g_realloc(cfg->native_code, 
-                                cfg->code_size);
-  *pcval = cfg->native_code + offset;
+	cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
+	*pcval = cfg->native_code + offset;
 
-   SH4_CFG_DEBUG(4) SH4_DEBUG("buffer reallocation pcval 0x%08x -> 0x%08x",
-			      (guint32)oldpcval,(guint32)pcval);
-   SH4_CFG_DEBUG(4) SH4_DEBUG("current offset %d, required offset %d, new buffer size %d",
-			      offset, length_max, cfg->code_size);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("buffer reallocation pcval 0x%08x -> 0x%08x",
+				   (guint32)oldpcval,(guint32)pcval);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("current offset %d, required offset %d, new buffer size %d",
+				   offset, length_max, cfg->code_size);
 
-   mono_jit_stats.code_reallocs++;
-   return;
+	mono_jit_stats.code_reallocs++;
+	return;
 }
 
 /* Return the offset of a bb if known */
 gboolean
-sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb,
-                           guint32 *offset)
+sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb, guint32 *offset)
 {
-   MonoSH4CstPool_Env *env = cfg->arch.poolenv;
-   guint32             bb_id = bb->block_num;
-   gboolean            ret = FALSE;    /* Pessimistic by default */
- 
-   g_assert(env!=NULL);
+	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
+	guint32             bb_id = bb->block_num;
+	gboolean            ret = FALSE;    /* Pessimistic by default */
 
-   if(env->nb_bblocks!=0 && bb_id<env->nb_bblocks) {
-      guint32 rel_add = env->tab_bb_offset[bb_id];
+	g_assert(env!=NULL);
 
-      if(sh4_is_valid_offset(rel_add)) {
-          ret    = TRUE;
-         *offset = rel_add;
-       }
-   }
- 
-   if(ret==FALSE) {
-    *offset = 0xFFFFFFFF;
-   }
+	if(env->nb_bblocks!=0 && bb_id<env->nb_bblocks) {
+		guint32 rel_add = env->tab_bb_offset[bb_id];
 
-   return ret;
+		if(sh4_is_valid_offset(rel_add)) {
+			ret    = TRUE;
+			*offset = rel_add;
+		}
+	}
+
+	if(ret==FALSE) {
+		*offset = 0xFFFFFFFF;
+	}
+
+	return ret;
 }
-
