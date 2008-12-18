@@ -1603,6 +1603,11 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
+	case OP_IBLT_UN:
+		inst->opcode = OP_SH4_CMPHS;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
 	default:
 		g_warning("unsupported next_inst->opcode %s (0x%x) in %s()\n",
 			  mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
@@ -1830,16 +1835,19 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		}
 
-		case OP_LOADU1_MEMBASE:
-		case OP_LOAD_MEMBASE:
-		case OP_LOADU4_MEMBASE:
-		case OP_LOADI4_MEMBASE: {
+		case OP_LOADU1_MEMBASE: {
 			MonoInst *new_inst  = NULL;
 			MonoInst *new_inst2 = NULL;
 
-			/* We should be testing the range of movb_dispRy_R0()
-			   in the case of OP_LOADU1_MEMBASE. As the immediate
-			   is 4-bits in both cases, we simplify. */
+			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
+			    SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset))
+				break;
+			/* else fall through. */
+
+		case OP_LOAD_MEMBASE:
+		case OP_LOADU4_MEMBASE:
+		case OP_LOADI4_MEMBASE:
+
 			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset))
 				break;
 
@@ -2167,11 +2175,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_LOADU1_MEMBASE:
 			/* MD: loadu1_membase: dest:z src1:b len:2 */
-			g_assert(inst->dreg == 0);
-			g_assert(!SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
-			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
-			break;
-
 		case OP_SH4_LOADU1_MEMBASE:
 			/* MD: sh4_loadu1_membase: dest:z src1:b len:2 */
 			g_assert(inst->dreg == 0);
