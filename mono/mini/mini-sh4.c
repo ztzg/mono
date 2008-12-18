@@ -2010,7 +2010,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_OR_IMM_R0:
-			/* MD: sh4_or_imm_R0: clob:1 dest:i src1:z len:2 */
+			/* MD: sh4_or_imm_R0: clob:1 dest:z src1:z len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_or_imm_R0(cfg, &buffer, inst->inst_imm);
@@ -2023,7 +2023,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_XOR_IMM_R0:
-			/* MD: sh4_xor_imm_R0: clob:1 dest:i src1:z len:2 */
+			/* MD: sh4_xor_imm_R0: clob:1 dest:z src1:z len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_xor_imm_R0(cfg, &buffer, inst->inst_imm);
@@ -2036,7 +2036,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_AND_IMM_R0:
-			/* MD: sh4_and_imm_R0: clob:1 dest:i src1:z len:2 */
+			/* MD: sh4_and_imm_R0: clob:1 dest:z src1:z len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
 			sh4_and_imm_R0(cfg, &buffer, inst->inst_imm);
