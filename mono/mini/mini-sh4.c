@@ -2263,6 +2263,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			free_args_area(cfg, &buffer);
 			break;
 
+		case OP_CALL_HANDLER:
+			/* MD: call_handler: clob:t len:16 */
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_BB, inst->inst_target_bb, sh4_temp);
+
+			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
+			sh4_nop(cfg, &buffer); /* delay slot */
+			break;
+
 		case OP_THROW:
 			/* MD: throw: src1:i len:20 */
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)

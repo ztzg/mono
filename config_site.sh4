@@ -1,5 +1,6 @@
 # -*- sh -*-
 
+# Run the following command if you get the sources from a repository:
 # env NOCONFIGURE=1 ./autogen.sh; cd eglib; env NOCONFIGURE=1 ./autogen.sh; cd ..; cp `which libtool` .; ./configure CONFIG_SITE=${PWD}/config_site.sh4
 
 host=sh4-superh-linux

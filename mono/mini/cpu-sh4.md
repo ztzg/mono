@@ -89,6 +89,7 @@ voidcall: clob:c len:30
 call: dest:z clob:c len:30
 voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
+call_handler: clob:t len:16
 throw: src1:i len:20
 move: dest:i src1:i len:2
 start_handler: clob:t len:6
