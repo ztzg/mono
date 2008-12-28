@@ -1270,7 +1270,18 @@ namespace System.Web.UI
 		}
 #endif
 
+#if TARGET_J2EE
 		public string ResolveUrl (string relativeUrl)
+		{
+			relativeUrl = InternalResolveUrl (relativeUrl);
+			javax.faces.context.FacesContext faces = getFacesContext ();
+			return faces.getExternalContext().encodeResourceURL(relativeUrl);
+		}
+
+		private string InternalResolveUrl (string relativeUrl)
+#else
+		public string ResolveUrl (string relativeUrl)
+#endif
 		{
 			if (relativeUrl == null)
 				throw new ArgumentNullException ("relativeUrl");
@@ -1327,14 +1338,22 @@ namespace System.Web.UI
 			else if (VirtualPathUtility.IsAbsolute (relativeUrl))
 				url = VirtualPathUtility.ToAppRelative (relativeUrl);
 			else
-				return faces.getApplication ().getViewHandler ().getResourceURL (faces, relativeUrl);
+				return getEncodedResourceURL(faces, relativeUrl);
 
 			if (VirtualPathUtility.IsAppRelative (url)) {
 				url = url.Substring (1);
 				url = url.Length == 0 ? "/" : url;
-				return faces.getApplication ().getViewHandler ().getResourceURL (faces, url);
+				return getEncodedResourceURL(faces, url);
 			}
 			return relativeUrl;
+		}
+
+		private string getEncodedResourceURL(javax.faces.context.FacesContext faces, string url)
+		{
+			url = faces.getApplication ().getViewHandler ().getResourceURL (faces, url);
+			if (VirtualPathUtility.IsAbsolute (url) || url.IndexOf (':') != -1)
+				return faces.getExternalContext().encodeResourceURL(url);
+			return url;
 		}
 		
 		string ResolveClientUrlInternal (string relativeUrl) {

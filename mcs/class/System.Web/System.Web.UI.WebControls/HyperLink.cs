@@ -116,7 +116,7 @@ namespace System.Web.UI.WebControls {
 			string image_url = ImageUrl;
 			if (image_url != "") {
 				Image img = new Image ();
-				img.ImageUrl = ResolveClientUrl (image_url);
+				img.ImageUrl = image_url;
 				string str = Text;
 				if (str != "")
 					img.AlternateText = str;

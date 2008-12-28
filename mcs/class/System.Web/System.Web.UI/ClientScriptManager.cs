@@ -246,7 +246,8 @@ namespace System.Web.UI
 			if (resourceName == null || resourceName.Length == 0)
 				throw new ArgumentNullException ("type");
 		
-			return System.Web.Handlers.AssemblyResourceLoader.GetResourceUrl (type, resourceName); 
+			string resUrl = System.Web.Handlers.AssemblyResourceLoader.GetResourceUrl (type, resourceName); 
+			return page.ResolveClientUrl(resUrl);
 		}
 		
 

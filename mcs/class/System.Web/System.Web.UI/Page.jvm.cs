@@ -126,14 +126,12 @@ namespace System.Web.UI
 		}
 
 		public override void encodeBegin (FacesContext context) {
-			// do nothing
+			// reset _facesContext if changed between action and render phases (such portal).
+			_facesContext = null;
 		}
 
 		public override void encodeChildren (FacesContext context) {
 			System.Diagnostics.Trace.WriteLine ("encodeChildren");
-
-			// reset _facesContext if changed between action and render phases (such portal).
-			_facesContext = null;
 
 			IHttpHandler jsfHandler = EnterThread ();
 			bool wasException = false;
@@ -374,7 +372,8 @@ namespace System.Web.UI
 		}
 
 		protected override FacesContext getFacesContext () {
-			return _facesContext ?? (_facesContext = FacesContext.getCurrentInstance ());
+			return (_facesContext = FacesContext.getCurrentInstance ());
+			// return _facesContext ?? (_facesContext = FacesContext.getCurrentInstance ());
 		}
 
 		#region FacesPageStatePersister

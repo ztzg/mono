@@ -1130,7 +1130,7 @@ public partial class Page : TemplateControl, IHttpHandler
 		writer.WriteLine ("\telse {{ {0} = document.{1}; }}", theForm, formUniqueID);
 #if TARGET_J2EE
 		// TODO implement callback on portlet
-		string serverUrl = Request.RawUrl;
+		string serverUrl = ResolveClientUrl(Request.RawUrl);
 		writer.WriteLine ("\t{0}.serverURL = {1};", theForm, ClientScriptManager.GetScriptLiteral (serverUrl));
 		writer.WriteLine ("\twindow.TARGET_J2EE = true;");
 		writer.WriteLine ("\twindow.IsMultiForm = {0};", IsMultiForm ? "true" : "false");
