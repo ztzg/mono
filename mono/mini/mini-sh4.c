@@ -1529,7 +1529,7 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	 *         jsr  @rX
 	 *         nop
 	 */
-	sh4_rX = (code16[-2] >> 8) & 0xF; /* TODO: get_sh4_Rx_jsr_indRx(code16[-2]); */
+	sh4_rX = get_Rx_sh4_jsr_indRx(code16[-2]);
 	if (!is_sh4_nop(code16[-1]) ||
 	    !is_sh4_jsr_indRx(code16[-2], sh4_rX))
 		return NULL;
@@ -1542,7 +1542,7 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	 *         mov.l @r3, rX
 	 */
 	if (is_sh4_movl_indRy(code16[-3], sh4_r3, sh4_rX)) {
-		sh4_rY = (code16[-4] >> 4) & 0xF; /* TODO: get_sh4_Ry_movl_indRy(code16[-4]); */
+		sh4_rY = get_Ry_sh4_movl_indRy(code16[-4]);
 		if (!is_sh4_add(code16[-4], sh4_rY, sh4_r3))
 			return NULL;
 
@@ -1558,8 +1558,8 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	 *
 	 *         mov.l @(small_index, rY), rX
 	 */
-		sh4_rY = (code16[-3] >> 4) & 0xF; /* TODO: get_sh4_Ry_movl_dispRy(code16[-3]); */
-		index  = (code16[-3] & 0xF) << 2; /* TODO: get_sh4_imm_movl_dispRy(code16[-3]); */
+		sh4_rY = get_Ry_sh4_movl_dispRy(code16[-3]);
+		index  = get_imm_sh4_movl_dispRy(code16[-3]);
 		if (!is_sh4_movl_dispRy(code16[-3], index, sh4_rY, sh4_rX))
 			return NULL;
 
@@ -1567,7 +1567,7 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	}
 
 	/* Check if it is not a load of the VTable. */
-	sh4_rZ = (code16[offset] >> 4) & 0xF; /* TODO: get_sh4_Ry_movl_dispRy(code16[offset]); */
+	sh4_rZ = get_Ry_sh4_movl_dispRy(code16[offset]);
 	if (!is_sh4_movl_dispRy(code16[offset], 0, sh4_rZ, sh4_rY))
 		return NULL;
 

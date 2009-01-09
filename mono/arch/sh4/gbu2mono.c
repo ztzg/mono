@@ -357,6 +357,105 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 	return;
 }
 
+static void printf_get_field(char *name, const char *field, int length)
+{
+	printf("static inline int get_%s_sh4_%s(guint16 code)\n", field, name);
+	printf("{\n");
+	printf("	return (code >> %d) & 0xF;\n", 12 - length);
+	printf("}\n");
+	printf("\n");
+}
+
+static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int scaling)
+{
+	int i = 0;
+	int length = 0;
+	int value = 0;
+
+	for (i = 0; i < 9; i++) {
+		switch (nibbles[i]) {
+		case REG_N:
+			printf_get_field(name, "Rx", length);
+			length += 4;
+			break;
+
+		case REG_M:
+			printf_get_field(name, "Ry", length);
+			length += 4;
+			break;
+
+		case IMM0_4:
+		case IMM1_4:
+			assert(scaling == 0);
+			printf_get_field(name, "imm", length);
+			length += 4;
+			break;
+
+		case IMM0_4BY4:
+		case IMM1_4BY4:
+			printf("static inline int get_imm_sh4_%s(guint16 code)\n", name);
+			printf("{\n");
+			printf("	return ((code >> %d) & 0xF) << 2;\n", 12 - length);
+			printf("}\n");
+			printf("\n");
+			length += 4;
+			break;
+
+		case HEX_0:
+		case HEX_1:
+		case HEX_2:
+		case HEX_3:
+		case HEX_4:
+		case HEX_5:
+		case HEX_6:
+		case HEX_7:
+		case HEX_8:
+		case HEX_9:
+		case HEX_A:
+		case HEX_B:
+		case HEX_C:
+		case HEX_D:
+		case HEX_E:
+		case HEX_F:
+		case REG_N_D:
+		case REG_N_B01:
+		case REG_NM:
+		case REG_B:
+		case IMM0_4BY2:
+		case IMM1_4BY2:
+			length += 4;
+			break;
+
+		case IMM0_8:
+		case IMM1_8:
+		case BRANCH_8:
+		case PCRELIMM_8BY2:
+		case IMM0_8BY2:
+		case IMM1_8BY2:
+		case PCRELIMM_8BY4:
+		case IMM0_8BY4:
+		case IMM1_8BY4:
+			length += 8;
+			break;
+
+		case BRANCH_12:
+			length += 12;
+			break;
+
+		default:
+			assert(0);
+			break;
+		}
+
+		if (length == 16)
+			break;
+	}
+
+	assert(length == 16);
+
+	return;
+}
+
 static void disambiguate(const sh_arg_type args[4], char *name, int size)
 {
 	int i = 0;
@@ -685,7 +784,7 @@ int main(void)
 		disambiguate(sh_table[i].arg, name, sizeof(name));
 
 		scaling = printf_checks(sh_table[i].nibbles, force_sign, name);
-
+		printf("\n");
 		printf("static inline void sh4_%s(void *cfg, guint8 **code", name);
 		printf_args(sh_table[i].arg, 1, &double_args);
 		printf(")\n");
@@ -712,6 +811,8 @@ int main(void)
 		printf("));\n");
 		printf("}\n");
 		printf("\n");
+
+		printf_get_fields(name, sh_table[i].nibbles, scaling);
 	}
 
 	printf("#include \"sh4-codegen-footer.h\"\n");
