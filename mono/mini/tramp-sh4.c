@@ -383,10 +383,49 @@ gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMe
 	return NULL;
 }
 
+/**
+ * The calling sequence is (for OP_.*CALL opcodes):
+ *
+ *          -X: LOAD address, r3
+ *          -4: jsr  @r3
+ *          -2: nop
+ *           0: <- code points here
+ */
+static inline void assert_sh4_call_site(guint8 *code)
+{
+	char name[] = "unknown call site";
+	guint16 *code16 = (void *)code;
+
+#define CALL_SITE_SIZE 16
+
+	g_assert(sh4_temp == sh4_r3);
+
+	if (!is_sh4_nop(code16[-1])               ||
+	    !is_sh4_jsr_indRx(code16[-2], sh4_r3) ||
+	    !is_sh4_LOAD(&code16[-3], sh4_r3)) {
+		mono_disassemble_code(NULL, code - CALL_SITE_SIZE * 2, CALL_SITE_SIZE * 2, name);
+		NOT_IMPLEMENTED;
+	}
+}
+
+/**
+ * Avoid a call to a "class init trampoline".
+ */
 void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 {
-	/* TODO - CV */
-	g_assert(0);
+	guint8 *call_site = code - 4;
+
+	SH4_EXTRA_DEBUG("args => %p, %p", code, registers);
+
+	/* Sanity check. */
+	assert_sh4_call_site(code);
+
+	/* Patch the call. */
+	sh4_nop(NULL, &call_site);
+
+	/* Flush instruction cache, since we've generated code. */
+	mono_arch_flush_icache(code - CALL_SITE_SIZE, CALL_SITE_SIZE);
+
 	return;
 }
 
@@ -400,38 +439,18 @@ void mono_arch_nullify_plt_entry(guint8 *code)
 /**
  * Search for and patch the calling sequence pointed to by 'code'
  * so it calls 'address'.
- *
- * The calling sequence is (for OP_.*CALL opcodes):
- *
- *          -X: LOAD address, r3
- *          -4: jsr  @r3
- *          -2: nop
- *           0: <- code points here
- *
  */
 void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 {
-	char name[] = "unknown call site";
-	guint16 *code16 = (void *)code;
-	guint8 *cstpool = NULL;
-
-#define CALL_SITE_SIZE 16
+	guint8 *constant_site = code - 8;
 
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
-	g_assert(sh4_temp == sh4_r3);
-
 	/* Sanity check. */
-	if (!is_sh4_nop(code16[-1])               ||
-	    !is_sh4_jsr_indRx(code16[-2], sh4_r3) ||
-	    !is_sh4_LOAD(&code16[-3], sh4_r3)) {
-		mono_disassemble_code(NULL, code - CALL_SITE_SIZE * 2, CALL_SITE_SIZE * 2, name);
-		NOT_IMPLEMENTED;
-	}
+	assert_sh4_call_site(code);
 
 	/* Patch the address. */
-	cstpool = code - 8;
-	sh4_emit32(&cstpool, (guint32)address);
+	sh4_emit32(&constant_site, (guint32)address);
 
 	/* Flush instruction cache, since we've generated code. */
 	mono_arch_flush_icache(code - CALL_SITE_SIZE, CALL_SITE_SIZE);
