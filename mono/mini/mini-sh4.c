@@ -1482,13 +1482,97 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
 	return NULL;
 }
 
+/**
+ * Determine the address of the vtable slot used by the [virtual] call
+ * which invoked the [magic] trampoline.
+ *
+ * Technically, a virtual call is a "call VTable[index]" where the
+ * "call" opcode is a "call_membase". Remember the lowering pass does
+ * the following transformation:
+ *
+ *     call_membase => load_membase + call_reg
+ *
+ * We have to analyse the following calling sequence backward because
+ * we don't known [yet] if a constant-pool is required:
+ *
+ *   // Load the VTable:
+ *
+ *           mov.l @rZ,rY
+ *
+ *   // Load the method address, that is, VTable[method_index] (load_membase):
+ *
+ *       #if index is small
+ *           mov.l @(small_index, rY), rX
+ *       #else
+ *           LOAD  big_index, r3
+ *           add   rY, r3
+ *           mov.l @r3, rX
+ *       #endif
+ *
+ *   // Jump to the method (call_reg):
+ *
+ *           jsr  @rX
+ *           nop
+ *             <- code points here
+ */
 gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 {
-	/* WIP
-	char *name = "unknown vcall";
-	mono_disassemble_code(NULL, code, VCALL_SIZE, name); */
-	g_warning("get_vcall_slot_addr not yet implemented\n");
-	return NULL;
+	guint16 *code16 = (void *)code;
+	SH4IntRegister sh4_rX = sh4_r0;
+	SH4IntRegister sh4_rY = sh4_r0;
+	SH4IntRegister sh4_rZ = sh4_r0;
+	int offset = 0;
+	int index = 0;
+
+	/* Check if it is not a jump to the method (call_reg):
+	 *
+	 *         jsr  @rX
+	 *         nop
+	 */
+	sh4_rX = (code16[-2] >> 8) & 0xF; /* TODO: get_sh4_Rx_jsr_indRx(code16[-2]); */
+	if (!is_sh4_nop(code16[-1]) ||
+	    !is_sh4_jsr_indRx(code16[-2], sh4_rX))
+		return NULL;
+
+	/* Check if it is not a load of the method address, that is,
+	 * VTable[method_index] (load_membase) with a big index:
+	 *
+	 *         LOAD  big_index, r3
+	 *         add   rY, r3
+	 *         mov.l @r3, rX
+	 */
+	if (is_sh4_movl_indRy(code16[-3], sh4_r3, sh4_rX)) {
+		sh4_rY = (code16[-4] >> 4) & 0xF; /* TODO: get_sh4_Ry_movl_indRy(code16[-4]); */
+		if (!is_sh4_add(code16[-4], sh4_rY, sh4_r3))
+			return NULL;
+
+		offset = is_sh4_LOAD(&code16[-5], sh4_r3);
+		if (offset == 0)
+			return NULL;
+
+		offset = -offset - 5;
+	}
+	else {
+	/* Check if it is not a load of the method address, that is,
+	 * VTable[method_index] (load_membase) with a small index:
+	 *
+	 *         mov.l @(small_index, rY), rX
+	 */
+		sh4_rY = (code16[-3] >> 4) & 0xF; /* TODO: get_sh4_Ry_movl_dispRy(code16[-3]); */
+		index  = (code16[-3] & 0xF) << 2; /* TODO: get_sh4_imm_movl_dispRy(code16[-3]); */
+		if (!is_sh4_movl_dispRy(code16[-3], index, sh4_rY, sh4_rX))
+			return NULL;
+
+		offset = -4;
+	}
+
+	/* Check if it is not a load of the VTable. */
+	sh4_rZ = (code16[offset] >> 4) & 0xF; /* TODO: get_sh4_Ry_movl_dispRy(code16[offset]); */
+	if (!is_sh4_movl_dispRy(code16[offset], 0, sh4_rZ, sh4_rY))
+		return NULL;
+
+	/* So far, so good! */
+	return (gpointer*)(regs[sh4_rX]);
 }
 
 /**

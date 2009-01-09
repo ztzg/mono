@@ -3578,6 +3578,7 @@ static inline int is_sh4_ftrv(guint16 code, SH4FloatRegister Rx)
 		&& code == ((0xF << 12) | ((((Rx & 0xF) << 2) | 0x1) << 8) | (0xF << 4) | (0xD << 0)));
 }
 
+#include "sh4-codegen-footer.h"
 
 #endif /* __MONO_SH4_CODEGEN_H__ */
 

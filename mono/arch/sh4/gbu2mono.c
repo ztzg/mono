@@ -714,6 +714,7 @@ int main(void)
 		printf("\n");
 	}
 
+	printf("#include \"sh4-codegen-footer.h\"\n");
 	printf("\n");
 	printf("#endif /* __MONO_SH4_CODEGEN_H__ */\n");
 	printf("\n");

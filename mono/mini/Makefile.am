@@ -272,7 +272,8 @@ common_sources = \
 	trivial-return_int.cs	\
 	trivial-add_int.cs	\
 	trivial-fibonacci.cs	\
-	trivial-outarg.cs
+	trivial-outarg.cs	\
+	trivial-virtual.cs
 
 test_sources = 		\
 	basic-calls.cs 	\
@@ -551,6 +552,9 @@ trivial-outarg: trivial-outarg.exe
 	$(RUNTIME) $<; test $$? = 28
 	$(RUNTIME) $< x; test $$? = 33
 	$(RUNTIME) $< x x; test $$? = 38
+
+trivial-virtual: trivial-virtual.exe
+	$(RUNTIME) $<; test $$? = 13
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe
