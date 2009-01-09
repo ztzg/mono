@@ -145,7 +145,7 @@ static int printf_checks(const sh_nibble_type nibbles[9], int force_sign, char *
 	return (factor >> 1);
 }
 
-static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int double_arg, char *name, int scaling)
+static void printf_tests(const sh_nibble_type nibbles[9], int force_sign, int double_arg, char *name, int scaling)
 {
 	int i = 0;
 
@@ -170,17 +170,17 @@ static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int d
 			break;
 
 		case REG_N:
-			printf("	g_assert(Rx >= 0);\n");
-			printf("	g_assert(Rx <= 15);\n");
+			printf(" && Rx >= 0");
+			printf(" && Rx <= 15");
 			if (double_arg)
-				printf("	g_assert(!(Rx & 0x1));\n");
+				printf(" && !(Rx & 0x1)");
 			break;
 
 		case REG_M:
-			printf("	g_assert(Ry >= 0);\n");
-			printf("	g_assert(Ry <= 15);\n");
+			printf(" && Ry >= 0");
+			printf(" && Ry <= 15");
 			if (double_arg)
-				printf("	g_assert(!(Ry & 0x1));\n");
+				printf(" && !(Ry & 0x1)");
 			break;
 
 		case REG_B:
@@ -200,21 +200,22 @@ static void printf_assert(const sh_nibble_type nibbles[9], int force_sign, int d
  		case PCRELIMM_8BY4:
  		case BRANCH_8:
  		case BRANCH_12:
-			printf("	g_assert(SH4_CHECK_RANGE_%s(imm));\n", name);
-			if (scaling != 0)
-				printf("	g_assert(SH4_CHECK_ALIGN_%s(imm));\n", name);
+			printf(" && SH4_CHECK_RANGE_%s(imm)", name);
+			if (scaling != 0) {
+				printf(" && SH4_CHECK_ALIGN_%s(imm)", name);
+			}
 			break;
 
 		case REG_N_D:
-			printf("	g_assert(!(Rx & 0x1));\n");
+			printf(" && !(Rx & 0x1)");
 			break;
 
 		case REG_NM:
-			printf("	g_assert(!((Rx & 0x3) || (Ry & 0x3)));\n");
+			printf(" && !((Rx & 0x3) || (Ry & 0x3))");
 			break;
 
 		case REG_N_B01:
-			printf("	g_assert(!(Rx & 0x3));\n");
+			printf(" && !(Rx & 0x3)");
 			break;
 
 		default:
@@ -231,8 +232,6 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 	int i = 0;
 	int length = 0;
 	int value = 0;
-
-	printf("	sh4_emit16(code, ");
 
 	for (i = 0; i < 9; i++) {
 		switch (nibbles[i]) {
@@ -353,7 +352,6 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 			printf(" | ");
 	}
 
-	printf("); \\\n");
 	assert(length == 16);
 
 	return;
@@ -523,11 +521,9 @@ static void disambiguate(const sh_arg_type args[4], char *name, int size)
 	return;
 }
 
-static void printf_args(const sh_arg_type args[4], int* double_arg)
+static void printf_args(const sh_arg_type args[4], int cfg, int* double_arg)
 {
 	int i = 0;
-
-	printf("(void *cfg, guint8 **code");
 
 	for (i = 0; i < 4; i++) {
 		if (args[i] == A_END)
@@ -631,8 +627,6 @@ static void printf_args(const sh_arg_type args[4], int* double_arg)
 			break;
 		}
 	}
-
-	printf(")\n");
 }
 
 int main(void)
@@ -692,13 +686,30 @@ int main(void)
 
 		scaling = printf_checks(sh_table[i].nibbles, force_sign, name);
 
-		printf("static inline void sh4_%s", name);
-		printf_args(sh_table[i].arg, &double_args);
+		printf("static inline void sh4_%s(void *cfg, guint8 **code", name);
+		printf_args(sh_table[i].arg, 1, &double_args);
+		printf(")\n");
 		printf("{\n");
 		printf("	if (cfg != NULL)\n");
 		printf("		sh4_cstpool_check(cfg, code);\n");
-		printf_assert(sh_table[i].nibbles, force_sign, double_args, name, scaling);
+		printf("	g_assert(1");
+		printf_tests(sh_table[i].nibbles, force_sign, double_args, name, scaling);
+		printf(");\n");
+		printf("	sh4_emit16(code, ");
 		printf_nibbles(sh_table[i].nibbles, scaling);
+		printf(");\n");
+		printf("}\n");
+		printf("\n");
+
+		printf("static inline int is_sh4_%s(guint16 code", name);
+		printf_args(sh_table[i].arg, 0, &double_args);
+		printf(")\n");
+		printf("{\n");
+		printf("	return (1");
+		printf_tests(sh_table[i].nibbles, force_sign, double_args, name, scaling);
+		printf("\n		&& code == (");
+		printf_nibbles(sh_table[i].nibbles, scaling);
+		printf("));\n");
 		printf("}\n");
 		printf("\n");
 	}

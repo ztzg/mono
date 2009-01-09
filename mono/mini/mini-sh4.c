@@ -1484,7 +1484,9 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
 
 gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 {
-	/* WIP */
+	/* WIP
+	char *name = "unknown vcall";
+	mono_disassemble_code(NULL, code, VCALL_SIZE, name); */
 	g_warning("get_vcall_slot_addr not yet implemented\n");
 	return NULL;
 }

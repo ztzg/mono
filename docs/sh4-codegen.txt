@@ -29,8 +29,20 @@ have to use the macros "SH4_CHECK_IMM_*" instead of things like :
 because this is massively error-prone: different instructions require
 different ranges and different alignment constraints.
 
-The SH4 code emitter can be re-generated from GNU Binutils thanks to
-'gbu2mono':
+A SH4 code "comparator" comes among the native code emitter, it checks
+if an instruction is what we are waiting for. For instance, you can
+write things like:
+
+    if (is_sh4_jsr_indRx(code[0], sh4_r3) &&
+        is_sh4_nop(code[1]))
+
+instead of:
+
+    if (code[0] == 0x430B &&
+        code[1] == 0x0009)
+
+The SH4 code emitter/comparator can be re-generated from GNU Binutils
+thanks to 'gbu2mono':
 
    gcc gbu2mono.c -I ${BINUTILS}/opcodes -o gbu2mono
    ./gbu2mono > sh4-codegen.h

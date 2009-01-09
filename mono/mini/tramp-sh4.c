@@ -406,14 +406,14 @@ void mono_arch_nullify_plt_entry(guint8 *code)
  *     . for OP_.*CALL opcodes:
  *
  *         #if strong_align
- *         -14: movl @cstpool, R3
- *         -12: bra cstpool_end
+ *         -14:     movl @cstpool, R3
+ *         -12:     bra cstpool_end
  *         #else
- *         -16: movl @cstpool, R3
- *         -14: bra cstpool_end
- *         -12: nop
+ *         -16:     movl @cstpool, R3
+ *         -14:     bra cstpool_end
+ *         -12:     nop
  *         #endif
- *          -10:     nop
+ *         -10:     nop
  *              cstpool:
  *          -8:     .word 0xXXXX
  *          -6:     .word 0xYYYY
@@ -429,8 +429,11 @@ void mono_arch_nullify_plt_entry(guint8 *code)
  */
 void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 {
+	char name[] = "unknown call site";
 	guint16 *code16 = (void *)code;
 	guint8 *cstpool = NULL;
+
+#define CALL_SITE_SIZE 16
 
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
@@ -441,21 +444,21 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	 * sequence of OP_.*CALL opcodes.
 	 */
 
-	if (code16[-1] == 0x0009 && /* nop */
-	    code16[-2] == 0x430B && /* jsr @r3 */
-	    code16[-5] == 0x0009    /* nop */
+	if (is_sh4_nop(code16[-1]) && 				/* -2:  nop			*/
+	    is_sh4_jsr_indRx(code16[-2], sh4_r3) &&		/* -4:  jsr @r3			*/
+	    is_sh4_nop(code16[-5])				/* -10: nop			*/
 	    &&
-	    ((code16[-6] == 0xA002 &&   /* bra cstpool_end */
-	      code16[-7] == 0xD301)     /* movl @cstpool, R3 */
+	    ((is_sh4_bra(code16[-6], 4) &&			/* -12: bra cstpool_end		*/
+	      is_sh4_movl_dispPC(code16[-7], 4, sh4_r3)) 	/* -14: movl @cstpool, R3	*/
 	     ||
-	     (code16[-6] == 0x0009 &&   /* nop */
-	      code16[-7] == 0xA003 &&   /* bra cstpool_end */
-	      code16[-8] == 0xD301))) { /* movl @cstpool, R3 */
+	     (is_sh4_nop(code16[-6]) &&				/* -12: nop			*/
+	      is_sh4_bra(code16[-7], 6) &&			/* -14: bra cstpool_end		*/
+	      is_sh4_movl_dispPC(code16[-8], 4, sh4_r3)))) {	/* -16: movl @cstpool, R3	*/
 		cstpool = code - 8;
 		sh4_emit32(&cstpool, (guint32)address);
 
 		/* Flush instruction cache, since we've generated code. */
-		mono_arch_flush_icache(code - 16, 16);
+		mono_arch_flush_icache(code - CALL_SITE_SIZE, CALL_SITE_SIZE);
 
 		return;
 	}
@@ -464,6 +467,8 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	 * Search in reverse order for the calling
 	 * sequence of OP_.*CALL_REG opcodes.
 	 */
+
+	mono_disassemble_code(NULL, code - CALL_SITE_SIZE * 2, CALL_SITE_SIZE * 2, name);
 
 	NOT_IMPLEMENTED;
 
