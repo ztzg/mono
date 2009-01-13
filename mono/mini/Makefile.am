@@ -273,6 +273,7 @@ common_sources = \
 	trivial-add_int.cs	\
 	trivial-fibonacci.cs	\
 	trivial-outarg.cs	\
+	trivial-outarg2.cs	\
 	trivial-virtual.cs
 
 test_sources = 		\
@@ -528,9 +529,9 @@ aotcheck: mono $(regtests)
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual
 
-trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe
+trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe trivial-outarg2.exe trivial-virtual.exe
 
 trivial-return_int: trivial-return_int.exe
 	$(RUNTIME) $<; test $$? = 3
@@ -552,6 +553,11 @@ trivial-outarg: trivial-outarg.exe
 	$(RUNTIME) $<; test $$? = 28
 	$(RUNTIME) $< x; test $$? = 33
 	$(RUNTIME) $< x x; test $$? = 38
+
+trivial-outarg2: trivial-outarg2.exe
+	$(RUNTIME) $<; test $$? = 70
+	$(RUNTIME) $< x; test $$? = 80
+	$(RUNTIME) $< x x; test $$? = 90
 
 trivial-virtual: trivial-virtual.exe
 	$(RUNTIME) $<; test $$? = 13

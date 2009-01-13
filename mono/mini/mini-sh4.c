@@ -871,6 +871,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					g_assert(inst->inst_basereg == sh4_r15);
+					g_assert_not_reached(); /* Not yet tested. */
 					sh4_movl_dispRx(NULL, &buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
 					break;
 
@@ -893,13 +894,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 			/* ... and was already onto the stack. */
 			case onto_stack:
-				/* What should I do here :
-				   . copy from a stack location to another one ? or
-				   . adjust inst->inst_offset according to arg_info->offset ? or
-				   . do nothing because it is already correctly set ? */
 				switch (arg_info->type) {
 				case integer32:
-					NOT_IMPLEMENTED;
+					/* Nothing because it is already correctly set in allocate_vars(). */
 					break;
 
 				case integer64:
