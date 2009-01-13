@@ -533,6 +533,11 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		if (inst->opcode == OP_REGVAR || (inst->flags & MONO_INST_IS_DEAD) != 0)
 			continue;
 
+		/* Specify how to access this local variable. */
+		inst->opcode = OP_REGOFFSET;
+		inst->inst_basereg = cfg->frame_reg;
+		inst->inst_offset = locals_offset;
+
 		/* inst->backend.is_pinvoke indicates native sized value types,
 		   this is used by the pinvoke wrappers when they call functions
 		   returning structures. */
@@ -541,19 +546,13 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		else
 			size = mono_type_size(inst->inst_vtype, (int *)&align);
 
+		locals_offset += size;
 		/* Align the access on a `align`-bytes boundary. */
 		locals_offset += align - 1;
 		locals_offset &= ~(align - 1);
 
-		/* Specify how to access this local variable. */
-		inst->opcode = OP_REGOFFSET;
-		inst->inst_basereg = cfg->frame_reg;
-		inst->inst_offset = locals_offset;
-
 		SH4_CFG_DEBUG(4) SH4_DEBUG("local '%d' size = %d", i, size);
 		SH4_CFG_DEBUG(4) SH4_DEBUG("local '%d' offset = %d", i, locals_offset);
-
-		locals_offset += size;
 	}
 
 	/* Record the amount of space needed by local variables, for mono_arch_emit_prolog(). */
@@ -610,12 +609,12 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 			inst->inst_basereg = cfg->frame_reg;
 			inst->inst_offset = arg_info->offset;
 
-			SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
-
 			/* The parameter area is before local variables and
 			   saved registers area (the stack grows to low address,
 			   offsets are positively computed). */
 			inst->inst_offset += locals_offset + cfg->arch.regsave_size;
+
+			SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
 			break;
 
 		case nowhere:
