@@ -370,7 +370,6 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 {
 	int i = 0;
 	int length = 0;
-	int value = 0;
 
 	for (i = 0; i < 9; i++) {
 		switch (nibbles[i]) {

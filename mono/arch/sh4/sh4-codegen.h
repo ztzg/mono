@@ -1541,28 +1541,28 @@ static inline int get_Ry_sh4_movb_indRy(guint16 code)
 	return (code >> 4) & 0xF;
 }
 
-#define SH4_CHECK_RANGE_movb_R0_dispRy(imm) ((imm) >= 0 && (imm) <= 15)
+#define SH4_CHECK_RANGE_movb_R0_dispRx(imm) ((imm) >= 0 && (imm) <= 15)
 
-static inline void sh4_movb_R0_dispRy(void *cfg, guint8 **code, int imm, SH4IntRegister Ry)
+static inline void sh4_movb_R0_dispRx(void *cfg, guint8 **code, int imm, SH4IntRegister Rx)
 {
 	if (cfg != NULL)
 		sh4_cstpool_check(cfg, code);
-	g_assert(1 && Ry >= 0 && Ry <= 15 && SH4_CHECK_RANGE_movb_R0_dispRy(imm));
-	sh4_emit16(code, (0x8 << 12) | (0x0 << 8) | ((Ry & 0xF) << 4) | ((imm & 0xF) << 0));
+	g_assert(1 && Rx >= 0 && Rx <= 15 && SH4_CHECK_RANGE_movb_R0_dispRx(imm));
+	sh4_emit16(code, (0x8 << 12) | (0x0 << 8) | ((Rx & 0xF) << 4) | ((imm & 0xF) << 0));
 }
 
-static inline int is_sh4_movb_R0_dispRy(guint16 code, int imm, SH4IntRegister Ry)
+static inline int is_sh4_movb_R0_dispRx(guint16 code, int imm, SH4IntRegister Rx)
 {
-	return (1 && Ry >= 0 && Ry <= 15 && SH4_CHECK_RANGE_movb_R0_dispRy(imm)
-		&& code == ((0x8 << 12) | (0x0 << 8) | ((Ry & 0xF) << 4) | ((imm & 0xF) << 0)));
+	return (1 && Rx >= 0 && Rx <= 15 && SH4_CHECK_RANGE_movb_R0_dispRx(imm)
+		&& code == ((0x8 << 12) | (0x0 << 8) | ((Rx & 0xF) << 4) | ((imm & 0xF) << 0)));
 }
 
-static inline int get_Ry_sh4_movb_R0_dispRy(guint16 code)
+static inline int get_Rx_sh4_movb_R0_dispRx(guint16 code)
 {
 	return (code >> 4) & 0xF;
 }
 
-static inline int get_imm_sh4_movb_R0_dispRy(guint16 code)
+static inline int get_imm_sh4_movb_R0_dispRx(guint16 code)
 {
 	return (code >> 0) & 0xF;
 }
@@ -2064,24 +2064,24 @@ static inline int get_Ry_sh4_movw_indRy(guint16 code)
 	return (code >> 4) & 0xF;
 }
 
-#define SH4_CHECK_RANGE_movw_R0_dispRy(imm) ((imm) >= 0 && (imm) <= 30)
-#define SH4_CHECK_ALIGN_movw_R0_dispRy(imm) (((imm) & 0x1) == 0)
+#define SH4_CHECK_RANGE_movw_R0_dispRx(imm) ((imm) >= 0 && (imm) <= 30)
+#define SH4_CHECK_ALIGN_movw_R0_dispRx(imm) (((imm) & 0x1) == 0)
 
-static inline void sh4_movw_R0_dispRy(void *cfg, guint8 **code, int imm, SH4IntRegister Ry)
+static inline void sh4_movw_R0_dispRx(void *cfg, guint8 **code, int imm, SH4IntRegister Rx)
 {
 	if (cfg != NULL)
 		sh4_cstpool_check(cfg, code);
-	g_assert(1 && Ry >= 0 && Ry <= 15 && SH4_CHECK_RANGE_movw_R0_dispRy(imm) && SH4_CHECK_ALIGN_movw_R0_dispRy(imm));
-	sh4_emit16(code, (0x8 << 12) | (0x1 << 8) | ((Ry & 0xF) << 4) | (((imm & 0x1E) >> 1) << 0));
+	g_assert(1 && Rx >= 0 && Rx <= 15 && SH4_CHECK_RANGE_movw_R0_dispRx(imm) && SH4_CHECK_ALIGN_movw_R0_dispRx(imm));
+	sh4_emit16(code, (0x8 << 12) | (0x1 << 8) | ((Rx & 0xF) << 4) | (((imm & 0x1E) >> 1) << 0));
 }
 
-static inline int is_sh4_movw_R0_dispRy(guint16 code, int imm, SH4IntRegister Ry)
+static inline int is_sh4_movw_R0_dispRx(guint16 code, int imm, SH4IntRegister Rx)
 {
-	return (1 && Ry >= 0 && Ry <= 15 && SH4_CHECK_RANGE_movw_R0_dispRy(imm) && SH4_CHECK_ALIGN_movw_R0_dispRy(imm)
-		&& code == ((0x8 << 12) | (0x1 << 8) | ((Ry & 0xF) << 4) | (((imm & 0x1E) >> 1) << 0)));
+	return (1 && Rx >= 0 && Rx <= 15 && SH4_CHECK_RANGE_movw_R0_dispRx(imm) && SH4_CHECK_ALIGN_movw_R0_dispRx(imm)
+		&& code == ((0x8 << 12) | (0x1 << 8) | ((Rx & 0xF) << 4) | (((imm & 0x1E) >> 1) << 0)));
 }
 
-static inline int get_Ry_sh4_movw_R0_dispRy(guint16 code)
+static inline int get_Rx_sh4_movw_R0_dispRx(guint16 code)
 {
 	return (code >> 4) & 0xF;
 }
