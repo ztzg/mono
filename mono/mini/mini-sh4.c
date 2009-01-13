@@ -1722,6 +1722,32 @@ static inline gboolean sh4_has_shift_inst_imm(guint32 immediate)
 	return ret;
 }
 
+static void merge_disp_in_new_reg(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst)
+{
+	MonoInst *new_inst  = NULL;
+	MonoInst *new_inst2 = NULL;
+
+	/* Load the offset in new register. */
+	MONO_INST_NEW(cfg, new_inst, OP_ICONST);
+	new_inst->inst_c0 = inst->inst_offset;
+	new_inst->dreg = mono_regstate_next_int(cfg->rs);
+
+	/* Add basereg from LOAD to this new register. */
+	MONO_INST_NEW(cfg, new_inst2, OP_IADD);
+	new_inst2->sreg1 = inst->inst_basereg;
+	new_inst2->sreg2 = new_inst->dreg;
+	new_inst2->dreg = new_inst->dreg;
+
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
+	mono_bblock_insert_before_ins(basic_block, new_inst2, new_inst);
+
+	inst->inst_offset = 0;
+	inst->inst_basereg = new_inst2->dreg;
+	/* inst->dreg destination reg is kept. */
+
+	return;
+}
+
 /**
  * Decompose some generic opcodes to architecture-specific ones.
  *
@@ -1917,49 +1943,48 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		}
 
-		case OP_LOADU1_MEMBASE: {
-			MonoInst *new_inst  = NULL;
-			MonoInst *new_inst2 = NULL;
-
+		/* the load byte and 16-bits-word instructions with 
+		   immediate displacement have a constraint on 
+		   dest register: must be R0. If the offset can be encoded
+		   inside the instruction, enforce R0 in output_basic_block()
+		   rule for new OP_SH4_LOADUx_MEMBASE... */
+		case OP_LOADU1_MEMBASE:
 			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
-			    SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset))
-				break;
-			/* else fall through. */
+			    SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset)) {
+				inst->opcode = OP_SH4_LOADU1_MEMBASE_R0;
+			} else {
+				/* merge disp+base_reg in new reg. 
+				   In output_basic_block(), the load Offset(BaseReg)
+				   is replaced by a load Reg */
+				merge_disp_in_new_reg(cfg, basic_block, inst);
+				inst->opcode = OP_SH4_LOADU1;
+			}
+			break;
+
+		case OP_LOADU2_MEMBASE:
+			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
+			    SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset)) {
+				inst->opcode = OP_SH4_LOADU2_MEMBASE_R0;
+			} else {
+				/* merge disp+base_reg in new reg */
+				merge_disp_in_new_reg(cfg, basic_block, inst);
+				inst->opcode = OP_SH4_LOADU2;
+			}
+			break;
 
 		case OP_LOAD_MEMBASE:
 		case OP_LOADU4_MEMBASE:
 		case OP_LOADI4_MEMBASE:
-
-			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset))
-				break;
-
-			/* Load the offset in new register. */
-			MONO_INST_NEW(cfg, new_inst, OP_ICONST);
-			new_inst->inst_c0 = inst->inst_offset;
-			new_inst->dreg = mono_regstate_next_int(cfg->rs);
-
-			/* Add basereg from LOAD to this new register. */
-			MONO_INST_NEW(cfg, new_inst2, OP_IADD);
-			new_inst2->sreg1 = inst->inst_basereg;
-			new_inst2->sreg2 = new_inst->dreg;
-			new_inst2->dreg = new_inst->dreg;
-
-			mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
-			mono_bblock_insert_before_ins(basic_block, new_inst2, new_inst);
-
-			/* We merge the case OP_LOAD_MEMBASE,
-			   OP_LOADU4_MEMBASE and  OP_LOADI4_MEMBASE. */
-			if (inst->opcode == OP_LOADU1_MEMBASE)
+			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
 				inst->opcode = OP_SH4_LOAD_MEMBASE;
-			else
-				inst->opcode = OP_SH4_LOADU1_MEMBASE;
-
-			inst->inst_offset = 0;
-			inst->inst_basereg = new_inst2->dreg;
-			/* inst->dreg destination reg is kept. */
-
+			} else {
+				/* merge disp+base_reg in new reg */
+				merge_disp_in_new_reg(cfg, basic_block, inst);
+				/* We merge the case OP_LOAD_MEMBASE, OP_LOADU4_MEMBASE and
+				   OP_LOADI4_MEMBASE */
+				inst->opcode = OP_SH4_LOAD;
+			}
 			break;
-		}
 
 		case OP_VOIDCALL_MEMBASE:
 		case OP_CALL_MEMBASE: {
@@ -2255,29 +2280,50 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
-		case OP_LOADU1_MEMBASE:
-			/* MD: loadu1_membase: dest:z src1:b len:2 */
-		case OP_SH4_LOADU1_MEMBASE:
-			/* MD: sh4_loadu1_membase: dest:z src1:b len:2 */
+		case OP_SH4_LOADU1_MEMBASE_R0:
+			/* MD: sh4_loadu1_membase_R0: dest:z src1:b len:2 */
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
 			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
 			break;
 
+		case OP_SH4_LOADU1:
+			/* MD: sh4_loadu1: dest:i src1:b len:2 */
+			sh4_movb_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			break;
+
+		case OP_SH4_LOADU2_MEMBASE_R0:
+			/* MD: sh4_loadu2_membase_R0: dest:z src1:b len:2 */
+			g_assert(inst->dreg == 0);
+			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
+			sh4_movw_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
+			break;
+
+		case OP_SH4_LOADU2:
+			/* MD: sh4_loadu2: dest:i src1:b len:2 */
+			sh4_movw_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			break;
+
+		case OP_SH4_LOAD_MEMBASE:
+			/* MD: sh4_load_membase: dest:i src1:b len:2 */
+			g_assert(SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset));
+			sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
+					inst->inst_basereg, inst->dreg);
+			break;
+
+		case OP_SH4_LOAD:
+			/* MD: sh4_load: dest:i src1:i len:2 */
+			sh4_movl_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			break;
+
 		case OP_LOAD_MEMBASE:
 			/* MD: load_membase: clob:t dest:i src1:I len:16 */
-		case OP_LOADU4_MEMBASE:
-			/* MD: loadu4_membase: clob:t dest:i src1:I len:16 */
-		case OP_LOADI4_MEMBASE:
-			/* MD: loadi4_membase: clob:t dest:i src1:I len:16 */
-
+			/* FIXME - DFE: this should be avoided by the lowering
+			   pass, but still happens. */
 			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
 				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
 						inst->inst_basereg, inst->dreg);
 			} else {
-				/* FIXME - DFE: this should be avoided by the lowering
-				   pass, but still happens with negative offsets. */
-
 				/* Put store-offset in Cst-Pool & clobber Rtemp. */
 				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
 						&(inst->inst_offset), sh4_temp);
@@ -2286,12 +2332,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
 				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
 			}
-			break;
-
-		case OP_SH4_LOAD_MEMBASE:
-			/* MD: sh4_load_membase: dest:i src1:b len:2 */
-			g_assert(!SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset));
-			sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_ICONST:

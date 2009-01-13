@@ -78,12 +78,13 @@ store_membase_imm: clob:t dest:b len:14
 storei4_membase_imm: clob:t dest:b len:14
 store_membase_reg: clob:t dest:b src1:i len:16
 storei4_membase_reg: clob:t dest:b src1:i len:16
-loadu1_membase: dest:z src1:b len:2
-sh4_loadu1_membase: dest:z src1:b len:2
-load_membase: clob:t dest:i src1:I len:16
-loadu4_membase: clob:t dest:i src1:I len:16
-loadi4_membase: clob:t dest:i src1:I len:16
+sh4_loadu1_membase_R0: dest:z src1:b len:2
+sh4_loadu1: dest:i src1:b len:2
+sh4_loadu2_membase_R0: dest:z src1:b len:2
+sh4_loadu2: dest:i src1:b len:2
 sh4_load_membase: dest:i src1:b len:2
+sh4_load: dest:i src1:i len:2
+load_membase: clob:t dest:i src1:I len:16
 iconst: dest:i len:12
 voidcall: clob:c len:30
 call: dest:z clob:c len:30
