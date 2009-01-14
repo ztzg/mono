@@ -274,7 +274,8 @@ common_sources = \
 	trivial-fibonacci.cs	\
 	trivial-outarg.cs	\
 	trivial-outarg2.cs	\
-	trivial-virtual.cs
+	trivial-virtual.cs	\
+	trivial-load_store.cs
 
 test_sources = 		\
 	basic-calls.cs 	\
@@ -529,9 +530,9 @@ aotcheck: mono $(regtests)
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store
 
-trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe trivial-outarg2.exe trivial-virtual.exe
+trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe trivial-outarg2.exe trivial-virtual.exe trivial-load_store.exe
 
 trivial-return_int: trivial-return_int.exe
 	$(RUNTIME) $<; test $$? = 3
@@ -561,6 +562,9 @@ trivial-outarg2: trivial-outarg2.exe
 
 trivial-virtual: trivial-virtual.exe
 	$(RUNTIME) $<; test $$? = 13
+
+trivial-load_store: trivial-load_store.exe
+	$(RUNTIME) $<; test $$? = 8
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe

@@ -1722,7 +1722,7 @@ static inline gboolean sh4_has_shift_inst_imm(guint32 immediate)
 	return ret;
 }
 
-static void merge_disp_in_new_reg(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst)
+static inline void decompose_op_offset2base(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst, int is_store)
 {
 	MonoInst *new_inst  = NULL;
 	MonoInst *new_inst2 = NULL;
@@ -1732,20 +1732,36 @@ static void merge_disp_in_new_reg(MonoCompile *cfg, MonoBasicBlock *basic_block,
 	new_inst->inst_c0 = inst->inst_offset;
 	new_inst->dreg = mono_regstate_next_int(cfg->rs);
 
-	/* Add basereg from LOAD to this new register. */
+	/* Add the base register to this new register. */
 	MONO_INST_NEW(cfg, new_inst2, OP_IADD);
-	new_inst2->sreg1 = inst->inst_basereg;
 	new_inst2->sreg2 = new_inst->dreg;
 	new_inst2->dreg = new_inst->dreg;
+	if (is_store != 0)
+		new_inst2->sreg1 = inst->inst_destbasereg;
+	else
+		new_inst2->sreg1 = inst->inst_basereg;
 
 	mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
 	mono_bblock_insert_before_ins(basic_block, new_inst2, new_inst);
 
 	inst->inst_offset = 0;
-	inst->inst_basereg = new_inst2->dreg;
-	/* inst->dreg destination reg is kept. */
+	if (is_store != 0)
+		inst->inst_destbasereg = new_inst2->dreg;
+	else
+		inst->inst_basereg = new_inst2->dreg;
 
 	return;
+}
+
+static inline void decompose_op_imm2reg(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst)
+{
+	MonoInst *new_inst = NULL;
+
+	MONO_INST_NEW(cfg, new_inst, OP_ICONST);
+	new_inst->inst_c0 = inst->inst_imm;
+	new_inst->dreg = mono_regstate_next_int(cfg->rs);
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst);
+	inst->sreg1 = new_inst->dreg;
 }
 
 /**
@@ -1835,7 +1851,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
-		case OP_OR_IMM:    /* Fall through */
+		case OP_OR_IMM:
 		case OP_IOR_IMM:
 			if((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
 			    SH4_CHECK_RANGE_or_imm_R0(inst->inst_imm)) {
@@ -1847,7 +1863,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
-		case OP_XOR_IMM:   /* Fall through */
+		case OP_XOR_IMM:
 		case OP_IXOR_IMM:
 			if((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
 			   SH4_CHECK_RANGE_xor_imm_R0(inst->inst_imm)) {
@@ -1870,7 +1886,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
-		case OP_SHL_IMM:       /* Fall through */
+		case OP_SHL_IMM:
 		case OP_ISHL_IMM:
 			if(inst->inst_imm==0) {
 				inst->opcode = OP_MOVE;
@@ -1881,7 +1897,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
-		case OP_MUL_IMM:    /* Fall through */
+		case OP_MUL_IMM:
 		case OP_IMUL_IMM: {
 			MonoInst *new_inst;
 			guint32 imm8;
@@ -1925,64 +1941,106 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 		}
 
-		case OP_STORE_MEMBASE_IMM:
-		case OP_STOREI4_MEMBASE_IMM: {
-			MonoInst *new_inst = NULL;
-
-			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
-				break;
-
-			MONO_INST_NEW(cfg, new_inst, OP_ICONST);
-			new_inst->inst_c0 = inst->inst_imm;
-			new_inst->dreg = mono_regstate_next_int(cfg->rs);
-			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
-
-			/* We merge the case STORE_MEMBASE and STOREI4_MEMBASE. */
-			inst->opcode = OP_STORE_MEMBASE_REG;
-			inst->sreg1 = new_inst->dreg;
 			break;
-		}
 
-		/* the load byte and 16-bits-word instructions with 
-		   immediate displacement have a constraint on 
-		   dest register: must be R0. If the offset can be encoded
-		   inside the instruction, enforce R0 in output_basic_block()
-		   rule for new OP_SH4_LOADUx_MEMBASE... */
+			break;
+
+		/* The SH4 can't store immediate into memory, so split
+		   store*_membase_imm into: iconst + store*_membase_reg. */
+		case OP_STOREI1_MEMBASE_IMM:
+			decompose_op_imm2reg(cfg, basic_block, inst);
+			/* Fall through. */
+		case OP_STOREI1_MEMBASE_REG:
+			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
+			    SH4_CHECK_RANGE_movb_R0_dispRx(inst->inst_offset)) {
+				inst->opcode = OP_SH4_STOREI1_MEMBASE_R0;
+			} else {
+				decompose_op_offset2base(cfg, basic_block, inst, 1);
+				inst->opcode = OP_SH4_STOREI1;
+			}
+			break;
+
+		/* See previous comment. */
+		case OP_STOREI2_MEMBASE_IMM:
+			decompose_op_imm2reg(cfg, basic_block, inst);
+			/* Fall through. */
+		case OP_STOREI2_MEMBASE_REG:
+			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
+			    SH4_CHECK_RANGE_movw_R0_dispRx(inst->inst_offset)) {
+				inst->opcode = OP_SH4_STOREI2_MEMBASE_R0;
+			} else {
+				decompose_op_offset2base(cfg, basic_block, inst, 1);
+				inst->opcode = OP_SH4_STOREI2;
+			}
+
+		/* See previous comment. */
+		case OP_STORE_MEMBASE_IMM:
+		case OP_STOREI4_MEMBASE_IMM:
+			decompose_op_imm2reg(cfg, basic_block, inst);
+			/* Fall through. */
+		case OP_STORE_MEMBASE_REG:
+		case OP_STOREI4_MEMBASE_REG:
+			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
+				inst->opcode = OP_SH4_STOREI4_MEMBASE;
+			} else {
+				decompose_op_offset2base(cfg, basic_block, inst, 1);
+				inst->opcode = OP_SH4_STOREI4;
+			}
+			break;
+
+		case OP_LOADI1_MEMBASE:
+			/* See previous comment. */
+			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
+			    SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset)) {
+				inst->opcode = OP_SH4_LOADI1_MEMBASE_R0;
+			} else {
+				decompose_op_offset2base(cfg, basic_block, inst, 0);
+				inst->opcode = OP_SH4_LOADI1;
+			}
+			break;
+
+		case OP_LOADI2_MEMBASE:
+			/* See previous comment. */
+			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
+			    SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset)) {
+				inst->opcode = OP_SH4_LOADI2_MEMBASE_R0;
+			} else {
+				decompose_op_offset2base(cfg, basic_block, inst, 0);
+				inst->opcode = OP_SH4_LOADI2;
+			}
+			break;
+
 		case OP_LOADU1_MEMBASE:
+			/* See previous comment. */
 			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
 			    SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset)) {
 				inst->opcode = OP_SH4_LOADU1_MEMBASE_R0;
 			} else {
-				/* merge disp+base_reg in new reg. 
-				   In output_basic_block(), the load Offset(BaseReg)
-				   is replaced by a load Reg */
-				merge_disp_in_new_reg(cfg, basic_block, inst);
+				decompose_op_offset2base(cfg, basic_block, inst, 0);
 				inst->opcode = OP_SH4_LOADU1;
 			}
 			break;
 
 		case OP_LOADU2_MEMBASE:
+			/* See previous comment. */
 			if ((inst->dreg == sh4_r0 || register_not_assigned(inst->dreg)) &&
 			    SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset)) {
 				inst->opcode = OP_SH4_LOADU2_MEMBASE_R0;
 			} else {
-				/* merge disp+base_reg in new reg */
-				merge_disp_in_new_reg(cfg, basic_block, inst);
+				decompose_op_offset2base(cfg, basic_block, inst, 0);
 				inst->opcode = OP_SH4_LOADU2;
 			}
 			break;
 
 		case OP_LOAD_MEMBASE:
-		case OP_LOADU4_MEMBASE:
 		case OP_LOADI4_MEMBASE:
+		case OP_LOADU4_MEMBASE:
+			/* See previous comment. */
 			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
-				inst->opcode = OP_SH4_LOAD_MEMBASE;
+				inst->opcode = OP_SH4_LOADI4_MEMBASE;
 			} else {
-				/* merge disp+base_reg in new reg */
-				merge_disp_in_new_reg(cfg, basic_block, inst);
-				/* We merge the case OP_LOAD_MEMBASE, OP_LOADU4_MEMBASE and
-				   OP_LOADI4_MEMBASE */
-				inst->opcode = OP_SH4_LOAD;
+				decompose_op_offset2base(cfg, basic_block, inst, 0);
+				inst->opcode = OP_SH4_LOADI4;
 			}
 			break;
 
@@ -2008,6 +2066,14 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				inst->opcode = OP_VOIDCALL_REG;
 			else
 				inst->opcode = OP_CALL_REG;
+
+			/* See comment about OP_SH4_LOAD*. */
+			if (SH4_CHECK_RANGE_movl_dispRy(new_inst->inst_offset)) {
+				new_inst->opcode = OP_SH4_LOADI4_MEMBASE;
+			} else {
+				decompose_op_offset2base(cfg, basic_block, new_inst, 0);
+				new_inst->opcode = OP_SH4_LOADI4;
+			}
 
 			break;
 		}
@@ -2245,51 +2311,86 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movl_decRx(cfg, &buffer, inst->sreg1, sh4_sp);
 			break;
 
-		case OP_STORE_MEMBASE_IMM:
-			/* MD: store_membase_imm: clob:t dest:b len:14 */
-		case OP_STOREI4_MEMBASE_IMM:
-			/* MD: storei4_membase_imm: clob:t dest:b len:14 */
+		case OP_SH4_STOREI1_MEMBASE_R0:
+			/* MD: sh4_storei1_membase_R0: src1:z dest:b len:2 */
+			g_assert(inst->sreg1 == sh4_r0);
+			g_assert(SH4_CHECK_RANGE_movb_R0_dispRx(inst->inst_offset));
+			sh4_movb_R0_dispRx(cfg, &buffer, inst->inst_offset, inst->inst_destbasereg);
+			break;
+
+		case OP_SH4_STOREI1:
+			/* MD: sh4_storei1: src1:i dest:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			sh4_movb_indRx(cfg, &buffer, inst->sreg1, inst->inst_destbasereg);
+			break;
+
+		case OP_SH4_STOREI2_MEMBASE_R0:
+			/* MD: sh4_storei2_membase_R0: src1:z dest:b len:2 */
+			g_assert(inst->sreg1 == sh4_r0);
+			g_assert(SH4_CHECK_RANGE_movw_R0_dispRx(inst->inst_offset));
+			sh4_movw_R0_dispRx(cfg, &buffer, inst->inst_offset, inst->inst_destbasereg);
+			break;
+
+		case OP_SH4_STOREI2:
+			/* MD: sh4_storei2: src1:i dest:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			sh4_movw_indRx(cfg, &buffer, inst->sreg1, inst->inst_destbasereg);
+			break;
+
+		case OP_SH4_STOREI4_MEMBASE:
+			/* MD: sh4_storei4_membase: src1:i dest:b len:2 */
 			g_assert(SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset));
-
-			/* Do not use the constant pool if possible. */
-			if (SH4_CHECK_RANGE_mov_imm(inst->inst_imm))
-				sh4_mov_imm(cfg, &buffer, inst->inst_imm, sh4_temp);
-			else
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-						&(inst->inst_imm), sh4_temp);
-
-			sh4_movl_dispRx(cfg, &buffer, sh4_temp,
-					inst->inst_offset, inst->inst_destbasereg);
+			sh4_movl_dispRx(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
-		case OP_STORE_MEMBASE_REG:
-			/* MD: store_membase_reg: clob:t dest:b src1:i len:16 */
-		case OP_STOREI4_MEMBASE_REG:
-			/* MD: storei4_membase_reg: clob:t dest:b src1:i len:16 */
-			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
-				sh4_movl_dispRx(cfg, &buffer, inst->sreg1,
-						inst->inst_offset, inst->inst_destbasereg);
-			} else {
-				/* Put store-offset in Cst-Pool & clobber Rtemp */
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-						&(inst->inst_offset), sh4_temp);
-				/* Compute store address in sh4_temp as we cannot clobber
-				   destbasereg */
-				sh4_add(cfg, &buffer, inst->inst_destbasereg, sh4_temp);
-				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, 0, sh4_temp);
-			}
+		case OP_SH4_STOREI4:
+			/* MD: sh4_storei4: src1:i dest:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			sh4_movl_indRx(cfg, &buffer, inst->sreg1, inst->inst_destbasereg);
 			break;
 
-		case OP_SH4_LOADU1_MEMBASE_R0:
-			/* MD: sh4_loadu1_membase_R0: dest:z src1:b len:2 */
+		case OP_SH4_LOADI1_MEMBASE_R0:
+			/* MD: sh4_loadi1_membase_R0: dest:z src1:b len:2 */
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
 			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
 			break;
 
+		case OP_SH4_LOADI1:
+			/* MD: sh4_loadi1: dest:i src1:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
+			sh4_movb_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			break;
+
+		case OP_SH4_LOADI2_MEMBASE_R0:
+			/* MD: sh4_loadi2_membase_R0: dest:z src1:b len:2 */
+			g_assert(inst->dreg == 0);
+			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
+			sh4_movw_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
+			break;
+
+		case OP_SH4_LOADI2:
+			/* MD: sh4_loadi2: dest:i src1:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
+			sh4_movw_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			break;
+
+		case OP_SH4_LOADU1_MEMBASE_R0:
+			/* MD: sh4_loadu1_membase_R0: dest:z src1:b len:4 */
+			g_assert(inst->dreg == 0);
+			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
+			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
+			sh4_and_imm_R0(cfg, &buffer, 0xFF); /* Adjust the sign. */
+			break;
+
 		case OP_SH4_LOADU1:
 			/* MD: sh4_loadu1: dest:i src1:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
 			sh4_movb_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			NOT_IMPLEMENTED; /* TODO - CV : fix the sign. */
 			break;
 
 		case OP_SH4_LOADU2_MEMBASE_R0:
@@ -2297,41 +2398,28 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
 			sh4_movw_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
+			NOT_IMPLEMENTED; /* TODO - CV : fix the sign. */
 			break;
 
 		case OP_SH4_LOADU2:
 			/* MD: sh4_loadu2: dest:i src1:b len:2 */
+			g_assert(inst->inst_offset == 0);
+			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
 			sh4_movw_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			NOT_IMPLEMENTED; /* TODO - CV : fix the sign. */
 			break;
 
-		case OP_SH4_LOAD_MEMBASE:
-			/* MD: sh4_load_membase: dest:i src1:b len:2 */
+		case OP_SH4_LOADI4_MEMBASE:
+			/* MD: sh4_loadi4_membase: dest:i src1:b len:2 */
 			g_assert(SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset));
 			sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
 					inst->inst_basereg, inst->dreg);
 			break;
 
-		case OP_SH4_LOAD:
-			/* MD: sh4_load: dest:i src1:i len:2 */
+		case OP_SH4_LOADI4:
+			/* MD: sh4_loadi4: dest:i src1:i len:2 */
+			g_assert(inst->inst_offset == 0);
 			sh4_movl_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
-			break;
-
-		case OP_LOAD_MEMBASE:
-			/* MD: load_membase: clob:t dest:i src1:I len:16 */
-			/* FIXME - DFE: this should be avoided by the lowering
-			   pass, but still happens. */
-			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
-				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
-						inst->inst_basereg, inst->dreg);
-			} else {
-				/* Put store-offset in Cst-Pool & clobber Rtemp. */
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE,
-						&(inst->inst_offset), sh4_temp);
-
-				/* Compute store address in sh4_temp as we cannot clobber destbasereg. */
-				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
-				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
-			}
 			break;
 
 		case OP_ICONST:
@@ -2580,7 +2668,19 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		default:
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
-			//g_assert_not_reached();
+			SH4_DEBUG("opcode '%s':\n"
+				  "	sreg1	= %d\n"
+				  "	sreg2	= %d\n"
+				  "	dreg	= %d\n"
+				  "	offset	= %d\n"
+				  "	imm	= %d",
+				  mono_inst_name(inst->opcode),
+				  (int)inst->sreg1,
+				  (int)inst->sreg2,
+				  (int)inst->dreg,
+				  (int)inst->inst_offset,
+				  (int)inst->inst_imm);
+			g_assert_not_reached();
 		}
 
 		/* Sanity checks. */
@@ -2592,8 +2692,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		}
 	}
 
-	sh4_cstpool_check_end_bb(cfg,basic_block,
-				 &buffer);
+	sh4_cstpool_check_end_bb(cfg, basic_block, &buffer);
 
 	cfg->code_len = buffer - cfg->native_code;
 

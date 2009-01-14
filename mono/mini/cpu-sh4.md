@@ -74,17 +74,22 @@ sh4_cmpge: src1:i src2:i len:6
 sh4_cmphs: src1:i src2:i len:6
 sh4_movt: dest:i len:2
 outarg_membase: src1:i len:2
-store_membase_imm: clob:t dest:b len:14
-storei4_membase_imm: clob:t dest:b len:14
-store_membase_reg: clob:t dest:b src1:i len:16
-storei4_membase_reg: clob:t dest:b src1:i len:16
-sh4_loadu1_membase_R0: dest:z src1:b len:2
+sh4_storei1_membase_R0: src1:z dest:b len:2
+sh4_storei1: src1:i dest:b len:2
+sh4_storei2_membase_R0: src1:z dest:b len:2
+sh4_storei2: src1:i dest:b len:2
+sh4_storei4_membase: src1:i dest:b len:2
+sh4_storei4: src1:i dest:b len:2
+sh4_loadi1_membase_R0: dest:z src1:b len:2
+sh4_loadi1: dest:i src1:b len:2
+sh4_loadi2_membase_R0: dest:z src1:b len:2
+sh4_loadi2: dest:i src1:b len:2
+sh4_loadu1_membase_R0: dest:z src1:b len:4
 sh4_loadu1: dest:i src1:b len:2
 sh4_loadu2_membase_R0: dest:z src1:b len:2
 sh4_loadu2: dest:i src1:b len:2
-sh4_load_membase: dest:i src1:b len:2
-sh4_load: dest:i src1:i len:2
-load_membase: clob:t dest:i src1:I len:16
+sh4_loadi4_membase: dest:i src1:b len:2
+sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
 voidcall: clob:c len:30
 call: dest:z clob:c len:30
