@@ -2375,31 +2375,31 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
 			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
-			sh4_and_imm_R0(cfg, &buffer, 0xFF); /* Adjust the sign. */
+			sh4_extub(cfg, &buffer, sh4_r0, sh4_r0); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADU1:
-			/* MD: sh4_loadu1: dest:i src1:b len:2 */
+			/* MD: sh4_loadu1: dest:i src1:b len:4 */
 			g_assert(inst->inst_offset == 0);
 			g_assert(SH4_CHECK_RANGE_movb_dispRy_R0(inst->inst_offset));
 			sh4_movb_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
-			NOT_IMPLEMENTED; /* TODO - CV : fix the sign. */
+			sh4_extub(cfg, &buffer, inst->dreg, inst->dreg); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADU2_MEMBASE_R0:
-			/* MD: sh4_loadu2_membase_R0: dest:z src1:b len:2 */
+			/* MD: sh4_loadu2_membase_R0: dest:z src1:b len:4 */
 			g_assert(inst->dreg == 0);
 			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
 			sh4_movw_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
-			NOT_IMPLEMENTED; /* TODO - CV : fix the sign. */
+			sh4_extuw(cfg, &buffer, sh4_r0, sh4_r0); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADU2:
-			/* MD: sh4_loadu2: dest:i src1:b len:2 */
+			/* MD: sh4_loadu2: dest:i src1:b len:4 */
 			g_assert(inst->inst_offset == 0);
 			g_assert(SH4_CHECK_RANGE_movw_dispRy_R0(inst->inst_offset));
 			sh4_movw_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
-			NOT_IMPLEMENTED; /* TODO - CV : fix the sign. */
+			sh4_extuw(cfg, &buffer, inst->dreg, inst->dreg); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADI4_MEMBASE:

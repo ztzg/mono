@@ -85,9 +85,9 @@ sh4_loadi1: dest:i src1:b len:2
 sh4_loadi2_membase_R0: dest:z src1:b len:2
 sh4_loadi2: dest:i src1:b len:2
 sh4_loadu1_membase_R0: dest:z src1:b len:4
-sh4_loadu1: dest:i src1:b len:2
-sh4_loadu2_membase_R0: dest:z src1:b len:2
-sh4_loadu2: dest:i src1:b len:2
+sh4_loadu1: dest:i src1:b len:4
+sh4_loadu2_membase_R0: dest:z src1:b len:4
+sh4_loadu2: dest:i src1:b len:4
 sh4_loadi4_membase: dest:i src1:b len:2
 sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
