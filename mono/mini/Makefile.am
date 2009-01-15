@@ -564,7 +564,7 @@ trivial-virtual: trivial-virtual.exe
 	$(RUNTIME) $<; test $$? = 13
 
 trivial-load_store: trivial-load_store.exe
-	$(RUNTIME) $<; test $$? = 8
+	$(RUNTIME) $<; test $$? = 16
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe

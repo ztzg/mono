@@ -476,6 +476,9 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
+	/* Spill var slots are allocated from bottom to top. */
+	cfg->flags |= MONO_CFG_HAS_SPILLUP;
+
 	signature = mono_method_signature(cfg->method);
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
 
@@ -501,8 +504,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	/* Allocate space to save the PR. */
 	cfg->arch.regsave_size += 4;
 
-	cfg->stack_offset += cfg->arch.regsave_size;
-
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -516,11 +517,9 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->frame_reg = sh4_r14;
 	cfg->used_int_regs |= 1 << sh4_r14;
 
-	g_assert((cfg->stack_offset & 0x3) == 0);
-
 	/* Allocate space to save the LMF just before "regular" local variables. */
 	if (cfg->method->save_lmf != 0)
-		cfg->stack_offset += sizeof(MonoLMF);
+		;
 
 	/* Compute space used by local variables and specify how to access them. */
 	for (i = cfg->locals_start; i < cfg->num_varinfo; i++) {
@@ -559,9 +558,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->arch.localloc_size = locals_offset;
 
 	/* Allocate space for local variables. */
-	cfg->stack_offset += locals_offset;
-
-	g_assert((cfg->stack_offset & 0x3) == 0);
+	;
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -744,10 +741,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	/* Initialize constant pools */
 	sh4_cstpool_init(cfg);
-
-	/* Re-align cfg->stack_offset if needed,
-	   due to the spilling of variables in mini-codegen.c. */
-	/* cfg->stack_offset = (stack_size + 0x3) & ~0x3; */
 
 	signature = mono_method_signature(cfg->method);
 
@@ -1042,7 +1035,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		}
 	}
 
-	SH4_CFG_DEBUG(4) SH4_DEBUG("localloc_size = %d", localloc_size);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("%s::localloc_size = %d", cfg->method->name, localloc_size);
 
 	/* Set the frame pointer. */
 	sh4_mov(NULL, &buffer, sh4_r15, sh4_r14);
@@ -2412,8 +2405,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SH4_LOADI4_MEMBASE:
 			/* MD: sh4_loadi4_membase: dest:i src1:b len:2 */
 			g_assert(SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset));
-			sh4_movl_dispRy(cfg, &buffer, inst->inst_offset,
-					inst->inst_basereg, inst->dreg);
+			sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_SH4_LOADI4:
@@ -2665,6 +2657,32 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movb_indRy(cfg, &buffer, inst->sreg1, sh4_temp);
 			break;
 		}
+
+			/* Support for spilled variables. */
+		case OP_STORE_MEMBASE_REG:
+			/* MD: store_membase_reg: len:2 */
+			g_assert(inst->inst_destbasereg == sh4_fp);
+			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
+				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
+			} else {
+				NOT_IMPLEMENTED;
+				/* decompose_op_offset2base(cfg, basic_block, inst, 1);
+				   inst->opcode = OP_SH4_STOREI4; */
+			}
+			break;
+
+			/* Support for spilled variables. */
+		case OP_LOAD_MEMBASE:
+			/* MD: load_membase: len:2 */
+			g_assert(inst->inst_basereg == sh4_fp);
+			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
+				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
+			} else {
+				NOT_IMPLEMENTED;
+				/* decompose_op_offset2base(cfg, basic_block, inst, 0);
+				   inst->opcode = OP_SH4_LOADI4; */
+			}
+			break;
 
 		default:
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);

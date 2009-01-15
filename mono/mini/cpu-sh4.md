@@ -106,3 +106,5 @@ sh4_bt: clob:t len:18
 sh4_bf: clob:t len:18
 label: len:0
 checkthis: clob:t src1:i len:2
+store_membase_reg: len:2
+load_membase: len:2
