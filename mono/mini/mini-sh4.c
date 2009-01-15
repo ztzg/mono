@@ -1725,14 +1725,16 @@ static inline void decompose_op_offset2base(MonoCompile *cfg, MonoBasicBlock *ba
 	new_inst->inst_c0 = inst->inst_offset;
 	new_inst->dreg = mono_regstate_next_int(cfg->rs);
 
-	/* Add the base register to this new register. */
+	/* Add the base register to this new register (dest == sreg1 for the SH4). */
 	MONO_INST_NEW(cfg, new_inst2, OP_IADD);
 	new_inst2->sreg2 = new_inst->dreg;
-	new_inst2->dreg = new_inst->dreg;
-	if (is_store != 0)
+	if (is_store != 0) {
+		new_inst2->dreg  = inst->inst_destbasereg;
 		new_inst2->sreg1 = inst->inst_destbasereg;
-	else
+	} else {
+		new_inst2->dreg  = inst->inst_basereg;
 		new_inst2->sreg1 = inst->inst_basereg;
+	}
 
 	mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
 	mono_bblock_insert_before_ins(basic_block, new_inst2, new_inst);
