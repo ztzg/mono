@@ -357,14 +357,28 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 	return;
 }
 
-static void printf_get_field(char *name, const char *field, int length)
+static void printf_get_field(char *name, const char *field, int length, int size, int scaling)
 {
 	printf("static inline int get_%s_sh4_%s(guint16 code)\n", field, name);
 	printf("{\n");
-	printf("	return (code >> %d) & 0xF;\n", 12 - length);
+	switch (size) {
+	case 4:
+		printf("	return ((code >> %d) & 0xF) << %d;\n", 12 - length, scaling);
+		break;
+	case 8:
+		printf("	return ((code >> %d) & 0xFF) << %d;\n", 8 - length, scaling);
+		break;
+	case 12:
+		printf("	return ((code >> %d) & 0xFFF) << %d;\n", 4 - length, scaling);
+		break;
+	default:
+		assert(0);
+		break;
+	}
 	printf("}\n");
 	printf("\n");
 }
+
 
 static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int scaling)
 {
@@ -374,29 +388,22 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 	for (i = 0; i < 9; i++) {
 		switch (nibbles[i]) {
 		case REG_N:
-			printf_get_field(name, "Rx", length);
+			printf_get_field(name, "Rx", length, 4, 0);
 			length += 4;
 			break;
 
 		case REG_M:
-			printf_get_field(name, "Ry", length);
+			printf_get_field(name, "Ry", length, 4, 0);
 			length += 4;
 			break;
 
 		case IMM0_4:
 		case IMM1_4:
-			assert(scaling == 0);
-			printf_get_field(name, "imm", length);
-			length += 4;
-			break;
-
+		case IMM0_4BY2:
+		case IMM1_4BY2:
 		case IMM0_4BY4:
 		case IMM1_4BY4:
-			printf("static inline int get_imm_sh4_%s(guint16 code)\n", name);
-			printf("{\n");
-			printf("	return ((code >> %d) & 0xF) << 2;\n", 12 - length);
-			printf("}\n");
-			printf("\n");
+			printf_get_field(name, "imm", length, 4, scaling);
 			length += 4;
 			break;
 
@@ -420,8 +427,6 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 		case REG_N_B01:
 		case REG_NM:
 		case REG_B:
-		case IMM0_4BY2:
-		case IMM1_4BY2:
 			length += 4;
 			break;
 
@@ -434,10 +439,12 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 		case PCRELIMM_8BY4:
 		case IMM0_8BY4:
 		case IMM1_8BY4:
+			printf_get_field(name, "imm", length, 8, scaling);
 			length += 8;
 			break;
 
 		case BRANCH_12:
+			printf_get_field(name, "imm", length, 12, scaling);
 			length += 12;
 			break;
 
