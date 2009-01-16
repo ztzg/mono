@@ -1486,16 +1486,20 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
  *
  *   // Load the VTable:
  *
- *           mov.l @rZ,rY
+ *           mov.l @(rZ, 0), rY
  *
  *   // Load the method address, that is, VTable[method_index] (load_membase):
  *
  *       #if index is small
  *           mov.l @(small_index, rY), rX
  *       #else
- *           LOAD  big_index, r3
- *           add   rY, r3
- *           mov.l @r3, rX
+ *           #if index is medium
+ *               mov  medium_index, rW
+ *           #else
+ *               LOAD big_index, rW
+ *           #endif
+ *           add   rW, rY
+ *           mov.l @rY, rX
  *       #endif
  *
  *   // Jump to the method (call_reg):
@@ -1507,6 +1511,7 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
 gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 {
 	guint16 *code16 = (void *)code;
+	SH4IntRegister sh4_rW = sh4_r0;
 	SH4IntRegister sh4_rX = sh4_r0;
 	SH4IntRegister sh4_rY = sh4_r0;
 	SH4IntRegister sh4_rZ = sh4_r0;
@@ -1524,22 +1529,32 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 		return NULL;
 
 	/* Check if it is not a load of the method address, that is,
-	 * VTable[method_index] (load_membase) with a big index:
+	 * VTable[method_index] (load_membase) with a medium/big index:
 	 *
-	 *         LOAD  big_index, r3
-	 *         add   rY, r3
-	 *         mov.l @r3, rX
+	 *         #if index is medium
+	 *             mov  medium_index, rW
+	 *         #else
+	 *             LOAD big_index, rW
+	 *         #endif
+	 *         add   rW, rY
+	 *         mov.l @rY, rX
 	 */
-	if (is_sh4_movl_indRy(code16[-3], sh4_r3, sh4_rX)) {
-		sh4_rY = get_Ry_sh4_movl_indRy(code16[-4]);
-		if (!is_sh4_add(code16[-4], sh4_rY, sh4_r3))
+	sh4_rY = get_Ry_sh4_movl_indRy(code16[-3]);
+	if (is_sh4_movl_indRy(code16[-3], sh4_rY, sh4_rX)) {
+		sh4_rW = get_Ry_sh4_add(code16[-4]);
+		if (!is_sh4_add(code16[-4], sh4_rW, sh4_rY))
 			return NULL;
 
-		offset = is_sh4_LOAD(&code16[-5], sh4_r3);
-		if (offset == 0)
-			return NULL;
+		index = get_imm_sh4_mov_imm(code16[-5]);
+		if (is_sh4_mov_imm(code16[-5], index, sh4_rW)) {
+			offset = -6;
+		} else {
+			offset = is_sh4_LOAD(&code16[-5], sh4_rW);
+			if (offset == 0)
+				return NULL;
 
-		offset = -offset - 5;
+			offset = -offset - 5;
+		}
 	}
 	else {
 	/* Check if it is not a load of the method address, that is,
