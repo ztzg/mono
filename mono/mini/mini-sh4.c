@@ -532,11 +532,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		if (inst->opcode == OP_REGVAR || (inst->flags & MONO_INST_IS_DEAD) != 0)
 			continue;
 
-		/* Specify how to access this local variable. */
-		inst->opcode = OP_REGOFFSET;
-		inst->inst_basereg = cfg->frame_reg;
-		inst->inst_offset = locals_offset;
-
 		/* inst->backend.is_pinvoke indicates native sized value types,
 		   this is used by the pinvoke wrappers when they call functions
 		   returning structures. */
@@ -545,10 +540,16 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		else
 			size = mono_type_size(inst->inst_vtype, (int *)&align);
 
-		locals_offset += size;
 		/* Align the access on a `align`-bytes boundary. */
 		locals_offset += align - 1;
 		locals_offset &= ~(align - 1);
+
+		/* Specify how to access this local variable. */
+		inst->opcode = OP_REGOFFSET;
+		inst->inst_basereg = cfg->frame_reg;
+		inst->inst_offset = locals_offset;
+
+		locals_offset += size;
 
 		SH4_CFG_DEBUG(4) SH4_DEBUG("local '%d' size = %d", i, size);
 		SH4_CFG_DEBUG(4) SH4_DEBUG("local '%d' offset = %d", i, locals_offset);
@@ -2143,9 +2144,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Get the 'len' field of this opcode, specify into cpu-sh4.md. */
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
-		SH4_CFG_DEBUG(4) SH4_DEBUG("inst => %s", mono_inst_name(inst->opcode));
-		SH4_CFG_DEBUG(4) SH4_DEBUG("inst_len => %d", length_max);
-
 		/* Reallocate enough room to store the SH4 instructions
 		   used to implement the current opcode. */
 		sh4_realloc_buf_if_needed(cfg,offset,offset+length_max,&buffer);
@@ -2157,12 +2155,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		SH4_CFG_DEBUG(4)
 			SH4_DEBUG("opcode '%s':\n"
+				  "	length	= %d\n"
 				  "	sreg1	= %d\n"
 				  "	sreg2	= %d\n"
 				  "	dreg	= %d\n"
 				  "	offset	= %d\n"
 				  "	imm	= %d",
 				  mono_inst_name(inst->opcode),
+				  (int)length_max,
 				  (int)inst->sreg1,
 				  (int)inst->sreg2,
 				  (int)inst->dreg,
