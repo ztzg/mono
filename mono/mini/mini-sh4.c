@@ -996,8 +996,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		sh4_bra_label(NULL, &patch3, buffer);
 	}
 
-	/* The space needed by local variables is computed into mono_arch_allocate_vars(). */
-	localloc_size = cfg->arch.localloc_size;
+	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
+	   and the size of the spill area (cfg->stack_offset) is computed into mini-codegen.c. */
+	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
 	if (localloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
 			sh4_add_imm(NULL, &buffer, -localloc_size, sh4_r15);
@@ -1100,8 +1101,8 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	 *	:              :
 	 */
 
-	/* Free the space used by local variables. */
-	localloc_size = cfg->arch.localloc_size;
+	/* Free the space used by local variables and the spill area. */
+	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
 	if (localloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(localloc_size))
 			sh4_add_imm(NULL, &buffer, localloc_size, sh4_r15);
