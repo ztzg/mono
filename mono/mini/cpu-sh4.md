@@ -102,6 +102,7 @@ start_handler: clob:t len:6
 endfilter: src1:z clob:t len:12
 endfinally: clob:t len:10
 br: clob:t len:16
+br_reg: src1:i len:4
 sh4_bt: clob:t len:18
 sh4_bf: clob:t len:18
 label: len:0

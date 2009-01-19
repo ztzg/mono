@@ -1690,6 +1690,12 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
+	case CEE_BGE_UN:
+	case OP_IBGE_UN:
+		inst->opcode = OP_SH4_CMPHS;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
 	case OP_IBLT:
 		inst->opcode = OP_SH4_CMPGE;
 		next_inst->opcode = OP_SH4_BF;
@@ -2602,6 +2608,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			break;
 		}
+
+		case OP_BR_REG:
+			/* MD: br_reg: src1:i len:4 */
+			sh4_jmp_indRx(cfg, &buffer, inst->sreg1);
+			sh4_nop(cfg, &buffer);
+			break;
 
 		case OP_SH4_BT: {
 			MonoJumpInfoType type;
