@@ -276,7 +276,8 @@ common_sources = \
 	trivial-outarg2.cs	\
 	trivial-virtual.cs	\
 	trivial-load_store.cs	\
-	trivial-compare.cs
+	trivial-compare.cs	\
+	trivial-switch.cs
 
 test_sources = 		\
 	basic-calls.cs 	\
@@ -531,9 +532,9 @@ aotcheck: mono $(regtests)
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch
 
-trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe trivial-outarg2.exe trivial-virtual.exe trivial-load_store.exe trivial-compare.exe
+trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe trivial-outarg2.exe trivial-virtual.exe trivial-load_store.exe trivial-compare.exe trivial-switch.exe
 
 trivial-return_int: trivial-return_int.exe
 	$(RUNTIME) $<; test $$? = 3
@@ -573,6 +574,13 @@ trivial-compare: trivial-compare.exe
 	$(RUNTIME) $< x x ; test $$? = 10
 	$(RUNTIME) $< x x x ; test $$? = 12
 	$(RUNTIME) $< x x x x; test $$? = 12
+
+trivial-switch: trivial-switch.exe
+	$(RUNTIME) $< ; test $$? = 3
+	$(RUNTIME) $< x ; test $$? = 2
+	$(RUNTIME) $< x x ; test $$? = 5
+	$(RUNTIME) $< x x x ; test $$? = 9
+	$(RUNTIME) $< x x x x; test $$? = 3
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe

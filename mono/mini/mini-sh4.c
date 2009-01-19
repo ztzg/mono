@@ -2789,6 +2789,27 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 
 		switch (patch_info->type) {
 
+		case MONO_PATCH_INFO_SWITCH:
+			/* The load of a jump table address looks like
+			   ("patch" points to the first instruction):
+
+			       mov.l   @jump_table_address, rX
+			       bra     .L01 // over the jump-table address
+			       nop
+			       // maybe another nop to align
+
+			       .long  $jump_table_address
+
+			     .L01:
+			       ... */
+
+			/* Patch over "mov.l + bra + nop". */
+			patch += 6;
+
+			/* Patch over the other "nop" used to align (if needed). */
+			if ((guint32)patch % 4 != 0)
+				patch += 2;
+
 		case MONO_PATCH_INFO_LABEL:
 		case MONO_PATCH_INFO_BB:
 		case MONO_PATCH_INFO_METHOD:
