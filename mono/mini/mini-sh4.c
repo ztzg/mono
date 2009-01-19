@@ -2293,22 +2293,22 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_SH4_CMPGT:
 			/* MD: sh4_cmpgt: src1:i src2:i len:2 */
-			sh4_cmpgt(cfg, &buffer, inst->sreg1, inst->sreg2);
+			sh4_cmpgt(cfg, &buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPHI:
 			/* MD: sh4_cmphi: src1:i src2:i len:2 */
-			sh4_cmphi(cfg, &buffer, inst->sreg1, inst->sreg2);
+			sh4_cmphi(cfg, &buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPGE:
 			/* MD: sh4_cmpge: src1:i src2:i len:6 */
-			sh4_cmpge(cfg, &buffer, inst->sreg1, inst->sreg2);
+			sh4_cmpge(cfg, &buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPHS:
 			/* MD: sh4_cmphs: src1:i src2:i len:6 */
-			sh4_cmphs(cfg, &buffer, inst->sreg1, inst->sreg2);
+			sh4_cmphs(cfg, &buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_MOVT:
