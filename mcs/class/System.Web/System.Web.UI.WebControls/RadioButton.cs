@@ -72,7 +72,11 @@ namespace System.Web.UI.WebControls {
 					return unique;
 				int colon = -1;
 				if (unique != null)
+#if NET_2_0
+					colon = unique.LastIndexOf(IdSeparator);
+#else
 					colon = unique.IndexOf (':');
+#endif
 				if (colon == -1)
 					return gn;
 
