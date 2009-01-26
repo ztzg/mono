@@ -1632,6 +1632,8 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  */
 static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
 {
+	next_inst->backend.data = NULL;
+
 	switch (next_inst->opcode) {
 	case OP_ICEQ:
 		inst->opcode = OP_SH4_CMPEQ;
