@@ -10099,8 +10099,9 @@ mono_allocate_stack_slots_full2 (MonoCompile *cfg, gboolean backward, guint32 *s
 
 		/* inst->backend.is_pinvoke indicates native sized value types, this is used by the
 		* pinvoke wrappers when they call functions returning structures */
-		if (inst->backend.is_pinvoke && MONO_TYPE_ISSTRUCT (inst->inst_vtype) && inst->inst_vtype->type != MONO_TYPE_TYPEDBYREF)
-			size = mono_class_native_size (inst->inst_vtype->data.klass, &align);
+		if (inst->backend.is_pinvoke && MONO_TYPE_ISSTRUCT (inst->inst_vtype) && inst->inst_vtype->type != MONO_TYPE_TYPEDBYREF) {
+			size = mono_class_native_size (mono_class_from_mono_type (inst->inst_vtype), &align);
+		}
 		else {
 			int ialign;
 
@@ -10360,9 +10361,9 @@ mono_allocate_stack_slots_full (MonoCompile *cfg, gboolean backward, guint32 *st
 
 		/* inst->backend.is_pinvoke indicates native sized value types, this is used by the
 		* pinvoke wrappers when they call functions returning structures */
-		if (inst->backend.is_pinvoke && MONO_TYPE_ISSTRUCT (inst->inst_vtype) && inst->inst_vtype->type != MONO_TYPE_TYPEDBYREF)
-			size = mono_class_native_size (inst->inst_vtype->data.klass, &align);
-		else {
+		if (inst->backend.is_pinvoke && MONO_TYPE_ISSTRUCT (inst->inst_vtype) && inst->inst_vtype->type != MONO_TYPE_TYPEDBYREF) {
+			size = mono_class_native_size (mono_class_from_mono_type (inst->inst_vtype), &align);
+		} else {
 			int ialign;
 
 			size = mono_type_size (inst->inst_vtype, &ialign);
@@ -11087,7 +11088,8 @@ mini_thread_cleanup (MonoThread *thread)
 		g_free (jit_tls->first_lmf);
 		g_free (jit_tls);
 		thread->jit_data = NULL;
-		TlsSetValue (mono_jit_tls_id, NULL);
+		if (thread == mono_thread_current ())
+			TlsSetValue (mono_jit_tls_id, NULL);
 	}
 }
 
@@ -12288,6 +12290,7 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, gbool
 		cfg->disable_vreg_to_lvreg = TRUE;
 
 		// cfg->opt |= MONO_OPT_SHARED;
+		cfg->opt &= ~MONO_OPT_DEADCE;
 		cfg->opt &= ~MONO_OPT_INLINE;
 		cfg->opt &= ~MONO_OPT_COPYPROP;
 		cfg->opt &= ~MONO_OPT_CONSPROP;
@@ -12465,6 +12468,7 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, gbool
 	if (cfg->new_ir) {
 		/* This must be done _before_ global reg alloc and _after_ decompose */
 		mono_handle_global_vregs (cfg);
+	if (cfg->opt & MONO_OPT_DEADCE)
 		mono_local_deadce (cfg);
 		mono_if_conversion (cfg);
 	}
@@ -12610,7 +12614,8 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, gbool
 			mono_ssa_remove2 (cfg);
 			mono_local_cprop2 (cfg);
 			mono_handle_global_vregs (cfg);
-			mono_local_deadce (cfg);
+			if (cfg->opt & MONO_OPT_DEADCE)
+				mono_local_deadce (cfg);
 		}
 		else
 			mono_ssa_remove (cfg);
@@ -12753,7 +12758,8 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, gbool
 			if (need_local_opts || cfg->compile_aot) {
 				/* To optimize code created by spill_global_vars */
 				mono_local_cprop2 (cfg);
-				mono_local_deadce (cfg);
+				if (cfg->opt & MONO_OPT_DEADCE)
+					mono_local_deadce (cfg);
 			}
 		}
 
@@ -13055,16 +13061,12 @@ mono_jit_compile_method_inner (MonoMethod *method, MonoDomain *target_domain, in
 
 		mono_class_init (method->klass);
 
-		mono_domain_lock (domain);
 		if ((code = mono_aot_get_method (domain, method))) {
-			mono_domain_unlock (domain);
 			vtable = mono_class_vtable (domain, method->klass);
 			g_assert (vtable);
 			mono_runtime_class_init (vtable);
 			return code;
 		}
-
-		mono_domain_unlock (domain);
 	}
 #endif
 
@@ -13617,9 +13619,15 @@ SIG_HANDLER_SIGNATURE (sigusr1_signal_handler)
 	gboolean running_managed;
 	MonoException *exc;
 	MonoThread *thread = mono_thread_current ();
+	MonoDomain *domain = mono_domain_get ();
 	void *ji;
 	
 	GET_CONTEXT;
+
+	if (!thread || !domain)
+		/* The thread might not have started up yet */
+		/* FIXME: Specify the synchronization with start_wrapper () in threads.c */
+		return;
 
 	if (thread->thread_dump_requested) {
 		thread->thread_dump_requested = FALSE;

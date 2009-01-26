@@ -119,7 +119,8 @@ case "$host" in
 		AC_DEFINE(PTHREAD_POINTER_ID, 1, [pthread is a pointer])
 		libdl=
 		libgc_threads=pthreads
-		with_sigaltstack=yes
+		# This doesn't seem to work as of 7.0 on amd64
+		with_sigaltstack=no
 # TLS is only partially implemented on -CURRENT (compiler support
 # but NOT library support)
 #
@@ -2274,7 +2275,7 @@ AC_CONFIG_COMMANDS([runtime/etc/mono/2.0/Browsers/Compat.browser],
 ],[LN_S='$LN_S'])
 
 if test x$enable_quiet_build = xyes; then
-   AC_CONFIG_COMMANDS([quiet], [for i in `find mono libgc support -name Makefile.in | sed -e 's/Makefile.in/Makefile/g'`; do $srcdir/scripts/patch-quiet.sh $i; done], [shell=$SHELL])
+   AC_CONFIG_COMMANDS([quiet], [for i in `find mono libgc support -name Makefile.in | sed -e 's/Makefile.in/Makefile/g'`; do if test -f $i; then $srcdir/scripts/patch-quiet.sh $i; fi; done], [shell=$SHELL])
    AC_CONFIG_COMMANDS([quiet-libtool], [sed -e 's/$echo "copying selected/$show "copying selected/g' < libtool > libtool.tmp && mv libtool.tmp libtool && chmod a+x libtool])
 fi
 
@@ -2338,6 +2339,8 @@ data/dotnet35.pc
 data/wcf.pc
 data/cecil.pc
 data/smcs.pc
+data/system.web.extensions_1.0.pc
+data/system.web.extensions.design_1.0.pc
 samples/Makefile
 support/Makefile
 data/config

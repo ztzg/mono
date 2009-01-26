@@ -3952,7 +3952,19 @@ mono_metadata_generic_param_equal (MonoGenericParam *p1, MonoGenericParam *p2, g
 	if (p1->num != p2->num)
 		return FALSE;
 
-	if (p1->owner == p2->owner)
+	/*
+	 * We have to compare the image as well because if we didn't,
+	 * the generic_inst_cache lookup wouldn't care about the image
+	 * of generic params, so what could happen is that a generic
+	 * inst with params from image A is put into the cache, then
+	 * image B gets that generic inst from the cache, image A is
+	 * unloaded, so the inst is deleted, but image B still retains
+	 * a pointer to it.
+	 *
+	 * The AOT runtime doesn't set the image when it's decoding
+	 * types, so we only compare it when the owner is NULL.
+	 */
+	if (p1->owner == p2->owner && (p1->owner || p1->image == p2->image))
 		return TRUE;
 
 	/*
@@ -5164,12 +5176,11 @@ mono_metadata_load_generic_params (MonoImage *image, guint32 token, MonoGenericC
 	do {
 		n++;
 		params = g_realloc (params, sizeof (MonoGenericParam) * n);
+		memset (&params [n - 1], 0, sizeof (MonoGenericParam));
 		params [n - 1].owner = container;
-		params [n - 1].pklass = NULL;
 		params [n - 1].flags = cols [MONO_GENERICPARAM_FLAGS];
 		params [n - 1].num = cols [MONO_GENERICPARAM_NUMBER];
 		params [n - 1].name = mono_metadata_string_heap (image, cols [MONO_GENERICPARAM_NAME]);
-		params [n - 1].constraints = NULL;
 		if (++i > tdef->rows)
 			break;
 		mono_metadata_decode_row (tdef, i - 1, cols, MONO_GENERICPARAM_SIZE);

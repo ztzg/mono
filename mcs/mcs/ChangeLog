@@ -1,3 +1,39 @@
+2009-01-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #457257
+	* decl.cs: Fixed incorrect member declaring type comparison.
+
+2009-01-02  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #463121
+	* nullable.cs: Fixed nullable user quality operator comparison.
+
+2009-01-02  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #462592
+	* pending.cs: Emit type arguments for generic proxy method.
+
+2008-12-30  Marek Safar  <marek.safar@gmail.com>
+
+	* expression.cs (As): Mutate all type arguments.
+
+2008-12-29  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #462622
+	* anonymous.cs: Resolve anonymous type GetHashCode in unchecked
+	context.
+
+2008-12-29  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #450782
+	* ecore.cs: Consider more variables of form V.I to be fixed.
+
+2008-12-18  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #457087
+	* generic.cs: Don't crash when constraint comes from type
+	declaration.
+
 2008-12-03  Marek Safar  <marek.safar@gmail.com>
 
 	* typemanager.cs, namespace.cs, driver.cs: Allow ExtensionAttribute

@@ -1,3 +1,121 @@
+2009-01-22  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124246.
+
+	* generic-stack-traces2.2.cs: Another generic sharing test for
+	stack traces.
+
+	* Makefile.am: Test added.
+
+2009-01-21 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r124059.
+
+	* appdomain-unload-callback.cs: New test for the AppDomain::DomainUnload
+	deadlock.
+
+	* Makefile.am: Test added.
+
+2009-01-21  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124028.
+
+	* bug-467456.cs: New test case.
+
+	* Makefile.am: Test added.
+
+2009-01-21  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124022.
+
+	* generic-unloading.2.cs, generic-unloading-sub.2.cs: Test case
+	for unloading images whose MonoGenericInst's are still in use.
+
+	* Makefile.am: Test added.
+
+2009-01-20  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r123917.
+
+	* generic-stack-traces.2.cs: Generic sharing test for stack
+	traces.
+
+	* Makefile.am: Test added.
+
+2009-01-18  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal9.cs: Change a test to be compatible with MS.NET.
+
+2009-01-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122672 - r122675.
+
+	* bug-459094	.cs: New regression test.
+
+	* Makefile.am: Test added.
+
+2008-12-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122134.
+
+	* bug-461261.cs: New regression test.
+
+	* Makefile.am: Test added.
+
+2008-12-24  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r122086.
+
+	* generic-sealed-virtual.2.cs: Test case for final generic
+	methods.
+
+	* Makefile.am: Test added.
+
+2008-12-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122071.
+
+	* bug-461941.cs: New regression test.
+
+	* Makefile.am: Test added.
+
+2008-12-23  Mark Probst  <mark.probst@gmail.com>
+
+	* bug-461198.2.cs: New generic sharing test.
+
+	* Makefile.am: Test added.
+
+2008-12-23  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122036.
+
+	* bug-461867.cs: New regression test.
+
+	* Makefile.am: Test added.
+
+2008-12-19  Mark Probst  <mark.probst@gmail.com>
+
+	* bug-459285.2.cs: New generic sharing test.
+
+	* Makefile.am: Test added.
+
+2008-12-19  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r121292.
+
+	* generic-marshalbyref.2.cs: Test for calls to marshal-by-ref
+	objects.
+
+	* Makefile.am: Test added.
+
+2008-12-08  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* bug457574.il: New regression test.
+
+	* Makefile.am: Test added.
+
+	Backported from trunk r121174.
+
 2008-12-03  Mark Probst  <mark.probst@gmail.com>
 
 	Backport of r120589.

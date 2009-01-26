@@ -312,7 +312,7 @@ mono_print_bb (MonoBasicBlock *bb, const char *msg)
 #if SIZEOF_VOID_P == 8
 #define ADD_WIDEN_OP(ins, arg1, arg2) do { \
 		/* FIXME: Need to add many more cases */ \
-		if ((arg1)->type == STACK_PTR && (arg2)->type == STACK_I4) { \
+		if ((arg1)->type == STACK_PTR && (arg2)->type == STACK_I4) {	\
 			MonoInst *widen; \
 			int dr = alloc_preg (cfg); \
 			EMIT_NEW_UNALU (cfg, widen, OP_SEXT_I4, dr, (arg2)->dreg); \
@@ -2259,9 +2259,21 @@ mono_emit_method_call_full (MonoCompile *cfg, MonoMethod *method, MonoMethodSign
 
 		this_reg = this->dreg;
 
+#ifdef MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE
+		if ((method->klass->parent == mono_defaults.multicastdelegate_class) && (!strcmp (method->name, "Invoke"))) {
+			/* Make a call to delegate->invoke_impl */
+			call->inst.opcode = callvirt_to_call_membase (call->inst.opcode);
+			call->inst.inst_basereg = this_reg;
+			call->inst.inst_offset = G_STRUCT_OFFSET (MonoDelegate, invoke_impl);
+			MONO_ADD_INS (cfg->cbb, (MonoInst*)call);
+
+			return (MonoInst*)call;
+		}
+#endif
+
 		if ((!cfg->compile_aot || enable_for_aot) && 
 			(!(method->flags & METHOD_ATTRIBUTE_VIRTUAL) || 
-			 ((method->flags & METHOD_ATTRIBUTE_FINAL) && 
+			 (MONO_METHOD_IS_FINAL (method) &&
 			  method->wrapper_type != MONO_WRAPPER_REMOTING_INVOKE_WITH_CHECK))) {
 			/* 
 			 * the method is not virtual, we just need to ensure this is not null
@@ -2284,21 +2296,7 @@ mono_emit_method_call_full (MonoCompile *cfg, MonoMethod *method, MonoMethodSign
 			return (MonoInst*)call;
 		}
 
-#ifdef MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE
-		if ((method->klass->parent == mono_defaults.multicastdelegate_class) && (!strcmp (method->name, "Invoke"))) {
-			/* Make a call to delegate->invoke_impl */
-			call->inst.opcode = callvirt_to_call_membase (call->inst.opcode);
-			call->inst.inst_basereg = this_reg;
-			call->inst.inst_offset = G_STRUCT_OFFSET (MonoDelegate, invoke_impl);
-			MONO_ADD_INS (cfg->cbb, (MonoInst*)call);
-
-			return (MonoInst*)call;
-		}
-#endif
-
-		if ((method->flags & METHOD_ATTRIBUTE_VIRTUAL) &&
-			((method->flags &  METHOD_ATTRIBUTE_FINAL) ||
-			 (method->klass && method->klass->flags & TYPE_ATTRIBUTE_SEALED))) {
+		if ((method->flags & METHOD_ATTRIBUTE_VIRTUAL) && MONO_METHOD_IS_FINAL (method)) {
 			/*
 			 * the method is virtual, but we can statically dispatch since either
 			 * it's class or the method itself are sealed.
@@ -2789,7 +2787,7 @@ handle_alloc (MonoCompile *cfg, MonoClass *klass, gboolean for_box)
 		EMIT_NEW_CLASSCONST (cfg, iargs [1], klass);
 
 		alloc_ftn = mono_object_new;
-	} else if (cfg->compile_aot && cfg->cbb->out_of_line && klass->type_token && klass->image == mono_defaults.corlib) {
+	} else if (cfg->compile_aot && cfg->cbb->out_of_line && klass->type_token && klass->image == mono_defaults.corlib && !klass->generic_class) {
 		/* This happens often in argument checking code, eg. throw new FooException... */
 		/* Avoid relocations and save some space by calling a helper function specialized to mscorlib */
 		EMIT_NEW_ICONST (cfg, iargs [0], mono_metadata_token_index (klass->type_token));
@@ -5047,6 +5045,17 @@ load_error:
 	return NULL;
 }
 
+static gboolean
+is_exception_class (MonoClass *class)
+{
+	while (class) {
+		if (class == mono_defaults.exception_class)
+			return TRUE;
+		class = class->parent;
+	}
+	return FALSE;
+}
+
 /*
  * mono_method_to_ir: translates IL into basic blocks containing trees
  */
@@ -5420,6 +5429,12 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 			UNVERIFIED;
 	}
 	class_inits = NULL;
+
+	/* We force the vtable variable here for all shared methods
+	   for the possibility that they might show up in a stack
+	   trace where their exact instantiation is needed. */
+	if (cfg->generic_sharing_context)
+		mono_get_vtable_var (cfg);
 
 	/* add a check for this != NULL to inlined methods */
 	if (is_virtual_call) {
@@ -5849,7 +5864,21 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 					cmethod =  (MonoMethod *)mono_method_get_wrapper_data (method, token);
 					cil_method = cmethod;
 				} else if (constrained_call) {
-					cmethod = mono_get_method_constrained (image, token, constrained_call, generic_context, &cil_method);
+					if ((constrained_call->byval_arg.type == MONO_TYPE_VAR || constrained_call->byval_arg.type == MONO_TYPE_MVAR) && cfg->generic_sharing_context) {
+						/* This is needed when using aot + generic sharing, since 
+						 * the AOT code allows generic sharing for methods with 
+						 * type parameters having constraints, and 
+						 * get_method_constrained can't find the method in klass 
+						 * representing a type var.
+						 * The type var is guaranteed to be a reference type in this
+						 * case.
+						 */
+						cmethod = mini_get_method (cfg, method, token, NULL, generic_context);
+						cil_method = cmethod;
+						g_assert (!cmethod->klass->valuetype);
+					} else {
+						cmethod = mono_get_method_constrained (image, token, constrained_call, generic_context, &cil_method);
+					}
 				} else {
 					cmethod = mini_get_method (cfg, method, token, NULL, generic_context);
 					cil_method = cmethod;
@@ -6037,7 +6066,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				}
 
 				if (!(cmethod->flags & METHOD_ATTRIBUTE_VIRTUAL) ||
-						(cmethod->flags & METHOD_ATTRIBUTE_FINAL)) {
+						MONO_METHOD_IS_FINAL (cmethod)) {
 					if (virtual)
 						check_this = TRUE;
 					virtual = 0;
@@ -6063,7 +6092,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 			/* Calling virtual generic methods */
 			if (cmethod && virtual && 
 			    (cmethod->flags & METHOD_ATTRIBUTE_VIRTUAL) && 
-		 	    !((cmethod->flags & METHOD_ATTRIBUTE_FINAL) && 
+		 	    !(MONO_METHOD_IS_FINAL (cmethod) && 
 			      cmethod->wrapper_type != MONO_WRAPPER_REMOTING_INVOKE_WITH_CHECK) &&
 			    mono_method_signature (cmethod)->generic_param_count) {
 				MonoInst *this_temp, *this_arg_temp, *store;
@@ -6185,7 +6214,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 
 			/* Inlining */
 			if ((cfg->opt & MONO_OPT_INLINE) && cmethod &&
-			    (!virtual || !(cmethod->flags & METHOD_ATTRIBUTE_VIRTUAL) || (cmethod->flags & METHOD_ATTRIBUTE_FINAL)) && 
+				(!virtual || !(cmethod->flags & METHOD_ATTRIBUTE_VIRTUAL) || MONO_METHOD_IS_FINAL (cmethod)) &&
 			    mono_method_check_inlining (cfg, cmethod) &&
 				 !g_list_find (dont_inline, cmethod)) {
 				int costs;
@@ -6257,7 +6286,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 			if (context_used && !imt_arg && !array_rank &&
 					(!mono_method_is_generic_sharable_impl (cmethod, TRUE) ||
 						!mono_class_generic_sharing_enabled (cmethod->klass)) &&
-					(!virtual || cmethod->flags & METHOD_ATTRIBUTE_FINAL ||
+					(!virtual || MONO_METHOD_IS_FINAL (cmethod) ||
 						!(cmethod->flags & METHOD_ATTRIBUTE_VIRTUAL))) {
 				INLINE_FAILURE;
 
@@ -6283,6 +6312,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				else if (*ip == CEE_CALLI)
 					g_assert (!vtable_arg);
 				else
+					/* FIXME: what the hell is this??? */
 					g_assert (cmethod->flags & METHOD_ATTRIBUTE_FINAL ||
 							!(cmethod->flags & METHOD_ATTRIBUTE_FINAL));
 
@@ -6851,7 +6881,9 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 						ins->inst_p1 = (gpointer)(gssize)(sp [1]->inst_c0);
 					ins->sreg2 = -1;
 
-					sp [1]->opcode = OP_NOP;
+					/* Might be followed by an instruction added by ADD_WIDEN_OP */
+					if (sp [1]->next == NULL)
+						sp [1]->opcode = OP_NOP;
 				}
 			}
 			MONO_ADD_INS ((cfg)->cbb, (ins));
@@ -7070,7 +7102,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 					if (bblock->out_of_line) {
 						MonoInst *iargs [2];
 
-						if (cfg->method->klass->image == mono_defaults.corlib) {
+						if (image == mono_defaults.corlib) {
 							/* 
 							 * Avoid relocations in AOT and save some space by using a 
 							 * version of helper_ldstr specialized to mscorlib.
@@ -7162,7 +7194,8 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 			 * Generate smaller code for the common newobj <exception> instruction in
 			 * argument checking code.
 			 */
-			if (bblock->out_of_line && cmethod->klass->image == mono_defaults.corlib && n <= 2 && 
+			if (bblock->out_of_line && cmethod->klass->image == mono_defaults.corlib &&
+				is_exception_class (cmethod->klass) && n <= 2 &&
 				((n < 1) || (!fsig->params [0]->byref && fsig->params [0]->type == MONO_TYPE_STRING)) && 
 				((n < 2) || (!fsig->params [1]->byref && fsig->params [1]->type == MONO_TYPE_STRING))) {
 				MonoInst *iargs [3];
@@ -7304,8 +7337,6 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 						(!mono_method_is_generic_sharable_impl (cmethod, TRUE) ||
 							!mono_class_generic_sharing_enabled (cmethod->klass))) {
 					MonoInst *cmethod_addr;
-
-					g_assert (!callvirt_this_arg);
 
 					cmethod_addr = emit_get_rgctx_method (cfg, context_used,
 						cmethod, MONO_RGCTX_INFO_GENERIC_METHOD_CODE);
@@ -7919,6 +7950,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 
 			if (*ip == CEE_LDSFLDA) {
 				ins->klass = mono_class_from_mono_type (field->type);
+				ins->type = STACK_PTR;
 				*sp++ = ins;
 			} else if (*ip == CEE_STSFLD) {
 				MonoInst *store;
@@ -9358,7 +9390,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 		MonoInst *store;
 
 		cfg->cbb = init_localsbb;
-		cfg->ip = header->code;
+		cfg->ip = NULL;
 		for (i = 0; i < header->num_locals; ++i) {
 			MonoType *ptype = header->locals [i];
 			int t = ptype->type;

@@ -369,7 +369,7 @@ mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_targe
 
 		g_assert ((code - start) <= 12);
 
-		mono_arch_flush_icache (code, 12);
+		mono_arch_flush_icache (start, 12);
 		cached = start;
 		mono_mini_arch_unlock ();
 		return cached;
@@ -402,7 +402,7 @@ mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_targe
 
 		g_assert ((code - start) <= size);
 
-		mono_arch_flush_icache (code, size);
+		mono_arch_flush_icache (start, size);
 		cache [sig->param_count] = start;
 		mono_mini_arch_unlock ();
 		return start;
@@ -578,11 +578,17 @@ mono_arch_regalloc_cost (MonoCompile *cfg, MonoMethodVar *vmv)
 	return 2;
 }
 
+#ifndef __GNUC_PREREQ
+#define __GNUC_PREREQ(maj, min) (0)
+#endif
+
 void
 mono_arch_flush_icache (guint8 *code, gint size)
 {
 #if __APPLE__
 	sys_icache_invalidate (code, size);
+#elif __GNUC_PREREQ(4, 1)
+	__clear_cache (code, code + size);
 #else
 	__asm __volatile ("mov r0, %0\n"
 			"mov r1, %1\n"

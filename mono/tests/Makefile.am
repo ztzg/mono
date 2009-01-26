@@ -288,8 +288,14 @@ BASE_TEST_CS_SRC=		\
 	generic-delegate-ctor.2.cs	\
 	generic-array-iface-set.2.cs	\
 	generic-typedef.2.cs	\
+	generic-marshalbyref.2.cs	\
 	bug-431413.2.cs	\
+	bug-459285.2.cs	\
 	generic-virtual-invoke.2.cs	\
+	bug-461198.2.cs	\
+	generic-sealed-virtual.2.cs	\
+	generic-stack-traces.2.cs	\
+	generic-stack-traces2.2.cs	\
 	recursive-generics.2.cs	\
 	bug-80392.2.cs		\
 	dynamic-method-access.2.cs	\
@@ -321,7 +327,15 @@ BASE_TEST_CS_SRC=		\
 	bug-81673.cs	\
 	bug-81691.cs	\
 	bug-80307.cs	\
-	bug-415577.cs
+	bug-415577.cs	\
+	bug-461867.cs	\
+	bug-461941.cs	\
+	bug-461261.cs	\
+	bug-459094.cs	\
+	generic-unloading.2.cs	\
+	generic-unloading-sub.2.cs	\
+	bug-467456.cs	\
+	appdomain-unload-callback.cs
 
 if AMD64
 TEST_CS_SRC = $(BASE_TEST_CS_SRC) async-exc-compilation.cs
@@ -413,7 +427,8 @@ TEST_IL_SRC=			\
 	generic-valuetype-newobj2.2.il	\
 	generic-valuetype-newobj.2.il	\
 	generic-constrained.2.il	\
-	bug-81466.il
+	bug-81466.il	\
+	bug457574.il
 
 #	bug-318677.il
 
@@ -716,7 +731,10 @@ test-generic-sharing : generics-sharing.2.exe shared-generic-methods.2.exe	\
 		generic-getgenericarguments.2.exe generic-type-builder.2.exe	\
 		generic-synchronized.2.exe generic-delegate-ctor.2.exe		\
 		generic-constrained.2.exe bug-431413.2.exe			\
-		generic-virtual-invoke.2.exe generic-typedef.2.exe
+		generic-virtual-invoke.2.exe generic-typedef.2.exe		\
+		generic-marshalbyref.2.exe bug-459285.2.exe bug-461198.2.exe	\
+		generic-sealed-virtual.2.exe generic-stack-traces.2.exe		\
+		generic-stack-traces2.2.exe
 	@for fn in $+ ; do	\
 		echo "Testing $$fn ...";	\
 		MONO_GENERIC_SHARING=all $(RUNTIME) -O=gshared                $$fn > $$fn.stdout || exit 1;	\

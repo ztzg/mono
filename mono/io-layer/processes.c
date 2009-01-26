@@ -394,6 +394,43 @@ utf16_concat (const gunichar2 *first, ...)
 	return ret;
 }
 
+#ifdef PLATFORM_MACOSX
+#include <sys/utsname.h>
+
+/* 0 = no detection; -1 = not 10.5 or higher;  1 = 10.5 or higher */
+static int osx_10_5_or_higher;
+
+static void
+detect_osx_10_5_or_higher ()
+{
+	struct utsname u;
+	char *p;
+	int v;
+	
+	if (uname (&u) != 0){
+		osx_10_5_or_higher = 1;
+		return;
+	}
+
+	p = u.release;
+	v = atoi (p);
+	
+	if (v < 9)
+		osx_10_5_or_higher = -1;
+	else 
+		osx_10_5_or_higher = 1;
+}
+
+static gboolean
+is_macos_10_5_or_higher ()
+{
+	if (osx_10_5_or_higher == 0)
+		detect_osx_10_5_or_higher ();
+	
+	return (osx_10_5_or_higher == 1);
+}
+#endif
+
 static const gunichar2 utf16_space_bytes [2] = { 0x20, 0 };
 static const gunichar2 *utf16_space = utf16_space_bytes; 
 static const gunichar2 utf16_quote_bytes [2] = { 0x22, 0 };
@@ -442,7 +479,10 @@ gboolean ShellExecuteEx (WapiShellExecuteInfo *sei)
 			return FALSE;
 
 #ifdef PLATFORM_MACOSX
-		handler = g_strdup ("/usr/bin/open -W");
+		if (is_macos_10_5_or_higher ())
+			handler = g_strdup ("/usr/bin/open -W");
+		else
+			handler = g_strdup ("/usr/bin/open");
 #else
 		/*
 		 * On Linux, try: xdg-open, the FreeDesktop standard way of doing it,

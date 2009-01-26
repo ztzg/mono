@@ -1,3 +1,227 @@
+2009-01-23  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124022 and r124301.
+
+	* metadata.c (mono_metadata_generic_param_equal): Owner as well as
+	image must match.  Only compare the image if the owner is NULL.
+	Fixes the AOT failures.
+
+2009-01-23  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r124268.
+	
+	* metadata.c (mono_metadata_load_generic_params): Initialize the 
+	MonoGenericParam structure using memset so the image field is initialized
+	as well.
+
+2009-01-21 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r124068.
+
+	* appdomain.c (mono_domain_unload): Change the InterlockedIncrement to
+	a plain store.
+
+2009-01-21 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r124058.
+
+	* domain-internals.h: Add new appdomain state MONO_APPDOMAIN_UNLOADING_START
+	which signals that the unloading has started but all appdomain services must
+	remain operational.
+
+	* appdomain.c (mono_domain_unload): The initial state for unloading now
+	is unloading_start and we switch to unloading after the managed call to
+	AppDomain::DomainUnload has finished.
+
+	The new unloading state has to be created because managed code in the
+	DomainUnload event can depend on things like the threadpool still working.
+	The domain must remain fully functional while the event executes.
+
+	This shown as an issue due to Process::WaitForExit, which waits for
+	async reads of stdout and stderr to complete. Since those are processed
+	in the threadpool the code deadlocks because the DomainUnload callback 
+	waits for the async read finished event, which should have been set by a
+	threadpool job but has been discarded due to the domain been in unload
+	state.
+
+2009-01-21  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r124065.
+	
+	* class.c (mono_class_setup_vtable_general): In the generic instance
+	optimization, set method->slot for abstract virtual methods. Fixes part of
+	#467834.
+
+2009-01-21  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r123958.
+
+	* reflection.c (resolve_object): For fields, inflate the class and
+	then get the field in the inflated class.
+
+2009-01-20  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r123917.
+
+	* class.c (mono_class_has_parent_and_ignore_generics),
+	class-internals.h: Made non-static.
+
+	* object-internals.h (struct _MonoException): Added a comment
+	explaining the new use of trace_ips.
+
+2009-01-19  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r123812.
+	
+	* loader.c (search_in_array_class): Call mono_class_setup_methods () before
+	accessing klass->methods. Fixes #467385.
+
+2009-01-18  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r123756.
+	
+	* marshal.c (emit_marshal_custom): Avoid calling MarshalNativeToManaged
+	for byval arguments without an [Out] attribute. Fixes #467212.
+
+2009-01-16  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r123642.
+	
+	* threads.c (mono_threads_abort_appdomain_threads): Abort threads outside the
+	threads_lock () to prevent deadlocks.
+
+2009-01-13  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r123201.
+	
+	* marshal.c: Avoid setting the exception clauses after a method has been entered 
+	into the wrapper caches. Fixes #465700.
+
+	* method-builder.c (mono_mb_set_clauses): New function to set the clauses of the
+	method builder.
+	(mono_mb_create_method): Set the clauses from the method builder.
+
+2008-12-16  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r123092.
+	
+	* marshal.c (mono_marshal_get_synchronized_wrapper): Make the 
+	initialization of the various _method variables thread safe. Fixes
+	#465377.
+	
+2009-01-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* class.c (mono_class_get_fields): Handle loading errors.
+
+2009-01-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122672 - r122675.
+
+	* file-io.c (ves_icall_System_IO_MonoIO_GetCurrentDirectory): Double check the
+	return value of GetCurrentDirectory to never access unitialized memory.
+
+	* file-io.c (ves_icall_System_IO_MonoIO_GetCurrentDirectory): Properly check the
+	return value of GetCurrentDirectory and expand the buffer if needed.
+
+	Fixes #459094.
+
+2009-01-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122579 - r122585.
+
+	* verify.c (mono_class_interface_implements_interface): Verify parents as we can't rely on
+	interfaces_packed here.
+
+	Fixes part of #463294.
+
+	* verify.c (is_array_type_compatible): Ignore bounds and sizes when checking array compatibility.
+
+	Fixes part of #463294.
+
+	* verify.c (stack_slot_is_complex_type_not_reference_type): Check if the type
+	is a boxed complex as well.
+
+	Fixes part of #463294.
+
+2008-11-27  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r120164.
+	
+	* marshal.c (mono_string_builder_to_utf8): Fixed a wrong
+	invocation to g_utf16_to_utf8().
+
+2008-12-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122133.
+
+	* class.c (get_implicit_generic_array_interfaces): If the internal
+	enumerator is an interface inflate System.Object instead of itself.
+
+	Fixes #461261.
+
+2008-12-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122070.
+
+	* object.c (mono_runtime_invoke_array): Don't assert with
+	byref nullable types.
+
+	* marshal.c (mono_marshal_get_runtime_invoke): To handle
+	byref nullables we unbox the object and store it on the
+	stack. 
+	We can't use the boxed object since it is the T of Nullable<T>
+	and the boxed representation of a nullable it's underlying type
+	or null.
+	We could cheat and create a boxed nullable and use the same
+	machinery of other byref VTs but this feels like a hack and
+	using the stack has the bonus of reducing heap pressure.
+
+	Fixes #461941.
+
+2008-12-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122035.
+
+ 	* marshal.c (mono_marshal_emit_managed_wrapper): Handle char
+ 	return value.
+ 
+ 	Fixes #461867.
+
+2008-12-19  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r121292.
+
+	* metadata/generic-sharing.c: Look for constraints in all type
+	arguments, not just the first one.
+
+2008-12-17  Geoff Norton  <gnorton@novell.com>
+
+	* threadpool.c: Ensure that the io_queue_lock is initialized
+	in all circumstances, as we always attempt to cleanup against it.
+
+2008-12-17  Miguel de Icaza  <miguel@novell.com>
+
+	* icall.c (ves_icall_System_Environment_get_Platform): For
+	compatibility reasons for existing client code we will keep
+	returning 4 for a while.   
+
+	For how long will depend on the documentation being updated, and
+	for us to give client code a chance to be updated.
+
+	This reverts the original decison on #433108 since we did not
+	catch roughly 33 instances of the broken code in our own source
+	code base, we did not catch failures on the buildbots, and QA did
+	not bring this as a problem.
+
+	Only today I found some customer's code breaking due to our own
+	class libraries not being fully updated and tracked it down to
+	this change.  I am reverting it because if we could not even get
+	our story straight in our own code base, how can we hope that our
+	end user code be fixed?
+
+	As of this morning, our Wiki page that documents how to detect
+	Unix had not been fixed.    
+
 2008-12-05  Marek Habersack  <mhabersack@novell.com>
 
 	* sysmath.c (ves_icall_System_Math_Round2): if round (3) and rint

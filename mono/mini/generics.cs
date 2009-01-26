@@ -240,6 +240,10 @@ class Tests {
 		return 0;
 	}
 
+	public static int test_0_nullable_ldflda () {
+		return GenericClass<string>.BIsAClazz == false ? 0 : 1;
+	}
+
 	public struct GenericStruct<T> {
 		public T t;
 
@@ -285,6 +289,15 @@ class Tests {
 		{
 			return x [index];
 		}
+
+        protected static T NullB = default(T);       
+        private static Nullable<bool>  _BIsA = null;
+        public static bool BIsAClazz {
+            get {
+                _BIsA = false;
+                return _BIsA.Value;
+            }
+        }
 	}
 
 	public class MRO : MarshalByRefObject {
@@ -383,6 +396,11 @@ class Tests {
 		return the_type == typeof (string) ? 0 : 1;
 	}
 
+	public static int test_0_throw_dead_this () {
+        new Foo<string> ("").throw_dead_this ();
+		return 0;
+	}
+
 	public static Type the_type;
 
 	public void ldvirtftn<T> () {
@@ -419,6 +437,14 @@ class Tests {
 			}
 		}
 
+		public void throw_dead_this () {
+			try {
+				new SomeClass().ThrowAnException();
+			}
+			catch {
+			}
+		}
+
 		public T1 get_default () {
 			return default (T1);
 		}
@@ -434,6 +460,12 @@ class Tests {
 		}
 
 	}
+
+	public class SomeClass {
+		public void ThrowAnException() {
+			throw new Exception ("Something went wrong");
+		}
+	}		
 
 	public interface IMyHandler {
 		object Bar<T>();

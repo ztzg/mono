@@ -1,3 +1,31 @@
+2009-01-13  Dean Brettle  <dean@brettle.com>
+
+	* HttpApplicationFactory.cs: if there are any *.browser files in
+	App_Data/Mono_Machine_Browsers/, use those instead of the default
+	machine browser files.  This allows app developers to workaround
+	limitations with Mono's default browser files without causing
+	incompatibilities with MS's implementation.
+
+2009-01-09  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpContext.cs: RewritePath now treats relative and absolute
+	file paths with more care. If a path is of the ~/file.aspx form,
+	then the ~/ part is removed and the rest is combined with the base
+	virtual path. If the file path is of the ~ or /file.aspx forms,
+	then it is combined verbatim with the base virtual path. Fixes bug
+	#463964
+	Make sure the path returned from HttpRequest.BaseVirtualPath
+	contains the trailing slash before combining. Fixes bug #463964
+
+2008-12-16  Marek Habersack  <mhabersack@novell.com>
+
+	* StaticFileHandler.cs: use HttpRuntime.RunningOnWindows instead
+	of checking the platform directly.
+
+2008-12-09  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpServerUtility.cs: when Execute finishes, clear
+	Request.QueryStringRaw. Backport of r121010 by Vladimir Krasnov.
 
 2008-11-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
 

@@ -155,13 +155,15 @@ namespace System.Net
 		}
 
 		internal int WriteBufferLength {
-			get { return (int) writeBuffer.Length; }
+			get { return writeBuffer != null ? (int) writeBuffer.Length : (-1); }
 		}
 
 		internal void ForceCompletion ()
 		{
-			nextReadCalled = true;
-			cnc.NextRead ();
+			if (!nextReadCalled) {
+				nextReadCalled = true;
+				cnc.NextRead ();
+			}
 		}
 		
 		internal void CheckComplete ()

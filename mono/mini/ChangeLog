@@ -1,3 +1,267 @@
+2009-01-25  Zoltan Varga  <vargaz@gmail.com>
+
+	* Backport of r123987.
+
+	* method-to-ir.c (method-to-ir.c): Add support for the constrained prefix
+	on type variables in AOTed code.
+	
+2009-01-22  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124246.
+
+	* mini-exceptions.c (ves_icall_get_frame_info): Fetch the generic
+	info from the (correct) context.
+
+2009-01-21  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r124092.
+	
+	* method-to-ir.c (handle_alloc): Avoid generic instances in the
+	out_of_line optimization.
+
+2009-01-21  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124028.
+
+	* method-to-ir.c: Only apply exception constructor optimization if
+	the the method actually belongs to an exception class.  Fixes
+	#467456.
+
+2009-01-20  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r123917.
+
+	* method-to-ir.c: Force the vtable variable in shared generic code
+	for the case that they might show up on a stack trace where they
+	are needed.
+
+	* mini-exceptions.c: Save and use generic sharing info as well as
+	IP in stack traces to resolve shared generic instantiations.
+
+2009-01-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r123754.
+
+	* mini.c (mini_thread_cleanup): Don't cleanup TLS storage if the
+	thread been cleaned up is not the same currently in execution.
+
+	Fixes appdomain-unload crashes on windows, osx and linux variants
+	without the __thread keyword.
+
+2009-01-13  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r123258.
+	
+	* mini.c (SIG_HANDLER_SIGNATURE): Avoid crashes when the current thread or
+	domain is not set. Fixes #465864.
+
+2009-01-12  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r123349.
+
+	* method-to-ir.c: Handle delegate invocation optimization earlier,
+	otherwise it would be handled (much more slowly) by the
+	final/sealed optimization.
+
+2009-01-08  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r122804.
+	
+	* method-to-ir.c (mono_method_to_ir): Fix the check for the mscorlib ldstr 
+	optimization. Fixes #464520.
+
+2009-01-07  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of 122702.
+	
+	* mini-arm.c (mono_arch_flush_icache): Use __GNUC_PREREQ instead of checking
+	__GNUC_MINOR__ which can break when the major version changes.
+
+2009-01-05  Zoltan Varga  <vargaz@gmail.com>
+
+	* branch-opts.c (mono_if_conversion): Fix another assert introduced by
+	the last change.
+
+	Backport of r122452.
+	
+	* mini.c (mono_allocate_stack_slots_full2): Use mono_class_from_mono_type
+	instead of directly accessing type->data.klass. Fixes #462016.
+	(mono_allocate_stack_slots_full): Ditto.
+
+	Backport of r122416.
+
+	* mini-arm.c (mono_arch_flush_icache): Applied patch from Riku Voipio 
+	<novell@kos.to>. Fix cache flush on kernels without OLDABI compat option.
+
+2009-01-04  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r122392.
+	
+	* branch-opts.c (mono_if_conversion): Fix an assert introduced by the last
+	change.
+	
+	Backport of r122386.
+
+	* branch-opts.c (mono_if_conversion): Use branch->inst_true_bb/inst_false_bb
+	instead of bblock->out_bb [0]/[1], the two might not be the same. Fixes
+	#463357.
+
+	* iltests.il.in: Add a regression test.
+
+2009-01-04  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122364.
+
+	* basic-simd.cs: Add a regression test for #462457.
+
+2009-01-04  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r122363.
+
+	* mini-ops.h: Add a definition of XPHI.
+
+	* mini.h (MONO_IS_PHI): Make is aware of simd instrincs. 
+
+	* ssa.c (op_phi_to_move): Handle XPHI.
+
+	* ssa.c (mono_ssa_compute): Generate a XPHI for simd intrinsics instead of VPHI.
+
+	Fixes #462457
+
+2008-12-29  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r122170.
+
+	* mini.c (mono_jit_compile_method_inner): Avoid holding the domain lock
+	while loading AOT methods.
+
+	Backport of r122168.
+	
+	* mini-exceptions.c: Check jit_tls->class_cast_from instead of class_cast_to
+	since only the former is nulled out after a successful cast. This prevents
+	crashes with rethrown exceptions when using --debug=casts.
+
+2008-12-24  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r122086.
+
+	* mini.h: New macro for checking whether a method is final,
+	i.e. whether the method or its class is marked final.
+
+	* method-to-ir.c: Use the new macro for all final-checks
+	consistently.  Fixes the crash in the System.ServiceModel tests.
+
+2008-12-24  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-ppc.c (mono_arch_build_imt_thunk): Fix the build.
+
+2008-12-23  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r122034.
+
+	* mini-ppc.c (mono_arch_build_imt_thunk): Save and restore r11.
+	Clobbering it is not allowed because the caller might use it as
+	the vtable register in the interface call.
+
+2008-12-23  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-exceptions.c (get_exception_catch_class): Removed another
+	overly strict assertion.  Fixes #461198.
+
+2008-12-19  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-exceptions.c (get_exception_catch_class): Removed overly
+	strict assertion.
+
+2008-12-19  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r121292.
+
+	* method-to-ir.c: Removed an unnecessary assertion.
+
+2008-12-16  Martin Baulig  <martin@ximian.com>
+
+	Backport of r120438.
+
+	* method-to-ir.c (mono_method_to_ir): Disable debugging
+	information for the init locals block to make the debugger stop
+	after all locals have been initalized.
+
+2008-12-16  Martin Baulig  <martin@ximian.com>
+
+	Backport of r120419.
+
+	* mini.c (mini_method_compile): Disable MONO_OPT_DEADCE when
+	running inside the debugger.
+
+2008-12-16  Martin Baulig  <martin@ximian.com>
+
+	Backport of r120407 from Zoltan Varga.
+
+	* mini.c (mini_method_compile): Only run local deadce if MONO_OPT_DEADCE
+	is enabled.
+
+	* method-to-ir.c (mono_method_to_ir): Fix invalid code generated by the 
+	alu->alu imm optimization which only shows if deadce is disabled.
+
+2008-12-16  Martin Baulig  <martin@ximian.com>
+
+	Backport of r120260.
+
+	* mini-exceptions.c (mono_handle_native_sigsegv): Check
+	mono_debug_using_mono_debugger() in addition to the
+	`no_gdb_backtrace' flag in the `MonoDebugOptions'.
+
+2008-12-14  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r120389.
+	
+	* method-to-ir.c (mono_method_to_ir): Set the type of the value pushed on
+	the stack in CEE_LDFLDA. Fixes #450542.
+
+	* generics.cs: Add a new test.
+
+2008-12-14  Zoltan Varga  <vargaz@gmail.com>
+	
+	Backport of r121496.
+	
+	* liveness.c (mono_analyze_liveness): Avoid eliminating the 'this' var in
+	gshared code. Fixes #458947.
+
+	* generics.cs: Add a test.
+
+2008-12-12  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r121457.
+	
+	* mini-arm.c tramp-arm.c: Fix calls to mono_arch_flush_icache.
+
+2008-12-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* ssa.c (fold_ins): branch opt can kill dummy switch ops so we can't
+	expect that an OP_BR_REG will be there.
+
+	* branch-opts.c (remove_block_if_useless): Use MONO_IS_BRANCH_OP instead of checking
+	for the many branch ops. The original check miss OP_BR_REG.
+
+	Fixes #457574.
+
+	Backported from trunk r121173 and r121175
+
+2008-12-09  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r121150.
+	
+	* aot-runtime.c (load_method): Avoid calling decode_exception_debug_info
+	while holding the aot lock.
+
+2008-12-09  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r121103.
+	
+	* aot-runtime.c (decode_exception_debug_info): Acquire the domain
+	lock when calling mono_domain_alloc (). Hopefully fixes #415608.
+
 2008-12-08  Zoltan Varga  <vargaz@gmail.com>
 
 	Backport of r120999.
