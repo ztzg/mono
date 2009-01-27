@@ -97,18 +97,18 @@ voidcall: clob:c len:30
 call: dest:z clob:c len:30
 voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
-call_handler: clob:t len:16
+call_handler: len:16
 throw: src1:i len:20
 move: dest:i src1:i len:2
-start_handler: clob:t len:6
-endfilter: src1:z clob:t len:10
-endfinally: clob:t len:10
-br: clob:t len:16
+start_handler: len:6
+endfilter: src1:z len:10
+endfinally: len:10
+br: len:16
 br_reg: src1:i len:4
-sh4_bt: clob:t len:18
-sh4_bf: clob:t len:18
+sh4_bt: len:18
+sh4_bf: len:18
 label: len:0
-checkthis: clob:t src1:I len:2
+checkthis: src1:i len:2
 store_membase_reg: len:2
 load_membase: len:2
 nop: len:0

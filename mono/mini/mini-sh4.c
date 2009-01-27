@@ -2638,7 +2638,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_CALL_HANDLER:
-			/* MD: call_handler: clob:t len:16 */
+			/* MD: call_handler: len:16 */
 			sh4_load(&buffer, 0, sh4_temp);
 			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code, MONO_PATCH_INFO_BB, inst->inst_target_bb);
 
@@ -2676,7 +2676,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		 * variable.
 		 */
 		case OP_START_HANDLER: {
-			/* MD: start_handler: clob:t len:6 */
+			/* MD: start_handler: len:6 */
 			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
 			/* We enforce Rtemp here because the SH4 instruction used to save
@@ -2698,10 +2698,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
-			/* MD: endfilter: src1:z clob:t len:10 */
+			/* MD: endfilter: src1:z len:10 */
 			/* The local allocator will put the result into sh4_r0. */
 		case OP_ENDFINALLY: {
-			/* MD: endfinally: clob:t len:10 */
+			/* MD: endfinally: len:10 */
 			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
 			/* We enforce Rtemp here because the SH4 instruction used to save
@@ -2724,7 +2724,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		}
 
 		case OP_BR: {
-			/* MD: br: clob:t len:16 */
+			/* MD: br: len:16 */
 			MonoJumpInfoType type;
 			gpointer target = NULL;
 			guint8 *address = NULL;
@@ -2771,9 +2771,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			guint8 *address = NULL;
 			guint8 *patch = NULL;
 			int displace = 0;
-			/* MD: sh4_bt: clob:t len:18 */
+			/* MD: sh4_bt: len:18 */
 		case OP_SH4_BF:
-			/* MD: sh4_bf: clob:t len:18 */
+			/* MD: sh4_bf: len:18 */
 
 			/* Find which kind of relocation should be used. */
 			if (inst->backend.data == (gpointer)-1) {
@@ -2834,7 +2834,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		}
 
 		case OP_CHECK_THIS: {
-			/* MD: checkthis: clob:t src1:I len:2 */
+			/* MD: checkthis: src1:i len:2 */
 			/* Trig an exception if sreg1 can not be dereferenced,
 			   might be misaligned in case of vtypes so use a byte load. */
 			sh4_movb_indRy(cfg, &buffer, inst->sreg1, sh4_temp);
