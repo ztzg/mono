@@ -215,8 +215,7 @@ sh4_sources = \
 	mini-sh4.c	\
 	mini-sh4.h	\
 	exceptions-sh4.c\
-	tramp-sh4.c	\
-	cstpool-sh4.c
+	tramp-sh4.c
 
 common_sources = \
 	mini.c		\

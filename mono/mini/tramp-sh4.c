@@ -402,7 +402,7 @@ static inline void assert_sh4_call_site(guint8 *code)
 
 	if (!is_sh4_nop(code16[-1])               ||
 	    !is_sh4_jsr_indRx(code16[-2], sh4_r3) ||
-	    !is_sh4_LOAD(&code16[-3], sh4_r3)) {
+	    !is_sh4_load(&code16[-3], sh4_r3)) {
 		mono_disassemble_code(NULL, code - CALL_SITE_SIZE * 2, CALL_SITE_SIZE * 2, name);
 		NOT_IMPLEMENTED;
 	}
