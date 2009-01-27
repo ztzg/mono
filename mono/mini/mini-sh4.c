@@ -463,6 +463,164 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 }
 
 /**
+ * For variable length argument lists emit a signature cookie.
+ * Pass a different signature because mono_ArgIterator_Setup assumes
+ * the signature cookie is passed first and all the arguments which
+ * were before it are passed on the stack after the signature.
+ */
+static inline void emit_signature_cookie2(MonoCompile *cfg, MonoCallInst *call)
+{
+	MonoMethodSignature *new_signature = NULL;
+	MonoInst *signature = NULL;
+	MonoInst *inst = NULL;
+
+	g_assert(cfg->new_ir == TRUE);
+
+	/* AOT not yet supported. */
+	cfg->disable_aot = TRUE;
+
+	new_signature = mono_metadata_signature_dup(call->signature);
+	new_signature->param_count -= call->signature->sentinelpos;
+	new_signature->sentinelpos = 0;
+
+	memcpy(new_signature->params,
+	       call->signature->params + call->signature->sentinelpos,
+	       new_signature->param_count * sizeof(MonoType*));
+
+	/* Declare a room where the signature cookie will be stored. */
+	MONO_INST_NEW(cfg, signature, OP_ICONST);
+	signature->inst_c0 = (guint32)new_signature;
+	signature->dreg    = mono_alloc_ireg(cfg);
+	MONO_ADD_INS(cfg->cbb, signature);
+
+	/* Create a new argument pointing to the signature cookie. */
+	MONO_INST_NEW(cfg, inst, OP_SH4_PUSH_ARG);
+	inst->sreg1 = signature->dreg;
+	cfg->arch.argalloc_size += 4;
+	MONO_ADD_INS(cfg->cbb, inst);
+}
+
+/**
+ * Take the arguments and generate the Mono instructions in an
+ * arch-specific way to properly call the function.
+ *
+ * Same as mono_arch_call_opcode(), but emits IR for pushing arguments
+ * to the stack. All the stuff in mono_arch_emit_this_vret_args()
+ * should be done in emit_call() too.
+ */
+void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
+{
+	MonoMethodSignature *signature = NULL;
+	struct call_info *call_info = NULL;
+	int sentinelpos = -1;
+	int arg_count = 0;
+	int i = 0;
+
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("args => %p, %p", cfg, call);
+
+	g_assert(cfg->new_ir == TRUE);
+
+	signature = call->signature;
+	arg_count = signature->param_count + signature->hasthis;
+	call_info = get_call_info(cfg->generic_sharing_context, signature);
+
+	if (call_info->ret.type == aggregate)
+		NOT_IMPLEMENTED;
+
+	if (signature->pinvoke == 0 &&
+	    signature->call_convention == MONO_CALL_VARARG)
+		sentinelpos = signature->sentinelpos + (signature->hasthis ? 1 : 0);
+
+	/* Used into mono_arch_output_basic_block():*CALL*
+	   to free the space used by parameters after a call. */
+	cfg->arch.argalloc_size = 0;
+
+	for (i = 0; i < arg_count; i++) {
+		struct arg_info *arg_info = &(call_info->args[i]);
+		MonoInst *arg = NULL;
+
+		/* Emit the signature cookie just before the implicit arguments. */
+		if (sentinelpos == i &&
+		    signature->pinvoke == 0 &&
+		    signature->call_convention == MONO_CALL_VARARG)
+			emit_signature_cookie2(cfg, call);
+
+		MONO_INST_NEW(cfg, arg, OP_NOP);
+		arg->cil_code  = call->args[i]->cil_code;
+		arg->type      = call->args[i]->type;
+		arg->sreg1     = call->args[i]->dreg;
+
+		g_assert(arg->sreg1 != -1);
+
+		switch (arg_info->type) {
+		case integer64:
+			NOT_IMPLEMENTED;
+			/* Fall through. */
+		case integer32:
+			switch (arg_info->storage) {
+			case into_register:
+				arg->opcode = OP_MOVE;
+				arg->dreg   = mono_alloc_ireg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+				break;
+
+			case onto_stack:
+				arg->opcode = OP_SH4_PUSH_ARG;
+				cfg->arch.argalloc_size += 4;
+				break;
+
+			case nowhere:
+			default:
+				g_assert_not_reached();
+			}
+			break;
+
+		case float32:
+			NOT_IMPLEMENTED;
+			break;
+
+		case float64:
+			NOT_IMPLEMENTED;
+			break;
+
+		case aggregate:
+			NOT_IMPLEMENTED;
+			break;
+
+		default:
+			g_assert_not_reached();
+			break;
+		}
+		MONO_ADD_INS(cfg->cbb, arg);
+	}
+
+	/* Emit the signature cookie in case no implicit arguments are specified. */
+	if (signature->pinvoke == 0 &&
+	    sentinelpos == arg_count &&
+	    signature->call_convention == MONO_CALL_VARARG)
+		emit_signature_cookie2(cfg, call);
+
+	call->stack_usage = call_info->stack_usage;
+
+	g_free(call_info->args);
+	g_free(call_info);
+	return;
+}
+
+/* Emits IR to move its argument to the proper return register. */
+void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
+{
+	g_assert(cfg->new_ir == TRUE);
+
+	/* MD: setret: dest:z src1:i len:2 */
+
+	/* Complex return types (as aggregates) not yet supported. */
+	MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
+	return;
+}
+
+/**
  * Allocate space onto the stack for variables/parameters/...
  * according to the SH4 ABI, and specify how to access them.
  */
@@ -622,30 +780,12 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("return type = %d", call_info->ret.type);
 
-	/* Specify how to access the return value. */
-	switch (call_info->ret.type) {
-	case aggregate:
-		NOT_IMPLEMENTED;
-		/* The caller set sh4_r2 to point to already allocated
-		   space where the return aggregate will be hold. */
-		cfg->ret->opcode = OP_REGVAR;
-		cfg->ret->inst_c0 = sh4_r2;
-		break;
-
-	case integer32:
-	case integer64:
-	case float32:
-	case float64:
-		cfg->ret->opcode = OP_REGVAR;
-		cfg->ret->inst_c0 = call_info->ret.reg; /* sh4_r0 or sh4_fr0 */
-		break;
-
-	case none: /* void */
-		break;
-
-	default:
-		g_assert_not_reached();
-		break;
+	/* Specify how to access the return value, see mono_arch_emit_setret().
+	   Complex return types (as aggregates) not yet supported. */
+	if (call_info->ret.type != none) {
+		cfg->ret->opcode  = OP_REGVAR;
+		cfg->ret->inst_c0 = call_info->ret.reg;
+		cfg->ret->dreg    = call_info->ret.reg;
 	}
 
 	g_free(call_info->args);
@@ -1457,6 +1597,17 @@ GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
  */
 MonoInst *mono_arch_get_inst_for_method(MonoCompile *cfg, MonoMethod *method, MonoMethodSignature *signature, MonoInst **args)
 {
+	g_assert(cfg->new_ir == FALSE);
+	return NULL;
+}
+
+/**
+ * Check for opcodes we can handle directly in hardware, but also emits the instructions.
+ */
+MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
+					 MonoMethodSignature *signature, MonoInst **args)
+{
+	g_assert(cfg->new_ir == TRUE);
 	return NULL;
 }
 
@@ -1601,9 +1752,8 @@ void *mono_arch_instrument_prolog(MonoCompile *cfg, void *func, void *p, gboolea
 
 gboolean mono_arch_is_inst_imm(gint64 imm)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return 0;
+	/* The lowering pass will take care of it. */
+	return TRUE;
 }
 
 /**
@@ -2331,6 +2481,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movt(cfg, &buffer, inst->dreg);
 			break;
 
+		case OP_SH4_PUSH_ARG:
+			/* MD: sh4_push_arg: src1:i len:2 */
 		case OP_OUTARG_MEMBASE:
 			/* MD: outarg_membase: src1:i len:2 */
 			sh4_movl_decRx(cfg, &buffer, inst->sreg1, sh4_sp);
@@ -2546,7 +2698,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
-			/* MD: endfilter: src1:z clob:t len:12 */
+			/* MD: endfilter: src1:z clob:t len:10 */
 			/* The local allocator will put the result into sh4_r0. */
 		case OP_ENDFINALLY: {
 			/* MD: endfinally: clob:t len:10 */
@@ -2717,6 +2869,20 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_NOP:		/* MD: nop: len:0 */
+		case OP_DUMMY_USE:	/* MD: dummy_use: len:0 */
+		case OP_DUMMY_STORE:	/* MD: dummy_store: len:0 */
+		case OP_NOT_REACHED:	/* MD: not_reached: len:0 */
+		case OP_NOT_NULL:	/* MD: not_null: len:0 */
+			break;
+
+		case OP_JUMP_TABLE:
+			/* MD: jump_table: dest:i len:12 */
+			sh4_load(&buffer, 0, inst->dreg);
+			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code,
+					    (MonoJumpInfoType)inst->inst_i1, inst->inst_p0);
+			break;
+
 		default:
 			g_warning("unknown opcode %s (0x%x)\n", mono_inst_name(inst->opcode), inst->opcode);
 			SH4_DEBUG("opcode '%s':\n"
@@ -2791,26 +2957,6 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 		switch (patch_info->type) {
 
 		case MONO_PATCH_INFO_SWITCH:
-			/* The load of a jump table address looks like
-			   ("patch" points to the first instruction):
-
-			       mov.l   @jump_table_address, rX
-			       bra     .L01 // over the jump-table address
-			       nop
-			       // maybe another nop to align
-
-			       .long  $jump_table_address
-
-			     .L01:
-			       ... */
-
-			/* Patch over "mov.l + bra + nop". */
-			patch += 6;
-
-			/* Patch over the other "nop" used to align (if needed). */
-			if ((guint32)patch % 4 != 0)
-				patch += 2;
-
 		case MONO_PATCH_INFO_LABEL:
 		case MONO_PATCH_INFO_BB:
 		case MONO_PATCH_INFO_METHOD:
@@ -2922,30 +3068,6 @@ const char *mono_arch_regname(int reg)
 void mono_arch_setup_jit_tls_data(MonoJitTlsData *tls)
 {
 	/* TODO - CV */
-	return;
-}
-
-void mono_arch_emit_call (MonoCompile *cfg, MonoCallInst *call)
-{
-	/* TODO - CV */
-	NOT_IMPLEMENTED;
-	return;
-}
-
-/* Check for opcodes we can handle directly in hardware, but also emits the instructions. */
-MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
-					 MonoMethodSignature *signature, MonoInst **args)
-{
-	/* TODO - CV */
-	NOT_IMPLEMENTED;
-	return NULL;
-}
-
-/* Emits IR to move its argument to the proper return register. */
-void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
-{
-	/* TODO - CV */
-	NOT_IMPLEMENTED;
 	return;
 }
 

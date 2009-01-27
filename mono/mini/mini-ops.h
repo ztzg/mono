@@ -1284,4 +1284,5 @@ MINI_OP(OP_SH4_CMPHS,			"sh4_cmphs",			NONE, IREG, IREG)
 MINI_OP(OP_SH4_BT,			"sh4_bt",			NONE, NONE, NONE)
 MINI_OP(OP_SH4_BF,			"sh4_bf",			NONE, NONE, NONE)
 MINI_OP(OP_SH4_MOVT,			"sh4_movt",			IREG, NONE, NONE)
+MINI_OP(OP_SH4_PUSH_ARG,		"sh4_push_arg",			NONE, IREG, NONE)
 #endif

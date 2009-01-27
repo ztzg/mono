@@ -51,6 +51,7 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
+setret: dest:z src1:i len:2
 int_add_imm: clob:1 dest:i src1:i len:2
 add_imm: clob:1 dest:i src1:i len:2
 int_add: clob:1 dest:i src1:i src2:i len:2
@@ -73,6 +74,7 @@ sh4_cmphi: src1:i src2:i len:2
 sh4_cmpge: src1:i src2:i len:6
 sh4_cmphs: src1:i src2:i len:6
 sh4_movt: dest:i len:2
+sh4_push_arg: src1:i len:2
 outarg_membase: src1:i len:2
 sh4_storei1_membase_R0: src1:z dest:b len:2
 sh4_storei1: src1:i dest:b len:2
@@ -99,7 +101,7 @@ call_handler: clob:t len:16
 throw: src1:i len:20
 move: dest:i src1:i len:2
 start_handler: clob:t len:6
-endfilter: src1:z clob:t len:12
+endfilter: src1:z clob:t len:10
 endfinally: clob:t len:10
 br: clob:t len:16
 br_reg: src1:i len:4
@@ -109,3 +111,9 @@ label: len:0
 checkthis: clob:t src1:i len:2
 store_membase_reg: len:2
 load_membase: len:2
+nop: len:0
+dummy_use: len:0
+dummy_store: len:0
+not_reached: len:0
+not_null: len:0
+jump_table: dest:i len:12
