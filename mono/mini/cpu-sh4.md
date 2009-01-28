@@ -109,8 +109,8 @@ sh4_bt: len:18
 sh4_bf: len:18
 label: len:0
 checkthis: src1:i len:2
-store_membase_reg: len:2
-load_membase: len:2
+store_membase_reg: len:16
+load_membase: len:16
 nop: len:0
 dummy_use: len:0
 dummy_store: len:0

@@ -2843,29 +2843,39 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Support for spilled variables. */
 		case OP_STORE_MEMBASE_REG:
-			/* MD: store_membase_reg: len:2 */
+			/* MD: store_membase_reg: len:16 */
 			g_assert(inst->inst_destbasereg == sh4_fp);
 			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
 				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			}
+			else if (SH4_CHECK_RANGE_add_imm(inst->inst_offset)) {
+				sh4_mov(cfg, &buffer, inst->inst_destbasereg, sh4_temp);
+				sh4_add_imm(cfg, &buffer, inst->inst_offset, sh4_temp);
+				sh4_movl_indRx(cfg, &buffer, inst->sreg1, sh4_temp);
+			}
 			else {
-				NOT_IMPLEMENTED;
-				/* decompose_op_offset2base(cfg, basic_block, inst, 1);
-				   inst->opcode = OP_SH4_STOREI4; */
+				sh4_load(&buffer, inst->inst_offset, sh4_temp);
+				sh4_add(cfg, &buffer, inst->inst_destbasereg, sh4_temp);
+				sh4_movl_indRx(cfg, &buffer, inst->sreg1, sh4_temp);
 			}
 			break;
 
 			/* Support for spilled variables. */
 		case OP_LOAD_MEMBASE:
-			/* MD: load_membase: len:2 */
+			/* MD: load_membase: len:16 */
 			g_assert(inst->inst_basereg == sh4_fp);
 			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
 				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			}
+			else if (SH4_CHECK_RANGE_add_imm(inst->inst_offset)) {
+				sh4_mov(cfg, &buffer, inst->inst_basereg, sh4_temp);
+				sh4_add_imm(cfg, &buffer, inst->inst_offset, sh4_temp);
+				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
+			}
 			else {
-				NOT_IMPLEMENTED;
-				/* decompose_op_offset2base(cfg, basic_block, inst, 0);
-				   inst->opcode = OP_SH4_LOADI4; */
+				sh4_load(&buffer, inst->inst_offset, sh4_temp);
+				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
+				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
 			}
 			break;
 
