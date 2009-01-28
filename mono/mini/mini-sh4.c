@@ -1323,7 +1323,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		while (((guint32)buffer % 4) != 0)
 			sh4_nop(NULL, &buffer);
 
-		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r8);
+		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r14);
 		sh4_emit32(&buffer, (guint32)localloc_size);
 	}
 
