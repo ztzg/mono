@@ -1063,8 +1063,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 		/* About used registers : sh4_r0 is a local register and is
 		   declared as clobbered into mono_arch_call_opcode() if
-		   "save_lmf" is set. sh4_r14 was saved previously and will
-		   be overwritten later. */
+		   "save_lmf" is set. */
 
 		/* pseudo-code: MonoLMF.registers[] = { %R0, ..., %R15 }; */
 		sh4_add_imm(NULL, &buffer, -sizeof(MonoLMF) + offsetof(MonoLMF, registers), sh4_r15);
@@ -1102,8 +1101,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		 */
 
 		/* pseudo-code: MonoLMF.previous_lmf = *(MonoLMF.lmf_addr); */
-		sh4_movl_indRy(NULL, &buffer, sh4_r0, sh4_r14);
-		sh4_movl_dispRx(NULL, &buffer, sh4_r14, offsetof(MonoLMF, previous_lmf), sh4_r15);
+		sh4_movl_indRy(NULL, &buffer, sh4_r0, sh4_temp);
+		sh4_movl_dispRx(NULL, &buffer, sh4_temp, offsetof(MonoLMF, previous_lmf), sh4_r15);
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = &MonoLMF;  */
 		sh4_movl_indRx(NULL, &buffer, sh4_r15, sh4_r0);
@@ -1140,21 +1139,18 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			sh4_add_imm(NULL, &buffer, -localloc_size, sh4_r15);
 		}
 		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
-			/* R14 can be used to increment the stack size (that is, used
-			   to decrement R15) because it was saved previously and will
-			   be overwritten later. */
-			sh4_mov_imm(NULL, &buffer, localloc_size, sh4_r14);
-			sh4_sub(NULL, &buffer, sh4_r14, sh4_r15);
+			sh4_mov_imm(NULL, &buffer, localloc_size, sh4_temp);
+			sh4_sub(NULL, &buffer, sh4_temp, sh4_r15);
 		}
 		else {
 			guint8 *patch0 = NULL;
 			guint8 *patch1 = NULL;
 
-			/* Patch slot for : sh4_r0 <- cfg->method */
+			/* Patch slot for : sh4_temp <- localloc_size */
 			patch0 = buffer;
 			sh4_die(NULL, &buffer);
 
-			sh4_sub(NULL, &buffer, sh4_r14, sh4_r15);
+			sh4_sub(NULL, &buffer, sh4_temp, sh4_r15);
 
 			/* Patch slot for : bra_label "skip_cstpool" */
 			patch1 = buffer;
@@ -1166,7 +1162,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				sh4_nop(NULL, &buffer);
 
 			/* Build the constant pool & patch the corresponding instruction. */
-			sh4_movl_PCrel(NULL, &patch0, buffer, sh4_r14);
+			sh4_movl_PCrel(NULL, &patch0, buffer, sh4_temp);
 			sh4_emit32(&buffer, (guint32)localloc_size);
 
 			sh4_bra_label(NULL, &patch1, buffer);
@@ -1244,14 +1240,11 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		if (SH4_CHECK_RANGE_add_imm(localloc_size))
 			sh4_add_imm(NULL, &buffer, localloc_size, sh4_r15);
 		else {
-			/* R14 can be used here because it was saved previously
-			   and will be overwritten/restored later. */
-
-			/* Patch slot for : sh4_r14 <- localloc_size */
+			/* Patch slot for : sh4_temp <- localloc_size */
 			patch1 = buffer;
 			sh4_die(NULL, &buffer);
 
-			sh4_add(NULL, &buffer, sh4_r14, sh4_r15);
+			sh4_add(NULL, &buffer, sh4_temp, sh4_r15);
 		}
 	}
 
@@ -1259,10 +1252,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
-		/* R14 can be used here because it was saved previously
-		   and will be overwritten/restored later. */
-		if (localloc_size != 0)
-			sh4_mov(NULL, &buffer, sh4_r15, sh4_r14);
+		sh4_mov(NULL, &buffer, sh4_r15, sh4_temp);
 
 		/* At this point, the stack looks like :
 		 *	:              :
@@ -1272,13 +1262,13 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		 *	|  saved reg.  | Callee's frame.
 		 *	|--------------|
 		 *	|    MonoLMF   |
-		 *	|--------------| <- sh4_r15, sh4_r14
+		 *	|--------------| <- sh4_r15, sh4_temp
 		 *	:              :
 		 */
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
-		sh4_movl_dispRy(NULL, &buffer, offsetof(MonoLMF, previous_lmf), sh4_r14, sh4_r4);
-		sh4_movl_dispRx(NULL, &buffer, sh4_r14, offsetof(MonoLMF, lmf_addr), sh4_r15);
+		sh4_movl_dispRy(NULL, &buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_r4);
+		sh4_movl_dispRx(NULL, &buffer, sh4_temp, offsetof(MonoLMF, lmf_addr), sh4_r15);
 
 		/* Adjust sh4_r15 to free of the "hidden" LMF. */
 		sh4_add_imm(NULL, &buffer, sizeof(MonoLMF), sh4_r15);
@@ -1323,7 +1313,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		while (((guint32)buffer % 4) != 0)
 			sh4_nop(NULL, &buffer);
 
-		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r14);
+		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_temp);
 		sh4_emit32(&buffer, (guint32)localloc_size);
 	}
 
