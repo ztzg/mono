@@ -355,7 +355,7 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 
 	/* Used into mono_arch_output_basic_block():*CALL*
 	   to free the space used by parameters after a call. */
-	cfg->arch.argalloc_size = 0;
+	call->stack_usage = 0;
 
 	for (i = 0; i < arg_count; i++) {
 		struct arg_info *arg_info = &(call_info->args[i]);
@@ -400,7 +400,7 @@ MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCa
 				/* Useless because the SH4 uses "mov.l Rx,@-R15" to store parameters.
 				arg->backend.arg_info = arg_info->offset; */
 
-				cfg->arch.argalloc_size += 4;
+				call->stack_usage += 4;
 				break;
 
 			case nowhere:
@@ -496,7 +496,7 @@ static inline void emit_signature_cookie2(MonoCompile *cfg, MonoCallInst *call)
 	/* Create a new argument pointing to the signature cookie. */
 	MONO_INST_NEW(cfg, inst, OP_SH4_PUSH_ARG);
 	inst->sreg1 = signature->dreg;
-	cfg->arch.argalloc_size += 4;
+	call->stack_usage += 4;
 	MONO_ADD_INS(cfg->cbb, inst);
 }
 
@@ -534,7 +534,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 	/* Used into mono_arch_output_basic_block():*CALL*
 	   to free the space used by parameters after a call. */
-	cfg->arch.argalloc_size = 0;
+	call->stack_usage = 0;
 
 	for (i = 0; i < arg_count; i++) {
 		struct arg_info *arg_info = &(call_info->args[i]);
@@ -567,7 +567,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 			case onto_stack:
 				arg->opcode = OP_SH4_PUSH_ARG;
-				cfg->arch.argalloc_size += 4;
+				call->stack_usage += 4;
 				break;
 
 			case nowhere:
@@ -2256,17 +2256,15 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 }
 
 /* Free the space used by parameters, computed into mono_arch_call_opcode(). */
-static inline void free_args_area(MonoCompile *cfg, guint8 **buffer)
+static inline void free_args_area(MonoCompile *cfg, guint8 **buffer, MonoCallInst *call)
 {
-	if (cfg->arch.argalloc_size != 0) {
-		if (SH4_CHECK_RANGE_add_imm(cfg->arch.argalloc_size))
-			sh4_add_imm(cfg, buffer, cfg->arch.argalloc_size, sh4_sp);
-		else {
-			/* sh4_temp belongs to clobbered registers during a call,
-			   so we can reuse it here. */
-			sh4_load(buffer, cfg->arch.argalloc_size, sh4_temp);
-			sh4_add(cfg, buffer, sh4_temp, sh4_sp);
-		}
+	if (SH4_CHECK_RANGE_add_imm(call->stack_usage))
+		sh4_add_imm(cfg, buffer, call->stack_usage, sh4_sp);
+	else {
+		/* sh4_temp belongs to clobbered registers during a call,
+		   so we can reuse it here. */
+		sh4_load(buffer, call->stack_usage, sh4_temp);
+		sh4_add(cfg, buffer, sh4_temp, sh4_sp);
 	}
 }
 
@@ -2274,6 +2272,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
 	MonoInst *inst = NULL;
 	guint8 *buffer = NULL;
+	MonoCallInst *call = NULL;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p", cfg, basic_block);
 	SH4_CFG_DEBUG(4) SH4_DEBUG("method: %s", cfg->method->name);
@@ -2588,9 +2587,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: voidcall: clob:c len:30 */
 		case OP_CALL: {
 			/* MD: call: dest:z clob:c len:30 */
-			MonoCallInst *call = (MonoCallInst*)inst;
 			MonoJumpInfoType type;
 			gpointer target = NULL;
+			call = (MonoCallInst*)inst;
 
 			/* patch cst-pool with call destination */
 			if (inst->flags & MONO_INST_HAS_METHOD) {
@@ -2613,18 +2612,22 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer); /* delay slot */
 
-			free_args_area(cfg, &buffer);
+			if (call->stack_usage != 0)
+				free_args_area(cfg, &buffer, call);
 			break;
 		}
 
 		case OP_VOIDCALL_REG:
-			/* MD: voidcall_reg: src1:i clob:c len:18 */
 		case OP_CALL_REG:
+			/* MD: voidcall_reg: src1:i clob:c len:18 */
 			/* MD: call_reg: dest:z src1:i clob:c len:18 */
+			call = (MonoCallInst*)inst;
+
 			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
 			sh4_nop(cfg, &buffer); /* delay slot */
 
-			free_args_area(cfg, &buffer);
+			if (call->stack_usage != 0)
+				free_args_area(cfg, &buffer, call);
 			break;
 
 		case OP_CALL_HANDLER:
