@@ -2669,18 +2669,17 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: start_handler: len:6 */
 			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
-			/* We enforce Rtemp here because the SH4 instruction used to save
-			   the return address clobbered the destination register. */
-			if (spvar->inst_basereg != sh4_temp)
+			if (SH4_CHECK_RANGE_movl_dispRx(spvar->inst_offset)) {
+				sh4_movl_dispRx(cfg, &buffer, sh4_sp, spvar->inst_offset, sh4_temp);
+			}
+			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
 				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_temp);
-
-			if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset))
 				sh4_add_imm(cfg, &buffer, spvar->inst_offset, sh4_temp);
+				sh4_movl_indRx(cfg, &buffer, sh4_sp, sh4_temp);
+			}
 			else {
 				NOT_IMPLEMENTED;
 			}
-
-			sh4_stsl_PR_decRx(cfg, &buffer, sh4_temp);
 
 			break;
 		}
@@ -2694,18 +2693,17 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: endfinally: len:10 */
 			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
-			/* We enforce Rtemp here because the SH4 instruction used to save
-			   the return address clobbered the source register. */
-			if (spvar->inst_basereg != sh4_temp)
+			if (SH4_CHECK_RANGE_movl_dispRy(spvar->inst_offset)) {
+				sh4_movl_dispRy(cfg, &buffer, spvar->inst_offset, sh4_temp, sh4_sp);
+			}
+			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
 				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_temp);
-
-			if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset))
 				sh4_add_imm(cfg, &buffer, spvar->inst_offset, sh4_temp);
+				sh4_movl_indRy(cfg, &buffer, sh4_temp, sh4_sp);
+			}
 			else {
 				NOT_IMPLEMENTED;
 			}
-
-			sh4_ldsl_incRx_PR(cfg, &buffer, sh4_temp);
 
 			sh4_rts(cfg, &buffer);
 			sh4_nop(cfg, &buffer);
