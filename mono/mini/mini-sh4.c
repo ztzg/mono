@@ -924,6 +924,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
 		struct arg_info *arg_info = &call_info->args[i];
 		MonoInst *inst = cfg->args[i];
+		int offset = 0;
 
 		/* The argument ends up into a register... */
 		if (inst->opcode == OP_REGVAR) {
@@ -961,14 +962,14 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			/* ... but was onto the stack. */
 			case onto_stack:
 				switch (arg_info->type) {
-				case integer32: {
-					int offset = cfg->arch.regsave_size + arg_info->offset;
+				case integer32:
+					offset = cfg->arch.regsave_size + arg_info->offset;
 					if (SH4_CHECK_RANGE_movl_dispRy(offset))
 						sh4_movl_dispRy(NULL, &buffer, offset, sh4_r15, inst->dreg);
 					else
 						NOT_IMPLEMENTED;
 					break;
-				}
+
 				case integer64:
 					NOT_IMPLEMENTED;
 					break;
@@ -1955,6 +1956,9 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		cfg->rs->next_vreg = basic_block->max_vreg;
 
 	MONO_BB_FOR_EACH_INS_SAFE(basic_block, next_inst, inst) {
+		MonoInst *new_inst = NULL;
+		guint32 imm8 = 0;
+
 		switch (inst->opcode) {
 		case OP_COMPARE:
 		case OP_ICOMPARE:
@@ -2058,10 +2062,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_MUL_IMM:
-		case OP_IMUL_IMM: {
-			MonoInst *new_inst;
-			guint32 imm8;
-
+		case OP_IMUL_IMM:
 			/* An obvious case */
 			if(inst->inst_imm == 0) {
 				inst->opcode = OP_ICONST;
@@ -2099,7 +2100,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			inst->opcode = OP_IMUL;
 			inst->sreg2 = new_inst->dreg;
 			break;
-		}
 
 		/* The SH4 can't store immediate into memory, so split
 		   store*_membase_imm into: iconst + store*_membase_reg. */
@@ -2210,9 +2210,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_VOIDCALL_MEMBASE:
-		case OP_CALL_MEMBASE: {
-			MonoInst *new_inst = NULL;
-
+		case OP_CALL_MEMBASE:
 			/* The opcodes call*_membase are splitted into
 			   load_membase + call*_reg. */
 			MONO_INST_NEW(cfg, new_inst, OP_LOAD_MEMBASE);
@@ -2242,7 +2240,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 			break;
-		}
 
 		default:
 			break;
@@ -2273,6 +2270,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	MonoInst *inst = NULL;
 	guint8 *buffer = NULL;
 	MonoCallInst *call = NULL;
+	MonoJumpInfoType type;
+	gpointer target = NULL;
+	MonoInst *spvar = NULL;
+	guint8 *address = NULL;
+	guint8 *patch = NULL;
+	int displace = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p", cfg, basic_block);
 	SH4_CFG_DEBUG(4) SH4_DEBUG("method: %s", cfg->method->name);
@@ -2585,10 +2588,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:30 */
-		case OP_CALL: {
+		case OP_CALL:
 			/* MD: call: dest:z clob:c len:30 */
-			MonoJumpInfoType type;
-			gpointer target = NULL;
 			call = (MonoCallInst*)inst;
 
 			/* patch cst-pool with call destination */
@@ -2615,7 +2616,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (call->stack_usage != 0)
 				free_args_area(cfg, &buffer, call);
 			break;
-		}
 
 		case OP_VOIDCALL_REG:
 		case OP_CALL_REG:
@@ -2668,9 +2668,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		 * the return address. Instead, we save it into a dedicated
 		 * variable.
 		 */
-		case OP_START_HANDLER: {
+		case OP_START_HANDLER:
 			/* MD: start_handler: len:6 */
-			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
+			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
 			if (SH4_CHECK_RANGE_movl_dispRx(spvar->inst_offset)) {
 				sh4_movl_dispRx(cfg, &buffer, sh4_sp, spvar->inst_offset, sh4_temp);
@@ -2685,16 +2685,15 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 			break;
-		}
 
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
 			/* MD: endfilter: src1:z len:10 */
 			/* The local allocator will put the result into sh4_r0. */
-		case OP_ENDFINALLY: {
+		case OP_ENDFINALLY:
 			/* MD: endfinally: len:10 */
-			MonoInst *spvar = mono_find_spvar_for_region(cfg, basic_block->region);
+			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 
 			if (SH4_CHECK_RANGE_movl_dispRy(spvar->inst_offset)) {
 				sh4_movl_dispRy(cfg, &buffer, spvar->inst_offset, sh4_temp, sh4_sp);
@@ -2712,15 +2711,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_nop(cfg, &buffer);
 
 			break;
-		}
 
-		case OP_BR: {
+		case OP_BR:
 			/* MD: br: len:16 */
-			MonoJumpInfoType type;
-			gpointer target = NULL;
-			guint8 *address = NULL;
-			int displace = 0;
-
 			if (inst->flags & MONO_INST_BRLABEL) {
 				type = MONO_PATCH_INFO_LABEL;
 				target = inst->inst_i0;
@@ -2748,7 +2741,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_nop(cfg, &buffer);
 
 			break;
-		}
 
 		case OP_BR_REG:
 			/* MD: br_reg: src1:i len:4 */
@@ -2756,16 +2748,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_nop(cfg, &buffer);
 			break;
 
-		case OP_SH4_BT: {
-			MonoJumpInfoType type;
-			gpointer target = NULL;
-			guint8 *address = NULL;
-			guint8 *patch = NULL;
-			int displace = 0;
+		case OP_SH4_BT:
 			/* MD: sh4_bt: len:18 */
 		case OP_SH4_BF:
 			/* MD: sh4_bf: len:18 */
-
 			/* Find which kind of relocation should be used. */
 			if (inst->backend.data == (gpointer)-1) {
 				type = MONO_PATCH_INFO_EXC;
@@ -2816,21 +2802,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 			break;
-		}
 
-		case OP_LABEL: {
+		case OP_LABEL:
 			/* MD: label: len:0 */
 			inst->inst_c0 = code - cfg->native_code;
 			break;
-		}
 
-		case OP_CHECK_THIS: {
+		case OP_CHECK_THIS:
 			/* MD: checkthis: src1:i len:2 */
 			/* Trig an exception if sreg1 can not be dereferenced,
 			   might be misaligned in case of vtypes so use a byte load. */
 			sh4_movb_indRy(cfg, &buffer, inst->sreg1, sh4_temp);
 			break;
-		}
 
 			/* Support for spilled variables. */
 		case OP_STORE_MEMBASE_REG:
