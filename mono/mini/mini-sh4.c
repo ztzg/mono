@@ -2665,9 +2665,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer); /* delay slot */
-
-			/* Should never return and help the unwinder. */
-			sh4_die(cfg, &buffer);
 			break;
 
 		case OP_MOVE:
@@ -2872,8 +2869,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_NOP:		/* MD: nop: len:0 */
 		case OP_DUMMY_USE:	/* MD: dummy_use: len:0 */
 		case OP_DUMMY_STORE:	/* MD: dummy_store: len:0 */
-		case OP_NOT_REACHED:	/* MD: not_reached: len:0 */
 		case OP_NOT_NULL:	/* MD: not_null: len:0 */
+			break;
+
+		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
+			sh4_die(cfg, &buffer);
 			break;
 
 		case OP_JUMP_TABLE:

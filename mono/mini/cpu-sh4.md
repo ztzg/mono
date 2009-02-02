@@ -114,6 +114,6 @@ load_membase: len:16
 nop: len:0
 dummy_use: len:0
 dummy_store: len:0
-not_reached: len:0
 not_null: len:0
+not_reached: len:2
 jump_table: dest:i len:12
