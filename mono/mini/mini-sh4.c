@@ -1785,6 +1785,9 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_COND_EXC_EQ:
+		/* Trick used in output_basic_block(). */
+		next_inst->backend.data = (gpointer)-1;
 	case CEE_BEQ:
 	case OP_IBEQ:
 		inst->opcode = OP_SH4_CMPEQ;
