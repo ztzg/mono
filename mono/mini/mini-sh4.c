@@ -1962,16 +1962,17 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		switch (inst->opcode) {
 		case OP_COMPARE:
 		case OP_ICOMPARE:
+			next_inst = inst->next;
+			g_assert(next_inst != NULL);
+			convert_comparison_to_sh4(inst, next_inst);
+			break;
+
 		case OP_COMPARE_IMM:
 		case OP_ICOMPARE_IMM:
 			next_inst = inst->next;
 			g_assert(next_inst != NULL);
 
 			convert_comparison_to_sh4(inst, next_inst);
-
-			if (inst->opcode == OP_COMPARE ||
-			    inst->opcode == OP_ICOMPARE)
-				break;
 
 			/* Optimize if possible. */
 			if ((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
