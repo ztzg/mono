@@ -63,8 +63,14 @@ sh4_xor_imm_R0: clob:1 dest:z src1:z len:2
 int_xor: clob:1 dest:i src1:i src2:i len:2
 sh4_and_imm_R0: clob:1 dest:z src1:z len:2
 int_and: clob:1 dest:i src1:i src2:i len:2
-int_shl_imm: clob:1 dest:i src1:i len:2
-shl_imm: clob:1 dest:i src1:i len:2
+sh4_shll1: clob:1 dest:i src1:i len:2
+sh4_shll2: clob:1 dest:i src1:i len:2
+sh4_shll8: clob:1 dest:i src1:i len:2
+sh4_shll16: clob:1 dest:i src1:i len:2
+sh4_shlr1: clob:1 dest:i src1:i len:2
+sh4_shlr2: clob:1 dest:i src1:i len:2
+sh4_shlr8: clob:1 dest:i src1:i len:2
+sh4_shlr16: clob:1 dest:i src1:i len:2
 int_shl: clob:1 dest:i src1:i src2:i len:2
 int_mul: dest:i src1:i src2:i len:4
 sh4_cmpeq: src1:i src2:i len:2

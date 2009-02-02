@@ -1854,31 +1854,6 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 	}
 }
 
-/**
- * Helper routine: returns true if sh4 has got a shift
- * instruction that shifts values by the considered
- * immediate.
- */
-static inline gboolean sh4_has_shift_inst_imm(guint32 immediate)
-{
-	gboolean ret = FALSE;
-
-	switch(immediate) {
-		case 1U:	/* Fall through */
-		case 2U:	/* Fall through */
-		case 8U:	/* Fall through */
-		case 16U:
-			ret = TRUE;
-		break;
-
-		default:
-			ret = FALSE;
-			break;
-	}
-
-	return ret;
-}
-
 static inline void decompose_op_offset2base(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst, int is_store)
 {
 	MonoInst *new_inst  = NULL;
@@ -1966,7 +1941,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	MONO_BB_FOR_EACH_INS_SAFE(basic_block, next_inst, inst) {
 		MonoInst *new_inst = NULL;
-		guint32 imm8 = 0;
 
 		switch (inst->opcode) {
 		case OP_COMPARE:
@@ -2061,54 +2035,78 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_SHL_IMM:
 		case OP_ISHL_IMM:
-			if(inst->inst_imm==0) {
+			switch (inst->inst_imm) {
+			case 0:
 				inst->opcode = OP_MOVE;
-			}
-			else if(!sh4_has_shift_inst_imm(inst->inst_imm)) {
-				/* See previous comment. */
-				inst->opcode = OP_ISHL_IMM;
+				break;
+			case 1:
+				inst->opcode = OP_SH4_SHLL1;
+				break;
+			case 2:
+				inst->opcode = OP_SH4_SHLL2;
+				break;
+			case 8:
+				inst->opcode = OP_SH4_SHLL8;
+				break;
+			case 16:
+				inst->opcode = OP_SH4_SHLL16;
+				break;
+			default:
 				mono_decompose_op_imm(cfg, basic_block, inst);
+				break;
+			}
+			break;
+
+		case OP_SHR_IMM:
+		case OP_ISHR_IMM:
+			switch (inst->inst_imm) {
+			case 0:
+				inst->opcode = OP_MOVE;
+				break;
+			case 1:
+				inst->opcode = OP_SH4_SHLR1;
+				break;
+			case 2:
+				inst->opcode = OP_SH4_SHLR2;
+				break;
+			case 8:
+				inst->opcode = OP_SH4_SHLR8;
+				break;
+			case 16:
+				inst->opcode = OP_SH4_SHLR16;
+				break;
+			default:
+				NOT_IMPLEMENTED;
+				break;
 			}
 			break;
 
 		case OP_MUL_IMM:
 		case OP_IMUL_IMM:
-			/* An obvious case */
-			if(inst->inst_imm == 0) {
+			switch (inst->inst_imm) {
+			case 0:
 				inst->opcode = OP_ICONST;
 				inst->inst_c0= 0;
-				break;  /* Early exit */
-			}
-
-			/* The case where immediate is 1 may already have
-			 * been reduced by CIL compilers. */
-			if(inst->inst_imm == 1) {
+				break;
+			case 1:
 				inst->opcode = OP_MOVE;
-				break;  /* Early exit */
+				break;
+			case 2:
+				inst->opcode = OP_SH4_SHLL1;
+				break;
+			case 4:
+				inst->opcode = OP_SH4_SHLL2;
+				break;
+			case 256:
+				inst->opcode = OP_SH4_SHLL8;
+				break;
+			case 65536:
+				inst->opcode = OP_SH4_SHLL16;
+				break;
+			default:
+				mono_decompose_op_imm(cfg, basic_block, inst);
+				break;
 			}
-
-			/* If immediate is a power of 2, we perform some elementary
-			 * operator strengh reductions in a limited number of cases:
-			 *
-			 *  - imm8==1 --> the goal is to map instruction shll.
-			 *  - imm8==2 --> the goal is to map instruction shll2
-			 *  - imm8==8 --> the goal is to map instruction shll8.
-			 *  - imm8==16--> the goal is to map instruction shll16.
-			 */
-			imm8 = mono_is_power_of_two(inst->inst_imm);
-			if(sh4_has_shift_inst_imm(imm8)) {
-				inst->opcode = OP_ISHL_IMM;
-				inst->inst_imm = imm8;
-				break;   /* Early exit */
-			}
-
-			/* Now, the general case */
-			MONO_INST_NEW(cfg,new_inst,OP_ICONST);
-			new_inst->inst_c0 = inst->inst_imm;
-			new_inst->dreg = mono_regstate_next_int(cfg->rs);
-			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
-			inst->opcode = OP_IMUL;
-			inst->sreg2 = new_inst->dreg;
 			break;
 
 		/* The SH4 can't store immediate into memory, so split
@@ -2400,27 +2398,52 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_and(cfg, &buffer, inst->sreg2, inst->sreg1);
 			break;
 
-		case OP_ISHL_IMM:
-		case OP_SHL_IMM:
-			/* MD: int_shl_imm: clob:1 dest:i src1:i len:2 */
-			/* MD: shl_imm: clob:1 dest:i src1:i len:2 */
+		case OP_SH4_SHLL1:
+			/* MD: sh4_shll1: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			g_assert(sh4_has_shift_inst_imm(inst->inst_imm));
-			if(inst->inst_imm == 1) {
-				sh4_shll(cfg,&buffer,inst->dreg);
-			}
-			else if (inst->inst_imm == 2) {
-				sh4_shll2(cfg,&buffer,inst->dreg);
-			}
-			else if (inst->inst_imm == 8) {
-				sh4_shll8(cfg,&buffer,inst->dreg);
-			}
-			else if (inst->inst_imm == 16) {
-				sh4_shll16(cfg,&buffer,inst->dreg);
-			}
-			else {
-				g_assert_not_reached();
-			}
+			sh4_shll(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLL2:
+			/* MD: sh4_shll2: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shll2(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLL8:
+			/* MD: sh4_shll8: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shll8(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLL16:
+			/* MD: sh4_shll16: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shll16(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLR1:
+			/* MD: sh4_shlr1: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shlr(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLR2:
+			/* MD: sh4_shlr2: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shlr2(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLR8:
+			/* MD: sh4_shlr8: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shlr8(cfg, &buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHLR16:
+			/* MD: sh4_shlr16: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shlr16(cfg, &buffer, inst->dreg);
 			break;
 
 		case OP_ISHL:
