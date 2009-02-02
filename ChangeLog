@@ -1,13 +1,53 @@
+2009-01-17  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Complete the OPROFILE checks.
+
 2009-01-16  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r123612.
-	
 	* configure.in: Avoid error messages in the quiet code if libgc/Makefile
 	does not exist yet. Fixes #466814.
+
+2009-01-09  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Check for the existence of the gettext executables.
+
+2008-01-08  Christian Prochnow  <cproch@seculogix.de>
+
+	* configure.in: Check for sys/statfs.h and sys/mount.h
+
+2009-01-07  Geoff Norton  <gnorton@novell.com>
+
+	* configure.in: Provide platform information to the mcs build tree
+
+2009-01-06  Jb Evain  <jbevain@novell.com>
+
+	* scripts/Makefile.am: don't generate a script for the now
+	dead mono-api-diff.
+
+2008-12-05  Jonathan Pryor  <jpryor@novell.com>
+
+	* man/mdoc-update.1: Document -fno-assembly-versions.
 
 2009-01-05  Zoltan Varga  <vargaz@gmail.com>
 
 	* configure.in: Disable sigaltstack on freebsd as it doesn't seem to work.
+
+2008-12-16  Marek Habersack  <mhabersack@novell.com>
+
+	* data/system.web.extensions.design_1.0.pc.in: added
+
+	* data/Makefile.am (EXTRA_DIST): added
+	system.web.extensions.design_1.0.pc.in. Also added to
+	pkgconfig_DATA
+
+	* configure.in: added data/system.web.extensions_1.0.pc to
+	AC_OUTPUT
+
+2008-12-16  Bill Holmes  <billholmes54@gmail.com>
+
+	* winconfig.h : Defining the SIZEOF_REGISTER variable for the MSVC builds.
+
+	Code is contributed under MIT/X11 license.
 
 2008-12-15  Marek Habersack  <mhabersack@novell.com>
 
@@ -23,10 +63,61 @@
 
 	* configure.in: added data/system.web.extensions_1.0.pc to AC_OUTPUT
 
+2008-12-11  Mark Mason <mmason@upwardaccess.com>
+
+	* configure.in: introduce SIZEOF_REGISTER - usually ==SIZEOF_VOID_P, except on mips/n32
+	
 2008-12-05  Marek Habersack  <mhabersack@novell.com>
- 
+
 	* configure.in: check whether round (3) and rint (3) are present
 	in the C library.
+
+2008-12-05  Jonathan Pryor  <jpryor@novell.com>
+
+	* man/mdoc-update.1: Document new parameters such as --exceptions.
+
+2008-12-04  Mark Probst  <mark.probst@gmail.com>
+
+	* configure.in: Disabling the sibling call optimization doesn't
+	work, so we're using -mminimal-toc.
+
+2008-12-03  Mark Probst  <mark.probst@gmail.com>
+
+	* configure.in: Disable sibling call optimization on PPC64 as it
+	seems to trip up GCC on the build bot.
+
+2008-11-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* data/mono-nunit.pc.in : add new 2.4.8 files.
+
+2008-11-21  Jb Evain  <jbevain@novell.com>
+
+	* scripts/Makefile.am: use only one mono-api-info pointing to the cecil one
+	which is mscorlib agnostic.
+
+2008-11-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Only enable AOT on linux. Fixes #447265.
+
+2008-11-19  Jonathan Pryor  <jpryor@novell.com>
+
+	* configure.in: Remove mono/monoburg/Makefile; fixes the build.
+
+2008-11-14  Andreas Färber  <andreas.faerber@web.de>
+
+	* configure.in: Add preprocessor defines for ppc(64).
+	Suggested by Paolo and Mark.
+	
+	Contributed under MIT/X11 license.
+
+2008-11-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Add an ENABLE_AOT variable to config.make, currently only
+	enabled for AMD64.
+
+2008-11-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Bump version to 2.3.
 
 Mon Nov 10 17:37:08 CET 2008 Paolo Molaro <lupus@ximian.com>
 

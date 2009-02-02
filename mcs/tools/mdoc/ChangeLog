@@ -1,3 +1,228 @@
+2009-01-05  Jonathan Pryor <jpryor@novell.com>
+
+	* Makefile: Fix $(PROGRAM) dependencies so that mdoc.exe is rebuilt
+	  when one of the dependent ../monodoc/Resources/* files is changed.
+
+2009-01-05  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/mdoc.cs: `mdoc' (no arguments) shouldn't print an
+	  index out of range error.  Fix.
+	* Mono.Documentation/monodocer.cs: Rename -fno-member-assembly-info to
+	  -fno-assembly-versions, which prevents generation of //AssemblyVersion
+	  elements.  This suffers the same warning as -fno-member-assembly-info,
+	  so don't use unless you can guarantee that no members will 
+	  ever be removed from your public API. :-)
+	  Clean up -f handling so that -f:no-assembly-versions will work as
+	  expected.
+
+2009-01-05  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: Add -fno-member-assembly-info,
+	  which remove /Type/Members/Member/AssemblyInfo elements.
+	  Requested by Mike Kestner.
+	  Warning: this option will break automatic version tracking, so if a
+	  member is present in e.g. v1.0 and is removed in e.g. v2.0, 
+	  the //Member element will be removed entirely when updating the
+	  documentation against the 2.0 assembly.  Use with care.
+
+2008-12-06  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: Remove "exception" from DocsNodeOrder
+	  so that <exception/> elements aren't grouped together.  This causes
+	  `make doc-update` to result in ~0 changes in ../../class/corlib.
+	  Change the sorting of --exceptions-generated <exception/> nodes so
+	  that namespaces are taken into consideration, thus "properly"
+	  grouping types by namespaces, as I'd usually expect...
+
+2008-12-05  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs, Mono.Documentation/monodocs2html.cs: 
+	  Reorder parameters to be in sorted order, so `mdoc help COMMAND` 
+	  parameters are sorted.
+	* Mono.Documentation/monodocer.cs: Remove try/catch in
+	  MDocUpdater.Run(MDocUpdaterOptions), so that any generated exceptions
+	  will be handled within mdoc itself (thus allowing the normal 
+	  "See `mdoc help' for more information." message).  Improve some
+	  error messages so they're more useful.
+
+2008-12-04  Jonathan Pryor <jpryor@novell.com>
+
+	* Makefile: Specify --exceptions=all in mdoc-update invocations.
+	* exceptions.cs: Add support for documenting a *subset* of all
+	  possible exceptions.  Subsets include: the member itself, the member
+	  and methods it calls that are in the same assembly, and all possible
+	  methods across all assemblies.
+	* monodocer.cs: Allow --exceptions to take a SOURCES argument, to
+	  control which location sources will be searched for exceptions.
+
+2008-12-02  Jonathan Pryor <jpryor@novell.com>
+
+	* Makefile: Add --exceptions to `mdoc update` invocations to test
+	  <exception/> generation.
+	* mdoc.exe.sources: Add Mono.Documentation/exceptions.cs to the build.
+	* Mono.Documentation/exceptions.cs: Added; searches through the
+	  callgraph of an IMemberReference, recording which exception types
+	  are created (and where they're created from).
+	* Mono.Documentation/monodocer.cs: Generate <exception/> elements.
+	* Test/DocTest-v1.cs: Modify some methods so that exceptions are
+	  emitted (thus testing <exception/> generation).
+	* Test/DocTest-v2.patch: Update (so patch(1) doesn't complain).
+	* Test/en.expected.importecmadoc/System/Array.xml,
+	  Test/en.expected.importecmadoc/System/Environment.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest.Generic/GenericBase`1.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/DocAttribute.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/DocValueType.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/UseLists.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/Widget.xml,
+	  Test/en.expected.importslashdoc/System/Array.xml,
+	  Test/en.expected.importslashdoc/System/Environment.xml,
+	  Test/en.expected.since/Mono.DocTest.Generic/GenericBase`1.xml,
+	  Test/en.expected.since/Mono.DocTest/DocAttribute.xml,
+	  Test/en.expected.since/Mono.DocTest/DocValueType.xml,
+	  Test/en.expected.since/Mono.DocTest/UseLists.xml,
+	  Test/en.expected.since/Mono.DocTest/Widget.xml,
+	  Test/en.expected.since/System/Array.xml,
+	  Test/en.expected.since/System/Environment.xml,
+	  Test/en.expected/Mono.DocTest.Generic/GenericBase`1.xml,
+	  Test/en.expected/Mono.DocTest/DocAttribute.xml,
+	  Test/en.expected/Mono.DocTest/DocValueType.xml,
+	  Test/en.expected/Mono.DocTest/UseLists.xml,
+	  Test/en.expected/Mono.DocTest/Widget.xml,
+	  Test/en.expected/System/Array.xml,
+	  Test/en.expected/System/Environment.xml,
+	  Test/html.expected/Mono.DocTest.Generic/GenericBase`1.html,
+	  Test/html.expected/Mono.DocTest/DocAttribute.html,
+	  Test/html.expected/Mono.DocTest/DocValueType.html,
+	  Test/html.expected/Mono.DocTest/UseLists.html,
+	  Test/html.expected/Mono.DocTest/Widget.html,
+	  Test/html.expected/System/Array.html,
+	  Test/html.expected/System/Environment.html,
+	  Test/msxdoc-expected.importslashdoc.xml: Flush; adds <exception/>
+	  elements (and/or HTML-rendered output of <exception/> elements).
+
+2008-11-19  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: Add the assembly's directory to
+	  Cecil's BaseAssemblyResolver search list so that assemblies in the
+	  same directory as the assembly we're processing can be found.
+	  Allows mono-tools/gendarme to be built with a Cecil-using mdoc.
+
+2008-11-15  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: Properties on interfaces shouldn't
+	  have `abstract' on them.
+	* Test/DocTest-v1.cs: Add a property to an interface to check above.
+	* Test/en.expected.importslashdoc/Mono.DocTest/Widget+IMenuItem.xml,
+	  Test/en.expected.since/Mono.DocTest/Widget+IMenuItem.xml,
+	  Test/en.expected/Mono.DocTest/Widget+IMenuItem.xml,
+	  Test/html.expected/Mono.DocTest/Widget+IMenuItem.html,
+	  Test/msxdoc-expected.importslashdoc.xml: Flush.
+
+2008-11-15  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: Fix regressions found from 
+	  `make doc-update` in corlib:
+	  - Ensure that custom attributes are sorted (they weren't before,
+	    resulting in spurious differences between Reflection & Cecil
+	    output).
+	  - CecilExtensions.GetMethod() should return null if the method can't
+	    be found.
+	  - DocUtils.IsDelegate() should ensure that the delegate type isn't
+	    abstract (otherwise it dies on System.MulticastDelegate, which is
+	    an abstract type lacking an "Invoke" method).
+	  - Properly count generic argument counts for nested types (fixes IOE
+	    from S.C.G.Dictionary`2.KeyCollection.Enumerator).
+	* Test/DocTest-v1.cs: Add doubly-nested class under a generic class to
+	  simulate S.C.G.Dictionary`2.KeyCollection.Enumerator behavior.
+	* Test/en.expected.importslashdoc/index.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest.Generic/GenericBase`1+NestedCollection+Enumerator.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest.Generic/GenericBase`1+NestedCollection.xml,
+	  Test/en.expected.since/index.xml,
+	  Test/en.expected.since/Mono.DocTest.Generic/GenericBase`1+NestedCollection+Enumerator.xml,
+	  Test/en.expected.since/Mono.DocTest.Generic/GenericBase`1+NestedCollection.xml,
+	  Test/en.expected/index.xml,
+	  Test/en.expected/Mono.DocTest.Generic/GenericBase`1+NestedCollection+Enumerator.xml,
+	  Test/en.expected/Mono.DocTest.Generic/GenericBase`1+NestedCollection.xml,
+	  Test/html.expected/index.html,
+	  Test/html.expected/Mono.DocTest.Generic/GenericBase`1+NestedCollection+Enumerator.html,
+	  Test/html.expected/Mono.DocTest.Generic/GenericBase`1+NestedCollection.html,
+	  Test/html.expected/Mono.DocTest.Generic/index.html,
+	  Test/msxdoc-expected.importslashdoc.xml: Flush (new types/changes
+	  from DocTest-v1.cs changes).
+
+
+2008-11-14  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: Use Mono.Cecil from class/lib/net_1_1, not net_2_0.
+
+2008-11-14  Jonathan Pryor <jpryor@novell.com>
+
+	* Makefile: Don't build monodocer1.exe, and add Mono.Cecil.dll to the 
+	  list of assembly references for mdoc.exe.
+	* Mono.Documentation/monodocer.cs: Migrate from System.Reflection to
+	  Mono.Cecil.  This was done for two reasons:
+	  1. mscorlib.dll: Reflection can load only one mscorlib.dll into an
+	     AppDomain, which must be the same mscorlib.dll as the runtime
+	     version.  Thus, in order to run monodocer on mscorlib.dll v1.1,
+	     monodocer must be a .NET 1.1 application, and to document
+	     mscorlib.dll v2.0, monodocer must be a .net 2.0 app.
+	  1.a I don't think it's feasable to drop support for 
+	     mscorlib.dll v1.1.
+	  1.b This has been previously handled (so far) with conditional 
+	     compilation, but the conditional compilation is painful to
+	     maintain, and prevents use of LINQ in ongoing development.
+	  1.c .NET 4.0 will be coming out "soon" (within 2 years?), and it's
+	     possible that mono will maintain the same limitation, thus
+	     necessitating having *three* different monodocer programs to
+	     document mscorlib.dll for v1.1, v2.0, and v4.0.  Yech.
+	  2. Future directions: It would be nice to parse method/property IL
+	     bodies to determine which exceptions can be generated, thus
+	     generating <exception cref="..."/> stubs.  Even with empty stubs,
+	     I belive this would be useful within e.g. MonoDevelop to know
+	     which exceptions a method is able to generate.
+	     This cannot be done (at present) with System.Reflection, and
+	     would require Mono.Cecil.
+	  Downsides: mdoc now depends upon Mono.Cecil, which is API-unstable.
+	  This will likely also complicate execution under .NET, as Mono.Cecil
+	  would need to be XCOPY deployed into mdoc.exe's directory.
+	* Test/DocTest-v1.cs: Add additional tests for Custom Attribute
+	  generation.
+	* Test/en.expected.importslashdoc/Mono.DocTest.Generic/Func`2.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest.Generic/MyList`2.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/DocAttribute.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/Widget+Direction.xml,
+	  Test/en.expected.importslashdoc/Mono.DocTest/Widget.xml,
+	  Test/en.expected.since/Mono.DocTest.Generic/Func`2.xml,
+	  Test/en.expected.since/Mono.DocTest.Generic/MyList`2.xml,
+	  Test/en.expected.since/Mono.DocTest/DocAttribute.xml,
+	  Test/en.expected.since/Mono.DocTest/Widget+Direction.xml,
+	  Test/en.expected.since/Mono.DocTest/Widget.xml,
+	  Test/en.expected/Mono.DocTest.Generic/Func`2.xml,
+	  Test/en.expected/Mono.DocTest.Generic/MyList`2.xml,
+	  Test/en.expected/Mono.DocTest/DocAttribute.xml,
+	  Test/en.expected/Mono.DocTest/Widget+Direction.xml,
+	  Test/en.expected/Mono.DocTest/Widget.xml,
+	  Test/html.expected/Mono.DocTest.Generic/Func`2.html,
+	  Test/html.expected/Mono.DocTest.Generic/MyList`2.html,
+	  Test/html.expected/Mono.DocTest/DocAttribute.html,
+	  Test/html.expected/Mono.DocTest/Widget+Direction.html,
+	  Test/html.expected/Mono.DocTest/Widget.html,
+	  Test/msxdoc-expected.importslashdoc.xml: Flush -- updated output due
+	  to new custom attributes, better implemented interface detection --
+	  care of the Mono.Cecil migration -- etc.
+
+2008-11-13  Jonathan Pryor <jpryor@novell.com>
+
+	* Test/html.expected/**: Update 
+	  //meta[@http-equiv='Content-Type']/@content attribute value (changed
+	  due to yesterday's defaulttemplate.xsl fix).
+
+2008-11-12  Jonathan Pryor <jpryor@novell.com>
+
+	* Resources/defaulttemplate.xsl: Update /html/head/meta/@content value
+	  so that IE7 properly recognizes the file as UTF-8 encoded.
+	  Fixes #444009.
+
 2008-10-27  Jonathan Pryor <jpryor@novell.com>
 
 	* Makefile: Fix build error caused by filenames containing '`'.

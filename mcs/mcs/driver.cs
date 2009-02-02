@@ -683,12 +683,12 @@ namespace Mono.CSharp
 		{
 			Location.Initialize ();
 
-			int files_count = Location.SourceFiles.Length;
-			for (int i = 0; i < files_count; ++i) {
+			ArrayList cu = Location.SourceFiles;
+			for (int i = 0; i < cu.Count; ++i) {
 				if (tokenize) {
-					tokenize_file (Location.SourceFiles [i]);
+					tokenize_file ((CompilationUnit) cu [i]);
 				} else {
-					Parse (Location.SourceFiles [i]);
+					Parse ((CompilationUnit) cu [i]);
 				}
 			}
 		}
@@ -1228,7 +1228,7 @@ namespace Mono.CSharp
 				if (embedded_resources == null)
 					embedded_resources = new Resources ();
 
-				bool embeded = arg.StartsWith ("/r");
+				bool embeded = arg [1] == 'r' || arg [1] == 'R';
 				string[] s = value.Split (argument_value_separator);
 				switch (s.Length) {
 				case 1:
@@ -1409,6 +1409,9 @@ namespace Mono.CSharp
 				warns = value.Split (argument_value_separator);
 				foreach (string wc in warns){
 					try {
+						if (wc.Trim ().Length == 0)
+							continue;
+
 						int warn = Int32.Parse (wc);
 						if (warn < 1) {
 							throw new ArgumentOutOfRangeException("warn");
@@ -2001,6 +2004,7 @@ namespace Mono.CSharp
 			AnonymousMethodStorey.Reset ();
 			SymbolWriter.Reset ();
 			Switch.Reset ();
+			Linq.QueryBlock.TransparentParameter.Reset ();
 		}
 
 	}

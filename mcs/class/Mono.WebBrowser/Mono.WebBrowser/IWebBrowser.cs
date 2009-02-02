@@ -98,7 +98,7 @@ namespace Mono.WebBrowser
 		event SecurityChangedEventHandler SecurityChanged;
 		
 		event ContextMenuEventHandler ContextMenuShown;
-
+		
 		event NavigationRequestedEventHandler NavigationRequested;
 	}
 
@@ -413,8 +413,8 @@ namespace Mono.WebBrowser
 			this.x = x;
 			this.y = y;
 		}
-	}
-
+	}	
+	
 	public delegate void NavigationRequestedEventHandler (object sender, NavigationRequestedEventArgs e);
 	public class NavigationRequestedEventArgs : System.ComponentModel.CancelEventArgs {
 		private string uri;
@@ -424,6 +424,6 @@ namespace Mono.WebBrowser
 		public NavigationRequestedEventArgs (string uri) {
 			this.uri = uri;
 		}
-	}
+	}	
 #endregion
 }

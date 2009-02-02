@@ -40,10 +40,50 @@ namespace Mono.Simd
 		public long X { get { return x; } set { x = value; } }
 		public long Y { get { return y; } set { y = value; } }
 
+		public static Vector2l One
+		{
+			get { return new Vector2l (1); }
+		}
+
+		public static Vector2l Zero
+		{
+			get { return new Vector2l (0); }
+		}
+
+		public static Vector2l MinusOne
+		{
+			get { return new Vector2l (-1); }
+		}
+
+		[System.Runtime.CompilerServices.IndexerName ("Component")]
+		public unsafe long this [int index]
+		{
+			get {
+				if ((index | 0x1) != 0x1) //index < 0 || index > 1
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (long *v = &x) {
+					return * (v + index);
+				}
+			}
+			set {
+				if ( (index | 0x1) != 0x1) //index < 0 || index > 1
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (long *v = &x) {
+					* (v + index) = value;
+				}
+			}
+		}
+
 		public Vector2l (long x, long y)
 		{
 			this.x = x;
 			this.y = y;
+		}
+
+		public Vector2l (long l)
+		{
+			this.x = l;
+			this.y = l;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
@@ -80,45 +120,6 @@ namespace Mono.Simd
 		public static Vector2l operator ^ (Vector2l v1, Vector2l v2)
 		{
 			return new Vector2l (v1.x ^ v2.x, v1.y ^ v2.y);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static Vector2l UnpackLow (Vector2l v1, Vector2l v2)
-		{
-			return new Vector2l (v1.x, v2.x);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static Vector2l UnpackHigh (Vector2l v1, Vector2l v2)
-		{
-			return new Vector2l (v1.y, v2.y);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector2l ShiftRightLogic (Vector2l v1, int amount)
-		{
-			return new Vector2l ((long)((ulong)(v1.x) >> amount), (long)((ulong)(v1.y) >> amount));
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe long ExtractByteMask (Vector2l va) {
-			int res = 0;
-			byte *a = (byte*)&va;
-			for (int i = 0; i < 16; ++i)
-				res |= (*a++ & 0x80) >> 7 << i;
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE41)]
-		public static Vector2l CompareEqual (Vector2l v1, Vector2l v2)
-		{
-			return new Vector2l ((long)(v1.x ==  v2.x ? -1 : 0), (long)(v1.y ==  v2.y ? -1 : 0));
-		}
-
-		[Acceleration (AccelMode.SSE42)]
-		public static Vector2l CompareGreaterThan (Vector2l v1, Vector2l v2)
-		{
-			return new Vector2l ((long)(v1.x > v2.x ? -1 : 0), (long)(v1.y >  v2.y ? -1 : 0));
 		}
 
 		[Acceleration (AccelMode.SSE1)]
@@ -260,6 +261,11 @@ namespace Mono.Simd
 		[CLSCompliant(false)]
 		public static unsafe void PrefetchNonTemporal (Vector2l *res)
 		{
+		}
+		
+		public override string ToString()
+		{
+			return "<" + x + ", " + y + ">"; 
 		}
 	}
 }

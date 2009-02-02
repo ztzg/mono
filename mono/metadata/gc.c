@@ -91,7 +91,10 @@ static void
 run_finalize (void *obj, void *data)
 {
 	MonoObject *exc = NULL;
-	MonoObject *o, *o2;
+	MonoObject *o;
+#ifndef HAVE_SGEN_GC
+	MonoObject *o2;
+#endif
 	MonoMethod* finalizer = NULL;
 	o = (MonoObject*)((char*)obj + GPOINTER_TO_UINT (data));
 
@@ -853,12 +856,16 @@ mono_gc_finalize_notify (void)
 #endif
 }
 
+#ifdef HAVE_BOEHM_GC
+
 static void
 collect_objects (gpointer key, gpointer value, gpointer user_data)
 {
 	GPtrArray *arr = (GPtrArray*)user_data;
 	g_ptr_array_add (arr, key);
 }
+
+#endif
 
 /*
  * finalize_domain_objects:
@@ -992,18 +999,15 @@ mono_gc_init (void)
 	mono_thread_create (mono_domain_get (), finalizer_thread, NULL);
 
 	/*
-	 * Waiting for a new thread would result in a deadlock when the runtime is
-	 * initialized from _CorDllMain that is called while the OS loader lock is
-	 * held by LoadLibrary. Avoiding waiting for the finalizer thread being
-	 * created should not cause any issues on Windows.
-	 */
-#ifndef PLATFORM_WIN32
-	/*
 	 * Wait until the finalizer thread sets gc_thread since its value is needed
 	 * by mono_thread_attach ()
+	 *
+	 * FIXME: Eliminate this as to avoid some deadlocks on windows. 
+	 * Waiting for a new thread should result in a deadlock when the runtime is
+	 * initialized from _CorDllMain that is called while the OS loader lock is
+	 * held by LoadLibrary.
 	 */
 	WaitForSingleObjectEx (thread_started_event, INFINITE, FALSE);
-#endif
 }
 
 void

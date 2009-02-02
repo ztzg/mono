@@ -51,11 +51,9 @@
 #
 # See the code in mini-sh4.c for more details on how the specifiers are used.
 
-setret: dest:z src1:i len:2
 int_add_imm: clob:1 dest:i src1:i len:2
 add_imm: clob:1 dest:i src1:i len:2
 int_add: clob:1 dest:i src1:i src2:i len:2
-add: clob:1 dest:i src1:i src2:i len:2
 int_sub: clob:1 dest:i src1:i src2:i len:2
 sh4_or_imm_R0: clob:1 dest:z src1:z len:2
 int_or: clob:1 dest:i src1:i src2:i len:2
@@ -81,7 +79,6 @@ sh4_cmpge: src1:i src2:i len:6
 sh4_cmphs: src1:i src2:i len:6
 sh4_movt: dest:i len:2
 sh4_push_arg: src1:i len:2
-outarg_membase: src1:i len:2
 sh4_storei1_membase_R0: src1:z dest:b len:2
 sh4_storei1: src1:i dest:b len:2
 sh4_storei2_membase_R0: src1:z dest:b len:2

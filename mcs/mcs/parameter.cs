@@ -725,6 +725,38 @@ namespace Mono.CSharp {
 			get { return types; }
 			set { types = value; }
 		}
+
+#if MS_COMPATIBLE
+		public AParametersCollection InflateTypes (Type[] genArguments, Type[] argTypes)
+		{
+			AParametersCollection p = (AParametersCollection) MemberwiseClone (); // Clone ();
+
+			for (int i = 0; i < Count; ++i) {
+				if (types[i].IsGenericType) {
+					Type[] gen_arguments_open = new Type[types[i].GetGenericTypeDefinition ().GetGenericArguments ().Length];
+					Type[] gen_arguments = types[i].GetGenericArguments ();
+					for (int ii = 0; ii < gen_arguments_open.Length; ++ii) {
+						if (gen_arguments[ii].IsGenericParameter) {
+							Type t = argTypes[gen_arguments[ii].GenericParameterPosition];
+							gen_arguments_open[ii] = t;
+						} else
+							gen_arguments_open[ii] = gen_arguments[ii];
+					}
+
+					p.types[i] = types[i].GetGenericTypeDefinition ().MakeGenericType (gen_arguments_open);
+					continue;
+				}
+
+				if (types[i].IsGenericParameter) {
+					Type gen_argument = argTypes[types[i].GenericParameterPosition];
+					p.types[i] = gen_argument;
+					continue;
+				}
+			}
+
+			return p;
+		}
+#endif
 	}
 
 	//
@@ -843,6 +875,9 @@ namespace Mono.CSharp {
 	/// </summary>
 	public class Parameters : AParametersCollection {
 		public static readonly Parameters EmptyReadOnlyParameters = new Parameters ();
+		
+		// Used by C# 2.0 delegates
+		public static readonly Parameters Undefined = new Parameters ();
 
 		private Parameters ()
 		{
@@ -880,8 +915,7 @@ namespace Mono.CSharp {
 					if (base_name != parameters [j].Name)
 						continue;
 
-					Report.Error (100, parameters [i].Location,
-						"The parameter name `{0}' is a duplicate", base_name);
+					ErrorDuplicateName (parameters [i]);
 					i = j;
 				}
 			}
@@ -949,35 +983,24 @@ namespace Mono.CSharp {
 			return parameters;
 		}
 
+		protected virtual void ErrorDuplicateName (Parameter p)
+		{
+			Report.Error (100, p.Location, "The parameter name `{0}' is a duplicate", p.Name);
+		}
+
 		/// <summary>
-		///    Returns the paramenter information based on the name
+		///    Returns the parameter information based on the name
 		/// </summary>
-		public Parameter GetParameterByName (string name, out int idx)
+		public int GetParameterIndexByName (string name)
 		{
-			idx = 0;
-
-			if (Count == 0)
-				return null;
-
-			int i = 0;
-
-			foreach (Parameter par in FixedParameters){
-				if (par.Name == name){
-					idx = i;
-					return par;
-				}
-				i++;
+			for (int idx = 0; idx < Count; ++idx) {
+				if (parameters [idx].Name == name)
+					return idx;
 			}
-			return null;
+
+			return -1;
 		}
 
-		public Parameter GetParameterByName (string name)
-		{
-			int idx;
-
-			return GetParameterByName (name, out idx);
-		}
-		
 		public bool Resolve (IResolveContext ec)
 		{
 			if (types != null)
@@ -1033,37 +1056,6 @@ namespace Mono.CSharp {
 			}
 		}
 
-#if MS_COMPATIBLE
-		public AParametersCollection InflateTypes (Type[] genArguments, Type[] argTypes)
-		{
-			Parameters p = Clone ();
-			for (int i = 0; i < Count; ++i) {
-				if (types[i].IsGenericType) {
-					Type[] gen_arguments_open = new Type [types[i].GetGenericTypeDefinition ().GetGenericArguments ().Length];
-					Type[] gen_arguments = types[i].GetGenericArguments ();
-					for (int ii = 0; ii < gen_arguments_open.Length; ++ii) {
-						if (gen_arguments[ii].IsGenericParameter) {
-							Type t = argTypes[gen_arguments[ii].GenericParameterPosition];
-							gen_arguments_open[ii] = t;
-						} else
-							gen_arguments_open[ii] = gen_arguments[ii];
-					}
-
-					p.types[i] = types[i].GetGenericTypeDefinition ().MakeGenericType (gen_arguments_open);
-					continue;
-				}
-
-				if (types[i].IsGenericParameter) {
-					Type gen_argument = argTypes[types[i].GenericParameterPosition];
-					p.types[i] = gen_argument;
-					continue;
-				}
-			}
-
-			return p;
-		}
-#endif
-
 		public void VerifyClsCompliance ()
 		{
 			foreach (Parameter p in FixedParameters)
@@ -1096,14 +1088,13 @@ namespace Mono.CSharp {
 
 		public Parameters Clone ()
 		{
-			Parameter [] parameters_copy = new Parameter [FixedParameters.Length];
-			int i = 0;
-			foreach (Parameter p in FixedParameters)
-				parameters_copy [i++] = p.Clone ();
-			Parameters ps = new Parameters (parameters_copy, HasArglist);
-			if (types != null)
-				ps.types = (Type[])types.Clone ();
-			return ps;
+			Parameters p = (Parameters) MemberwiseClone ();
+
+			p.parameters = new IParameterData [parameters.Length];
+			for (int i = 0; i < Count; ++i)
+				p.parameters [i] = this [i].Clone ();
+
+			return p;
 		}
 	}
 }

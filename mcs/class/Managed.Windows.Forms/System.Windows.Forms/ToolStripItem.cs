@@ -467,12 +467,12 @@ namespace System.Windows.Forms
 					return this.image;
 					
 				if (this.image_index >= 0)
-					if (this.owner != null && this.owner.ImageList != null)
+					if (this.owner != null && this.owner.ImageList != null && this.owner.ImageList.Images.Count > this.image_index)
 						return this.owner.ImageList.Images[this.image_index];
 
 
 				if (!string.IsNullOrEmpty (this.image_key))
-					if (this.owner != null && this.owner.ImageList != null)
+					if (this.owner != null && this.owner.ImageList != null && this.owner.ImageList.Images.Count > this.image_index)
 						return this.owner.ImageList.Images[this.image_key];
 						
 				return null;
@@ -930,6 +930,7 @@ namespace System.Windows.Forms
 					
 				this.Invalidate ();
 				this.Parent.NotifySelectedChanged (this);
+				OnUIASelectionChanged ();
 			}
 		}
 
@@ -1121,6 +1122,7 @@ namespace System.Windows.Forms
 				this.is_selected = false;
 				this.is_pressed = false;
 				this.Invalidate ();
+				OnUIASelectionChanged ();
 			}
 
 			EventHandler eh = (EventHandler)(Events [MouseLeaveEvent]);
@@ -1528,16 +1530,16 @@ namespace System.Windows.Forms
 					preferred_size = new Size (width, height);
 					break;
 				case ToolStripItemDisplayStyle.Image:
-					if (this.Image == null)
+					if (this.GetImageSize () == Size.Empty)
 						preferred_size = this.DefaultSize;
 					else {
 						switch (this.image_scaling) {
 							case ToolStripItemImageScaling.None:
-								preferred_size = this.Image.Size;
+								preferred_size = this.GetImageSize ();
 								break;
 							case ToolStripItemImageScaling.SizeToFit:
 								if (this.parent == null)
-									preferred_size = this.Image.Size;
+									preferred_size = this.GetImageSize ();
 								else
 									preferred_size = this.parent.ImageScalingSize;
 								break;
@@ -1548,8 +1550,8 @@ namespace System.Windows.Forms
 					int width2 = text_size.Width + this.padding.Horizontal;
 					int height2 = text_size.Height + this.padding.Vertical;
 
-					if (this.Image != null) {
-						Size image_size = this.Image.Size;
+					if (this.GetImageSize () != Size.Empty) {
+						Size image_size = this.GetImageSize ();
 						
 						if (this.image_scaling == ToolStripItemImageScaling.SizeToFit && this.parent != null)
 							image_size = this.parent.ImageScalingSize;
@@ -1660,6 +1662,7 @@ namespace System.Windows.Forms
 			if (is_selected) {
 				this.is_selected = false;
 				this.Invalidate ();
+				OnUIASelectionChanged ();
 			}
 		}
 		
@@ -1727,16 +1730,29 @@ namespace System.Windows.Forms
 		
 		internal Size GetImageSize ()
 		{
-			if (this.Image == null)
-				return Size.Empty;
+			// Get the actual size of our internal image -or-
+			// Get the ImageList.ImageSize if we are using ImageLists
+			if (this.image_scaling == ToolStripItemImageScaling.None) {
+				if (this.image != null)
+					return image.Size;
+					
+				if (this.image_index >= 0 || !string.IsNullOrEmpty (this.image_key))
+					if (this.owner != null && this.owner.ImageList != null)
+						return this.owner.ImageList.ImageSize;
+			} else {
+				// If we have an image and a parent, return ImageScalingSize
+				if (this.Parent == null)
+					return Size.Empty;
+					
+				if (this.image != null)
+					return this.Parent.ImageScalingSize;
+
+				if (this.image_index >= 0 || !string.IsNullOrEmpty (this.image_key))
+					if (this.owner != null && this.owner.ImageList != null)
+						return this.Parent.ImageScalingSize;
+			}
 			
-			if (this.image_scaling == ToolStripItemImageScaling.None)
-				return this.Image.Size;
-				
-			if (this.Parent == null)
-				return Size.Empty;
-				
-			return this.Parent.ImageScalingSize;
+			return Size.Empty;
 		}
 		
 		internal string GetToolTip ()
@@ -1931,6 +1947,24 @@ namespace System.Windows.Forms
 		{
 			OnDragOver (dragEvent);
 		}
+		#endregion
+
+		#region UIA Framework: Methods, Properties and Events
+
+		static object UIASelectionChangedEvent = new object ();
+
+		internal event EventHandler UIASelectionChanged {
+			add { Events.AddHandler (UIASelectionChangedEvent, value); }
+			remove { Events.RemoveHandler (UIASelectionChangedEvent, value); }
+		}
+
+		internal void OnUIASelectionChanged ()
+		{
+			EventHandler eh = (EventHandler)(Events [UIASelectionChangedEvent]);
+			if (eh != null)
+				eh (this, EventArgs.Empty);
+		}
+		
 		#endregion
 
 		[ComVisible (true)]

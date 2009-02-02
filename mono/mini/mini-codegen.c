@@ -18,7 +18,6 @@
 
 #include "mini.h"
 #include "trace.h"
-#include "inssel.h"
 #include "mini-arch.h"
 
 #ifndef MONO_MAX_XREGS
@@ -251,9 +250,6 @@ mono_spillvar_offset (MonoCompile *cfg, int spillvar, int bank)
 	MonoSpillInfo *info;
 	int size;
 
-#if defined (__mips__)
-	g_assert_not_reached();
-#endif
 	if (G_UNLIKELY (spillvar >= (cfg->spill_info_len [bank]))) {
 		while (spillvar >= cfg->spill_info_len [bank])
 			resize_spill_info (cfg, bank);
@@ -385,6 +381,8 @@ mono_print_ins_index (int i, MonoInst *ins)
 			}
 			break;
 		case OP_PHI:
+		case OP_VPHI:
+		case OP_XPHI:
 		case OP_FPHI: {
 			int i;
 			printf (" [%d (", (int)ins->inst_c0);
@@ -496,6 +494,7 @@ mono_print_ins_index (int i, MonoInst *ins)
 	case OP_VCALL2_REG:
 	case OP_VCALL2_MEMBASE:
 	case OP_VOIDCALL:
+	case OP_VOIDCALL_MEMBASE:
 	case OP_VOIDCALLVIRT: {
 		MonoCallInst *call = (MonoCallInst*)ins;
 		GSList *list;
@@ -960,54 +959,46 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 		memset (cfg->reginfo, 0, cfg->reginfo_len * sizeof (RegTrack));
 	}
 
-	if (cfg->new_ir) {
-		/* 
-		 * For large methods, next_vreg can be very large, so g_malloc0 time can
-		 * be prohibitive. So we manually init the reginfo entries used by the 
-		 * bblock.
-		 */
-		for (ins = bb->code; ins; ins = ins->next) {
-			spec = ins_get_spec (ins->opcode);
+	/* 
+	 * For large methods, next_vreg can be very large, so g_malloc0 time can
+	 * be prohibitive. So we manually init the reginfo entries used by the 
+	 * bblock.
+	 */
+	for (ins = bb->code; ins; ins = ins->next) {
+		spec = ins_get_spec (ins->opcode);
 
-			if ((ins->dreg != -1) && (ins->dreg < max)) {
-				memset (&reginfo [ins->dreg], 0, sizeof (RegTrack));
-#if SIZEOF_VOID_P == 4
-				if (MONO_ARCH_INST_IS_REGPAIR (spec [MONO_INST_DEST])) {
-					/**
-					 * In the new IR, the two vregs of the regpair do not alias the
-					 * original long vreg. shift the vreg here so the rest of the 
-					 * allocator doesn't have to care about it.
-					 */
-					if (cfg->new_ir)
-						ins->dreg ++;
-					memset (&reginfo [ins->dreg + 1], 0, sizeof (RegTrack));
-				}
-#endif
+		if ((ins->dreg != -1) && (ins->dreg < max)) {
+			memset (&reginfo [ins->dreg], 0, sizeof (RegTrack));
+#if SIZEOF_REGISTER == 4
+			if (MONO_ARCH_INST_IS_REGPAIR (spec [MONO_INST_DEST])) {
+				/**
+				 * In the new IR, the two vregs of the regpair do not alias the
+				 * original long vreg. shift the vreg here so the rest of the 
+				 * allocator doesn't have to care about it.
+				 */
+				ins->dreg ++;
+				memset (&reginfo [ins->dreg + 1], 0, sizeof (RegTrack));
 			}
-			if ((ins->sreg1 != -1) && (ins->sreg1 < max)) {
-				memset (&reginfo [ins->sreg1], 0, sizeof (RegTrack));
-#if SIZEOF_VOID_P == 4
-				if (MONO_ARCH_INST_IS_REGPAIR (spec [MONO_INST_SRC1])) {
-					if (cfg->new_ir)
-						ins->sreg1 ++;
-					memset (&reginfo [ins->sreg1 + 1], 0, sizeof (RegTrack));
-				}
 #endif
-			}
-			if ((ins->sreg2 != -1) && (ins->sreg2 < max)) {
-				memset (&reginfo [ins->sreg2], 0, sizeof (RegTrack));
-#if SIZEOF_VOID_P == 4
-				if (MONO_ARCH_INST_IS_REGPAIR (spec [MONO_INST_SRC2])) {
-					if (cfg->new_ir)
-						ins->sreg2 ++;
-					memset (&reginfo [ins->sreg2 + 1], 0, sizeof (RegTrack));
-				}
-#endif
-			}
 		}
-	}
-	else {
-		memset (reginfo, 0, max * sizeof (RegTrack));
+		if ((ins->sreg1 != -1) && (ins->sreg1 < max)) {
+			memset (&reginfo [ins->sreg1], 0, sizeof (RegTrack));
+#if SIZEOF_REGISTER == 4
+			if (MONO_ARCH_INST_IS_REGPAIR (spec [MONO_INST_SRC1])) {
+				ins->sreg1 ++;
+				memset (&reginfo [ins->sreg1 + 1], 0, sizeof (RegTrack));
+			}
+#endif
+		}
+		if ((ins->sreg2 != -1) && (ins->sreg2 < max)) {
+			memset (&reginfo [ins->sreg2], 0, sizeof (RegTrack));
+#if SIZEOF_REGISTER == 4
+			if (MONO_ARCH_INST_IS_REGPAIR (spec [MONO_INST_SRC2])) {
+				ins->sreg2 ++;
+				memset (&reginfo [ins->sreg2 + 1], 0, sizeof (RegTrack));
+			}
+#endif
+		}
 	}
 
 	/*if (cfg->opt & MONO_OPT_COPYPROP)
@@ -1036,7 +1027,7 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 		if (spec_src1) {
 			bank = sreg1_bank (spec);
 			g_assert (ins->sreg1 != -1);
-			if (cfg->new_ir && is_soft_reg (ins->sreg1, bank))
+			if (is_soft_reg (ins->sreg1, bank))
 				/* This means the vreg is not local to this bb */
 				g_assert (reginfo [ins->sreg1].born_in > 0);
 			rs->vassign [ins->sreg1] = -1;
@@ -1056,7 +1047,7 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 		if (spec_src2) {
 			bank = sreg2_bank (spec);
 			g_assert (ins->sreg2 != -1);
-			if (cfg->new_ir && is_soft_reg (ins->sreg2, bank))
+			if (is_soft_reg (ins->sreg2, bank))
 				/* This means the vreg is not local to this bb */
 				g_assert (reginfo [ins->sreg2].born_in > 0);
 			rs->vassign [ins->sreg2] = -1;
@@ -1440,7 +1431,7 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 			}
 		}
 
-		if (prev_dreg >= 0 && is_soft_reg (prev_dreg, bank) && (spec_dest != 'b') && (cfg->new_ir || reginfo [prev_dreg].born_in >= i)) {
+		if (prev_dreg >= 0 && is_soft_reg (prev_dreg, bank) && (spec_dest != 'b')) {
 			/* 
 			 * In theory, we could free up the hreg even if the vreg is alive,
 			 * but branches inside bblocks force us to assign the same hreg
@@ -1453,8 +1444,7 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 				mono_regstate_free_general (rs, dreg, bank);
 			else
 				mono_regstate_free_int (rs, dreg);
-			if (cfg->new_ir)
-				rs->vassign [prev_dreg] = -1;
+			rs->vassign [prev_dreg] = -1;
 		}
 
 		if ((dest_dreg != -1) && (ins->dreg != dest_dreg)) {
@@ -2224,7 +2214,7 @@ mono_is_regsize_var (MonoType *t)
 	case MONO_TYPE_U:
 	case MONO_TYPE_PTR:
 	case MONO_TYPE_FNPTR:
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
 #endif
@@ -2364,7 +2354,7 @@ mono_peephole_ins (MonoBasicBlock *bb, MonoInst *ins)
 		if (last_ins && (last_ins->opcode == OP_STOREI2_MEMBASE_REG) &&
 			ins->inst_basereg == last_ins->inst_destbasereg &&
 			ins->inst_offset == last_ins->inst_offset) {
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			ins->opcode = (ins->opcode == OP_LOADI2_MEMBASE) ? OP_PCONV_TO_I2 : OP_PCONV_TO_U2;
 #else
 			/* The definition of OP_PCONV_TO_U2 is wrong */

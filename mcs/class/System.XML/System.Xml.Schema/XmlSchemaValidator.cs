@@ -527,6 +527,9 @@ namespace System.Xml.Schema
 			if (schemas.Count == 0)
 				return;
 
+			if (skipValidationDepth >= 0 && depth > skipValidationDepth)
+				return;
+
 			ComplexType ct = Context.ActualType as ComplexType;
 			if (ct != null) {
 				switch (ct.ContentType) {
@@ -614,7 +617,7 @@ namespace System.Xml.Schema
 					throw new InvalidOperationException ("Initialize() must be called before processing validation.");
 				else
 					throw new InvalidOperationException (
-						String.Format ("Unexpected attempt to validation state transition from {0} to {1} was happened.",
+						String.Format ("Unexpected attempt to validate state transition from {0} to {1}.",
 							transition,
 							expected));
 			}

@@ -1,3 +1,50 @@
+2009-01-17  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandBuilderTest.cs: Improved DeriveParameters test.
+	* SqlCommandTest.cs: Added InputOutput parameter to
+	StoredProc_ParameterTest.
+
+2009-01-04  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandBuilderTest.cs: Improved tests to also check
+	behavior of RefreshSchema.
+	* SqlDataReaderTest.cs: Added tests for GetBytes.
+
+2009-01-03  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandBuilderTest.cs: Improve Get*Command tests.
+	* SqlCommandTest.cs: Fixed warning.
+	* SqlConnectionTest.cs: Removed unused property.
+	* SqlDataReaderTest.cs: Enabled GetChars test on 1.0
+	profile. Added GetValues test. Added and improved
+	GetSqlValue tests. Improved HasRows and NextResult
+	tests. Added GetFieldType tests. Added big batch of
+	schema-related tests.
+	* SqlParameterTest.cs: Moved disconnected tests to
+	System.Data test suite. Improved test for bug
+	#382635. Added test for failed conversion to SQL type.
+
+2008-12-31  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlCommandBuilderTest.cs: Improve Get*Command tests.
+	* SqlCommandTest.cs: Added test for bug #341743. Added test
+	for connection state after executing invalid SQL. Improved
+	stored procedure test to check behavior with and without
+	leading '@' for parameter names. Minor formatting changes.
+	* SqlConnectionTest.cs: Split up connection string errors
+	test.
+	* SqlDataReaderTest.cs: Improved GetInt64Test. Improved and
+	added GetBytes tests. Added GetSqlValues and HasRows tests.
+	Added GetSchemaTable test. Improved GetProviderSpecificFieldType
+	tests.
+	* SqlParameterTest.cs: Improved ParameterType test. Added
+	type inferrence tests.
+	* SqlTransactionTest.cs: Allow not working tests to run on MS.
+
+2008-12-30  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* SqlConnectionTest.cs: Improve Database test.
+
 2008-11-11  Gert Driesen  <drieseng@users.sourceforge.net>
 
 	* SqlCommandTest.cs: Added (SMALL)MONEY rounding tests.

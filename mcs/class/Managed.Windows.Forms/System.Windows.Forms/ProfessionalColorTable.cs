@@ -614,13 +614,15 @@ namespace System.Windows.Forms
 		
 		private ColorSchemes GetCurrentStyle ()
 		{
-			if (!VisualStyleInformation.IsEnabledByUser)
+			if (!VisualStyleInformation.IsEnabledByUser || string.IsNullOrEmpty (VisualStylesEngine.Instance.VisualStyleInformationFileName))
+
+
 				return ColorSchemes.Classic;
 			else {
-				switch (VisualStyleInformation.DisplayName) {
-					case "Aero style":
+				switch (System.IO.Path.GetFileNameWithoutExtension (VisualStylesEngine.Instance.VisualStyleInformationFileName).ToLowerInvariant ()) {
+					case "aero":
 						return ColorSchemes.Aero;
-					case "Media Center Style":
+					case "royale":
 						return ColorSchemes.MediaCenter;
 					default:
 						switch (VisualStyleInformation.ColorScheme) {

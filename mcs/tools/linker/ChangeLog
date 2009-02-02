@@ -1,3 +1,22 @@
+2008-12-16  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: build monolinker.exe in the profile directory instead of
+	the current one.
+
+2008-12-02  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Linker/AssemblyResolver.cs (AreSame(TypeReference,TypeReference):
+	fix the case where we compare two GenericInstanceType of the same
+	element type with different generic arguments.
+
+2008-11-24  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Linker.Steps/ResolveFromAssemblyStep.cs
+	* Mono.Linker.Steps/ResolveFromXmlStep.cs
+	* Mono.Linker.Steps/MarkStep.cs:
+		generalize the use of the new Has* pattern in Cecil
+		to avoid unecessary allocations. Also cache delegates.
+
 2008-09-12  Jb Evain  <jbevain@novell.com>
 
 	* Mono.Linker/Pipeline.cs: add a RemoveStep method.

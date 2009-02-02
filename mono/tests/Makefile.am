@@ -328,9 +328,14 @@ BASE_TEST_CS_SRC=		\
 	bug-81691.cs	\
 	bug-80307.cs	\
 	bug-415577.cs	\
+	filter-stack.cs	\
+	vararg2.cs	\
+	bug-389886-sre-generic-interface-instances.cs	\
 	bug-461867.cs	\
 	bug-461941.cs	\
 	bug-461261.cs	\
+	bug-400716.cs	\
+	bug-462592.cs	\
 	bug-459094.cs	\
 	generic-unloading.2.cs	\
 	generic-unloading-sub.2.cs	\
@@ -428,7 +433,10 @@ TEST_IL_SRC=			\
 	generic-valuetype-newobj.2.il	\
 	generic-constrained.2.il	\
 	bug-81466.il	\
-	bug457574.il
+	bug457574.il	\
+	bug445361.il	\
+	bug-463303.il	\
+	bug469742.2.il
 
 #	bug-318677.il
 

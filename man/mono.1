@@ -642,11 +642,6 @@ This can be a time consuming operation.
 \fIjit\fR, \fIj\fR
 Collect information about time spent by the JIT engine compiling
 methods. 
-.TP
-\fItrack-stack\fR, \fIts\fR
-Track the execution stack. By itself this option does nothing, but it
-enables more detailed reporting in other options (because the profiler
-will use the stack data).
 .ne
 .RE
 .PP
@@ -1404,6 +1399,16 @@ No generic code sharing will be performed.
 .Sp
 Generic code sharing by default only applies to collections.   The
 Mono JIT by default turns this on.
+.TP
+\fBMONO_XDEBUG\fR
+When the the MONO_XDEBUG env var is set, debugging info for JITted
+code is emitted into a shared library, loadable into gdb. This enables,
+for example, to see managed frame names on gdb backtraces.
+.TP
+\fBMONO_VERBOSE_METHOD\fR
+Enables the maximum JIT verbosity for the specified method. This is
+very helpfull to diagnose a miscompilation problems of a specific
+method.
 .SH VALGRIND
 If you want to use Valgrind, you will find the file `mono.supp'
 useful, it contains the suppressions for the GC which trigger

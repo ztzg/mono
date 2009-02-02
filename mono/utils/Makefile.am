@@ -7,7 +7,7 @@ if ENABLE_DTRACE
 BUILT_SOURCES = mono-dtrace.h
 
 mono-dtrace.h: $(top_srcdir)/data/mono.d
-	$(DTRACE) $(DTRACEFLAGS) -s $(top_srcdir)/data/mono.d -o $@
+	$(DTRACE) $(DTRACEFLAGS) -h -s $(top_srcdir)/data/mono.d -o $@ || > $@
 
 endif
 
@@ -56,6 +56,7 @@ libmonoutils_la_SOURCES = \
 	freebsd-elf_common.h \
 	freebsd-elf32.h	\
 	freebsd-elf64.h	\
+	freebsd-dwarf.h \
 	dtrace.h
 
 libmonoutilsincludedir = $(includedir)/mono-$(API_VER)/mono/utils

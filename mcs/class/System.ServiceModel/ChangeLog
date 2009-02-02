@@ -1,3 +1,19 @@
+2009-01-14  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources,
+	  net_2_1_raw_System.ServiceModel.dll.sources :
+	  added missing exception types (corcompare work).
+
+2009-01-14  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources :
+	  added ClientBase_InteractiveChannelInitializerTest.cs.
+
+2009-01-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources : add OperationContext
+	  and OperationContextScope to 2.1 build.
+
 2008-09-12  Astushi Enomoto  <atsushi@ximian.com>
             Jb Evain  <jbevain@novell.com>
 

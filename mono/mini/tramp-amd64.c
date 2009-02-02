@@ -223,20 +223,22 @@ guchar*
 mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *code_size, MonoJumpInfo **ji, gboolean aot)
 {
 	guint8 *buf, *code, *tramp, *br [2], *r11_save_code, *after_r11_save_code;
-	int i, lmf_offset, offset, res_offset, arg_offset, tramp_offset, saved_regs_offset;
-	int saved_fpregs_offset, rbp_offset, framesize, orig_rsp_to_rbp_offset;
+	int i, lmf_offset, offset, res_offset, arg_offset, rax_offset, tramp_offset, saved_regs_offset;
+	int saved_fpregs_offset, rbp_offset, framesize, orig_rsp_to_rbp_offset, cfa_offset;
 	gboolean has_caller;
+	GSList *unwind_ops = NULL;
+	GSList *l;
 
 	if (tramp_type == MONO_TRAMPOLINE_JUMP)
 		has_caller = FALSE;
 	else
 		has_caller = TRUE;
 
-	code = buf = mono_global_codeman_reserve (524);
+	code = buf = mono_global_codeman_reserve (538);
 
 	*ji = NULL;
 
-	framesize = 524 + sizeof (MonoLMF);
+	framesize = 538 + sizeof (MonoLMF);
 	framesize = (framesize + (MONO_ARCH_FRAME_ALIGNMENT - 1)) & ~ (MONO_ARCH_FRAME_ALIGNMENT - 1);
 
 	orig_rsp_to_rbp_offset = 0;
@@ -245,20 +247,37 @@ mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *c
 	code += 5;
 	after_r11_save_code = code;
 
+	// CFA = sp + 16 (the trampoline address is on the stack)
+	cfa_offset = 16;
+	mono_add_unwind_op_def_cfa (unwind_ops, code, buf, AMD64_RSP, 16);
+	// IP saved at CFA - 8
+	mono_add_unwind_op_offset (unwind_ops, code, buf, AMD64_RIP, -8);
+
 	/* Pop the return address off the stack */
 	amd64_pop_reg (code, AMD64_R11);
 	orig_rsp_to_rbp_offset += 8;
+
+	cfa_offset -= 8;
+	mono_add_unwind_op_def_cfa_offset (unwind_ops, code, buf, cfa_offset);
 
 	/* 
 	 * Allocate a new stack frame
 	 */
 	amd64_push_reg (code, AMD64_RBP);
+	cfa_offset += 8;
+	mono_add_unwind_op_def_cfa_offset (unwind_ops, code, buf, cfa_offset);
+	mono_add_unwind_op_offset (unwind_ops, code, buf, AMD64_RBP, - cfa_offset);
+
 	orig_rsp_to_rbp_offset -= 8;
 	amd64_mov_reg_reg (code, AMD64_RBP, AMD64_RSP, 8);
+	mono_add_unwind_op_def_cfa_reg (unwind_ops, code, buf, AMD64_RBP);
 	amd64_alu_reg_imm (code, X86_SUB, AMD64_RSP, framesize);
 
 	offset = 0;
 	rbp_offset = - offset;
+
+	offset += 8;
+	rax_offset = - offset;
 
 	offset += 8;
 	tramp_offset = - offset;
@@ -441,38 +460,35 @@ mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *c
 	amd64_mov_reg_membase (code, AMD64_R11, AMD64_RBP, lmf_offset + G_STRUCT_OFFSET (MonoLMF, lmf_addr), 8);
 	amd64_mov_membase_reg (code, AMD64_R11, 0, AMD64_RCX, 8);
 
-	/* Restore argument registers, r10 (needed to pass rgctx to
-	   static shared generic methods) and r11 (imt register for
-	   interface calls). */
-	for (i = 0; i < AMD64_NREG; ++i)
-		if (AMD64_IS_ARGUMENT_REG (i) || i == AMD64_R10 || i == AMD64_R11)
-			amd64_mov_reg_membase (code, i, AMD64_RBP, saved_regs_offset + (i * 8), 8);
-
 	/* 
-	 * FIXME: When using aot-only, the called code might be a C vararg function 
-	 * which uses %rax as well.
-	 * We could restore it, but we would have to use another register to store the
-	 * target address, and we don't have any left.
-	 * Also, the default AOT plt trampolines overwrite 'rax'.
+	 * Save rax to the stack, after the leave instruction, this will become part of
+	 * the red zone.
 	 */
+	amd64_mov_membase_reg (code, AMD64_RBP, rax_offset, AMD64_RAX, 8);
+
+	/* Restore argument registers, r10 (needed to pass rgctx to
+	   static shared generic methods), r11 (imt register for
+	   interface calls), and rax (needed for direct calls to C vararg functions). */
+	for (i = 0; i < AMD64_NREG; ++i)
+		if (AMD64_IS_ARGUMENT_REG (i) || i == AMD64_R10 || i == AMD64_R11 || i == AMD64_RAX)
+			amd64_mov_reg_membase (code, i, AMD64_RBP, saved_regs_offset + (i * 8), 8);
 
 	for (i = 0; i < 8; ++i)
 		amd64_movsd_reg_membase (code, i, AMD64_RBP, saved_fpregs_offset + (i * 8));
-
-	if (tramp_type == MONO_TRAMPOLINE_RESTORE_STACK_PROT)
-		amd64_mov_reg_membase (code, AMD64_RAX, AMD64_RBP, saved_regs_offset + (AMD64_RAX * 8), 8);
 
 	/* Restore stack */
 	amd64_leave (code);
 
 	if (MONO_TRAMPOLINE_TYPE_MUST_RETURN (tramp_type)) {
+		/* Load result */
+		amd64_mov_reg_membase (code, AMD64_RAX, AMD64_RSP, rax_offset - 0x8, 8);
 		amd64_ret (code);
 	} else {
-		/* call the compiled method */
-		amd64_jump_reg (code, AMD64_RAX);
+		/* call the compiled method using the saved rax */
+		amd64_jump_membase (code, AMD64_RSP, rax_offset - 0x8);
 	}
 
-	g_assert ((code - buf) <= 524);
+	g_assert ((code - buf) <= 538);
 
 	mono_arch_flush_icache (buf, code - buf);
 
@@ -485,6 +501,12 @@ mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *c
 		nullified_class_init_trampoline = mono_arch_get_nullified_class_init_trampoline (&code_len);
 	}
 
+	mono_save_trampoline_xdebug_info ("<generic_trampoline>", buf, *code_size, unwind_ops);
+
+	for (l = unwind_ops; l; l = l->next)
+		g_free (l->data);
+	g_slist_free (unwind_ops);
+	
 	return buf;
 }
 

@@ -1,3 +1,56 @@
+2009-01-29 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Tds70.cs: fix for output parameters and '@'.
+	Fixes bug #470579. Patch from Varadhan.
+
+2009-01-24 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TdsConnectionPool.cs: made getting/releasing connections thread safe.
+	If we have a release connection available, we return that without locking
+
+2009-01-21 Christian Hergert <christian.hergert@gmail.com>
+
+	* TdsComm.cs: optimize Append(byte[],int,byte) for adding data to
+	the buffer in the largest size of chunks possible.  also optimize
+	other Append overloads to use this rather than lots of Append(byte).
+
+2009-01-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TdsComm.cs: no need for the ManualResetEvent or the timeout instance
+	variables.
+
+2009-01-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Tds70.cs: fix my mistake in the previous patch.
+
+2009-01-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Tds70.cs: more '@' handling.
+
+2009-01-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Tds70.cs: send the leading '@' for parameters that do not have one.
+	Fixes bug #466071.
+	Thanks to William Shallum.
+
+2009-01-04  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* Tds.cs: Support detecting NULL value when sequentially reading
+	text/ntext/image column. Fixed typo in exception message in
+	GetSequentialColumnValue. Support reading zero-length binary data.
+
+2008-12-30  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* Tds.cs: Added IsWideType method.
+	* Tds70.cs: Fixed columnsize for unicode columns. Set precision
+	and scale for non-decimal/numeric column.
+	* TdsColumnType.cs: Adds tds names as comment.
+
+2008-12-30  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* Tds.cs (LoadData): Improve exception message when attempting to
+	read before the current position. Update the remaining length of the
+	stream when skipping bytes.
 
 2008-12-05 Gonzalo Paniagua Javier <gonzalo@novell.com>
 

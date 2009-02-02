@@ -46,12 +46,54 @@ namespace Mono.Simd
 		public int Z { get { return z; } set { z = value; } }
 		public int W { get { return w; } set { w = value; } }
 
+		public static Vector4i Identity
+		{
+			get { return  new Vector4i (1); }
+		}
+
+		public static Vector4i Zero
+		{
+			get { return  new Vector4i (0); }
+		}
+
+		public static Vector4i MinusOne
+		{
+			get { return new Vector4i (-1); }
+		}
+
+		[System.Runtime.CompilerServices.IndexerName ("Component")]
+		public unsafe int this [int index]
+		{
+			get {
+				if ((index | 0x3) != 0x3) //index < 0 || index > 3
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (int *v = &x) {
+					return * (v + index);
+				}
+			}
+			set {
+				if ( (index | 0x3) != 0x3) //index < 0 || index > 3
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (int *v = &x) {
+					* (v + index) = value;
+				}
+			}
+		}
+
 		public Vector4i (int x, int y, int z, int w)
 		{
 			this.x = x;
 			this.y = y;
 			this.z = z;
 			this.w = w;
+		}
+		
+		public Vector4i (int i)
+		{
+			this.x = i;
+			this.y = i;
+			this.z = i;
+			this.w = i;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
@@ -103,94 +145,15 @@ namespace Mono.Simd
 		}
 
 		[Acceleration (AccelMode.SSE2)]
-		public static Vector4i UnpackLow (Vector4i v1, Vector4i v2)
+		public static bool operator ==(Vector4i v1, Vector4i v2)
 		{
-			return new Vector4i (v1.x, v2.x, v1.y, v2.y);
+			return v1.x == v2.x && v1.y == v2.y && v1.z == v2.z && v1.w == v2.w;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
-		public static Vector4i UnpackHigh (Vector4i v1, Vector4i v2)
+		public static bool operator !=(Vector4i v1, Vector4i v2)
 		{
-			return new Vector4i (v1.z, v2.z, v1.w, v2.w);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector4i ShiftRightLogic (Vector4i v1, int amount)
-		{
-			Vector4i res = new Vector4i ();
-			int *a = &v1.x;
-			int *b = &res.x;
-			for (int i = 0; i < 4; ++i)
-				*b++ = (int)((uint)(*a++) >> amount);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE41)]
-		public static Vector4i Max (Vector4i v1, Vector4i v2)
-		{
-			return new Vector4i (System.Math.Max (v1.x, v2.x), System.Math.Max (v1.y, v2.y), System.Math.Max (v1.z, v2.z), System.Math.Max (v1.w, v2.w));
-		}
-
-		[Acceleration (AccelMode.SSE41)]
-		public static Vector4i Min (Vector4i v1, Vector4i v2)
-		{
-			return new Vector4i (System.Math.Min (v1.x, v2.x), System.Math.Min (v1.y, v2.y), System.Math.Min (v1.z, v2.z), System.Math.Min (v1.w, v2.w));
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe int ExtractByteMask (Vector4i va) {
-			int res = 0;
-			byte *a = (byte*)&va;
-			for (int i = 0; i < 16; ++i)
-				res |= (*a++ & 0x80) >> 7 << i;
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector4i Shuffle (Vector4i v1, ShuffleSel sel)
-		{
-			int *ptr = (int*)&v1;
-			int idx = (int)sel;
-			return new Vector4i (*(ptr + ((idx >> 0) & 0x3)),*(ptr + ((idx >> 2) & 0x3)),*(ptr + ((idx >> 4) & 0x3)),*(ptr + ((idx >> 6) & 0x3)));
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static Vector4i CompareEqual (Vector4i v1, Vector4i v2)
-		{
-			return new Vector4i ((int)(v1.x ==  v2.x ? -1 : 0), (int)(v1.y ==  v2.y ? -1 : 0), (int)(v1.z ==  v2.z ? -1 : 0), (int)(v1.w ==  v2.w ? -1 : 0));
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static Vector4i CompareGreaterThan (Vector4i v1, Vector4i v2)
-		{
-			return new Vector4i ((int)(v1.x > v2.x ? -1 : 0), (int)(v1.y >  v2.y ? -1 : 0), (int)(v1.z >  v2.z ? -1 : 0), (int)(v1.w >  v2.w ? -1 : 0));
-		}
-
-		[CLSCompliant(false)]
-		[Acceleration (AccelMode.SSE41)]
-		public static unsafe Vector8us PackWithUnsignedSaturation (Vector4i va, Vector4i vb) {
-			Vector8us res = new Vector8us ();
-			int *a = (int*)&va;
-			int *b = (int*)&vb;
-			ushort *c = (ushort*)&res;
-			for (int i = 0; i < 4; ++i)
-				*c++ = (ushort)System.Math.Max (0, System.Math.Min (*a++, ushort.MaxValue));
-			for (int i = 0; i < 4; ++i)
-				*c++ = (ushort)System.Math.Max (0, System.Math.Min (*b++, ushort.MaxValue));
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8s PackWithSignedSaturation (Vector4i va, Vector4i vb) {
-			Vector8s res = new Vector8s ();
-			int *a = (int*)&va;
-			int *b = (int*)&vb;
-			short *c = (short*)&res;
-			for (int i = 0; i < 4; ++i)
-				*c++ = (short)System.Math.Max (System.Math.Min ((int)*a++, short.MaxValue), short.MinValue);
-			for (int i = 0; i < 4; ++i)
-				*c++ = (short)System.Math.Max (System.Math.Min ((int)*b++, short.MaxValue), short.MinValue);
-			return res;
+			return v1.x != v2.x || v1.y != v2.y || v1.z != v2.z || v1.w != v2.w;
 		}
 
 		[Acceleration (AccelMode.SSE1)]
@@ -333,6 +296,11 @@ namespace Mono.Simd
 		[CLSCompliant(false)]
 		public static unsafe void PrefetchNonTemporal (Vector4i *res)
 		{
+		}
+		
+		public override string ToString()
+		{
+			return "<" + x + ", " + y + ", " + z + ", " + w + ">"; 
 		}
 	}
 }

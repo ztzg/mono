@@ -243,6 +243,7 @@ ICALL(ENV_13, "get_Platform", ves_icall_System_Environment_get_Platform)
 ICALL(ENV_14, "get_ProcessorCount", mono_cpu_count)
 ICALL(ENV_15, "get_TickCount", mono_msec_ticks)
 ICALL(ENV_16, "get_UserName", ves_icall_System_Environment_get_UserName)
+ICALL(ENV_16m, "internalBroadcastSettingChange", ves_icall_System_Environment_BroadcastSettingChange)
 ICALL(ENV_17, "internalGetEnvironmentVariable", ves_icall_System_Environment_GetEnvironmentVariable)
 ICALL(ENV_18, "internalGetGacPath", ves_icall_System_Environment_GetGacPath)
 ICALL(ENV_19, "internalGetHome", ves_icall_System_Environment_InternalGetHome)
@@ -281,6 +282,10 @@ ICALL(CULINF_10, "internal_is_lcid_neutral", ves_icall_System_Globalization_Cult
 ICALL_TYPE(REGINF, "System.Globalization.RegionInfo", REGINF_1)
 ICALL(REGINF_1, "construct_internal_region_from_lcid", ves_icall_System_Globalization_RegionInfo_construct_internal_region_from_lcid)
 ICALL(REGINF_2, "construct_internal_region_from_name", ves_icall_System_Globalization_RegionInfo_construct_internal_region_from_name)
+
+ICALL_TYPE(IODRIVEINFO, "System.IO.DriveInfo", IODRIVEINFO_1)
+ICALL(IODRIVEINFO_1, "GetDiskFreeSpaceInternal", ves_icall_System_IO_DriveInfo_GetDiskFreeSpace)
+ICALL(IODRIVEINFO_2, "GetDriveTypeInternal", ves_icall_System_IO_DriveInfo_GetDriveType)
 
 ICALL_TYPE(FAMW, "System.IO.FAMWatcher", FAMW_1)
 ICALL(FAMW_1, "InternalFAMNextEvent", ves_icall_System_IO_FAMW_InternalFAMNextEvent)
@@ -401,7 +406,7 @@ ICALL(NDNS_2, "GetHostByName_internal(string,string&,string[]&,string[]&)", ves_
 ICALL(NDNS_3, "GetHostName_internal(string&)", ves_icall_System_Net_Dns_GetHostName_internal)
 
 ICALL_TYPE(SOCK, "System.Net.Sockets.Socket", SOCK_1)
-ICALL(SOCK_1, "Accept_internal(intptr,int&)", ves_icall_System_Net_Sockets_Socket_Accept_internal)
+ICALL(SOCK_1, "Accept_internal(intptr,int&,bool)", ves_icall_System_Net_Sockets_Socket_Accept_internal)
 ICALL(SOCK_2, "Available_internal(intptr,int&)", ves_icall_System_Net_Sockets_Socket_Available_internal)
 ICALL(SOCK_3, "Bind_internal(intptr,System.Net.SocketAddress,int&)", ves_icall_System_Net_Sockets_Socket_Bind_internal)
 ICALL(SOCK_4, "Blocking_internal(intptr,bool,int&)", ves_icall_System_Net_Sockets_Socket_Blocking_internal)

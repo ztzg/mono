@@ -585,10 +585,10 @@ find_method (MonoClass *in_class, MonoClass *ic, const char* name, MonoMethodSig
 		if (name [0] == '.' && (!strcmp (name, ".ctor") || !strcmp (name, ".cctor")))
 			break;
 
-		g_assert (from_class->interface_count == in_class->interface_count);
-		for (i = 0; i < in_class->interface_count; i++) {
-			MonoClass *in_ic = in_class->interfaces [i];
-			MonoClass *from_ic = from_class->interfaces [i];
+		g_assert (from_class->interface_offsets_count == in_class->interface_offsets_count);
+		for (i = 0; i < in_class->interface_offsets_count; i++) {
+			MonoClass *in_ic = in_class->interfaces_packed [i];
+			MonoClass *from_ic = from_class->interfaces_packed [i];
 			char *ic_qname, *ic_fqname, *ic_class_name;
 			
 			ic_class_name = mono_type_get_name_full (&in_ic->byval_arg, MONO_TYPE_NAME_FORMAT_IL);
@@ -2050,6 +2050,7 @@ mono_method_get_header (MonoMethod *method)
 	MonoImage* img;
 	gpointer loc;
 	MonoMethodNormal* mn = (MonoMethodNormal*) method;
+	MonoMethodHeader *header;
 
 	if ((method->flags & METHOD_ATTRIBUTE_ABSTRACT) || (method->iflags & METHOD_IMPL_ATTRIBUTE_RUNTIME) || (method->iflags & METHOD_IMPL_ATTRIBUTE_INTERNAL_CALL) || (method->flags & METHOD_ATTRIBUTE_PINVOKE_IMPL))
 		return NULL;
@@ -2061,23 +2062,28 @@ mono_method_get_header (MonoMethod *method)
 #endif
 		return mn->header;
 
-	mono_loader_lock ();
-
-	if (mn->header) {
-		mono_loader_unlock ();
-		return mn->header;
-	}
-
 	if (method->is_inflated) {
 		MonoMethodInflated *imethod = (MonoMethodInflated *) method;
 		MonoMethodHeader *header;
-		/* the lock is recursive */
+
 		header = mono_method_get_header (imethod->declaring);
+
+		mono_loader_lock ();
+
+		if (mn->header) {
+			mono_loader_unlock ();
+			return mn->header;
+		}
+
 		mn->header = inflate_generic_header (header, mono_method_get_context (method));
 		mono_loader_unlock ();
 		return mn->header;
 	}
 
+	/* 
+	 * Do most of the work outside the loader lock, to avoid assembly loader hook
+	 * deadlocks.
+	 */
 	g_assert (mono_metadata_token_table (method->token) == MONO_TABLE_METHOD);
 	idx = mono_metadata_token_index (method->token);
 	img = method->klass->image;
@@ -2086,7 +2092,19 @@ mono_method_get_header (MonoMethod *method)
 
 	g_assert (loc);
 
-	mn->header = mono_metadata_parse_mh_full (img, mono_method_get_generic_container (method), loc);
+	header = mono_metadata_parse_mh_full (img, mono_method_get_generic_container (method), loc);
+
+	mono_loader_lock ();
+
+	if (mn->header) {
+		/* header is allocated from the image mempool, no need to free it */
+		mono_loader_unlock ();
+		return mn->header;
+	}
+
+	mono_memory_barrier ();
+
+	mn->header = header;
 
 	mono_loader_unlock ();
 	return mn->header;

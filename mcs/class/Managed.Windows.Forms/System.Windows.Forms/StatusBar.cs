@@ -552,12 +552,12 @@ namespace System.Windows.Forms {
 				remove { owner.Events.RemoveHandler (UIACollectionChangedEvent, value); }
 			}
 			
-			internal void OnUIACollectionChanged (CollectionChangeEventArgs args)
+			internal void OnUIACollectionChanged (CollectionChangeEventArgs e)
 			{
 				CollectionChangeEventHandler eh
 					= (CollectionChangeEventHandler) owner.Events [UIACollectionChangedEvent];
 				if (eh != null)
-					eh (owner, args);
+					eh (owner, e);
 			}
 #endif
 			#endregion
@@ -744,7 +744,14 @@ namespace System.Windows.Forms {
 			}
 
 			public virtual void Remove (StatusBarPanel value) {
+				int index = IndexOf (value);
 				panels.Remove (value);
+
+#if NET_2_0
+				// UIA Framework Event: Panel Removed
+				if (index >= 0)
+					OnUIACollectionChanged (new CollectionChangeEventArgs (CollectionChangeAction.Remove, index));
+#endif
 			}
 
 			public virtual void RemoveAt (int index) {

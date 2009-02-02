@@ -999,6 +999,10 @@ namespace System.Windows.Forms {
 						}
 					} else
 						UpdateBounds ();
+#if NET_2_0
+					// UIA Framework Event: Menu Changed
+					OnUIAMenuChanged (EventArgs.Empty);
+#endif
 				}
 			}
 		}
@@ -1311,6 +1315,11 @@ namespace System.Windows.Forms {
 					topmost = value;
 					if (IsHandleCreated)
 						XplatUI.SetTopmost(window.Handle, value);
+
+#if NET_2_0
+					// UIA Framework: Raises internal event
+					OnUIATopMostChanged ();
+#endif
 				}
 			}
 		}
@@ -1366,6 +1375,12 @@ namespace System.Windows.Forms {
 
 					XplatUI.SetWindowState(Handle, value);
 				}
+
+#if NET_2_0
+				// UIA Framework: Raises internal event
+				if (old_state != window_state) 
+					OnUIAWindowStateChanged ();
+#endif
 			}
 		}
 
@@ -1545,7 +1560,8 @@ namespace System.Windows.Forms {
 				//only do this when on Windows, since X behaves weirdly otherwise
 				//modal windows appear below their parent/owner/ancestor.
 				//(confirmed on several window managers, so it's not a wm bug).
-				bool is_unix = ((int) Environment.OSVersion.Platform) == 128 || ((int) Environment.OSVersion.Platform == 4);
+				int p = (int) Environment.OSVersion.Platform;
+				bool is_unix = (p == 128) || (p == 4) || (p == 6);
 				if ((VisibleInternal && (is_changing_visible_state == 0 || is_unix)) || this.IsRecreating)
 					cp.Style |= (int)WindowStyles.WS_VISIBLE;
 
@@ -3283,6 +3299,50 @@ namespace System.Windows.Forms {
 				eh (this, e);
 		}
 #endif
+
+		#region UIA Framework Events
+#if NET_2_0
+		static object UIAMenuChangedEvent = new object ();
+		static object UIATopMostChangedEvent = new object ();
+		static object UIAWindowStateChangedEvent = new object ();
+
+		internal event EventHandler UIAMenuChanged {
+			add { Events.AddHandler (UIAMenuChangedEvent, value); }
+			remove { Events.RemoveHandler (UIAMenuChangedEvent, value); }
+		}
+
+		internal event EventHandler UIATopMostChanged {
+			add { Events.AddHandler (UIATopMostChangedEvent, value); }
+			remove { Events.RemoveHandler (UIATopMostChangedEvent, value); }
+		}
+
+		internal event EventHandler UIAWindowStateChanged {
+			add { Events.AddHandler (UIAWindowStateChangedEvent, value); }
+			remove { Events.RemoveHandler (UIAWindowStateChangedEvent, value); }
+		}
+
+		internal void OnUIAMenuChanged (EventArgs e)
+		{
+			EventHandler eh = (EventHandler) Events [UIAMenuChangedEvent];
+			if (eh != null)
+				eh (this, e);
+		}
+
+		internal void OnUIATopMostChanged ()
+		{
+			EventHandler eh = (EventHandler) Events [UIATopMostChangedEvent];
+			if (eh != null)
+				eh (this, EventArgs.Empty);
+		}
+
+		internal void OnUIAWindowStateChanged ()
+		{
+			EventHandler eh = (EventHandler) Events [UIAWindowStateChangedEvent];
+			if (eh != null)
+				eh (this, EventArgs.Empty);
+		}
+#endif
+		#endregion	// UIA Framework Events
 		#endregion	// Events
 	}
 }

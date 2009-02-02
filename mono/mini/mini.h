@@ -20,9 +20,20 @@
 
 #define MONO_BREAKPOINT_ARRAY_SIZE 64
 
+/* C type matching the size of a machine register. Not always the same as 'int' */
+/* Note that member 'p' of MonoInst must be the same type, as OP_PCONST is defined
+ * as one of the OP_ICONST types, so inst_c0 must be the same as inst_p0
+ */
+#if SIZEOF_REGISTER == 4
+typedef gint32 mgreg_t;
+#elif SIZEOF_REGISTER == 8
+typedef gint64 mgreg_t;
+#endif
+
 #include "mini-arch.h"
 #include "regalloc.h"
 #include "declsec.h"
+#include "unwind.h"
 
 #ifndef G_LIKELY
 #define G_LIKELY(a) (a)
@@ -66,7 +77,7 @@
 #define MONO_FAKE_VTABLE_METHOD ((MonoMethod*)GINT_TO_POINTER(-2))
 
 /* Version number of the AOT file format */
-#define MONO_AOT_FILE_VERSION "44"
+#define MONO_AOT_FILE_VERSION "45"
  
 /* Per-domain information maintained by the JIT */
 typedef struct
@@ -178,7 +189,7 @@ enum {
  * this is used to determine when some branch optimizations are possible: we exclude FP compares
  * because they have weird semantics with NaNs.
  */
-#define MONO_IS_COND_BRANCH_OP(ins) (((ins)->opcode >= CEE_BEQ && (ins)->opcode <= CEE_BLT_UN) || ((ins)->opcode >= OP_LBEQ && (ins)->opcode <= OP_LBLT_UN) || ((ins)->opcode >= OP_FBEQ && (ins)->opcode <= OP_FBLT_UN) || ((ins)->opcode >= OP_IBEQ && (ins)->opcode <= OP_IBLT_UN))
+#define MONO_IS_COND_BRANCH_OP(ins) (((ins)->opcode >= OP_LBEQ && (ins)->opcode <= OP_LBLT_UN) || ((ins)->opcode >= OP_FBEQ && (ins)->opcode <= OP_FBLT_UN) || ((ins)->opcode >= OP_IBEQ && (ins)->opcode <= OP_IBLT_UN))
 #define MONO_IS_COND_BRANCH_NOFP(ins) (MONO_IS_COND_BRANCH_OP(ins) && !(((ins)->opcode >= OP_FBEQ) && ((ins)->opcode <= OP_FBLT_UN)) && (!(ins)->inst_left || (ins)->inst_left->inst_left->type != STACK_R8))
 
 #define MONO_IS_BRANCH_OP(ins) (MONO_IS_COND_BRANCH_OP(ins) || ((ins)->opcode == OP_BR) || ((ins)->opcode == OP_BR_REG) || ((ins)->opcode == OP_SWITCH))
@@ -267,121 +278,6 @@ extern const char ins_info[];
 #define MONO_BB_FOR_EACH_INS_REVERSE_SAFE(bb, p, ins) for ((ins) = (bb)->last_ins, p = (ins) ? (ins)->prev : NULL; (ins); (ins) = (p), (p) = (ins) ? (ins)->prev : NULL)
 
 #define mono_bb_first_ins(bb) (bb)->code
-
-#if 0
-
-static inline void
-MONO_INST_LIST_ADD_TAIL (MonoInstList *new, MonoInstList *head)
-{
-	__MONO_INST_LIST_ADD (new, head->prev, head);
-}
-
-static inline void
-__MONO_INST_LIST_DEL (MonoInstList *prev, MonoInstList *next)
-{
-	next->prev = prev;
-	prev->next = next;
-}
-
-static inline void
-__MONO_INST_LIST_SPLICE (MonoInstList *list, MonoInstList *head)
-{
-	MonoInstList *first = list->next;
-	MonoInstList *last = list->prev;
-	MonoInstList *at = head->next;
-
-	first->prev = head;
-	head->next = first;
-
-	last->next = at;
-	at->prev = last;
-}
-
-static inline void
-MONO_INST_LIST_SPLICE (MonoInstList *list, MonoInstList *head) 
-{
-	if (!MONO_INST_LIST_EMPTY (list))
-		__MONO_INST_LIST_SPLICE (list, head);
-}
-
-static inline void
-MONO_INST_LIST_SPLICE_TAIL (MonoInstList *list, MonoInstList *head) 
-{
-	if (!MONO_INST_LIST_EMPTY (list))
-		__MONO_INST_LIST_SPLICE (list, head->prev);
-}
-
-static inline void
-MONO_INST_LIST_SPLICE_INIT (MonoInstList *list, MonoInstList *head)
-{
-	if (!MONO_INST_LIST_EMPTY (list)) {
-		__MONO_INST_LIST_SPLICE (list, head);
-		MONO_INST_LIST_INIT (list);
-	}
-}
-
-static inline void
-MONO_INST_LIST_SPLICE_TAIL_INIT (MonoInstList *list, MonoInstList *head)
-{
-	if (!MONO_INST_LIST_EMPTY (list)) {
-		__MONO_INST_LIST_SPLICE (list, head->prev);
-		MONO_INST_LIST_INIT (list);
-	}
-}
-
-/*#define mono_container_of(ptr, type, member) ({			\
-	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
-	(type *)( (char *)__mptr - offsetof(type,member) );})
-
-#define MONO_INST_LIST_ENTRY(ptr, type, member) \
-	mono_container_of(ptr, type, member)*/
-
-#define MONO_INST_LIST_ENTRY(ptr, type, member)	\
-	((type *)(gpointer)(ptr))
-
-#define MONO_INST_LIST_FIRST_ENTRY(ptr, type, member) \
-	MONO_INST_LIST_ENTRY((ptr)->next, type, member)
-
-#define MONO_INST_LIST_LAST_ENTRY(ptr, type, member) \
-	MONO_INST_LIST_ENTRY((ptr)->prev, type, member)
-
-#define MONO_INST_LIST_FOR_EACH(pos, head) \
-	for (pos = (head)->next; pos != (head); pos = pos->next)
-
-#define MONO_INST_LIST_FOR_EACH_PREV(pos, head) \
-	for (pos = (head)->prev; pos != (head); pos = pos->prev)
-
-#define MONO_INST_LIST_FOR_EACH_SAFE(pos, n, head) \
-	for (pos = (head)->next, n = pos->next; pos != (head); \
-		pos = n, n = pos->next)
-
-#define MONO_INST_LIST_FOR_EACH_PREV_SAFE(pos, n, head) \
-	for (pos = (head)->prev, n = pos->prev; pos != (head); \
-		pos = n, n = pos->prev)
-
-#define MONO_INST_LIST_FOR_EACH_ENTRY(pos, head, member) \
-	for (pos = MONO_INST_LIST_ENTRY ((head)->next, MonoInst, member);\
-	     &pos->member != (head);\
-	     pos = MONO_INST_LIST_ENTRY (pos->member.next, MonoInst, member))
-
-#define MONO_INST_LIST_FOR_EACH_ENTRY_REVERSE(pos, head, member) \
-	for (pos = MONO_INST_LIST_ENTRY ((head)->prev, MonoInst, member);\
-	     &pos->member != (head);\
-	     pos = MONO_INST_LIST_ENTRY (pos->member.prev, MonoInst, member))
-
-#define MONO_INST_LIST_FOR_EACH_ENTRY_SAFE(pos, n, head, member) \
-	for (pos = MONO_INST_LIST_ENTRY ((head)->next, MonoInst, member),\
-		n = MONO_INST_LIST_ENTRY (pos->member.next, MonoInst, member);\
-	     &pos->member != (head); 					\
-	     pos = n, n = MONO_INST_LIST_ENTRY (n->member.next, MonoInst, member))
-
-#define MONO_BB_FOR_EACH_INS(bb, ins) MONO_INST_LIST_FOR_EACH_ENTRY ((ins), &((bb)->ins_list), node)
-
-#define MONO_BB_FOR_EACH_INS_SAFE(bb, next, ins) MONO_INST_LIST_FOR_EACH_ENTRY_SAFE ((ins), (next), &((bb)->ins_list), node)
-
-#define MONO_BB_FOR_EACH_INS_REVERSE(bb, ins) MONO_INST_LIST_FOR_EACH_ENTRY_REVERSE ((ins), &((bb)->ins_list), node)
-
-#endif
 
 struct MonoEdge {
 	MonoEdge *next;
@@ -531,8 +427,14 @@ struct MonoInst {
 		union {
 			MonoInst *src;
 			MonoMethodVar *var;
-			gssize const_val;
+			mgreg_t const_val;
+#if (SIZEOF_REGISTER > SIZEOF_VOID_P) && (G_BYTE_ORDER == G_BIG_ENDIAN)
+			struct {
+				gpointer p[SIZEOF_REGISTER/SIZEOF_VOID_P];
+			} pdata;
+#else
 			gpointer p;
+#endif
 			MonoMethod *method;
 			MonoMethodSignature *signature;
 			MonoBasicBlock **many_blocks;
@@ -627,8 +529,13 @@ enum {
 #define inst_c1 data.op[1].const_val
 #define inst_i0 data.op[0].src
 #define inst_i1 data.op[1].src
+#if (SIZEOF_REGISTER > SIZEOF_VOID_P) && (G_BYTE_ORDER == G_BIG_ENDIAN)
+#define inst_p0 data.op[0].pdata.p[SIZEOF_REGISTER/SIZEOF_VOID_P - 1]
+#define inst_p1 data.op[1].pdata.p[SIZEOF_REGISTER/SIZEOF_VOID_P - 1]
+#else
 #define inst_p0 data.op[0].p
 #define inst_p1 data.op[1].p
+#endif
 #define inst_l  data.i8const
 #define inst_r  data.r8const
 #define inst_left  data.op[0].src
@@ -939,7 +846,6 @@ typedef struct {
 	guint            got_var_allocated : 1;
 	guint            ret_var_is_local : 1;
 	guint            ret_var_set : 1;
-	guint            new_ir : 1;
 	guint            globalra : 1;
 	guint            unverifiable : 1;
 	guint            skip_visibility : 1;
@@ -948,6 +854,7 @@ typedef struct {
 	guint            disable_initlocals_opt : 1;
 	guint            disable_omit_fp : 1;
 	guint            disable_vreg_to_lvreg : 1;
+	guint            disable_deadce_vars : 1;
 	guint            has_got_slots : 1;
 	guint            uses_rgctx_reg : 1;
 	guint            uses_vtable_reg : 1;
@@ -963,6 +870,8 @@ typedef struct {
 	guint32          exception_data;
 	char*            exception_message;
 	gpointer         exception_ptr;
+
+	GSList*          unwind_ops;
 
 	/* Fields used by the local reg allocator */
 	void*            reginfo;
@@ -998,6 +907,9 @@ typedef struct {
 
 	/* Used to implement fconv_to_r8_x. This is a double (8 bytes) var.*/
 	MonoInst *fconv_to_r8_x_var;
+
+	/*Use to implement simd constructors. This is a vector (16 bytes) var.*/
+	MonoInst *simd_ctor_var;
 
 	/* Used by AOT */
 	guint32 got_offset;
@@ -1072,9 +984,6 @@ enum {
 };
 #undef MINI_OP
 
-/* Can't use the same with both JITs since that would break the burg rules */
-#if defined(NEW_IR)
-
 #if SIZEOF_VOID_P == 8
 #define OP_PCONST OP_I8CONST
 #define OP_PADD OP_LADD
@@ -1105,6 +1014,9 @@ enum {
 #define OP_PMUL OP_IMUL
 #define OP_PMUL_IMM OP_IMUL_IMM
 #define OP_PNEG OP_INEG
+#define OP_PCONV_TO_I1 OP_ICONV_TO_I1
+#define OP_PCONV_TO_U1 OP_ICONV_TO_U1
+#define OP_PCONV_TO_I2 OP_ICONV_TO_I2
 #define OP_PCONV_TO_U2 OP_ICONV_TO_U2
 #define OP_PCONV_TO_OVF_I1_UN OP_ICONV_TO_OVF_I1_UN
 #define OP_PCONV_TO_OVF_I1 OP_ICONV_TO_OVF_I1
@@ -1116,42 +1028,6 @@ enum {
 #define OP_PBGE OP_IBGE
 #define OP_STOREP_MEMBASE_REG OP_STOREI4_MEMBASE_REG
 #define OP_STOREP_MEMBASE_IMM OP_STOREI4_MEMBASE_IMM
-#endif
-
-#else
-
-#if SIZEOF_VOID_P == 8
-#define OP_PCONST OP_I8CONST
-#define OP_PADD OP_LADD
-#define OP_PADD_IMM OP_LADD_IMM
-#define OP_PNEG OP_LNEG
-#define OP_PCONV_TO_I1 OP_LCONV_TO_I1
-#define OP_PCONV_TO_U1 OP_LCONV_TO_U1
-#define OP_PCONV_TO_I2 OP_LCONV_TO_I2
-#define OP_PCONV_TO_U2 OP_LCONV_TO_U2
-#define OP_PCONV_TO_OVF_I1_UN OP_LCONV_TO_OVF_I1_UN
-#define OP_PCONV_TO_OVF_I1 OP_LCONV_TO_OVF_I1
-#define OP_PBEQ OP_LBEQ
-#define OP_PCEQ CEE_CEQ
-#define OP_STOREP_MEMBASE_REG OP_STOREI8_MEMBASE_REG
-#define OP_STOREP_MEMBASE_IMM OP_STOREI8_MEMBASE_IMM
-#else
-#define OP_PCONST OP_ICONST
-#define OP_PADD CEE_ADD
-#define OP_PADD2 OP_IADD
-#define OP_PNEG CEE_NEG
-#define OP_PCONV_TO_I1 OP_ICONV_TO_I1
-#define OP_PCONV_TO_U1 OP_ICONV_TO_U1
-#define OP_PCONV_TO_I2 OP_ICONV_TO_I2
-#define OP_PCONV_TO_U2 CEE_CONV_U2
-#define OP_PCONV_TO_OVF_I1_UN CEE_CONV_OVF_I1_UN
-#define OP_PCONV_TO_OVF_I1 CEE_CONV_OVF_I1
-#define OP_PBEQ OP_IBEQ
-#define OP_PCEQ CEE_CEQ
-#define OP_STOREP_MEMBASE_REG OP_STOREI4_MEMBASE_REG
-#define OP_STOREP_MEMBASE_IMM OP_STOREI4_MEMBASE_IMM
-#endif
-
 #endif
 
 typedef enum {
@@ -1187,7 +1063,7 @@ extern const char MONO_ARCH_CPU_SPEC [] MONO_INTERNAL;
 #define MONO_ARCH_CPU_SPEC_IDX_COMBINE(a) a ## _idx
 #define MONO_ARCH_CPU_SPEC_IDX(a) MONO_ARCH_CPU_SPEC_IDX_COMBINE(a)
 extern const guint16 MONO_ARCH_CPU_SPEC_IDX(MONO_ARCH_CPU_SPEC) [] MONO_INTERNAL;
-#define ins_get_spec(op) ((const char*)&MONO_ARCH_CPU_SPEC + MONO_ARCH_CPU_SPEC_IDX(MONO_ARCH_CPU_SPEC)[(op)])
+#define ins_get_spec(op) ((const char*)&MONO_ARCH_CPU_SPEC + MONO_ARCH_CPU_SPEC_IDX(MONO_ARCH_CPU_SPEC)[(op) - OP_LOAD])
 
 enum {
 	MONO_COMP_DOM = 1,
@@ -1290,8 +1166,7 @@ void      mono_bblock_insert_before_ins     (MonoBasicBlock *bb, MonoInst *ins, 
 void      mono_verify_bblock                (MonoBasicBlock *bb) MONO_INTERNAL;
 void      mono_verify_cfg                   (MonoCompile *cfg) MONO_INTERNAL;
 void      mono_constant_fold                (MonoCompile *cfg) MONO_INTERNAL;
-void      mono_constant_fold_inst           (MonoInst *inst, gpointer data) MONO_INTERNAL;
-MonoInst* mono_constant_fold_ins2           (MonoCompile *cfg, MonoInst *ins, MonoInst *arg1, MonoInst *arg2, gboolean overwrite) MONO_INTERNAL;
+MonoInst* mono_constant_fold_ins            (MonoCompile *cfg, MonoInst *ins, MonoInst *arg1, MonoInst *arg2, gboolean overwrite) MONO_INTERNAL;
 int       mono_eval_cond_branch             (MonoInst *branch) MONO_INTERNAL;
 int       mono_is_power_of_two              (guint32 val) MONO_INTERNAL;
 void      mono_cprop_local                  (MonoCompile *cfg, MonoBasicBlock *bb, MonoInst **acp, int acp_size) MONO_INTERNAL;
@@ -1315,15 +1190,12 @@ void      mono_merge_basic_blocks           (MonoCompile *cfg, MonoBasicBlock *b
 void      mono_optimize_branches            (MonoCompile *cfg) MONO_INTERNAL;
 
 void      mono_blockset_print               (MonoCompile *cfg, MonoBitSet *set, const char *name, guint idom) MONO_INTERNAL;
-void      mono_print_tree                   (MonoInst *tree) MONO_INTERNAL;
-void      mono_print_tree_nl                (MonoInst *tree) MONO_INTERNAL;
 void      mono_print_ins_index              (int i, MonoInst *ins) MONO_INTERNAL;
 void      mono_print_ins                    (MonoInst *ins) MONO_INTERNAL;
 void      mono_print_bb                     (MonoBasicBlock *bb, const char *msg) MONO_INTERNAL;
 void      mono_print_code                   (MonoCompile *cfg, const char *msg) MONO_INTERNAL;
 void      mono_print_method_from_ip         (void *ip);
 char     *mono_pmip                         (void *ip);
-void      mono_select_instructions          (MonoCompile *cfg) MONO_INTERNAL;
 const char* mono_inst_name                  (int op);
 int       mono_op_to_op_imm                 (int opcode) MONO_INTERNAL;
 int       mono_op_imm_to_op                 (int opcode) MONO_INTERNAL;
@@ -1332,7 +1204,6 @@ guint     mono_type_to_load_membase         (MonoCompile *cfg, MonoType *type) M
 guint     mono_type_to_store_membase        (MonoCompile *cfg, MonoType *type) MONO_INTERNAL;
 guint     mini_type_to_stind                (MonoCompile* cfg, MonoType *type) MONO_INTERNAL;
 guint32   mono_reverse_branch_op            (guint32 opcode) MONO_INTERNAL;
-void      mono_inst_foreach                 (MonoInst *tree, MonoInstFunc func, gpointer data) MONO_INTERNAL;
 void      mono_disassemble_code             (MonoCompile *cfg, guint8 *code, int size, char *id) MONO_INTERNAL;
 void      mono_add_patch_info               (MonoCompile *cfg, int ip, MonoJumpInfoType type, gconstpointer target) MONO_INTERNAL;
 void      mono_remove_patch_info            (MonoCompile *cfg, int ip) MONO_INTERNAL;
@@ -1389,10 +1260,6 @@ guint32   mono_aot_get_plt_info_offset      (gssize *regs, guint8 *code) MONO_IN
 gboolean  mono_aot_get_cached_class_info    (MonoClass *klass, MonoCachedClassInfo *res) MONO_INTERNAL;
 gboolean  mono_aot_get_class_from_name      (MonoImage *image, const char *name_space, const char *name, MonoClass **klass) MONO_INTERNAL;
 MonoJitInfo* mono_aot_find_jit_info         (MonoDomain *domain, MonoImage *image, gpointer addr) MONO_INTERNAL;
-void mono_aot_set_make_unreadable           (gboolean unreadable) MONO_INTERNAL;
-gboolean mono_aot_is_pagefault              (void *ptr) MONO_INTERNAL;
-void mono_aot_handle_pagefault              (void *ptr) MONO_INTERNAL;
-guint32 mono_aot_get_n_pagefaults           (void) MONO_INTERNAL;
 gpointer mono_aot_plt_resolve               (gpointer aot_module, guint32 plt_info_offset, guint8 *code) MONO_INTERNAL;
 gpointer mono_aot_get_method_from_vt_slot   (MonoDomain *domain, MonoVTable *vtable, int slot) MONO_INTERNAL;
 gpointer mono_aot_create_specific_trampoline   (MonoImage *image, gpointer arg1, MonoTrampolineType tramp_type, MonoDomain *domain, guint32 *code_len) MONO_INTERNAL;
@@ -1404,12 +1271,17 @@ void     mono_aot_register_globals          (gpointer *globals);
 /* This too */
 void     mono_aot_register_module           (gpointer *aot_info);
 
+void     mono_xdebug_init                   (void) MONO_INTERNAL;
+void     mono_save_xdebug_info              (MonoMethod *method, guint8 *code, guint32 code_size, MonoInst **args, GSList *unwind_info) MONO_INTERNAL;
+void     mono_save_trampoline_xdebug_info   (const char *tramp_name, guint8 *code, guint32 code_size, GSList *unwind_info) MONO_INTERNAL;
+/* This is an exported function */
+void     mono_xdebug_emit                   (void) MONO_INTERNAL;
+
 gboolean  mono_method_blittable             (MonoMethod *method) MONO_INTERNAL;
 gboolean  mono_method_same_domain           (MonoJitInfo *caller, MonoJitInfo *callee) MONO_INTERNAL;
 
 void      mono_register_opcode_emulation    (int opcode, const char* name, const char *sigstr, gpointer func, gboolean no_throw) MONO_INTERNAL;
 void      mono_draw_graph                   (MonoCompile *cfg, MonoGraphOptions draw_options) MONO_INTERNAL;
-void      mono_add_varcopy_to_end           (MonoCompile *cfg, MonoBasicBlock *bb, int src, int dest) MONO_INTERNAL;
 void      mono_add_ins_to_end               (MonoBasicBlock *bb, MonoInst *inst) MONO_INTERNAL;
 gpointer  mono_create_ftnptr                (MonoDomain *domain, gpointer addr) MONO_INTERNAL;
 
@@ -1463,13 +1335,23 @@ void              mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb) MON
 MonoInst         *mono_branch_optimize_exception_target (MonoCompile *cfg, MonoBasicBlock *bb, const char * exname) MONO_INTERNAL;
 void              mono_remove_critical_edges (MonoCompile *cfg) MONO_INTERNAL;
 gboolean          mono_is_regsize_var (MonoType *t) MONO_INTERNAL;
-void              mini_emit_memcpy2 (MonoCompile *cfg, int destreg, int doffset, int srcreg, int soffset, int size, int align) MONO_INTERNAL;
+void              mini_emit_memcpy (MonoCompile *cfg, int destreg, int doffset, int srcreg, int soffset, int size, int align) MONO_INTERNAL;
 CompRelation      mono_opcode_to_cond (int opcode) MONO_INTERNAL;
 CompType          mono_opcode_to_type (int opcode, int cmp_opcode) MONO_INTERNAL;
 CompRelation      mono_negate_cond (CompRelation cond) MONO_INTERNAL;
 int               mono_op_imm_to_op (int opcode) MONO_INTERNAL;
 void              mono_decompose_op_imm (MonoCompile *cfg, MonoBasicBlock *bb, MonoInst *ins) MONO_INTERNAL;
 void              mono_peephole_ins (MonoBasicBlock *bb, MonoInst *ins) MONO_INTERNAL;
+MonoUnwindOp     *mono_create_unwind_op (int when, 
+										 int tag, int reg, 
+										 int val) MONO_INTERNAL;
+void              mono_emit_unwind_op (MonoCompile *cfg, int when, 
+									   int tag, int reg, 
+									   int val) MONO_INTERNAL;
+
+int               mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_bblock, MonoBasicBlock *end_bblock, 
+									 MonoInst *return_var, GList *dont_inline, MonoInst **inline_args, 
+									 guint inline_offset, gboolean is_virtual_call) MONO_INTERNAL;
 
 void              mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins) MONO_INTERNAL;
 void              mono_decompose_long_opts (MonoCompile *cfg) MONO_INTERNAL;
@@ -1488,8 +1370,6 @@ guint32   mono_arch_cpu_optimizazions           (guint32 *exclude_mask) MONO_INT
 void      mono_arch_instrument_mem_needs        (MonoMethod *method, int *stack, int *code) MONO_INTERNAL;
 void     *mono_arch_instrument_prolog           (MonoCompile *cfg, void *func, void *p, gboolean enable_arguments) MONO_INTERNAL;
 void     *mono_arch_instrument_epilog           (MonoCompile *cfg, void *func, void *p, gboolean enable_arguments) MONO_INTERNAL;
-MonoCallInst *mono_arch_call_opcode             (MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call, int is_virtual) MONO_INTERNAL;
-MonoInst *mono_arch_get_inst_for_method         (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args) MONO_INTERNAL;
 void      mono_codegen                          (MonoCompile *cfg) MONO_INTERNAL;
 void      mono_call_inst_add_outarg_reg         (MonoCompile *cfg, MonoCallInst *call, int vreg, int hreg, gboolean fp) MONO_INTERNAL;
 const char *mono_arch_regname                   (int reg) MONO_INTERNAL;
@@ -1498,6 +1378,7 @@ gpointer  mono_arch_get_throw_exception         (void) MONO_INTERNAL;
 gpointer  mono_arch_get_rethrow_exception       (void) MONO_INTERNAL;
 gpointer  mono_arch_get_throw_exception_by_name (void) MONO_INTERNAL;
 gpointer  mono_arch_get_throw_corlib_exception  (void) MONO_INTERNAL;
+void      mono_arch_exceptions_init             (void) MONO_INTERNAL;
 guchar*   mono_arch_create_trampoline_code      (MonoTrampolineType tramp_type) MONO_INTERNAL;
 guchar*   mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *code_size, MonoJumpInfo **ji, gboolean aot) MONO_INTERNAL;
 gpointer  mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot) MONO_INTERNAL;
@@ -1527,7 +1408,6 @@ void      mono_arch_output_basic_block          (MonoCompile *cfg, MonoBasicBloc
 gboolean  mono_arch_has_unwind_info             (gconstpointer addr) MONO_INTERNAL;
 void      mono_arch_setup_jit_tls_data          (MonoJitTlsData *tls) MONO_INTERNAL;
 void      mono_arch_free_jit_tls_data           (MonoJitTlsData *tls) MONO_INTERNAL;
-void      mono_arch_emit_this_vret_args         (MonoCompile *cfg, MonoCallInst *inst, int this_reg, int this_type, int vt_reg) MONO_INTERNAL;
 void      mono_arch_fill_argument_info          (MonoCompile *cfg) MONO_INTERNAL;
 void      mono_arch_allocate_vars               (MonoCompile *m) MONO_INTERNAL;
 int       mono_arch_get_argument_info           (MonoMethodSignature *csig, int param_count, MonoJitArgumentInfo *arg_info) MONO_INTERNAL;
@@ -1672,13 +1552,13 @@ gboolean       mono_trace_eval                  (MonoMethod *method) MONO_INTERN
 extern void
 mono_perform_abc_removal (MonoCompile *cfg) MONO_INTERNAL;
 extern void
-mono_perform_abc_removal2 (MonoCompile *cfg) MONO_INTERNAL;
+mono_perform_abc_removal (MonoCompile *cfg) MONO_INTERNAL;
 extern void
 mono_perform_ssapre (MonoCompile *cfg) MONO_INTERNAL;
 extern void
 mono_local_cprop (MonoCompile *cfg) MONO_INTERNAL;
 extern void
-mono_local_cprop2 (MonoCompile *cfg);
+mono_local_cprop (MonoCompile *cfg);
 extern void
 mono_local_deadce (MonoCompile *cfg);
 
@@ -1701,6 +1581,8 @@ gpointer mono_helper_get_rgctx_other_ptr (MonoClass *caller_class, MonoVTable *v
 					  gint32 rgctx_index) MONO_INTERNAL;
 
 void mono_generic_sharing_init (void) MONO_INTERNAL;
+
+MonoJitInfo* mono_domain_lookup_shared_generic (MonoDomain *domain, MonoMethod *method) MONO_INTERNAL;
 
 MonoClass* mini_class_get_container_class (MonoClass *class) MONO_INTERNAL;
 MonoGenericContext* mini_class_get_context (MonoClass *class) MONO_INTERNAL;

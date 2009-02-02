@@ -130,86 +130,98 @@ namespace MonoTests.System.Data
 		}
 
 		[Test]
-		public void Open_ConnectionString_Incorrect ()
+		public void Open_ConnectionString_LoginInvalid ()
 		{
-			Assert.Ignore ("NotWorking");
-
 			// login invalid
 			conn = new SqlConnection (connectionString + "user id=invalidLogin");
 			try {
 				conn.Open ();
-				Assert.Fail ("#A1");
+				Assert.Fail ("#1");
 			} catch (SqlException ex) {
 				// Login failed for user 'invalidLogin'
-				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#A2");
-				Assert.AreEqual ((byte) 14, ex.Class, "#A3");
-				Assert.IsNull (ex.InnerException, "#A4");
-				Assert.IsNotNull (ex.Message, "#A5");
-				Assert.IsTrue (ex.Message.IndexOf ("'invalidLogin'") != -1, "#A6");
-				Assert.AreEqual (18456, ex.Number, "#A7");
-				Assert.AreEqual ((byte) 1, ex.State, "#A8");
+				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#2");
+				Assert.AreEqual ((byte) 14, ex.Class, "#3");
+				Assert.IsNull (ex.InnerException, "#4");
+				Assert.IsNotNull (ex.Message, "#5");
+				Assert.IsTrue (ex.Message.IndexOf ("'invalidLogin'") != -1, "#6");
+				Assert.AreEqual (18456, ex.Number, "#7");
+				Assert.AreEqual ((byte) 1, ex.State, "#8");
 			} finally {
 				conn.Close ();
 			}
+		}
 
-			// database invalid
+		[Test]
+		public void Open_ConnectionString_DatabaseInvalid ()
+		{
 			conn = new SqlConnection (connectionString + "database=invalidDB");
 			try {
 				conn.Open ();
-				Assert.Fail ("#B1");
+				Assert.Fail ("#1");
 			} catch (SqlException ex) {
 				// Cannot open database "invalidDB" requested
 				// by the login. The login failed
-				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#B2");
-				Assert.AreEqual ((byte) 11, ex.Class, "#B3");
-				Assert.IsNull (ex.InnerException, "#B4");
-				Assert.IsNotNull (ex.Message, "#B5");
-				Assert.IsTrue (ex.Message.IndexOf ("\"invalidDB\"") != -1, "#B6");
-				Assert.AreEqual (4060, ex.Number, "#B7");
-				Assert.AreEqual ((byte) 1, ex.State, "#B8");
+				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#2");
+				Assert.AreEqual ((byte) 11, ex.Class, "#3");
+				Assert.IsNull (ex.InnerException, "#4");
+				Assert.IsNotNull (ex.Message, "#5");
+				Assert.IsTrue (ex.Message.IndexOf ("\"invalidDB\"") != -1, "#6");
+				Assert.AreEqual (4060, ex.Number, "#7");
+				Assert.AreEqual ((byte) 1, ex.State, "#8");
 			} finally {
 				conn.Close ();
 			}
 
+		}
+
+		[Test]
+		public void Open_ConnectionString_PasswordInvalid ()
+		{
 			// password invalid
 			conn = new SqlConnection (connectionString + ";password=invalidPassword");
 			try {
 				conn.Open ();
-				Assert.Fail ("#C1");
+				Assert.Fail ("#1");
 			} catch (SqlException ex) {
 				// Login failed for user '...'
-				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#C2");
-				Assert.AreEqual ((byte) 14, ex.Class, "#C3");
-				Assert.IsNull (ex.InnerException, "#C4");
-				Assert.IsNotNull (ex.Message, "#C5");
-				Assert.AreEqual (18456, ex.Number, "#C6");
-				Assert.AreEqual ((byte) 1, ex.State, "#C7");
+				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#2");
+				Assert.AreEqual ((byte) 14, ex.Class, "#3");
+				Assert.IsNull (ex.InnerException, "#4");
+				Assert.IsNotNull (ex.Message, "#5");
+				Assert.AreEqual (18456, ex.Number, "#6");
+				Assert.AreEqual ((byte) 1, ex.State, "#7");
 			} finally {
 				conn.Close ();
 			}
+		}
+
+		[Test]
+		public void Open_ConnectionString_ServerInvalid ()
+		{
+			Assert.Ignore ("Long running");
 
 			// server invalid
 			conn = new SqlConnection (connectionString + ";server=invalidServerName");
 			try {
 				conn.Open ();
-				Assert.Fail ("#D1");
+				Assert.Fail ("#1");
 			} catch (SqlException ex) {
 				// An error has occurred while establishing a
 				// connection to the server...
-				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#D2");
-				Assert.AreEqual ((byte) 20, ex.Class, "#D3");
-				Assert.IsNull (ex.InnerException, "#D4");
-				Assert.IsNotNull (ex.Message, "#D5");
+				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#2");
+				Assert.AreEqual ((byte) 20, ex.Class, "#3");
+				Assert.IsNull (ex.InnerException, "#4");
+				Assert.IsNotNull (ex.Message, "#5");
 #if NET_2_0
-				Assert.AreEqual (53, ex.Number, "#D6");
+				Assert.AreEqual (53, ex.Number, "#6");
 #else
-				Assert.AreEqual (17, ex.Number, "#D6");
+				Assert.AreEqual (17, ex.Number, "#6");
 #endif
-				Assert.AreEqual ((byte) 0, ex.State, "#D7");
+				Assert.AreEqual ((byte) 0, ex.State, "#7");
 			} finally {
 				conn.Close ();
 			}
-		}
+			}
 
 		[Test] // bug #383061
 		public void Open_MaxPoolSize_Reached ()
@@ -682,18 +694,35 @@ namespace MonoTests.System.Data
 			conn = new SqlConnection (connectionString);
 			string database = conn.Database;
 
+			SqlCommand cmd;
+
 			// Test if database property is updated when a query changes database
 			conn.Open ();
-			SqlCommand cmd = new SqlCommand ("use [master]" , conn);
+			cmd = new SqlCommand ("use [master]" , conn);
 			cmd.ExecuteNonQuery ();
 			Assert.AreEqual ("master", conn.Database, "#1");
+
+			// ensure we're really in the expected database
+			cmd.CommandText = "SELECT name FROM sys.databases WHERE name = 'master'";
+			using (SqlDataReader dr = cmd.ExecuteReader ()) {
+				Assert.IsTrue (dr.Read (), "#2");
+			}
+
 			conn.Close ();
-			Assert.AreEqual (database, conn.Database, "#2");
+			Assert.AreEqual (database, conn.Database, "#3");
 
 			// Test if the database property is reset on re-opening the connection
 			conn.ConnectionString = connectionString;
 			conn.Open ();
-			Assert.AreEqual (database, conn.Database, "#3");
+			Assert.AreEqual (database, conn.Database, "#4");
+
+			// ensure we're really in the expected database
+			cmd.CommandText = "SELECT fname FROM employee WHERE id = 2";
+			using (SqlDataReader dr = cmd.ExecuteReader ()) {
+				Assert.IsTrue (dr.Read (), "#5");
+				Assert.AreEqual ("ramesh", dr.GetValue (0), "#6");
+			}
+
 			conn.Close ();
 		}
 

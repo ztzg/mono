@@ -38,21 +38,28 @@ namespace Mono.Mozilla
 {
 	internal class WebBrowser : IWebBrowser
 	{
-		private bool loaded;
-		private DOM.Document document;
+		bool loaded;
+		internal bool created = false;
+		bool creating = false;
+
+		internal DOM.Document document;
 		
 		internal DOM.Navigation navigation;
 		internal Platform platform;
 		internal Platform enginePlatform;
 		internal Callback callbacks;
-		private System.ComponentModel.EventHandlerList events;
-		private System.ComponentModel.EventHandlerList domEvents;
+		System.ComponentModel.EventHandlerList events;
+		System.ComponentModel.EventHandlerList domEvents;
 
-		private string statusText;
+		string statusText;
 
-		private bool streamingMode;
+		bool streamingMode;
 		
 		internal Hashtable documents;
+
+		int width;
+		int height;
+		bool isDirty;
 		
 		public WebBrowser (Platform platform)
 		{
@@ -68,6 +75,20 @@ namespace Mono.Mozilla
 			return loaded;
 		}
 
+		bool Created {
+			get {
+				if (!creating && !created) {
+					creating = true;
+					created = Base.Create (this);
+					if (created && isDirty) {
+						isDirty = false;
+						Base.Resize (this, width, height);
+					}
+				}
+				return created;
+			}
+		}
+
 		public void Shutdown ()
 		{
 			Base.Shutdown (this);
@@ -78,6 +99,7 @@ namespace Mono.Mozilla
 			this.document = null;
 			this.DomEvents.Dispose ();
 			this.domEvents = null;
+			this.documents.Clear ();
 		}
 
 		public bool Initialized {
@@ -90,7 +112,10 @@ namespace Mono.Mozilla
 					nsIWebBrowserFocus webBrowserFocus = (nsIWebBrowserFocus) (navigation.navigation);
 					nsIDOMWindow window;
 					webBrowserFocus.getFocusedWindow (out window);
-					return new DOM.Window (this, window) as IWindow;
+					if (window == null)
+						((nsIWebBrowser) navigation.navigation).getContentDOMWindow (out window);
+					if (window != null)
+						return new DOM.Window (this, window) as IWindow;
 				}
 				return null;
 			}
@@ -107,6 +132,8 @@ namespace Mono.Mozilla
 
 		public INavigation Navigation {
 			get {
+				if (!Created) return null;
+
 				if (navigation == null) {
 					
 					nsIWebNavigation webNav = Base.GetWebNavigation (this);
@@ -123,6 +150,7 @@ namespace Mono.Mozilla
 		public bool Offline {
 			get {
 				bool ret;
+				if (!Created) return true;
 				IOService.getOffline (out ret);
 				return ret;
 			}
@@ -148,7 +176,7 @@ namespace Mono.Mozilla
 				return events;
 			}
 		}
-
+		
 		Mono.Mozilla.DOM.ContentListener contentListener;
 		Mono.Mozilla.DOM.ContentListener ContentListener {
 			get {
@@ -156,7 +184,8 @@ namespace Mono.Mozilla
 					contentListener = new Mono.Mozilla.DOM.ContentListener (this);
 				return contentListener;
 			}
-		}
+		}		
+		
 		
 		nsIServiceManager servMan;
 		internal nsIServiceManager ServiceManager {
@@ -174,7 +203,8 @@ namespace Mono.Mozilla
 				if (ioService == null) {
 					IntPtr ioServicePtr = IntPtr.Zero;
 
-					ioServicePtr = ServiceManager.getServiceByContractID ("@mozilla.org/network/io-service;1", typeof (nsIIOService).GUID);
+					ServiceManager.getServiceByContractID ("@mozilla.org/network/io-service;1", typeof (nsIIOService).GUID,
+						out ioServicePtr);
 					if (ioServicePtr == IntPtr.Zero)
 						throw new Mono.WebBrowser.Exception (Mono.WebBrowser.Exception.ErrorCodes.IOService);
 
@@ -193,7 +223,8 @@ namespace Mono.Mozilla
 			get {
 				if (accessibilityService == null) {
 					IntPtr accessibilityServicePtr = IntPtr.Zero;
-					accessibilityServicePtr = ServiceManager.getServiceByContractID ("@mozilla.org/accessibilityService;1", typeof (nsIAccessibilityService).GUID);
+					ServiceManager.getServiceByContractID ("@mozilla.org/accessibilityService;1", typeof (nsIAccessibilityService).GUID,
+						out accessibilityServicePtr);
 					if (accessibilityServicePtr == IntPtr.Zero) {
 						throw new Mono.WebBrowser.Exception (Mono.WebBrowser.Exception.ErrorCodes.AccessibilityService);
 					}
@@ -214,7 +245,8 @@ namespace Mono.Mozilla
 				if (errorService == null) {
 					IntPtr errorServicePtr = IntPtr.Zero;
 
-					errorServicePtr = ServiceManager.getServiceByContractID ("@mozilla.org/xpcom/error-service;1", typeof (nsIErrorService).GUID);
+					ServiceManager.getServiceByContractID ("@mozilla.org/xpcom/error-service;1", typeof (nsIErrorService).GUID,
+						out errorServicePtr);
 					if (errorServicePtr == IntPtr.Zero)
 						return null;
 
@@ -241,30 +273,38 @@ namespace Mono.Mozilla
 		#region Layout
 		public void FocusIn (FocusOption focus)
 		{
+			if (!created) return;
 			Base.Focus (this, focus);
 		}
 		public void FocusOut ()
 		{
+			if (!created) return;
 			Base.Blur (this);
 		}
 		
 		public void Activate ()
 		{
+			if (!Created) return;
 			Base.Activate (this);
 		}
 		public void Deactivate ()
 		{
+			if (!created) return;
 			Base.Deactivate (this);
 		}
 
 		public void Resize (int width, int height)
 		{
+			this.width = width;
+			this.height = height;
+			isDirty = true;
+			if (!created) return;
 			Base.Resize (this, width, height);			
 		}
-		
 
 		public void Render (byte[] data)
 		{
+			if (!Created) return;
 			if (data == null)
 				throw new ArgumentNullException ("data");
 			string html = System.Text.ASCIIEncoding.UTF8.GetString (data);
@@ -273,13 +313,14 @@ namespace Mono.Mozilla
 
 		public void Render (string html)
 		{
+			if (!Created) return;
 			Render (html, "file:///", "text/html");
 		}
 
 				
 		public void Render (string html, string uri, string contentType)
 		{
-			
+			if (!Created) return;
 			nsIWebBrowserStream stream;
 			if (Navigation != null) {
 				stream = (nsIWebBrowserStream) navigation.navigation;
@@ -302,8 +343,9 @@ namespace Mono.Mozilla
 			stream.closeStream ();
 
 		}
-
+		
 		public void ExecuteScript (string script) {
+			if (!Created) return;
 			Base.EvalScript (this, script);
 		}
 				
@@ -493,5 +535,7 @@ namespace Mono.Mozilla
 		}
 
 		#endregion
+
+
 	}
 }

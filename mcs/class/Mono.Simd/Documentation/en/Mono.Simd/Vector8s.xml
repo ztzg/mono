@@ -42,6 +42,23 @@
         <remarks></remarks>
       </Docs>
     </Member>
+    <Member MemberName="Component">
+      <MemberSignature Language="C#" Value="public short this[int index] { set; get; }" />
+      <MemberType>Property</MemberType>
+      <AssemblyInfo>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+      </AssemblyInfo>
+      <ReturnValue>
+        <ReturnType>System.Int16</ReturnType>
+      </ReturnValue>
+      <Parameters>
+        <Parameter Name="index" Type="System.Int32" />
+      </Parameters>
+      <Docs>
+        <param name="index">The index of the component.</param>
+        <summary>Gets/Sets the component's value.</summary>
+      </Docs>
+    </Member>
     <Member MemberName="AddWithSaturation">
       <MemberSignature Language="C#" Value="public static Mono.Simd.Vector8s AddWithSaturation (Mono.Simd.Vector8s va, Mono.Simd.Vector8s vb);" />
       <MemberType>Method</MemberType>
@@ -125,30 +142,6 @@
         <summary>To be added.</summary>
         <returns>To be added.</returns>
         <remarks>To be added.</remarks>
-      </Docs>
-    </Member>
-    <Member MemberName="ExtractByteMask">
-      <MemberSignature Language="C#" Value="public static int ExtractByteMask (Mono.Simd.Vector8s va);" />
-      <MemberType>Method</MemberType>
-      <AssemblyInfo>
-        <AssemblyVersion>2.0.0.0</AssemblyVersion>
-      </AssemblyInfo>
-      <Attributes>
-        <Attribute>
-          <AttributeName>Mono.Simd.Acceleration(Mono.Simd.AccelMode.SSE2)</AttributeName>
-        </Attribute>
-      </Attributes>
-      <ReturnValue>
-        <ReturnType>System.Int32</ReturnType>
-      </ReturnValue>
-      <Parameters>
-        <Parameter Name="va" Type="Mono.Simd.Vector8s" />
-      </Parameters>
-      <Docs>
-        <param name="va">Vector.</param>
-        <summary>Extracts a byte mask from the vector.</summary>
-        <returns>An integer with the low 16 bits representing the mask.</returns>
-        <remarks>This returns a 16-bit value where each bit is formed from the most significant bit of each byte.</remarks>
       </Docs>
     </Member>
     <Member MemberName="LoadAligned">
@@ -783,8 +776,8 @@
         <remarks>To be added.</remarks>
       </Docs>
     </Member>
-    <Member MemberName="ShiftRightLogic">
-      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector8s ShiftRightLogic (Mono.Simd.Vector8s va, int amount);" />
+    <Member MemberName="LogicalRightShift">
+      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector8s LogicalRightShift (Mono.Simd.Vector8s va, int amount);" />
       <MemberType>Method</MemberType>
       <AssemblyInfo>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>
@@ -914,8 +907,8 @@
         <remarks>To be added.</remarks>
       </Docs>
     </Member>
-    <Member MemberName="SubWithSaturation">
-      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector8s SubWithSaturation (Mono.Simd.Vector8s va, Mono.Simd.Vector8s vb);" />
+    <Member MemberName="SubtractWithSaturation">
+      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector8s SubtractWithSaturation (Mono.Simd.Vector8s va, Mono.Simd.Vector8s vb);" />
       <MemberType>Method</MemberType>
       <AssemblyInfo>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>

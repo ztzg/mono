@@ -140,7 +140,8 @@ libmonoruntime_la_SOURCES = \
 	mono-perfcounters-def.h	\
 	debug-helpers.c	\
 	generic-sharing.c	\
-	mempool-internals.h
+	mempool-internals.h	\
+	metadata-verify.c
 
 libmonoruntime_static_la_SOURCES = $(libmonoruntime_la_SOURCES)
 
@@ -180,7 +181,7 @@ if DTRACE_G_REQUIRED
 PEDUMP_DTRACE_OBJECT = pedump-dtrace.$(OBJEXT)
 
 pedump-dtrace.$(OBJEXT): $(top_srcdir)/data/mono.d libmonoruntime.la ../io-layer/libwapi.la ../utils/libmonoutils.la
-	DTRACE="$(DTRACE)" DTRACEFLAGS="$(DTRACEFLAGS)" AR="$(AR)" $(SHELL) $(top_srcdir)/dtrace-prelink.sh \
+	DTRACE="$(DTRACE)" DTRACEFLAGS="$(DTRACEFLAGS)" AR="$(AR)" $(SHELL) $(top_srcdir)/data/dtrace-prelink.sh \
 	--pic pedump-dtrace.$(OBJEXT) $(top_srcdir)/data/mono.d libmonoruntime.la ../io-layer/libwapi.la ../utils/libmonoutils.la
 
 else

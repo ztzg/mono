@@ -205,7 +205,9 @@ namespace System.Windows.Forms {
 		private static IntPtr PRIMARY;
 		//private static IntPtr DIB;
 		private static IntPtr OEMTEXT;
-		private static IntPtr UNICODETEXT;
+		private static IntPtr UTF8_STRING;
+		private static IntPtr UTF16_STRING;
+		private static IntPtr RICHTEXTFORMAT;
 		private static IntPtr TARGETS;
 
 		// mouse hover message generation
@@ -618,6 +620,8 @@ namespace System.Windows.Forms {
 				"PRIMARY",
 				"COMPOUND_TEXT",
 				"UTF8_STRING",
+				"UTF16_STRING",
+				"RICHTEXTFORMAT",
 				"TARGETS",
 				"_SWF_AsyncAtom",
 				"_SWF_PostMessageAtom",
@@ -691,7 +695,9 @@ namespace System.Windows.Forms {
 			CLIPBOARD = atoms [off++];
 			PRIMARY = atoms [off++];
 			OEMTEXT = atoms [off++];
-			UNICODETEXT = atoms [off++];
+			UTF8_STRING = atoms [off++];
+			UTF16_STRING = atoms [off++];
+			RICHTEXTFORMAT = atoms [off++];
 			TARGETS = atoms [off++];
 			AsyncAtom = atoms [off++];
 			PostAtom = atoms [off++];
@@ -1020,7 +1026,8 @@ namespace System.Windows.Forms {
 				   is ignored by metacity. */
 				functions |= MotifFunctions.Move | MotifFunctions.Resize | MotifFunctions.Minimize | MotifFunctions.Maximize;
 			} else if (form != null && form.FormBorderStyle == FormBorderStyle.None) {
-				functions |= MotifFunctions.All;
+				/* allow borderless window to be maximized */
+				functions |= MotifFunctions.All | MotifFunctions.Resize;
 			} else {
 				if (StyleSet (cp.Style, WindowStyles.WS_CAPTION)) {
 					functions |= MotifFunctions.Move;
@@ -1244,9 +1251,15 @@ namespace System.Windows.Forms {
 					// FIXME - convert pixmap to image
 				} else if (property == OEMTEXT) {
 					Clipboard.Item = Marshal.PtrToStringAnsi(prop);
-				} else if (property == UNICODETEXT) {
+				} else if (property == UTF8_STRING) {
+					byte [] buffer = new byte [(int)nitems];
+					for (int i = 0; i < (int)nitems; i++)
+						buffer [i] = Marshal.ReadByte (prop, i);
+					Clipboard.Item = Encoding.UTF8.GetString (buffer);
+				} else if (property == UTF16_STRING) {
+					Clipboard.Item = Marshal.PtrToStringUni (prop, Encoding.Unicode.GetMaxCharCount ((int)nitems));
+				} else if (property == RICHTEXTFORMAT)
 					Clipboard.Item = Marshal.PtrToStringAnsi(prop);
-				}
 
 				XFree(prop);
 			}
@@ -1417,8 +1430,8 @@ namespace System.Windows.Forms {
 					//
 					if (in_doevents ||
 					    (Application.MWFThread.Current.Context != null && 
-					     Application.MWFThread.Current.Context.MainForm != null && 
-					     Application.MWFThread.Current.Context.MainForm.IsLoaded)) {
+					     (Application.MWFThread.Current.Context.MainForm == null || 
+					      Application.MWFThread.Current.Context.MainForm.IsLoaded))) {
 						timer.Busy = true;
 						timer.Update (now);
 						timer.FireTick ();
@@ -1698,7 +1711,9 @@ namespace System.Windows.Forms {
 						if (Clipboard.Item is String) {
 							atoms[atom_count++] = (int)Atom.XA_STRING;
 							atoms[atom_count++] = (int)OEMTEXT;
-							atoms[atom_count++] = (int)UNICODETEXT;
+							atoms[atom_count++] = (int)UTF8_STRING;
+							atoms[atom_count++] = (int)UTF16_STRING;
+							atoms[atom_count++] = (int)RICHTEXTFORMAT;
 						} else if (Clipboard.Item is Image) {
 							atoms[atom_count++] = (int)Atom.XA_PIXMAP;
 							atoms[atom_count++] = (int)Atom.XA_BITMAP;
@@ -1713,10 +1728,12 @@ namespace System.Windows.Forms {
 
 						buflen = 0;
 
-						if (xevent.SelectionRequestEvent.target == (IntPtr)Atom.XA_STRING) {
+						// The RTF spec mentions that ascii is enough to contain it
+						if (xevent.SelectionRequestEvent.target == (IntPtr)Atom.XA_STRING ||
+								xevent.SelectionRequestEvent.target == (IntPtr)RICHTEXTFORMAT) {
 							Byte[] bytes;
 
-							bytes = new ASCIIEncoding().GetBytes((string)Clipboard.Item);
+							bytes = new ASCIIEncoding().GetBytes((string)Clipboard.Source);
 							buffer = Marshal.AllocHGlobal(bytes.Length);
 							buflen = bytes.Length;
 
@@ -1725,14 +1742,19 @@ namespace System.Windows.Forms {
 							}
 						} else if (xevent.SelectionRequestEvent.target == OEMTEXT) {
 							// FIXME - this should encode into ISO2022
-							buffer = Marshal.StringToHGlobalAnsi((string)Clipboard.Item);
+							buffer = Marshal.StringToHGlobalAnsi((string)Clipboard.Source);
 							while (Marshal.ReadByte(buffer, buflen) != 0) {
 								buflen++;
 							}
-						} else if (xevent.SelectionRequestEvent.target == UNICODETEXT) {
-							buffer = Marshal.StringToHGlobalAnsi((string)Clipboard.Item);
-							while (Marshal.ReadByte(buffer, buflen) != 0) {
-								buflen++;
+						} else if (xevent.SelectionRequestEvent.target == UTF16_STRING) {
+							Byte [] bytes;
+
+							bytes = Encoding.Unicode.GetBytes ((string)Clipboard.Source);
+							buffer = Marshal.AllocHGlobal (bytes.Length);
+							buflen = bytes.Length;
+
+							for (int i = 0; i < buflen; i++) {
+								Marshal.WriteByte (buffer, i, bytes [i]);
 							}
 						} else {
 							buffer = IntPtr.Zero;
@@ -1773,6 +1795,7 @@ namespace System.Windows.Forms {
 							TranslatePropertyToClipboard(xevent.SelectionEvent.property);
 						} else {
 							Clipboard.Item = null;
+							Clipboard.Source = null;
 						}
 					} else {
 						Dnd.HandleSelectionNotifyEvent (ref xevent);
@@ -2598,10 +2621,11 @@ namespace System.Windows.Forms {
 			//else if (format == "PenData" ) return 10;
 			//else if (format == "RiffAudio" ) return 11;
 			//else if (format == "WaveAudio" ) return 12;
-			else if (format == "UnicodeText" ) return UNICODETEXT.ToInt32();
+			else if (format == "UnicodeText" ) return UTF16_STRING.ToInt32();
 			//else if (format == "EnhancedMetafile" ) return 14;
 			//else if (format == "FileDrop" ) return 15;
 			//else if (format == "Locale" ) return 16;
+			else if (format == "Rich Text Format") return RICHTEXTFORMAT.ToInt32 ();
 
 			return XInternAtom(DisplayHandle, format, false).ToInt32();
 		}
@@ -2626,6 +2650,7 @@ namespace System.Windows.Forms {
 		}
 
 		internal override void ClipboardStore(IntPtr handle, object obj, int type, XplatUI.ObjectToClipboard converter) {
+			Clipboard.Source = obj;
 			Clipboard.Item = obj;
 			Clipboard.Type = type;
 			Clipboard.Converter = converter;
@@ -3852,14 +3877,14 @@ namespace System.Windows.Forms {
 					// F1 key special case - WM_HELP sending
 					if (msg.wParam == (IntPtr)VirtualKeys.VK_F1 || msg.wParam == (IntPtr)VirtualKeys.VK_HELP) {
 						// Send the keypress message first
-						NativeWindow.WndProc (hwnd.client_window, msg.message, msg.wParam, msg.lParam);
+						NativeWindow.WndProc (FocusWindow, msg.message, msg.wParam, msg.lParam);
 
 						// Send wM_HELP
 						HELPINFO helpInfo = new HELPINFO ();
 						GetCursorPos (IntPtr.Zero, out helpInfo.MousePos.x, out helpInfo.MousePos.y);
 						IntPtr helpInfoPtr = Marshal.AllocHGlobal (Marshal.SizeOf (helpInfo));
 						Marshal.StructureToPtr (helpInfo, helpInfoPtr, true);
-						NativeWindow.WndProc (hwnd.client_window, Msg.WM_HELP, IntPtr.Zero, helpInfoPtr);
+						NativeWindow.WndProc (FocusWindow, Msg.WM_HELP, IntPtr.Zero, helpInfoPtr);
 						Marshal.FreeHGlobal (helpInfoPtr);
 
 						goto ProcessNextMessage;
@@ -4549,7 +4574,7 @@ namespace System.Windows.Forms {
 
 				XGetWindowProperty(DisplayHandle, handle,
 						   _NET_WM_NAME, IntPtr.Zero, new IntPtr (1), false,
-						   UNICODETEXT, out actual_atom, out actual_format, out nitems, out bytes_after, ref prop);
+						   UTF8_STRING, out actual_atom, out actual_format, out nitems, out bytes_after, ref prop);
 
 				if ((long)nitems > 0 && prop != IntPtr.Zero) {
 					text = Marshal.PtrToStringUni (prop, (int)nitems);
@@ -6002,7 +6027,7 @@ namespace System.Windows.Forms {
 			hwnd = Hwnd.ObjectFromHandle(handle);
 
 			lock (XlibLock) {
-				XChangeProperty(DisplayHandle, hwnd.whole_window, _NET_WM_NAME, UNICODETEXT, 8,
+				XChangeProperty(DisplayHandle, hwnd.whole_window, _NET_WM_NAME, UTF8_STRING, 8,
 						PropertyMode.Replace, text, Encoding.UTF8.GetByteCount (text));
 
 				// XXX this has problems with UTF8.

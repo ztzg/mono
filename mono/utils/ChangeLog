@@ -1,16 +1,63 @@
-2008-11-24  Zoltan Varga  <vargaz@gmail.com>
+2009-01-19  Bill Holmes  <billholmes54@gmail.com>
 
-	Backport of r123968.
-	
-	* freebsd-elf_common.h (struct): Use uint32_t instead of 
-	u_int32_t to fix the build on opensolaris.
+	* mono-path.c (mono_path_canonicalize): Adding support for UNC
+	   paths on Windows.
 
-2008-12-03  Rodrigo Kumpera  <rkumpera@novell.com>
+	Contributed under MIT/X11 license.
+
+2009-01-18  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-mmap.c: Applied patch from Koushik Dutta
+	(koush@koushikdutta.com). Add an #ifdef HAVE_SHM_OPEN.
+
+2009-01-16  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-hash.c: Change the roots to use write barriers when running with
+	SGEN, to avoid scanning all the hash nodes at every minor collection.
+
+2009-01-15  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-hash.c: Rewrite the SGEN specific parts to use a user defined
+	marker function instead of registering each GC node as a hash root.
+
+2009-01-08  Bill Holmes  <billholmes54@gmail.com>
+
+	* mono-dl.c (mono_dl_open): Fix the MSVC build.
+
+	Contributed under MIT/X11 license.
+
+2008-12-19  Miguel de Icaza  <miguel@novell.com>
+
+	* mono-dl.c (mono_dl_open): Do not crash if the platform does not
+	support dlopen.
+
+2008-12-08  Kornél Pál  <kornelpal@gmail.com>
+
+	* mono-time.c (mono_100ns_ticks, PLATFORM_WIN32): Use GetSystemTimeAsFileTime
+	with ULARGE_INTEGER that is more efficient.
+
+	Contributed under MIT/X11 license.
+
+2008-12-02  Rodrigo Kumpera  <rkumpera@novell.com>
 
 	* mono-property-hash.c (mono_property_hash_destroy): Release
 	the root hashtable as well.
 
-	Backported from trunk.
+2008-11-24  Zoltan Varga  <vargaz@gmail.com>
+
+	* freebsd-elf_common.h (struct): Use uint32_t instead of 
+	u_int32_t to fix the build on opensolaris.
+
+2008-11-18  Zoltan Varga  <vargaz@gmail.com>
+
+	* freebsd-dwarf.h: Add dwarf.h header file from freebsd.
+
+2008-11-14  Andreas Färber  <andreas.faerber@web.de>
+
+	* Makefile.am (ENABLE_DTRACE): Re-add dtrace -h flag.
+	Fixes #445074.
+	
+	Contributed under MIT/X11 license.
 
 Mon Nov 10 17:38:41 CET 2008 Paolo Molaro <lupus@ximian.com>
 

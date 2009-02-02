@@ -112,6 +112,13 @@ namespace System.Windows.Forms {
 
 			// Initialize things that need to be done after the driver is ready
 			DataFormats.GetFormat(0);
+
+#if NET_2_0
+			// Signal that the Application loop can be run.
+			// This allows UIA to initialize a11y support for MWF
+			// before the main loop begins.
+			Application.FirePreRun ();
+#endif
 		}
 		#endregion	// Constructor & Destructor
 
@@ -119,12 +126,9 @@ namespace System.Windows.Forms {
 
 		public static bool RunningOnUnix {
 			get {
-#if NET_2_0
-				return (Environment.OSVersion.Platform == PlatformID.Unix || Environment.OSVersion.Platform == PlatformID.MacOSX);
-#else
-				int platform = (int) Environment.OSVersion.Platform;
-				return (platform == 128);
-#endif
+				int p = (int) Environment.OSVersion.Platform;
+				
+				return (p == 4 || p == 6 || p == 128);
 			}
 		}
 

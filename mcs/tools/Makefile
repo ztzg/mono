@@ -3,7 +3,6 @@ thisdir = tools
 net_1_1_dirs := \
 	al			\
 	cilc		\
-	corcompare	\
 	culevel		\
 	ictool		\
 	mono-xsd	\
@@ -64,9 +63,9 @@ net_1_1_SUBDIRS := $(net_1_1_dirs)
 net_2_0_bootstrap_SUBDIRS = resgen
 net_2_0_SUBDIRS := $(net_2_0_dirs)
 net_2_1_raw_SUBDIRS := $(net_2_1_dirs)
-net_2_1_SUBDIRS := $(net_2_1_dirs) tuner
+net_2_1_SUBDIRS := $(net_2_1_dirs) moon
 
-SUBDIRS = $(net_1_1_dirs) $(net_2_0_dirs) $(net_2_1_dirs)
+SUBDIRS = $(net_1_1_SUBDIRS) $(net_2_0_SUBDIRS) $(net_2_1_SUBDIRS)
 
 include ../build/rules.make
 

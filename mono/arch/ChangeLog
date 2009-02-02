@@ -1,9 +1,129 @@
+2009-01-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add x86_movd_xreg_membase.
+
+2008-12-19  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: Fixed the argument order for lwzu in
+	ppc_load_reg_update.
+
+2008-12-12  Mark Mason	<mmason@upwardaccess.com>
+
+	* mips/mips-codegen.h: Changes to support n32.
+	
+2008-12-10  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: A few new macros for the final PPC/PPC64
+	merge.
+
+2008-12-05  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: ppc_load_func must use ppc_load_sequence.
+	Added ppc_compare_log.
+
+2008-12-05  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: Added ppc_load_func for PPC32.  Added
+	ppc_load/store_multiple_regs and ppc_compare_reg_imm.
+
+2008-12-02  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: Opcodes for floating point conversions from
+	64 bit integers.
+
+	Code submitted by andreas.faerber@web.de at
+	https://bugzilla.novell.com/show_bug.cgi?id=324134 under the
+	X11/MIT license.
+
+2008-11-28  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: #define for the maximum length of a load
+	sequence.
+
+2008-11-21  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: Make ppc_is_[u]imm16() work with 64 bit
+	values.
+
+2008-11-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add X86_SSE_MOVHPD_REG_MEMBASE and renamed MOVS to MOVSD.
+
+2008-11-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add X86_SSE_MOVS_ reg/membase variants.
+
+	* x86/x86-codegen.h: Add x86_sse_alu_pd_reg_membase_imm.
+
+	* x86/x86-codegen.h: Sort the x86_sse_alu_* macros decently.
+
+2008-11-20  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: Use ppc_load_reg instead of ppc_ld in
+	ppc_load_func to fix the 2 bit shift.
+
+2008-11-20  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: 64 bit division opcodes.
+
+	Code submitted by andreas.faerber@web.de at
+	https://bugzilla.novell.com/show_bug.cgi?id=324134 under the
+	X11/MIT license.
+
 2008-11-20  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r119444.
-	
 	* arm/Makefile.am (libmonoarch_arm_la_SOURCES): Don't build tramp.c, it is only
 	used by the interpreter.
+
+2008-11-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add PEXTR B/W/D.
+
+2008-11-18 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add PINSR B/W/D.
+
+2008-11-18  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: Macro for nop added.
+
+2008-11-18  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: PPC64 code generation macros.
+
+	Based on code submitted by andreas.faerber@web.de at
+	https://bugzilla.novell.com/show_bug.cgi?id=324134 under the
+	X11/MIT license.
+
+2008-11-18  Mark Probst  <mark.probst@gmail.com>
+
+	* ppc/ppc-codegen.h: A few fixes and additions.
+
+	Based on code submitted by andreas.faerber@web.de at
+	https://bugzilla.novell.com/show_bug.cgi?id=324134 under the
+	X11/MIT license.
+
+2008-11-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Fix comment about the version of PCMPGTQ.
+
+	* x86/x86-codegen.h: Add movsd constant and x86_sse_alu_sd_membase_reg
+	macro.
+
+2008-11-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Add X86_SSE_MOVHPD_MEMBASE_REG constant
+	and x86_sse_alu_pd_membase_reg/x86_sse_alu_membase_reg macros.
+
+2008-11-15  Andreas Faerber  <andreas.faerber@web.de>
+
+	* ppc/test.c: Add support for Mac OS X.
+
+	Code is contributed under MIT/X11 license.
+
+2008-11-13  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* x86/x86-codegen.h: Remove not used macro x86_pshufd_reg_reg.
 
 2008-11-04  Rodrigo Kumpera  <rkumpera@novell.com>
 

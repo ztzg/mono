@@ -49,7 +49,7 @@ memory_barrier: len:4
 nop: len:4
 relaxed_nop: len:4
 break: len:4
-jmp: len:104
+jmp: len:108
 call: dest:a clob:c len:16
 br: len:4
 throw: src1:i len:20
@@ -60,8 +60,8 @@ add_ovf_carry: dest:i src1:i src2:i len:16
 sub_ovf_carry: dest:i src1:i src2:i len:16
 add_ovf_un_carry: dest:i src1:i src2:i len:16
 sub_ovf_un_carry: dest:i src1:i src2:i len:16
-start_handler: len:16
-endfinally: len:12
+start_handler: len:32
+endfinally: len:28
 ceq: dest:i len:12
 cgt: dest:i len:12
 cgt.un: dest:i len:12
@@ -72,9 +72,6 @@ compare: src1:i src2:i len:4
 compare_imm: src1:i len:12
 fcompare: src1:f src2:f len:12
 oparglist: src1:i len:12
-outarg: src1:i len:1
-outarg_imm: len:5
-setret: dest:a src1:i len:4
 setlret: src1:i src2:i len:12
 checkthis: src1:b len:4
 voidcall: len:16 clob:c
@@ -197,7 +194,7 @@ float_clt: dest:i src1:f src2:f len:16
 float_clt_un: dest:i src1:f src2:f len:20
 float_conv_to_u: dest:i src1:f len:36
 call_handler: len:12
-endfilter: src1:i len:16
+endfilter: src1:i len:32
 aot_const: dest:i len:8
 sqrt: dest:f src1:f len:4
 adc: dest:i src1:i src2:i len:4

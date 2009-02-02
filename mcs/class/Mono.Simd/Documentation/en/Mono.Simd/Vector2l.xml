@@ -30,6 +30,23 @@
         <remarks></remarks>
       </Docs>
     </Member>
+    <Member MemberName="Component">
+      <MemberSignature Language="C#" Value="public long this[int index] { set; get; }" />
+      <MemberType>Property</MemberType>
+      <AssemblyInfo>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+      </AssemblyInfo>
+      <ReturnValue>
+        <ReturnType>System.Int64</ReturnType>
+      </ReturnValue>
+      <Parameters>
+        <Parameter Name="index" Type="System.Int32" />
+      </Parameters>
+      <Docs>
+        <param name="index">The index of the component.</param>
+        <summary>Gets/Sets the component's value.</summary>
+      </Docs>
+    </Member>
     <Member MemberName="CompareEqual">
       <MemberSignature Language="C#" Value="public static Mono.Simd.Vector2l CompareEqual (Mono.Simd.Vector2l v1, Mono.Simd.Vector2l v2);" />
       <MemberType>Method</MemberType>
@@ -80,30 +97,6 @@
         <summary>To be added.</summary>
         <returns>To be added.</returns>
         <remarks>To be added.</remarks>
-      </Docs>
-    </Member>
-    <Member MemberName="ExtractByteMask">
-      <MemberSignature Language="C#" Value="public static long ExtractByteMask (Mono.Simd.Vector2l va);" />
-      <MemberType>Method</MemberType>
-      <AssemblyInfo>
-        <AssemblyVersion>2.0.0.0</AssemblyVersion>
-      </AssemblyInfo>
-      <Attributes>
-        <Attribute>
-          <AttributeName>Mono.Simd.Acceleration(Mono.Simd.AccelMode.SSE2)</AttributeName>
-        </Attribute>
-      </Attributes>
-      <ReturnValue>
-        <ReturnType>System.Int64</ReturnType>
-      </ReturnValue>
-      <Parameters>
-        <Parameter Name="va" Type="Mono.Simd.Vector2l" />
-      </Parameters>
-      <Docs>
-        <param name="va">Vector.</param>
-        <summary>Extracts a byte mask from the vector.</summary>
-        <returns>An integer with the low 16 bits representing the mask.</returns>
-        <remarks>This returns a 16-bit value where each bit is formed from the most significant bit of each byte.</remarks>
       </Docs>
     </Member>
     <Member MemberName="LoadAligned">
@@ -547,8 +540,8 @@
         <remarks>The vector elements contain the substraction of the elements in the second vector from the elements in the first vector.</remarks>
       </Docs>
     </Member>
-    <Member MemberName="ShiftRightLogic">
-      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector2l ShiftRightLogic (Mono.Simd.Vector2l v1, int amount);" />
+    <Member MemberName="LogicalRightShift">
+      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector2l LogicalRightShift (Mono.Simd.Vector2l v1, int amount);" />
       <MemberType>Method</MemberType>
       <AssemblyInfo>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>

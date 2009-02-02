@@ -181,8 +181,7 @@ namespace Mono.Cecil.Cil {
 				case OperandType.InlineType :
 				case OperandType.InlineTok :
 					if (instr.Operand is TypeReference)
-						WriteToken (m_reflectWriter.GetTypeDefOrRefToken (
-								instr.Operand as TypeReference));
+						WriteToken (GetTypeToken ((TypeReference) instr.Operand));
 					else if (instr.Operand is GenericInstanceMethod)
 						WriteToken (m_reflectWriter.GetMethodSpecToken (instr.Operand as GenericInstanceMethod));
 					else if (instr.Operand is MemberReference)
@@ -225,6 +224,11 @@ namespace Mono.Cecil.Cil {
 			}
 
 			m_codeWriter.BaseStream.Position = pos;
+		}
+
+		MetadataToken GetTypeToken (TypeReference type)
+		{
+			return m_reflectWriter.GetTypeDefOrRefToken (type);
 		}
 
 		MetadataToken GetCallSiteToken (CallSite cs)
@@ -326,7 +330,7 @@ namespace Mono.Cecil.Cil {
 		{
 			switch (eh.Type) {
 			case ExceptionHandlerType.Catch :
-				WriteToken (eh.CatchType.MetadataToken);
+				WriteToken (GetTypeToken (eh.CatchType));
 				break;
 			case ExceptionHandlerType.Filter :
 				m_codeWriter.Write ((uint) eh.FilterStart.Offset);
@@ -364,22 +368,25 @@ namespace Mono.Cecil.Cil {
 		{
 			long pos = m_binaryWriter.BaseStream.Position;
 
-			if (body.Variables.Count > 0 || body.ExceptionHandlers.Count > 0
+			if (body.HasVariables || body.HasExceptionHandlers
 				|| m_codeWriter.BaseStream.Length >= 64 || body.MaxStack > 8) {
 
 				MethodHeader header = MethodHeader.FatFormat;
 				if (body.InitLocals)
 					header |= MethodHeader.InitLocals;
-				if (body.ExceptionHandlers.Count > 0)
+				if (body.HasExceptionHandlers)
 					header |= MethodHeader.MoreSects;
 
 				m_binaryWriter.Write ((byte) header);
 				m_binaryWriter.Write ((byte) 0x30); // (header size / 4) << 4
 				m_binaryWriter.Write ((short) body.MaxStack);
 				m_binaryWriter.Write ((int) m_codeWriter.BaseStream.Length);
-				m_binaryWriter.Write (((int) TokenType.Signature | body.LocalVarToken));
+				// the token should be zero if there are no variables
+				int token = body.HasVariables ? ((int) TokenType.Signature | body.LocalVarToken) : 0;
+				m_binaryWriter.Write (token);
 
-				WriteExceptionHandlerCollection (body.ExceptionHandlers);
+				if (body.HasExceptionHandlers)
+					WriteExceptionHandlerCollection (body.ExceptionHandlers);
 			} else
 				m_binaryWriter.Write ((byte) ((byte) MethodHeader.TinyFormat |
 					m_codeWriter.BaseStream.Length << 2));
@@ -552,7 +559,7 @@ namespace Mono.Cecil.Cil {
 					break;
 
 				IMethodSignature method = (IMethodSignature) instruction.Operand;
-				int count = method.Parameters.Count;
+				int count = method.HasParameters ? method.Parameters.Count : 0;
 				if (method.HasThis && code != OpCodes.Newobj)
 					++count;
 

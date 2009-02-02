@@ -1,9 +1,71 @@
+2009-01-30  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: don't save the control's state if it's
+	disabled. Fixes bug #470993
+
+2009-01-23  Marek Habersack  <mhabersack@novell.com>
+
+	* HtmlTextWriter.cs: if OnTagRender returns false when called from
+	RenderBeginTag, push the tag to the stack regardless, and ignore
+	it in DoBeginTag and RenderEndTag. Fixes bug #463634
+
+2009-01-13  Marek Habersack  <mhabersack@novell.com>
+
+	* CodeBuilder.cs, RootBuilder.cs, CollectionBuilder.cs: updates
+	related to ControlBuilder cleanup.
+
+	* ControlBuilder.cs: code cleanup - no field should be visible
+	outside the class unless it's a constant or a read-only field.
+
+2009-01-12  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateParser.cs: line pragmas are on by default. Fixes bug
+	#460479
+
+2009-01-09  Marek Habersack  <mhabersack@novell.com>
+
+	* BaseParser.cs, PageParser.cs, UserControlParser.cs: use
+	VirtualPathUtility.GetDirectory instead of UrlUtils.GetDirectory.
+
+2008-12-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TemplateControl.cs: use IndexOf (char).
+
 2008-12-18  Marek Habersack  <mhabersack@novell.com>
 
 	* ControlBuilder.cs: BindingContainerType returns typeof (Page)
 	only when the current object is a RootBuilder and it's been
 	created for a page parser. Otherwise it returns typeof
 	(Control). Fixes bug #456305
+
+2008-12-11  Marek Habersack  <mhabersack@novell.com>
+
+	* MasterPageParser.cs: check if masterType is null before using it
+	in AddDirective.
+
+	* TemplateParser.cs: in the 2.0 profile when a custom control is
+	registered, do not compile it right away but store the tag name in
+	a registry to be compiled at a later stage.
+
+2008-12-09 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* XhtmlTextWriter.cs: don't recreate the Hashtables every time, but
+	Clone the defaults.
+
+2008-12-10  Marek Habersack  <mhabersack@novell.com>
+
+	* MasterPageParser.cs: do not compile anything while
+	parsing. MasterType virtual path is not compiled, but stored for
+	later. It is compiled when the MasterType property is requested
+	from within MasterPageCompiler.
+
+	* PageParser.cs: do not compile anything while
+	parsing. MasterPageFile, MasterType and PreviousPageType virtual
+	paths aren't compiled but checked for existence and stored for
+	later. Actual compilation happens when the MasterType and
+	PreviousPageType are requested from within PageCompiler.
+
+	* BaseParser.cs: added a new helper method, ThrowParseFileNotFound.
 
 2008-12-03  Marek Habersack  <mhabersack@novell.com>
 
@@ -103,6 +165,11 @@
 	* DataBinder.cs: if Eval doesn't find the indicated property, try
 	to find an indexer property on the object and use the expression
 	value as its parameter. Fixes #444725
+
+2008-11-13  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: added ability to reset child names to a specific
+	value, not only to 0.
 
 2008-10-29  Marek Habersack  <mhabersack@novell.com>
 

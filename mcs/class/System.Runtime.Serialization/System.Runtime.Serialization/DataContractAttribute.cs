@@ -51,6 +51,9 @@ namespace System.Runtime.Serialization
 			get { return ns; }
 			set { ns = value; }
 		}
+
+		// new in 3.5 SP1
+		public bool IsReference { get; set; }
 	}
 }
 #endif

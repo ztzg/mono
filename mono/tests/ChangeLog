@@ -1,3 +1,11 @@
+2009-01-27  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r124712.
+
+	* bug469742.2.il: New test.
+
+	* Makefile.am: Test added.
+
 2009-01-22  Mark Probst  <mark.probst@gmail.com>
 
 	Backport of r124246.
@@ -42,21 +50,43 @@
 
 	* Makefile.am: Test added.
 
+2009-01-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* test-runner.cs: Avoid closing a stream which is still being written to.
+
 2009-01-18  Zoltan Varga  <vargaz@gmail.com>
 
 	* marshal9.cs: Change a test to be compatible with MS.NET.
 
 2009-01-07 Rodrigo Kumpera  <rkumpera@novell.com>
 
-	Backport of r122672 - r122675.
+	* bug-459094.cs: New regression test.
 
-	* bug-459094	.cs: New regression test.
+	* Makefile.am: Test added.
+
+2009-01-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* bug-462592.cs: New regression test.
+
+	* Makefile.am: Test added.
+
+2009-01-05  Zoltan Varga  <vargaz@gmail.com>
+
+	* pinvoke2.cs: Add another test for generic structures.
+
+2009-01-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* bug-463303.il: New regression test.
+
+	* Makefile.am: Test added.
+
+2009-01-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* bug-400716.cs: New regression test.
 
 	* Makefile.am: Test added.
 
 2008-12-26 Rodrigo Kumpera  <rkumpera@novell.com>
-
-	Backport of r122134.
 
 	* bug-461261.cs: New regression test.
 
@@ -64,16 +94,12 @@
 
 2008-12-24  Mark Probst  <mark.probst@gmail.com>
 
-	Backport of r122086.
-
 	* generic-sealed-virtual.2.cs: Test case for final generic
 	methods.
 
 	* Makefile.am: Test added.
 
 2008-12-24 Rodrigo Kumpera  <rkumpera@novell.com>
-
-	Backport of r122071.
 
 	* bug-461941.cs: New regression test.
 
@@ -87,8 +113,6 @@
 
 2008-12-23  Rodrigo Kumpera  <rkumpera@novell.com>
 
-	Backport of r122036.
-
 	* bug-461867.cs: New regression test.
 
 	* Makefile.am: Test added.
@@ -99,12 +123,22 @@
 
 	* Makefile.am: Test added.
 
-2008-12-19  Mark Probst  <mark.probst@gmail.com>
+2008-12-12  Rodrigo Kumpera  <rkumpera@novell.com>
 
-	Backport of r121292.
+	* bug-389886-sre-generic-interface-instances.cs: New regression test.
+
+	* Makefile.am: Test added.
+
+2008-12-11  Mark Probst  <mark.probst@gmail.com>
 
 	* generic-marshalbyref.2.cs: Test for calls to marshal-by-ref
 	objects.
+
+	* Makefile.am: Test added.
+
+2008-12-08  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* bug445361.il: New regression test.
 
 	* Makefile.am: Test added.
 
@@ -114,22 +148,40 @@
 
 	* Makefile.am: Test added.
 
-	Backported from trunk r121174.
+2008-12-07  Zoltan Varga  <vargaz@gmail.com>
+
+	* stack-overflow.cs (foo): Prevent the large local variable from being
+	optimized away.
 
 2008-12-03  Mark Probst  <mark.probst@gmail.com>
-
-	Backport of r120589.
 
 	* generic-typedef.2.cs: New test for ldtoken of open generic
 	types.
 
 	* Makefile.am: Test added.
 
+2008-11-26  Mark Probst  <mark.probst@gmail.com>
+
+	* vararg2.cs: Forgot to add at last commit.
+
+2008-11-26  Mark Probst  <mark.probst@gmail.com>
+
+	* vararg2.cs: Test for sub-word sized variable arguments.
+
+	* Makefile.am: Test added.
+
 2008-11-20  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r119398.
-	
 	* pinvoke2.cs: Add a test for passing/receiving generic struct instances.
+
+	* stackframes-async.2.cs: Add a test for #444383.
+
+2008-11-13  Mark Probst  <mark.probst@gmail.com>
+
+	* filter-stack.cs: Test whether method calls with large arguments
+	work in filter clauses.
+
+	* Makefile.am: Test added.
 
 2008-11-06  Jonathan Chambers  <joncham@gmail.com>
 

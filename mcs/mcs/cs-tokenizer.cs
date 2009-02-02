@@ -53,6 +53,11 @@ namespace Mono.CSharp
 		public int parsing_block;
 		internal int query_parsing;
 		
+		// 
+		// When parsing type only, useful for ambiguous nullable types
+		//
+		public int parsing_type;
+		
 		//
 		// Set when parsing generic declaration (type or method header)
 		//
@@ -871,7 +876,7 @@ namespace Mono.CSharp
 		//
 		int TokenizePossibleNullableType ()
 		{
-			if (parsing_block == 0)
+			if (parsing_block == 0 || parsing_type > 0)
 				return Token.INTERR_NULLABLE;
 
 			int d = peek_char ();
@@ -898,6 +903,7 @@ namespace Mono.CSharp
 			}
 
 			PushPosition ();
+			current_token = Token.NONE;
 			int next_token;
 			switch (xtoken ()) {
 			case Token.LITERAL_INTEGER:
@@ -910,6 +916,7 @@ namespace Mono.CSharp
 			case Token.FALSE:
 			case Token.NULL:
 			case Token.THIS:
+			case Token.NEW:
 				next_token = Token.INTERR;
 				break;
 				
@@ -2257,12 +2264,6 @@ namespace Mono.CSharp
 			int c;
 			string_builder.Length = 0;
 
-			//
-			// No need to parse full string when parsing lambda arguments
-			//
-			if (lambda_arguments_parsing)
-				return Token.LITERAL_STRING;			
-			
 			while ((c = get_char ()) != -1){
 				if (c == '"'){
 					if (quoted && peek_char () == '"'){
@@ -2416,8 +2417,20 @@ namespace Mono.CSharp
 				case '\v':
 				case 0xa0:
 				case 0:
+				case 0xFEFF:	// Ignore BOM anywhere in the file
 					continue;
 
+/*				This is required for compatibility with .NET
+				case 0xEF:
+					if (peek_char () == 0xBB) {
+						PushPosition ();
+						get_char ();
+						if (get_char () == 0xBF)
+							continue;
+						PopPosition ();
+					}
+					break;
+*/
 				case '\r':
 					if (peek_char () != '\n')
 						advance_line ();
@@ -2792,7 +2805,7 @@ namespace Mono.CSharp
 				error_details = ((char)c).ToString ();
 				return Token.ERROR;
 			}
-
+			
 			return Token.EOF;
 		}
 

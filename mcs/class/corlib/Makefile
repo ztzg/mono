@@ -11,6 +11,8 @@ LIBRARY_USE_INTERMEDIATE_FILE = yes
 LIBRARY_COMPILE = $(BOOT_COMPILE)
 LIBRARY_INSTALL_DIR = $(mono_libdir)/mono/$(FRAMEWORK_VERSION)
 
+AOT_IN_PROFILES = net_1_1
+
 RESOURCE_FILES = \
 	resources/collation.core.bin \
 	resources/collation.tailoring.bin \
@@ -24,7 +26,7 @@ corlib_flags = -unsafe -nostdlib
 LOCAL_MCS_FLAGS = -nowarn:612,618 -d:INSIDE_CORLIB
 
 # System.IO/DirectoryInfoTest.cs needs Mono.Posix
-TEST_MCS_FLAGS = -debug+ -debug:full -nowarn:168,219,618,672 -unsafe -r:$(topdir)/class/lib/$(PROFILE)/Mono.Posix.dll
+TEST_MCS_FLAGS = -debug+ -debug:full -nowarn:168,219,618,672 -unsafe -r:$(topdir)/class/lib/$(PROFILE)/Mono.Posix.dll -define:MONO_DATACONVERTER_STATIC_METHODS
 
 EXTRA_DISTFILES = \
 	corlib.dll.win32-excludes		\

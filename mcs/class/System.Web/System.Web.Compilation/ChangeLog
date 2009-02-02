@@ -1,7 +1,73 @@
+2009-01-26  Marek Habersack  <mhabersack@novell.com>
+
+	* CompilationException.cs: added a Message override to make error
+	messages more useful.
+
+2009-01-23 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* AspComponentFoundry.cs: no need to throw. Caller handles a null
+	return value.
+
+2009-01-23  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: if dependencyCache already contains the virtual
+	path, replace its corresponding file set (in AddToCache). This can
+	happen only if the requested virtual path compilation resulted in
+	errors and the compilation has been retried. Fixes bug #462681
+
+2009-01-14  Marek Habersack  <mhabersack@novell.com>
+
+	* AspGenerator.cs: implemented a work around which allows the
+	server controls embedded in client tag attributes to be parsed and
+	compiled.
+
+2009-01-13  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs, AspGenerator.cs, BaseCompiler.cs,
+	GlobalAsaxCompiler.cs, PageThemeCompiler.cs: updates related to
+	ControlBuilder cleanup.
+
+2009-01-12  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: do not generate #line pragmas for
+	plain strings. Fixes bug #461214
+
+2008-12-11  Marek Habersack  <mhabersack@novell.com>
+
+	* BaseCompiler.cs: added a new method, InitializeType, to be
+	overriden in child classes when any class initialization needs to
+	be performed before methods, constructors and fields are created.
+
+	* TemplateControlCompiler.cs: if the parser has any custom
+	controls registered, compile them here - in the InitializeType
+	method.
+
+2008-12-10  Marek Habersack  <mhabersack@novell.com>
+
+	* ParseException.cs: made serializable.
+
+	* PageCompiler.cs: CreateStronglyTypedProperty calls
+	AddReferencedAssembly to add type's assembly to the unit's
+	references after the typed property has been created.
+
+	* BaseCompiler.cs: added a new helper method,
+	AddReferencedAssembly to be used whenever an assembly location
+	needs to be added to the compilation unit's list after the parsing
+	is done (e.g. when processing PreviousPageType or MasterPageType
+	properties in PageParser)
+
 2008-12-08  Marek Habersack  <mhabersack@novell.com>
 
 	* TemplateControlCompiler.cs: use the correct regex match group
 	index in SanitizeBindCall (), fixes bug #457011
+
+2008-12-05  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: attempt to enter the compilation critical
+	section with a timeout up to 3 times before giving up. This avoids
+	deadlocks in situations where there are two virtual directores
+	each containing user controls referencing user controls from the
+	other directory.
 
 2008-12-02 Gonzalo Paniagua Javier <gonzalo@novell.com>
 

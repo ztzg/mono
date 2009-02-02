@@ -41,10 +41,45 @@ namespace Mono.Simd
 		public ulong X { get { return x; } set { x = value; } }
 		public ulong Y { get { return y; } set { y = value; } }
 
+		public static Vector2ul One
+		{
+			get { return new Vector2ul (1); }
+		}
+
+		public static Vector2ul Zero
+		{
+			get { return new Vector2ul (0); }
+		}
+
+		[System.Runtime.CompilerServices.IndexerName ("Component")]
+		public unsafe ulong this [int index]
+		{
+			get {
+				if ((index | 0x1) != 0x1) //index < 0 || index > 1
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (ulong *v = &x) {
+					return * (v + index);
+				}
+			}
+			set {
+				if ( (index | 0x1) != 0x1) //index < 0 || index > 1
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (ulong *v = &x) {
+					* (v + index) = value;
+				}
+			}
+		}
+
 		public Vector2ul (ulong x, ulong y)
 		{
 			this.x = x;
 			this.y = y;
+		}
+		
+		public Vector2ul (ulong ul)
+		{
+			this.x = ul;
+			this.y = ul;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
@@ -87,33 +122,6 @@ namespace Mono.Simd
 		public static Vector2ul operator ^ (Vector2ul v1, Vector2ul v2)
 		{
 			return new Vector2ul (v1.x ^ v2.x, v1.y ^ v2.y);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static Vector2ul UnpackLow (Vector2ul v1, Vector2ul v2)
-		{
-			return new Vector2ul (v1.x, v2.x);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static Vector2ul UnpackHigh (Vector2ul v1, Vector2ul v2)
-		{
-			return new Vector2ul (v1.y, v2.y);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe int ExtractByteMask (Vector2ul va) {
-			int res = 0;
-			byte *a = (byte*)&va;
-			for (int i = 0; i < 16; ++i)
-				res |= (*a++ & 0x80) >> 7 << i;
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE41)]
-		public static Vector2ul CompareEqual (Vector2ul v1, Vector2ul v2)
-		{
-			return new Vector2ul ((ulong)(v1.x ==  v2.x ? -1 : 0), (ulong)(v1.y ==  v2.y ? -1 : 0));
 		}
 
 		[Acceleration (AccelMode.SSE1)]
@@ -250,5 +258,10 @@ namespace Mono.Simd
 		public static unsafe void PrefetchNonTemporal (Vector2ul *res)
 		{
 		}
+		public override string ToString()
+		{
+			return "<" + x + ", " + y + ">"; 
+		}
+		
 	}
 }

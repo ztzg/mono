@@ -1,3 +1,34 @@
+2008-11-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : add NUNIT_RESOURCE_FILES to dist.
+
+2008-11-20  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web.Extensions.dll.sources: added
+	System.Web.ClientServices and System.Web.ClientServices.Providers
+	Sorted contents for easier reading and modification.
+
+2008-11-19  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (NUNIT_RESOURCE_FILES): added
+
+	* System.Web.Extensions_test.dll.sources: added the system.web
+	Mainsoft test suite files.
+	Added new test files.
+
+2008-11-18  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web.Extensions.dll.sources: added
+	./System.Web.UI.WebControls/ListViewTableCell.cs
+	Added ./System.Web.Query.Dynamic/DynamicClass.cs and
+	./System.Web.Query.Dynamic/ParseException.cs	
+	Added ./System.Web.UI.WebControls/ListViewContainer.cs
+
+2008-11-15  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web.Extensions.dll.sources: added
+	System.Web.UI.WebControls/DataPagerCommandEventArgs.cs
+
 2008-10-30  Marek Habersack  <mhabersack@novell.com>
 
 	* System.Web.Extensions.dll.sources: added

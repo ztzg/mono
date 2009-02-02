@@ -3317,7 +3317,10 @@ namespace System.Windows.Forms
 				GetItemAtDisplayIndex (focused_item_index).Focused = false;
 			focused_item_index = display_index;
 #if NET_2_0
-			OnUIAFocusedItemChanged ();
+			if (display_index == -1)
+				OnUIAFocusedItemChanged ();
+				// otherwise the event will have been fired
+				// when the ListViewItem's Focused was set
 #endif
 		}
 
@@ -6312,6 +6315,11 @@ namespace System.Windows.Forms
 			return group.HeaderBounds;
 		}
 
+		internal int UIAItemsLocationLength
+		{
+			get { return items_location.Length; }
+		}
+
 		private void OnUIACheckBoxesChanged ()
 		{
 			EventHandler eh = (EventHandler) Events [UIACheckBoxesChangedEvent];
@@ -6347,7 +6355,7 @@ namespace System.Windows.Forms
 				eh (this, EventArgs.Empty);
 		}
 
-		private void OnUIAFocusedItemChanged ()
+		internal void OnUIAFocusedItemChanged ()
 		{
 			EventHandler eh = (EventHandler) Events [UIAFocusedItemChangedEvent];
 			if (eh != null)

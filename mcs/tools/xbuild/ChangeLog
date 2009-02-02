@@ -1,3 +1,11 @@
+2008-12-12  Ankit Jain  <jankit@novell.com>
+
+	* Microsoft.CSharp.targets: Add CreateCSharpManifestResourceName task.
+
+2008-11-23  Ankit Jain  <jankit@novell.com>
+
+	* xbuild/Microsoft.Common.tasks: Add AssignCulture task.
+
 2008-10-01  Ankit Jain  <jankit@novell.com>
 
 	* xbuild/Microsoft.Common.tasks: Add CallTarget and AssignTargetPath task.

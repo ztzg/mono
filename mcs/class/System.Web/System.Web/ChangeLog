@@ -1,3 +1,36 @@
+2009-01-29 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpApplicationFactory.cs: fix check that avoids lock. Keep one
+	HttpApplication instance ready to be returned in an instance variable
+	to avoid a few locks.
+
+2009-01-29  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpApplicationFactory.cs: optimize lock usage.
+
+2009-01-23 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpResponse.cs: make sure config is not null here.
+	* HttpApplication.cs: add a timer (-d:PIPELINE_TIMER) for the pipeline.
+	Handle timeouts for OutputPage() too.
+
+2009-01-23 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpApplicationFactory.cs: set/reset the context for the application
+	when creating/disposing. Dispose() out of the lock.
+
+2009-01-24  Marek Habersack  <mhabersack@novell.com>
+
+	* XmlSiteMapProvider.cs: if a nested sitemap is used (via the
+	siteMapFile node attribute) watch the named file for
+	changes. Fixes bug #465693
+
+2009-01-19  Christian Hergert  <christian.hergert@gmail.com>
+
+	* QueueManager.cs: Implement requests queued performance counter.
+	* HttpRuntime.cs: Implement requests total counter.
+	* HttpApplication.cs: Implement requests total counter.
+
 2009-01-13  Dean Brettle  <dean@brettle.com>
 
 	* HttpApplicationFactory.cs: if there are any *.browser files in
@@ -17,6 +50,26 @@
 	Make sure the path returned from HttpRequest.BaseVirtualPath
 	contains the trailing slash before combining. Fixes bug #463964
 
+2008-12-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ServerVariablesCollection.cs: use IndexOf (char).
+
+2008-12-24  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpApplicationFactory.cs: watch for changes to web.config also
+	in the subdirectories.
+
+2008-12-20  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpResponse.cs: the code in TransmitFile (VirtualFile, bool)
+	was an abomination - dear children, don't do this at home (never,
+	ever, allocate a buffer to load entire file). I will wear a brown
+	paper bag every 2nd Sunday in the next 6 months for writing the
+	old version of this code.
+	New code optimizes the write when DefaultVirtualFile is used (as
+	it refers to a physical file on disk) and reads/writes other
+	virtual files in chunks.
+
 2008-12-16  Marek Habersack  <mhabersack@novell.com>
 
 	* StaticFileHandler.cs: use HttpRuntime.RunningOnWindows instead
@@ -26,6 +79,11 @@
 
 	* HttpServerUtility.cs: when Execute finishes, clear
 	Request.QueryStringRaw. Backport of r121010 by Vladimir Krasnov.
+
+2008-12-03  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* NoParamsInvoker.cs:
+	* HttpApplicationFactory.cs: Fixed support for static eventhandlers.
 
 2008-11-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
 

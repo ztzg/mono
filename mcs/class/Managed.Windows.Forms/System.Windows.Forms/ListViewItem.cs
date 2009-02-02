@@ -329,6 +329,10 @@ namespace System.Windows.Forms
 					prev_focused_item.UpdateFocusedState ();
 					
 				owner.focused_item_index = value ? Index : -1;
+#if NET_2_0
+				if (value)
+					owner.OnUIAFocusedItemChanged ();
+#endif
 
 				UpdateFocusedState ();
 			}
@@ -1223,6 +1227,8 @@ namespace System.Windows.Forms
 			
 			#region Public Constructors
 			public ListViewSubItem ()
+				: this (null, string.Empty, Color.Empty,
+					Color.Empty, null)
 			{
 			}
 

@@ -404,6 +404,31 @@ namespace MonoTests.System.Text.RegularExpressions
 		}
 
 		[Test]
+		public void bug443841 ()
+		{
+			string numberString = @"[0-9]+";
+			string doubleString = string.Format (@" *[+-]? *{0}(\.{0})?([eE][+-]?{0})? *",
+				numberString);
+			string vector1To3String = string.Format (@"{0}(,{0}(,{0})?)?",
+				doubleString);
+			Regex r;
+			MatchCollection matches;
+			
+			r = new Regex (string.Format ("^{0}$", vector1To3String));
+			Assert.IsTrue (r.IsMatch ("1"), "#A1");
+			matches = r.Matches ("1");
+			Assert.AreEqual (1, matches.Count, "#A2");
+			Assert.AreEqual ("1", matches [0].Value, "#A3");
+
+			r = new Regex (string.Format ("^{0}$", vector1To3String),
+				RegexOptions.Compiled);
+			Assert.IsTrue (r.IsMatch ("1"), "#B1");
+			matches = r.Matches ("1");
+			Assert.AreEqual (1, matches.Count, "#B2");
+			Assert.AreEqual ("1", matches [0].Value, "#B3");
+		}
+
+		[Test]
 		public void CharClassWithIgnoreCase ()
 		{
 			string str = "Foobar qux";
@@ -467,6 +492,12 @@ namespace MonoTests.System.Text.RegularExpressions
 			bug80554_trials [3].Execute ();
 		}
 
+		[Test]
+		public void Bug432172 ()
+		{
+			new Regex ("^(else|elif|except|finally)([^a-zA-Z_0-9]).*", RegexOptions.Compiled);
+		}
+
 		void Kill65535_1 (int length)
 		{
 			StringBuilder sb = new StringBuilder ("x");
@@ -519,7 +550,8 @@ namespace MonoTests.System.Text.RegularExpressions
 		};
 
 		static RegexTrial[] trials = {
-			new RegexTrial (@"^[^.\d]*(\d+)(?:\D+(\d+))?", RegexOptions.None, "MD 9.18", "Pass. Group[0]=(0,7) Group[1]=(3,1) Group[2]=(5,2)")
+			new RegexTrial (@"^[^.\d]*(\d+)(?:\D+(\d+))?", RegexOptions.None, "MD 9.18", "Pass. Group[0]=(0,7) Group[1]=(3,1) Group[2]=(5,2)"),
+            new RegexTrial (@"(.*:|.*)(DirName)", RegexOptions.Compiled, "/home/homedir/DirName", "Pass. Group[0]=(0,21) Group[1]=(0,14) Group[2]=(14,7)")
 	    };
 	}
 }

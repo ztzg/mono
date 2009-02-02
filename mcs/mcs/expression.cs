@@ -1372,10 +1372,10 @@ namespace Mono.CSharp {
 			expr.Emit (ec);
 
 			if (do_isinst)
-				ig.Emit (OpCodes.Isinst, probe_type_expr.Type);
+				ig.Emit (OpCodes.Isinst, type);
 
 #if GMCS_SOURCE
-			if (TypeManager.IsNullableType (type))
+			if (TypeManager.IsGenericParameter (type) || TypeManager.IsNullableType (type))
 				ig.Emit (OpCodes.Unbox_Any, type);
 #endif
 		}
@@ -2538,13 +2538,9 @@ namespace Mono.CSharp {
 
 			// The conversion rules are ignored in enum context but why
 			if (!ec.InEnumContext && lc != null && rc != null && (TypeManager.IsEnumType (left.Type) || TypeManager.IsEnumType (right.Type))) {
-				left = lc = EnumLiftUp (ec, lc, rc, loc);
-				if (lc == null)
-					return null;
-
-				right = rc = EnumLiftUp (ec, rc, lc, loc);
-				if (rc == null)
-					return null;
+				lc = EnumLiftUp (ec, lc, rc, loc);
+				if (lc != null)
+					rc = EnumLiftUp (ec, rc, lc, loc);
 			}
 
 			if (rc != null && lc != null) {
@@ -4036,7 +4032,7 @@ namespace Mono.CSharp {
 		LocalTemporary temp;
 
 		#region Abstract
-		public abstract HoistedVariable HoistedVariable { get; }
+		public abstract HoistedVariable GetHoistedVariable (EmitContext ec);
 		public abstract bool IsFixed { get; }
 		public abstract bool IsRef { get; }
 		public abstract string Name { get; }
@@ -4055,8 +4051,9 @@ namespace Mono.CSharp {
 
 		public void AddressOf (EmitContext ec, AddressOp mode)
 		{
-			if (IsHoistedEmitRequired (ec)) {
-				HoistedVariable.AddressOf (ec, mode);
+			HoistedVariable hv = GetHoistedVariable (ec);
+			if (hv != null) {
+				hv.AddressOf (ec, mode);
 				return;
 			}
 
@@ -4088,8 +4085,9 @@ namespace Mono.CSharp {
 		{
 			Report.Debug (64, "VARIABLE EMIT", this, Variable, type, IsRef, loc);
 
-			if (IsHoistedEmitRequired (ec)) {
-				HoistedVariable.Emit (ec, leave_copy);
+			HoistedVariable hv = GetHoistedVariable (ec);
+			if (hv != null) {
+				hv.Emit (ec, leave_copy);
 				return;
 			}
 
@@ -4116,25 +4114,24 @@ namespace Mono.CSharp {
 		public void EmitAssign (EmitContext ec, Expression source, bool leave_copy,
 					bool prepare_for_load)
 		{
-			Report.Debug (64, "VARIABLE EMIT ASSIGN", this, Variable, type, IsRef,
-				      source, loc);
-
-			if (IsHoistedEmitRequired (ec)) {
-				HoistedVariable.EmitAssign (ec, source, leave_copy, prepare_for_load);
+			HoistedVariable hv = GetHoistedVariable (ec);
+			if (hv != null) {
+				hv.EmitAssign (ec, source, leave_copy, prepare_for_load);
 				return;
 			}
 
-			if (IsRef)
-				Variable.Emit (ec);
-
-			source.Emit (ec);
-
-			// HACK: variable is already emitted when source is an initializer 
-			if (source is NewInitialize) {
-				if (leave_copy) {
-					Variable.Emit (ec);
+			New n_source = source as New;
+			if (n_source != null) {
+				if (!n_source.Emit (ec, this)) {
+					if (leave_copy)
+						EmitLoad (ec);
+					return;
 				}
-				return;
+			} else {
+				if (IsRef)
+					EmitLoad (ec);
+
+				source.Emit (ec);
 			}
 
 			if (leave_copy) {
@@ -4157,15 +4154,7 @@ namespace Mono.CSharp {
 		}
 
 		public bool IsHoisted {
-			get { return HoistedVariable != null; }
-		}
-
-		protected virtual bool IsHoistedEmitRequired (EmitContext ec)
-		{
-			//
-			// Default implementation return true when there is a hosted variable
-			//
-			return HoistedVariable != null;
+			get { return GetHoistedVariable (null) != null; }
 		}
 
 		public override void MutateHoistedGenericType (AnonymousMethodStorey storey)
@@ -4207,8 +4196,9 @@ namespace Mono.CSharp {
 			get { return local_info.VariableInfo; }
 		}
 
-		public override HoistedVariable HoistedVariable {
-			get { return local_info.HoistedVariableReference; }
+		public override HoistedVariable GetHoistedVariable (EmitContext ec)
+		{
+			return local_info.HoistedVariableReference;
 		}
 
 		//		
@@ -4377,12 +4367,10 @@ namespace Mono.CSharp {
 	/// </summary>
 	public class ParameterReference : VariableReference {
 		readonly ToplevelParameterInfo pi;
-		readonly ToplevelBlock referenced;
 
-		public ParameterReference (ToplevelBlock referenced, ToplevelParameterInfo pi, Location loc)
+		public ParameterReference (ToplevelParameterInfo pi, Location loc)
 		{
 			this.pi = pi;
-			this.referenced = referenced;
 			this.loc = loc;
 		}
 
@@ -4394,8 +4382,9 @@ namespace Mono.CSharp {
 			get { return pi.Parameter.ModFlags == Parameter.Modifier.OUT; }
 		}
 
-		public override HoistedVariable HoistedVariable {
-			get { return pi.Parameter.HoistedVariableReference; }
+		public override HoistedVariable GetHoistedVariable (EmitContext ec)
+		{
+			return pi.Parameter.HoistedVariableReference;
 		}
 
 		//
@@ -4455,24 +4444,38 @@ namespace Mono.CSharp {
 			if (am == null)
 				return true;
 
-			ToplevelBlock declared = pi.Block;
-			if (declared != referenced) {
-				if (IsRef) {
-					Report.Error (1628, loc,
-						"Parameter `{0}' cannot be used inside `{1}' when using `ref' or `out' modifier",
-						Name, am.ContainerType);
-					return false;
+			Block b = ec.CurrentBlock;
+			while (b != null) {
+				IParameterData[] p = b.Toplevel.Parameters.FixedParameters;
+				for (int i = 0; i < p.Length; ++i) {
+					if (p [i] != Parameter)
+						continue;
+
+					//
+					// Skip closest anonymous method parameters
+					//
+					if (b == ec.CurrentBlock && !am.IsIterator)
+						return true;
+
+					if (IsRef) {
+						Report.Error (1628, loc,
+							"Parameter `{0}' cannot be used inside `{1}' when using `ref' or `out' modifier",
+							Name, am.ContainerType);
+					}
+
+					b = null;
+					break;
 				}
-			} else {
-				if (!am.IsIterator)
-					return true;
+
+				if (b != null)
+					b = b.Toplevel.Parent;
 			}
 
-			if (ec.IsVariableCapturingRequired) {
-				if (pi.Parameter.HasAddressTaken)
-					AnonymousMethodExpression.Error_AddressOfCapturedVar (this, loc);
+			if (pi.Parameter.HasAddressTaken)
+				AnonymousMethodExpression.Error_AddressOfCapturedVar (this, loc);
 
-				AnonymousMethodStorey storey = declared.CreateAnonymousMethodStorey (ec);
+			if (ec.IsVariableCapturingRequired) {
+				AnonymousMethodStorey storey = pi.Block.CreateAnonymousMethodStorey (ec);
 				storey.CaptureParameter (ec, this);
 			}
 
@@ -4490,7 +4493,7 @@ namespace Mono.CSharp {
 			if (pr == null)
 				return false;
 
-			return Name == pr.Name && referenced == pr.referenced;
+			return Name == pr.Name;
 		}
 		
 		protected override void CloneTo (CloneContext clonectx, Expression target)
@@ -4500,8 +4503,9 @@ namespace Mono.CSharp {
 
 		public override Expression CreateExpressionTree (EmitContext ec)
 		{
-			if (IsHoistedEmitRequired (ec))
-				return HoistedVariable.CreateExpressionTree (ec);
+			HoistedVariable hv = GetHoistedVariable (ec);
+			if (hv != null)
+				return hv.CreateExpressionTree (ec);
 
 			return Parameter.ExpressionTreeVariableReference ();
 		}
@@ -4824,7 +4828,7 @@ namespace Mono.CSharp {
 						return null;
 					}
 				} else {
-					if (iexpr == null) {
+					if (iexpr == null || iexpr == EmptyExpression.Null) {
 						SimpleName.Error_ObjectRefRequired (ec, loc, mg.GetSignatureForError ());
 					}
 				}
@@ -4845,7 +4849,7 @@ namespace Mono.CSharp {
 				return null;
 			}
 
-			if (Arguments == null && method.DeclaringType == TypeManager.object_type && method.Name == "Finalize") {
+			if (Arguments == null && method.DeclaringType == TypeManager.object_type && method.Name == Destructor.MetadataName) {
 				if (mg.IsBase)
 					Report.Error (250, loc, "Do not directly call your base class Finalize method. It is called automatically from your destructor");
 				else
@@ -5242,17 +5246,6 @@ namespace Mono.CSharp {
 	}
 */
 
-	//
-	// This class is used to "disable" the code generation for the
-	// temporary variable when initializing value types.
-	//
-	sealed class EmptyAddressOf : EmptyExpression, IMemoryLocation {
-		public void AddressOf (EmitContext ec, AddressOp Mode)
-		{
-			// nothing
-		}
-	}
-	
 	/// <summary>
 	///    Implements the new expression 
 	/// </summary>
@@ -5264,17 +5257,11 @@ namespace Mono.CSharp {
 		// but if `type' is not null, it *might* contain a NewDelegate
 		// (because of field multi-initialization)
 		//
-		public Expression RequestedType;
+		Expression RequestedType;
 
 		MethodGroupExpr method;
 
-		//
-		// If set, the new expression is for a value_target, and
-		// we will not leave anything on the stack.
-		//
-		protected Expression value_target;
-		protected bool value_target_set;
-		bool is_type_parameter = false;
+		bool is_type_parameter;
 		
 		public New (Expression requested_type, ArrayList arguments, Location l)
 		{
@@ -5282,45 +5269,6 @@ namespace Mono.CSharp {
 			Arguments = arguments;
 			loc = l;
 		}
-
-		public bool SetTargetVariable (Expression value)
-		{
-			value_target = value;
-			value_target_set = true;
-			if (!(value_target is IMemoryLocation)){
-				Error_UnexpectedKind (null, "variable", loc);
-				return false;
-			}
-			return true;
-		}
-
-		//
-		// This function is used to disable the following code sequence for
-		// value type initialization:
-		//
-		// AddressOf (temporary)
-		// Construct/Init
-		// LoadTemporary
-		//
-		// Instead the provide will have provided us with the address on the
-		// stack to store the results.
-		//
-		static Expression MyEmptyExpression;
-		
-		public void DisableTemporaryValueType ()
-		{
-			if (MyEmptyExpression == null)
-				MyEmptyExpression = new EmptyAddressOf ();
-
-			//
-			// To enable this, look into:
-			// test-34 and test-89 and self bootstrapping.
-			//
-			// For instance, we can avoid a copy by using `newobj'
-			// instead of Call + Push-temp on value types.
-//			value_target = MyEmptyExpression;
-		}
-
 
 		/// <summary>
 		/// Converts complex core type syntax like 'new int ()' to simple constant
@@ -5578,13 +5526,9 @@ namespace Mono.CSharp {
 		}
 
 		//
-		// This DoEmit can be invoked in two contexts:
+		// This Emit can be invoked in two contexts:
 		//    * As a mechanism that will leave a value on the stack (new object)
 		//    * As one that wont (init struct)
-		//
-		// You can control whether a value is required on the stack by passing
-		// need_value_on_stack.  The code *might* leave a value on the stack
-		// so it must be popped manually
 		//
 		// If we are dealing with a ValueType, we have a few
 		// situations to deal with:
@@ -5601,68 +5545,75 @@ namespace Mono.CSharp {
 		//
 		// Returns whether a value is left on the stack
 		//
-		bool DoEmit (EmitContext ec, bool need_value_on_stack)
+		// *** Implementation note ***
+		//
+		// To benefit from this optimization, each assignable expression
+		// has to manually cast to New and call this Emit.
+		//
+		// TODO: It's worth to implement it for arrays and fields
+		//
+		public virtual bool Emit (EmitContext ec, IMemoryLocation target)
 		{
+			if (is_type_parameter)
+				return DoEmitTypeParameter (ec);
+
 			bool is_value_type = TypeManager.IsValueType (type);
 			ILGenerator ig = ec.ig;
+			VariableReference vr = target as VariableReference;
 
-			if (is_value_type){
-				IMemoryLocation ml;
-
-				// Allow DoEmit() to be called multiple times.
-				// We need to create a new LocalTemporary each time since
-				// you can't share LocalBuilders among ILGeneators.
-				if (!value_target_set)
-					value_target = new LocalTemporary (type);
-
-				ml = (IMemoryLocation) value_target;
-				ml.AddressOf (ec, AddressOp.Store);
+			if (target != null && is_value_type && (vr != null || method == null)) {
+				target.AddressOf (ec, AddressOp.Store);
+			} else if (vr != null && vr.IsRef) {
+				vr.EmitLoad (ec);
 			}
 
 			if (method != null)
 				method.EmitArguments (ec, Arguments);
 
-			if (is_value_type){
-				if (method == null)
+			if (is_value_type) {
+				if (method == null) {
 					ig.Emit (OpCodes.Initobj, type);
-				else
+					return false;
+				}
+
+				if (vr != null) {
 					ig.Emit (OpCodes.Call, (ConstructorInfo) method);
-                                if (need_value_on_stack){
-                                        value_target.Emit (ec);
-                                        return true;
-                                }
-                                return false;
-			} else {
-				ConstructorInfo ci = (ConstructorInfo) method;
-#if MS_COMPATIBLE
-				if (TypeManager.IsGenericType (type))
-					ci = TypeBuilder.GetConstructor (type, ci);
-#endif
-				ig.Emit (OpCodes.Newobj, ci);
-				return true;
+					return false;
+				}
 			}
+
+			ConstructorInfo ci = (ConstructorInfo) method;
+#if MS_COMPATIBLE
+			if (TypeManager.IsGenericType (type))
+				ci = TypeBuilder.GetConstructor (type, ci);
+#endif
+
+			ig.Emit (OpCodes.Newobj, ci);
+			return true;
 		}
 
 		public override void Emit (EmitContext ec)
 		{
-			if (is_type_parameter)
-				DoEmitTypeParameter (ec);
-			else
-				DoEmit (ec, true);
+			LocalTemporary v = null;
+			if (method == null && TypeManager.IsValueType (type)) {
+				// TODO: Use temporary variable from pool
+				v = new LocalTemporary (type);
+			}
+
+			if (!Emit (ec, v))
+				v.Emit (ec);
 		}
 		
 		public override void EmitStatement (EmitContext ec)
 		{
-			bool value_on_stack;
+			LocalTemporary v = null;
+			if (method == null && TypeManager.IsValueType (type)) {
+				// TODO: Use temporary variable from pool
+				v = new LocalTemporary (type);
+			}
 
-			if (is_type_parameter)
-				value_on_stack = DoEmitTypeParameter (ec);
-			else
-				value_on_stack = DoEmit (ec, false);
-
-			if (value_on_stack)
+			if (Emit (ec, v))
 				ec.ig.Emit (OpCodes.Pop);
-
 		}
 
 		public virtual bool HasInitializer {
@@ -5691,8 +5642,7 @@ namespace Mono.CSharp {
 				throw new Exception ("AddressOf should not be used for classes");
 			}
 
-			if (!value_target_set)
-				value_target = new LocalTemporary (type);
+			LocalTemporary	value_target = new LocalTemporary (type);
 			IMemoryLocation ml = (IMemoryLocation) value_target;
 
 			ml.AddressOf (ec, AddressOp.Store);
@@ -6332,15 +6282,6 @@ namespace Mono.CSharp {
 					if ((dims == 1) && etype.IsValueType &&
 					    (!TypeManager.IsBuiltinOrEnum (etype) ||
 					     etype == TypeManager.decimal_type)) {
-						if (e is New){
-							New n = (New) e;
-
-							//
-							// Let new know that we are providing
-							// the address where to store the results
-							//
-							n.DisableTemporaryValueType ();
-						}
 
 						ig.Emit (OpCodes.Ldelema, etype);
 					}
@@ -6588,8 +6529,9 @@ namespace Mono.CSharp {
 			return this;
 		}
 
-		public override HoistedVariable HoistedVariable {
-			get { return null; }
+		public override HoistedVariable GetHoistedVariable (EmitContext ec)
+		{
+			return null;
 		}
 	}
 	
@@ -6642,17 +6584,25 @@ namespace Mono.CSharp {
 			get { return false; }
 		}
 
-		protected override bool IsHoistedEmitRequired (EmitContext ec)
+		public override HoistedVariable GetHoistedVariable (EmitContext ec)
 		{
-			//
-			// Handle 'this' differently, it cannot be assigned hence
-			// when we are not inside anonymous method we can emit direct access 
-			//
-			return ec.CurrentAnonymousMethod != null && base.IsHoistedEmitRequired (ec);
-		}
+			// Is null when probing IsHoisted
+			if (ec == null)
+				return null;
 
-		public override HoistedVariable HoistedVariable {
-			get { return TopToplevelBlock.HoistedThisVariable; }
+			if (ec.CurrentAnonymousMethod == null)
+				return null;
+
+			AnonymousMethodStorey storey = ec.CurrentAnonymousMethod.Storey;
+			while (storey != null) {
+				AnonymousMethodStorey temp = storey.Parent as AnonymousMethodStorey;
+				if (temp == null)
+					return storey.HoistedThis;
+
+				storey = temp;
+			}
+
+			return null;
 		}
 
 		public override bool IsRef {
@@ -6661,15 +6611,6 @@ namespace Mono.CSharp {
 
 		protected override ILocalVariable Variable {
 			get { return ThisVariable.Instance; }
-		}
-
-		// TODO: Move to ToplevelBlock
-		ToplevelBlock TopToplevelBlock {
-			get {
-				ToplevelBlock tl = block.Toplevel;
-				while (tl.Parent != null) tl = tl.Parent.Toplevel;
-				return tl;
-			}
 		}
 
 		public static bool IsThisAvailable (EmitContext ec)
@@ -6715,24 +6656,8 @@ namespace Mono.CSharp {
 					variable_info = block.Toplevel.ThisVariable.VariableInfo;
 
 				AnonymousExpression am = ec.CurrentAnonymousMethod;
-				if (am != null) {
-					//
-					// this is hoisted to very top level block
-					//
-					if (ec.IsVariableCapturingRequired) {
-						//
-						// TODO: it should be optimized, see test-anon-75.cs
-						//
-						// `this' variable has its own scope which is mostly empty
-						// and causes creation of extraneous storey references.
-						// Also it's hard to remove `this' dependencies when we Undo
-						// this access.
-						//
-						AnonymousMethodStorey scope = TopToplevelBlock.Explicit.CreateAnonymousMethodStorey (ec);
-						if (HoistedVariable == null) {
-							TopToplevelBlock.HoistedThisVariable = scope.CaptureThis (ec, this);
-						}
-					}
+				if (am != null && ec.IsVariableCapturingRequired) {
+					am.SetHasThisAccess ();
 				}
 			}
 			
@@ -6819,11 +6744,6 @@ namespace Mono.CSharp {
 			This target = (This) t;
 
 			target.block = clonectx.LookupBlock (block);
-		}
-
-		public void RemoveHoisting ()
-		{
-			TopToplevelBlock.HoistedThisVariable = null;
 		}
 
 		public override void SetHasAddressTaken ()
@@ -7372,8 +7292,6 @@ namespace Mono.CSharp {
 			this.expr = expr;
 		}
 
-		// TODO: this method has very poor performace for Enum fields and
-		// probably for other constants as well
 		Expression DoResolve (EmitContext ec, Expression right_side)
 		{
 			if (type != null)
@@ -7396,16 +7314,15 @@ namespace Mono.CSharp {
 
 			string LookupIdentifier = MemberName.MakeName (Name, targs);
 
-			if (expr_resolved is Namespace) {
-				Namespace ns = (Namespace) expr_resolved;
+			Namespace ns = expr_resolved as Namespace;
+			if (ns != null) {
 				FullNamedExpression retval = ns.Lookup (ec.DeclContainer, LookupIdentifier, loc);
-#if GMCS_SOURCE
-				if ((retval != null) && (targs != null))
-					retval = new ConstructedType (retval, targs, loc).ResolveAsTypeStep (ec, false);
-#endif
 
 				if (retval == null)
-					ns.Error_NamespaceDoesNotExist (ec.DeclContainer, loc, Name);
+					ns.Error_NamespaceDoesNotExist (ec.DeclContainer, loc, LookupIdentifier);
+				else if (targs != null)
+					retval = new GenericTypeExpr (retval.Type, targs, loc).ResolveAsTypeStep (ec, false);
+
 				return retval;
 			}
 
@@ -7458,10 +7375,11 @@ namespace Mono.CSharp {
 				}
 
 				expr = expr_resolved;
-				Error_MemberLookupFailed (
+				member_lookup = Error_MemberLookupFailed (
 					ec.ContainerType, expr_type, expr_type, Name, null,
 					AllMemberTypes, AllBindingFlags);
-				return null;
+				if (member_lookup == null)
+					return null;
 			}
 
 			TypeExpr texpr = member_lookup as TypeExpr;
@@ -7480,7 +7398,7 @@ namespace Mono.CSharp {
 				}
 
 #if GMCS_SOURCE
-				ConstructedType ct = expr_resolved as ConstructedType;
+				GenericTypeExpr ct = expr_resolved as GenericTypeExpr;
 				if (ct != null) {
 					//
 					// When looking up a nested type in a generic instance
@@ -7489,7 +7407,7 @@ namespace Mono.CSharp {
 					//
 					// See gtest-172-lib.cs and gtest-172.cs for an example.
 					//
-					ct = new ConstructedType (
+					ct = new GenericTypeExpr (
 						member_lookup.Type, ct.TypeArguments, loc);
 
 					return ct.ResolveAsTypeStep (ec, false);
@@ -7541,26 +7459,26 @@ namespace Mono.CSharp {
 
 		public FullNamedExpression ResolveNamespaceOrType (IResolveContext rc, bool silent)
 		{
-			FullNamedExpression new_expr = expr.ResolveAsTypeStep (rc, silent);
+			FullNamedExpression expr_resolved = expr.ResolveAsTypeStep (rc, silent);
 
-			if (new_expr == null)
+			if (expr_resolved == null)
 				return null;
 
 			string LookupIdentifier = MemberName.MakeName (Name, targs);
 
-			if (new_expr is Namespace) {
-				Namespace ns = (Namespace) new_expr;
+			Namespace ns = expr_resolved as Namespace;
+			if (ns != null) {
 				FullNamedExpression retval = ns.Lookup (rc.DeclContainer, LookupIdentifier, loc);
-#if GMCS_SOURCE
-				if ((retval != null) && (targs != null))
-					retval = new ConstructedType (retval, targs, loc).ResolveAsTypeStep (rc, false);
-#endif
-				if (!silent && retval == null)
+
+				if (retval == null && !silent)
 					ns.Error_NamespaceDoesNotExist (rc.DeclContainer, loc, LookupIdentifier);
+				else if (targs != null)
+					retval = new GenericTypeExpr (retval.Type, targs, loc).ResolveAsTypeStep (rc, silent);
+
 				return retval;
 			}
 
-			TypeExpr tnew_expr = new_expr.ResolveAsTypeTerminal (rc, false);
+			TypeExpr tnew_expr = expr_resolved.ResolveAsTypeTerminal (rc, false);
 			if (tnew_expr == null)
 				return null;
 
@@ -7578,7 +7496,7 @@ namespace Mono.CSharp {
 				if (silent)
 					return null;
 
-				Error_IdentifierNotFound (rc, new_expr, LookupIdentifier);
+				Error_IdentifierNotFound (rc, expr_resolved, LookupIdentifier);
 				return null;
 			}
 
@@ -7589,12 +7507,12 @@ namespace Mono.CSharp {
 #if GMCS_SOURCE
 			TypeArguments the_args = targs;
 			Type declaring_type = texpr.Type.DeclaringType;
-			if (TypeManager.HasGenericArguments (declaring_type)) {
+			if (TypeManager.HasGenericArguments (declaring_type) && !TypeManager.IsGenericTypeDefinition (expr_type)) {
 				while (!TypeManager.IsEqual (TypeManager.DropGenericTypeArguments (expr_type), declaring_type)) {
 					expr_type = expr_type.BaseType;
 				}
 				
-				TypeArguments new_args = new TypeArguments (loc);
+				TypeArguments new_args = new TypeArguments ();
 				foreach (Type decl in TypeManager.GetTypeArguments (expr_type))
 					new_args.Add (new TypeExpression (decl, loc));
 
@@ -7605,7 +7523,7 @@ namespace Mono.CSharp {
 			}
 
 			if (the_args != null) {
-				ConstructedType ctype = new ConstructedType (texpr.Type, the_args, loc);
+				GenericTypeExpr ctype = new GenericTypeExpr (texpr.Type, the_args, loc);
 				return ctype.ResolveAsTypeStep (rc, false);
 			}
 #endif
@@ -7624,7 +7542,7 @@ namespace Mono.CSharp {
 				if (expr_type == null)
 					return;
 
-				Namespace.Error_TypeArgumentsCannotBeUsed (expr_type.Type, loc);
+				Namespace.Error_TypeArgumentsCannotBeUsed (expr_type, loc);
 				return;
 			}
 
@@ -8245,6 +8163,18 @@ namespace Mono.CSharp {
 				temp.Emit (ec);
 				temp.Release (ec);
 			}
+		}
+
+		public void EmitNew (EmitContext ec, New source, bool leave_copy)
+		{
+			if (!source.Emit (ec, this)) {
+				if (leave_copy)
+					throw new NotImplementedException ();
+
+				return;
+			}
+
+			throw new NotImplementedException ();
 		}
 
 		public void AddressOf (EmitContext ec, AddressOp mode)
@@ -8880,7 +8810,6 @@ namespace Mono.CSharp {
 
 		private EmptyExpressionStatement ()
 		{
-			type = TypeManager.object_type;
 			eclass = ExprClass.Value;
 			loc = Location.Null;
 		}
@@ -8897,6 +8826,7 @@ namespace Mono.CSharp {
 
 		public override Expression DoResolve (EmitContext ec)
 		{
+			type = TypeManager.object_type;
 			return this;
 		}
 
@@ -8992,7 +8922,7 @@ namespace Mono.CSharp {
 			Type ltype = lexpr.Type;
 #if GMCS_SOURCE
 			if ((dim.Length > 0) && (dim [0] == '?')) {
-				TypeExpr nullable = new Nullable.NullableType (left, loc);
+				TypeExpr nullable = new Nullable.NullableType (lexpr, loc);
 				if (dim.Length > 1)
 					nullable = new ComposedCast (nullable, dim.Substring (1), loc);
 				return nullable.ResolveAsTypeTerminal (ec, false);
@@ -9036,13 +8966,6 @@ namespace Mono.CSharp {
 			return left.GetSignatureForError () + dim;
 		}
 
-		protected override void CloneTo (CloneContext clonectx, Expression t)
-		{
-			ComposedCast target = (ComposedCast) t;
-
-			target.left = (FullNamedExpression)left.Clone (clonectx);
-		}
-		
 		public override TypeExpr ResolveAsTypeTerminal (IResolveContext ec, bool silent)
 		{
 			return ResolveAsBaseTerminal (ec, silent);
@@ -9294,12 +9217,12 @@ namespace Mono.CSharp {
 			//
 			Constant c = source as Constant;
 			if (c != null && c.IsDefaultInitializer (type) && target.eclass == ExprClass.Variable)
-				return EmptyExpressionStatement.Instance;
+				return EmptyExpressionStatement.Instance.DoResolve (ec);
 
 			return expr;
 		}
 
-		protected override Expression Error_MemberLookupFailed (MemberInfo[] members)
+		protected override Expression Error_MemberLookupFailed (Type type, MemberInfo[] members)
 		{
 			MemberInfo member = members [0];
 			if (member.MemberType != MemberTypes.Property && member.MemberType != MemberTypes.Field)
@@ -9586,20 +9509,22 @@ namespace Mono.CSharp {
 
 			public override void Emit (EmitContext ec)
 			{
-				new_instance.value_target.Emit (ec);
+				Expression e = (Expression) new_instance.instance;
+				e.Emit (ec);
 			}
 
 			#region IMemoryLocation Members
 
 			public void AddressOf (EmitContext ec, AddressOp mode)
 			{
-				((IMemoryLocation)new_instance.value_target).AddressOf (ec, mode);
+				new_instance.instance.AddressOf (ec, mode);
 			}
 
 			#endregion
 		}
 
 		CollectionOrObjectInitializers initializers;
+		IMemoryLocation instance;
 
 		public NewInitialize (Expression requested_type, ArrayList arguments, CollectionOrObjectInitializers initializers, Location l)
 			: base (requested_type, arguments, l)
@@ -9649,51 +9574,52 @@ namespace Mono.CSharp {
 			return e;
 		}
 
-		public override void Emit (EmitContext ec)
+		public override bool Emit (EmitContext ec, IMemoryLocation target)
 		{
-			base.Emit (ec);
+			bool left_on_stack = base.Emit (ec, target);
+
+			if (initializers.IsEmpty)
+				return left_on_stack;
+
+			LocalTemporary temp = null;
 
 			//
 			// If target is non-hoisted variable, let's use it
 			//
-			VariableReference variable = value_target as VariableReference;
-			if (variable != null && variable.HoistedVariable == null) {
-				if (variable.IsRef)
-					StoreFromPtr (ec.ig, type);
-				else
-					variable.EmitAssign (ec, EmptyExpression.Null, false, false);
-			} else {
-				variable = null;
-				if (value_target == null || value_target_set)
-					value_target = new LocalTemporary (type);
+			VariableReference variable = target as VariableReference;
+			if (variable != null) {
+				instance = target;
 
-				((LocalTemporary) value_target).Store (ec);
+				if (left_on_stack) {
+					if (variable.IsRef)
+						StoreFromPtr (ec.ig, type);
+					else
+						variable.EmitAssign (ec, EmptyExpression.Null, false, false);
+
+					left_on_stack = false;
+				}
+			} else {
+				temp = target as LocalTemporary;
+				if (temp == null) {
+					if (!left_on_stack)
+						throw new NotImplementedException ();
+
+					temp = new LocalTemporary (type);
+				}
+
+				instance = temp;
+				if (left_on_stack)
+					temp.Store (ec);
 			}
 
 			initializers.Emit (ec);
 
-			if (variable == null) {
-				value_target.Emit (ec);
-				value_target = null;
-			}
-		}
-
-		public override void EmitStatement (EmitContext ec)
-		{
-			if (initializers.IsEmpty) {
-				base.EmitStatement (ec);
-				return;
+			if (left_on_stack) {
+				temp.Emit (ec);
+				temp.Release (ec);
 			}
 
-			base.Emit (ec);
-
-			if (value_target == null) {
-				LocalTemporary variable = new LocalTemporary (type);
-				variable.Store (ec);
-				value_target = variable;
-			}
-
-			initializers.EmitStatement (ec);
+			return left_on_stack;
 		}
 
 		public override bool HasInitializer {
@@ -9794,8 +9720,8 @@ namespace Mono.CSharp {
 			if (anonymous_type == null)
 				return null;
 
-			ConstructedType te = new ConstructedType (anonymous_type.TypeBuilder,
-				new TypeArguments (loc, t_args), loc);
+			GenericTypeExpr te = new GenericTypeExpr (anonymous_type.TypeBuilder,
+				new TypeArguments (t_args), loc);
 
 			return new New (te, arguments, loc).Resolve (ec);
 		}

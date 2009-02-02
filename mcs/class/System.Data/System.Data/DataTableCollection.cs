@@ -36,6 +36,9 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace System.Data
 {
@@ -46,14 +49,7 @@ namespace System.Data
 		 "System.Drawing.Design.UITypeEditor, " + Consts.AssemblySystem_Drawing)]
 	[DefaultEvent ("CollectionChanged")]
 	[ListBindable (false)]
-#if !NET_2_0
-	[Serializable]
-#endif
-	public
-#if NET_2_0
-	sealed
-#endif
-	class DataTableCollection : InternalDataCollectionBase {
+	public partial class DataTableCollection : InternalDataCollectionBase {
 		DataSet dataSet;
 		DataTable[] mostRecentTables;
 
@@ -83,15 +79,6 @@ namespace System.Data
 				return index < 0 ? null : (DataTable) List [index];
 			}
 		}
-
-#if NET_2_0
-		public DataTable this [string name, string tbNamespace] {
-			get {
-				int index = IndexOf (name, tbNamespace, true);
-				return index < 0 ? null : (DataTable) List [index];
-			}
-		}
-#endif
 
 		protected override ArrayList List {
 			get { return base.List; }
@@ -165,15 +152,6 @@ namespace System.Data
 			return table;
 		}
 
-#if NET_2_0
-		public DataTable Add (string name, string tbNamespace)
-		{
-			DataTable table = new DataTable (name, tbNamespace);
-			this.Add (table);
-			return table;
-		}
-#endif
-
 		public void AddRange (DataTable [] tables)
 		{
 			if (dataSet != null && dataSet.InitInProgress) {
@@ -219,18 +197,6 @@ namespace System.Data
 			return (-1 != IndexOf (name, false));
 		}
 
-#if NET_2_0
-		public bool Contains (string name, string tableNamespace)
-		{
-			return (IndexOf (name, tableNamespace) != -1);
-		}
-
-		public void CopyTo (DataTable [] array, int index)
-		{
-			CopyTo ((Array) array, index);
-		}
-#endif
-
 		public
 #if !NET_2_0
 		virtual
@@ -248,16 +214,6 @@ namespace System.Data
 		{
 			return IndexOf (tableName, false);
 		}
-
-#if NET_2_0
-		public int IndexOf (string tableName, string tableNamespace)
-		{
-			if (tableNamespace == null)
-				throw new ArgumentNullException ("'tableNamespace' argument cannot be null.",
-						"tableNamespace");
-			return IndexOf (tableName, tableNamespace, false);
-		}
-#endif
 
 		public void Remove (DataTable table)
 		{
@@ -277,17 +233,6 @@ namespace System.Data
 				throw new ArgumentException ("Table " + name + " does not belong to this DataSet");
 			RemoveAt (index);
 		}
-
-#if NET_2_0
-		public void Remove (string name, string tableNamespace)
-		{
-			int index = IndexOf (name, tableNamespace, true);
-			if (index == -1)
-				 throw new ArgumentException ("Table " + name + " does not belong to this DataSet");
-
-			RemoveAt (index);
-		}
-#endif
 
 		public void RemoveAt (int index)
 		{
@@ -323,45 +268,6 @@ namespace System.Data
 		#endregion
 
 		#region Private methods
-#if NET_2_0
-		private int IndexOf (string name, string ns, bool error)
-		{
-			int index = -1, count = 0, match = -1;
-			do {
-				index = IndexOf (name, error, index+1);
-
-				if (index == -1)
-					break;
-
-				if (ns == null) {
-					if (count > 1)
-						break;
-					count++;
-					match = index;
-				} else if (this [index].Namespace.Equals (ns))
-					return index;
-
-			} while (index != -1 && index < Count);
-
-			if (count == 1)
-				return match;
-
-			if (count == 0 || !error)
-				return -1;
-
-			throw new ArgumentException ("The given name '" + name + "' matches atleast two names" +
-					"in the collection object with different namespaces");
-		}
-#endif
-
-		private int IndexOf (string name, bool error)
-		{
-#if NET_2_0
-			return IndexOf (name, null, error);
-# else
-			return IndexOf (name, error, 0);
-#endif
-		}
 
 		private int IndexOf (string name, bool error, int start)
 		{
@@ -463,4 +369,121 @@ namespace System.Data
 
 		#endregion
 	}
+
+#if NET_2_0
+	sealed partial class DataTableCollection {
+		public DataTable this [string name, string tbNamespace] {
+			get {
+				int index = IndexOf (name, tbNamespace, true);
+				return index < 0 ? null : (DataTable) List [index];
+			}
+		}
+
+		public DataTable Add (string name, string tbNamespace)
+		{
+			DataTable table = new DataTable (name, tbNamespace);
+			this.Add (table);
+			return table;
+		}
+
+		public bool Contains (string name, string tableNamespace)
+		{
+			return (IndexOf (name, tableNamespace) != -1);
+		}
+
+		public int IndexOf (string tableName, string tableNamespace)
+		{
+			if (tableNamespace == null)
+				throw new ArgumentNullException ("'tableNamespace' argument cannot be null.",
+						"tableNamespace");
+			return IndexOf (tableName, tableNamespace, false);
+		}
+
+		public void Remove (string name, string tableNamespace)
+		{
+			int index = IndexOf (name, tableNamespace, true);
+			if (index == -1)
+				 throw new ArgumentException ("Table " + name + " does not belong to this DataSet");
+
+			RemoveAt (index);
+		}
+
+		private int IndexOf (string name, string ns, bool error)
+		{
+			int index = -1, count = 0, match = -1;
+			do {
+				index = IndexOf (name, error, index+1);
+
+				if (index == -1)
+					break;
+
+				if (ns == null) {
+					if (count > 1)
+						break;
+					count++;
+					match = index;
+				} else if (this [index].Namespace.Equals (ns))
+					return index;
+
+			} while (index != -1 && index < Count);
+
+			if (count == 1)
+				return match;
+
+			if (count == 0 || !error)
+				return -1;
+
+			throw new ArgumentException ("The given name '" + name + "' matches atleast two names" +
+					"in the collection object with different namespaces");
+		}
+
+		private int IndexOf (string name, bool error)
+		{
+			return IndexOf (name, null, error);
+		}
+
+		public void CopyTo (DataTable [] array, int index)
+		{
+			CopyTo ((Array) array, index);
+		}
+
+		internal void BinarySerialize_Schema (SerializationInfo si)
+		{
+			si.AddValue ("DataSet.Tables.Count", Count);
+			for (int i = 0; i < Count; i++) {
+				DataTable dt = (DataTable) List [i];
+
+				if (dt.dataSet != dataSet)
+					throw new SystemException ("Internal Error: inconsistent DataTable");
+
+				MemoryStream ms = new MemoryStream ();
+				BinaryFormatter bf = new BinaryFormatter ();
+				bf.Serialize (ms, dt);
+				byte [] serializedStream = ms.ToArray ();
+				ms.Close ();
+				si.AddValue ("DataSet.Tables_" + i, serializedStream, typeof (Byte []));
+			}
+		}
+
+		internal void BinarySerialize_Data (SerializationInfo si)
+		{
+			for (int i = 0; i < Count; i++) {
+				DataTable dt = (DataTable) List [i];
+				for (int j = 0; j < dt.Columns.Count; j++) {
+					si.AddValue ("DataTable_" + i + ".DataColumn_" + j + ".Expression",
+						     dt.Columns[j].Expression);
+				}
+				dt.BinarySerialize (si, "DataTable_" + i + ".");
+			}
+		}
+	}
+#else
+	[Serializable]
+	partial class DataTableCollection {
+		private int IndexOf (string name, bool error)
+		{
+			return IndexOf (name, error, 0);
+		}
+	}
+#endif
 }

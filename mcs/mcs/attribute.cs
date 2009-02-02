@@ -384,8 +384,8 @@ namespace Mono.CSharp {
 			if (ds == null)
 				ds = owner.ResolveContext.DeclContainer;
 			
-			EmitContext ec = new EmitContext (owner.ResolveContext, ds, owner.ResolveContext.DeclContainer,
-				Location, null, typeof (Attribute), owner.ResolveContext.DeclContainer.ModFlags, false);
+			EmitContext ec = new EmitContext (owner.ResolveContext, ds, ds,
+				Location, null, typeof (Attribute), ds.ModFlags, false);
 			ec.IsAnonymousMethodAllowed = false;
 
 			ConstructorInfo ctor = ResolveConstructor (ec);
@@ -1723,17 +1723,19 @@ namespace Mono.CSharp {
 			ObsoleteAttribute result = null;
 			if (TypeManager.HasElementType (type)) {
 				result = GetObsoleteAttribute (TypeManager.GetElementType (type));
-			} else if (TypeManager.IsGenericParameter (type) || TypeManager.IsGenericType (type))
-				return null;
-			else {
+			} else if (TypeManager.IsGenericParameter (type))
+				result = null;	// TODO: throw new NotSupportedException ()
+			else if (TypeManager.IsGenericType (type) && !TypeManager.IsGenericTypeDefinition (type)) {
+				return GetObsoleteAttribute (TypeManager.DropGenericTypeArguments (type));
+			} else {
 				DeclSpace type_ds = TypeManager.LookupDeclSpace (type);
 
 				// Type is external, we can get attribute directly
 				if (type_ds == null) {
 					if (TypeManager.obsolete_attribute_type != null) {
-						object [] attribute = type.GetCustomAttributes (TypeManager.obsolete_attribute_type, false);
+						object[] attribute = type.GetCustomAttributes (TypeManager.obsolete_attribute_type, false);
 						if (attribute.Length == 1)
-							result = (ObsoleteAttribute) attribute [0];
+							result = (ObsoleteAttribute) attribute[0];
 					}
 				} else {
 					result = type_ds.GetObsoleteAttribute ();

@@ -3,6 +3,7 @@
 //
 // Author:
 //   Everaldo Canuto (ecanuto@novell.com)
+//   Andreia Gaita (avidigal@novell.com)
 //
 // (C) 2006 Novell, Inc. (http://www.novell.com)
 //
@@ -298,7 +299,7 @@ namespace MonoTests.System.Windows.Forms
 				// check for Unix platforms - see FAQ for more details
 				// http://www.mono-project.com/FAQ:_Technical#How_to_detect_the_execution_platform_.3F
 				int platform = (int) Environment.OSVersion.Platform;
-				return ((platform == 4) || (platform == 128));
+				return ((platform == 4) || (platform == 128) || (platform == 6));
 			}
 		}
 	}

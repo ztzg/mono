@@ -19,6 +19,16 @@
 #endif
 #include <errno.h>
 
+#include <sys/types.h>
+#ifndef PLATFORM_WIN32 
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#endif
+
 #include <mono/metadata/object.h>
 #include <mono/io-layer/io-layer.h>
 #include <mono/metadata/socket-io.h>
@@ -65,6 +75,11 @@
  * inet_ntop() is missing), but the libws2_32 library is missing the
  * actual implementations of these functions.
  */
+#undef AF_INET6
+#endif
+
+#ifdef PLATFORM_ANDROID
+// not yet actually implemented...
 #undef AF_INET6
 #endif
 
@@ -773,13 +788,20 @@ gint32 ves_icall_System_Net_Sockets_Socket_Available_internal(SOCKET sock,
 							      gint32 *error)
 {
 	int ret;
-	gulong amount;
+	int amount;
 	
 	MONO_ARCH_SAVE_REGS;
 
 	*error = 0;
 	
+#if defined(PLATFORM_MACOSX)
+	{
+		socklen_t optlen = sizeof (amount);
+		ret=getsockopt (sock, SOL_SOCKET, SO_NREAD, &amount, &optlen);
+	}
+#else
 	ret=ioctlsocket(sock, FIONREAD, &amount);
+#endif
 	if(ret==SOCKET_ERROR) {
 		*error = WSAGetLastError ();
 		return(0);
@@ -811,13 +833,41 @@ void ves_icall_System_Net_Sockets_Socket_Blocking_internal(SOCKET sock,
 }
 
 gpointer ves_icall_System_Net_Sockets_Socket_Accept_internal(SOCKET sock,
-							     gint32 *error)
+							     gint32 *error,
+							     gboolean blocking)
 {
 	SOCKET newsock;
 	
 	MONO_ARCH_SAVE_REGS;
 
 	*error = 0;
+
+#ifdef PLATFORM_WIN32
+	/* Several applications are getting stuck during shutdown on Windows 
+	 * when an accept call is on a background thread.
+	 * 
+	 */
+	if (blocking) {
+		MonoThread* curthread = mono_thread_current ();
+
+		if (curthread) {
+			for (;;) {
+				int selectret;
+				TIMEVAL timeout; 
+				fd_set readfds;
+				FD_ZERO (&readfds);
+				FD_SET(sock, &readfds);
+				timeout.tv_sec = 0;
+				timeout.tv_usec = 1000;
+				selectret = select (0, &readfds, NULL, NULL, &timeout);
+				if (selectret > 0)
+					break;
+				if (curthread->state & ThreadState_StopRequested)
+					return NULL;
+			}
+		}
+	}
+#endif
 	
 	newsock = _wapi_accept (sock, NULL, 0);
 	if(newsock==INVALID_SOCKET) {
@@ -1583,7 +1633,7 @@ static SOCKET Socket_to_SOCKET(MonoObject *sockobj)
 	MonoClassField *field;
 	
 	field=mono_class_get_field_from_name(sockobj->vtable->klass, "socket");
-	sock=*(SOCKET *)(((char *)sockobj)+field->offset);
+	sock=GPOINTER_TO_INT (*(gpointer *)(((char *)sockobj)+field->offset));
 
 	return(sock);
 }
@@ -1624,7 +1674,7 @@ void ves_icall_System_Net_Sockets_Socket_Select_internal(MonoArray **sockets, gi
 			return;
 		}
 
-		pfds [idx].fd = GPOINTER_TO_INT (Socket_to_SOCKET (obj));
+		pfds [idx].fd = Socket_to_SOCKET (obj);
 		pfds [idx].events = (mode == 0) ? MONO_POLLIN : (mode == 1) ? MONO_POLLOUT : POLL_ERRORS;
 		idx++;
 	}
@@ -2673,8 +2723,12 @@ addrinfo_to_IPHostEntry(struct addrinfo *info, MonoString **h_name,
 
 		mono_array_setref (*h_addr_list, addr_index, addr_string);
 
-		if(!i && ai->ai_canonname != NULL) {
-			*h_name=mono_string_new(domain, ai->ai_canonname);
+		if(!i) {
+			if (ai->ai_canonname != NULL) {
+				*h_name=mono_string_new(domain, ai->ai_canonname);
+			} else {
+				*h_name=mono_string_new(domain, buffer);
+			}
 		}
 
 		addr_index++;

@@ -17,6 +17,7 @@ mainsoft/NunitWeb/NunitWeb/BaseControlCollection.cs
 mainsoft/NunitWeb/NunitWeb/BaseInvoker.cs
 mainsoft/NunitWeb/NunitWeb/BaseRequest.cs
 mainsoft/NunitWeb/NunitWeb/BaseWorkerRequest.cs
+mainsoft/NunitWeb/NunitWeb/CustomSection.cs
 mainsoft/NunitWeb/NunitWeb/FakeMembershipProvider.cs
 mainsoft/NunitWeb/NunitWeb/FormRequest.cs
 mainsoft/NunitWeb/NunitWeb/IForeignData.cs
@@ -128,6 +129,7 @@ System.Web.UI/DataSourceSelectArgumentsTest.cs
 System.Web.UI/HtmlTextWriterTest.cs
 System.Web.UI/MinimizableAttributeTypeConverterTest.cs
 System.Web.UI/OutputCacheParametersTest.cs
+System.Web.UI/PageParserTest.cs
 System.Web.UI/PageTest.cs
 System.Web.UI/PostBackOptionsTest.cs
 System.Web.UI/PropertyConverterTest.cs

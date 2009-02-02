@@ -221,8 +221,8 @@ namespace Mono.CSharp {
 		{
 			if (args == null)
 				return name;
-			else
-				return name + "`" + args.Count;
+
+			return name + "`" + args.Count;
 		}
 
 		public static string MakeName (string name, int count)
@@ -349,14 +349,21 @@ namespace Mono.CSharp {
 				}
 			} else {
 				if ((ModFlags & (Modifiers.ABSTRACT | Modifiers.EXTERN | Modifiers.PARTIAL)) == 0) {
-					if (RootContext.Version >= LanguageVersion.LINQ && this is Property.PropertyMethod &&
-						!(this is Indexer.GetIndexerMethod || this is Indexer.SetIndexerMethod)) {
-						Report.Error (840, Location, "`{0}' must have a body because it is not marked abstract or extern. The property can be automatically implemented when you define both accessors",
-						              GetSignatureForError ());
-					} else {
-						Report.Error (501, Location, "`{0}' must have a body because it is not marked abstract, extern, or partial",
-						              GetSignatureForError ());
+					if (RootContext.Version >= LanguageVersion.LINQ) {
+						Property.PropertyMethod pm = this as Property.PropertyMethod;
+						if (pm is Indexer.GetIndexerMethod || pm is Indexer.SetIndexerMethod)
+							pm = null;
+
+						if (pm != null && (pm.Property.Get.IsDummy || pm.Property.Set.IsDummy)) {
+							Report.Error (840, Location,
+								"`{0}' must have a body because it is not marked abstract or extern. The property can be automatically implemented when you define both accessors",
+								GetSignatureForError ());
+							return false;
+						}
 					}
+
+					Report.Error (501, Location, "`{0}' must have a body because it is not marked abstract, extern, or partial",
+					              GetSignatureForError ());
 					return false;
 				}
 			}
@@ -381,8 +388,8 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			if (((Parent.ModFlags & Modifiers.SEALED) != 0) &&
-				((ModFlags & Modifiers.OVERRIDE) == 0) && (Name != "Finalize")) {
+			if ((Parent.ModFlags & Modifiers.SEALED) != 0 && (ModFlags & Modifiers.OVERRIDE) == 0 &&
+				!(this is Destructor)) {
 				Report.Warning (628, 4, Location, "`{0}': new protected member declared in sealed class",
 					GetSignatureForError ());
 				return;
@@ -729,24 +736,31 @@ namespace Mono.CSharp {
 		{
 			if (!IsClsComplianceRequired ()) {
 				if (HasClsCompliantAttribute && Report.WarningLevel >= 2) {
-					if (!IsExposedFromAssembly ())
-						Report.Warning (3019, 2, Location, "CLS compliance checking will not be performed on `{0}' because it is not visible from outside this assembly", GetSignatureForError ());
-					if (!CodeGen.Assembly.IsClsCompliant)
-						Report.Warning (3021, 2, Location, "`{0}' does not need a CLSCompliant attribute because the assembly is not marked as CLS-compliant", GetSignatureForError ());
+					if (!IsExposedFromAssembly ()) {
+						Attribute a = OptAttributes.Search (TypeManager.cls_compliant_attribute_type);
+						Report.Warning (3019, 2, a.Location, "CLS compliance checking will not be performed on `{0}' because it is not visible from outside this assembly", GetSignatureForError ());
+					}
+
+					if (!CodeGen.Assembly.IsClsCompliant) {
+						Attribute a = OptAttributes.Search (TypeManager.cls_compliant_attribute_type);
+						Report.Warning (3021, 2, a.Location, "`{0}' does not need a CLSCompliant attribute because the assembly is not marked as CLS-compliant", GetSignatureForError ());
+					}
 				}
 				return false;
 			}
 
 			if (HasClsCompliantAttribute) {
 				if (CodeGen.Assembly.ClsCompliantAttribute == null && !CodeGen.Assembly.IsClsCompliant) {
-					Report.Warning (3014, 1, Location,
+					Attribute a = OptAttributes.Search (TypeManager.cls_compliant_attribute_type);
+					Report.Warning (3014, 1, a.Location,
 						"`{0}' cannot be marked as CLS-compliant because the assembly is not marked as CLS-compliant",
 						GetSignatureForError ());
 					return false;
 				}
 
 				if (!Parent.IsClsComplianceRequired ()) {
-					Report.Warning (3018, 1, Location, "`{0}' cannot be marked as CLS-compliant because it is a member of non CLS-compliant type `{1}'", 
+					Attribute a = OptAttributes.Search (TypeManager.cls_compliant_attribute_type);
+					Report.Warning (3018, 1, a.Location, "`{0}' cannot be marked as CLS-compliant because it is a member of non CLS-compliant type `{1}'", 
 						GetSignatureForError (), Parent.GetSignatureForError ());
 					return false;
 				}
@@ -864,6 +878,8 @@ namespace Mono.CSharp {
 
 		protected readonly bool is_generic;
 		readonly int count_type_params;
+		protected TypeParameter[] type_params;
+		TypeParameter[] type_param_list;
 
 		//
 		// Whether we are Generic
@@ -912,6 +928,9 @@ namespace Mono.CSharp {
 				defined_names.Add (name, symbol);
 				return true;
 			}
+
+			if ((mc.ModFlags & Modifiers.COMPILER_GENERATED) != 0)
+				return true;
 
 			if (symbol.EnableOverloadChecks (mc))
 				return true;
@@ -964,6 +983,11 @@ namespace Mono.CSharp {
 		//
 		public bool IsTopLevel {
 			get { return (Parent != null && Parent.Parent == null); }
+		}
+
+		public virtual bool IsUnmanagedType ()
+		{
+			return false;
 		}
 
 		public virtual void CloseType ()
@@ -1026,7 +1050,7 @@ namespace Mono.CSharp {
 		
 		public bool CheckAccessLevel (Type check_type)
 		{
-			TypeBuilder tb = TypeBuilder;
+			Type tb = TypeBuilder;
 #if GMCS_SOURCE
 			if (this is GenericMethod) {
 				tb = Parent.TypeBuilder;
@@ -1041,6 +1065,11 @@ namespace Mono.CSharp {
 			check_type = TypeManager.DropGenericTypeArguments (check_type);
 			if (check_type == tb)
 				return true;
+
+			// TODO: When called from LocalUsingAliasEntry tb is null
+			// because we are in RootDeclSpace
+			if (tb == null)
+				tb = typeof (RootDeclSpace);
 
 			//
 			// Broken Microsoft runtime, return public for arrays, no matter what 
@@ -1227,12 +1256,6 @@ namespace Mono.CSharp {
 			}
 			TypeBuilder.SetCustomAttribute (cb);
 		}
-
-		//
-		// Extensions for generics
-		//
-		protected TypeParameter[] type_params;
-		TypeParameter[] type_param_list;
 
 		TypeParameter[] initialize_type_params ()
 		{
@@ -2287,15 +2310,22 @@ namespace Mono.CSharp {
 				return null;
 
 			EntryType entry_type = EntryType.Static | EntryType.Method | EntryType.NotExtensionMethod;
-			if (publicOnly) {
-				entry_type |= EntryType.Public;
-			}
 			EntryType found_entry_type = entry_type & ~EntryType.NotExtensionMethod;
 
 			ArrayList candidates = null;
 			foreach (CacheEntry entry in entries) {
 				if ((entry.EntryType & entry_type) == found_entry_type) {
 					MethodBase mb = (MethodBase)entry.Member;
+
+					// Simple accessibility check
+					if ((entry.EntryType & EntryType.Public) == 0 && publicOnly) {
+						MethodAttributes ma = mb.Attributes & MethodAttributes.MemberAccessMask;
+						if (ma != MethodAttributes.Assembly && ma != MethodAttributes.FamORAssem)
+							continue;
+						
+						if (!TypeManager.IsThisOrFriendAssembly (mb.DeclaringType.Assembly))
+							continue;
+					}
 
 					IMethodData md = TypeManager.GetMethod (mb);
 					AParametersCollection pd = md == null ?

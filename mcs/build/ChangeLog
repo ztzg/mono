@@ -1,3 +1,63 @@
+2009-01-08  Geoff Norton  <gnorton@novell.com>
+
+	* Makefile: Add darwin.make to the make dist target as well
+
+2009-01-07  Geoff Norton  <gnorton@novell.com>
+
+	* library.make: Allow platform specific exclude tags from the
+	test harness suite.
+	* darwin.make: Add to the build and add a new NotOnMac test
+	category
+
+2008-12-30  Ankit Jain  <jankit@novell.com>
+
+	* library.make (TEST_HARNESS_OUTPUT*): Fix /labels switch.
+
+2008-12-12  Raja R Harinath  <harinath@hurrynot.org>
+
+	* rules.make (topdir): Don't use $(shell ...).
+	Reported by Jonathan Chambers.
+
+2008-12-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* library.make : enable FIXTURE and TESTNAME on run-test-ondotnet.
+
+2008-11-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : ugh, ok another dist pain.
+
+2008-11-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* nunit-summary.xsl : copied from nunit resource (summary.xslt)
+	* library.make : put transformation result from TestResult-*.xml
+	  into TestResult-*.log as we used to do.
+
+2008-11-28  Marek Habersack  <mhabersack@novell.com>
+
+	* library.make (FIXTURE_ARG): /parameter:value syntax is not
+	supported in nunit 2.4
+	(TESTNAME_ARG): added support for the nunit-console -run
+	parameter, so that individual tests can be ran.
+
+2008-11-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* library.make : another nunit20 to kill :(
+
+2008-11-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* library.make : update nunit options that break upgrade to 2.4.
+
+2008-11-18  Raja R Harinath  <harinath@hurrynot.org>
+
+	* library.make (TEST_FILES): Notice filenames with ../ in the test
+	sources file, and handle them in a way suitable for the 'make
+	dist' handling of such files.
+
+2008-11-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* library.make: AOT the library after compilation if the AOT_IN_PROFILES
+	variable is defined and it contains the current profile.
+
 2008-10-18  Jonathan Pryor  <jpryor@novell.com>
 
 	* rules.make (dist-default): Distribute the Documentation directory, 

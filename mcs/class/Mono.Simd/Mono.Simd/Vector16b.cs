@@ -64,6 +64,7 @@ namespace Mono.Simd
 		internal byte v14;
 		[ FieldOffset(15) ]
 		internal byte v15;
+		
 		public Vector16b (byte v0, byte v1, byte v2, byte v3, byte v4, byte v5, byte v6, byte v7, byte v8, byte v9, byte v10, byte v11, byte v12, byte v13, byte v14, byte v15)
 		{
 			this.v0 = v0;
@@ -81,7 +82,28 @@ namespace Mono.Simd
 			this.v12 = v12;
 			this.v13 = v13;
 			this.v14 = v14;
-			this.v15 = v15;		}
+			this.v15 = v15;
+		}
+		
+		public Vector16b (byte b)
+		{
+			this.v0 = b;
+			this.v1 = b;
+			this.v2 = b;
+			this.v3 = b;
+			this.v4 = b;
+			this.v5 = b;
+			this.v6 = b;
+			this.v7 = b;
+			this.v8 = b;
+			this.v9 = b;
+			this.v10 = b;
+			this.v11 = b;
+			this.v12 = b;
+			this.v13 = b;
+			this.v14 = b;
+			this.v15 = b;
+		}
 
 		public byte V0 { get { return v0; } set { v0 = value; } }
 		public byte V1 { get { return v1; } set { v1 = value; } }
@@ -99,6 +121,35 @@ namespace Mono.Simd
 		public byte V13 { get { return v13; } set { v13 = value; } }
 		public byte V14 { get { return v14; } set { v14 = value; } }
 		public byte V15 { get { return v15; } set { v15 = value; } }
+
+		public static Vector16b One
+		{
+			get {return new Vector16b (1); }
+		}
+
+		public static Vector16b Zero
+		{
+			get {return new Vector16b (0); }
+		}
+
+		[System.Runtime.CompilerServices.IndexerName ("Component")]
+		public unsafe byte this [int index]
+		{
+			get {
+				if ((index | 0xF) != 0xF) //index < 0 || index > 15
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (byte *v = &v0) {
+					return * (v + index);
+				}
+			}
+			set {
+				if ( (index | 0xF) != 0xF) //index < 0 || index > 15
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (byte *v = &v0) {
+					* (v + index) = value;
+				}
+			}
+		}
 
 		[Acceleration (AccelMode.SSE2)]
 		public static unsafe Vector16b operator + (Vector16b va, Vector16b vb)
@@ -128,11 +179,13 @@ namespace Mono.Simd
 		public static unsafe Vector16b operator & (Vector16b va, Vector16b vb)
 		{
 			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte)(*a++ & *b++);
+			uint *a = (uint*) &va.v0;
+			uint *b = (uint*) &vb.v0;
+			uint *c = (uint*) &res.v0;
+			*c++ = *a++ & *b++;
+			*c++ = *a++ & *b++;
+			*c++ = *a++ & *b++;
+			*c = *a & *b;
 			return res;
 		}
 
@@ -140,11 +193,13 @@ namespace Mono.Simd
 		public static unsafe Vector16b operator | (Vector16b va, Vector16b vb)
 		{
 			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte)(*a++ | *b++);
+			uint *a = (uint*) &va.v0;
+			uint *b = (uint*) &vb.v0;
+			uint *c = (uint*) &res.v0;
+			*c++ = *a++ | *b++;
+			*c++ = *a++ | *b++;
+			*c++ = *a++ | *b++;
+			*c = *a | *b;
 			return res;
 		}
 
@@ -152,119 +207,36 @@ namespace Mono.Simd
 		public static unsafe Vector16b operator ^ (Vector16b va, Vector16b vb)
 		{
 			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte)(*a++ ^ *b++);
+			uint *a = (uint*) &va.v0;
+			uint *b = (uint*) &vb.v0;
+			uint *c = (uint*) &res.v0;
+			*c++ = *a++ ^ *b++;
+			*c++ = *a++ ^ *b++;
+			*c++ = *a++ ^ *b++;
+			*c = *a ^ *b;
 			return res;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b UnpackLow (Vector16b va, Vector16b vb)
+		public unsafe static bool operator ==(Vector16b va, Vector16b vb)
 		{
-			return new Vector16b (va.v0, vb.v0, va.v1, vb.v1, va.v2, vb.v2, va.v3, vb.v3, va.v4, vb.v4, va.v5, vb.v5, va.v6, vb.v6, va.v7, vb.v7);
+			byte *a = &va.v0;
+			byte *b = &vb.v0;
+			for (int i = 0; i < 16; ++i)
+				if (*a++ != *b++)
+					return false;
+			return true;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b UnpackHigh (Vector16b va, Vector16b vb)
+		public unsafe static bool operator !=(Vector16b va, Vector16b vb)
 		{
-			return new Vector16b (va.v8, vb.v8, va.v9, vb.v9, va.v10, vb.v10, va.v11, vb.v11, va.v12, vb.v12, va.v13, vb.v13, va.v14, vb.v14, va.v15, vb.v15);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b AddWithSaturation (Vector16b va, Vector16b vb) {
-			Vector16b res = new Vector16b ();
 			byte *a = &va.v0;
 			byte *b = &vb.v0;
-			byte *c = &res.v0;
 			for (int i = 0; i < 16; ++i)
-				*c++ = (byte) System.Math.Min (*a++ + *b++, byte.MaxValue);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b SubWithSaturation (Vector16b va, Vector16b vb) {
-			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte) System.Math.Max (*a++ - *b++, 0);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b Average (Vector16b va, Vector16b vb) {
-			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte) ((*a++ + *b++ + 1) >> 1);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b Max (Vector16b va, Vector16b vb) {
-			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte) System.Math.Max(*a++, *b++);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b Min (Vector16b va, Vector16b vb) {
-			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte) System.Math.Min(*a++, *b++);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe int ExtractByteMask (Vector16b va) {
-			int res = 0;
-			byte *a = (byte*)&va;
-			for (int i = 0; i < 16; ++i)
-				res |= (*a++ & 0x80) >> 7 << i;
-			return res;
-		}
-
-		[CLSCompliant(false)]
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us SumOfAbsoluteDifferences (Vector16b va, Vector16sb vb) {
-			Vector8us res = new Vector8us ();
-			byte *a = &va.v0;
-			sbyte *b = (sbyte*)&vb;
-
-			int tmp = 0;
-			for (int i = 0; i < 8; ++i)
-				tmp += System.Math.Abs ((int)*a++ - (int)*b++);
-			res.V0 = (ushort)tmp;
-
-			tmp = 0;
-			for (int i = 0; i < 8; ++i)
-				tmp += System.Math.Abs ((int)*a++ - (int)*b++);
-			res.V4 = (ushort)tmp;
-
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b CompareEqual (Vector16b va, Vector16b vb) {
-			Vector16b res = new Vector16b ();
-			byte *a = &va.v0;
-			byte *b = &vb.v0;
-			byte *c = &res.v0;
-			for (int i = 0; i < 16; ++i)
-				*c++ = (byte) (*a++ == *b++ ? -1 : 0);
-			return res;
+				if (*a++ != *b++)
+					return true;
+			return false;
 		}
 
 		[Acceleration (AccelMode.SSE1)]
@@ -406,6 +378,14 @@ namespace Mono.Simd
 		[CLSCompliant(false)]
 		public static unsafe void PrefetchNonTemporal (Vector16b *res)
 		{
+		}
+		
+		public override string ToString()
+		{
+			return "<" + v0 + ", " + v1 + ", " + v2 + ", " + v3 + ", " +
+					v4 + ", " + v5 + ", " + v6 + ", " + v7 + ", " + 
+					+ v8 + ", " + v9 + ", " + v10 + ", " + v11 + ", " +
+					v12 + ", " + v13 + ", " + v14 + ", " + v15 + ">"; 
 		}
 	}
 }

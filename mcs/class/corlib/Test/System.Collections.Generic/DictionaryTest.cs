@@ -879,6 +879,113 @@ namespace MonoTests.System.Collections.Generic {
 			Assert.IsTrue (enumerator.MoveNext ());
 			Assert.IsFalse (enumerator.MoveNext ());
 		}
+
+		[Test]
+		public void ICollectionOfKeyValuePairContains ()
+		{
+			var dictionary = new Dictionary<string, int> ();
+			dictionary.Add ("foo", 42);
+			dictionary.Add ("bar", 12);
+
+			var collection = dictionary as ICollection<KeyValuePair<string, int>>;
+
+			Assert.AreEqual (2, collection.Count);
+
+			Assert.IsFalse (collection.Contains (new KeyValuePair<string, int> ("baz", 13)));
+			Assert.IsFalse (collection.Contains (new KeyValuePair<string, int> ("foo", 13)));
+			Assert.IsTrue (collection.Contains (new KeyValuePair<string, int> ("foo", 42)));
+		}
+
+		[Test]
+		public void ICollectionOfKeyValuePairRemove ()
+		{
+			var dictionary = new Dictionary<string, int> ();
+			dictionary.Add ("foo", 42);
+			dictionary.Add ("bar", 12);
+
+			var collection = dictionary as ICollection<KeyValuePair<string, int>>;
+
+			Assert.AreEqual (2, collection.Count);
+
+			Assert.IsFalse (collection.Remove (new KeyValuePair<string, int> ("baz", 13)));
+			Assert.IsFalse (collection.Remove (new KeyValuePair<string, int> ("foo", 13)));
+			Assert.IsTrue (collection.Remove (new KeyValuePair<string, int> ("foo", 42)));
+
+			Assert.AreEqual (12, dictionary ["bar"]);
+			Assert.IsFalse (dictionary.ContainsKey ("foo"));
+		}
+
+		[Test]
+		public void ICollectionCopyToKeyValuePairArray ()
+		{
+			var dictionary = new Dictionary<string, int> ();
+			dictionary.Add ("foo", 42);
+
+			var collection = dictionary as ICollection;
+
+			Assert.AreEqual (1, collection.Count);
+
+			var pairs = new KeyValuePair<string, int> [1];
+
+			collection.CopyTo (pairs, 0);
+
+			Assert.AreEqual ("foo", pairs [0].Key);
+			Assert.AreEqual (42, pairs [0].Value);
+		}
+
+		[Test]
+		public void ICollectionCopyToDictionaryEntryArray ()
+		{
+			var dictionary = new Dictionary<string, int> ();
+			dictionary.Add ("foo", 42);
+
+			var collection = dictionary as ICollection;
+
+			Assert.AreEqual (1, collection.Count);
+
+			var entries = new DictionaryEntry [1];
+
+			collection.CopyTo (entries, 0);
+
+			Assert.AreEqual ("foo", (string) entries [0].Key);
+			Assert.AreEqual (42, (int) entries [0].Value);
+		}
+
+		[Test]
+		public void ICollectionCopyToObjectArray ()
+		{
+			var dictionary = new Dictionary<string, int> ();
+			dictionary.Add ("foo", 42);
+
+			var collection = dictionary as ICollection;
+
+			Assert.AreEqual (1, collection.Count);
+
+			var array = new object [1];
+
+			collection.CopyTo (array, 0);
+
+			var pair = (KeyValuePair<string, int>) array [0];
+
+			Assert.AreEqual ("foo", pair.Key);
+			Assert.AreEqual (42, pair.Value);
+		}
+
+		[Test]
+		[ExpectedException (typeof (ArgumentException))]
+		public void ICollectionCopyToInvalidArray ()
+		{
+			var dictionary = new Dictionary<string, int> ();
+			dictionary.Add ("foo", 42);
+
+			var collection = dictionary as ICollection;
+
+			Assert.AreEqual (1, collection.Count);
+
+			var array = new int [1];
+
+			collection.CopyTo (array, 0);
+		}
 	}
 }
 

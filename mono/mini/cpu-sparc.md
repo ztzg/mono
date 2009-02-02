@@ -73,10 +73,6 @@ icompare_imm: src1:i len:64
 fcompare: src1:f src2:f len:64
 lcompare: src1:i src2:i len:4
 setfret: dest:f src1:f len:8
-outarg: src1:i len:1
-outarg_imm: len:5
-setret: dest:a src1:i len:4
-sparc_setfreg_float: dest:f src1:f len:4 clob:r
 checkthis: src1:b len:4
 oparglist: src1:i len:64
 call: dest:o clob:c len:40

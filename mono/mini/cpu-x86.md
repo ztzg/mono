@@ -123,9 +123,6 @@ compare: src1:i src2:i len:2
 compare_imm: src1:i len:6
 fcompare: src1:f src2:f clob:a len:9
 oparglist: src1:b len:10
-outarg: src1:i len:1
-outarg_imm: len:5
-setret: dest:a src1:i len:2
 setlret: dest:l src1:i src2:i len:4
 checkthis: src1:b len:3
 voidcall: len:17 clob:c
@@ -298,6 +295,7 @@ abs: dest:f src1:f len:2
 tan: dest:f src1:f len:49
 atan: dest:f src1:f len:8
 sqrt: dest:f src1:f len:2
+round: dest:f src1:f len:2
 bigmul: len:2 dest:l src1:a src2:i
 bigmul_un: len:2 dest:l src1:a src2:i
 sext_i1: dest:i src1:y len:3
@@ -451,7 +449,6 @@ pxor: dest:x src1:x src2:x len:4 clob:1
 sqrtps: dest:x src1:x len:4
 rsqrtps: dest:x src1:x len:4
 rcpps: dest:x src1:x len:4
-shuffleps: dest:x src1:x len:5
 
 pshufflew_high: dest:x src1:x len:5
 pshufflew_low: dest:x src1:x len:5
@@ -568,7 +565,23 @@ xzero: dest:x len:4
 
 iconv_to_x: dest:x src1:i len:4
 extract_i4: dest:i src1:x len:4
+
+extract_i2: dest:i src1:x len:10
+extract_u2: dest:i src1:x len:10
+extract_i1: dest:i src1:x len:10
+extract_u1: dest:i src1:x len:10
+extract_r8: dest:f src1:x len:8 
+
 iconv_to_r8_raw: dest:f src1:i len:17 
+
+insert_i2: dest:x src1:x src2:i len:5 clob:1
+
+extractx_u2: dest:i src1:x len:5
+insertx_u1_slow: dest:x src1:i src2:i len:15 clob:x
+
+insertx_i4_slow: dest:x src1:x src2:i len:13 clob:x
+insertx_r4_slow: dest:x src1:x src2:f len:24 clob:1
+insertx_r8_slow: dest:x src1:x src2:f len:24 clob:1
 
 loadx_membase: dest:x src1:b len:7
 storex_membase: dest:b src1:x len:7
@@ -578,11 +591,14 @@ loadx_aligned_membase: dest:x src1:b len:7
 storex_aligned_membase_reg: dest:b src1:x len:7
 storex_nta_membase_reg: dest:b src1:x len:7
 
-push_r4: src1:f len:13
-loadx_stack: dest:x len: 13
-
 fconv_to_r8_x: dest:x src1:f len:14 
 xconv_r8_to_i4: dest:y src1:x len:7
 
 prefetch_membase: src1:b len:4
+
+expand_i1: dest:x src1:y len:17 clob:1
+expand_i2: dest:x src1:i len:15
+expand_i4: dest:x src1:i len:9
+expand_r4: dest:x src1:f len:13
+expand_r8: dest:x src1:f len:13
 

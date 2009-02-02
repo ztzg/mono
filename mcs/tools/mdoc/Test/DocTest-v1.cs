@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 public class NoNamespace {}
 
@@ -25,7 +26,7 @@ namespace System {
 		/// </remarks>
 		public static string GetFolderPath (SpecialFolder folder)
 		{
-			return null;
+			throw new NotSupportedException ();
 		}
 	}
 
@@ -34,18 +35,19 @@ namespace System {
 		// the ECMA docs have a different return type than .NET -- skip.
 		public static System.Collections.ObjectModel.ReadOnlyCollection<T> AsReadOnly<T> (T[] array)
 		{
-			return null;
+			throw new NotImplementedException ();
 		}
 
 		// ECMA docs use <T,U> instead of <TInput,TOutput> --> map them.
 		public static TOutput[] ConvertAll<TInput, TOutput> (TInput[] array, Converter<TInput, TOutput> converter)
 		{
-			return null;
+			throw new InvalidOperationException ();
 		}
 
 		// ECMA docs *incorrectly* document parameter -- skip
 		public static void Resize<T> (ref T[] array, int newSize)
 		{
+			throw new Exception ();
 		}
 	}
 
@@ -76,9 +78,24 @@ namespace Mono.DocTest {
 			[Doc ("documented field")] public string field;
 		}
 		#endregion
+		/// <remarks><c>C:Mono.DocTest.DocAttribute(System.String)</c></remarks>
 		public DocAttribute (string docs)
 		{
+			if (docs == null)
+				throw new ArgumentNullException ("docs");
 		}
+
+		/// <remarks><c>P:Mono.DocTest.DocAttribute.Property</c></remarks>
+		public Type Property { get; set; }
+
+		/// <remarks><c>F:Mono.DocTest.DocAttribute.Field</c></remarks>
+		public bool Field;
+
+		/// <remarks><c>F:Mono.DocTest.DocAttribute.FlagsEnum</c></remarks>
+		public ConsoleModifiers FlagsEnum;
+
+		/// <remarks><c>F:Mono.DocTest.DocAttribute.NonFlagsEnum</c></remarks>
+		public Color NonFlagsEnum;
 	}
 
 	/// <summary>Possible colors</summary>
@@ -108,7 +125,12 @@ namespace Mono.DocTest {
 
 		/// <param name="i">A <see cref="T:System.Int32" />.</param>
 		/// <remarks><see cref="M:Mono.DocTest.DocValueType.M(System.Int32)"/>.</remarks>
-		public void M (int i) {}
+		public void M (int i)
+		{
+			if ((new Random().Next() % 2) == 0)
+				throw new SystemException ();
+			throw new ApplicationException ();
+		}
 	}
 
 	/// <remarks><c>T:Mono.DocTest.Widget</c>.</remarks>
@@ -177,12 +199,19 @@ namespace Mono.DocTest {
 		public unsafe float **ppValues;
 
 		/// <remarks><c>T:Mono.DocTest.Widget.IMenuItem</c>.</remarks>
-		public interface IMenuItem {}
+		public interface IMenuItem {
+			/// <remarks><c>M:Mono.DocTest.Widget.IMenuItem.A</c>.</remarks>
+			void A ();
+
+			/// <remarks><c>P:Mono.DocTest.Widget.IMenuItem.P</c>.</remarks>
+			int B {get; set;}
+		}
 
 		/// <remarks><c>T:Mono.DocTest.Widget.Del</c>.</remarks>
 		public delegate void Del (int i);
 
 		/// <remarks><c>T:Mono.DocTest.Widget.Direction</c>.</remarks>
+		[Flags]
 		public enum Direction {
 			/// <remarks><c>T:Mono.DocTest.Widget.Direction.North</c>.</remarks>
 			North,
@@ -222,9 +251,10 @@ namespace Mono.DocTest {
 		/// <param name="f">A <see cref="T:System.Single" />.</param>
 		/// <param name="v">A <see cref="T:Mono.DocTest.DocValueType" />.</param>
 		/// <remarks><c>M:Mono.DocTest.Widget.M1(System.Char,System.Signle@,Mono.DocTest.DocValueType@)</c>.</remarks>
-		[return:Doc ("return:DocAttribute")]
-		[Doc("normal DocAttribute")]
-		public void M1 ([Doc ("c")] char c, [Doc ("f")] out float f, 
+		[return:Doc ("return:DocAttribute", Property=typeof(Widget))]
+		[Doc("normal DocAttribute", Field=true)]
+		public void M1 ([Doc ("c", FlagsEnum=ConsoleModifiers.Alt | ConsoleModifiers.Control)] char c, 
+				[Doc ("f", NonFlagsEnum=Color.Red)] out float f, 
 				[Doc ("v")] ref DocValueType v) {f=0;}
 
 		/// <param name="x1">A <see cref="T:System.Int16" /> array.</param>
@@ -330,16 +360,35 @@ namespace Mono.DocTest {
 		///  <para><c>M:Mono.DocTest.UseLists.Process(System.Collections.Generic.List{System.Int32})</c>.</para>
 		/// <para><see cref="M:System.Collections.Generic.List{System.Int32}.Remove(`0)" /></para>
 		/// </remarks>
-		public void Process (List<int> list) {}
+		public void Process (List<int> list)
+		{
+			// Bug: only creation is looked for, so this generates an <exception/>
+			// node:
+			new Exception ();
+
+			// Bug? We only look at "static" types, so we can't follow
+			// delegates/interface calls:
+			Func<int, int> a = x => {throw new InvalidOperationException ();};
+			a (1);
+		}
 
 		/// <param name="list">A <see cref="T:Mono.DocTest.Generic.MyList{System.Predicate{System.Int32}}" />.</param>
 		/// <remarks><c>M:Mono.DocTest.UseLists.Process(System.Collections.Generic.List{System.Predicate{System.Int32}})</c>.</remarks>
-		public void Process (List<Predicate<int>> list) {}
+		public void Process (List<Predicate<int>> list)
+		{
+			if (list == null)
+				throw new ArgumentNullException ("list");
+			Process<int> (list);
+		}
 
 		/// <param name="list">A <see cref="T:Mono.DocTest.Generic.MyList{System.Predicate{``0}}" />.</param>
 		/// <typeparam name="T">Something Else</typeparam>
 		/// <remarks><c>M:Mono.DocTest.UseLists.Process``1(System.Collections.Generic.List{System.Predicate{``0}})</c>.</remarks>
-		public void Process<T> (List<Predicate<T>> list) {}
+		public void Process<T> (List<Predicate<T>> list)
+		{
+			if (list.Any (p => p == null))
+				throw new ArgumentException ("predicate null");
+		}
 
 		/// <param name="helper">A <see cref="T:Mono.DocTest.Generic.MyList{``0}.Helper{``1,``2}" />.</param>
 		/// <typeparam name="T"><c>T</c></typeparam>
@@ -358,7 +407,7 @@ namespace Mono.DocTest.Generic {
 	/// <typeparam name="TRet">return type, with attributes!</typeparam>
 	/// <remarks><c>T:Mono.DocTest.Generic.Func`2</c>.</remarks>
 	[Doc ("method")]
-	[return:Doc ("return")]
+	[return:Doc ("return", Field=false)]
 	public delegate TRet Func<[Doc ("arg!")] TArg, [Doc ("ret!")] TRet> (
 			[Doc ("arg-actual")] TArg a
 	) where TArg : Exception;
@@ -439,6 +488,13 @@ namespace Mono.DocTest.Generic {
 
 		/// <remarks>E:Mono.DocTest.Generic.GenericBase`1.MyEvent</remarks>
 		public event EventHandler<FooEventArgs> MyEvent;
+
+		/// <remarks>T:Mono.DocTest.Generic.GenericBase`1.NestedCollection</remarks>
+		public class NestedCollection {
+			/// <remarks>T:Mono.DocTest.Generic.GenericBase`1.NestedCollection.Enumerator</remarks>
+			public struct Enumerator {
+			}
+		}
 	}
 	
 	/// <typeparam name="T">I'm Dying Here!</typeparam>

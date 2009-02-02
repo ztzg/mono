@@ -61,6 +61,18 @@ namespace Mono.Simd
 			this.v6 = v6;
 			this.v7 = v7;
 		}
+		
+		public Vector8us (ushort us)
+		{
+			this.v0 = us;
+			this.v1 = us;
+			this.v2 = us;
+			this.v3 = us;
+			this.v4 = us;
+			this.v5 = us;
+			this.v6 = us;
+			this.v7 = us;
+		}
 
 		public ushort V0 { get { return v0; } set { v0 = value; } }
 		public ushort V1 { get { return v1; } set { v1 = value; } }
@@ -70,6 +82,35 @@ namespace Mono.Simd
 		public ushort V5 { get { return v5; } set { v5 = value; } }
 		public ushort V6 { get { return v6; } set { v6 = value; } }
 		public ushort V7 { get { return v7; } set { v7 = value; } }
+
+		public static Vector8us Identity
+		{
+			get { return  new Vector8us (1); }
+		}
+
+		public static Vector8us Zero
+		{
+			get { return  new Vector8us (0); }
+		}
+
+		[System.Runtime.CompilerServices.IndexerName ("Component")]
+		public unsafe ushort this [int index]
+		{
+			get {
+				if ((index | 0x7) != 0x7) //index < 0 || index > 7
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (ushort *v = &v0) {
+					return * (v + index);
+				}
+			}
+			set {
+				if ( (index | 0x7) != 0x7) //index < 0 || index > 7
+					throw new ArgumentOutOfRangeException ("index");
+				fixed (ushort *v = &v0) {
+					* (v + index) = value;
+				}
+			}
+		}
 
 		[Acceleration (AccelMode.SSE2)]
 		public static unsafe Vector8us operator + (Vector8us va, Vector8us vb)
@@ -137,11 +178,13 @@ namespace Mono.Simd
 		public static unsafe Vector8us operator & (Vector8us va, Vector8us vb)
 		{
 			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort)(*a++ & *b++);
+			uint *a = (uint*) &va.v0;
+			uint *b = (uint*) &vb.v0;
+			uint *c = (uint*) &res.v0;
+			*c++ = *a++ & *b++;
+			*c++ = *a++ & *b++;
+			*c++ = *a++ & *b++;
+			*c = *a & *b;
 			return res;
 		}
 
@@ -149,11 +192,13 @@ namespace Mono.Simd
 		public static unsafe Vector8us operator | (Vector8us va, Vector8us vb)
 		{
 			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort)(*a++ | *b++);
+			uint *a = (uint*) &va.v0;
+			uint *b = (uint*) &vb.v0;
+			uint *c = (uint*) &res.v0;
+			*c++ = *a++ | *b++;
+			*c++ = *a++ | *b++;
+			*c++ = *a++ | *b++;
+			*c = *a | *b;
 			return res;
 		}
 
@@ -161,165 +206,36 @@ namespace Mono.Simd
 		public static unsafe Vector8us operator ^ (Vector8us va, Vector8us vb)
 		{
 			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort)(*a++ ^ *b++);
+			uint *a = (uint*) &va.v0;
+			uint *b = (uint*) &vb.v0;
+			uint *c = (uint*) &res.v0;
+			*c++ = *a++ ^ *b++;
+			*c++ = *a++ ^ *b++;
+			*c++ = *a++ ^ *b++;
+			*c = *a ^ *b;
 			return res;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us UnpackLow (Vector8us va, Vector8us vb)
+		public unsafe static bool operator ==(Vector8us va, Vector8us vb)
 		{
-			return new Vector8us (va.v0, vb.v0, va.v1, vb.v1, va.v2, vb.v2, va.v3, vb.v3);
+			ushort *a = &va.v0;
+			ushort *b = &vb.v0;
+			for (int i = 0; i < 8; ++i)
+				if (*a++ != *b++)
+					return false;
+			return true;
 		}
 
 		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us UnpackHigh (Vector8us va, Vector8us vb)
+		public unsafe static bool operator !=(Vector8us va, Vector8us vb)
 		{
-			return new Vector8us (va.v4, vb.v4, va.v5, vb.v5, va.v6, vb.v6, va.v7, vb.v7);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us ShiftRightArithmetic (Vector8us va, int amount)
-		{
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*b++ = (ushort)((short)(*a++) >> amount);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us AddWithSaturation (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
 			ushort *a = &va.v0;
 			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
 			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort) System.Math.Min (*a++ + *b++, ushort.MaxValue);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us SubWithSaturation (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort) System.Math.Max (*a++ - *b++, 0);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us Average (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort) ((*a++ + *b++ + 1) >> 1);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE41)]
-		public static unsafe Vector8us Max (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort) System.Math.Max (*a++, *b++);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE41)]
-		public static unsafe Vector8us Min (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort) System.Math.Min (*a++, *b++);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe int ExtractByteMask (Vector8us va) {
-			int res = 0;
-			byte *a = (byte*)&va;
-			for (int i = 0; i < 16; ++i)
-				res |= (*a++ & 0x80) >> 7 << i;
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us ShuffleHigh (Vector8us va, ShuffleSel sel)
-		{
-			ushort *ptr = ((ushort*)&va) + 4;
-			int idx = (int)sel;
-			return new Vector8us (va.v0, va.v1, va.v2, va.v3, *(ptr + ((idx >> 0) & 0x3)), *(ptr + ((idx >> 2) & 0x3)), *(ptr + ((idx >> 4) & 0x3)), *(ptr + ((idx >> 6) & 0x3)));
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us ShuffleLow (Vector8us va, ShuffleSel sel)
-		{
-			ushort *ptr = ((ushort*)&va);
-			int idx = (int)sel;
-			return new Vector8us (*(ptr + ((idx >> 0) & 0x3)), *(ptr + ((idx >> 2) & 0x3)), *(ptr + ((idx >> 4) & 0x3)), *(ptr + ((idx >> 6) & 0x3)), va.v4, va.v5, va.v6, va.v7);
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us CompareEqual (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort) (*a++ == *b++ ? -1 : 0);
-			return res;
-		}
-
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector8us MultiplyStoreHigh (Vector8us va, Vector8us vb) {
-			Vector8us res = new Vector8us ();
-			ushort *a = &va.v0;
-			ushort *b = &vb.v0;
-			ushort *c = &res.v0;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (ushort)((uint)*a++ * (uint)*b++ >> 16);
-			return res;
-		}
-
-		/*This function performs a packuswb, which treats the source as a signed value */
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16b SignedPackWithUnsignedSaturation (Vector8us va, Vector8us vb) {
-			Vector16b res = new Vector16b ();
-			short *a = (short*)&va;
-			short *b = (short*)&vb;
-			byte *c = (byte*)&res;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (byte)System.Math.Max (0, System.Math.Min ((int)*a++, byte.MaxValue));
-			for (int i = 0; i < 8; ++i)
-				*c++ = (byte)System.Math.Max (0, System.Math.Min ((int)*b++, byte.MaxValue));
-			return res;
-		}
-
-		/*This function performs a packsswb, which treats the source as a signed value */
-		[Acceleration (AccelMode.SSE2)]
-		public static unsafe Vector16sb SignedPackWithSignedSaturation (Vector8us va, Vector8us vb) {
-			Vector16sb res = new Vector16sb ();
-			short *a = (short*)&va;
-			short *b = (short*)&vb;
-			sbyte *c = (sbyte*)&res;
-			for (int i = 0; i < 8; ++i)
-				*c++ = (sbyte)System.Math.Max (System.Math.Min ((int)*a++, sbyte.MaxValue), sbyte.MinValue);
-			for (int i = 0; i < 8; ++i)
-				*c++ = (sbyte)System.Math.Max (System.Math.Min ((int)*b++, sbyte.MaxValue), sbyte.MinValue);
-			return res;
+				if (*a++ != *b++)
+					return true;
+			return false;
 		}
 
 		[Acceleration (AccelMode.SSE1)]
@@ -456,6 +372,12 @@ namespace Mono.Simd
 		[CLSCompliant(false)]
 		public static unsafe void PrefetchNonTemporal (Vector8us *res)
 		{
+		}
+		
+		public override string ToString()
+		{
+			return "<" + v0 + ", " + v1 + ", " + v2 + ", " + v3 + ", " +
+					v4 + ", " + v5 + ", " + v6 + ", " + v7 + ">"; 
 		}
 	}
 }

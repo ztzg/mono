@@ -12,6 +12,7 @@
 #include <mono/io-layer/io-layer.h>
 
 extern CRITICAL_SECTION mono_delegate_section;
+extern CRITICAL_SECTION mono_strtod_mutex;
 
 /*
  * If this is set, the memory belonging to appdomains is not freed when a domain is
@@ -179,7 +180,9 @@ struct _MonoDomain {
 	MonoGHashTable    *type_init_exception_hash;
 	/* maps delegate trampoline addr -> delegate object */
 	MonoGHashTable     *delegate_hash_table;
-#define MONO_DOMAIN_LAST_GC_TRACKED delegate_hash_table
+	/* typeof (void) */
+	MonoObject         *typeof_void;
+#define MONO_DOMAIN_LAST_GC_TRACKED typeof_void
 	guint32            state;
 	/* Needed by Thread:GetDomainID() */
 	gint32             domain_id;
@@ -215,7 +218,6 @@ struct _MonoDomain {
 	/* Used when accessing 'domain_assemblies' */
 	CRITICAL_SECTION    assemblies_lock;
 
-	GHashTable	   *shared_generics_hash;
 	GHashTable	   *method_rgctx_hash;
 
 	GHashTable	   *generic_virtual_cases;
@@ -291,12 +293,6 @@ mono_jit_info_get_generic_sharing_context (MonoJitInfo *ji) MONO_INTERNAL;
 
 void
 mono_jit_info_set_generic_sharing_context (MonoJitInfo *ji, MonoGenericSharingContext *gsctx) MONO_INTERNAL;
-
-MonoJitInfo*
-mono_domain_lookup_shared_generic (MonoDomain *domain, MonoMethod *method) MONO_INTERNAL;
-
-void
-mono_domain_register_shared_generic (MonoDomain *domain, MonoMethod *method, MonoJitInfo *jit_info) MONO_INTERNAL;
 
 char *
 mono_make_shadow_copy (const char *filename) MONO_INTERNAL;

@@ -628,6 +628,8 @@ namespace System.Xml
 		{
 			XmlAttribute attr = node as XmlAttribute;
 			XmlNode tmp = attr != null ? attr.OwnerElement : node;
+			if (tmp == null)
+				return; // i.e. attr has null OwnerElement.
 			for (XmlNode tmp2 = GetParentNode (tmp); tmp2 != null; tmp2 = GetParentNode (tmp2))
 				tmp = tmp2;
 			node = tmp;
@@ -656,7 +658,8 @@ namespace System.Xml
 						if (ec != null)
 							return ec;
 					}
-					return c;
+					else
+						return c;
 				}
 				return null;
 			default:
@@ -679,7 +682,8 @@ namespace System.Xml
 						if (ec != null)
 							return ec;
 					}
-					return c;
+					else
+						return c;
 				}
 				return null;
 			default:
@@ -745,6 +749,95 @@ namespace System.Xml
 			return null;
 		}
 
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override string LookupNamespace (string prefix)
+		{
+			// FIXME: optimize
+			return base.LookupNamespace (prefix);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override string LookupPrefix (string namespaceUri)
+		{
+			// FIXME: optimize
+			return base.LookupPrefix (namespaceUri);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override bool MoveToChild (XPathNodeType type)
+		{
+			// FIXME: optimize
+			return base.MoveToChild (type);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override bool MoveToChild (string localName, string namespaceURI)
+		{
+			// FIXME: optimize
+			return base.MoveToChild (localName, namespaceURI);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override bool MoveToNext (string localName, string namespaceURI)
+		{
+			// FIXME: optimize
+			return base.MoveToNext (localName, namespaceURI);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override bool MoveToNext (XPathNodeType type)
+		{
+			// FIXME: optimize
+			return base.MoveToNext (type);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override bool MoveToFollowing (string localName,
+			string namespaceURI, XPathNavigator end)
+		{
+			// FIXME: optimize
+			return base.MoveToFollowing (localName, namespaceURI, end);
+		}
+
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		override bool MoveToFollowing (XPathNodeType type,
+			XPathNavigator end)
+		{
+			// FIXME: optimize
+			return base.MoveToFollowing (type, end);
+		}
 		#endregion
 	}
 }

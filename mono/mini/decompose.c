@@ -106,7 +106,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		break;
 	case OP_ICONV_TO_OVF_U4:
 	case OP_ICONV_TO_OVF_I4_UN:
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 	case OP_ICONV_TO_OVF_U:
 	case OP_ICONV_TO_OVF_I_UN:
 #endif
@@ -118,21 +118,21 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 	case OP_ICONV_TO_I4:
 	case OP_ICONV_TO_U4:
 	case OP_ICONV_TO_OVF_I4:
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 	case OP_ICONV_TO_OVF_I:
 	case OP_ICONV_TO_OVF_U_UN:
 #endif
 		ins->opcode = OP_MOVE;
 		break;
 	case OP_ICONV_TO_I:
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 		ins->opcode = OP_SEXT_I4;
 #else
 		ins->opcode = OP_MOVE;
 #endif
 		break;
 	case OP_ICONV_TO_U:
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 		ins->opcode = OP_ZEXT_I4;
 #else
 		ins->opcode = OP_MOVE;
@@ -144,7 +144,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		break;
 
 		/* Long opcodes on 64 bit machines */
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 	case OP_LCONV_TO_I4:
 		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_LSHR_IMM, ins->dreg, ins->sreg1, 0);
 		ins->opcode = OP_NOP;
@@ -166,7 +166,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_ISHR_UN_IMM, ins->dreg, ins->sreg1, 0);
 		ins->opcode = OP_NOP;
 		break;
-#if defined(__ppc__) || defined(__powerpc__)
+#if defined(__mono_ppc__) && !defined(__mono_ppc64__)
 	case OP_LADD_OVF:
 		/* ADC sets the condition code */
 		MONO_EMIT_NEW_BIALU (cfg, OP_ADDCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
@@ -206,6 +206,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		MONO_EMIT_NEW_COND_EXC (cfg, C, "OverflowException");
 		ins->opcode = OP_NOP;
 		break;
+#ifndef __mono_ppc64__
 	case OP_LSUB_OVF:
 		MONO_EMIT_NEW_BIALU (cfg, OP_SUBCC, ins->dreg, ins->sreg1, ins->sreg2);
 		MONO_EMIT_NEW_COND_EXC (cfg, OV, "OverflowException");
@@ -216,6 +217,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		MONO_EMIT_NEW_COND_EXC (cfg, C, "OverflowException");
 		ins->opcode = OP_NOP;
 		break;
+#endif
 #endif
 		
 	case OP_ICONV_TO_OVF_I8:
@@ -378,7 +380,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 	}
 }
 
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 static int lbr_decomp [][2] = {
 	{0, 0}, /* BEQ */
 	{OP_IBGT, OP_IBGE_UN}, /* BGE */
@@ -409,7 +411,7 @@ static int lcset_decomp [][2] = {
 void
 mono_decompose_long_opts (MonoCompile *cfg)
 {
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 	MonoBasicBlock *bb, *first_bb;
 
 	/*
@@ -1196,7 +1198,28 @@ mono_decompose_vtype_opts (MonoCompile *cfg)
 							MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI4_MEMBASE_REG, dest->dreg, 0, call2->inst.dreg);
 							break;
 						case 8:
+#if SIZEOF_REGISTER == 4
+							/*
+							FIXME It would be nice to fix the operding of OP_CALL to make it possible to use numbering voodoo
+							FIXME It would be even nicer to be able to leverage the long decompose stuff.
+							*/
+							switch (call2->inst.opcode) {
+							case OP_CALL:
+								call2->inst.opcode = OP_LCALL;
+								break;
+							case OP_CALL_REG:
+								call2->inst.opcode = OP_LCALL_REG;
+								break;
+							case OP_CALL_MEMBASE:
+								call2->inst.opcode = OP_LCALL_MEMBASE;
+								break;
+							}
+							call2->inst.dreg = alloc_lreg (cfg);
+							MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI4_MEMBASE_REG, dest->dreg, MINI_MS_WORD_OFFSET, call2->inst.dreg + 2);
+							MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI4_MEMBASE_REG, dest->dreg, MINI_LS_WORD_OFFSET, call2->inst.dreg + 1);
+#else
 							MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI8_MEMBASE_REG, dest->dreg, 0, call2->inst.dreg);
+#endif
 							break;
 						default:
 							/* This assumes the vtype is sizeof (gpointer) long */

@@ -8,11 +8,12 @@
  */
 
 #include "mini.h"
+#include "ir-emit.h"
 #include <mono/metadata/debug-helpers.h>
 #include <mono/metadata/mempool-internals.h>
 
 /* Disable for now to save space */
-#undef MONO_ARCH_ENABLE_GLOBAL_RA
+//#undef MONO_ARCH_ENABLE_GLOBAL_RA
 
 #ifdef MONO_ARCH_ENABLE_GLOBAL_RA
 
@@ -134,28 +135,7 @@ typedef struct MonoRegallocContext {
  * MACROS
  */
 
-#define NEW_UNALU(cfg,dest,op,dr,sr1) do { \
-        MONO_INST_NEW ((cfg), (dest), (op)); \
-        (dest)->dreg = dr; \
-        (dest)->sreg1 = sr1; \
-    } while (0)        
-
-#define NEW_STORE_MEMBASE(cfg,dest,op,base,offset,sr) do { \
-        MONO_INST_NEW ((cfg), (dest), (op)); \
-        (dest)->sreg1 = sr; \
-        (dest)->inst_destbasereg = base; \
-        (dest)->inst_offset = offset; \
-	} while (0)
-
-#define NEW_LOAD_MEMBASE(cfg,dest,op,dr,base,offset) do { \
-        MONO_INST_NEW ((cfg), (dest), (op)); \
-        (dest)->dreg = (dr); \
-        (dest)->inst_basereg = (base); \
-        (dest)->inst_offset = (offset); \
-        (dest)->type = STACK_I4; \
-	} while (0)
-
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 #define BITS_PER_CHUNK 64
 #else
 #define BITS_PER_CHUNK 32
@@ -178,8 +158,11 @@ typedef struct MonoRegallocContext {
 #define INS_POS_DEF 2
 #define INS_POS_SPILL 3
 
-/* 16 is used instead of 4 so liveness ranges are easier to read */
-#define INS_POS_INTERVAL 16
+/* 
+ * Should use 16 so liveness ranges are easier to read, but that would overflow
+ * on big bblocks.
+ */
+#define INS_POS_INTERVAL 8
 
 #define is_hard_reg(r,fp) ((fp) ? ((r) < MONO_MAX_FREGS) : ((r) < MONO_MAX_IREGS))
 #define is_soft_reg(r,fp) (!is_hard_reg((r),(fp)))
@@ -194,23 +177,14 @@ typedef struct MonoRegallocContext {
 #define dreg_is_fp(spec)  (spec [MONO_INST_DEST] == 'f')
 #endif
 
-static inline GSList*
-g_slist_append_mempool (MonoMemPool *mp, GSList   *list,
-						gpointer  data)
-{
-	GSList *new_list, *last;
+/* 
+ * Get the base ins position from an ins pos.
+ * FIXME: This shouldn't be required but some parts of the code can't seem to
+ * handle use positions which have an INS_POS_DEF added.
+ */
+#define USE_POS_BASE(ins_pos) ((ins_pos) & ~(INS_POS_INTERVAL - 1))
 
-	last = g_slist_last (list);
-	new_list = mono_mempool_alloc (mp, sizeof (GSList));
-	new_list->data = data;
-	new_list->next = NULL;
-	if (last) {
-		last->next = new_list;
-		return list;
-	} else {
-		return new_list;
-	}
-}
+#define USE_POS_IS_DEF(ins_pos) ((ins_pos) & INS_POS_DEF)
 
 static MonoInst*
 create_move (MonoCompile *cfg, int dreg, int sreg)
@@ -756,7 +730,15 @@ update_liveness (MonoCompile *cfg, MonoRegallocContext *ctx, MonoInst *ins, int 
 		} else {
 			if (last_use [ins->dreg] > 0) {
 				LIVENESS_DEBUG (printf ("\tadd range to R%d: [%x, %x]\n", ins->dreg, inst_num + INS_POS_DEF, last_use [ins->dreg]));
-				mono_linterval_add_range (ctx->cfg, ctx->varinfo [ins->dreg].interval, inst_num + INS_POS_DEF, last_use [ins->dreg]);
+				if (ins->dreg == ins->sreg1 && ins->dreg < MONO_FIRST_VREG) {
+					/* 
+					 * Avoid a hole in the liveness range, since the allocation code
+					 * could think the register is free there.
+					 */
+					mono_linterval_add_range (ctx->cfg, ctx->varinfo [ins->dreg].interval, inst_num, last_use [ins->dreg]);
+				} else {
+					mono_linterval_add_range (ctx->cfg, ctx->varinfo [ins->dreg].interval, inst_num + INS_POS_DEF, last_use [ins->dreg]);
+				}
 				last_use [ins->dreg] = 0;
 			}
 			else {
@@ -770,9 +752,13 @@ update_liveness (MonoCompile *cfg, MonoRegallocContext *ctx, MonoInst *ins, int 
 				}
 			}
 		}
-		if (ins->opcode != OP_NOP)
+		if (ins->opcode != OP_NOP) {
 			/* Since we process instructions backwards, the list will be properly sorted */
-			ctx->varinfo [ins->dreg].use_pos = g_slist_prepend_mempool (ctx->cfg->mempool, ctx->varinfo [ins->dreg].use_pos, GINT_TO_POINTER (inst_num));
+			if (MONO_IS_STORE_MEMBASE (ins))
+				ctx->varinfo [ins->dreg].use_pos = g_slist_prepend_mempool (ctx->cfg->mempool, ctx->varinfo [ins->dreg].use_pos, GINT_TO_POINTER (inst_num));
+			else
+				ctx->varinfo [ins->dreg].use_pos = g_slist_prepend_mempool (ctx->cfg->mempool, ctx->varinfo [ins->dreg].use_pos, GINT_TO_POINTER (inst_num + INS_POS_DEF));
+		}
 
 		/* Set preferred vregs */
 		if ((ins->opcode == OP_MOVE) || (ins->opcode == OP_FMOVE)) {
@@ -1131,7 +1117,9 @@ decompose_volatile_intervals (MonoCompile *cfg, MonoRegallocContext *ctx, GList 
 	new_intervals = g_list_copy (intervals);
 	for (l = intervals; l; l = l->next) {
 		MonoRegallocInterval *current = l->data;
+		MonoLiveInterval *new;
 		GSList *use_pos;
+		gboolean ends_with_def;
 
 		if (!current->is_volatile)
 			continue;
@@ -1140,8 +1128,19 @@ decompose_volatile_intervals (MonoCompile *cfg, MonoRegallocContext *ctx, GList 
 		 * Instead of trying to split the arbitrary interval produced by the liveness
 		 * analysis phase, just use one big interval.
 		 */
-		current->interval = mono_mempool_alloc0 (cfg->mempool, sizeof (MonoLiveInterval));
-		mono_linterval_add_range (cfg, current->interval, 0, (32767 << 16));
+		ends_with_def = FALSE;
+		use_pos = current->use_pos;
+		while (use_pos) {
+			int pos = GPOINTER_TO_INT (use_pos->data);
+
+			use_pos = use_pos->next;
+			if (!use_pos && USE_POS_IS_DEF (pos))
+				ends_with_def = TRUE;
+		}
+
+		new = mono_mempool_alloc0 (cfg->mempool, sizeof (MonoLiveInterval));
+		mono_linterval_add_range (cfg, new, 0, current->interval->last_range->to + (ends_with_def ? INS_POS_INTERVAL : 0));
+		current->interval = new;
 
 		LSCAN_DEBUG (printf ("R%d is volatile ", current->vreg));
 		LSCAN_DEBUG (mono_linterval_print (current->interval));
@@ -1151,7 +1150,8 @@ decompose_volatile_intervals (MonoCompile *cfg, MonoRegallocContext *ctx, GList 
 
 		use_pos = current->use_pos;
 		while (use_pos) {
-			int pos = GPOINTER_TO_INT (use_pos->data);
+			gboolean is_def = USE_POS_IS_DEF (GPOINTER_TO_INT (use_pos->data));
+			int pos = USE_POS_BASE (GPOINTER_TO_INT (use_pos->data));
 			use_pos = use_pos->next;
 
 			LSCAN_DEBUG (printf ("\tUse pos: %x\n", pos));
@@ -1162,13 +1162,19 @@ decompose_volatile_intervals (MonoCompile *cfg, MonoRegallocContext *ctx, GList 
 				current = current->child2;
 			}
 
+			if (!is_def && pos == current->interval->last_range->to) {
+				/* No need to split the last use */
+				new_intervals = g_list_insert_sorted (new_intervals, current, compare_by_interval_start_pos_func);				
+				break;
+			}
+
 			/* Split the use into its own interval */
 			split_interval (cfg, ctx, current, pos + INS_POS_INTERVAL);
 			new_intervals = g_list_insert_sorted (new_intervals, current->child1, compare_by_interval_start_pos_func);
 			current = current->child2;
 
 			/* No need to (and hard to) split between use positions at the same place */
-			while (use_pos && GPOINTER_TO_INT (use_pos->data) == pos)
+			while (use_pos && USE_POS_BASE (GPOINTER_TO_INT (use_pos->data)) == pos)
 				use_pos = use_pos->next;
 		}
 	}
@@ -1247,7 +1253,7 @@ linear_scan (MonoCompile *cfg, MonoRegallocContext *ctx)
 
 			/* Have to split at an use pos so a spill load can be inserted */
 			if (current->use_pos) {
-				guint32 pos = GPOINTER_TO_INT (current->use_pos->data);
+				guint32 pos = USE_POS_BASE (GPOINTER_TO_INT (current->use_pos->data));
 
 				split_interval (cfg, ctx, current, pos);
 				unhandled = g_list_remove (unhandled, current);
@@ -1404,7 +1410,7 @@ linear_scan (MonoCompile *cfg, MonoRegallocContext *ctx)
 		g_assert (reg != -1);
 
 		if (!(free_pos [reg] > 0 && free_pos [reg] >= current->interval->range->from) &&
-			GPOINTER_TO_INT (current->use_pos->data) <= current->interval->range->from) {
+			USE_POS_BASE (GPOINTER_TO_INT (current->use_pos->data)) <= current->interval->range->from) {
 			/*
 			 * No register is available, and current is needed in a register right now.
 			 * So free up a register by spilling an interval in active.
@@ -1429,7 +1435,7 @@ linear_scan (MonoCompile *cfg, MonoRegallocContext *ctx)
 			g_assert (to_spill);
 
 			LSCAN_DEBUG (printf ("\tNo free register found, splitting and spilling R%d\n", to_spill->vreg));
-			split_pos = GPOINTER_TO_INT (current->use_pos->data);
+			split_pos = USE_POS_BASE (GPOINTER_TO_INT (current->use_pos->data));
 			/* 
 			 * Avoid splitting to_spill before the start of current, since
 			 * its second child, which is added to unhandled would begin before 
@@ -1495,15 +1501,17 @@ linear_scan (MonoCompile *cfg, MonoRegallocContext *ctx)
 
 			unhandled = g_list_insert_sorted (unhandled, current->child2, compare_by_interval_start_pos_func);
 		} else {
+			guint32 use_pos = USE_POS_BASE (GPOINTER_TO_INT (current->use_pos->data));
+
 			/* No register is available */
-			if (GPOINTER_TO_INT (current->use_pos->data) > current->interval->range->from) {
+			if (use_pos > current->interval->range->from) {
 				/*
 				 * The interval is not currently needed in a register. So split it, and
 				 * spill the first part to memory, and save the second part for later
 				 * processing.
 				 */
-				LSCAN_DEBUG (printf ("\tSplitting current at first use pos %x, spilling the first part.\n", GPOINTER_TO_INT (current->use_pos->data)));
-				split_interval (cfg, ctx, current, GPOINTER_TO_INT (current->use_pos->data));
+				LSCAN_DEBUG (printf ("\tSplitting R%d(current) at first use pos %x, spilling the first part.\n", current->vreg, use_pos));
+				split_interval (cfg, ctx, current, use_pos);
 				unhandled = g_list_insert_sorted (unhandled, current->child2, compare_by_interval_start_pos_func);
 			} else {
 				/* Handled previously */
@@ -1750,9 +1758,12 @@ order_moves (MonoCompile *cfg, MonoRegallocContext *ctx, MonoInst **moves, int n
 
 		/* Create stores */
 		for (i = 0; i < nmoves; ++i) {
-			if (moves [i]->opcode != OP_MOVE)
+			if (moves [i]->opcode == OP_MOVE)
+				MONO_INST_NEW (cfg, ins, OP_STORE_MEMBASE_REG);
+			else if (moves [i]->opcode == OP_FMOVE)
+				MONO_INST_NEW (cfg, ins, OP_STORER8_MEMBASE_REG);
+			else
 				NOT_IMPLEMENTED;
-			MONO_INST_NEW (cfg, ins, OP_STORE_MEMBASE_REG);
 			ins->sreg1 = moves [i]->sreg1;
 			ins->inst_destbasereg = cfg->frame_reg;
 			ins->inst_offset = offsets [i];
@@ -1763,9 +1774,12 @@ order_moves (MonoCompile *cfg, MonoRegallocContext *ctx, MonoInst **moves, int n
 
 		/* Create loads */
 		for (i = 0; i < nmoves; ++i) {
-			if (moves [i]->opcode != OP_MOVE)
+			if (moves [i]->opcode == OP_MOVE)
+				MONO_INST_NEW (cfg, ins, OP_LOAD_MEMBASE);
+			else if (moves [i]->opcode == OP_FMOVE)
+				MONO_INST_NEW (cfg, ins, OP_LOADR8_MEMBASE);
+			else
 				NOT_IMPLEMENTED;
-			MONO_INST_NEW (cfg, ins, OP_LOAD_MEMBASE);
 			ins->dreg = moves [i]->dreg;
 			ins->inst_basereg = cfg->frame_reg;
 			ins->inst_offset = offsets [i];
@@ -1832,6 +1846,11 @@ add_spill_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 				pos_interval_limit = INS_POS_INTERVAL;
 			}
 
+			/*
+			 * This is the most complex/hackish part of the allocator, but I failed to
+			 * make it any simpler.
+			 * FIXME FIXME FIXME: CLEAN THIS UP
+			 */
 			for (pos_interval = 0; pos_interval < pos_interval_limit; ++pos_interval) {
 				spill_list = g_hash_table_lookup (ctx->split_positions, GUINT_TO_POINTER (pos));
 				/* Insert stores first, then loads so registers don't get overwritten */
@@ -1859,7 +1878,7 @@ add_spill_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 						// FIXME: Why is !is_volatile needed ?
 						// It seems to fail when the same volatile var is a source and a
 						// destination of the same instruction
-						if ((iter == 0) && (child1->hreg != -1) && (child2->hreg != -1) && !interval->is_volatile) {
+						if ((iter == 0) && (child1->hreg != -1) && (child2->hreg != -1) && !interval->is_volatile && pos_interval > 0) {
 							int offset;
 
 							/*
@@ -1887,6 +1906,20 @@ add_spill_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 							g_hash_table_insert (ctx->spill_ins, load, load);
 
 							LSCAN_DEBUG (printf (" Spill store/load added for R%d (R%d -> R%d) at %x\n", interval->vreg, child1->vreg, child2->vreg, pos));
+						} else if ((iter == 0) && (child1->hreg != -1) && (child2->hreg != -1) && (child1->hreg != child2->hreg) && pos_interval == 0) {
+							/* Happens with volatile intervals, i.e. in
+							 * R1 <- FOO
+							 * R2 <- OP R1 R2
+							 * R1's interval is split between the two instructions.
+							 */
+							// FIXME: This should be done in iter 1, but it has 
+							// ordering problems with other loads. Now it might have
+							// ordering problems with stores.
+							g_assert (!interval->fp);
+							move = create_move (cfg, child2->hreg, child1->hreg);
+							mono_bblock_insert_before_ins (bb, ins, move);
+							prev = move;
+							g_hash_table_insert (ctx->spill_ins, move, move);
 						} else if ((iter == 0) && (child1->hreg != -1) && (child2->hreg == -1)) {
 							g_assert (child2->offset != -1);
 
@@ -1901,8 +1934,13 @@ add_spill_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 							g_assert (child1->offset != -1);
 							NEW_LOAD_MEMBASE (cfg, load, mono_type_to_load_membase (cfg, interval->type), child2->hreg, cfg->frame_reg, child1->offset);
 
-							mono_bblock_insert_before_ins (bb, ins, load);
-							prev = load;
+							if (pos_interval >= INS_POS_DEF)
+								/* Happens in InternalGetChars, couldn't create a testcase */
+								mono_bblock_insert_after_ins (bb, ins, load);
+							else {
+								mono_bblock_insert_before_ins (bb, ins, load);
+								prev = load;
+							}
 							g_hash_table_insert (ctx->spill_ins, load, load);
 
 							LSCAN_DEBUG (printf (" Spill load added for R%d (R%d -> R%d) at %x\n", interval->vreg, child1->vreg, child2->vreg, pos));
@@ -2059,10 +2097,15 @@ rewrite_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 	MonoBasicBlock *bb;
 	MonoInst *ins, *prev;
 	int pos;
+	MonoInst **defs;
+
+	defs = g_new (MonoInst*, MONO_MAX_IREGS + MONO_MAX_FREGS);
 
 	for (bb = cfg->bb_entry; bb; bb = bb->next_bb) {
 		if (cfg->verbose_level > 1)
 			printf ("\nREGALLOC-REWRITE BLOCK %d:\n", bb->block_num);
+
+		memset (defs, 0, sizeof (MonoInst*) * (MONO_MAX_IREGS + MONO_MAX_FREGS));
 
 		pos = (bb->dfn << 16);
 		prev = NULL;
@@ -2108,12 +2151,21 @@ rewrite_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 					ins->dreg = l->hreg;
 					ins->sreg1 = l->hreg;
 					ins->inst_imm = ctx->varinfo [var->dreg].offset;
+					defs [ins->dreg] = ins;
 				} else {
 					ins->opcode = OP_MOVE;
 					ins->dreg = l->hreg;
 					ins->sreg1 = cfg->frame_reg;
+					defs [ins->dreg] = ins;
 				}
 				spec = INS_INFO (OP_NOP);
+
+				/* 
+				 * We need to fold these instructions into the instructions which
+				 * use them, but we can't call mono_local_cprop () since that could
+				 * generate code which doesn't obey register constraints.
+				 * So we do it manually.
+				 */
 			}
 
 			if (spec [MONO_INST_DEST] != ' ') {
@@ -2121,16 +2173,38 @@ rewrite_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 					MonoRegallocInterval *l = child_at (&ctx->varinfo [ins->dreg], pos + INS_POS_USE);
 					g_assert (l->hreg != -1);
 					ins->dreg = l->hreg;
+
+					/* Fold the instruction computing the address */
+					/* FIXME: fails in generics-sharing.2.exe
+					def = defs [ins->dreg];
+					if (def && def->opcode == OP_MOVE && def->sreg1 == cfg->frame_reg) {
+						ins->dreg = cfg->frame_reg;
+					} else if (def && def->opcode == OP_ADD_IMM && def->sreg1 == cfg->frame_reg) {
+						ins->dreg = cfg->frame_reg;
+						ins->inst_destbasereg += def->inst_imm;
+					}
+					*/
+					/*
+					 * FIXME: Deadce the def. This is hard to do, since it could be
+					 * accessed in other bblocks.
+					 */
 				} else {
 					MonoRegallocInterval *l = child_at (&ctx->varinfo [ins->dreg], pos + INS_POS_DEF);
 					g_assert (l->hreg != -1);
 					ins->dreg = l->hreg;
+					defs [ins->dreg] = NULL;
 				}
 			}
 			if (spec [MONO_INST_SRC1] != ' ') {
 				MonoRegallocInterval *l = child_at (&ctx->varinfo [ins->sreg1], pos + INS_POS_USE);
 				g_assert (l->hreg != -1);
 				ins->sreg1 = l->hreg;
+
+				/*
+				def = defs [ins->sreg1];
+				if (def && def->opcode == OP_MOVE && def->sreg1 == cfg->frame_reg)
+					ins->sreg1 = cfg->frame_reg;
+				*/
 			}
 			if (spec [MONO_INST_SRC2] != ' ') {
 				MonoRegallocInterval *l = child_at (&ctx->varinfo [ins->sreg2], pos + INS_POS_USE);
@@ -2144,6 +2218,8 @@ rewrite_code (MonoCompile *cfg, MonoRegallocContext *ctx)
 			prev = ins;
 		}
 	}
+
+	g_free (defs);
 }
 
 static MonoRegallocContext*

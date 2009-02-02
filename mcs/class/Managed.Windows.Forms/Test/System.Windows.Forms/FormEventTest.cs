@@ -40,7 +40,7 @@ namespace MonoTests.System.Windows.Forms
 		public void Activated ()
 		{
 			if (TestHelper.RunningOnUnix)
-				Assert.Ignore ("#7 fails");
+				Assert.Ignore ("#3 fails");
 
 			_form = new Form ();
 			EventLogger logger = new EventLogger (_form);
@@ -272,7 +272,7 @@ namespace MonoTests.System.Windows.Forms
 		public void EventOrder_Dialog ()
 		{
 			if (TestHelper.RunningOnUnix)
-				Assert.Ignore ("#A1 fails");
+				Assert.Ignore ("#A3 fails");
 
 			string [] expectedEvents = {
 				"Load",

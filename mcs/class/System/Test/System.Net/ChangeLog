@@ -1,11 +1,34 @@
+
+2009-01-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* IPAddressTest.cs: tests for bug #467472.
+
+2009-01-16 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpWebRequestTest.cs: add directory listing test when the $HOME is
+	not /.
+
 2009-01-12 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* FtpWebRequestTest.cs: test deleting a file.
+
+2008-11-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpListener2Test.cs: make sure we dispose the listener.
+
+2008-11-17 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpListener2Test.cs: (CreateNS) set a default read/write timeout
+	of 5s.
 
 2008-11-13 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* FtpWebRequestTest.cs: the upload test now passes with the MS
 	runtime. Added another test for download.
+
+2008-11-12 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpListener2Test.cs: Fixed Test7.
 
 2008-11-03 Gonzalo Paniagua Javier <gonzalo@novell.com>
 

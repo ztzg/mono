@@ -1,0 +1,107 @@
+2009-01-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add more tests for pe optional header.
+
+2009-01-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add pe-optional-heaver var.
+	Improve debugging messages. 
+
+2009-01-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Improve debugging.
+
+	* header-tests.md: Add tests for the optional header.
+
+2009-01-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Revert decision of making base 16 the default.
+	It makes for shorter tests, but it's confusing.
+
+	* header-tests.md: Fix the tests to use an explicit 0x for hexadecimal numbers.
+
+2009-01-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add tests for characteristics.
+
+2009-01-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Improved debugging and made small cleanup on macro names.
+
+2009-01-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add tests for symbol table and number of symbols.
+
+2009-01-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add tests for the machine field.
+
+2009-01-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add set-uint effect.
+
+2009-01-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Rename pe-header to pe-signature.
+	Add pe-header tests.
+
+2009-01-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Rename pe-header to pe-signature.
+	Add support for decimal literals using a '0' prefix.
+	Add proper pe-header variable.
+
+2009-01-12 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add tests for pe header.
+
+2009-01-12 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Refactor the file-size into a new
+	atom 'variable' which is more extensible and easier
+	to use. Added binary add.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add tests for lfanew ranges.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Extended grammar for expressions for
+	selectors and effects.
+	Added subtraction and file-size expressions.
+	Added truncate effect.
+	Fixed all warnings under -Wall.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: New clean-stamps target, more deps fine tunning.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* header-tests.md: Add test for the lfanew field.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add support for absolute uint patching.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: Fix generate-stamp deps.
+	
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: Add run-test target and fix the generation deps.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: Add check_with_peverify target to make it easier to
+	check against MS peverify.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: gen-md-tests now require glib. Fix the build.
+
+2009-01-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Initial commit of the metadata verifier test suite.

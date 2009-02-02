@@ -32,7 +32,7 @@
 #include <glib.h>
 
 #include "mini.h"
-#include "inssel.h"
+#include "ir-emit.h"
 #include "cpu-sh4.h"
 
 int sh4_extra_debug = 0;
@@ -278,192 +278,6 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 
 /**
  * For variable length argument lists emit a signature cookie.
- */
-static inline void emit_signature_cookie(MonoCompile *cfg, MonoCallInst *call, struct arg_info *arg_info)
-{
-	MonoInst *arg = NULL;
-	MonoInst *signature = NULL;
-
-	g_assert(cfg->new_ir == FALSE);
-
-	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p, %p", cfg, call, arg_info);
-
-	/* Declare a room where the signature cookie will be stored. */
-	MONO_INST_NEW(cfg, signature, OP_ICONST);
-	signature->inst_p0 = call->signature;
-
-	/* Create a new argument pointing to the signature cookie. */
-	MONO_INST_NEW(cfg, arg, OP_OUTARG);
-	arg->inst_left = signature;
-	arg->inst_call = call;
-
-	switch (arg_info->storage) {
-	case into_register:
-		arg->backend.reg3 = arg_info->reg;
-		call->used_iregs |= 1 << arg_info->reg;
-		break;
-
-	case onto_stack:
-		arg->opcode = OP_OUTARG_MEMBASE;
-		arg->backend.size = arg_info->size;
-		/* Useless because the SH4 uses "mov.l Rx,@-R15" to store parameters.
-		arg->backend.arg_info = arg_info->offset; */
-		break;
-
-	case nowhere:
-	default:
-		g_assert_not_reached();
-	}
-
-	/* prepend, so they get reversed */
-	arg->next = call->out_args;
-	call->out_args = arg;
-
-	return;
-}
-
-/**
- * Take the arguments and generate the Mono instructions in an
- * arch-specific way to properly call the function.
- */
-MonoCallInst *mono_arch_call_opcode(MonoCompile *cfg, MonoBasicBlock* bb, MonoCallInst *call, int is_virtual)
-{
-	MonoMethodSignature *signature = NULL;
-	struct call_info *call_info = NULL;
-	int sentinelpos = -1;
-	int arg_count = 0;
-	int i = 0;
-
-	g_assert(cfg->new_ir == FALSE);
-
-	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p, %p, %d", cfg, bb, call, is_virtual);
-
-	signature = call->signature;
-	arg_count = signature->param_count + signature->hasthis;
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
-
-	/* The register sh4_r0 is required to save a LMF. */
-	if (cfg->method->save_lmf != 0)
-		call->used_iregs |= 1 << sh4_r0;
-
-	if (call_info->ret.type == aggregate)
-		NOT_IMPLEMENTED;
-
-	if (signature->pinvoke == 0 &&
-	    signature->call_convention == MONO_CALL_VARARG)
-		sentinelpos = signature->sentinelpos + (is_virtual ? 1 : 0);
-
-	/* Used into mono_arch_output_basic_block():*CALL*
-	   to free the space used by parameters after a call. */
-	call->stack_usage = 0;
-
-	for (i = 0; i < arg_count; i++) {
-		struct arg_info *arg_info = &(call_info->args[i]);
-		MonoInst *arg = NULL;
-
-		/* Emit the signature cookie just before the implicit arguments. */
-		if (sentinelpos == i &&
-		    signature->pinvoke == 0 &&
-		    signature->call_convention == MONO_CALL_VARARG)
-			emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
-
-		if (is_virtual != 0 && i == 0) {
-			/* The argument will be attached to the call instruction. */
-			arg = call->args[0]; /* <= Definitively useless! But similar to other backends... */
-			call->used_iregs |= 1 << arg_info->reg;
-			continue;
-		}
-
-		MONO_INST_NEW(cfg, arg, OP_OUTARG);
-		arg->cil_code  = call->args[i]->cil_code;
-		arg->type      = call->args[i]->type;
-		arg->inst_left = call->args[i];
-		arg->inst_call = call;
-
-		SH4_CFG_DEBUG(4) SH4_DEBUG("type of arg[%d] = %d", i, arg_info->type);
-
-		switch (arg_info->type) {
-		case integer64:
-			if (arg_info->storage == into_register)
-				call->used_iregs |= 1 << (arg_info->reg + 1);
-			/* Fall through. */
-		case integer32:
-			switch (arg_info->storage) {
-			case into_register:
-				arg->backend.reg3 = arg_info->reg;
-				call->used_iregs |= 1 << arg_info->reg;
-				break;
-
-			case onto_stack:
-				arg->opcode = OP_OUTARG_MEMBASE;
-				arg->backend.size = arg_info->size;
-				/* Useless because the SH4 uses "mov.l Rx,@-R15" to store parameters.
-				arg->backend.arg_info = arg_info->offset; */
-
-				call->stack_usage += 4;
-				break;
-
-			case nowhere:
-			default:
-				g_assert_not_reached();
-			}
-			break;
-
-		case float32:
-			NOT_IMPLEMENTED;
-			break;
-
-		case float64:
-			NOT_IMPLEMENTED;
-			break;
-
-		case aggregate:
-			NOT_IMPLEMENTED;
-			break;
-
-		default:
-			g_assert_not_reached();
-			break;
-		}
-
-		/* prepend, so they get reversed */
-		arg->next = call->out_args;
-		call->out_args = arg;
-	}
-
-	/* Emit the signature cookie in case no implicit arguments are specified. */
-	if (signature->pinvoke == 0 &&
-	    sentinelpos == arg_count &&
-	    signature->call_convention == MONO_CALL_VARARG)
-		emit_signature_cookie(cfg, call, &(call_info->sig_cookie));
-
-	if (call_info->stack_align_amount != 0) {
-		; /* TODO - CV */
-	}
-
-	/* Reverse the call->out_args list. */
-	{
-		MonoInst *prev = NULL, *list = call->out_args, *next;
-		while (list) {
-			next = list->next;
-			list->next = prev;
-			prev = list;
-			list = next;
-		}
-		call->out_args = prev;
-	}
-
-	call->stack_usage = call_info->stack_usage;
-	cfg->flags |= MONO_CFG_HAS_CALLS;
-
-	g_free(call_info->args);
-	g_free(call_info);
-
-	return call;
-}
-
-/**
- * For variable length argument lists emit a signature cookie.
  * Pass a different signature because mono_ArgIterator_Setup assumes
  * the signature cookie is passed first and all the arguments which
  * were before it are passed on the stack after the signature.
@@ -473,8 +287,6 @@ static inline void emit_signature_cookie2(MonoCompile *cfg, MonoCallInst *call)
 	MonoMethodSignature *new_signature = NULL;
 	MonoInst *signature = NULL;
 	MonoInst *inst = NULL;
-
-	g_assert(cfg->new_ir == TRUE);
 
 	/* AOT not yet supported. */
 	cfg->disable_aot = TRUE;
@@ -518,8 +330,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 	SH4_CFG_DEBUG(4)
 		SH4_DEBUG("args => %p, %p", cfg, call);
-
-	g_assert(cfg->new_ir == TRUE);
 
 	signature = call->signature;
 	arg_count = signature->param_count + signature->hasthis;
@@ -611,10 +421,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 /* Emits IR to move its argument to the proper return register. */
 void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
 {
-	g_assert(cfg->new_ir == TRUE);
-
-	/* MD: setret: dest:z src1:i len:2 */
-
 	/* Complex return types (as aggregates) not yet supported. */
 	MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
 	return;
@@ -1435,42 +1241,6 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 	return;
 }
 
-void mono_arch_emit_this_vret_args(MonoCompile *cfg, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
-{
-	int this_dreg = -1;
-
-	g_assert(cfg->new_ir == FALSE);
-
-	/* Keep in sync with get_call_info(). */
-	if (vt_reg == -1)
-		this_dreg = sh4_r4;
-	else
-		this_dreg = sh4_r5;
-
-	/* Add the "this" argument. */
-	if (this_reg != -1) {
-		MonoInst *this;
-		MONO_INST_NEW(cfg, this, OP_MOVE);
-		this->type  = this_type;
-		this->sreg1 = this_reg;
-		this->dreg  = mono_regstate_next_int(cfg->rs);
-		mono_bblock_add_inst(cfg->cbb, this);
-		mono_call_inst_add_outarg_reg(cfg, inst, this->dreg, this_dreg, FALSE);
-	}
-
-	/* Add the "vt" argument. */
-	if (vt_reg != -1) {
-		MonoInst *vtarg;
-		MONO_INST_NEW(cfg, vtarg, OP_MOVE);
-		vtarg->sreg1 = vt_reg;
-		vtarg->dreg  = mono_regstate_next_int(cfg->rs);
-		mono_bblock_add_inst(cfg->cbb, vtarg);
-		mono_call_inst_add_outarg_reg(cfg, inst, vtarg->dreg, sh4_r4, FALSE);
-	}
-
-	return;
-}
-
 void mono_arch_flush_icache(guint8 *code, gint size)
 {
 #if defined (__SH4A__)
@@ -1584,21 +1354,11 @@ GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
 }
 
 /**
- * Check for opcodes we can handle directly in hardware.     
- */
-MonoInst *mono_arch_get_inst_for_method(MonoCompile *cfg, MonoMethod *method, MonoMethodSignature *signature, MonoInst **args)
-{
-	g_assert(cfg->new_ir == FALSE);
-	return NULL;
-}
-
-/**
  * Check for opcodes we can handle directly in hardware, but also emits the instructions.
  */
 MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
 					 MonoMethodSignature *signature, MonoInst **args)
 {
-	g_assert(cfg->new_ir == TRUE);
 	return NULL;
 }
 
@@ -1862,7 +1622,7 @@ static inline void decompose_op_offset2base(MonoCompile *cfg, MonoBasicBlock *ba
 	/* Load the offset in new register. */
 	MONO_INST_NEW(cfg, new_inst, OP_ICONST);
 	new_inst->inst_c0 = inst->inst_offset;
-	new_inst->dreg = mono_regstate_next_int(cfg->rs);
+	new_inst->dreg = mono_alloc_ireg(cfg);
 
 	/* Add the base register to this new register (dest == sreg1 for the SH4). */
 	MONO_INST_NEW(cfg, new_inst2, OP_IADD);
@@ -1894,7 +1654,7 @@ static inline void decompose_op_imm2reg(MonoCompile *cfg, MonoBasicBlock *basic_
 
 	MONO_INST_NEW(cfg, new_inst, OP_ICONST);
 	new_inst->inst_c0 = inst->inst_imm;
-	new_inst->dreg = mono_regstate_next_int(cfg->rs);
+	new_inst->dreg = mono_alloc_ireg(cfg);
 	mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 	inst->sreg1 = new_inst->dreg;
 }
@@ -1935,10 +1695,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 #define register_not_assigned(reg) ((reg) < 0 || (reg) >= MONO_MAX_IREGS)
 
-	/* Setup the virtual-register allocator. */
-	if (basic_block->max_vreg > cfg->rs->next_vreg)
-		cfg->rs->next_vreg = basic_block->max_vreg;
-
 	MONO_BB_FOR_EACH_INS_SAFE(basic_block, next_inst, inst) {
 		MonoInst *new_inst = NULL;
 
@@ -1968,7 +1724,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 				MONO_INST_NEW(cfg, new_inst, OP_ICONST);
 				new_inst->inst_c0 = inst->inst_imm;
-				new_inst->dreg = mono_regstate_next_int(cfg->rs);
+				new_inst->dreg = mono_alloc_ireg(cfg);
 				mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 				inst->sreg2 = new_inst->dreg;
 			}
@@ -2227,7 +1983,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* Link the new opcodes together. */
 			new_inst->inst_basereg = inst->inst_basereg;
 			new_inst->inst_offset = inst->inst_offset;
-			new_inst->dreg = mono_regstate_next_int(cfg->rs);
+			new_inst->dreg = mono_alloc_ireg(cfg);
 
 			inst->inst_offset = 0;
 			inst->sreg1 = new_inst->dreg;
@@ -2255,7 +2011,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	}
 
 	/* Save the state of the virtual-register allocator. */
-	basic_block->max_vreg = cfg->rs->next_vreg;
+	basic_block->max_vreg = cfg->next_vreg;
+
 
 	if (cfg->verbose_level >= 3) {
 		printf("AFTER LOWERING BLOCK %d:\n", basic_block->block_num);
@@ -2348,7 +2105,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case CEE_ADD:
 		case OP_IADD:
 			/* MD: int_add: clob:1 dest:i src1:i src2:i len:2 */
-			/* MD: add: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_add(cfg, &buffer, inst->sreg2, inst->dreg);
 			break;
@@ -2514,8 +2270,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_SH4_PUSH_ARG:
 			/* MD: sh4_push_arg: src1:i len:2 */
-		case OP_OUTARG_MEMBASE:
-			/* MD: outarg_membase: src1:i len:2 */
 			sh4_movl_decRx(cfg, &buffer, inst->sreg1, sh4_sp);
 			break;
 

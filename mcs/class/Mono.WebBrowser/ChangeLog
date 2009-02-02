@@ -1,20 +1,62 @@
-2008-11-21  Andreia Gaita <shana@jitted.com>
+2008-11-23  Andreia Gaita <shana@jitted.com>
 
-	* Mono.Mozilla/DOM/ContentListener.cs: Added (oops)
+	* Mono.Mozilla/Callback.cs: Catch redirecting and update url accordingly. 
+	Ignore OnLocationChanged, it's not always called, use OnStateChange instead.
 
-2008-11-20  Andreia Gaita <shana@jitted.com>
+2008-11-23  Andreia Gaita <shana@jitted.com>
+
+	* Mono.Mozilla/WebBrowser.cs: Do delayed resizing, when the resize happens 
+	before a window is created. Fix the window getter so it gets the top content
+	window if no window is focused.
+
+2008-11-23  Andreia Gaita <shana@jitted.com>
+
+	* Mono.Mozilla/Callback.cs: Send NS_BINDING_ABORTED code for a cancelled request.
+	* Mono.Mozilla/interfaces/nsIRequest.cs: Fix status type
+	[Fixes #445498]
+
+2008-11-23  Andreia Gaita <shana@jitted.com>
+
+	* Mono.Mozilla/WebBrowser.cs: create the browser window when the control gets
+	activated so focus works properly
+
+2008-11-23  Andreia Gaita <shana@jitted.com> 
+
+	* Mono.Mozilla/Callback.cs,
+	  Mono.Mozilla/DOM/DocumentEncoder.cs,
+	  Mono.Mozilla/DOM/HTMLElement.cs,
+	  Mono.Mozilla/WebBrowser.cs,
+	  Mono.Mozilla/interfaces/nsIServiceManager.cs:
+	  Fix ContentStream for xulrunner 1.8.
+	  Fix Document and Uri setting when loading new pages
+
+2008-11-23  Andreia Gaita <shana@jitted.com>
+
+	* Mono.Mozilla/Base.cs, Mono.Mozilla/WebBrowser.cs: Separate initialization 
+	in 3 stages so events can be registered before the window is actually created. 
+	The creation of the window is now done only when a user requests something
+	from the binding (like opening a window, or rendering content)
+
+2008-11-19  Andreia Gaita <shana@jitted.com> 
+
+	* Mono.Mozilla/DOM/Node.cs, Mono.Mozilla/DOM/Window.cs: Fix comparison operators
+
+2008-11-13  Andreia Gaita <shana@jitted.com> 
+
+	* Mono.Mozilla/Callback.cs, Mono.WebBrowser/DOM/EventArgs.cs: strong typing
+	  for node event arguments
+
+2008-11-13  Andreia Gaita <shana@jitted.com> 
 
 	* Mono.WebBrowser/IWebBrowser.cs, Mono.Mozilla/WebBrowser.cs: Support script
 	  execution directly in the browser object
-	  [Backported, r118685]
 
-2008-11-20  Andreia Gaita <shana@jitted.com>
+2008-11-13  Andreia Gaita <shana@jitted.com> 
 
 	* Mono.Mozilla/DOM/Node.cs, Mono.Mozilla/DOM/Window.cs: Fix equality
 	  operators
-	  [Backported, r118684, r119336]
 
-2008-11-20  Andreia Gaita <shana@jitted.com>
+2008-11-12  Andreia Gaita <shana@jitted.com> 
 
 	* Mono.WebBrowser.dll.sources, Mono.WebBrowser2K5.csproj,
 	  Mono.Mozilla/interfaces/nsIURIContentListener.cs,
@@ -22,7 +64,6 @@
 	  requests and handle content types
 	* Mono.WebBrowser/IWebBrowser.cs, Mono.Mozilla/WebBrowser.cs: New
 	  NavigationRequested event to catch load requests
-	[Backported, r118617]
 
 2008-11-08  Andreia Gaita <shana@jitted.com> 
 

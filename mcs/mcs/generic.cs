@@ -231,12 +231,9 @@ namespace Mono.CSharp {
 				}
 
 				TypeExpr expr;
-				ConstructedType cexpr = fn as ConstructedType;
+				GenericTypeExpr cexpr = fn as GenericTypeExpr;
 				if (cexpr != null) {
-					if (!cexpr.ResolveConstructedType (ec))
-						return false;
-
-					expr = cexpr;
+					expr = cexpr.ResolveAsBaseTerminal (ec, false);
 				} else
 					expr = ((Expression) obj).ResolveAsTypeTerminal (ec, false);
 
@@ -419,7 +416,7 @@ namespace Mono.CSharp {
 			resolved_types = true;
 
 			foreach (object obj in constraints) {
-				ConstructedType cexpr = obj as ConstructedType;
+				GenericTypeExpr cexpr = obj as GenericTypeExpr;
 				if (cexpr == null)
 					continue;
 
@@ -913,21 +910,6 @@ namespace Mono.CSharp {
 			return false;
 		}
 
-		public static string GetSignatureForError (TypeParameter[] tp)
-		{
-			if (tp == null || tp.Length == 0)
-				return "";
-
-			StringBuilder sb = new StringBuilder ("<");
-			for (int i = 0; i < tp.Length; ++i) {
-				if (i > 0)
-					sb.Append (",");
-				sb.Append (tp[i].GetSignatureForError ());
-			}
-			sb.Append ('>');
-			return sb.ToString ();
-		}
-
 		public void InflateConstraints (Type declaring)
 		{
 			if (constraints != null)
@@ -1067,36 +1049,25 @@ namespace Mono.CSharp {
 		}
 	}
 
-	/// <summary>
-	///   Tracks the type arguments when instantiating a generic type.  We're used in
-	///   ConstructedType.
-	/// </summary>
+	//
+	// Tracks the type arguments when instantiating a generic type. It's used
+	// by both type arguments and type parameters
+	//
 	public class TypeArguments {
-		public readonly Location Location;
 		ArrayList args;
 		Type[] atypes;
-		int dimension;
-		bool has_type_args;
 		
-		public TypeArguments (Location loc)
+		public TypeArguments ()
 		{
 			args = new ArrayList ();
-			this.Location = loc;
 		}
 
-		public TypeArguments (Location loc, params Expression[] types)
+		public TypeArguments (params FullNamedExpression[] types)
 		{
-			this.Location = loc;
 			this.args = new ArrayList (types);
 		}
-		
-		public TypeArguments (int dimension, Location loc)
-		{
-			this.dimension = dimension;
-			this.Location = loc;
-		}
 
-		public void Add (Expression type)
+		public void Add (FullNamedExpression type)
 		{
 			args.Add (type);
 		}
@@ -1122,24 +1093,9 @@ namespace Mono.CSharp {
 			}
 		}
 
-		public bool HasTypeArguments {
-			get {
-				return has_type_args;
-			}
-		}
-
 		public int Count {
 			get {
-				if (dimension > 0)
-					return dimension;
-				else
-					return args.Count;
-			}
-		}
-
-		public bool IsUnbound {
-			get {
-				return dimension > 0;
+				return args.Count;
 			}
 		}
 
@@ -1161,49 +1117,46 @@ namespace Mono.CSharp {
 		/// </summary>
 		public bool Resolve (IResolveContext ec)
 		{
+			if (atypes != null)
+				return atypes.Length != 0;
+
 			int count = args.Count;
 			bool ok = true;
 
 			atypes = new Type [count];
 
 			for (int i = 0; i < count; i++){
-				TypeExpr te = ((Expression) args [i]).ResolveAsTypeTerminal (ec, false);
+				TypeExpr te = ((FullNamedExpression) args[i]).ResolveAsTypeTerminal (ec, false);
 				if (te == null) {
 					ok = false;
 					continue;
 				}
 
 				atypes[i] = te.Type;
-				if (te.Type.IsGenericParameter) {
-					if (te is TypeParameterExpr)
-						has_type_args = true;
-					continue;
-				}
 
 				if (te.Type.IsSealed && te.Type.IsAbstract) {
-					Report.Error (718, Location, "`{0}': static classes cannot be used as generic arguments",
+					Report.Error (718, te.Location, "`{0}': static classes cannot be used as generic arguments",
 						te.GetSignatureForError ());
-					return false;
+					ok = false;
 				}
 
 				if (te.Type.IsPointer || TypeManager.IsSpecialType (te.Type)) {
-					Report.Error (306, Location,
+					Report.Error (306, te.Location,
 						"The type `{0}' may not be used as a type argument",
-						TypeManager.CSharpName (te.Type));
-					return false;
-				}
-
-				if (te.Type == TypeManager.void_type) {
-					Expression.Error_VoidInvalidInTheContext (Location);
-					return false;
+						te.GetSignatureForError ());
+					ok = false;
 				}
 			}
+
+			if (!ok)
+				atypes = Type.EmptyTypes;
+
 			return ok;
 		}
 
 		public TypeArguments Clone ()
 		{
-			TypeArguments copy = new TypeArguments (Location);
+			TypeArguments copy = new TypeArguments ();
 			foreach (Expression ta in args)
 				copy.args.Add (ta);
 
@@ -1229,40 +1182,29 @@ namespace Mono.CSharp {
 	}
 
 	/// <summary>
-	///   An instantiation of a generic type.
+	///   A reference expression to generic type
 	/// </summary>	
-	public class ConstructedType : TypeExpr {
-		FullNamedExpression name;
+	class GenericTypeExpr : TypeExpr
+	{
 		TypeArguments args;
-		Type[] gen_params, atypes;
-		Type gt;
+		Type[] gen_params;	// TODO: Waiting for constrains check cleanup
+		Type open_type;
 
-		/// <summary>
-		///   Instantiate the generic type `fname' with the type arguments `args'.
-		/// </summary>		
-		public ConstructedType (FullNamedExpression fname, TypeArguments args, Location l)
+		//
+		// Should be carefully used only with defined generic containers. Type parameters
+		// can be used as type arguments in this case.
+		//
+		// TODO: This could be GenericTypeExpr specialization
+		//
+		public GenericTypeExpr (DeclSpace gType, Location l)
 		{
-			loc = l;
-			this.name = fname;
-			this.args = args;
+			open_type = gType.TypeBuilder.GetGenericTypeDefinition ();
 
-			eclass = ExprClass.Type;
-		}
-
-		/// <summary>
-		///   This is used to construct the `this' type inside a generic type definition.
-		/// </summary>
-		public ConstructedType (Type t, TypeParameter[] type_params, Location l)
-		{
-			gt = t.GetGenericTypeDefinition ();
-
-			args = new TypeArguments (l);
-			foreach (TypeParameter type_param in type_params)
+			args = new TypeArguments ();
+			foreach (TypeParameter type_param in gType.TypeParameters)
 				args.Add (new TypeParameterExpr (type_param, l));
 
 			this.loc = l;
-			this.name = new TypeExpression (gt, l);
-			eclass = ExprClass.Type;
 		}
 
 		/// <summary>
@@ -1270,11 +1212,12 @@ namespace Mono.CSharp {
 		///   Use this constructor if you already know the fully resolved
 		///   generic type.
 		/// </summary>		
-		public ConstructedType (Type t, TypeArguments args, Location l)
-			: this ((FullNamedExpression)null, args, l)
+		public GenericTypeExpr (Type t, TypeArguments args, Location l)
 		{
-			gt = t.GetGenericTypeDefinition ();
-			this.name = new TypeExpression (gt, l);
+			open_type = t.GetGenericTypeDefinition ();
+
+			loc = l;
+			this.args = args;
 		}
 
 		public TypeArguments TypeArguments {
@@ -1288,9 +1231,26 @@ namespace Mono.CSharp {
 
 		protected override TypeExpr DoResolveAsTypeStep (IResolveContext ec)
 		{
-			if (!ResolveConstructedType (ec))
+			if (eclass != ExprClass.Invalid)
+				return this;
+
+			eclass = ExprClass.Type;
+
+			if (!args.Resolve (ec))
 				return null;
 
+			gen_params = open_type.GetGenericArguments ();
+			Type[] atypes = args.Arguments;
+			
+			if (atypes.Length != gen_params.Length) {
+				Namespace.Error_InvalidNumberOfTypeArguments (open_type, loc);
+				return null;
+			}
+
+			//
+			// Now bind the parameters
+			//
+			type = open_type.MakeGenericType (atypes);
 			return this;
 		}
 
@@ -1300,107 +1260,43 @@ namespace Mono.CSharp {
 		/// </summary>
 		public bool CheckConstraints (IResolveContext ec)
 		{
-			return ConstraintChecker.CheckConstraints (ec, gt, gen_params, atypes, loc);
-		}
-
-		/// <summary>
-		///   Resolve the constructed type, but don't check the constraints.
-		/// </summary>
-		public bool ResolveConstructedType (IResolveContext ec)
-		{
-			if (type != null)
-				return true;
-			// If we already know the fully resolved generic type.
-			if (gt != null)
-				return DoResolveType (ec);
-
-			int num_args;
-			Type t = name.Type;
-
-			if (t == null) {
-				Report.Error (246, loc, "Cannot find type `{0}'<...>", GetSignatureForError ());
-				return false;
-			}
-
-			num_args = TypeManager.GetNumberOfTypeArguments (t);
-			if (num_args == 0) {
-				Report.Error (308, loc,
-					      "The non-generic type `{0}' cannot " +
-					      "be used with type arguments.",
-					      TypeManager.CSharpName (t));
-				return false;
-			}
-
-			gt = t.GetGenericTypeDefinition ();
-			return DoResolveType (ec);
-		}
-
-		bool DoResolveType (IResolveContext ec)
-		{
-			//
-			// Resolve the arguments.
-			//
-			if (args.Resolve (ec) == false)
-				return false;
-
-			gen_params = gt.GetGenericArguments ();
-			atypes = args.Arguments;
-
-			if (atypes.Length != gen_params.Length) {
-				Report.Error (305, loc,
-					      "Using the generic type `{0}' " +
-					      "requires {1} type arguments",
-					      TypeManager.CSharpName (gt),
-					      gen_params.Length.ToString ());
-				return false;
-			}
-
-			//
-			// Now bind the parameters.
-			//
-			type = gt.MakeGenericType (atypes);
-			return true;
-		}
-
-		public Expression GetSimpleName (EmitContext ec)
-		{
-			return this;
+			return ConstraintChecker.CheckConstraints (ec, open_type, gen_params, args.Arguments, loc);
 		}
 
 		public override bool CheckAccessLevel (DeclSpace ds)
 		{
-			return ds.CheckAccessLevel (gt);
+			return ds.CheckAccessLevel (open_type);
 		}
 
 		public override bool AsAccessible (DeclSpace ds)
 		{
-			foreach (Type t in atypes) {
+			foreach (Type t in args.Arguments) {
 				if (!ds.IsAccessibleAs (t))
 					return false;
 			}
 
-			return ds.IsAccessibleAs (gt);
+			return ds.IsAccessibleAs (open_type);
 		}
 
 		public override bool IsClass {
-			get { return gt.IsClass; }
+			get { return open_type.IsClass; }
 		}
 
 		public override bool IsValueType {
-			get { return gt.IsValueType; }
+			get { return open_type.IsValueType; }
 		}
 
 		public override bool IsInterface {
-			get { return gt.IsInterface; }
+			get { return open_type.IsInterface; }
 		}
 
 		public override bool IsSealed {
-			get { return gt.IsSealed; }
+			get { return open_type.IsSealed; }
 		}
 
 		public override bool Equals (object obj)
 		{
-			ConstructedType cobj = obj as ConstructedType;
+			GenericTypeExpr cobj = obj as GenericTypeExpr;
 			if (cobj == null)
 				return false;
 
@@ -1549,7 +1445,7 @@ namespace Mono.CSharp {
 			if (TypeManager.HasGenericArguments (ctype)) {
 				Type[] types = TypeManager.GetTypeArguments (ctype);
 
-				TypeArguments new_args = new TypeArguments (loc);
+				TypeArguments new_args = new TypeArguments ();
 
 				for (int i = 0; i < types.Length; i++) {
 					Type t = types [i];
@@ -1561,7 +1457,7 @@ namespace Mono.CSharp {
 					new_args.Add (new TypeExpression (t, loc));
 				}
 
-				TypeExpr ct = new ConstructedType (ctype, new_args, loc);
+				TypeExpr ct = new GenericTypeExpr (ctype, new_args, loc);
 				if (ct.ResolveAsTypeStep (ec, false) == null)
 					return false;
 				ctype = ct.Type;
@@ -1750,22 +1646,26 @@ namespace Mono.CSharp {
 		///   Define and resolve the type parameters.
 		///   We're called from Method.Define().
 		/// </summary>
-		public bool Define (MethodBuilder mb)
+		public bool Define (MethodOrOperator m)
 		{
 			TypeParameterName[] names = MemberName.TypeArguments.GetDeclarations ();
 			string[] snames = new string [names.Length];
 			for (int i = 0; i < names.Length; i++) {
 				string type_argument_name = names[i].Name;
-				Parameter p = parameters.GetParameterByName (type_argument_name);
-				if (p != null) {
-					Error_ParameterNameCollision (p.Location, type_argument_name, "method parameter");
-					return false;
+				int idx = parameters.GetParameterIndexByName (type_argument_name);
+				if (idx >= 0) {
+					Block b = m.Block;
+					if (b == null)
+						b = new Block (null);
+
+					b.Error_AlreadyDeclaredTypeParameter (parameters [i].Location,
+						type_argument_name, "method parameter");
 				}
 				
 				snames[i] = type_argument_name;
 			}
 
-			GenericTypeParameterBuilder[] gen_params = mb.DefineGenericParameters (snames);
+			GenericTypeParameterBuilder[] gen_params = m.MethodBuilder.DefineGenericParameters (snames);
 			for (int i = 0; i < TypeParameters.Length; i++)
 				TypeParameters [i].Define (gen_params [i]);
 
@@ -1778,12 +1678,6 @@ namespace Mono.CSharp {
 			}
 
 			return true;
-		}
-
-		internal static void Error_ParameterNameCollision (Location loc, string name, string collisionWith)
-		{
-			Report.Error (412, loc, "The type parameter name `{0}' is the same as `{1}'",
-				name, collisionWith);
 		}
 
 		/// <summary>
@@ -2905,10 +2799,11 @@ namespace Mono.CSharp {
 			return LowerBoundInference (e.Type, t) * 2;
 		}
 
-		static void RemoveDependentTypes (ArrayList types, Type returnType)
+		void RemoveDependentTypes (ArrayList types, Type returnType)
 		{
-			if (returnType.IsGenericParameter) {
-				types [returnType.GenericParameterPosition] = null;
+			int idx = IsUnfixed (returnType);
+			if (idx >= 0) {
+				types [idx] = null;
 				return;
 			}
 

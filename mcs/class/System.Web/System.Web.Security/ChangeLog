@@ -4,6 +4,12 @@
 	as the copy source. Fixes bug #464783. Patch from Christian
 	Prochnow <cproch@seculogix.de>
 
+2008-12-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* SqlRoleProvider.cs:
+	* SqlMembershipProvider.cs: use IndexOf (char) instead of
+	IndexOf (string).
+
 2008-08-20  Marek Habersack  <mhabersack@novell.com>
 
 	* Membership.cs: implemented the HashAlgorithmType property. Fixes

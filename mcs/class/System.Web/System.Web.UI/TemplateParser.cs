@@ -82,9 +82,9 @@ namespace System.Web.UI {
 		string compilerOptions;
 		string language;
 		bool implicitLanguage;
-		bool strictOn = false;
-		bool explicitOn = false;
-		bool linePragmasOn = false;
+		bool strictOn ;
+		bool explicitOn;
+		bool linePragmasOn = true;
 		bool output_cache;
 		int oc_duration;
 		string oc_header, oc_custom, oc_param, oc_controls;
@@ -104,6 +104,7 @@ namespace System.Web.UI {
 		Type codeFileBaseClassType;
 		List <UnknownAttributeDescriptor> unknownMainAttributes;
 		Stack <string> includeDirs;
+		List <string> registeredTagNames;
 #else
 		Stack includeDirs;
 		Assembly srcAssembly;		
@@ -224,7 +225,7 @@ namespace System.Web.UI {
 			fileExists = File.Exists (realpath);
 #endif
 			if (!fileExists)
-				throw new ParseException (Location, "Could not find file \"" + src + "\".");
+				ThrowParseFileNotFound (src);
 
 			if (String.Compare (realpath, inputFile, false, invariantCulture) == 0)
                                 return;
@@ -236,31 +237,28 @@ namespace System.Web.UI {
 			if (VirtualPathUtility.IsAbsolute (vpath))
 				vpath = VirtualPathUtility.ToAppRelative (vpath);
 #endif
-			
-                        Type type = null;
-                        AddDependency (vpath);
+                        
                         try {
 #if NET_2_0
-				type = BuildManager.GetCompiledType (vpath);
-				if (type == null)
-					throw new ParseException (Location, "Error compiling user control '" + vpath + "'.");
-
-				if (!(typeof (UserControl).IsAssignableFrom (type)))
-					throw new ParseException (Location, "Type '" + type.ToString () + "' does not derive from 'System.Web.UI.UserControl'.");
+				RegisterTagName (tagPrefix + ":" + tagName);
+				RootBuilder.Foundry.RegisterFoundry (tagPrefix, tagName, vpath);
 #else
+				Type type = null;
 				ArrayList other_deps = new ArrayList ();
                                 type = UserControlParser.GetCompiledType (vpath, realpath, other_deps, Context);
 				foreach (string s in other_deps)
                                         AddDependency (s);
+				AddAssembly (type.Assembly, true);
+				RootBuilder.Foundry.RegisterFoundry (tagPrefix, tagName, type);
 #endif
+				AddDependency (vpath);
                         } catch (ParseException pe) {
                                 if (this is UserControlParser)
                                         throw new ParseException (Location, pe.Message, pe);
                                 throw;
                         }
 
-                        AddAssembly (type.Assembly, true);
-                        RootBuilder.Foundry.RegisterFoundry (tagPrefix, tagName, type);
+                        
                 }
 
                 internal void RegisterNamespace (string tagPrefix, string ns, string assembly)
@@ -600,9 +598,7 @@ namespace System.Web.UI {
 			strictOn = GetBool (atts, "Strict", compConfig.Strict);
 			explicitOn = GetBool (atts, "Explicit", compConfig.Explicit);
 			if (atts.ContainsKey ("LinePragmas"))
-				linePragmasOn = GetBool (atts, "LinePragmas", false);
-			else
-				linePragmasOn = true;
+				linePragmasOn = GetBool (atts, "LinePragmas", true);
 			
 			string inherits = GetString (atts, "Inherits", null);
 #if NET_2_0
@@ -725,6 +721,17 @@ namespace System.Web.UI {
 		}
 
 #if NET_2_0
+		void RegisterTagName (string tagName)
+		{
+			if (registeredTagNames == null)
+				registeredTagNames = new List <string> ();
+
+			if (registeredTagNames.Contains (tagName))
+				return;
+
+			registeredTagNames.Add (tagName);
+		}
+		
 		void CheckUnknownAttribute (string name, string val, string inherits)
 		{
 			MemberInfo mi = null;
@@ -1198,6 +1205,10 @@ namespace System.Web.UI {
 		}
 
 #if NET_2_0
+		internal List <string> RegisteredTagNames {
+			get { return registeredTagNames; }
+		}
+		
 		internal PagesSection PagesConfig {
 			get {
 				return WebConfigurationManager.GetSection ("system.web/pages") as PagesSection;

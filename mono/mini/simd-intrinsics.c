@@ -10,7 +10,6 @@
 #include <config.h>
 #include <stdio.h>
 
-#define NEW_IR
 #include "mini.h"
 #include "ir-emit.h"
 
@@ -34,7 +33,9 @@ TODO pass simd arguments in registers or, at least, add SSE support for pushing 
 TODO pass simd args byval to a non-intrinsic method cause some useless local var load/store to happen.
 TODO check if we need to init the SSE control word with better precision.
 TODO add support for 3 reg sources in mini without slowing the common path. Or find a way to make MASKMOVDQU work.
-TODO make SimdRuntime.get_AccelMode work under AOT  
+TODO make SimdRuntime.get_AccelMode work under AOT
+TODO patterns such as "a ^= b" generate slower code as the LDADDR op will be copied to a tmp first. Look at adding a indirection reduction pass after the dce pass.
+TODO extend bounds checking code to support for range checking.  
 
 General notes for SIMD intrinsics.
 
@@ -67,11 +68,14 @@ without a OP_LDADDR.
 enum {
 	SIMD_EMIT_BINARY,
 	SIMD_EMIT_UNARY,
+	SIMD_EMIT_SETTER,
 	SIMD_EMIT_GETTER,
+	SIMD_EMIT_GETTER_QWORD,
 	SIMD_EMIT_CTOR,
 	SIMD_EMIT_CAST,
 	SIMD_EMIT_SHUFFLE,
 	SIMD_EMIT_SHIFT,
+	SIMD_EMIT_EQUALITY,
 	SIMD_EMIT_LOAD_ALIGNED,
 	SIMD_EMIT_STORE,
 	SIMD_EMIT_EXTRACT_MASK,
@@ -122,12 +126,8 @@ typedef struct {
 	guint8 flags;
 } SimdIntrinsc;
 
-/*
-Missing:
-setters
- */
 static const SimdIntrinsc vector4f_intrinsics[] = {
-	{ SN_ctor, 0, SIMD_EMIT_CTOR },
+	{ SN_ctor, OP_EXPAND_R4, SIMD_EMIT_CTOR },
 	{ SN_AddSub, OP_ADDSUBPS, SIMD_EMIT_BINARY, SIMD_VERSION_SSE3 },
 	{ SN_AndNot, OP_ANDNPS, SIMD_EMIT_BINARY },
 	{ SN_CompareEqual, OP_COMPPS, SIMD_EMIT_BINARY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
@@ -153,7 +153,7 @@ static const SimdIntrinsc vector4f_intrinsics[] = {
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
 	{ SN_Reciprocal, OP_RCPPS, SIMD_EMIT_UNARY },
-	{ SN_Shuffle, OP_SHUFLEPS, SIMD_EMIT_SHUFFLE },
+	{ SN_Shuffle, OP_PSHUFLED, SIMD_EMIT_SHUFFLE },
 	{ SN_Sqrt, OP_SQRTPS, SIMD_EMIT_UNARY },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
 	{ SN_StoreNonTemporal, OP_STOREX_NTA_MEMBASE_REG, SIMD_EMIT_STORE },
@@ -165,19 +165,20 @@ static const SimdIntrinsc vector4f_intrinsics[] = {
 	{ SN_op_BitwiseAnd, OP_ANDPS, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_ORPS, SIMD_EMIT_BINARY },
 	{ SN_op_Division, OP_DIVPS, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_COMPPS, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_XORPS, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST }, 
+	{ SN_op_Inequality, OP_COMPPS, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_Multiply, OP_MULPS, SIMD_EMIT_BINARY },
 	{ SN_op_Subtraction, OP_SUBPS, SIMD_EMIT_BINARY },
+	{ SN_set_W, 3, SIMD_EMIT_SETTER },
+	{ SN_set_X, 0, SIMD_EMIT_SETTER },
+	{ SN_set_Y, 1, SIMD_EMIT_SETTER },
+	{ SN_set_Z, 2, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector2d_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_R8, SIMD_EMIT_CTOR },
 	{ SN_AddSub, OP_ADDSUBPD, SIMD_EMIT_BINARY, SIMD_VERSION_SSE3 },
 	{ SN_AndNot, OP_ANDNPD, SIMD_EMIT_BINARY },
 	{ SN_CompareEqual, OP_COMPPD, SIMD_EMIT_BINARY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
@@ -201,6 +202,8 @@ static const SimdIntrinsc vector2d_intrinsics[] = {
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
+	{ SN_get_X, 0, SIMD_EMIT_GETTER_QWORD },
+	{ SN_get_Y, 1, SIMD_EMIT_GETTER_QWORD },
 	{ SN_op_Addition, OP_ADDPD, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_ANDPD, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_ORPD, SIMD_EMIT_BINARY },
@@ -209,17 +212,13 @@ static const SimdIntrinsc vector2d_intrinsics[] = {
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST }, 
 	{ SN_op_Multiply, OP_MULPD, SIMD_EMIT_BINARY },
 	{ SN_op_Subtraction, OP_SUBPD, SIMD_EMIT_BINARY },
+	{ SN_set_X, 0, SIMD_EMIT_SETTER },
+	{ SN_set_Y, 1, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector2ul_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I8, SIMD_EMIT_CTOR },
 	{ SN_CompareEqual, OP_PCMPEQQ, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
-	{ SN_ExtractByteMask, 0, SIMD_EMIT_EXTRACT_MASK },
 	{ SN_LoadAligned, 0, SIMD_EMIT_LOAD_ALIGNED },
 	{ SN_PrefetchTemporalAllCacheLevels, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_0 },
 	{ SN_PrefetchTemporal1stLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_1 },
@@ -228,6 +227,8 @@ static const SimdIntrinsc vector2ul_intrinsics[] = {
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHQ, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWQ, SIMD_EMIT_BINARY },
+	{ SN_get_X, 0, SIMD_EMIT_GETTER_QWORD },
+	{ SN_get_Y, 1, SIMD_EMIT_GETTER_QWORD },
 	{ SN_op_Addition, OP_PADDQ, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
@@ -237,27 +238,25 @@ static const SimdIntrinsc vector2ul_intrinsics[] = {
 	{ SN_op_Multiply, OP_PMULQ, SIMD_EMIT_BINARY },
 	{ SN_op_RightShift, OP_PSHRQ, SIMD_EMIT_SHIFT },
 	{ SN_op_Subtraction, OP_PSUBQ, SIMD_EMIT_BINARY },
+	{ SN_set_X, 0, SIMD_EMIT_SETTER },
+	{ SN_set_Y, 1, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector2l_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I8, SIMD_EMIT_CTOR },
 	{ SN_CompareEqual, OP_PCMPEQQ, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_CompareGreaterThan, OP_PCMPGTQ, SIMD_EMIT_BINARY, SIMD_VERSION_SSE42 },
-	{ SN_ExtractByteMask, 0, SIMD_EMIT_EXTRACT_MASK },
 	{ SN_LoadAligned, 0, SIMD_EMIT_LOAD_ALIGNED },
+	{ SN_LogicalRightShift, OP_PSHRQ, SIMD_EMIT_SHIFT },
 	{ SN_PrefetchTemporalAllCacheLevels, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_0 },
 	{ SN_PrefetchTemporal1stLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_1 },
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
-	{ SN_ShiftRightLogic, OP_PSHRQ, SIMD_EMIT_SHIFT },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHQ, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWQ, SIMD_EMIT_BINARY },
+	{ SN_get_X, 0, SIMD_EMIT_GETTER_QWORD },
+	{ SN_get_Y, 1, SIMD_EMIT_GETTER_QWORD },
 	{ SN_op_Addition, OP_PADDQ, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
@@ -266,17 +265,14 @@ static const SimdIntrinsc vector2l_intrinsics[] = {
 	{ SN_op_LeftShift, OP_PSHLQ, SIMD_EMIT_SHIFT },
 	{ SN_op_Multiply, OP_PMULQ, SIMD_EMIT_BINARY },
 	{ SN_op_Subtraction, OP_PSUBQ, SIMD_EMIT_BINARY },
+	{ SN_set_X, 0, SIMD_EMIT_SETTER },
+	{ SN_set_Y, 1, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector4ui_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I4, SIMD_EMIT_CTOR },
+	{ SN_ArithmeticRightShift, OP_PSARD, SIMD_EMIT_SHIFT },
 	{ SN_CompareEqual, OP_PCMPEQD, SIMD_EMIT_BINARY },
-	{ SN_ExtractByteMask, 0, SIMD_EMIT_EXTRACT_MASK },
 	{ SN_LoadAligned, 0, SIMD_EMIT_LOAD_ALIGNED },
 	{ SN_Max, OP_PMAXD_UN, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_Min, OP_PMIND_UN, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
@@ -284,35 +280,39 @@ static const SimdIntrinsc vector4ui_intrinsics[] = {
 	{ SN_PrefetchTemporal1stLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_1 },
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
-	{ SN_ShiftRightArithmetic, OP_PSARD, SIMD_EMIT_SHIFT },
 	{ SN_Shuffle, OP_PSHUFLED, SIMD_EMIT_SHUFFLE },
 	{ SN_SignedPackWithSignedSaturation, OP_PACKD, SIMD_EMIT_BINARY },
 	{ SN_SignedPackWithUnsignedSaturation, OP_PACKD_UN, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHD, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWD, SIMD_EMIT_BINARY },
+	{ SN_get_W, 3, SIMD_EMIT_GETTER },
+	{ SN_get_X, 0, SIMD_EMIT_GETTER },
+	{ SN_get_Y, 1, SIMD_EMIT_GETTER },
+	{ SN_get_Z, 2, SIMD_EMIT_GETTER },
 	{ SN_op_Addition, OP_PADDD, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_PCMPEQD, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_PXOR, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST },
+	{ SN_op_Inequality, OP_PCMPEQD, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_LeftShift, OP_PSHLD, SIMD_EMIT_SHIFT },
 	{ SN_op_Multiply, OP_PMULD, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_op_RightShift, OP_PSHRD, SIMD_EMIT_SHIFT },
 	{ SN_op_Subtraction, OP_PSUBD, SIMD_EMIT_BINARY },
+	{ SN_set_W, 3, SIMD_EMIT_SETTER },
+	{ SN_set_X, 0, SIMD_EMIT_SETTER },
+	{ SN_set_Y, 1, SIMD_EMIT_SETTER },
+	{ SN_set_Z, 2, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector4i_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I4, SIMD_EMIT_CTOR },
 	{ SN_CompareEqual, OP_PCMPEQD, SIMD_EMIT_BINARY },
 	{ SN_CompareGreaterThan, OP_PCMPGTD, SIMD_EMIT_BINARY },
-	{ SN_ExtractByteMask, 0, SIMD_EMIT_EXTRACT_MASK },
 	{ SN_LoadAligned, 0, SIMD_EMIT_LOAD_ALIGNED },
+	{ SN_LogicalRightShift, OP_PSHRD, SIMD_EMIT_SHIFT },
 	{ SN_Max, OP_PMAXD, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_Min, OP_PMIND, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_PackWithSignedSaturation, OP_PACKD, SIMD_EMIT_BINARY },
@@ -321,33 +321,37 @@ static const SimdIntrinsc vector4i_intrinsics[] = {
 	{ SN_PrefetchTemporal1stLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_1 },
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
-	{ SN_ShiftRightLogic, OP_PSHRD, SIMD_EMIT_SHIFT },
 	{ SN_Shuffle, OP_PSHUFLED, SIMD_EMIT_SHUFFLE },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHD, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWD, SIMD_EMIT_BINARY },
+	{ SN_get_W, 3, SIMD_EMIT_GETTER },
+	{ SN_get_X, 0, SIMD_EMIT_GETTER },
+	{ SN_get_Y, 1, SIMD_EMIT_GETTER },
+	{ SN_get_Z, 2, SIMD_EMIT_GETTER },
 	{ SN_op_Addition, OP_PADDD, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_PCMPEQD, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_PXOR, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST },
+	{ SN_op_Inequality, OP_PCMPEQD, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_LeftShift, OP_PSHLD, SIMD_EMIT_SHIFT },
 	{ SN_op_Multiply, OP_PMULD, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_op_RightShift, OP_PSARD, SIMD_EMIT_SHIFT },
 	{ SN_op_Subtraction, OP_PSUBD, SIMD_EMIT_BINARY },
+	{ SN_set_W, 3, SIMD_EMIT_SETTER },
+	{ SN_set_X, 0, SIMD_EMIT_SETTER },
+	{ SN_set_Y, 1, SIMD_EMIT_SETTER },
+	{ SN_set_Z, 2, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector8us_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I2, SIMD_EMIT_CTOR },
 	{ SN_AddWithSaturation, OP_PADDW_SAT_UN, SIMD_EMIT_BINARY },
+	{ SN_ArithmeticRightShift, OP_PSARW, SIMD_EMIT_SHIFT },
 	{ SN_Average, OP_PAVGW_UN, SIMD_EMIT_BINARY },
 	{ SN_CompareEqual, OP_PCMPEQW, SIMD_EMIT_BINARY },
-	{ SN_ExtractByteMask, 0, SIMD_EMIT_EXTRACT_MASK },
 	{ SN_LoadAligned, 0, SIMD_EMIT_LOAD_ALIGNED },
 	{ SN_Max, OP_PMAXW_UN, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
 	{ SN_Min, OP_PMINW_UN, SIMD_EMIT_BINARY, SIMD_VERSION_SSE41 },
@@ -356,38 +360,50 @@ static const SimdIntrinsc vector8us_intrinsics[] = {
 	{ SN_PrefetchTemporal1stLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_1 },
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
-	{ SN_ShiftRightArithmetic, OP_PSARW, SIMD_EMIT_SHIFT },
 	{ SN_ShuffleHigh, OP_PSHUFLEW_HIGH, SIMD_EMIT_SHUFFLE },
 	{ SN_ShuffleLow, OP_PSHUFLEW_LOW, SIMD_EMIT_SHUFFLE },
 	{ SN_SignedPackWithSignedSaturation, OP_PACKW, SIMD_EMIT_BINARY },
 	{ SN_SignedPackWithUnsignedSaturation, OP_PACKW_UN, SIMD_EMIT_BINARY },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
-	{ SN_SubWithSaturation, OP_PSUBW_SAT_UN, SIMD_EMIT_BINARY },
+	{ SN_SubtractWithSaturation, OP_PSUBW_SAT_UN, SIMD_EMIT_BINARY },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHW, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWW, SIMD_EMIT_BINARY },
+	{ SN_get_V0, 0, SIMD_EMIT_GETTER },
+	{ SN_get_V1, 1, SIMD_EMIT_GETTER },
+	{ SN_get_V2, 2, SIMD_EMIT_GETTER },
+	{ SN_get_V3, 3, SIMD_EMIT_GETTER },
+	{ SN_get_V4, 4, SIMD_EMIT_GETTER },
+	{ SN_get_V5, 5, SIMD_EMIT_GETTER },
+	{ SN_get_V6, 6, SIMD_EMIT_GETTER },
+	{ SN_get_V7, 7, SIMD_EMIT_GETTER },
 	{ SN_op_Addition, OP_PADDW, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_PCMPEQW, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_PXOR, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST },
+	{ SN_op_Inequality, OP_PCMPEQW, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_LeftShift, OP_PSHLW, SIMD_EMIT_SHIFT },
 	{ SN_op_Multiply, OP_PMULW, SIMD_EMIT_BINARY },
 	{ SN_op_RightShift, OP_PSHRW, SIMD_EMIT_SHIFT },
 	{ SN_op_Subtraction, OP_PSUBW, SIMD_EMIT_BINARY },
+	{ SN_set_V0, 0, SIMD_EMIT_SETTER },
+	{ SN_set_V1, 1, SIMD_EMIT_SETTER },
+	{ SN_set_V2, 2, SIMD_EMIT_SETTER },
+	{ SN_set_V3, 3, SIMD_EMIT_SETTER },
+	{ SN_set_V4, 4, SIMD_EMIT_SETTER },
+	{ SN_set_V5, 5, SIMD_EMIT_SETTER },
+	{ SN_set_V6, 6, SIMD_EMIT_SETTER },
+	{ SN_set_V7, 7, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector8s_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I2, SIMD_EMIT_CTOR },
 	{ SN_AddWithSaturation, OP_PADDW_SAT, SIMD_EMIT_BINARY },
 	{ SN_CompareEqual, OP_PCMPEQW, SIMD_EMIT_BINARY },
 	{ SN_CompareGreaterThan, OP_PCMPGTW, SIMD_EMIT_BINARY },
-	{ SN_ExtractByteMask, 0, SIMD_EMIT_EXTRACT_MASK },
 	{ SN_LoadAligned, 0, SIMD_EMIT_LOAD_ALIGNED },
+	{ SN_LogicalRightShift, OP_PSHRW, SIMD_EMIT_SHIFT },
 	{ SN_Max, OP_PMAXW, SIMD_EMIT_BINARY },
 	{ SN_Min, OP_PMINW, SIMD_EMIT_BINARY },
 	{ SN_MultiplyStoreHigh, OP_PMULW_HIGH, SIMD_EMIT_BINARY },
@@ -397,31 +413,43 @@ static const SimdIntrinsc vector8s_intrinsics[] = {
 	{ SN_PrefetchTemporal1stLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_1 },
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
-	{ SN_ShiftRightLogic, OP_PSHRW, SIMD_EMIT_SHIFT },
 	{ SN_ShuffleHigh, OP_PSHUFLEW_HIGH, SIMD_EMIT_SHUFFLE },
 	{ SN_ShuffleLow, OP_PSHUFLEW_LOW, SIMD_EMIT_SHUFFLE },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
-	{ SN_SubWithSaturation, OP_PSUBW_SAT_UN, SIMD_EMIT_BINARY },
+	{ SN_SubtractWithSaturation, OP_PSUBW_SAT_UN, SIMD_EMIT_BINARY },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHW, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWW, SIMD_EMIT_BINARY },
+	{ SN_get_V0, 0, SIMD_EMIT_GETTER },
+	{ SN_get_V1, 1, SIMD_EMIT_GETTER },
+	{ SN_get_V2, 2, SIMD_EMIT_GETTER },
+	{ SN_get_V3, 3, SIMD_EMIT_GETTER },
+	{ SN_get_V4, 4, SIMD_EMIT_GETTER },
+	{ SN_get_V5, 5, SIMD_EMIT_GETTER },
+	{ SN_get_V6, 6, SIMD_EMIT_GETTER },
+	{ SN_get_V7, 7, SIMD_EMIT_GETTER },
 	{ SN_op_Addition, OP_PADDW, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_PCMPEQW, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_PXOR, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST },
+	{ SN_op_Inequality, OP_PCMPEQW, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_LeftShift, OP_PSHLW, SIMD_EMIT_SHIFT },
 	{ SN_op_Multiply, OP_PMULW, SIMD_EMIT_BINARY },
 	{ SN_op_RightShift, OP_PSARW, SIMD_EMIT_SHIFT },
 	{ SN_op_Subtraction, OP_PSUBW, SIMD_EMIT_BINARY },
+	{ SN_set_V0, 0, SIMD_EMIT_SETTER },
+	{ SN_set_V1, 1, SIMD_EMIT_SETTER },
+	{ SN_set_V2, 2, SIMD_EMIT_SETTER },
+	{ SN_set_V3, 3, SIMD_EMIT_SETTER },
+	{ SN_set_V4, 4, SIMD_EMIT_SETTER },
+	{ SN_set_V5, 5, SIMD_EMIT_SETTER },
+	{ SN_set_V6, 6, SIMD_EMIT_SETTER },
+	{ SN_set_V7, 7, SIMD_EMIT_SETTER },
 };
 
-/*
-Missing:
-.ctor
-getters
-setters
- */
 static const SimdIntrinsc vector16b_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I1, SIMD_EMIT_CTOR },
 	{ SN_AddWithSaturation, OP_PADDB_SAT_UN, SIMD_EMIT_BINARY },
 	{ SN_Average, OP_PAVGB_UN, SIMD_EMIT_BINARY },
 	{ SN_CompareEqual, OP_PCMPEQB, SIMD_EMIT_BINARY },
@@ -434,25 +462,58 @@ static const SimdIntrinsc vector16b_intrinsics[] = {
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
-	{ SN_SubWithSaturation, OP_PSUBB_SAT_UN, SIMD_EMIT_BINARY },
+	{ SN_SubtractWithSaturation, OP_PSUBB_SAT_UN, SIMD_EMIT_BINARY },
 	{ SN_SumOfAbsoluteDifferences, OP_PSUM_ABS_DIFF, SIMD_EMIT_BINARY },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHB, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWB, SIMD_EMIT_BINARY },
+	{ SN_get_V0, 0, SIMD_EMIT_GETTER },
+	{ SN_get_V1, 1, SIMD_EMIT_GETTER },
+	{ SN_get_V10, 10, SIMD_EMIT_GETTER },
+	{ SN_get_V11, 11, SIMD_EMIT_GETTER },
+	{ SN_get_V12, 12, SIMD_EMIT_GETTER },
+	{ SN_get_V13, 13, SIMD_EMIT_GETTER },
+	{ SN_get_V14, 14, SIMD_EMIT_GETTER },
+	{ SN_get_V15, 15, SIMD_EMIT_GETTER },
+	{ SN_get_V2, 2, SIMD_EMIT_GETTER },
+	{ SN_get_V3, 3, SIMD_EMIT_GETTER },
+	{ SN_get_V4, 4, SIMD_EMIT_GETTER },
+	{ SN_get_V5, 5, SIMD_EMIT_GETTER },
+	{ SN_get_V6, 6, SIMD_EMIT_GETTER },
+	{ SN_get_V7, 7, SIMD_EMIT_GETTER },
+	{ SN_get_V8, 8, SIMD_EMIT_GETTER },
+	{ SN_get_V9, 9, SIMD_EMIT_GETTER },
 	{ SN_op_Addition, OP_PADDB, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_PCMPEQB, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_PXOR, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST },
+	{ SN_op_Inequality, OP_PCMPEQB, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_Subtraction, OP_PSUBB, SIMD_EMIT_BINARY },
+	{ SN_set_V0, 0, SIMD_EMIT_SETTER },
+	{ SN_set_V1, 1, SIMD_EMIT_SETTER },
+	{ SN_set_V10, 10, SIMD_EMIT_SETTER },
+	{ SN_set_V11, 11, SIMD_EMIT_SETTER },
+	{ SN_set_V12, 12, SIMD_EMIT_SETTER },
+	{ SN_set_V13, 13, SIMD_EMIT_SETTER },
+	{ SN_set_V14, 14, SIMD_EMIT_SETTER },
+	{ SN_set_V15, 15, SIMD_EMIT_SETTER },
+	{ SN_set_V2, 2, SIMD_EMIT_SETTER },
+	{ SN_set_V3, 3, SIMD_EMIT_SETTER },
+	{ SN_set_V4, 4, SIMD_EMIT_SETTER },
+	{ SN_set_V5, 5, SIMD_EMIT_SETTER },
+	{ SN_set_V6, 6, SIMD_EMIT_SETTER },
+	{ SN_set_V7, 7, SIMD_EMIT_SETTER },
+	{ SN_set_V8, 8, SIMD_EMIT_SETTER },
+	{ SN_set_V9, 9, SIMD_EMIT_SETTER },
 };
 
 /*
 Missing:
-.ctor
-getters
 setters
  */
 static const SimdIntrinsc vector16sb_intrinsics[] = {
+	{ SN_ctor, OP_EXPAND_I1, SIMD_EMIT_CTOR },
 	{ SN_AddWithSaturation, OP_PADDB_SAT, SIMD_EMIT_BINARY },
 	{ SN_CompareEqual, OP_PCMPEQB, SIMD_EMIT_BINARY },
 	{ SN_CompareGreaterThan, OP_PCMPGTB, SIMD_EMIT_BINARY },
@@ -465,15 +526,49 @@ static const SimdIntrinsc vector16sb_intrinsics[] = {
 	{ SN_PrefetchTemporal2ndLevelCache, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_2 },
 	{ SN_PrefetchNonTemporal, 0, SIMD_EMIT_PREFETCH, SIMD_VERSION_SSE1, SIMD_PREFETCH_MODE_NTA },
 	{ SN_StoreAligned, OP_STOREX_ALIGNED_MEMBASE_REG, SIMD_EMIT_STORE },
-	{ SN_SubWithSaturation, OP_PSUBB_SAT, SIMD_EMIT_BINARY },
+	{ SN_SubtractWithSaturation, OP_PSUBB_SAT, SIMD_EMIT_BINARY },
 	{ SN_UnpackHigh, OP_UNPACK_HIGHB, SIMD_EMIT_BINARY },
 	{ SN_UnpackLow, OP_UNPACK_LOWB, SIMD_EMIT_BINARY },
+	{ SN_get_V0, 0, SIMD_EMIT_GETTER },
+	{ SN_get_V1, 1, SIMD_EMIT_GETTER },
+	{ SN_get_V10, 10, SIMD_EMIT_GETTER },
+	{ SN_get_V11, 11, SIMD_EMIT_GETTER },
+	{ SN_get_V12, 12, SIMD_EMIT_GETTER },
+	{ SN_get_V13, 13, SIMD_EMIT_GETTER },
+	{ SN_get_V14, 14, SIMD_EMIT_GETTER },
+	{ SN_get_V15, 15, SIMD_EMIT_GETTER },
+	{ SN_get_V2, 2, SIMD_EMIT_GETTER },
+	{ SN_get_V3, 3, SIMD_EMIT_GETTER },
+	{ SN_get_V4, 4, SIMD_EMIT_GETTER },
+	{ SN_get_V5, 5, SIMD_EMIT_GETTER },
+	{ SN_get_V6, 6, SIMD_EMIT_GETTER },
+	{ SN_get_V7, 7, SIMD_EMIT_GETTER },
+	{ SN_get_V8, 8, SIMD_EMIT_GETTER },
+	{ SN_get_V9, 9, SIMD_EMIT_GETTER },
 	{ SN_op_Addition, OP_PADDB, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseAnd, OP_PAND, SIMD_EMIT_BINARY },
 	{ SN_op_BitwiseOr, OP_POR, SIMD_EMIT_BINARY },
+	{ SN_op_Equality, OP_PCMPEQB, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_EQ },
 	{ SN_op_ExclusiveOr, OP_PXOR, SIMD_EMIT_BINARY },
 	{ SN_op_Explicit, 0, SIMD_EMIT_CAST },
+	{ SN_op_Inequality, OP_PCMPEQB, SIMD_EMIT_EQUALITY, SIMD_VERSION_SSE1, SIMD_COMP_NEQ },
 	{ SN_op_Subtraction, OP_PSUBB, SIMD_EMIT_BINARY },
+	{ SN_set_V0, 0, SIMD_EMIT_SETTER },
+	{ SN_set_V1, 1, SIMD_EMIT_SETTER },
+	{ SN_set_V10, 10, SIMD_EMIT_SETTER },
+	{ SN_set_V11, 11, SIMD_EMIT_SETTER },
+	{ SN_set_V12, 12, SIMD_EMIT_SETTER },
+	{ SN_set_V13, 13, SIMD_EMIT_SETTER },
+	{ SN_set_V14, 14, SIMD_EMIT_SETTER },
+	{ SN_set_V15, 15, SIMD_EMIT_SETTER },
+	{ SN_set_V2, 2, SIMD_EMIT_SETTER },
+	{ SN_set_V3, 3, SIMD_EMIT_SETTER },
+	{ SN_set_V4, 4, SIMD_EMIT_SETTER },
+	{ SN_set_V5, 5, SIMD_EMIT_SETTER },
+	{ SN_set_V6, 6, SIMD_EMIT_SETTER },
+	{ SN_set_V7, 7, SIMD_EMIT_SETTER },
+	{ SN_set_V8, 8, SIMD_EMIT_SETTER },
+	{ SN_set_V9, 9, SIMD_EMIT_SETTER },
 };
 
 static guint32 simd_supported_versions;
@@ -531,6 +626,7 @@ apply_vreg_following_block_interference (MonoCompile *cfg, MonoInst *ins, int re
 	}
 	return FALSE;
 }
+
 /*
 This pass recalculate which vars need MONO_INST_INDIRECT.
 
@@ -649,8 +745,8 @@ mono_simd_simplify_indirection (MonoCompile *cfg)
 		if (!(vreg_flags [var->dreg] & VREG_SINGLE_BB_USE))
 			continue;
 		for (ins = target_bb [var->dreg]->code; ins; ins = ins->next) {
-			/*We can, pretty much kill it.*/
-			if (ins->dreg == var->dreg) {
+			/*We can avoid inserting the XZERO if the first use doesn't depend on the zero'ed value.*/
+			if (ins->dreg == var->dreg && ins->sreg1 != var->dreg && ins->sreg2 != var->dreg) {
 				break;
 			} else if (ins->sreg1 == var->dreg || ins->sreg2 == var->dreg) {
 				MonoInst *tmp;
@@ -729,6 +825,26 @@ get_int_to_float_spill_area (MonoCompile *cfg)
 	return cfg->iconv_raw_var;
 }
 
+/*We share the var with fconv_to_r8_x to save some stack space.*/
+static MonoInst*
+get_double_spill_area (MonoCompile *cfg)
+{
+	if (!cfg->fconv_to_r8_x_var) {
+		cfg->fconv_to_r8_x_var = mono_compile_create_var (cfg, &mono_defaults.double_class->byval_arg, OP_LOCAL);
+		cfg->fconv_to_r8_x_var->flags |= MONO_INST_VOLATILE; /*FIXME, use the don't regalloc flag*/
+	}	
+	return cfg->fconv_to_r8_x_var;
+}
+static MonoInst*
+get_simd_ctor_spill_area (MonoCompile *cfg, MonoClass *avector_klass)
+{
+	if (!cfg->simd_ctor_var) {
+		cfg->simd_ctor_var = mono_compile_create_var (cfg, &avector_klass->byval_arg, OP_LOCAL);
+		cfg->simd_ctor_var->flags |= MONO_INST_VOLATILE; /*FIXME, use the don't regalloc flag*/
+	}	
+	return cfg->simd_ctor_var;
+}
+
 static MonoInst*
 simd_intrinsic_emit_binary (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
 {
@@ -768,76 +884,241 @@ simd_intrinsic_emit_unary (const SimdIntrinsc *intrinsic, MonoCompile *cfg, Mono
 	return ins;
 }
 
+static int
+mono_type_to_extract_op (MonoType *type)
+{
+	switch (type->type) {
+	case MONO_TYPE_I1:
+		return OP_EXTRACT_I1;
+	case MONO_TYPE_U1:
+		return OP_EXTRACT_U1;
+	case MONO_TYPE_I2:
+		return OP_EXTRACT_I2;
+	case MONO_TYPE_U2:
+		return OP_EXTRACT_U2;
+	case MONO_TYPE_I4:
+	case MONO_TYPE_U4:
+	case MONO_TYPE_R4:
+		return OP_EXTRACT_I4;
+	}
+	g_assert_not_reached ();
+}
+
+/*Returns the amount to shift the element index to get the dword it belongs to*/
+static int
+mono_type_elements_shift_bits (MonoType *type)
+{
+	switch (type->type) {
+	case MONO_TYPE_I1:
+	case MONO_TYPE_U1:
+		return 2;
+	case MONO_TYPE_I2:
+	case MONO_TYPE_U2:
+		return 1;
+	case MONO_TYPE_I4:
+	case MONO_TYPE_U4:
+	case MONO_TYPE_R4:
+		return 0;
+	}
+	g_assert_not_reached ();
+}
+
+static int
+mono_type_to_slow_insert_op (MonoType *type)
+{
+	switch (type->type) {
+	case MONO_TYPE_I1:
+	case MONO_TYPE_U1:
+		return OP_INSERTX_U1_SLOW;
+	case MONO_TYPE_I2:
+	case MONO_TYPE_U2:
+		return OP_INSERT_I2;
+	case MONO_TYPE_I4:
+	case MONO_TYPE_U4:
+		return OP_INSERTX_I4_SLOW;
+	case MONO_TYPE_I8:
+	case MONO_TYPE_U8:
+		return OP_INSERTX_I8_SLOW;
+	case MONO_TYPE_R4:
+		return OP_INSERTX_R4_SLOW;
+	case MONO_TYPE_R8:
+		return OP_INSERTX_R8_SLOW;
+	}
+	g_assert_not_reached ();
+}
+
+static MonoInst*
+simd_intrinsic_emit_setter (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
+{
+	MonoInst *ins;
+	MonoMethodSignature *sig = mono_method_signature (cmethod);
+	int size, align;
+	size = mono_type_size (sig->params [0], &align); 
+
+	if (size == 2 || size == 4 || size == 8) {
+		MONO_INST_NEW (cfg, ins, mono_type_to_slow_insert_op (sig->params [0]));
+		ins->klass = cmethod->klass;
+		/*This is a partial load so we encode the dependency on the previous value by setting dreg and sreg1 to the same value.*/
+		ins->dreg = ins->sreg1 = load_simd_vreg (cfg, cmethod, args [0]);
+		ins->sreg2 = args [1]->dreg;
+		ins->inst_c0 = intrinsic->opcode;
+		if (sig->params [0]->type == MONO_TYPE_R4)
+			ins->backend.spill_var = get_int_to_float_spill_area (cfg);
+		else if (sig->params [0]->type == MONO_TYPE_R8)
+			ins->backend.spill_var = get_double_spill_area (cfg);
+		MONO_ADD_INS (cfg->cbb, ins);
+	} else {
+		int vreg, sreg;
+
+		MONO_INST_NEW (cfg, ins, OP_EXTRACTX_U2);
+		ins->klass = cmethod->klass;
+		ins->sreg1 = sreg = load_simd_vreg (cfg, cmethod, args [0]);
+		ins->type = STACK_I4;
+		ins->dreg = vreg = alloc_ireg (cfg);
+		ins->inst_c0 = intrinsic->opcode / 2;
+		MONO_ADD_INS (cfg->cbb, ins);
+
+		MONO_INST_NEW (cfg, ins, OP_INSERTX_U1_SLOW);
+		ins->klass = cmethod->klass;
+		ins->sreg1 = vreg;
+		ins->sreg2 = args [1]->dreg;
+		ins->dreg = sreg;
+		ins->inst_c0 = intrinsic->opcode;
+		MONO_ADD_INS (cfg->cbb, ins);
+
+	}
+	return ins;
+}
+
 static MonoInst*
 simd_intrinsic_emit_getter (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
 {
-	MonoInst *tmp, *ins;
-	int vreg;
-	
+	MonoInst *ins;
+	MonoMethodSignature *sig = mono_method_signature (cmethod);
+	int vreg, shift_bits = mono_type_elements_shift_bits (sig->ret);
+
 	vreg = load_simd_vreg (cfg, cmethod, args [0]);
 
-	if (intrinsic->opcode) {
-		MONO_INST_NEW (cfg, ins, OP_SHUFLEPS);
+	if (intrinsic->opcode >> shift_bits) {
+		MONO_INST_NEW (cfg, ins, OP_PSHUFLED);
 		ins->klass = cmethod->klass;
 		ins->sreg1 = vreg;
-		ins->inst_c0 = intrinsic->opcode;
+		ins->inst_c0 = intrinsic->opcode >> shift_bits;
 		ins->type = STACK_VTYPE;
 		ins->dreg = vreg = alloc_ireg (cfg);
 		MONO_ADD_INS (cfg->cbb, ins);
 	}
 
-	MONO_INST_NEW (cfg, tmp, OP_EXTRACT_I4);
-	tmp->klass = cmethod->klass;
-	tmp->sreg1 = vreg;
-	tmp->type = STACK_I4;
-	tmp->dreg = alloc_ireg (cfg);
-	MONO_ADD_INS (cfg->cbb, tmp);
+	MONO_INST_NEW (cfg, ins, mono_type_to_extract_op (sig->ret));
+	ins->klass = cmethod->klass;
+	ins->sreg1 = vreg;
+	ins->type = STACK_I4;
+	ins->dreg = vreg = alloc_ireg (cfg);
+	ins->inst_c0 = intrinsic->opcode & ((1 << shift_bits) - 1);
+	MONO_ADD_INS (cfg->cbb, ins);
 
-	MONO_INST_NEW (cfg, ins, OP_ICONV_TO_R8_RAW);
-	ins->klass = mono_defaults.single_class;
-	ins->sreg1 = tmp->dreg;
-	ins->type = STACK_R8;
-	ins->dreg = alloc_freg (cfg);
-	ins->backend.spill_var = get_int_to_float_spill_area (cfg);
-	MONO_ADD_INS (cfg->cbb, ins);	
+	if (sig->ret->type == MONO_TYPE_R4) {
+		MONO_INST_NEW (cfg, ins, OP_ICONV_TO_R8_RAW);
+		ins->klass = mono_defaults.single_class;
+		ins->sreg1 = vreg;
+		ins->type = STACK_R8;
+		ins->dreg = alloc_freg (cfg);
+		ins->backend.spill_var = get_int_to_float_spill_area (cfg);
+		MONO_ADD_INS (cfg->cbb, ins);	
+	}
+	return ins;
+}
+
+static MonoInst*
+simd_intrinsic_emit_long_getter (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
+{
+	MonoInst *ins;
+	int vreg;
+	gboolean is_r8 = mono_method_signature (cmethod)->ret->type == MONO_TYPE_R8;
+
+	vreg = load_simd_vreg (cfg, cmethod, args [0]);
+
+	MONO_INST_NEW (cfg, ins, is_r8 ? OP_EXTRACT_R8 : OP_EXTRACT_I8);
+	ins->klass = cmethod->klass;
+	ins->sreg1 = vreg;
+	ins->inst_c0 = intrinsic->opcode;
+	if (is_r8) {
+		ins->type = STACK_R8;
+		ins->dreg = alloc_freg (cfg);
+		ins->backend.spill_var = get_double_spill_area (cfg);
+	} else {
+		ins->type = STACK_I8;
+		ins->dreg = alloc_lreg (cfg);		
+	}
+	MONO_ADD_INS (cfg->cbb, ins);
+
 	return ins;
 }
 
 static MonoInst*
 simd_intrinsic_emit_ctor (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
 {
-	MonoInst *ins;
-	int i;
+	MonoInst *ins = NULL;
+	int i, addr_reg;
+	gboolean is_ldaddr = args [0]->opcode == OP_LDADDR;
+	MonoMethodSignature *sig = mono_method_signature (cmethod);
+	int store_op = mono_type_to_store_membase (cfg, sig->params [0]);
+	int arg_size = mono_type_size (sig->params [0], &i);
 
-	for (i = 1; i < 5; ++i) {
-		MONO_INST_NEW (cfg, ins, OP_PUSH_R4);
-		ins->sreg1 = args [5 - i]->dreg;
-		ins->klass = args [5 - i]->klass;
+	if (sig->param_count == 1) {
+		int dreg;
+		
+		if (is_ldaddr) {
+			dreg = args [0]->inst_i0->dreg;
+			NULLIFY_INS (args [0]);
+		} else {
+			g_assert (args [0]->type == STACK_MP || args [0]->type == STACK_PTR);
+			dreg = alloc_ireg (cfg);
+		}
+
+		MONO_INST_NEW (cfg, ins, intrinsic->opcode);
+		ins->klass = cmethod->klass;
+		ins->sreg1 = args [1]->dreg;
+		ins->type = STACK_VTYPE;
+		ins->dreg = dreg;
+
 		MONO_ADD_INS (cfg->cbb, ins);
+		if (sig->params [0]->type == MONO_TYPE_R4)
+			ins->backend.spill_var = get_int_to_float_spill_area (cfg);
+		else if (sig->params [0]->type == MONO_TYPE_R8)
+			ins->backend.spill_var = get_double_spill_area (cfg);
+
+		if (!is_ldaddr) {
+			MONO_INST_NEW (cfg, ins, OP_STOREX_MEMBASE);
+			ins->dreg = args [0]->dreg;
+			ins->sreg1 = dreg;
+			MONO_ADD_INS (cfg->cbb, ins);
+		}
+		return ins;
 	}
 
-	if (args [0]->opcode == OP_LDADDR) { /*Eliminate LDADDR if it's initing a local var*/
+	if (is_ldaddr) {
+		NEW_VARLOADA (cfg, ins, get_simd_ctor_spill_area (cfg, cmethod->klass), &cmethod->klass->byref_arg);
+		MONO_ADD_INS (cfg->cbb, ins);
+		addr_reg = ins->dreg;
+	} else {
+		g_assert (args [0]->type == STACK_MP || args [0]->type == STACK_PTR);
+		addr_reg = args [0]->dreg;
+	}
+
+	for (i = sig->param_count - 1; i >= 0; --i) {
+		EMIT_NEW_STORE_MEMBASE (cfg, ins, store_op, addr_reg, i * arg_size, args [i + 1]->dreg);
+	}
+
+	if (is_ldaddr) { /*Eliminate LDADDR if it's initing a local var*/
 		int vreg = ((MonoInst*)args [0]->inst_p0)->dreg;
 		NULLIFY_INS (args [0]);
 		
-		MONO_INST_NEW (cfg, ins, OP_LOADX_STACK);
+		MONO_INST_NEW (cfg, ins, OP_LOADX_MEMBASE);
 		ins->klass = cmethod->klass;
+		ins->sreg1 = addr_reg;
 		ins->type = STACK_VTYPE;
 		ins->dreg = vreg;
-		MONO_ADD_INS (cfg->cbb, ins);
-	} else {
-		int vreg = alloc_ireg (cfg);
-
-		MONO_INST_NEW (cfg, ins, OP_LOADX_STACK);
-		ins->klass = cmethod->klass;
-		ins->type = STACK_VTYPE;
-		ins->dreg = vreg;
-		MONO_ADD_INS (cfg->cbb, ins);
-		
-		MONO_INST_NEW (cfg, ins, OP_STOREX_MEMBASE_REG);
-		ins->klass = cmethod->klass;
-		ins->dreg = args [0]->dreg;
-		ins->sreg1 = vreg;
 		MONO_ADD_INS (cfg->cbb, ins);
 	}
 	return ins;
@@ -862,7 +1143,6 @@ simd_intrinsic_emit_cast (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoM
 }
 
 static MonoInst*
-
 simd_intrinsic_emit_shift (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
 {
 	MonoInst *ins;
@@ -894,6 +1174,52 @@ simd_intrinsic_emit_shift (const SimdIntrinsc *intrinsic, MonoCompile *cfg, Mono
 	ins->type = STACK_VTYPE;
 	ins->dreg = alloc_ireg (cfg);
 	MONO_ADD_INS (cfg->cbb, ins);
+	return ins;
+}
+
+static inline gboolean
+mono_op_is_packed_compare (int op)
+{
+	return op >= OP_PCMPEQB && op <= OP_PCMPEQQ;
+}
+
+static MonoInst*
+simd_intrinsic_emit_equality (const SimdIntrinsc *intrinsic, MonoCompile *cfg, MonoMethod *cmethod, MonoInst **args)
+{
+	MonoInst* ins;
+	int left_vreg, right_vreg, tmp_vreg;
+
+	left_vreg = get_simd_vreg (cfg, cmethod, args [0]);
+	right_vreg = get_simd_vreg (cfg, cmethod, args [1]);
+	
+
+	MONO_INST_NEW (cfg, ins, intrinsic->opcode);
+	ins->klass = cmethod->klass;
+	ins->sreg1 = left_vreg;
+	ins->sreg2 = right_vreg;
+	ins->type = STACK_VTYPE;
+	ins->klass = cmethod->klass;
+	ins->dreg = tmp_vreg = alloc_ireg (cfg);
+	ins->inst_c0 = intrinsic->flags;
+	MONO_ADD_INS (cfg->cbb, ins);
+
+	/*FIXME the next ops are SSE specific*/
+	MONO_INST_NEW (cfg, ins, OP_EXTRACT_MASK);
+	ins->klass = cmethod->klass;
+	ins->sreg1 = tmp_vreg;
+	ins->type = STACK_I4;
+	ins->dreg = tmp_vreg = alloc_ireg (cfg);
+	MONO_ADD_INS (cfg->cbb, ins);
+
+	/*FP ops have a not equal instruction, which means that we must test the results with OR semantics.*/
+	if (mono_op_is_packed_compare (intrinsic->opcode) || intrinsic->flags == SIMD_COMP_EQ) {
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_COMPARE_IMM, -1, tmp_vreg, 0xFFFF);
+		NEW_UNALU (cfg, ins, intrinsic->flags == SIMD_COMP_EQ ? OP_CEQ : OP_CLT_UN, tmp_vreg, -1);
+	} else {
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_COMPARE_IMM, -1, tmp_vreg, 0);
+		NEW_UNALU (cfg, ins, OP_CGT_UN, tmp_vreg, -1);
+	}
+	MONO_ADD_INS (cfg->cbb, ins);	
 	return ins;
 }
 
@@ -1035,8 +1361,12 @@ emit_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsi
 		return simd_intrinsic_emit_binary (result, cfg, cmethod, args);
 	case SIMD_EMIT_UNARY:
 		return simd_intrinsic_emit_unary (result, cfg, cmethod, args);
+	case SIMD_EMIT_SETTER:
+		return simd_intrinsic_emit_setter (result, cfg, cmethod, args);
 	case SIMD_EMIT_GETTER:
 		return simd_intrinsic_emit_getter (result, cfg, cmethod, args);
+	case SIMD_EMIT_GETTER_QWORD:
+		return simd_intrinsic_emit_long_getter (result, cfg, cmethod, args);
 	case SIMD_EMIT_CTOR:
 		return simd_intrinsic_emit_ctor (result, cfg, cmethod, args);
 	case SIMD_EMIT_CAST:
@@ -1045,6 +1375,8 @@ emit_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsi
 		return simd_intrinsic_emit_shuffle (result, cfg, cmethod, args); 
 	case SIMD_EMIT_SHIFT:
 		return simd_intrinsic_emit_shift (result, cfg, cmethod, args);
+	case SIMD_EMIT_EQUALITY:
+		return simd_intrinsic_emit_equality (result, cfg, cmethod, args);
 	case SIMD_EMIT_LOAD_ALIGNED:
 		return simd_intrinsic_emit_load_aligned (result, cfg, cmethod, args);
 	case SIMD_EMIT_STORE:
@@ -1055,6 +1387,87 @@ emit_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsi
 		return simd_intrinsic_emit_prefetch (result, cfg, cmethod, args);
 	}
 	g_assert_not_reached ();
+}
+
+static int
+mono_emit_vector_ldelema (MonoCompile *cfg, MonoType *array_type, MonoInst *arr, MonoInst *index, gboolean check_bounds)
+{
+	MonoInst *ins;
+	guint32 size;
+	int mult_reg, add_reg, array_reg, index_reg, index2_reg, index3_reg;
+
+	size = mono_array_element_size (mono_class_from_mono_type (array_type));
+	mult_reg = alloc_preg (cfg);
+	array_reg = arr->dreg;
+	index_reg = index->dreg;
+
+#if SIZEOF_VOID_P == 8
+	/* The array reg is 64 bits but the index reg is only 32 */
+	index2_reg = alloc_preg (cfg);
+	MONO_EMIT_NEW_UNALU (cfg, OP_SEXT_I4, index2_reg, index_reg);
+#else
+	index2_reg = index_reg;
+#endif
+	index3_reg = alloc_preg (cfg);
+
+	if (check_bounds) {
+		MONO_EMIT_BOUNDS_CHECK (cfg, array_reg, MonoArray, max_length, index2_reg);
+		MONO_EMIT_NEW_BIALU_IMM (cfg,  OP_PADD_IMM, index3_reg, index2_reg, 16 / size - 1);
+		MONO_EMIT_BOUNDS_CHECK (cfg, array_reg, MonoArray, max_length, index3_reg);
+	}
+
+	add_reg = alloc_preg (cfg);
+
+	MONO_EMIT_NEW_BIALU_IMM (cfg, OP_MUL_IMM, mult_reg, index2_reg, size);
+	MONO_EMIT_NEW_BIALU (cfg, OP_PADD, add_reg, array_reg, mult_reg);
+	NEW_BIALU_IMM (cfg, ins, OP_PADD_IMM, add_reg, add_reg, G_STRUCT_OFFSET (MonoArray, vector));
+	ins->type = STACK_PTR;
+	MONO_ADD_INS (cfg->cbb, ins);
+
+	return add_reg;
+}
+
+static MonoInst*
+emit_array_extension_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
+{
+	if (!strcmp ("GetVector", cmethod->name) || !strcmp ("GetVectorAligned", cmethod->name)) {
+		MonoInst *load;
+		int addr = mono_emit_vector_ldelema (cfg, fsig->params [0], args [0], args [1], TRUE);
+
+		MONO_INST_NEW (cfg, load, !strcmp ("GetVectorAligned", cmethod->name) ? OP_LOADX_ALIGNED_MEMBASE : OP_LOADX_MEMBASE );
+		load->klass = cmethod->klass;
+		load->sreg1 = addr;
+		load->type = STACK_VTYPE;
+		load->dreg = alloc_ireg (cfg);
+		MONO_ADD_INS (cfg->cbb, load);
+
+		return load;
+	}
+	if (!strcmp ("SetVector", cmethod->name) || !strcmp ("SetVectorAligned", cmethod->name)) {
+		MonoInst *store;
+		int vreg = get_simd_vreg (cfg, cmethod, args [1]);
+		int addr = mono_emit_vector_ldelema (cfg, fsig->params [0], args [0], args [2], TRUE);
+
+		MONO_INST_NEW (cfg, store, !strcmp ("SetVectorAligned", cmethod->name) ? OP_STOREX_ALIGNED_MEMBASE_REG :  OP_STOREX_MEMBASE);
+		store->klass = cmethod->klass;
+		store->dreg = addr;
+		store->sreg1 = vreg;
+		MONO_ADD_INS (cfg->cbb, store);
+
+		return store;
+	}
+	if (!strcmp ("IsAligned", cmethod->name)) {
+		MonoInst *ins;
+		int addr = mono_emit_vector_ldelema (cfg, fsig->params [0], args [0], args [1], FALSE);
+
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, addr, addr, 15);
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_COMPARE_IMM, -1, addr, 0);
+		NEW_UNALU (cfg, ins, OP_CEQ, addr, -1);
+		MONO_ADD_INS (cfg->cbb, ins);
+
+		return ins;
+	}
+	return NULL;
 }
 
 static MonoInst*
@@ -1071,30 +1484,45 @@ emit_simd_runtime_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodS
 MonoInst*
 mono_emit_simd_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args)
 {
-	if (!strcmp ("Mono.Simd", cmethod->klass->name_space) && !strcmp ("SimdRuntime", cmethod->klass->name))
-		return emit_simd_runtime_intrinsics (cfg, cmethod, fsig, args);
-	if (!cmethod->klass->simd_type)
+	const char *class_name;
+
+	if (strcmp ("Mono.Simd", cmethod->klass->name_space))
 		return NULL;
+
+	class_name = cmethod->klass->name;
+	if (!strcmp ("SimdRuntime", class_name))
+		return emit_simd_runtime_intrinsics (cfg, cmethod, fsig, args);
+
+	if (!strcmp ("ArrayExtensions", class_name))
+		return emit_array_extension_intrinsics (cfg, cmethod, fsig, args);
+	
+	if (!strcmp ("VectorOperations", class_name)) {
+		if (!(cmethod->flags & METHOD_ATTRIBUTE_STATIC))
+			return NULL;
+		class_name = mono_class_from_mono_type (mono_method_signature (cmethod)->params [0])->name;
+	} else if (!cmethod->klass->simd_type)
+		return NULL;
+
 	cfg->uses_simd_intrinsics = 1;
-	if (!strcmp ("Vector2d", cmethod->klass->name))
+	if (!strcmp ("Vector2d", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector2d_intrinsics, sizeof (vector2d_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector4f", cmethod->klass->name))
+	if (!strcmp ("Vector4f", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector4f_intrinsics, sizeof (vector4f_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector2ul", cmethod->klass->name))
+	if (!strcmp ("Vector2ul", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector2ul_intrinsics, sizeof (vector2ul_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector2l", cmethod->klass->name))
+	if (!strcmp ("Vector2l", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector2l_intrinsics, sizeof (vector2l_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector4ui", cmethod->klass->name))
+	if (!strcmp ("Vector4ui", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector4ui_intrinsics, sizeof (vector4ui_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector4i", cmethod->klass->name))
+	if (!strcmp ("Vector4i", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector4i_intrinsics, sizeof (vector4i_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector8us", cmethod->klass->name))
+	if (!strcmp ("Vector8us", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector8us_intrinsics, sizeof (vector8us_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector8s", cmethod->klass->name))
+	if (!strcmp ("Vector8s", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector8s_intrinsics, sizeof (vector8s_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector16b", cmethod->klass->name))
+	if (!strcmp ("Vector16b", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector16b_intrinsics, sizeof (vector16b_intrinsics) / sizeof (SimdIntrinsc));
-	if (!strcmp ("Vector16sb", cmethod->klass->name))
+	if (!strcmp ("Vector16sb", class_name))
 		return emit_intrinsics (cfg, cmethod, fsig, args, vector16sb_intrinsics, sizeof (vector16sb_intrinsics) / sizeof (SimdIntrinsc));
 
 	return NULL;

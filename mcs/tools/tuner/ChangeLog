@@ -1,3 +1,12 @@
+2008-12-01  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: move tuning logic inside ../moon. We now simply build
+	the tuner as a simple library.
+
+2008-11-20  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: simplify Makefile and tune System.Xml.Linq.
+
 2008-10-16  Jb Evain  <jbevain@novell.com>
 
 	* masterinfos/silverlight/*.info: update to SL2.

@@ -371,18 +371,24 @@ namespace System.Net.Sockets
 					return;
 				}
 
+				/* It seems the MS runtime
+				 * special-cases 0-length requested
+				 * receive data.  See bug 464201.
+				 */
 				int total = 0;
-				try {
-					SocketError error;
+				if (result.Size > 0) {
+					try {
+						SocketError error;
 					
-					total = acc_socket.Receive_nochecks (result.Buffer,
-									     result.Offset,
-									     result.Size,
-									     result.SockFlags,
-									     out error);
-				} catch (Exception e) {
-					result.Complete (e);
-					return;
+						total = acc_socket.Receive_nochecks (result.Buffer,
+										     result.Offset,
+										     result.Size,
+										     result.SockFlags,
+										     out error);
+					} catch (Exception e) {
+						result.Complete (e);
+						return;
+					}
 				}
 
 				result.Complete (acc_socket, total);
@@ -1383,7 +1389,7 @@ namespace System.Net.Sockets
 		
 		// Creates a new system socket, returning the handle
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		private extern static IntPtr Accept_internal(IntPtr sock, out int error);
+		private extern static IntPtr Accept_internal(IntPtr sock, out int error, bool blocking);
 
 		Thread blocking_thread;
 		public Socket Accept() {
@@ -1394,7 +1400,7 @@ namespace System.Net.Sockets
 			IntPtr sock = (IntPtr) (-1);
 			blocking_thread = Thread.CurrentThread;
 			try {
-				sock = Accept_internal(socket, out error);
+				sock = Accept_internal(socket, out error, blocking);
 			} catch (ThreadAbortException) {
 				if (disposed) {
 #if !NET_2_1
@@ -1427,7 +1433,7 @@ namespace System.Net.Sockets
 			blocking_thread = Thread.CurrentThread;
 			
 			try {
-				sock = Accept_internal (socket, out error);
+				sock = Accept_internal (socket, out error, blocking);
 			} catch (ThreadAbortException) {
 				if (disposed) {
 #if !NET_2_1
@@ -3041,19 +3047,29 @@ namespace System.Net.Sockets
 		internal int ReceiveFrom_nochecks (byte [] buf, int offset, int size, SocketFlags flags,
 						   ref EndPoint remote_end)
 		{
+			int error;
+			return ReceiveFrom_nochecks_exc (buf, offset, size, flags, ref remote_end, true, out error);
+		}
+
+		internal int ReceiveFrom_nochecks_exc (byte [] buf, int offset, int size, SocketFlags flags,
+						   ref EndPoint remote_end, bool throwOnError, out int error)
+		{
 			SocketAddress sockaddr = remote_end.Serialize();
-			int cnt, error;
-
-			cnt = RecvFrom_internal (socket, buf, offset, size, flags, ref sockaddr, out error);
-
+			int cnt = RecvFrom_internal (socket, buf, offset, size, flags, ref sockaddr, out error);
 			SocketError err = (SocketError) error;
 			if (err != 0) {
 				if (err != SocketError.WouldBlock && err != SocketError.InProgress)
 					connected = false;
-				else if (err == SocketError.WouldBlock && blocking) // This might happen when ReceiveTimeout is set
-					throw new SocketException (error, "Operation timed out.");
+				else if (err == SocketError.WouldBlock && blocking) { // This might happen when ReceiveTimeout is set
+					if (throwOnError)	
+						throw new SocketException ((int) SocketError.TimedOut, "Operation timed out");
+					error = (int) SocketError.TimedOut;
+					return 0;
+				}
 
-				throw new SocketException (error);
+				if (throwOnError)
+					throw new SocketException (error);
+				return 0;
 			}
 
 			connected = true;

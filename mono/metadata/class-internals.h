@@ -638,6 +638,7 @@ typedef struct {
 	guint32 exceptions_finallys;
 	guint32 exceptions_depth;
 	guint32 aspnet_requests_queued;
+	guint32 aspnet_requests;
 	/* Memory category */
 	guint32 gc_collections0;
 	guint32 gc_collections1;
@@ -1134,10 +1135,16 @@ mono_class_has_parent_and_ignore_generics (MonoClass *klass, MonoClass *parent) 
 MonoClass *
 mono_class_get_generic_type_definition (MonoClass *klass) MONO_INTERNAL;
 
+gboolean
+mono_class_has_parent_and_ignore_generics (MonoClass *klass, MonoClass *parent) MONO_INTERNAL;
+
 int
 mono_method_get_vtable_slot (MonoMethod *method) MONO_INTERNAL;
 
 int
 mono_method_get_vtable_index (MonoMethod *method) MONO_INTERNAL;
+
+void
+mono_class_setup_interface_id (MonoClass *class) MONO_INTERNAL;
 
 #endif /* __MONO_METADATA_CLASS_INTERBALS_H__ */

@@ -47,15 +47,12 @@
 #include <mono/metadata/monitor.h>
 #include <mono/utils/mono-compiler.h>
 
-#define NEW_IR
 #include "mini.h"
 #include "trace.h"
 
 #include "ir-emit.h"
 
 #include "jit-icalls.h"
-
-#include "aliasing.h"
 
 #define BRANCH_COST 100
 #define INLINE_LENGTH_LIMIT 20
@@ -107,10 +104,6 @@ MonoInst* mono_emit_native_call (MonoCompile *cfg, gconstpointer func, MonoMetho
 void mini_emit_stobj (MonoCompile *cfg, MonoInst *dest, MonoInst *src, MonoClass *klass, gboolean native);
 void mini_emit_initobj (MonoCompile *cfg, MonoInst *dest, const guchar *ip, MonoClass *klass);
 
-int mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_bblock, MonoBasicBlock *end_bblock, 
-		   MonoInst *return_var, GList *dont_inline, MonoInst **inline_args, 
-		   guint inline_offset, gboolean is_virtual_call);
-
 /* helper methods signature */
 extern MonoMethodSignature *helper_sig_class_init_trampoline;
 extern MonoMethodSignature *helper_sig_domain_get;
@@ -130,7 +123,7 @@ extern MonoMethodSignature *helper_sig_monitor_enter_exit_trampoline;
 #define FREG 'f'
 #define VREG 'v'
 #define XREG 'x'
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 #define LREG IREG
 #else
 #define LREG 'l'
@@ -206,7 +199,7 @@ handle_enum:
 		return OP_MOVE;
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 		return OP_MOVE;
 #else
 		return OP_LMOVE;
@@ -273,30 +266,6 @@ mono_print_bb (MonoBasicBlock *bb, const char *msg)
 		} \
 	} while (0)
 
-#ifndef MONO_ARCH_EMIT_BOUNDS_CHECK
-#define MONO_ARCH_EMIT_BOUNDS_CHECK(cfg, array_reg, offset, index_reg) do { \
-			int _length_reg = alloc_ireg (cfg); \
-			MONO_EMIT_NEW_LOAD_MEMBASE_OP (cfg, OP_LOADI4_MEMBASE, _length_reg, array_reg, offset); \
-			MONO_EMIT_NEW_BIALU (cfg, OP_COMPARE, -1, _length_reg, index_reg); \
-			MONO_EMIT_NEW_COND_EXC (cfg, LE_UN, "IndexOutOfRangeException"); \
-	} while (0)
-#endif
-
-#define MONO_EMIT_BOUNDS_CHECK(cfg, array_reg, array_type, array_length_field, index_reg) do { \
-            if (!(cfg->opt & MONO_OPT_ABCREM)) { \
-                MONO_ARCH_EMIT_BOUNDS_CHECK ((cfg), (array_reg), G_STRUCT_OFFSET (array_type, array_length_field), (index_reg)); \
-            } else { \
-                MonoInst *ins; \
-                MONO_INST_NEW ((cfg), ins, OP_BOUNDS_CHECK); \
-                ins->sreg1 = array_reg; \
-                ins->sreg2 = index_reg; \
-                ins->inst_imm = G_STRUCT_OFFSET (array_type, array_length_field); \
-                MONO_ADD_INS ((cfg)->cbb, ins); \
-			    (cfg)->flags |= MONO_CFG_HAS_ARRAY_ACCESS; \
-                (cfg)->cbb->has_array_access = TRUE; \
-            } \
-    } while (0)
-
 #if defined(__i386__) || defined(__x86_64__)
 #define EMIT_NEW_X86_LEA(cfg,dest,sr1,sr2,shift,imm) do { \
 		MONO_INST_NEW (cfg, dest, OP_X86_LEA); \
@@ -309,7 +278,7 @@ mono_print_bb (MonoBasicBlock *bb, const char *msg)
 	} while (0)
 #endif
 
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 #define ADD_WIDEN_OP(ins, arg1, arg2) do { \
 		/* FIXME: Need to add many more cases */ \
 		if ((arg1)->type == STACK_PTR && (arg2)->type == STACK_I4) {	\
@@ -788,7 +757,7 @@ type_from_op (MonoInst *ins, MonoInst *src1, MonoInst *src2) {
 	case OP_LCOMPARE:
 	case OP_ICOMPARE:
 		ins->type = bin_comp_table [src1->type] [src2->type] ? STACK_I4: STACK_INV;
-		if ((src1->type == STACK_I8) || ((sizeof (gpointer) == 8) && ((src1->type == STACK_PTR) || (src1->type == STACK_OBJ) || (src1->type == STACK_MP))))
+		if ((src1->type == STACK_I8) || ((SIZEOF_REGISTER == 8) && ((src1->type == STACK_PTR) || (src1->type == STACK_OBJ) || (src1->type == STACK_MP))))
 			ins->opcode = OP_LCOMPARE;
 		else if (src1->type == STACK_R8)
 			ins->opcode = OP_FCOMPARE;
@@ -797,7 +766,7 @@ type_from_op (MonoInst *ins, MonoInst *src1, MonoInst *src2) {
 		break;
 	case OP_ICOMPARE_IMM:
 		ins->type = bin_comp_table [src1->type] [src1->type] ? STACK_I4 : STACK_INV;
-		if ((src1->type == STACK_I8) || ((sizeof (gpointer) == 8) && ((src1->type == STACK_PTR) || (src1->type == STACK_OBJ) || (src1->type == STACK_MP))))
+		if ((src1->type == STACK_I8) || ((SIZEOF_REGISTER == 8) && ((src1->type == STACK_PTR) || (src1->type == STACK_OBJ) || (src1->type == STACK_MP))))
 			ins->opcode = OP_LCOMPARE_IMM;		
 		break;
 	case CEE_BEQ:
@@ -885,7 +854,7 @@ type_from_op (MonoInst *ins, MonoInst *src1, MonoInst *src2) {
 			break;
 		case STACK_PTR:
 		case STACK_MP:
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			ins->opcode = OP_LCONV_TO_U;
 #else
 			ins->opcode = OP_MOVE;
@@ -1645,7 +1614,7 @@ mini_emit_memset (MonoCompile *cfg, int destreg, int offset, int size, int val, 
 		case 4:
 			MONO_EMIT_NEW_STORE_MEMBASE_IMM (cfg, OP_STOREI4_MEMBASE_IMM, destreg, offset, val);
 			break;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 		case 8:
 			MONO_EMIT_NEW_STORE_MEMBASE_IMM (cfg, OP_STOREI8_MEMBASE_IMM, destreg, offset, val);
 #endif
@@ -1655,7 +1624,7 @@ mini_emit_memset (MonoCompile *cfg, int destreg, int offset, int size, int val, 
 
 	val_reg = alloc_preg (cfg);
 
-	if (sizeof (gpointer) == 8)
+	if (SIZEOF_REGISTER == 8)
 		MONO_EMIT_NEW_I8CONST (cfg, val_reg, val);
 	else
 		MONO_EMIT_NEW_ICONST (cfg, val_reg, val);
@@ -1671,7 +1640,7 @@ mini_emit_memset (MonoCompile *cfg, int destreg, int offset, int size, int val, 
 	}	
 
 #if !NO_UNALIGNED_ACCESS
-	if (sizeof (gpointer) == 8) {
+	if (SIZEOF_REGISTER == 8) {
 		if (offset % 8) {
 			MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI4_MEMBASE_REG, destreg, offset, val_reg);
 			offset += 4;
@@ -1705,7 +1674,7 @@ mini_emit_memset (MonoCompile *cfg, int destreg, int offset, int size, int val, 
 #endif /* DISABLE_JIT */
 
 void 
-mini_emit_memcpy2 (MonoCompile *cfg, int destreg, int doffset, int srcreg, int soffset, int size, int align)
+mini_emit_memcpy (MonoCompile *cfg, int destreg, int doffset, int srcreg, int soffset, int size, int align)
 {
 	int cur_reg;
 
@@ -1725,7 +1694,7 @@ mini_emit_memcpy2 (MonoCompile *cfg, int destreg, int doffset, int srcreg, int s
 	}
 
 #if !NO_UNALIGNED_ACCESS
-	if (sizeof (gpointer) == 8) {
+	if (SIZEOF_REGISTER == 8) {
 		while (size >= 8) {
 			cur_reg = alloc_preg (cfg);
 			MONO_EMIT_NEW_LOAD_MEMBASE_OP (cfg, OP_LOADI8_MEMBASE, cur_reg, srcreg, soffset);
@@ -2207,7 +2176,7 @@ mono_emit_rgctx_calli (MonoCompile *cfg, MonoMethodSignature *sig, MonoInst **ar
 {
 #ifdef MONO_ARCH_RGCTX_REG
 	MonoCallInst *call;
-	int rgctx_reg;
+	int rgctx_reg = -1;
 
 	if (rgctx_arg) {
 		rgctx_reg = mono_alloc_preg (cfg);
@@ -2474,9 +2443,24 @@ mini_emit_stobj (MonoCompile *cfg, MonoInst *dest, MonoInst *src, MonoClass *kla
 	else
 		n = mono_class_value_size (klass, &align);
 
+#if HAVE_WRITE_BARRIERS
+	/* if native is true there should be no references in the struct */
+	if (klass->has_references && !native) {
+		/* Avoid barriers when storing to the stack */
+		if (!((dest->opcode == OP_ADD_IMM && dest->sreg1 == cfg->frame_reg) ||
+			  (dest->opcode == OP_LDADDR))) {
+			iargs [0] = dest;
+			iargs [1] = src;
+			EMIT_NEW_PCONST (cfg, iargs [2], klass);
+
+			mono_emit_jit_icall (cfg, mono_value_copy, iargs);
+		}
+	}
+#endif
+
 	if ((cfg->opt & MONO_OPT_INTRINS) && n <= sizeof (gpointer) * 5) {
 		/* FIXME: Optimize the case when src/dest is OP_LDADDR */
-		mini_emit_memcpy2 (cfg, dest->dreg, 0, src->dreg, 0, n, align);
+		mini_emit_memcpy (cfg, dest->dreg, 0, src->dreg, 0, n, align);
 	} else {
 		iargs [0] = dest;
 		iargs [1] = src;
@@ -3026,7 +3010,7 @@ handle_isinst (MonoCompile *cfg, MonoClass *klass, MonoInst *src)
 
 	MONO_START_BB (cfg, false_bb);
 
-	MONO_EMIT_NEW_ICONST (cfg, res_reg, 0);
+	MONO_EMIT_NEW_PCONST (cfg, res_reg, 0);
 	MONO_EMIT_NEW_BRANCH_BLOCK (cfg, OP_BR, end_bb);
 
 	MONO_START_BB (cfg, is_null_bb);
@@ -3250,8 +3234,12 @@ handle_delegate_ctor (MonoCompile *cfg, MonoClass *klass, MonoInst *target, Mono
 	}
 
 	/* Set invoke_impl field */
-	trampoline = mono_create_delegate_trampoline (klass);
-	EMIT_NEW_AOTCONST (cfg, tramp_ins, MONO_PATCH_INFO_ABS, trampoline);
+	if (cfg->compile_aot) {
+		EMIT_NEW_AOTCONST (cfg, tramp_ins, MONO_PATCH_INFO_DELEGATE_TRAMPOLINE, klass);
+	} else {
+		trampoline = mono_create_delegate_trampoline (klass);
+		EMIT_NEW_PCONST (cfg, tramp_ins, trampoline);
+	}
 	MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STORE_MEMBASE_REG, obj->dreg, G_STRUCT_OFFSET (MonoDelegate, invoke_impl), tramp_ins->dreg);
 
 	/* All the checks which are in mono_delegate_ctor () are done by the delegate trampoline */
@@ -3445,7 +3433,7 @@ mini_emit_ldelema_1_ins (MonoCompile *cfg, MonoClass *klass, MonoInst *arr, Mono
 	array_reg = arr->dreg;
 	index_reg = index->dreg;
 
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 	/* The array reg is 64 bits but the index reg is only 32 */
 	index2_reg = alloc_preg (cfg);
 	MONO_EMIT_NEW_UNALU (cfg, OP_SEXT_I4, index2_reg, index_reg);
@@ -3580,7 +3568,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 			int mult_reg = alloc_preg (cfg);
 			int add_reg = alloc_preg (cfg);
 
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			/* The array reg is 64 bits but the index reg is only 32 */
 			MONO_EMIT_NEW_UNALU (cfg, OP_SEXT_I4, index_reg, args [1]->dreg);
 #else
@@ -3747,7 +3735,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 			   (strcmp (cmethod->klass->name, "Interlocked") == 0)) {
 		ins = NULL;
 
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 		if (strcmp (cmethod->name, "Read") == 0 && (fsig->params [0]->type == MONO_TYPE_I8)) {
 			/* 64 bit reads are already atomic */
 			MONO_INST_NEW (cfg, ins, OP_LOADI8_MEMBASE);
@@ -3765,7 +3753,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 
 			if (fsig->params [0]->type == MONO_TYPE_I4)
 				opcode = OP_ATOMIC_ADD_NEW_I4;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			else if (fsig->params [0]->type == MONO_TYPE_I8)
 				opcode = OP_ATOMIC_ADD_NEW_I8;
 #endif
@@ -3789,7 +3777,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 
 			if (fsig->params [0]->type == MONO_TYPE_I4)
 				opcode = OP_ATOMIC_ADD_NEW_I4;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			else if (fsig->params [0]->type == MONO_TYPE_I8)
 				opcode = OP_ATOMIC_ADD_NEW_I8;
 #endif
@@ -3812,7 +3800,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 
 			if (fsig->params [0]->type == MONO_TYPE_I4)
 				opcode = OP_ATOMIC_ADD_NEW_I4;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			else if (fsig->params [0]->type == MONO_TYPE_I8)
 				opcode = OP_ATOMIC_ADD_NEW_I8;
 #endif
@@ -3823,7 +3811,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 				ins->inst_basereg = args [0]->dreg;
 				ins->inst_offset = 0;
 				ins->sreg2 = args [1]->dreg;
-				ins->type = (opcode == OP_ATOMIC_ADD_I4) ? STACK_I4 : STACK_I8;
+				ins->type = (opcode == OP_ATOMIC_ADD_NEW_I4) ? STACK_I4 : STACK_I8;
 				MONO_ADD_INS (cfg->cbb, ins);
 			}
 		}
@@ -3835,7 +3823,7 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 
 			if (fsig->params [0]->type == MONO_TYPE_I4)
 				opcode = OP_ATOMIC_EXCHANGE_I4;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 			else if ((fsig->params [0]->type == MONO_TYPE_I8) ||
 					 (fsig->params [0]->type == MONO_TYPE_I) ||
 					 (fsig->params [0]->type == MONO_TYPE_OBJECT))
@@ -4117,7 +4105,7 @@ inline_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig,
 	prev_current_method = cfg->current_method;
 	prev_generic_context = cfg->generic_context;
 
-	costs = mono_method_to_ir2 (cfg, cmethod, sbblock, ebblock, rvar, dont_inline, sp, real_offset, *ip == CEE_CALLVIRT);
+	costs = mono_method_to_ir (cfg, cmethod, sbblock, ebblock, rvar, dont_inline, sp, real_offset, *ip == CEE_CALLVIRT);
 
 	cfg->inlined_method = prev_inlined_method;
 	cfg->real_offset = prev_real_offset;
@@ -4991,7 +4979,8 @@ emit_stloc_ir (MonoCompile *cfg, MonoInst **sp, MonoMethodHeader *header, int n)
 {
 	MonoInst *ins;
 	guint32 opcode = mono_type_to_regmove (cfg, header->locals [n]);
-	if ((opcode == OP_MOVE) && ((sp [0]->opcode == OP_ICONST) || (sp [0]->opcode == OP_I8CONST))) {
+	if ((opcode == OP_MOVE) && cfg->cbb->last_ins == sp [0]  &&
+			((sp [0]->opcode == OP_ICONST) || (sp [0]->opcode == OP_I8CONST))) {
 		/* Optimize reg-reg moves away */
 		/* 
 		 * Can't optimize other opcodes, since sp[0] might point to
@@ -5057,10 +5046,12 @@ is_exception_class (MonoClass *class)
 }
 
 /*
- * mono_method_to_ir: translates IL into basic blocks containing trees
+ * mono_method_to_ir:
+ *
+ *   Translate the .net IL into linear IR.
  */
 int
-mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_bblock, MonoBasicBlock *end_bblock, 
+mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_bblock, MonoBasicBlock *end_bblock, 
 		   MonoInst *return_var, GList *dont_inline, MonoInst **inline_args, 
 		   guint inline_offset, gboolean is_virtual_call)
 {
@@ -5246,6 +5237,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				
 				if (clause->flags == MONO_EXCEPTION_CLAUSE_FILTER) {
 					GET_BBLOCK (cfg, tblock, ip + clause->data.filter_offset);
+					tblock->flags |= BB_EXCEPTION_HANDLER;
 					tblock->real_offset = clause->data.filter_offset;
 					tblock->in_scount = 1;
 					tblock->in_stack = mono_mempool_alloc (cfg->mempool, sizeof (MonoInst*));
@@ -5260,9 +5252,6 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 					clause->data.catch_class &&
 					cfg->generic_sharing_context &&
 					mono_class_check_context_used (clause->data.catch_class)) {
-				if (mono_method_get_context (method)->method_inst)
-					GENERIC_SHARING_FAILURE (CEE_NOP);
-
 				/*
 				 * In shared generic code with catch
 				 * clauses containing type variables
@@ -5796,8 +5785,6 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				MonoMethodSignature *fsig = mono_method_signature (cmethod);
 				int i, n;
 
-				/* FIXME: Remove OP_JMP from mini-amd64.c when the old JIT is removed */
-
 				/* Handle tail calls similarly to calls */
 				n = fsig->param_count + fsig->hasthis;
 
@@ -5865,11 +5852,9 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 					cil_method = cmethod;
 				} else if (constrained_call) {
 					if ((constrained_call->byval_arg.type == MONO_TYPE_VAR || constrained_call->byval_arg.type == MONO_TYPE_MVAR) && cfg->generic_sharing_context) {
-						/* This is needed when using aot + generic sharing, since 
-						 * the AOT code allows generic sharing for methods with 
-						 * type parameters having constraints, and 
-						 * get_method_constrained can't find the method in klass 
-						 * representing a type var.
+						/* 
+						 * This is needed since get_method_constrained can't find 
+						 * the method in klass representing a type var.
 						 * The type var is guaranteed to be a reference type in this
 						 * case.
 						 */
@@ -6333,7 +6318,16 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 					NOT_IMPLEMENTED;
 #endif
 				} else {
-					ins = (MonoInst*)mono_emit_calli (cfg, fsig, sp, addr);
+					if (addr->opcode == OP_AOTCONST && addr->inst_c1 == MONO_PATCH_INFO_ICALL_ADDR) {
+						/* 
+						 * Instead of emitting an indirect call, emit a direct call
+						 * with the contents of the aotconst as the patch info.
+						 */
+						ins = (MonoInst*)mono_emit_abs_call (cfg, MONO_PATCH_INFO_ICALL_ADDR, addr->inst_p0, fsig, sp);
+						NULLIFY_INS (addr);
+					} else {
+						ins = (MonoInst*)mono_emit_calli (cfg, fsig, sp, addr);
+					}
 				}
 				if (!MONO_TYPE_IS_VOID (fsig->ret)) {
 					if (fsig->pinvoke && !fsig->ret->byref) {
@@ -6603,7 +6597,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 			type_from_op (cmp, sp [0], NULL);
 			CHECK_TYPE (cmp);
 
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 			if (cmp->opcode == OP_LCOMPARE_IMM) {
 				/* Convert it to OP_LCOMPARE */
 				MONO_INST_NEW (cfg, ins, OP_I8CONST);
@@ -6731,7 +6725,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				else
 					MONO_EMIT_NEW_BIALU_IMM (cfg, OP_SHL_IMM, offset_reg, src1->dreg, 2);
 
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 				/* The upper word might not be zero, and we add it to a 64 bit address later */
 				MONO_EMIT_NEW_UNALU (cfg, OP_ZEXT_I4, offset_reg, offset_reg);
 #endif
@@ -6799,6 +6793,17 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 		case CEE_STIND_I:
 			CHECK_STACK (2);
 			sp -= 2;
+
+#if HAVE_WRITE_BARRIERS
+			if (*ip == CEE_STIND_REF && method->wrapper_type != MONO_WRAPPER_WRITE_BARRIER && !((sp [1]->opcode == OP_PCONST) && (sp [1]->inst_p0 == 0))) {
+				/* insert call to write barrier */
+				MonoMethod *write_barrier = mono_gc_get_write_barrier ();
+				mono_emit_method_call (cfg, write_barrier, sp, NULL);
+				ins_flag = 0;
+				ip++;
+				break;
+			}
+#endif
 
 			NEW_STORE_MEMBASE (cfg, ins, stind_to_store_membase (*ip), sp [0]->dreg, 0, sp [1]->dreg);
 			ins->flags |= ins_flag;
@@ -6870,7 +6875,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				if (imm_opcode != -1) {
 					ins->opcode = imm_opcode;
 					if (sp [1]->opcode == OP_I8CONST) {
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 						ins->inst_imm = sp [1]->inst_l;
 #else
 						ins->inst_ls_word = sp [1]->inst_ls_word;
@@ -6912,7 +6917,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				int data = sp [-1]->inst_c0;
 				sp [-1]->opcode = OP_I8CONST;
 				sp [-1]->type = STACK_I8;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 				if ((*ip) == CEE_CONV_U8)
 					sp [-1]->inst_c0 = (guint32)data;
 				else
@@ -7592,9 +7597,11 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				ins->inst_target_bb = tblock;
 				GET_BBLOCK (cfg, tblock, ip);
 				/* 
-				 * This leads to some inconsistency, since the two bblocks are not
-				 * really connected, but it is needed for handling stack arguments
-				 * correct (See test_0_box_brtrue_opt_regress_81102).
+				 * This leads to some inconsistency, since the two bblocks are 
+				 * not really connected, but it is needed for handling stack 
+				 * arguments correctly (See test_0_box_brtrue_opt_regress_81102).
+				 * FIXME: This should only be needed if sp != stack_start, but that
+				 * doesn't work for some reason (test failure in mcs/tests on x86).
 				 */
 				link_bblock (cfg, bblock, tblock);
 				if (sp != stack_start) {
@@ -7715,6 +7722,20 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 					}
 				} else {
 					MonoInst *store;
+
+#if HAVE_WRITE_BARRIERS
+				if (mini_type_to_stind (cfg, field->type) == CEE_STIND_REF && !(sp [1]->opcode == OP_PCONST && sp [1]->inst_c0 == 0)) {
+					/* insert call to write barrier */
+					MonoMethod *write_barrier = mono_gc_get_write_barrier ();
+					MonoInst *iargs [2];
+					int dreg;
+
+					dreg = alloc_preg (cfg);
+					EMIT_NEW_BIALU_IMM (cfg, iargs [0], OP_PADD_IMM, dreg, sp [0]->dreg, foffset);
+					iargs [1] = sp [1];
+					mono_emit_method_call (cfg, write_barrier, iargs, NULL);
+				}
+#endif
 
 					EMIT_NEW_STORE_MEMBASE_TYPE (cfg, store, field->type, sp [0]->dreg, foffset, sp [1]->dreg);
 						
@@ -8004,6 +8025,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 						EMIT_NEW_ICONST (cfg, *sp, *((guint32 *)addr));
 						sp++;
 						break;
+#ifndef HAVE_MOVING_COLLECTOR
 					case MONO_TYPE_I:
 					case MONO_TYPE_U:
 					case MONO_TYPE_STRING:
@@ -8017,6 +8039,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 						type_to_eval_stack_type ((cfg), field->type, *sp);
 						sp++;
 						break;
+#endif
 					case MONO_TYPE_I8:
 					case MONO_TYPE_U8:
 						EMIT_NEW_I8CONST (cfg, *sp, *((gint64 *)addr));
@@ -8948,7 +8971,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				cmp->sreg2 = sp [1]->dreg;
 				type_from_op (cmp, sp [0], sp [1]);
 				CHECK_TYPE (cmp);
-				if ((sp [0]->type == STACK_I8) || ((sizeof (gpointer) == 8) && ((sp [0]->type == STACK_PTR) || (sp [0]->type == STACK_OBJ) || (sp [0]->type == STACK_MP))))
+				if ((sp [0]->type == STACK_I8) || ((SIZEOF_REGISTER == 8) && ((sp [0]->type == STACK_PTR) || (sp [0]->type == STACK_OBJ) || (sp [0]->type == STACK_MP))))
 					cmp->opcode = OP_LCOMPARE;
 				else if (sp [0]->type == STACK_R8)
 					cmp->opcode = OP_FCOMPARE;
@@ -8975,7 +8998,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 			}
 			case CEE_LDFTN: {
 				MonoInst *argconst;
-				MonoMethod *cil_method, *ctor_method;
+				MonoMethod *cil_method;
 				gboolean needs_static_rgctx_invoke;
 
 				CHECK_STACK_OVF (1);
@@ -9012,18 +9035,21 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				/* FIXME: SGEN support */
 				/* FIXME: handle shared static generic methods */
 				/* FIXME: handle this in shared code */
-				if (!needs_static_rgctx_invoke && !context_used && (sp > stack_start) && (ip + 6 + 5 < end) && ip_in_bb (cfg, bblock, ip + 6) && (ip [6] == CEE_NEWOBJ) && (ctor_method = mini_get_method (cfg, method, read32 (ip + 7), NULL, generic_context)) && (ctor_method->klass->parent == mono_defaults.multicastdelegate_class)) {
-					MonoInst *target_ins;
+				if (!needs_static_rgctx_invoke && !context_used && (sp > stack_start) && (ip + 6 + 5 < end) && ip_in_bb (cfg, bblock, ip + 6) && (ip [6] == CEE_NEWOBJ)) {
+					MonoMethod *ctor_method = mini_get_method (cfg, method, read32 (ip + 7), NULL, generic_context);
+					if (ctor_method && (ctor_method->klass->parent == mono_defaults.multicastdelegate_class)) {
+						MonoInst *target_ins;
 
-					ip += 6;
-					if (cfg->verbose_level > 3)
-						g_print ("converting (in B%d: stack: %d) %s", bblock->block_num, (int)(sp - stack_start), mono_disasm_code_one (NULL, method, ip, NULL));
-					target_ins = sp [-1];
-					sp --;
-					*sp = handle_delegate_ctor (cfg, ctor_method->klass, target_ins, cmethod);
-					ip += 5;					
-					sp ++;
-					break;
+						ip += 6;
+						if (cfg->verbose_level > 3)
+							g_print ("converting (in B%d: stack: %d) %s", bblock->block_num, (int)(sp - stack_start), mono_disasm_code_one (NULL, method, ip, NULL));
+						target_ins = sp [-1];
+						sp --;
+						*sp = handle_delegate_ctor (cfg, ctor_method->klass, target_ins, cmethod);
+						ip += 5;			
+						sp ++;
+						break;
+					}
 				}
 #endif
 
@@ -9253,7 +9279,7 @@ mono_method_to_ir2 (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_
 				sp -= 3;
 
 				if ((ip [1] == CEE_CPBLK) && (cfg->opt & MONO_OPT_INTRINS) && (sp [2]->opcode == OP_ICONST) && ((n = sp [2]->inst_c0) <= sizeof (gpointer) * 5)) {
-					mini_emit_memcpy2 (cfg, sp [0]->dreg, 0, sp [1]->dreg, 0, sp [2]->inst_c0, 0);
+					mini_emit_memcpy (cfg, sp [0]->dreg, 0, sp [1]->dreg, 0, sp [2]->inst_c0, 0);
 				} else if ((ip [1] == CEE_INITBLK) && (cfg->opt & MONO_OPT_INTRINS) && (sp [2]->opcode == OP_ICONST) && ((n = sp [2]->inst_c0) <= sizeof (gpointer) * 5) && (sp [1]->opcode == OP_ICONST) && (sp [1]->inst_c0 == 0)) {
 					/* emit_memset only works when val == 0 */
 					mini_emit_memset (cfg, sp [0]->dreg, 0, sp [2]->inst_c0, sp [1]->inst_c0, 0);
@@ -9663,7 +9689,7 @@ mono_load_membase_to_load_mem (int opcode)
 		return OP_LOADI4_MEM;
 	case OP_LOADU4_MEMBASE:
 		return OP_LOADU4_MEM;
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 	case OP_LOADI8_MEMBASE:
 		return OP_LOADI8_MEM;
 #endif
@@ -9923,7 +9949,7 @@ int
 mono_op_to_op_imm_noemul (int opcode)
 {
 	switch (opcode) {
-#if SIZEOF_VOID_P == 4 && !defined(MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS)
+#if SIZEOF_REGISTER == 4 && !defined(MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS)
 	case OP_LSHR:
 	case OP_LSHL:
 	case OP_LSHR_UN:
@@ -10001,7 +10027,7 @@ mono_handle_global_vregs (MonoCompile *cfg)
 					vreg = ins->sreg2;
 				}
 
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 				if (regtype == 'l') {
 					/*
 					 * Since some instructions reference the original long vreg,
@@ -10071,7 +10097,7 @@ mono_handle_global_vregs (MonoCompile *cfg)
 		case STACK_PTR:
 		case STACK_MP:
 		case STACK_VTYPE:
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 		case STACK_I8:
 #endif
 #if !defined(__i386__) && !defined(MONO_ARCH_SOFT_FLOAT)
@@ -10145,7 +10171,7 @@ mono_handle_global_vregs (MonoCompile *cfg)
 				cfg->varinfo [pos]->inst_c0 = pos;
 				memcpy (&cfg->vars [pos], &cfg->vars [i], sizeof (MonoMethodVar));
 				cfg->vars [pos].idx = pos;
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 				if (cfg->varinfo [pos]->type == STACK_I8) {
 					/* Modify the two component vars too */
 					MonoInst *var1;
@@ -10196,7 +10222,7 @@ mono_spill_global_vars (MonoCompile *cfg, gboolean *need_local_opts)
 	stacktypes ['x'] = STACK_VTYPE;
 #endif
 
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 	/* Create MonoInsts for longs */
 	for (i = 0; i < cfg->num_varinfo; i++) {
 		MonoInst *ins = cfg->varinfo [i];
@@ -10521,7 +10547,7 @@ mono_spill_global_vars (MonoCompile *cfg, gboolean *need_local_opts)
 							mono_bblock_insert_before_ins (bb, ins, load_ins);
 						}
 						else {
-#if SIZEOF_VOID_P == 4
+#if SIZEOF_REGISTER == 4
 							g_assert (load_opcode != OP_LOADI8_MEMBASE);
 #endif
 							NEW_LOAD_MEMBASE (cfg, load_ins, load_opcode, sreg, var->inst_basereg, var->inst_offset);
@@ -10632,13 +10658,8 @@ mono_spill_global_vars (MonoCompile *cfg, gboolean *need_local_opts)
  *   fcompare + branchCC.
  * - create a helper function for allocating a stack slot, taking into account 
  *   MONO_CFG_HAS_SPILLUP.
- * - merge new GC changes in mini.c.
  * - merge r68207.
  * - merge the ia64 switch changes.
- * - merge the mips conditional changes.
- * - remove unused opcodes from mini-ops.h, remove "op_" from the opcode names,
- *   remove the op_ opcodes from the cpu-..md files, clean up the cpu-..md files.
- * - make the cpu_ tables smaller when the usage of the cee_ opcodes is removed.
  * - optimize mono_regstate2_alloc_int/float.
  * - fix the pessimistic handling of variables accessed in exception handler blocks.
  * - need to write a tree optimization pass, but the creation of trees is difficult, i.e.
@@ -10649,8 +10670,6 @@ mono_spill_global_vars (MonoCompile *cfg, gboolean *need_local_opts)
  * - LAST MERGE: 108395.
  * - when returning vtypes in registers, generate IR and append it to the end of the
  *   last bb instead of doing it in the epilog.
- * - when the new JIT is done, use the ins emission macros in ir-emit.h instead of the 
- *   ones in inssel.h.
  * - change the store opcodes so they use sreg1 instead of dreg to store the base register.
  */
 

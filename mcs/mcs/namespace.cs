@@ -168,19 +168,22 @@ namespace Mono.CSharp {
  			bool contains_extension_methods = TypeManager.extension_attribute_type != null &&
  					assembly.IsDefined(TypeManager.extension_attribute_type, false);
  
- 			if (get_namespaces_method != null && !contains_extension_methods) {
+ 			if (get_namespaces_method != null) {
   				string [] namespaces = (string []) get_namespaces_method.Invoke (assembly, null);
   				foreach (string ns in namespaces)
  					RegisterNamespace (ns);
-  				return;
+
+				if (!contains_extension_methods)
+					return;
   			}
-  
- 			foreach (Type t in assembly.GetExportedTypes ()) {
+
+ 			foreach (Type t in assembly.GetTypes ()) {
  				if ((t.Attributes & Class.StaticClassAttribute) == Class.StaticClassAttribute &&
  					contains_extension_methods && t.IsDefined (TypeManager.extension_attribute_type, false))
  					RegisterExtensionMethodClass (t);
- 				else
- 					RegisterNamespace (t.Namespace);
+
+				if (get_namespaces_method == null)
+					RegisterNamespace (t.Namespace);
  			}
   		}
 
@@ -361,7 +364,7 @@ namespace Mono.CSharp {
 			if (name.IndexOf ('`') > 0) {
 				FullNamedExpression retval = Lookup (ds, SimpleName.RemoveGenericArity (name), loc);
 				if (retval != null) {
-					Error_TypeArgumentsCannotBeUsed (retval.Type, loc);
+					Error_TypeArgumentsCannotBeUsed (retval, loc);
 					return;
 				}
 			} else {
@@ -383,10 +386,14 @@ namespace Mono.CSharp {
 				TypeManager.CSharpName(t), TypeManager.GetNumberOfTypeArguments(t).ToString());
 		}
 
-		public static void Error_TypeArgumentsCannotBeUsed (Type t, Location loc)
+		public static void Error_TypeArgumentsCannotBeUsed (FullNamedExpression expr, Location loc)
 		{
-			Report.SymbolRelatedToPreviousError (t);
-			Error_TypeArgumentsCannotBeUsed (loc, "type", TypeManager.CSharpName (t));
+			if (expr is TypeExpr) {
+				Report.SymbolRelatedToPreviousError (expr.Type);
+				Error_TypeArgumentsCannotBeUsed (loc, "type", expr.GetSignatureForError ());
+			} else {
+				expr.Error_ExpressionCannotBeGeneric (loc);
+			}
 		}
 
 		public static void Error_TypeArgumentsCannotBeUsed (MethodBase mi, Location loc)
@@ -676,7 +683,7 @@ namespace Mono.CSharp {
 		}
 
 		class LocalUsingAliasEntry : UsingAliasEntry {
-			Expression resolved;
+			FullNamedExpression resolved;
 			MemberName value;
 
 			public LocalUsingAliasEntry (string alias, MemberName name, Location loc)
@@ -688,7 +695,7 @@ namespace Mono.CSharp {
 			public override FullNamedExpression Resolve (IResolveContext rc)
 			{
 				if (resolved != null || value == null)
-					return (FullNamedExpression)resolved;
+					return resolved;
 
 				resolved = value.GetTypeExpression ().ResolveAsTypeStep (rc, false);
 				if (resolved == null) {
@@ -696,18 +703,15 @@ namespace Mono.CSharp {
 					return null;
 				}
 
-				// FIXME: This is quite wrong, the accessibility is not global
-				if (resolved.Type != null) {
-					TypeAttributes attr = resolved.Type.Attributes & TypeAttributes.VisibilityMask;
-					if (attr == TypeAttributes.NestedPrivate || attr == TypeAttributes.NestedFamily ||
-					 	((attr == TypeAttributes.NestedFamORAssem || attr == TypeAttributes.NestedAssembly) && 
-						TypeManager.LookupDeclSpace (resolved.Type) == null)) {
+				TypeExpr te = resolved as TypeExpr;
+				if (te != null) {
+					if (!te.CheckAccessLevel (rc.DeclContainer)) {
+						Report.SymbolRelatedToPreviousError (te.Type);
 						Expression.ErrorIsInaccesible (resolved.Location, resolved.GetSignatureForError ());
-						return null;
 					}
 				}
 
-				return (FullNamedExpression)resolved;
+				return resolved;
 			}
 
 			public override string ToString ()

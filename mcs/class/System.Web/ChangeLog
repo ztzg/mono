@@ -1,10 +1,31 @@
-2008-12-11  Dean Brettle  <dean@brettle.com>
+2009-01-27  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web.dll.sources: added System.Web.Util/SearchPattern.cs
+
+2009-01-20  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web.dll.sources: added System.Web.UI.WebControls/Substitution.cs
+
+2008-12-23  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added Test/mainsoft/NunitWebResources/CustomSectionEmptyCollection.aspx
+
+	* System.Web_test.dll.sources: added mainsoft/NunitWeb/NunitWeb/CustomSection.cs
+
+2008-12-12  Dean Brettle  <dean@brettle.com>
 
 	* System.Web.dll.sources: deleted
 	System.Web.Configuration_2.0/CapabilitiesChecksum.cs
 	
 	* Makefile (RESOURCE_FILES_2): deleted
 	System.Web.Configuration_2.0/RandomRoboBotKeywords.txt
+
+2008-12-10  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/MissingMasterFile.aspx
+
+	* System.Web_test.dll.sources: added System.Web.UI/PageParserTest.cs
 
 2008-12-03  Marek Habersack  <mhabersack@novell.com>
 

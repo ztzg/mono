@@ -39,6 +39,23 @@
         <remarks></remarks>
       </Docs>
     </Member>
+    <Member MemberName="Component">
+      <MemberSignature Language="C#" Value="public uint this[int index] { set; get; }" />
+      <MemberType>Property</MemberType>
+      <AssemblyInfo>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+      </AssemblyInfo>
+      <ReturnValue>
+        <ReturnType>System.UInt32</ReturnType>
+      </ReturnValue>
+      <Parameters>
+        <Parameter Name="index" Type="System.Int32" />
+      </Parameters>
+      <Docs>
+        <param name="index">The index of the component.</param>
+        <summary>Gets/Sets the component's value.</summary>
+      </Docs>
+    </Member>
     <Member MemberName="CompareEqual">
       <MemberSignature Language="C#" Value="public static Mono.Simd.Vector4ui CompareEqual (Mono.Simd.Vector4ui v1, Mono.Simd.Vector4ui v2);" />
       <MemberType>Method</MemberType>
@@ -60,30 +77,6 @@
         <returns>A new vector with the comparison results.</returns>
 
         <remarks>Equal components get the UInt32.MaxValue, unequal components get the zero value.</remarks>
-      </Docs>
-      <Attributes>
-        <Attribute>
-          <AttributeName>Mono.Simd.Acceleration(Mono.Simd.AccelMode.SSE2)</AttributeName>
-        </Attribute>
-      </Attributes>
-    </Member>
-    <Member MemberName="ExtractByteMask">
-      <MemberSignature Language="C#" Value="public static int ExtractByteMask (Mono.Simd.Vector4ui va);" />
-      <MemberType>Method</MemberType>
-      <AssemblyInfo>
-        <AssemblyVersion>2.0.0.0</AssemblyVersion>
-      </AssemblyInfo>
-      <ReturnValue>
-        <ReturnType>System.Int32</ReturnType>
-      </ReturnValue>
-      <Parameters>
-        <Parameter Name="va" Type="Mono.Simd.Vector4ui" />
-      </Parameters>
-      <Docs>
-        <param name="va">Vector.</param>
-        <summary>Extracts a byte mask from the vector.</summary>
-        <returns>An integer with the low 16 bits representing the mask.</returns>
-        <remarks>This returns a 16-bit value where each bit is formed from the most significant bit of each byte.</remarks>
       </Docs>
       <Attributes>
         <Attribute>
@@ -627,8 +620,8 @@
         </Attribute>
       </Attributes>
     </Member>
-    <Member MemberName="ShiftRightArithmetic">
-      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector4ui ShiftRightArithmetic (Mono.Simd.Vector4ui v1, int amount);" />
+    <Member MemberName="ArithmeticRightShift">
+      <MemberSignature Language="C#" Value="public static Mono.Simd.Vector4ui ArithmeticRightShift (Mono.Simd.Vector4ui v1, int amount);" />
       <MemberType>Method</MemberType>
       <AssemblyInfo>
         <AssemblyVersion>2.0.0.0</AssemblyVersion>

@@ -1,0 +1,789 @@
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <glib.h>
+
+#if 1
+#define DEBUG_PARSER(stmt) do { stmt; } while (0)
+#else
+#define DEBUG_PARSER(stmt)
+#endif
+
+#if 0
+#define DEBUG_SCANNER(stmt) do { stmt; } while (0)
+#define SCANNER_DEBUG
+#else
+#define DEBUG_SCANNER(stmt)
+#endif
+
+/*
+Grammar:
+
+tokens:
+	comment ::= '#.*<eol>
+	identifier ::= ([a-z] | [A-Z]) ([a-z] | [A-Z] | [0-9] | [_-.])* 
+	hexa_digit = [0-9] | [a-f] | [A-F]
+	number ::= hexadecimal | decimal
+	hexadecimal ::= (+-)?('0' [xX])? hexa_digit+
+	decimal ::= 0 [0-9]+
+	eol ::= <eol>
+	punctuation ::= [{}]
+
+program:
+	test_case*
+
+test_case:
+	identifier '{' assembly_directive test_entry* '}'
+
+assembly_directive:
+ 'assembly' identifier  
+
+test_entry:
+	validity patch (',' patch)*
+
+validity:
+	'valid' | 'invalid'
+
+patch:
+	selector effect
+
+selector:
+	'offset' expression
+
+effect:
+	('set-byte' | 'set-ushort' | 'set-uint') expression
+
+expression:
+	atom ([+-] atom)*
+
+atom:
+	number | variable:
+
+variable:
+	file-size |
+	pe-header |
+	pe-optional-header |
+	pe-signature
+
+TODO For the sake of a simple implementation, tokens are space delimited.
+*/
+
+enum {
+	TOKEN_INVALID,
+	TOKEN_ID,
+	TOKEN_NUM,
+	TOKEN_PUNC,
+	TOKEN_EOF,
+};
+
+enum {
+	OK,
+	INVALID_TOKEN_TYPE,
+	INVALID_PUNC_TEXT,
+	INVALID_ID_TEXT,
+	INVALID_VALIDITY_TEST,
+	INVALID_NUMBER,
+	INVALID_FILE_NAME,
+	INVALID_SELECTOR,
+	INVALID_EFFECT,
+	INVALID_EXPRESSION,
+	INVALID_VARIABLE_NAME
+};
+
+enum {
+	TEST_TYPE_VALID,
+	TEST_TYPE_INVALID
+};
+
+enum {
+	SELECTOR_ABS_OFFSET,
+};
+
+enum {
+	EFFECT_SET_BYTE,
+	EFFECT_SET_USHORT,
+	EFFECT_SET_UINT,
+	EFFECT_SET_TRUNC
+};
+
+enum {
+	EXPRESSION_CONSTANT,
+	EXPRESSION_VARIABLE,
+	EXPRESSION_ADD,
+	EXPRESSION_SUB
+};
+
+typedef struct _expression expression_t;
+
+typedef struct {
+	int type;
+	int start, end; /*stream range text is in [start, end[*/
+	int line;
+} token_t;
+
+typedef struct {
+	char *input;
+	int idx, size, line;
+	token_t current;
+} scanner_t;
+
+
+struct _expression {
+	int type;
+	union {
+		gint32 constant;
+		char *name;
+		struct {
+			expression_t *left;
+			expression_t *right;
+		} bin;
+	} data;
+};
+
+
+typedef struct {
+	int type;
+	expression_t *expression;
+} patch_selector_t;
+
+
+typedef struct {
+	int type;
+	expression_t *expression;
+} patch_effect_t;
+
+typedef struct {
+	patch_selector_t *selector;
+	patch_effect_t *effect;
+} test_patch_t;
+
+typedef struct {
+	int validity;
+	GSList *patches; /*of test_patch_t*/
+	char *data;
+	int data_size;
+} test_entry_t;
+
+typedef struct {
+	char *name;
+	char *assembly;
+	int count;
+
+	char *assembly_data;
+	int assembly_size;
+	int init;
+} test_set_t;
+
+/*******************************************************************************************************/
+
+static const char*
+test_validity_name (int validity)
+{
+	switch (validity) {
+	case TEST_TYPE_VALID:
+		return "valid";
+	case TEST_TYPE_INVALID:
+		return "invalid";
+	default:
+		printf ("Invalid test type %d\n", validity);
+		exit (INVALID_VALIDITY_TEST);
+	}
+}
+
+static char*
+read_whole_file_and_close (const char *name, int *file_size)
+{
+	FILE *file = fopen (name, "ro");
+	char *res;
+	int fsize;
+
+	if (!file) {
+		printf ("Could not open file %s\n", name);
+		exit (INVALID_FILE_NAME);
+	}
+
+	fseek (file, 0, SEEK_END);
+	fsize = ftell (file);
+	fseek (file, 0, SEEK_SET);
+
+	res = g_malloc (fsize + 1);
+
+	fread (res, fsize, 1, file);
+	fclose (file);
+	*file_size = fsize;
+	return res;
+}
+
+static void
+init_test_set (test_set_t *test_set)
+{
+	if (test_set->init)
+		return;
+	test_set->assembly_data = read_whole_file_and_close (test_set->assembly, &test_set->assembly_size);
+
+	test_set->init = 1;
+}
+
+static char*
+make_test_name (test_entry_t *entry, test_set_t *test_set)
+{
+	return g_strdup_printf ("%s-%s-%d.exe", test_validity_name (entry->validity), test_set->name, test_set->count++);
+}
+
+#define READ_VAR(KIND, PTR) GUINT32_FROM_LE((guint32)*((KIND*)(PTR)))
+#define SET_VAR(KIND, PTR, VAL) do { *((KIND*)(PTR)) = (KIND)VAL; }  while (0)
+
+static guint32
+lookup_var (test_entry_t *entry, const char *name)
+{
+	if (!strcmp ("file-size", name))
+		return entry->data_size;
+	if (!strcmp ("pe-signature", name))
+		return READ_VAR (guint32, entry->data + 0x3c); 
+	if (!strcmp ("pe-header", name))
+		return READ_VAR (guint32, entry->data + 0x3c) + 4; 
+	if (!strcmp ("pe-optional-header", name))
+		return READ_VAR (guint32, entry->data + 0x3c) + 24; 
+
+	printf ("Unknown variable in expression %s\n", name);
+	exit (INVALID_VARIABLE_NAME);
+}
+
+static guint32
+expression_eval (expression_t *exp, test_entry_t *entry)
+{
+	switch (exp->type) {
+	case EXPRESSION_CONSTANT:
+		return exp->data.constant;
+	case EXPRESSION_VARIABLE:
+		return lookup_var (entry, exp->data.name);
+	case EXPRESSION_ADD:
+		return expression_eval (exp->data.bin.left, entry) + expression_eval (exp->data.bin.right, entry);
+	case EXPRESSION_SUB:
+		return expression_eval (exp->data.bin.left, entry) - expression_eval (exp->data.bin.right, entry);
+	default:
+		printf ("Invalid expression type %d\n", exp->type);
+		exit (INVALID_EXPRESSION);
+	}	return 0;
+}
+
+static guint32
+apply_selector (patch_selector_t *selector, test_entry_t *entry)
+{
+	guint32 value = 0;
+	if (selector->expression)
+		value = expression_eval (selector->expression, entry);
+	switch (selector->type) {
+	case SELECTOR_ABS_OFFSET:
+		DEBUG_PARSER (printf("\tabsolute offset selector [%d]\n", value));
+		return value;
+	default:
+		printf ("Invalid selector type %d\n", selector->type);
+		exit (INVALID_SELECTOR);
+	}
+}
+
+static void
+apply_effect (patch_effect_t *effect, test_entry_t *entry, guint32 offset)
+{
+	gint32 value = 0;
+	char *ptr = entry->data + offset;
+	if (effect->expression)
+		value = expression_eval (effect->expression, entry);
+
+	switch (effect->type) {
+	case EFFECT_SET_BYTE:
+		DEBUG_PARSER (printf("\tset-byte effect old value [%x] new value [%x]\n", READ_VAR (guint8, ptr), value));
+		SET_VAR (guint8, ptr, value);
+		break;
+	case EFFECT_SET_USHORT:
+		DEBUG_PARSER (printf("\tset-ushort effect old value [%x] new value [%x]\n", READ_VAR (guint16, ptr), value));
+		SET_VAR (guint16, ptr, value);
+		break;
+	case EFFECT_SET_UINT:
+		DEBUG_PARSER (printf("\tset-uint effect old value [%x] new value [%x]\n", READ_VAR (guint32, ptr), value));
+		SET_VAR (guint32, ptr, value);
+		break;
+	case EFFECT_SET_TRUNC:
+		DEBUG_PARSER (printf("\ttrunc effect [%d]\n", offset));
+		entry->data_size = offset;
+		break;
+	default:
+		printf ("Invalid effect type %d\n", effect->type);
+		exit (INVALID_EFFECT);
+	}
+}
+
+static void
+apply_patch (test_entry_t *entry, test_patch_t *patch)
+{
+	guint32 offset = apply_selector (patch->selector, entry);
+	apply_effect (patch->effect, entry, offset);
+}
+
+static void
+process_test_entry (test_set_t *test_set, test_entry_t *entry)
+{
+	GSList *tmp;
+	char *file_name;
+	FILE *f;
+
+	init_test_set (test_set);
+	entry->data = g_memdup (test_set->assembly_data, test_set->assembly_size);
+	entry->data_size = test_set->assembly_size;
+
+	DEBUG_PARSER (printf("(%d)%s\n", test_set->count, entry->validity == TEST_TYPE_VALID? "valid" : "invalid"));
+	for (tmp = entry->patches; tmp; tmp = tmp->next)
+		apply_patch (entry, tmp->data);
+
+	file_name = make_test_name (entry, test_set);
+
+	f = fopen (file_name, "wo");
+	fwrite (entry->data, entry->data_size, 1, f);
+	fclose (f);
+
+	g_free (file_name);
+} 	
+
+/*******************************************************************************************************/
+
+static void
+patch_free (test_patch_t *patch)
+{
+	free (patch->selector);
+	free (patch->effect);
+	free (patch);
+}
+
+static void
+test_set_free (test_set_t *set)
+{
+	free (set->name);
+	free (set->assembly);
+	free (set->assembly_data);
+}
+
+static void
+test_entry_free (test_entry_t *entry)
+{
+	GSList *tmp;
+
+	free (entry->data);
+	for (tmp = entry->patches; tmp; tmp = tmp->next)
+		patch_free (tmp->data);
+	g_slist_free (entry->patches);
+}
+
+
+/*******************************************************************************************************/
+static const char*
+token_type_name (int type)
+{
+	switch (type) {
+	case TOKEN_INVALID:
+		return "invalid";
+	case TOKEN_ID:
+		return "identifier";
+	case TOKEN_NUM:
+		return "number";
+	case TOKEN_PUNC:
+		return "punctuation";
+	case TOKEN_EOF:
+		return "end of file";
+	}
+	return "unknown token type";
+}
+
+#define CUR_CHAR (scanner->input [scanner->idx])
+
+static int
+is_eof (scanner_t *scanner)
+{
+	return scanner->idx >= scanner->size;
+}
+
+static int
+ispunct_char (int c)
+{
+	return c == '{' || c == '}' || c == ',';
+}
+
+static void
+skip_spaces (scanner_t *scanner)
+{
+start:
+	while (!is_eof (scanner) && isspace (CUR_CHAR)) {
+		if (CUR_CHAR == '\n')
+			++scanner->line;
+		++scanner->idx;
+	}
+	if (CUR_CHAR == '#') {
+		while (!is_eof (scanner) && CUR_CHAR != '\n') {
+			++scanner->idx;
+		}
+		goto start;
+	}
+}
+
+static char*
+token_text_dup (scanner_t *scanner, token_t *token)
+{
+	int len = token->end - token->start;
+	
+	char *str = g_memdup (scanner->input + token->start, len + 1);
+	str [len] = 0;
+	return str;
+}
+
+#if SCANNER_DEBUG
+static void
+dump_token (scanner_t *scanner, token_t *token)
+{
+	char *str = token_text_dup (scanner, token);
+	
+	printf ("token '%s' of type '%s' at line %d\n", str, token_type_name (token->type), token->line);
+	free (str);
+}
+
+#endif
+
+static void
+next_token (scanner_t *scanner)
+{
+	int start, end, type;
+	char c;
+	skip_spaces (scanner);
+	start = scanner->idx;
+	while (!is_eof (scanner) && !isspace (CUR_CHAR)) {
+		++scanner->idx;
+	}
+	end = scanner->idx;
+
+	c = scanner->input [start];
+	if (start >= scanner->size)
+		type = TOKEN_EOF;
+	else if (isdigit (c) || c == '\'')
+		type = TOKEN_NUM;
+	else if (ispunct_char (c))
+		type = TOKEN_PUNC;
+	else
+		type = TOKEN_ID;
+	scanner->current.start = start;
+	scanner->current.end = end;
+	scanner->current.type = type;
+	scanner->current.line = scanner->line;
+
+	DEBUG_SCANNER (dump_token (scanner, &scanner->current));
+}
+
+static scanner_t*
+scanner_new (const char *file_name)
+{
+	scanner_t *res;
+
+	res = g_new0 (scanner_t, 1);
+	res->input = read_whole_file_and_close (file_name, &res->size);
+
+	res->line = 1;
+	next_token (res);
+
+	return res;
+}
+
+static void
+scanner_free (scanner_t *scanner)
+{
+	free (scanner->input);
+	free (scanner);
+}
+
+static token_t*
+scanner_get_current_token (scanner_t *scanner)
+{
+	return &scanner->current;
+}
+
+static int
+scanner_get_type (scanner_t *scanner)
+{
+	return scanner_get_current_token (scanner)->type;
+}
+
+static int
+scanner_get_line (scanner_t *scanner)
+{
+	return scanner_get_current_token (scanner)->line;
+}
+
+static char*
+scanner_text_dup (scanner_t *scanner)
+{
+	return token_text_dup (scanner, scanner_get_current_token (scanner));
+}
+
+static int
+scanner_text_parse_number (scanner_t *scanner, long *res)
+{
+	char *text = scanner_text_dup (scanner);
+	char *end = NULL;
+	int ok;
+	if (text [0] == '\'') {
+		ok = strlen (text) != 3 || text [2] != '\'';
+		if (!ok)
+			*res = text [1];
+	} else {
+		*res = strtol (text, &end, 0);
+		ok = *end;
+	}
+	free (text);
+
+	return ok;
+}
+
+static int
+match_current_type (scanner_t *scanner, int type)
+{
+	return scanner_get_type (scanner) == type;
+}
+
+static int
+match_current_text (scanner_t *scanner, const char *text)
+{
+	token_t *t = scanner_get_current_token (scanner);
+	return !strncmp (scanner->input + t->start, text, t->end - t->start);
+}
+
+static int
+match_current_type_and_text (scanner_t *scanner, int type, const char *text)
+{
+	return match_current_type (scanner, type)  && match_current_text (scanner, text);
+}
+
+/*******************************************************************************************************/
+#define FAIL(MSG, REASON) do { \
+	printf ("%s at line %d for rule %s\n", MSG, scanner_get_line (scanner), __FUNCTION__);	\
+	exit (REASON);	\
+} while (0);
+
+#define EXPECT_TOKEN(TYPE) do { \
+	if (scanner_get_type (scanner) != TYPE) { \
+		printf ("Expected %s but got %s '%s' at line %d for rule %s\n", token_type_name (TYPE), token_type_name (scanner_get_type (scanner)), scanner_text_dup (scanner), scanner_get_line (scanner), __FUNCTION__);	\
+		exit (INVALID_TOKEN_TYPE);	\
+	}	\
+} while (0)
+
+#define CONSUME_SPECIFIC_PUNCT(TEXT) do { \
+	EXPECT_TOKEN (TOKEN_PUNC);	\
+	if (!match_current_text (scanner, TEXT)) { \
+		char *__tmp = scanner_text_dup (scanner);	\
+		printf ("Expected '%s' but got '%s' at line %d for rule %s\n", TEXT, __tmp, scanner_get_line (scanner), __FUNCTION__);	\
+		free (__tmp); \
+		exit (INVALID_PUNC_TEXT);	\
+	}	\
+	next_token (scanner); \
+} while (0)
+
+#define CONSUME_IDENTIFIER(DEST) do { \
+	EXPECT_TOKEN (TOKEN_ID);	\
+	DEST = scanner_text_dup (scanner);	\
+	next_token (scanner); \
+} while (0)
+
+#define CONSUME_SPECIFIC_IDENTIFIER(TEXT) do { \
+	EXPECT_TOKEN (TOKEN_ID);	\
+	if (!match_current_text (scanner, TEXT)) { \
+		char *__tmp = scanner_text_dup (scanner);	\
+		printf ("Expected '%s' but got '%s' at line %d for rule %s\n", TEXT, __tmp, scanner_get_line (scanner), __FUNCTION__);	\
+		free (__tmp); \
+		exit (INVALID_ID_TEXT);	\
+	}	\
+	next_token (scanner); \
+} while (0)
+
+#define CONSUME_NUMBER(DEST) do { \
+	long __tmp_num;	\
+	EXPECT_TOKEN (TOKEN_NUM);	\
+	if (scanner_text_parse_number (scanner, &__tmp_num)) {	\
+		char *__tmp = scanner_text_dup (scanner);	\
+		printf ("Expected a number but got '%s' at line %d for rule %s\n", __tmp, scanner_get_line (scanner), __FUNCTION__);	\
+		free (__tmp); \
+		exit (INVALID_NUMBER);	\
+	}	\
+	DEST = __tmp_num; \
+	next_token (scanner); \
+} while (0)
+
+#define LA_ID(TEXT) (scanner_get_type (scanner) == TOKEN_ID && match_current_text (scanner, TEXT))
+#define LA_PUNCT(TEXT) (scanner_get_type (scanner) == TOKEN_PUNC && match_current_text (scanner, TEXT))
+
+/*******************************************************************************************************/
+static expression_t*
+parse_atom (scanner_t *scanner)
+{
+	expression_t *atom = g_new0 (expression_t, 1);
+	if (scanner_get_type (scanner) == TOKEN_NUM) {
+		atom->type = EXPRESSION_CONSTANT;
+		CONSUME_NUMBER (atom->data.constant);
+	} else {
+		atom->type = EXPRESSION_VARIABLE;
+		CONSUME_IDENTIFIER (atom->data.name);
+	}
+	return atom;
+}
+
+
+static expression_t*
+parse_expression (scanner_t *scanner)
+{
+	expression_t *exp = parse_atom (scanner);
+
+	if (LA_ID ("-") || LA_ID ("+")) {
+		char *text;
+		CONSUME_IDENTIFIER (text);
+		expression_t *left = exp;
+		exp = g_new0 (expression_t, 1);
+		exp->type = !strcmp ("+", text) ? EXPRESSION_ADD: EXPRESSION_SUB;
+		exp->data.bin.left = left;
+		exp->data.bin.right = parse_atom (scanner);
+	}
+	return exp;
+}
+
+
+static patch_selector_t*
+parse_selector (scanner_t *scanner)
+{
+	patch_selector_t *selector;
+
+	CONSUME_SPECIFIC_IDENTIFIER ("offset");
+
+	selector = g_new0 (patch_selector_t, 1);
+	selector->type = SELECTOR_ABS_OFFSET;
+	selector->expression = parse_expression (scanner);
+	return selector;
+}
+
+static patch_effect_t*
+parse_effect (scanner_t *scanner)
+{
+	patch_effect_t *effect;
+	char *name;
+	int type;
+
+	CONSUME_IDENTIFIER(name);
+
+	if (!strcmp ("set-byte", name))
+		type = EFFECT_SET_BYTE; 
+	else if (!strcmp ("set-ushort", name))
+		type = EFFECT_SET_USHORT; 
+	else if (!strcmp ("set-uint", name))
+		type = EFFECT_SET_UINT; 
+	else if (!strcmp ("truncate", name))
+		type = EFFECT_SET_TRUNC;
+	else 
+		FAIL(g_strdup_printf ("Invalid effect kind, expected one of: (set-byte set-ushort set-uint) but got %s",name), INVALID_ID_TEXT);
+
+	effect = g_new0 (patch_effect_t, 1);
+	effect->type = type;
+	if (type != EFFECT_SET_TRUNC)
+		effect->expression = parse_expression (scanner);
+	return effect;
+}
+
+static test_patch_t*
+parse_patch (scanner_t *scanner)
+{
+	test_patch_t *patch;
+
+	patch = g_new0 (test_patch_t, 1);
+	patch->selector = parse_selector (scanner);
+	patch->effect = parse_effect (scanner);
+	return patch;
+}
+
+static int
+parse_validity (scanner_t *scanner)
+{
+	char *name = NULL;
+	int validity;
+	CONSUME_IDENTIFIER (name);
+
+	if (!strcmp (name, "valid"))
+		validity = TEST_TYPE_VALID;
+	else if (!strcmp (name, "invalid"))
+		validity = TEST_TYPE_INVALID;
+	else {
+		printf ("Expected either 'valid' or 'invalid' but got '%s' at the begining of a test entry at line %d\n", name, scanner_get_line (scanner));
+		exit (INVALID_VALIDITY_TEST);
+	}
+
+	free (name);
+	return validity;
+}
+
+static void
+parse_test_entry (scanner_t *scanner, test_set_t *test_set)
+{
+	test_entry_t entry = { 0 };
+	
+	entry.validity = parse_validity (scanner);
+
+	do {
+		entry.patches = g_slist_append (entry.patches, parse_patch (scanner));
+	} while (match_current_type_and_text (scanner, TOKEN_PUNC, ","));
+
+	process_test_entry (test_set, &entry);
+
+	test_entry_free (&entry);
+}
+
+static void
+parse_test (scanner_t *scanner)
+{
+	test_set_t set = { 0 };
+
+	CONSUME_IDENTIFIER (set.name);
+	CONSUME_SPECIFIC_PUNCT ("{");
+	CONSUME_SPECIFIC_IDENTIFIER ("assembly");
+	CONSUME_IDENTIFIER (set.assembly);
+
+	DEBUG_PARSER (printf ("RULE %s using assembly %s\n", set.name, set.assembly));
+
+	while (!match_current_type (scanner, TOKEN_EOF) && !match_current_type_and_text (scanner, TOKEN_PUNC, "}"))
+		parse_test_entry (scanner, &set);
+
+	CONSUME_SPECIFIC_PUNCT ("}");
+
+	test_set_free (&set);
+}
+
+
+static void
+parse_program (scanner_t *scanner)
+{
+	while (!match_current_type (scanner, TOKEN_EOF))
+		parse_test (scanner);
+}
+
+
+static void
+digest_file (const char *file)
+{
+	scanner_t *scanner = scanner_new (file); 
+	parse_program (scanner);
+	scanner_free (scanner);
+}
+
+int
+main (int argc, char **argv)
+{
+	if (argc != 2) {
+		printf ("usage: gen-md.test file_to_process\n");
+		return 1;
+	}
+
+	digest_file (argv [1]);
+	return 0;
+}
+

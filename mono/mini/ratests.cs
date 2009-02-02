@@ -189,6 +189,30 @@ public class Tests {
 		return 0;
 	}
 
+	static int decode_len (out int pos) {
+		pos = 19;
+		return 10;
+	}
+
+	static void clobber_all (int pos) {
+		for (int i = 0; i < 10; ++i)
+			for (int j = 0; j < 10; ++j)
+				for (int k = 0; k < 10; ++k)
+					for (int l = 0; l < 10; ++l)
+						;
+	}
+
+	public static int test_29_volatile_regress_2 () {
+		int pos = 0;
+
+		int len = decode_len (out pos);
+		call_clobber_inner ();
+		pos += len;
+
+		clobber_all (pos);
+		return pos;
+	}
+
 	public static int test_0_clobber_regress_1 () {
 		object[] a11 = new object [10];
 		object o = new Object ();
@@ -298,6 +322,61 @@ public class Tests {
 	public unsafe static int test_0_spill_regress_4 () {
 		object o = new Object ();
 		new Tests ().LastIndexOfSortKey ("", 10, 0, 5, null, 0, false, ref o);
+
+		return 0;
+	}
+
+	public static bool IsEqual (Type type, Type base_type) {
+		return (type.GetHashCode () == base_type.GetHashCode ());
+	}
+
+	public static bool IsNestedFamilyAccessible (Type type, Type base_type)
+	{
+		do {
+			if (IsEqual (type, base_type))
+				return true;
+
+			type = type.DeclaringType;
+		} while (type != null);
+
+		return false;
+	}
+
+	public static int test_0_do_while_critical_edges () {
+		IsNestedFamilyAccessible (typeof (int), typeof (object));
+
+		return 0;
+	}
+
+	public static string return_string (string s) {
+		for (int i = 0; i < 1000; ++i)
+			;
+		return s;
+	}
+
+	public static int test_0_switch_critical_edges () {
+		// A spill load is inserted at the end of the bblock containing the OP_BR_REG,
+		// overwriting the source reg of the OP_BR_REG. The edge is not really 
+		// a critical edge, since its source bblock only has 1 exit, but it must
+		// be treated as such.
+		for (int i=0; i < UInt16.MaxValue; i++) {
+			Char c = Convert.ToChar (i);
+			switch (i) {
+			case 0x0009:
+			case 0x000A:
+			case 0x000B:
+			case 0x2028:
+			case 0x2029:
+			case 0x202F:
+			case 0x205F:
+			case 0x3000:
+				//Console.WriteLine ((i.ToString () + (int)c));
+				return_string ((i.ToString () + (int)c));
+				break;
+			default:
+				break;
+			}
+		}
 
 		return 0;
 	}

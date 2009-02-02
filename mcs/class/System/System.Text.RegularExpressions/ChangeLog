@@ -1,29 +1,35 @@
 2009-01-14  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r123417.
-	
 	* CILCompiler.cs: Avoid throwing exceptions for a few more unhandled opcodes.
 	Implement the reverse/ignorecase versions of Reference. Fix the reverse
 	version of Bitmap. Error out if a Jump opcode jumps outside the current
 	pc range. This works around #466151.
 
+2009-01-12  Jb Evain  <jbevain@novell.com>
+
+	* RxInterpreter.cs: set trace_rx to false for NET_2_1.
+	* Regex.cs: set old_rx to false for NET_2_1.
+
 2009-01-07  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r122700.
-	
 	* RxInterpreter.cs: Add support for constant strings in anchors. Fixes
 	#464135.
 
+2008-11-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* cache.cs: avoid infinite loop.
+
+2008-11-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* cache.cs:
+	* Regex.cs: honor CacheSize value.
+
 2008-11-13  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport r118729 from HEAD.
-	
 	* RxInterpreter.cs: Fix pc computation in various opcodes. Fixes #443841.
 
 2008-11-11  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport r118484 from HEAD.
-	
 	* CILCompiler.cs: Implement Reference opcode.
 
 2008-10-30  Zoltan Varga  <vargaz@gmail.com>

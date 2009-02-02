@@ -68,6 +68,8 @@ namespace System.Windows.Forms
 		private int thumb_size = 40;
 		private const int thumb_min_size = 8;
 		private const int thumb_notshown_size = 40;
+		internal bool use_manual_thumb_size;
+		internal int manual_thumb_size;
 		internal bool vert;
 		internal bool implicit_control;
 		private int lastclick_pos;		// Position of the last button-down event
@@ -275,6 +277,13 @@ namespace System.Windows.Forms
 			}
 		}
 
+		int MaximumAllowed {
+			get {
+				return use_manual_thumb_size ? maximum - manual_thumb_size + 1 :
+					maximum - LargeChange + 1;
+			}
+		}
+
 		internal Rectangle ThumbPos {
 			get {
 				return thumb_pos;
@@ -328,6 +337,7 @@ namespace System.Windows.Forms
 					Invalidate (thumb_pos);
 			}
 		}
+
 		#endregion	// Internal & Private Properties
 
 		#region Public Properties
@@ -740,6 +750,8 @@ namespace System.Windows.Forms
 
 		private void CalcThumbArea ()
 		{
+			int lchange = use_manual_thumb_size ? manual_thumb_size : LargeChange;
+
 			// Thumb area
 			if (vert) {
 
@@ -751,7 +763,7 @@ namespace System.Windows.Forms
 				if (Height < thumb_notshown_size)
 					thumb_size = 0;
 				else {
-					double per =  ((double) this.LargeChange / (double)((1 + maximum - minimum)));
+					double per =  ((double) lchange / (double)((1 + maximum - minimum)));
 					thumb_size = 1 + (int) (thumb_area.Height * per);
 
 					if (thumb_size < thumb_min_size)
@@ -762,7 +774,7 @@ namespace System.Windows.Forms
 						thumb_size = 17;
 				}
 
-				pixel_per_pos = ((float)(thumb_area.Height - thumb_size) / (float) ((maximum - minimum - this.LargeChange) + 1));
+				pixel_per_pos = ((float)(thumb_area.Height - thumb_size) / (float) ((maximum - minimum - lchange) + 1));
 
 			} else	{
 
@@ -774,7 +786,7 @@ namespace System.Windows.Forms
 				if (Width < thumb_notshown_size)
 					thumb_size = 0;
 				else {
-					double per =  ((double) this.LargeChange / (double)((1 + maximum - minimum)));
+					double per =  ((double) lchange / (double)((1 + maximum - minimum)));
 					thumb_size = 1 + (int) (thumb_area.Width * per);
 
 					if (thumb_size < thumb_min_size)
@@ -785,14 +797,14 @@ namespace System.Windows.Forms
 						thumb_size = 17;
 				}
 
-				pixel_per_pos = ((float)(thumb_area.Width - thumb_size) / (float) ((maximum - minimum - this.LargeChange) + 1));
+				pixel_per_pos = ((float)(thumb_area.Width - thumb_size) / (float) ((maximum - minimum - lchange) + 1));
 			}
 		}
 
 		private void LargeIncrement ()
     		{
 			ScrollEventArgs event_args;
-    			int pos = Math.Min (Maximum - large_change + 1, position + large_change);
+    			int pos = Math.Min (MaximumAllowed, position + large_change);
 
     			event_args = new ScrollEventArgs (ScrollEventType.LargeIncrement, pos);
     			OnScroll (event_args);
@@ -1282,7 +1294,7 @@ namespace System.Windows.Forms
 		private void SetEndPosition ()
 		{
 			ScrollEventArgs event_args;
-    			int pos = Maximum - LargeChange + 1;
+    			int pos = MaximumAllowed;
 
     			event_args = new ScrollEventArgs (ScrollEventType.Last, pos);
     			OnScroll (event_args);
@@ -1314,7 +1326,7 @@ namespace System.Windows.Forms
     		private void SmallIncrement ()
     		{
     			ScrollEventArgs event_args;
-    			int pos = Math.Min (Maximum - LargeChange + 1, position + SmallChange);
+    			int pos = Math.Min (MaximumAllowed, position + SmallChange);
 
     			event_args = new ScrollEventArgs (ScrollEventType.SmallIncrement, pos);
     			OnScroll (event_args);
@@ -1392,8 +1404,8 @@ namespace System.Windows.Forms
     			if (newPos < minimum)
     				pos = minimum;
     			else
-    				if (newPos > maximum + 1 - LargeChange)
-    					pos = maximum + 1 - LargeChange;
+    				if (newPos > MaximumAllowed)
+    					pos = MaximumAllowed;
 				else
 					pos = newPos;
 

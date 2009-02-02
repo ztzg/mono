@@ -1,3 +1,113 @@
+2009-01-05  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil/ReflectionHelper.cs
+	* Mono.Cecil/DefaultImporter.cs:
+		Adjust references's generic parameter count on import.
+
+2009-01-05  Sebastien Pouliot  <sebastien at ximian.com>
+
+	* CodeReader.cs: Do not call VisitVariableDefinitionCollection
+	unless LocalVarToken is different from zero.
+	* CodeWriter.cs: Use HasVariables and HasExceptionHandlers.
+	Write zero, not TokenType.Signature, for LocalVarToken if no
+	variable is defined. That should fix the problem with unsign
+	* Mono.Cecil.Cil/MethodBody.cs: Add HasExceptionHandlers,
+	HasVariables and HasScopes to avoid creating empty collections
+	inside Cecil. There is no HasInstruction because there's always
+	something if MethodDefinition.HasBody is true (i.e. a MethodBody
+	exists). [re-apply r1222198]
+
+2008-12-29  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Mono.Cecil/MethodReturnType.cs: Override ToString so we can, by
+	default, display something useful about the return type.
+
+2008-12-29  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Mono.Cecil/GenericInstanceMethod.cs,
+	* Mono.Cecil/GenericInstanceType.cs,
+	* Mono.Cecil/IGenericInstance.cs: Introduce HasGenericArguments into
+	the interface and implement it inside GenericInstance[Method|Type]
+
+2008-12-16  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil.Signatures/SignatureReader.cs: fix reading of wrong
+	modifiers.
+
+2008-12-01  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Mono.Cecil.Signatures/CustomAttrib.cs: Define reusable Empty
+	arrays for both FixedArg and NamedArg.
+	* Mono.Cecil.Signatures/SignatureReader.cs: Avoid creating empty
+	ParameterDefinitionCollection on constructors. Use the new Empty
+	arrays when possible.
+
+2008-12-01  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Mono.Cecil/MethodReference.cs: Make HasParameters virtual
+	* Mono.Cecil/MethodSpecification.cs: Override HasParameters to make
+	sure we're tracking the same object as the Parameters property does.
+	* Mono.Cecil/PropertyDefinition.cs: Implement HasParameters based on
+	the GetMethod, SetMethod or its own parameter collection.
+	* Mono.Cecil/PropertyReference.cs: Add abstract HasParameters property
+
+2008-11-27  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil/ExternTypeCollection.cs: don't attach types as they
+	are already attached to the current module.
+
+2008-11-22  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Mono.Cecil/GenericParameter.cs,
+	* Mono.Cecil/ICustomAttributeProvider.cs,
+	* Mono.Cecil/CallSite.cs,
+	* Mono.Cecil/IMethodSignature.cs,
+	* Mono.Cecil/FunctionPointerType.cs,
+	* Mono.Cecil/FieldDefinition.cs,
+	* Mono.Cecil/TypeReference.cs,
+	* Mono.Cecil/GenericInstanceMethod.cs,
+	* Mono.Cecil/IHasSecurity.cs,
+	* Mono.Cecil/MethodReturnType.cs,
+	* Mono.Cecil/AssemblyDefinition.cs,
+	* Mono.Cecil/TypeDefinition.cs,
+	* Mono.Cecil/MethodDefinition.cs,
+	* Mono.Cecil/EventDefinition.cs,
+	* Mono.Cecil/ModuleDefinition.cs,
+	* Mono.Cecil/MethodReference.cs,
+	* Mono.Cecil/ReflectionWriter.cs,
+	* Mono.Cecil/ParameterDefinition.cs,
+	* Mono.Cecil/PropertyDefinition.cs,
+	* Mono.Cecil/IGenericParameterProvider.cs:
+		Add boolean Has{x} properties so Cecil consumers are able
+		to avoid the lazy allocations that would be made for an
+		empty {x}. Use the Has{x} properties inside Cecil (some
+		cases might be missing).
+
+2008-11-16  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Mono.Cecil/TypeDefinition.cs (IsValueType): Inline the call to
+	IsEnum and remove the double null check being done.
+
+2008-11-14  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil/ParameterAttributes.cs: add Retval and Lcid.
+	* Mono.Cecil/ParameterDefinition.cs: add Is* property accordingly.
+
+2008-11-12  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil.Signatures/SignatureReader.cs: properly construct
+	TypeReferences when reading them from custom attributes data.
+
+2008-11-11  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil/ReflectionReader.cs (AddTypeRef):
+	protect against invalid token.
+
+2008-11-11  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Cecil.Cil/CodeWriter.cs: fix writing of catch handlers
+	of a generic exception type.
+
 2008-11-06  Jb Evain  <jbevain@novell.com>
 
 	* Mono.Cecil.Metadata/MetadataWriter.cs: properly clean

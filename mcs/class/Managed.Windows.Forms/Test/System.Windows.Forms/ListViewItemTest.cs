@@ -701,6 +701,11 @@ namespace MonoTests.System.Windows.Forms
 		{
 			ListViewItem.ListViewSubItem subItem = new ListViewItem.ListViewSubItem ();
 			Assert.AreEqual (string.Empty, subItem.Text, "#1");
+			Assert.AreEqual (SystemColors.Window, subItem.BackColor, "#2");
+			Assert.AreEqual (SystemColors.WindowText, subItem.ForeColor, "#3");
+#if NET_2_0
+			Assert.AreEqual (SystemFonts.DefaultFont, subItem.Font, "#4");
+#endif
 		}
 
 		[Test] // ctor (ListViewItem, String)

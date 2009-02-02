@@ -1,7 +1,21 @@
-2008-12-21  Veerapuram Varadhan  <vvaradhan@novell.com>
+2009-01-03  Gert Driesen  <drieseng@users.sourceforge.net>
 
-	* System.Data_test.dll.sources: Add the new SqlXmlTest.cs
-	
+	* System.Data_test.dll.sources: Added SqlCommandBuilderTest.cs
+	and SqlParameterTest.cs.
+
+2008-12-30  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* System.Data_test.dll.sources: Added DBConcurrencyExceptionTest.cs.
+
+2008-12-30  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* System.Data_test.dll.sources: Added OdbcCommandBuilderTest.cs,
+	OdbcConnectionStringBuilderTest.cs and DbCommandBuilderTest.cs.
+
+2008-12-22  Ankit Jain  <jankit@novell.com>
+
+	* System.Data_test.dll.sources: Fix typo in SqlXmlTest.cs
+
 2008-08-27  Daniel Morgan <monodanmorg@yahoo.com>
 
 	* System.Data.SqlClient/SqlConnectionStringBuilder.cs: modified -

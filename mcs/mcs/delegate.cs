@@ -423,10 +423,11 @@ namespace Mono.CSharp {
 			}
 #endif
 			Delegate d = TypeManager.LookupDelegate (delegate_type);
+			MethodInfo invoke;
 			if (d != null) {
 #if GMCS_SOURCE
 				if (g_args != null) {
-					MethodInfo invoke = TypeBuilder.GetMethod (dt, d.InvokeBuilder);
+					invoke = TypeBuilder.GetMethod (dt, d.InvokeBuilder);
 #if MS_COMPATIBLE
 					Parameters p = (Parameters) d.Parameters.InflateTypes (g_args, g_args);
 					TypeManager.RegisterMethod (invoke, p);
@@ -447,7 +448,17 @@ namespace Mono.CSharp {
 				return null;
 			}
 
-			return (MethodInfo) mg.Methods[0];
+			invoke = (MethodInfo) mg.Methods[0];
+#if MS_COMPATIBLE
+			if (g_args != null) {
+				AParametersCollection p = TypeManager.GetParameterData (invoke);
+				p = p.InflateTypes (g_args, g_args);
+				TypeManager.RegisterMethod (invoke, p);
+				return invoke;
+			}
+#endif
+
+			return invoke;
 		}
 
 		//
@@ -476,18 +487,22 @@ namespace Mono.CSharp {
 		public static MethodBase VerifyMethod (Type container_type, Type delegate_type,
 						       MethodGroupExpr old_mg, MethodBase mb)
 		{
+			bool is_method_definition = TypeManager.IsGenericMethodDefinition (mb);
+			
 			MethodInfo invoke_mb = GetInvokeMethod (container_type, delegate_type);
 			if (invoke_mb == null)
 				return null;
+				
+			if (is_method_definition)
+				invoke_mb = (MethodInfo) TypeManager.DropGenericMethodArguments (invoke_mb);
 
 			AParametersCollection invoke_pd = TypeManager.GetParameterData (invoke_mb);
 
 #if GMCS_SOURCE
-			if (old_mg.type_arguments == null &&
+			if (!is_method_definition && old_mg.type_arguments == null &&
 			    !TypeManager.InferTypeArguments (invoke_pd, ref mb))
 				return null;
 #endif
-
 			AParametersCollection pd = TypeManager.GetParameterData (mb);
 
 			if (invoke_pd.Count != pd.Count)
@@ -507,14 +522,13 @@ namespace Mono.CSharp {
 				if (invoke_pd_type_mod != pd_type_mod)
 					return null;
 
-				if (invoke_pd_type == pd_type)
+				if (TypeManager.IsEqual (invoke_pd_type, pd_type))
 					continue;
 
-				//if (!IsTypeCovariant (invoke_pd_type, pd_type))
-				//	return null;
+				if (IsTypeCovariant (new EmptyExpression (invoke_pd_type), pd_type))
+					continue;
 
-				if (RootContext.Version == LanguageVersion.ISO_1)
-					return null;
+				return null;
 			}
 
 			Type invoke_mb_retval = ((MethodInfo) invoke_mb).ReturnType;
@@ -561,7 +575,6 @@ namespace Mono.CSharp {
 
 			bool params_method = pd.HasParams;
 			bool is_params_applicable = false;
-			me.DelegateType = delegate_type;
 			bool is_applicable = me.IsApplicable (ec, args, arg_count, ref mb, ref is_params_applicable) == 0;
 
 			if (!is_applicable && !params_method && arg_count != pd_count) {
@@ -864,6 +877,11 @@ namespace Mono.CSharp {
 
 			Error_ConversionFailed (ec, method, null);
 			return true;
+		}
+
+		public bool AmbiguousCall (MethodBase ambiguous)
+		{
+			return false;
 		}
 
 		#endregion

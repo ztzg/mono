@@ -1,3 +1,23 @@
+2009-01-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataColumnTest.cs : try a string comparison fix.
+
+2008-12-30  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* DBConcurrencyExceptionTest.cs: Added .ctor and Row(Count) tests.
+
+2008-12-29  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* DataTableTest.cs: Allow NFIFromBug55978 test to pass when MONO_PATH
+	is not set.
+	* BinarySerializationTest.cs: Change culture for culture-sensitive
+	tests.
+	* DataColumnTest2.cs: Change culture for culture-sensitive tests.
+
+2008-11-18  Raja R Harinath  <harinath@hurrynot.org>
+
+	* DataSetTest.cs (Bug420862): New test.
+
 2008-09-16  brandin claar  <brandin.claar@gmail.com>
 
 	* BinarySerializationTest.cs (TestDefaultValues): New.

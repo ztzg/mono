@@ -485,6 +485,42 @@ cominterop_class_guid (MonoClass* klass, guint8* guid)
 	return FALSE;
 }
 
+static gboolean
+cominterop_com_visible (MonoClass* klass)
+{
+	static MonoClass *ComVisibleAttribute = NULL;
+	MonoCustomAttrInfo *cinfo;
+
+	/* Handle the ComVisibleAttribute */
+	if (!ComVisibleAttribute)
+		ComVisibleAttribute = mono_class_from_name (mono_defaults.corlib, "System.Runtime.InteropServices", "ComVisibleAttribute");
+
+	cinfo = mono_custom_attrs_from_class (klass);	
+	if (cinfo) {
+		MonoReflectionComVisibleAttribute *attr = (MonoReflectionComVisibleAttribute*)mono_custom_attrs_get_attr (cinfo, ComVisibleAttribute);
+
+		if (!attr)
+			return FALSE;
+		if (!cinfo->cached)
+			mono_custom_attrs_free (cinfo);
+
+		if (attr->visible)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static void cominterop_raise_hr_exception (int hr)
+{
+	static MonoMethod* throw_exception_for_hr = NULL;
+	MonoException* ex;
+	void* params[1] = {&hr};
+	if (!throw_exception_for_hr)
+		throw_exception_for_hr = mono_class_get_method_from_name (mono_defaults.marshal_class, "GetExceptionForHR", 1);
+	ex = (MonoException*)mono_runtime_invoke (throw_exception_for_hr, NULL, params, NULL);
+	mono_raise_exception (ex);
+}
+
 /**
  * cominterop_get_interface:
  * @obj: managed wrapper object containing COM object
@@ -512,13 +548,7 @@ cominterop_get_interface (MonoComObject* obj, MonoClass* ic, gboolean throw_exce
 		g_assert(found);
 		hr = ves_icall_System_Runtime_InteropServices_Marshal_QueryInterfaceInternal (obj->iunknown, iid, &itf);
 		if (hr < 0 && throw_exception) {
-			static MonoMethod* throw_exception_for_hr = NULL;
-			MonoException* ex;
-			void* params[1] = {&hr};
-			if (!throw_exception_for_hr)
-				throw_exception_for_hr = mono_class_get_method_from_name (mono_defaults.marshal_class, "GetExceptionForHR", 1);
-			ex = (MonoException*)mono_runtime_invoke (throw_exception_for_hr, NULL, params, NULL);
-			mono_raise_exception (ex);
+			cominterop_raise_hr_exception (hr);	
 		}
 
 		if (hr >= 0 && itf) {
@@ -10259,46 +10289,6 @@ mono_marshal_get_array_address (int rank, int elem_size)
 	return ret;
 }
 
-MonoMethod*
-mono_marshal_get_write_barrier (void)
-{
-	static MonoMethod* ret = NULL;
-	MonoMethodSignature *sig;
-	MonoMethodBuilder *mb;
-	int max_stack = 2;
-
-	if (ret)
-		return ret;
-	
-	mb = mono_mb_new (mono_defaults.object_class, "writebarrier", MONO_WRAPPER_WRITE_BARRIER);
-
-	sig = mono_metadata_signature_alloc (mono_defaults.corlib, 2);
-
-	/* void writebarrier (MonoObject** addr, MonoObject* obj) */
-	sig->ret = &mono_defaults.void_class->byval_arg;
-	sig->params [0] = &mono_defaults.object_class->this_arg;
-	sig->params [1] = &mono_defaults.object_class->byval_arg;
-
-	/* just the store right now: add an hook for the GC to use, maybe something
-	 * that can be used for stelemref as well
-	 * We need a write barrier variant to be used with struct copies as well, though
-	 * there are also other approaches possible, like writing a wrapper specific to
-	 * the struct or to the reference pattern in the struct...
-	 * Depending on the GC, we may want variants that take the object we store to
-	 * when it is available.
-	 */
-	mono_mb_emit_ldarg (mb, 0);
-	mono_mb_emit_ldarg (mb, 1);
-	mono_mb_emit_icall (mb, mono_gc_wbarrier_generic_store);
-	/*mono_mb_emit_byte (mb, CEE_STIND_REF);*/
-
-	mono_mb_emit_byte (mb, CEE_RET);
-
-	ret = mono_mb_create_method (mb, sig, max_stack);
-	mono_mb_free (mb);
-	return ret;
-}
-
 void*
 mono_marshal_alloc (gulong size)
 {
@@ -10667,6 +10657,21 @@ ves_icall_System_Runtime_InteropServices_Marshal_ReleaseInternal (gpointer pUnk)
 
 #ifndef DISABLE_COM
 
+#define MONO_S_OK 0x00000000L
+#define MONO_E_NOINTERFACE 0x80004002L
+#define MONO_E_NOTIMPL 0x80004001L
+
+static gboolean cominterop_can_support_dispatch (MonoClass* klass)
+{
+	if (!(klass->flags & TYPE_ATTRIBUTE_PUBLIC) )
+		return FALSE;
+
+	if (!cominterop_com_visible (klass))
+		return FALSE;
+
+	return TRUE;
+}
+
 static void*
 cominterop_get_idispatch_for_object (MonoObject* object)
 {
@@ -10678,6 +10683,9 @@ cominterop_get_idispatch_for_object (MonoObject* object)
 			mono_defaults.idispatch_class, TRUE);
 	}
 	else {
+		MonoClass* klass = mono_object_class (object);
+		if (!cominterop_can_support_dispatch (klass) )
+			cominterop_raise_hr_exception (MONO_E_NOINTERFACE);
 		return cominterop_get_ccw (object, mono_defaults.idispatch_class);
 	}
 }
@@ -10690,6 +10698,8 @@ ves_icall_System_Runtime_InteropServices_Marshal_GetIUnknownForObjectInternal (M
 #ifndef DISABLE_COM
 	if (!object)
 		return NULL;
+
+	mono_init_com_types ();
 
 	if (cominterop_object_is_rcw (object)) {
 		MonoClass *klass = NULL;
@@ -10751,6 +10761,8 @@ void*
 ves_icall_System_Runtime_InteropServices_Marshal_GetIDispatchForObjectInternal (MonoObject* object)
 {
 #ifndef DISABLE_COM
+	mono_init_com_types ();
+
 	return cominterop_get_idispatch_for_object (object);
 #else
 	g_assert_not_reached ();
@@ -11227,7 +11239,7 @@ ves_icall_System_ComObject_CreateRCW (MonoReflectionType *type)
 }
 
 static gboolean    
-cominterop_finalizer (gpointer key, gpointer value, gpointer user_data)
+cominterop_rcw_interface_finalizer (gpointer key, gpointer value, gpointer user_data)
 {
 	ves_icall_System_Runtime_InteropServices_Marshal_ReleaseInternal (value);
 	return TRUE;
@@ -11246,12 +11258,57 @@ ves_icall_System_ComObject_ReleaseInterfaces (MonoComObject* obj)
 			g_hash_table_remove (rcw_hash, obj->iunknown);
 		}
 
-		g_hash_table_foreach_remove (obj->itf_hash, cominterop_finalizer, NULL);
+		g_hash_table_foreach_remove (obj->itf_hash, cominterop_rcw_interface_finalizer, NULL);
+		g_hash_table_destroy (obj->itf_hash);
 		ves_icall_System_Runtime_InteropServices_Marshal_ReleaseInternal (obj->iunknown);
 		obj->itf_hash = obj->iunknown = NULL;
 		mono_cominterop_unlock ();
 	}
 }
+
+#ifndef DISABLE_COM
+
+static gboolean    
+cominterop_rcw_finalizer (gpointer key, gpointer value, gpointer user_data)
+{
+	guint32 gchandle = 0;
+
+	gchandle = GPOINTER_TO_UINT (value);
+	if (gchandle) {
+		MonoComInteropProxy* proxy = (MonoComInteropProxy*)mono_gchandle_get_target (gchandle);
+		
+		if (proxy) {
+			if (proxy->com_object->itf_hash) {
+				g_hash_table_foreach_remove (proxy->com_object->itf_hash, cominterop_rcw_interface_finalizer, NULL);
+				g_hash_table_destroy (proxy->com_object->itf_hash);
+			}
+			if (proxy->com_object->iunknown)
+				ves_icall_System_Runtime_InteropServices_Marshal_ReleaseInternal (proxy->com_object->iunknown);
+			proxy->com_object->itf_hash = proxy->com_object->iunknown = NULL;
+		}
+		
+		mono_gchandle_free (gchandle);
+	}
+
+	return TRUE;
+}
+
+void
+cominterop_release_all_rcws ()
+{
+	if (!rcw_hash)
+		return;
+
+	mono_cominterop_lock ();
+
+	g_hash_table_foreach_remove (rcw_hash, cominterop_rcw_finalizer, NULL);
+	g_hash_table_destroy (rcw_hash);
+	rcw_hash = NULL;
+
+	mono_cominterop_unlock ();
+}
+
+#endif
 
 gpointer
 ves_icall_System_ComObject_GetInterfaceInternal (MonoComObject* obj, MonoReflectionType* type, MonoBoolean throw_exception)
@@ -11498,6 +11555,11 @@ mono_class_native_size (MonoClass *klass, guint32 *align)
 	return klass->marshal_info->native_size;
 }
 
+/* __alignof__ returns the preferred alignment of values not the actual alignment used by
+   the compiler so is wrong e.g. for Linux where doubles are aligned on a 4 byte boundary
+   but __alignof__ returns 8 - using G_STRUCT_OFFSET works better */
+#define ALIGNMENT(type) G_STRUCT_OFFSET(struct { char c; type x; }, x)
+
 /*
  * mono_type_native_stack_size:
  * @t: the type to return the size it uses on the stack
@@ -11516,8 +11578,8 @@ mono_type_native_stack_size (MonoType *t, guint32 *align)
 		align = &tmp;
 
 	if (t->byref) {
-		*align = 4;
-		return 4;
+		*align = sizeof (gpointer);
+		return sizeof (gpointer);
 	}
 
 	switch (t->type){
@@ -11529,6 +11591,8 @@ mono_type_native_stack_size (MonoType *t, guint32 *align)
 	case MONO_TYPE_U2:
 	case MONO_TYPE_I4:
 	case MONO_TYPE_U4:
+		*align = 4;
+		return 4;
 	case MONO_TYPE_I:
 	case MONO_TYPE_U:
 	case MONO_TYPE_STRING:
@@ -11538,20 +11602,22 @@ mono_type_native_stack_size (MonoType *t, guint32 *align)
 	case MONO_TYPE_PTR:
 	case MONO_TYPE_FNPTR:
 	case MONO_TYPE_ARRAY:
-		*align = 4;
-		return 4;
+		*align = sizeof (gpointer);
+		return sizeof (gpointer);
 	case MONO_TYPE_R4:
 		*align = 4;
 		return 4;
+	case MONO_TYPE_R8:
+		*align = ALIGNMENT (gdouble);
+		return 8;
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
-	case MONO_TYPE_R8:
-		*align = 4;
+		*align = ALIGNMENT (glong);
 		return 8;
 	case MONO_TYPE_GENERICINST:
 		if (!mono_type_generic_inst_is_valuetype (t)) {
-			*align = 4;
-			return 4;
+			*align = sizeof (gpointer);
+			return sizeof (gpointer);
 		} 
 		/* Fall through */
 	case MONO_TYPE_TYPEDBYREF:
@@ -11577,11 +11643,6 @@ mono_type_native_stack_size (MonoType *t, guint32 *align)
 	}
 	return 0;
 }
-
-/* __alignof__ returns the preferred alignment of values not the actual alignment used by
-   the compiler so is wrong e.g. for Linux where doubles are aligned on a 4 byte boundary
-   but __alignof__ returns 8 - using G_STRUCT_OFFSET works better */
-#define ALIGNMENT(type) G_STRUCT_OFFSET(struct { char c; type x; }, x)
 
 gint32
 mono_marshal_type_size (MonoType *type, MonoMarshalSpec *mspec, guint32 *align,
@@ -12393,10 +12454,6 @@ cominterop_ccw_release (MonoCCWInterface* ccwe)
 	return ref_count;
 }
 
-#define MONO_S_OK 0x00000000L
-#define MONO_E_NOINTERFACE 0x80004002L
-#define MONO_E_NOTIMPL 0x80004001L
-
 #ifdef PLATFORM_WIN32
 static const IID MONO_IID_IMarshal = {0x3, 0x0, 0x0, {0xC0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x46}};
 #endif
@@ -12456,6 +12513,9 @@ cominterop_ccw_queryinterface (MonoCCWInterface* ccwe, guint8* riid, gpointer* p
 
 	/* handle IDispatch special */
 	if (cominterop_class_guid_equal (riid, mono_defaults.idispatch_class)) {
+		if (!cominterop_can_support_dispatch (klass))
+			return MONO_E_NOINTERFACE;
+		
 		*ppv = cominterop_get_ccw (object, mono_defaults.idispatch_class);
 		/* remember to addref on QI */
 		cominterop_ccw_addref (*ppv);

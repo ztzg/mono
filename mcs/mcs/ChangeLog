@@ -1,12 +1,124 @@
+2009-01-30  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #470767
+	* statement.cs: Introduced BlockScopeExpression, needed when 
+	expression tree conversion has to emit scope variables.
+
+2009-01-28  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #470227
+	* cs-tokenizer.cs: Remove too agressive parser optimization.
+
+2009-01-28  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #324319
+	* class.cs: Remove too early base type resolve.
+
+2009-01-27  Marek Safar  <marek.safar@gmail.com>
+
+	* anonymous.cs: Fixed recent regression when initializing captured 
+	this.
+
+2009-01-26  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #469019
+	* anonymous.cs: Use all parent type parameters when instantiating
+	nested generic storey.
+
+2009-01-26  Marek Safar  <marek.safar@gmail.com>
+
+	* expression.cs: Check for null instance methodgroup expression.
+
+2009-01-26  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #469244
+	* cs-tokenizer.cs, cs-parser.jay: Fixed parsing of nullable type
+	instance inside a conditional expression.
+
+2009-01-17  Marek Safar  <marek.safar@gmail.com>
+
+	* convert.cs, ecore.cs: Explicitly casts type arguments to pass
+	verifier checks.
+
+2009-01-16  Marek Safar  <marek.safar@gmail.com>
+
+	* nullable.cs (LiftedBinaryOperator): Check for all possible null
+	expressions.
+
+2009-01-15  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #466634
+	* statement.cs: Add reference for nested storey when only this
+	is captured.
+
+2009-01-15  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #466474
+	* codegen.cs: Emit SecurityPermissionAttribute when -unsafe option
+	was specified.
+
+2009-01-15  Marek Safar  <marek.safar@gmail.com>
+
+	* iterators.cs, anonymous.cs, expression.cs, statement.cs, ecore.cs:
+	Fixed nested stories parent referencing process. Also fixes #463985.
+
+2009-01-06  Marek Safar  <marek.safar@gmail.com>
+
+	* decl.cs, iterators.cs, expression.cs, statement.cs, doc.cs, 
+	class.cs, cs-parser.jay, codegen.cs: Clean up destructor
+	implementation. Also fixes #463108.
+
+2009-01-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #416109
+	* decl.cs: Issue correct CLSAttribute warning location.
+
+2009-01-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #456775
+	* attribute.cs: Use attribute owner scope when resolving attribute
+	arguments.
+
 2009-01-05  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #457257
 	* decl.cs: Fixed incorrect member declaring type comparison.
 
+2009-01-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #460896
+	* driver.cs: Handle /RES resources as embeddable.
+
+2009-01-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #462515
+	* ecore.cs: Report inacessible members upwards.
+
+2009-01-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #463190, #463192
+	* decl.cs, namespace.cs: Also import internal extension classes.
+
+2009-01-04  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #463415
+	* generic.cs: Use right index for RemoveDependentTypes.
+
+2009-01-02  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #463196
+	* expression.cs: Fixed enum to null comparison.
+
 2009-01-02  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #463121
-	* nullable.cs: Fixed nullable user quality operator comparison.
+	* nullable.cs: Fixed nullable user equality operator comparison.
+
+2009-01-02  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #462950
+	* class.cs, decl.cs: Use full explicit name when defining automatic
+	property backing field.
 
 2009-01-02  Marek Safar  <marek.safar@gmail.com>
 
@@ -28,22 +140,170 @@
 	A fix for bug #450782
 	* ecore.cs: Consider more variables of form V.I to be fixed.
 
+2008-12-29  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #460712
+	* typemanager.cs: Core types could be imported.
+
+2008-12-28  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bugs #460847, #460772, #458049, #457339, #447807
+	* generic.cs, parameter.cs, lambda.cs, linq.cs, anonymous.cs
+	statement.cs, ecore.cs, class.cs, delegate.cs, flowanalysis.cs
+	cs-parser.jay, driver.cs: LINQ implementation upgrade to deal with
+	user lambdas used inside query clauses.
+
+2008-12-18  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #460229
+	* cs-tokenizer.cs: Ignore wrongly placed BOM markers.
+
+2008-12-18  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #459952
+	* decl.cs, namespace.cs: Use common CheckAccessLevel.
+
+2008-12-18  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #459630
+	* convert.cs: Enum to valuetype conversion is not allowed.
+
 2008-12-18  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #457087
 	* generic.cs: Don't crash when constraint comes from type
 	declaration.
 
+2008-12-16  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #459221
+	* anonymous.cs, statement.cs: Delay only captured this
+	initialization.
+
+2008-12-12  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #457489
+	* anonymous.cs, statement.cs: Split anonymous storey instantiation
+	and initialization to capture scope initializers correctly.
+
+2008-12-11  Marek Safar  <marek.safar@gmail.com>
+
+	* generic.cs, parameter.cs, expression.cs, statement.cs, doc.cs:
+	ParameterReference refactoring.
+
 2008-12-03  Marek Safar  <marek.safar@gmail.com>
 
 	* typemanager.cs, namespace.cs, driver.cs: Allow ExtensionAttribute
 	to be imported from any assembly.
+
+2008-12-03  Marek Safar  <marek.safar@gmail.com>
+
+	* parameter.cs, lambda.cs, linq.cs, iterators.cs, anonymous.cs
+	statement.cs, class.cs, cs-parser.jay: Removed duplicate parameters
+	from anonymous method and lambda expression.
+
+2008-12-01  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #448560
+	* expression.cs (As): Box any generic type arguments to be
+	verifiable.
+
+2008-11-29  Raja R Harinath  <harinath@hurrynot.org>
+
+	Add tripwire for implicit conversion bugs
+	* ecore.cs (MethodGroupExpr.Error_ArgumentCountWrong): New helper
+	for CS1501 error.
+	(MethodGroupExpr.OverloadResolve): Add sanity check between
+	IsApplicable and VerifyArgumentsCompat.
+	(VerifyArgumentsCompat): Report CS1501 where appropriate.
+
+2008-11-29  Raja R Harinath  <harinath@hurrynot.org>
+
+	Fix build break in System.Data_test
+	* convert.cs (ImplicitConversionExists): Move NullLiteral
+	conversions ...
+	(ImplicitStandardConversionExists): ... here.
+
+2008-11-28  Marek Safar  <marek.safar@gmail.com>
+
+	* literal.cs: Emit correctly explicit null to nullable cast.
+
+2008-11-28  Marek Safar  <marek.safar@gmail.com>
+
+	* ecore.cs, generics.cs: Fixed crash when type arguments fail to
+	resolve.
+
+2008-11-28  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #449005
+	* convert.cs, nullable.cs: Use only one implicit nullable
+	conversion.
+
+2008-11-27  Marek Safar  <marek.safar@gmail.com>
+
+	* convert.cs, literal.cs: More Convert cleanup is needed.
+
+2008-11-27  Marek Safar  <marek.safar@gmail.com>
+
+	* decl.cs, class.cs: Fixed misleading error message.
+
+2008-11-26  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #449005
+	* nullable.cs (EmitEquality): Disable optimization for user operator
+	operands.
 
 2008-11-25  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #447027
 	* anonymous.cs (HoistedVariable): Cache also outer access to deal
 	with context variables stored as expression instances.
+
+2008-11-25  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #447027
+	* delegate.cs: Fixed delegate VerifyMethod logic.
+
+2008-11-24  Marek Safar  <marek.safar@gmail.com>
+
+	* ecore.cs, delegate.cs: MethodGroup expressions can be applicable
+	but not verifiable.
+
+2008-11-21  Marek Safar  <marek.safar@gmail.com>
+
+	* typemanager.cs, decl.cs, anonymous.cs, class.cs, enum.cs: Rewrote
+	member type resolve to follow normal flow, instead of random
+	property access.
+
+2008-11-21  Marek Safar  <marek.safar@gmail.com>
+
+	* iterators.cs (GetEnumeratorStatement): Re-use already resolved
+	type.
+
+2008-11-21  Marek Safar  <marek.safar@gmail.com>
+
+	* const.cs: Emit decimal array constant as literal.
+
+2008-11-20  Marek Safar  <marek.safar@gmail.com>
+
+	* iterators.cs, ecore.cs: Removed CurrentBlock statement.
+
+2008-11-19  Marek Safar  <marek.safar@gmail.com>
+
+	* eval.cs, location.cs, driver.cs (Location.SourceFiles): Turned
+	into real property (saves 8 MB for corlib compilation).
+
+2008-11-19  Marek Safar  <marek.safar@gmail.com>
+
+	* generic.cs, lambda.cs, linq.cs, iterators.cs, anonymous.cs,
+	nullable.cs, expression.cs, statement.cs, ecore.cs, cs-parser.jay
+	generic-mcs.cs: Small cleanup of TypeArguments.
+
+2008-11-18  Marek Safar  <marek.safar@gmail.com>
+
+	* generic.cs, iterators.cs, anonymous.cs, nullable.cs, ecore.cs,
+	expression.cs, namespace.cs, generic-mcs.cs, class.cs: Small cleanup
+	of ConstructedType expression, renamed to GenericTypeExpr.
 
 2008-11-17  Marek Safar  <marek.safar@gmail.com>
 
@@ -63,11 +323,47 @@
 	* ecore.cs: Ignore open generic types when used as generic type
 	instance fields.
 
+2008-11-17  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #445458
+	* expression.cs, cs-parser.jay: Don't crash when an expression
+	statement is null.
+
+2008-11-17  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #445464
+	* expression.cs, cs-parser.jay: Fixed typeof of non-generic type
+	inside unbound type.
+
+2008-11-14  Jb Evain  <jbevain@novell.com>
+
+	* driver.cs: ignore empty -nowarn argument such as
+	the one in -nowarn:12,13,,.
+
 2008-11-13  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #444271
 	* anonymous.cs: Rescan parent storeys when best candidate was
 	undone.
+
+2008-11-13  Marek Safar  <marek.safar@gmail.com>
+
+	* generic.cs, expression.cs, ecore.cs, cs-parser.jay: Removed
+	useless UnboundTypeExpression.
+	
+	* attribute.cs: Do check obsolete attribute on generic types.
+
+2008-11-12  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bugs #425680, #400139
+	* ecore.cs, expression.cs: Trying to do some almost_matched_members
+	refactoring.
+
+2008-11-11  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #435747
+	* assign.cs, expression.cs: Cleanup New assignment to emit correcly
+	compound value types assignment. Few micro optimizations added.
 
 2008-11-10  Marek Safar  <marek.safar@gmail.com>
 

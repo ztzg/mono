@@ -156,7 +156,7 @@ if (ins->flags & MONO_INST_BRLABEL) { 							\
 		s390_ldr (code, ins->dreg, ins->sreg1);			\
 	}
 
-#define MONO_EMIT_NEW_MOVE2(cfg,dest,offset,src,imm,size) do { 			\
+#define MONO_EMIT_NEW_MOVE(cfg,dest,offset,src,imm,size) do { 			\
                 MonoInst *inst; 						\
 		int tmpr = 0;							\
 		int sReg, dReg;							\
@@ -196,7 +196,7 @@ if (ins->flags & MONO_INST_BRLABEL) { 							\
         MONO_ADD_INS (cfg->cbb, inst); \
 	} while (0)
 
-#define MONO_OUTPUT_VTR2(cfg, size, dr, sr, so) do {				\
+#define MONO_OUTPUT_VTR(cfg, size, dr, sr, so) do {				\
 	int reg = mono_alloc_preg (cfg); \
 	switch (size) {								\
 		case 0: 							\
@@ -222,7 +222,7 @@ if (ins->flags & MONO_INST_BRLABEL) { 							\
 	mono_call_inst_add_outarg_reg(cfg, call, reg, dr, FALSE);	\
 } while (0)
 
-#define MONO_OUTPUT_VTS2(cfg, size, dr, dx, sr, so) do {				\
+#define MONO_OUTPUT_VTS(cfg, size, dr, dx, sr, so) do {				\
 	int tmpr;								\
 	switch (size) {								\
 		case 0: 							\
@@ -253,7 +253,7 @@ if (ins->flags & MONO_INST_BRLABEL) { 							\
 				dr, dx, tmpr);					\
 		break;								\
 		case 8:								\
-			MONO_EMIT_NEW_MOVE2 (cfg, dr, dx, sr, so, size);		\
+			MONO_EMIT_NEW_MOVE (cfg, dr, dx, sr, so, size);		\
 		break;								\
 	}									\
 } while (0)
@@ -282,9 +282,9 @@ if (ins->flags & MONO_INST_BRLABEL) { 							\
 #include <mono/utils/mono-math.h>
 
 #include "mini-s390x.h"
-#include "inssel.h"
 #include "cpu-s390x.h"
 #include "jit-icalls.h"
+#include "ir-emit.h"
 
 /*========================= End of Includes ========================*/
 
@@ -379,7 +379,6 @@ static guchar * emit_float_to_int (MonoCompile *, guchar *, int, int, int, gbool
 gpointer mono_arch_get_lmf_addr (void);
 static guint8 * emit_load_volatile_arguments (guint8 *, MonoCompile *);
 static void catch_SIGILL(int, siginfo_t *, void *);
-static void emit_sig_cookie (MonoCompile *, MonoCallInst *, CallInfo *, int);
 
 /*========================= End of Prototypes ======================*/
 
@@ -1806,12 +1805,7 @@ mono_arch_allocate_vars (MonoCompile *cfg)
 	
 	cinfo   = get_call_info (cfg, cfg->mempool, sig, sig->pinvoke);
 
-	if (cinfo->struct_ret) {
-		if (!cfg->new_ir) {
-			cfg->vret_addr->opcode = OP_REGVAR;
-			cfg->vret_addr->inst_c0 = s390_r2;
-		}
-	} else {
+	if (!cinfo->struct_ret) {
 		switch (mono_type_get_underlying_type (sig->ret)->type) {
 		case MONO_TYPE_VOID:
 			break;
@@ -1838,9 +1832,6 @@ mono_arch_allocate_vars (MonoCompile *cfg)
 		inst->opcode 	   = OP_REGOFFSET;
 		inst->inst_basereg = frame_reg;
 		offset 		  += sizeof(gpointer);
-		if (!cfg->new_ir && (sig->call_convention == MONO_CALL_VARARG) &&
-		    (!retFitsInReg (cinfo->ret.size)))
-			cfg->sig_cookie += cinfo->ret.size;
 		if (G_UNLIKELY (cfg->verbose_level > 1)) {
 			printf ("vret_addr =");
 			mono_print_ins (cfg->vret_addr);
@@ -1870,104 +1861,56 @@ mono_arch_allocate_vars (MonoCompile *cfg)
 		inst = cfg->args [curinst];
 		if (inst->opcode != OP_REGVAR) {
 			switch (cinfo->args[iParm].regtype) {
-			case RegTypeStructByAddr :
-				if (cfg->new_ir) {
-					MonoInst *indir;
+			case RegTypeStructByAddr : {
+				MonoInst *indir;
 
-					size = sizeof (gpointer);
+				size = sizeof (gpointer);
 
-					inst->opcode = OP_REGOFFSET;
-					inst->inst_basereg = frame_reg;
-					offset = S390_ALIGN (offset, sizeof (gpointer));
-					inst->inst_offset = offset;
+				inst->opcode = OP_REGOFFSET;
+				inst->inst_basereg = frame_reg;
+				offset = S390_ALIGN (offset, sizeof (gpointer));
+				inst->inst_offset = offset;
 
-					/* Add a level of indirection */
-					MONO_INST_NEW (cfg, indir, 0);
-					*indir = *inst;
-					inst->opcode = OP_VTARG_ADDR;
-					inst->inst_left = indir;
-				} else {
-					if (cinfo->args[iParm].reg == STK_BASE) {
-						inst->opcode       = OP_S390_LOADARG;
-						inst->inst_basereg = frame_reg;
-						offset 		   = S390_ALIGN(offset, sizeof(long));
-						inst->inst_offset  = offset; 
-						size		   = abs(cinfo->args[iParm].vtsize);
-						inst->backend.arg_info	   = cinfo->args[iParm].offset;
-					} else {
-						inst->opcode 	   = OP_S390_ARGREG;
-						inst->inst_basereg = frame_reg;
-						size		   = sizeof(gpointer);
-						offset		   = S390_ALIGN(offset, size);
-						inst->inst_offset  = offset;
-						inst->backend.arg_info	   = cinfo->args[iParm].offset;
-					}
-				}
+				/* Add a level of indirection */
+				MONO_INST_NEW (cfg, indir, 0);
+				*indir = *inst;
+				inst->opcode = OP_VTARG_ADDR;
+				inst->inst_left = indir;
+			}
 				break;
 			case RegTypeStructByVal :
-				if (cfg->new_ir) {
-					size		   = cinfo->args[iParm].size;
-					offset		   = S390_ALIGN(offset, size);
-					inst->opcode = OP_REGOFFSET;
-					inst->inst_basereg = frame_reg;
-					inst->inst_offset = offset;
-				} else {
-					inst->opcode	   = OP_S390_ARGPTR;
-					inst->inst_basereg = frame_reg;
-					size		   = cinfo->args[iParm].size;
-					offset		   = S390_ALIGN(offset, size);
-					inst->inst_offset  = offset;
-					inst->backend.arg_info	   = cinfo->args[iParm].offset;
-				}
+				size		   = cinfo->args[iParm].size;
+				offset		   = S390_ALIGN(offset, size);
+				inst->opcode = OP_REGOFFSET;
+				inst->inst_basereg = frame_reg;
+				inst->inst_offset = offset;
 				break;
 			default :
-				if (cfg->new_ir) {
-					if (cinfo->args [iParm].reg == STK_BASE) {
-						/*
-						 * These arguments are in the previous frame, so we can't 
-						 * compute their offset from the current frame pointer right
-						 * now, since cfg->stack_offset is not yet known, so dedicate a 
-						 * register holding the previous frame pointer.
-						 */
-						cfg->arch.bkchain_reg = s390_r12;
-						cfg->used_int_regs |= 1 << cfg->arch.bkchain_reg;
+				if (cinfo->args [iParm].reg == STK_BASE) {
+					/*
+					 * These arguments are in the previous frame, so we can't 
+					 * compute their offset from the current frame pointer right
+					 * now, since cfg->stack_offset is not yet known, so dedicate a 
+					 * register holding the previous frame pointer.
+					 */
+					cfg->arch.bkchain_reg = s390_r12;
+					cfg->used_int_regs |= 1 << cfg->arch.bkchain_reg;
 
-						inst->opcode 	   = OP_REGOFFSET;
-						inst->inst_basereg = cfg->arch.bkchain_reg;
-						size		   = (cinfo->args[iParm].size < 8
-										  ? 8 - cinfo->args[iParm].size
-										  : 0);
-						inst->inst_offset  = cinfo->args [iParm].offset + size;
-						size = sizeof (long);
-					} else {
-						inst->opcode 	   = OP_REGOFFSET;
-						inst->inst_basereg = frame_reg;
-						size		   = (cinfo->args[iParm].size < 8
-										  ? sizeof(int)  
-										  : sizeof(long));
-						offset		   = S390_ALIGN(offset, size);
-						inst->inst_offset  = offset;
-					}
+					inst->opcode 	   = OP_REGOFFSET;
+					inst->inst_basereg = cfg->arch.bkchain_reg;
+					size		   = (cinfo->args[iParm].size < 8
+									  ? 8 - cinfo->args[iParm].size
+									  : 0);
+					inst->inst_offset  = cinfo->args [iParm].offset + size;
+					size = sizeof (long);
 				} else {
-					if (cinfo->args[iParm].reg != STK_BASE) {
-						inst->opcode 	   = OP_REGOFFSET;
-						inst->inst_basereg = frame_reg;
-						size		   = (cinfo->args[iParm].size < 8
-										  ? sizeof(int)
-										  : sizeof(long));
-						offset		   = S390_ALIGN(offset, size);
-						inst->inst_offset  = offset;
-					} else {
-						inst->opcode 	   = OP_S390_STKARG;
-						inst->inst_basereg = frame_reg;
-						size		   = ((cinfo->args[iParm].size < 8) 
-										  ? 8 - cinfo->args[iParm].size
-										  : 0);
-						inst->inst_offset  = cinfo->args[iParm].offset + 
-							size;
-						inst->backend.arg_info       = 0;
-						size		   = sizeof(long);
-					}
+					inst->opcode 	   = OP_REGOFFSET;
+					inst->inst_basereg = frame_reg;
+					size		   = (cinfo->args[iParm].size < 8
+									  ? sizeof(int)  
+									  : sizeof(long));
+					offset		   = S390_ALIGN(offset, size);
+					inst->inst_offset  = offset;
 				}
 				break;
 			}
@@ -2054,130 +1997,6 @@ mono_arch_create_vars (MonoCompile *cfg)
 
 /*========================= End of Function ========================*/
 
-/*------------------------------------------------------------------*/
-/*                                                                  */
-/* Name		- mono_arch_call_opcode                             */
-/*                                                                  */
-/* Function	- Take the arguments and generate the arch-specific */
-/*		  instructions to properly call the function. This  */
-/*		  includes pushing, moving argments to the correct  */
-/*		  etc.                                              */
-/*		                               			    */
-/*------------------------------------------------------------------*/
-
-MonoCallInst*
-mono_arch_call_opcode (MonoCompile *cfg, MonoBasicBlock* bb, 
-		       MonoCallInst *call, int is_virtual)
-{
-	MonoInst *in;
-	MonoCallArgParm *arg;
-	MonoMethodSignature *sig;
-	int i, n, lParamArea;
-	CallInfo *cinfo;
-	ArgInfo *ainfo;
-
-	sig = call->signature;
-	n = sig->param_count + sig->hasthis;
-	DEBUG (g_print ("Call requires: %d parameters\n",n));
-	
-	cinfo = get_call_info (cfg, cfg->mempool, sig, sig->pinvoke);
-
-	call->stack_usage = MAX(cinfo->sz.stack_size, call->stack_usage);
-	lParamArea        = MAX((call->stack_usage - S390_MINIMAL_STACK_SIZE - cinfo->sz.parm_size), 0);
-	cfg->param_area   = MAX (((signed) cfg->param_area), lParamArea);
-	cfg->flags       |= MONO_CFG_HAS_CALLS;
-
-	if (cinfo->struct_ret)
-		call->used_iregs |= 1 << cinfo->ret.reg;
-
-	for (i = 0; i < n; ++i) {
-		ainfo = cinfo->args + i;
-
-		if (!(sig->pinvoke) &&
-		    (sig->call_convention == MONO_CALL_VARARG) &&
-		    (i == sig->sentinelpos)) {
-			emit_sig_cookie (cfg, call, cinfo, ainfo->size);
-		}
-
-		if (is_virtual && i == 0) {
-			/* the argument will be attached to the call instrucion */
-			in = call->args [i];
-			call->used_iregs |= 1 << ainfo->reg;
-		} else {
-			MONO_INST_NEW_CALL_ARG (cfg, arg, OP_OUTARG);
-			in                  = call->args [i];
-			arg->ins.cil_code   = in->cil_code;
-			arg->ins.inst_left  = in;
-			arg->ins.type       = in->type;
-			/* prepend, we'll need to reverse them later */
-			arg->ins.next       = call->out_args;
-			call->out_args      = (MonoInst *) arg;
-			arg->ins.inst_right = (MonoInst *) call;
-			if (ainfo->regtype == RegTypeGeneral) {
-				arg->ins.backend.reg3 = ainfo->reg;
-				call->used_iregs |= 1 << ainfo->reg;
-			} else if (ainfo->regtype == RegTypeStructByAddr) {
-				call->used_iregs |= 1 << ainfo->reg;
-				arg->ins.sreg1    = ainfo->reg;
-				arg->ins.opcode   = OP_OUTARG_VT;
-				arg->size         = -ainfo->vtsize;
-				arg->offset       = ainfo->offset;
-				arg->offPrm       = ainfo->offparm + cinfo->sz.offStruct;
-			} else if (ainfo->regtype == RegTypeStructByVal) {
-				if (ainfo->reg != STK_BASE) 
-					call->used_iregs |= 1 << ainfo->reg;
-				arg->ins.sreg1  = ainfo->reg;
-				arg->ins.opcode = OP_OUTARG_VT;
-				arg->size       = ainfo->size;
-				arg->offset     = ainfo->offset;
-				arg->offPrm     = ainfo->offparm + cinfo->sz.offStruct;
-			} else if (ainfo->regtype == RegTypeBase) {
-				arg->ins.opcode   = OP_OUTARG_MEMBASE;
-				arg->ins.sreg1    = ainfo->reg;
-				arg->size         = ainfo->size;
-				arg->offset       = ainfo->offset;
-				call->used_iregs |= 1 << ainfo->reg;
-			} else if (ainfo->regtype == RegTypeFP) {
-				arg->ins.backend.reg3 = ainfo->reg;
-				call->used_fregs |= 1 << ainfo->reg;
-				if (ainfo->size == 4)
-					arg->ins.opcode = OP_OUTARG_R4;
-				else
-					arg->ins.opcode = OP_OUTARG_R8;
-			} else {
-				g_assert_not_reached ();
-			}
-		}
-	}
-
-	/*
-	 * Handle the case where there are no implicit arguments 
-	 */
-	if (!(sig->pinvoke) &&
-	    (sig->call_convention == MONO_CALL_VARARG) &&
-	    (n == sig->sentinelpos)) {
-		emit_sig_cookie (cfg, call, cinfo, sizeof(MonoType *));
-	}
-
-	/*
-	 * Reverse the call->out_args list.
-	 */
-	{
-		MonoInst *prev = NULL, *list = call->out_args, *next;
-		while (list) {
-			next = list->next;
-			list->next = prev;
-			prev = list;
-			list = next;
-		}
-		call->out_args = prev;
-	}
-
-	return call;
-}
-
-/*========================= End of Function ========================*/
-
 static void
 add_outarg_reg2 (MonoCompile *cfg, MonoCallInst *call, ArgStorage storage, int reg, MonoInst *tree)
 {
@@ -2211,7 +2030,7 @@ add_outarg_reg2 (MonoCompile *cfg, MonoCallInst *call, ArgStorage storage, int r
 }
 
 static void
-emit_sig_cookie2 (MonoCompile *cfg, MonoCallInst *call, CallInfo *cinfo)
+emit_sig_cookie (MonoCompile *cfg, MonoCallInst *call, CallInfo *cinfo)
 {
 	MonoMethodSignature *tmpSig;
 	MonoInst *sig_arg;
@@ -2292,7 +2111,7 @@ mono_arch_emit_call (MonoCompile *cfg, MonoCallInst *call)
 
 		if ((sig->call_convention == MONO_CALL_VARARG) &&
 		    (i == sig->sentinelpos)) {
-			emit_sig_cookie2 (cfg, call, cinfo);
+			emit_sig_cookie (cfg, call, cinfo);
 		}
 
 		switch (ainfo->regtype) {
@@ -2406,7 +2225,7 @@ mono_arch_emit_call (MonoCompile *cfg, MonoCallInst *call)
 	 */
 	if ((sig->call_convention == MONO_CALL_VARARG) &&
 	    (i == sig->sentinelpos)) {
-		emit_sig_cookie2 (cfg, call, cinfo);
+		emit_sig_cookie (cfg, call, cinfo);
 	}
 }
 
@@ -2434,9 +2253,9 @@ mono_arch_emit_outarg_vt (MonoCompile *cfg, MonoInst *ins, MonoInst *src)
 				arg->offPrm     = ainfo->offparm + cinfo->sz.offStruct;
 		*/
 		if (ainfo->reg != STK_BASE) {
-			MONO_OUTPUT_VTR2 (cfg, size, ainfo->reg, src->dreg, 0);
+			MONO_OUTPUT_VTR (cfg, size, ainfo->reg, src->dreg, 0);
 		} else {
-			MONO_OUTPUT_VTS2 (cfg, size, ainfo->reg, ainfo->offset,
+			MONO_OUTPUT_VTS (cfg, size, ainfo->reg, ainfo->offset,
 							  src->dreg, 0);
 		}	
 	} else if (ainfo->regtype == RegTypeStructByValInFP) {
@@ -2453,7 +2272,7 @@ mono_arch_emit_outarg_vt (MonoCompile *cfg, MonoInst *ins, MonoInst *src)
 
 		mono_call_inst_add_outarg_reg (cfg, call, dreg, ainfo->reg, TRUE);
 	} else {
-		MONO_EMIT_NEW_MOVE2 (cfg, STK_BASE, ainfo->offparm,
+		MONO_EMIT_NEW_MOVE (cfg, STK_BASE, ainfo->offparm,
 							 src->dreg, 0, size);
 	}
 }
@@ -2480,53 +2299,6 @@ mono_arch_emit_setret (MonoCompile *cfg, MonoMethod *method, MonoInst *val)
 	}
 			
 	MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, cfg->ret->dreg, val->dreg);
-}
-
-/*========================= End of Function ========================*/
-
-/*------------------------------------------------------------------*/
-/*                                                                  */
-/* Name		- emit_sig_cookie.                                  */
-/*                                                                  */
-/* Function	- For variable length parameter lists construct a   */
-/*		  signature cookie and emit it.			    */
-/*		                               			    */
-/*------------------------------------------------------------------*/
-
-static void
-emit_sig_cookie (MonoCompile *cfg, MonoCallInst *call, 
-		 CallInfo *cinfo, int argSize)
-{
-	MonoCallArgParm *arg;
-	MonoMethodSignature *tmpSig;
-	MonoInst *sigArg;
-			
-	cfg->disable_aot = TRUE;
-
-	/*----------------------------------------------------------*/
-	/* mono_ArgIterator_Setup assumes the signature cookie is   */
-	/* passed first and all the arguments which were before it  */
-	/* passed on the stack after the signature. So compensate   */
-	/* by passing a different signature.			    */
-	/*----------------------------------------------------------*/
-	tmpSig = mono_metadata_signature_dup (call->signature);
-	tmpSig->param_count -= call->signature->sentinelpos;
-	tmpSig->sentinelpos  = 0;
-	if (tmpSig->param_count > 0)
-		memcpy (tmpSig->params, 
-			call->signature->params + call->signature->sentinelpos, 
-			tmpSig->param_count * sizeof(MonoType *));
-
-	MONO_INST_NEW (cfg, sigArg, OP_ICONST);
-	sigArg->inst_p0 = tmpSig;
-
-	MONO_INST_NEW_CALL_ARG (cfg, arg, OP_OUTARG_MEMBASE);
-	arg->ins.inst_left   = sigArg;
-	arg->ins.inst_right  = (MonoInst *) call;
-	arg->size            = argSize;
-	arg->offset          = cinfo->sigCookie.offset;
-	arg->ins.next        = call->out_args;
-	call->out_args       = (MonoInst *) arg;
 }
 
 /*========================= End of Function ========================*/
@@ -2768,9 +2540,6 @@ mono_arch_lowering_pass (MonoCompile *cfg, MonoBasicBlock *bb)
 {
 	MonoInst *ins, *next;
 
-	if (bb->max_vreg > cfg->rs->next_vreg)
-		cfg->rs->next_vreg = bb->max_vreg;
-
 	MONO_BB_FOR_EACH_INS_SAFE (bb, next, ins) {
 		switch (ins->opcode) {
 		case OP_DIV_IMM:
@@ -2795,7 +2564,7 @@ mono_arch_lowering_pass (MonoCompile *cfg, MonoBasicBlock *bb)
 		}
 	}
 
-	bb->max_vreg = cfg->rs->next_vreg;
+	bb->max_vreg = cfg->next_vreg;
 }
 
 /*========================= End of Function ========================*/
@@ -4089,9 +3858,6 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			s390_lg   (code, s390_r1, 0, ins->sreg1, ins->inst_offset);
 			s390_basr (code, s390_r14, s390_r1);
 		}
-			break;
-		case OP_OUTARG: 
-			g_assert_not_reached ();
 			break;
 		case OP_LOCALLOC: {
 			int alloca_skip = S390_MINIMAL_STACK_SIZE + cfg->param_area;
@@ -5412,78 +5178,6 @@ mono_arch_setup_jit_tls_data (MonoJitTlsData *tls)
 void
 mono_arch_free_jit_tls_data (MonoJitTlsData *tls)
 {
-
-}
-
-/*========================= End of Function ========================*/
-
-/*------------------------------------------------------------------*/
-/*                                                                  */
-/* Name		- mono_arch_emit_this_vret_args                     */
-/*                                                                  */
-/* Function	-                                                   */
-/*		                               			    */
-/*------------------------------------------------------------------*/
-
-void
-mono_arch_emit_this_vret_args (MonoCompile *cfg, MonoCallInst *inst, int this_reg, int this_type, int vt_reg)
-{
-	int this_dreg = s390_r2;
-	
-	if (vt_reg != -1)
-		this_dreg = s390_r3;
-
-	/* add the this argument */
-	if (this_reg != -1) {
-		MonoInst *this;
-		MONO_INST_NEW (cfg, this, OP_MOVE);
-		this->type  = this_type;
-		this->sreg1 = this_reg;
-		this->dreg  = mono_regstate_next_int (cfg->rs);
-		mono_bblock_add_inst (cfg->cbb, this);
-		mono_call_inst_add_outarg_reg (cfg, inst, this->dreg, this_dreg, FALSE);
-	}
-
-	if (vt_reg != -1) {
-		MonoInst *vtarg;
-		MONO_INST_NEW (cfg, vtarg, OP_MOVE);
-		vtarg->type  = STACK_MP;
-		vtarg->sreg1 = vt_reg;
-		vtarg->dreg  = mono_regstate_next_int (cfg->rs);
-		mono_bblock_add_inst (cfg->cbb, vtarg);
-		mono_call_inst_add_outarg_reg (cfg, inst, vtarg->dreg, s390_r2, FALSE);
-	}
-}
-
-/*========================= End of Function ========================*/
-
-/*------------------------------------------------------------------*/
-/*                                                                  */
-/* Name		- mono_arch_get_inst_for_method                   */
-/*                                                                  */
-/* Function	- Check for opcodes we can handle directly in       */
-/*		  hardware.                    			    */
-/*		                               			    */
-/*------------------------------------------------------------------*/
-
-MonoInst*
-mono_arch_get_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, 
-			       MonoMethodSignature *fsig, MonoInst **args)
-{
-	MonoInst *ins = NULL;
-
-	if (cmethod->klass == mono_defaults.math_class) {
-		if (strcmp (cmethod->name, "Sqrt") == 0) {
-			MONO_INST_NEW (cfg, ins, OP_SQRT);
-			ins->inst_i0 = args [0];
-		}
-//		if (strcmp (cmethod->name, "Abs") == 0) {
-//			MONO_INST_NEW (cfg, ins, OP_ABS);
-//			ins->inst_i0 = args [0];
-//		}
-	}
-
-	return ins;
 }
 
 /*========================= End of Function ========================*/

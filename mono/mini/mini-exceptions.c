@@ -86,6 +86,10 @@ mono_exceptions_init (void)
 	try_more_restore_tramp = mono_create_specific_trampoline (try_more_restore, MONO_TRAMPOLINE_RESTORE_STACK_PROT, mono_domain_get (), NULL);
 	restore_stack_protection_tramp = mono_create_specific_trampoline (restore_stack_protection, MONO_TRAMPOLINE_RESTORE_STACK_PROT, mono_domain_get (), NULL);
 #endif
+
+#ifdef MONO_ARCH_HAVE_EXCEPTIONS_INIT
+	mono_arch_exceptions_init ();
+#endif
 }
 
 gpointer
@@ -798,54 +802,15 @@ static MonoClass*
 get_exception_catch_class (MonoJitExceptionInfo *ei, MonoJitInfo *ji, MonoContext *ctx)
 {
 	MonoClass *catch_class = ei->data.catch_class;
-	MonoGenericJitInfo *gi;
-	gpointer info;
-	MonoClass *class, *method_container_class;
 	MonoType *inflated_type;
-	MonoGenericContext context = { NULL, NULL };
+	MonoGenericContext context;
 
 	if (!catch_class)
 		return NULL;
 
-	if (!ji->has_generic_jit_info)
+	if (!ji->has_generic_jit_info || !mono_jit_info_get_generic_jit_info (ji)->has_this)
 		return catch_class;
-
-	gi = mono_jit_info_get_generic_jit_info (ji);
-	if (!gi->has_this)
-		return catch_class;
-
-	if (gi->this_in_reg)
-		info = mono_arch_context_get_int_reg (ctx, gi->this_reg);
-	else
-		info = *(gpointer*)(gpointer)((char*)mono_arch_context_get_int_reg (ctx, gi->this_reg) +
-				gi->this_offset);
-
-	g_assert (ji->method->is_inflated);
-
-	if (mono_method_get_context (ji->method)->method_inst) {
-		MonoMethodRuntimeGenericContext *mrgctx = info;
-
-		class = mrgctx->class_vtable->klass;
-		context.method_inst = mrgctx->method_inst;
-		g_assert (context.method_inst);
-	} else if ((ji->method->flags & METHOD_ATTRIBUTE_STATIC) || ji->method->klass->valuetype) {
-		MonoVTable *vtable = info;
-
-		class = vtable->klass;
-	} else {
-		MonoObject *this = info;
-
-		class = this->vtable->klass;
-	}
-
-	if (class->generic_class || class->generic_container)
-		context.class_inst = mini_class_get_context (class)->class_inst;
-
-	g_assert (!ji->method->klass->generic_container);
-	if (ji->method->klass->generic_class)
-		method_container_class = ji->method->klass->generic_class->container_class;
-	else
-		method_container_class = ji->method->klass;
+	context = get_generic_context_from_stack_frame (ji, get_generic_info_from_stack_frame (ji, ctx));
 
 	/* FIXME: we shouldn't inflate but instead put the
 	   type in the rgctx and fetch it from there.  It
@@ -1571,7 +1536,7 @@ mono_print_thread_dump (void *sigctx)
 	MonoContext ctx;
 #endif
 	GString* text = g_string_new (0);
-	char *name;
+	char *name, *wapi_desc;
 	GError *error = NULL;
 
 	if (thread->name) {
@@ -1583,9 +1548,13 @@ mono_print_thread_dump (void *sigctx)
 	else if (thread->threadpool_thread)
 		g_string_append (text, "\n\"<threadpool thread>\"");
 	else
-		g_string_append (text, "\n\"\"");
+		g_string_append (text, "\n\"<unnamed thread>\"");
 
-	g_string_append_printf (text, " tid=0x%p this=0x%p:\n", (gpointer)(gsize)thread->tid, thread);
+#ifndef PLATFORM_WIN32
+	wapi_desc = wapi_current_thread_desc ();
+	g_string_append_printf (text, " tid=0x%p this=0x%p %s\n", (gpointer)(gsize)thread->tid, thread,  wapi_desc);
+	free (wapi_desc);
+#endif
 
 	/* FIXME: */
 #if defined(__i386__) || defined(__x86_64__)

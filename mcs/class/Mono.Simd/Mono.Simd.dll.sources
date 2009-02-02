@@ -3,6 +3,7 @@
 Assembly/AssemblyInfo.cs
 Mono.Simd/AccelMode.cs
 Mono.Simd/AccelerationAttribute.cs
+Mono.Simd/ArrayExtensions.cs
 Mono.Simd/SimdRuntime.cs
 Mono.Simd/Vector2d.cs
 Mono.Simd/Vector2ul.cs
@@ -14,4 +15,5 @@ Mono.Simd/Vector8us.cs
 Mono.Simd/Vector8s.cs
 Mono.Simd/Vector16b.cs
 Mono.Simd/Vector16sb.cs
+Mono.Simd/VectorOperations.cs
 

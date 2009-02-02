@@ -53,7 +53,6 @@
 #include "jit.h"
 #include <string.h>
 #include <ctype.h>
-#include "inssel.h"
 #include <locale.h>
 #include "version.h"
 
@@ -840,6 +839,8 @@ compile_all_methods_thread_main (CompileAllThreadArgs *args)
 			continue;
 
 		method = mono_get_method (image, token, NULL);
+		if (!method)
+			continue;
 		if ((method->iflags & METHOD_IMPL_ATTRIBUTE_INTERNAL_CALL) ||
 		    (method->flags & METHOD_ATTRIBUTE_PINVOKE_IMPL) ||
 		    (method->iflags & METHOD_IMPL_ATTRIBUTE_RUNTIME) ||
@@ -1121,6 +1122,7 @@ mini_trace_usage (void)
 		 "    T:Type               Specifies a type\n"
 		 "    +EXPR                Includes expression\n"
 		 "    -EXPR                Excludes expression\n"
+		 "    EXPR,EXPR            Multiple expressions\n"
 		 "    disabled             Don't print any output until toggled via SIGUSR2\n");
 }
 

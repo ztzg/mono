@@ -414,7 +414,7 @@ namespace System.Windows.Forms {
 
 		void PushData (bool force)
 		{
-			if (manager == null || manager.IsSuspended || manager.Count == 0 || manager.Current == null)
+			if (manager == null || manager.IsSuspended || manager.Count == 0 || manager.Position == -1)
 				return;
 #if NET_2_0
 			if (!force && control_update_mode == ControlUpdateMode.Never)
@@ -606,6 +606,10 @@ namespace System.Windows.Forms {
 			TypeConverter converter = TypeDescriptor.GetConverter (data.GetType ());
 			if (converter != null && converter.CanConvertTo (data_type))
 				return converter.ConvertTo (data, data_type);
+
+			converter = TypeDescriptor.GetConverter (data_type);
+			if (converter != null && converter.CanConvertFrom (data.GetType()))
+				return converter.ConvertFrom (data);
 
 			if (data is IConvertible) {
 				object res = Convert.ChangeType (data, data_type);

@@ -1,6 +1,26 @@
-2008-11-13  Bill Holmes  <billholmes54@gmail.com>
+2009-01-22  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r118724.
+	Backport of r124260.
+	
+	* Stopwatch.cs: Reorder the calculations in Elapsed and ElapsedMilliseconds
+	to avoid overflow. Fixes #468570. Patch by Yoni Shalom <silver83@gmail.com>.
+
+2009-01-18  Zoltan Varga  <vargaz@gmail.com>
+
+	* Process.cs: Avoid closing the duplicated process handle in
+	ProcessWaitHandle, it is done automatically by the WaitHandle.Dispose ().
+	Fixes #464628.
+
+2008-12-09 Christian Hergert <christian.hergert@gmail.com>
+
+	* CounterCreationData.cs: CounterHelp defaults to String.Empty.
+
+2008-11-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* PerformanceCounter.cs: add 2 workarounds for known problems. I will
+	add the corresponding test cases later.
+
+2008-11-13  Bill Holmes  <billholmes54@gmail.com>
 
 	* Process.cs : Adding an implementation for WaitForInputIdle
 	  to call the an internal call.  The internal call is only 

@@ -73,7 +73,7 @@ typedef struct MonoAotModule {
 	guint32 opts;
 	/* Pointer to the Global Offset Table */
 	gpointer *got;
-	guint32 got_size;
+	guint32 got_size, plt_size;
 	GHashTable *name_cache;
 	GHashTable *extra_methods;
 	/* Maps methods to their code */
@@ -91,9 +91,7 @@ typedef struct MonoAotModule {
 	guint8 *code_end;
 	guint8 *plt;
 	guint8 *plt_end;
-	guint8 *plt_info;
-	guint8 *plt_jump_table;
-	guint32 plt_jump_table_size;
+	guint32 plt_got_offset_base;
 	guint32 *code_offsets;
 	guint8 *method_info;
 	guint32 *method_info_offsets;
@@ -111,10 +109,21 @@ typedef struct MonoAotModule {
 	guint32 *extra_method_info_offsets;
 	guint8 *extra_method_info;
 	guint8 *trampolines;
-	guint32 num_trampolines, first_trampoline_got_offset, trampoline_index;
+	guint32 num_trampolines, trampoline_got_offset_base, trampoline_index;
 	gpointer *globals;
 	MonoDl *sofile;
 } MonoAotModule;
+
+/* This structure is stored in the AOT file */
+typedef struct MonoAotFileInfo
+{
+	guint32 plt_got_offset_base;
+	guint32 trampoline_got_offset_base;
+	guint32 num_trampolines;
+	guint32 got_size;
+	guint32 plt_size;
+	gpointer *got;
+} MonoAotFileInfo;
 
 static GHashTable *aot_modules;
 #define mono_aot_lock() EnterCriticalSection (&aot_mutex)
@@ -152,7 +161,6 @@ static gboolean spawn_compiler = TRUE;
 static gint32 mono_last_aot_method = -1;
 
 static gboolean make_unreadable = FALSE;
-static guint32 n_pagefaults = 0;
 static guint32 name_table_accesses = 0;
 
 /* Used to speed-up find_aot_module () */
@@ -791,12 +799,7 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 	char *opt_flags = NULL;
 	gpointer *globals;
 	gboolean full_aot = FALSE;
-	gpointer *plt_jump_table_addr = NULL;
-	guint32 *plt_jump_table_size = NULL;
-	guint32 *trampolines_info = NULL;
-	gpointer *got_addr = NULL;
-	gpointer *got = NULL;
-	guint32 *got_size_ptr = NULL;
+	MonoAotFileInfo *file_info = NULL;
 	int i;
 
 	if (mono_compile_aot)
@@ -810,6 +813,9 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 		return;
 
 	if (assembly->image->dynamic)
+		return;
+
+	if (mono_security_get_mode () == MONO_SECURITY_MODE_CAS)
 		return;
 
 	mono_aot_lock ();
@@ -913,18 +919,18 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 		return;
 	}
 
-	find_symbol (sofile, globals, "got_addr", (gpointer *)&got_addr);
-	g_assert (got_addr);
-	got = (gpointer*)*got_addr;
-	g_assert (got);
-	find_symbol (sofile, globals, "got_size", (gpointer *)&got_size_ptr);
-	g_assert (got_size_ptr);
+	find_symbol (sofile, globals, "mono_aot_file_info", (gpointer*)&file_info);
+	g_assert (file_info);
 
 	amodule = g_new0 (MonoAotModule, 1);
 	amodule->aot_name = aot_name;
 	amodule->assembly = assembly;
-	amodule->got = got;
-	amodule->got_size = *got_size_ptr;
+	amodule->plt_got_offset_base = file_info->plt_got_offset_base;
+	amodule->num_trampolines = file_info->num_trampolines;
+	amodule->trampoline_got_offset_base = file_info->trampoline_got_offset_base;
+	amodule->got_size = file_info->got_size;
+	amodule->plt_size = file_info->plt_size;
+	amodule->got = file_info->got;
 	amodule->got [0] = assembly->image;
 	amodule->globals = globals;
 	amodule->sofile = sofile;
@@ -998,22 +1004,6 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 
 	find_symbol (sofile, globals, "plt", (gpointer*)&amodule->plt);
 	find_symbol (sofile, globals, "plt_end", (gpointer*)&amodule->plt_end);
-	find_symbol (sofile, globals, "plt_info", (gpointer*)&amodule->plt_info);
-
-	find_symbol (sofile, globals, "plt_jump_table_addr", (gpointer *)&plt_jump_table_addr);
-	g_assert (plt_jump_table_addr);
-	amodule->plt_jump_table = (guint8*)*plt_jump_table_addr;
-	g_assert (amodule->plt_jump_table);
-
-	find_symbol (sofile, globals, "plt_jump_table_size", (gpointer *)&plt_jump_table_size);
-	g_assert (plt_jump_table_size);
-	amodule->plt_jump_table_size = *plt_jump_table_size;
-
-	find_symbol (sofile, globals, "trampolines_info", (gpointer *)&trampolines_info);
-	if (trampolines_info) {
-		amodule->num_trampolines = trampolines_info [0];
-		amodule->first_trampoline_got_offset = trampolines_info [1];
-	}	
 
 	if (make_unreadable) {
 #ifndef PLATFORM_WIN32
@@ -2049,7 +2039,7 @@ load_method (MonoDomain *domain, MonoAotModule *aot_module, MonoImage *image, Mo
 
 	mono_aot_unlock ();
 
-	if (from_plt && klass)
+	if (from_plt && klass && !klass->generic_container)
 		mono_runtime_class_init (mono_class_vtable (domain, klass));
 
 	return code;
@@ -2337,106 +2327,6 @@ find_aot_module (guint8 *code)
 }
 
 /*
- * mono_aot_set_make_unreadable:
- *
- *   Set whenever to make all mmaped memory unreadable. In conjuction with a
- * SIGSEGV handler, this is useful to find out which pages the runtime tries to read.
- */
-void
-mono_aot_set_make_unreadable (gboolean unreadable)
-{
-	make_unreadable = unreadable;
-}
-
-typedef struct {
-	MonoAotModule *module;
-	guint8 *ptr;
-} FindMapUserData;
-
-static void
-find_map (gpointer key, gpointer value, gpointer user_data)
-{
-	MonoAotModule *module = (MonoAotModule*)value;
-	FindMapUserData *data = (FindMapUserData*)user_data;
-
-	if (!data->module)
-		if ((data->ptr >= module->mem_begin) && (data->ptr < module->mem_end))
-			data->module = module;
-}
-
-static MonoAotModule*
-find_module_for_addr (void *ptr)
-{
-	FindMapUserData data;
-
-	if (!make_unreadable)
-		return NULL;
-
-	data.module = NULL;
-	data.ptr = (guint8*)ptr;
-
-	mono_aot_lock ();
-	g_hash_table_foreach (aot_modules, (GHFunc)find_map, &data);
-	mono_aot_unlock ();
-
-	return data.module;
-}
-
-/*
- * mono_aot_is_pagefault:
- *
- *   Should be called from a SIGSEGV signal handler to find out whenever @ptr is
- * within memory allocated by this module.
- */
-gboolean
-mono_aot_is_pagefault (void *ptr)
-{
-	if (!make_unreadable)
-		return FALSE;
-
-	return find_module_for_addr (ptr) != NULL;
-}
-
-/*
- * mono_aot_handle_pagefault:
- *
- *   Handle a pagefault caused by an unreadable page by making it readable again.
- */
-void
-mono_aot_handle_pagefault (void *ptr)
-{
-#ifndef PLATFORM_WIN32
-	guint8* start = (guint8*)ROUND_DOWN (((gssize)ptr), PAGESIZE);
-	int res;
-
-	mono_aot_lock ();
-	res = mprotect (start, PAGESIZE, PROT_READ|PROT_WRITE|PROT_EXEC);
-	g_assert (res == 0);
-
-	n_pagefaults ++;
-	mono_aot_unlock ();
-
-#if 0
- {
-	void *array [256];
-	char **names;
-	int i, size;
-
-	printf ("\nNative stacktrace:\n\n");
-
-	size = backtrace (array, 256);
-	names = backtrace_symbols (array, size);
-	for (i =0; i < size; ++i) {
-		printf ("\t%s\n", names [i]);
-	}
-	free (names);
- }
-#endif
-
-#endif
-}
-
-/*
  * mono_aot_plt_resolve:
  *
  *   This function is called by the entries in the PLT to resolve the actual method that
@@ -2454,7 +2344,7 @@ mono_aot_plt_resolve (gpointer aot_module, guint32 plt_info_offset, guint8 *code
 
 	//printf ("DYN: %p %d\n", aot_module, plt_info_offset);
 
-	p = &module->plt_info [plt_info_offset];
+	p = &module->got_info [plt_info_offset];
 
 	ji.type = decode_value (p, &p);
 
@@ -2492,10 +2382,8 @@ init_plt (MonoAotModule *info)
 #ifdef MONO_ARCH_AOT_SUPPORTED
 #ifdef __i386__
 	guint8 *buf = info->plt;
-#elif defined(__x86_64__)
-	int i, n_entries;
-#elif defined(__arm__)
-	int i, n_entries;
+#elif defined(__x86_64__) || defined(__arm__)
+	int i;
 #endif
 	gpointer tramp;
 
@@ -2510,15 +2398,14 @@ init_plt (MonoAotModule *info)
 	x86_jump_code (buf, tramp);
 #elif defined(__x86_64__) || defined(__arm__)
 	/*
-	 * Initialize the entries in the plt_jump_table to point to the default targets.
+	 * Initialize the PLT entries in the GOT to point to the default targets.
 	 */
-	 n_entries = info->plt_jump_table_size / sizeof (gpointer);
 
 	 /* The first entry points to the AOT trampoline */
-	 ((gpointer*)info->plt_jump_table)[0] = tramp;
-	 for (i = 1; i < n_entries; ++i)
+	 ((gpointer*)info->got)[info->plt_got_offset_base] = tramp;
+	 for (i = 1; i < info->plt_size; ++i)
 		 /* All the default entries point to the first entry */
-		 ((gpointer*)info->plt_jump_table)[i] = info->plt;
+		 ((gpointer*)info->got)[info->plt_got_offset_base + i] = info->plt;
 #else
 	g_assert_not_reached ();
 #endif
@@ -2757,8 +2644,8 @@ mono_aot_create_specific_trampoline (MonoImage *image, gpointer arg1, MonoTrampo
 	tramp = generic_trampolines [tramp_type];
 	g_assert (tramp);
 
-	amodule->got [amodule->first_trampoline_got_offset + (index *2)] = tramp;
-	amodule->got [amodule->first_trampoline_got_offset + (index *2) + 1] = arg1;
+	amodule->got [amodule->trampoline_got_offset_base + (index *2)] = tramp;
+	amodule->got [amodule->trampoline_got_offset_base + (index *2) + 1] = arg1;
 
 #ifdef __x86_64__
 	tramp_size = 16;
@@ -2805,17 +2692,6 @@ mono_aot_get_lazy_fetch_trampoline (guint32 slot)
 	return code;
 }
 
-/*
- * mono_aot_get_n_pagefaults:
- *
- *   Return the number of times handle_pagefault is called.
- */
-guint32
-mono_aot_get_n_pagefaults (void)
-{
-	return n_pagefaults;
-}
-
 #else
 /* AOT disabled */
 
@@ -2858,28 +2734,6 @@ gpointer
 mono_aot_get_method_from_token (MonoDomain *domain, MonoImage *image, guint32 token)
 {
 	return NULL;
-}
-
-gboolean
-mono_aot_is_pagefault (void *ptr)
-{
-	return FALSE;
-}
-
-void
-mono_aot_set_make_unreadable (gboolean unreadable)
-{
-}
-
-guint32
-mono_aot_get_n_pagefaults (void)
-{
-	return 0;
-}
-
-void
-mono_aot_handle_pagefault (void *ptr)
-{
 }
 
 guint8*

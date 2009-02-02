@@ -33,6 +33,7 @@ using System.Reflection;
 using System.Web.UI;
 using System.Web.SessionState;
 using System.Web.Configuration;
+using System.Threading;
 
 using System.Web.Compilation;
 #if TARGET_J2EE
@@ -69,9 +70,10 @@ namespace System.Web {
 #else
 		static HttpApplicationFactory theFactory = new HttpApplicationFactory();
 #endif
-		MethodInfo session_end;
+		object session_end; // This is a MethodInfo
 		bool needs_init = true;
 		bool app_start_needed = true;
+		bool have_app_events;
 		Type app_type;
 		HttpApplicationState app_state;
 		Hashtable app_event_handlers;
@@ -85,6 +87,7 @@ namespace System.Web {
 		static string[] app_mono_machine_browsers_files = new string[0];
 #endif
 		Stack available = new Stack ();
+		object next_free;
 		Stack available_for_end = new Stack ();
 		
 		bool IsEventHandler (MethodInfo m)
@@ -149,6 +152,9 @@ namespace System.Web {
 		
 		Hashtable GetApplicationTypeEvents (Type type)
 		{
+			if (have_app_events)
+				return app_event_handlers;
+
 			lock (this_lock) {
 				if (app_event_handlers != null)
 					return app_event_handlers;
@@ -172,6 +178,7 @@ namespace System.Web {
 					}
 				}
 				used = null;
+				have_app_events = true;
 			}
 
 			return app_event_handlers;
@@ -179,12 +186,10 @@ namespace System.Web {
 
 		Hashtable GetApplicationTypeEvents (HttpApplication app)
 		{
-			lock (this_lock) {
-				if (app_event_handlers != null)
-					return app_event_handlers;
+			if (have_app_events)
+				return app_event_handlers;
 
-				return GetApplicationTypeEvents (app.GetType ());
-			}
+			return GetApplicationTypeEvents (app.GetType ());
 		}
 
 		bool FireEvent (string method_name, object target, object [] args)
@@ -277,16 +282,13 @@ namespace System.Web {
 
 				string usualName = moduleName + "_" + eventName;
 				object methodData = possibleEvents [usualName];
-				if (methodData != null && eventName == "End" && moduleName == "Session") {
-					lock (factory) {
-						if (factory.session_end == null)
-							factory.session_end = (MethodInfo) methodData;
-					}
-					continue;
-				}
-
 				if (methodData == null)
 					continue;
+
+				if (eventName == "End" && moduleName == "Session") {
+					Interlocked.CompareExchange (ref factory.session_end, methodData, null);
+					continue;
+				}
 
 				if (methodData is MethodInfo) {
 					factory.AddHandler (evt, target, app, (MethodInfo) methodData);
@@ -307,14 +309,19 @@ namespace System.Web {
 				NoParamsInvoker npi = new NoParamsInvoker (app, method);
 				evt.AddEventHandler (target, npi.FakeDelegate);
 			} else {
-				evt.AddEventHandler (target, Delegate.CreateDelegate (
-							     evt.EventHandlerType, app,
+				if (method.IsStatic) {
+					evt.AddEventHandler (target, Delegate.CreateDelegate (
+						evt.EventHandlerType, method));
+				} else {
+					evt.AddEventHandler (target, Delegate.CreateDelegate (
+								     evt.EventHandlerType, app,
 #if NET_2_0
-							     method
+								     method
 #else
-							     method.Name
+								     method.Name
 #endif
-						     ));
+							     ));
+				}
 			}
 			
 		}
@@ -330,7 +337,7 @@ namespace System.Web {
 			MethodInfo method = null;
 			HttpApplication app = null;
 			lock (factory.available_for_end) {
-				method = factory.session_end;
+				method = (MethodInfo) factory.session_end;
 				if (method == null)
 					return;
 
@@ -471,9 +478,9 @@ namespace System.Web {
 
 					WatchLocationForRestart("Global.asax");
 					WatchLocationForRestart("global.asax");
-					WatchLocationForRestart("Web.config");
-					WatchLocationForRestart("web.config");
-					WatchLocationForRestart("Web.Config");
+					WatchLocationForRestart(String.Empty, "Web.config", true);
+					WatchLocationForRestart(String.Empty, "web.config", true);
+					WatchLocationForRestart(String.Empty, "Web.Config", true);
 					needs_init = false;
 #if NET_2_0
 				} catch (Exception) {
@@ -532,6 +539,12 @@ namespace System.Web {
 				}
 			}
 
+			app = (HttpApplication) Interlocked.Exchange (ref factory.next_free, null);
+			if (app != null) {
+				app.RequestCompleted = false;
+				return app;
+			}
+
 			lock (factory.available) {
 				if (factory.available.Count > 0) {
 					app = (HttpApplication) factory.available.Pop ();
@@ -558,24 +571,33 @@ namespace System.Web {
 
 		internal static void RecycleForSessionEnd (HttpApplication app)
 		{
+			bool dispose = false;
 			HttpApplicationFactory factory = theFactory;
 			lock (factory.available_for_end) {
-				if (factory.available_for_end.Count < 32)
+				if (factory.available_for_end.Count < 64)
 					factory.available_for_end.Push (app);
 				else
-					app.Dispose ();
+					dispose = true;
 			}
+			if (dispose)
+				app.Dispose ();
 		}
 
 		internal static void Recycle (HttpApplication app)
 		{
+			bool dispose = false;
 			HttpApplicationFactory factory = theFactory;
+			if (Interlocked.CompareExchange (ref factory.next_free, app, null) == null)
+				return;
+
 			lock (factory.available) {
-				if (factory.available.Count < 32)
+				if (factory.available.Count < 64)
 					factory.available.Push (app);
 				else
-					app.Dispose ();
+					dispose = true;
 			}
+			if (dispose)
+				app.Dispose ();
 		}
 
 		internal static bool ContextAvailable {
@@ -600,7 +622,7 @@ namespace System.Web {
 			physicalPath = Path.Combine(physicalPath, virtualPath);
 			bool isDir = Directory.Exists(physicalPath);
 			bool isFile = isDir ? false : File.Exists(physicalPath);
-			
+
 			if (isDir || isFile) {
 				// create the watcher
 				FileSystemEventHandler fseh = new FileSystemEventHandler(OnFileChanged);

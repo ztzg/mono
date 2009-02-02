@@ -1,3 +1,38 @@
+2009-01-26  Christian Prochnow <cproch@seculogix.de>
+
+	* Ping.cs: ignore ICMP echo request packet in case we ping
+	  localhost.
+
+2009-01-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NetworkInformationPermission.cs,
+	  NetworkInformationPermissionAttribute.cs : implement some,
+	  otherwise it blocks compilation.
+
+2008-12-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Ping.cs: use the new internal method in Socket to avoid having to
+	throw exceptions when there's a timeout.
+
+2008-12-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Ping.cs: close the socket in SendPrivileged. Use Buffer.BlockCopy
+	instead of Array.Copy. Return IPStatus.Unknown instead of throwing an
+	exception for unknown status codes received.
+
+2008-11-29  Miguel De Icaza  <miguel@novell.com>
+
+	* NetworkInterface.cs: Do not throw an exception when scanning
+	external kernel information that might cause problems.   The
+	application should not crash just trying to fetch interfaces from
+	the system. 
+
+2008-11-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Ping.cs: the time for the arguments of 'ping' is in seconds. Don't
+	read the output of running the command, since we trust the return
+	code.
+
 2008-10-27  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* Ping.cs : use privileged mode for non-unix. On Windows there is

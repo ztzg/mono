@@ -1169,7 +1169,7 @@ mono_domain_create (void)
 	domain->proxy_vtable_hash = g_hash_table_new ((GHashFunc)mono_ptrarray_hash, (GCompareFunc)mono_ptrarray_equal);
 	domain->static_data_array = NULL;
 	mono_jit_code_hash_init (&domain->jit_code_hash);
-	domain->ldstr_table = mono_g_hash_table_new ((GHashFunc)mono_string_hash, (GCompareFunc)mono_string_equal);
+	domain->ldstr_table = mono_g_hash_table_new_type ((GHashFunc)mono_string_hash, (GCompareFunc)mono_string_equal, MONO_HASH_KEY_VALUE_GC);
 	domain->num_jit_info_tables = 1;
 	domain->jit_info_table = jit_info_table_new (domain);
 	domain->jit_info_free_queue = NULL;
@@ -1179,7 +1179,6 @@ mono_domain_create (void)
 	InitializeCriticalSection (&domain->assemblies_lock);
 	InitializeCriticalSection (&domain->jit_code_hash_lock);
 
-	domain->shared_generics_hash = NULL;
 	domain->method_rgctx_hash = NULL;
 
 	mono_appdomains_lock ();
@@ -1792,26 +1791,6 @@ mono_domain_assembly_open (MonoDomain *domain, const char *name)
 	return ass;
 }
 
-MonoJitInfo*
-mono_domain_lookup_shared_generic (MonoDomain *domain, MonoMethod *method)
-{
-	if (!domain->shared_generics_hash)
-		return NULL;
-
-	return g_hash_table_lookup (domain->shared_generics_hash, method);
-}
-
-void
-mono_domain_register_shared_generic (MonoDomain *domain, MonoMethod *method, MonoJitInfo *jit_info)
-{
-	if (!domain->shared_generics_hash)
-		domain->shared_generics_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-
-	g_assert (domain->shared_generics_hash);
-
-	g_hash_table_insert (domain->shared_generics_hash, method, jit_info);
-}
-
 void
 mono_domain_free (MonoDomain *domain, gboolean force)
 {
@@ -1919,10 +1898,6 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	}
 	g_hash_table_destroy (domain->finalizable_objects_hash);
 	domain->finalizable_objects_hash = NULL;
-	if (domain->shared_generics_hash) {
-		g_hash_table_destroy (domain->shared_generics_hash);
-		domain->shared_generics_hash = NULL;
-	}
 	if (domain->method_rgctx_hash) {
 		g_hash_table_destroy (domain->method_rgctx_hash);
 		domain->method_rgctx_hash = NULL;

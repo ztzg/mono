@@ -905,6 +905,13 @@ do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
 	image->raw_buffer_used = TRUE;
 	image->raw_data_len = stat_buf.st_size;
 	image->raw_data = mono_file_map (stat_buf.st_size, MONO_MMAP_READ|MONO_MMAP_PRIVATE, fileno (filed), 0, &image->raw_data_handle);
+	if (!image->raw_data) {
+		fclose (filed);
+		g_free (image);
+		if (status)
+			*status = MONO_IMAGE_IMAGE_INVALID;
+		return NULL;
+	}
 	iinfo = g_new0 (MonoCLIImageInfo, 1);
 	image->image_info = iinfo;
 	image->name = mono_path_resolve_symlinks (fname);
@@ -1362,10 +1369,11 @@ mono_image_close (MonoImage *image)
 	 * assemblies, so we can't release these references in mono_assembly_close () since the
 	 * MonoImage might outlive its associated MonoAssembly.
 	 */
-	if (image->references) {
+	if (image->references && !image->dynamic) {
+		MonoTableInfo *t = &image->tables [MONO_TABLE_ASSEMBLYREF];
 		int i;
 
-		for (i = 0; image->references [i]; i++) {
+		for (i = 0; i < t->rows; i++) {
 			if (image->references [i])
 				mono_assembly_close (image->references [i]);
 		}

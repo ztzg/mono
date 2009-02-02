@@ -64,13 +64,13 @@ endif
 ifeq (net_2_0, $(PROFILE))
 COMPILER_NAME = gmcs
 TEST_PATTERN = '*test-*.cs'
-LOCAL_RUNTIME_FLAGS = --security=validil
+LOCAL_RUNTIME_FLAGS = --security=validil --verify-all
 TOPTIONS += '-il:ver-il-gmcs.xml'
 endif
 ifeq (net_1_1, $(PROFILE))
 COMPILER_NAME = mcs
 TEST_PATTERN = 'test-*.cs'
-LOCAL_RUNTIME_FLAGS = --security=validil
+LOCAL_RUNTIME_FLAGS = --security=validil --verify-all
 endif
 
 COMPILER = $(topdir)/class/lib/$(PROFILE)/$(COMPILER_NAME).exe
@@ -81,7 +81,7 @@ TEST_ILS := $(wildcard *-lib.il)
 ifeq (net_2_0, $(PROFILE))
 eval-test: 
 	$(CSCOMPILE) eval-test.cs -r:$(COMPILER)
-	MONO_PATH=$(topdir)/class/lib/$(PROFILE):. $(RUNTIME) eval-test.exe
+	$(with_mono_path) $(RUNTIME) $(RUNTIME_FLAGS) eval-test.exe
 else
 eval-test:
 endif

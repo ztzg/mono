@@ -6,7 +6,7 @@ AC_CANONICAL_SYSTEM
 m4_ifdef([_A][M_PROG_TAR],[_A][M_SET_OPTION([tar-ustar])])
 
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(mono,2.2)
+AM_INIT_AUTOMAKE(mono,2.4)
 AM_MAINTAINER_MODE
 
 API_VER=1.0
@@ -144,6 +144,7 @@ case "$host" in
 		libmono_ldflags="-lpthread"
 		libdl="-ldl"
 		libgc_threads=pthreads
+		AOT_SUPPORTED="yes"
 		;;
 	*-*-hpux*)
         platform_win32=no
@@ -175,6 +176,7 @@ case "$host" in
 		;;
 	*-*-darwin*)
 		platform_win32=no
+		platform_darwin=yes
 		CPPFLAGS="$CPPFLAGS -no-cpp-precomp -D_THREAD_SAFE -DGC_MACOSX_THREADS -DPLATFORM_MACOSX -DUSE_MMAP -DUSE_MUNMAP"
 		CPPFLAGS="$CPPFLAGS -DGetCurrentProcess=MonoGetCurrentProcess -DGetCurrentThread=MonoGetCurrentThread -DCreateEvent=MonoCreateEvent"
 		libmono_cflags="-D_THREAD_SAFE"
@@ -267,7 +269,7 @@ fi
 AM_CONDITIONAL(NO_VERSION_SCRIPT, test x$no_version_script = xyes)
 
 AC_CHECK_HEADERS(sys/filio.h sys/sockio.h netdb.h utime.h sys/utime.h semaphore.h sys/un.h linux/rtc.h sys/syscall.h sys/mkdev.h)
-AC_CHECK_HEADERS(sys/user.h)
+AC_CHECK_HEADERS(sys/user.h sys/socket.h sys/ipc.h sys/sem.h sys/utsname.h alloca.h ucontext.h pwd.h)
 
 AC_CHECK_HEADER(zlib.h, [have_zlib=yes], [have_zlib=no])
 if test x$have_zlib = xyes; then
@@ -391,6 +393,14 @@ fi
 # gettext: prepare the translation directories. 
 # we do not configure the full gettext, as we consume it dynamically from C#
 AM_PO_SUBDIRS
+
+if test "x$USE_NLS" = "xyes"; then
+   AC_CHECK_PROG(HAVE_MSGFMT, msgfmt,yes,no)
+
+   if test "x$HAVE_MSGFMT" = "xno"; then
+	  AC_MSG_ERROR([msgfmt not found. You need to install the 'gettext' package, or pass --enable-nls=no to configure.])
+   fi
+fi
 
 AC_ARG_WITH([libgdiplus], 
 	[  --with-libgdiplus=installed|sibling|<path>	Override the libgdiplus used for System.Drawing tests (defaults to NO)], 
@@ -1406,9 +1416,12 @@ if test x$platform_win32 = xno; then
 	AC_CHECK_HEADERS(sys/extattr.h)
 	AC_CHECK_HEADERS(sys/sendfile.h)
 	AC_CHECK_HEADERS(sys/statvfs.h)
+	AC_CHECK_HEADERS(sys/statfs.h)
 	AC_CHECK_HEADERS(sys/vfstab.h)
 	AC_CHECK_HEADERS(sys/xattr.h)
 	AC_CHECK_HEADERS(sys/mman.h)
+	AC_CHECK_HEADERS(sys/param.h)
+	AC_CHECK_HEADERS(sys/mount.h)
 	AC_CHECK_FUNCS(getdomainname)
 	AC_CHECK_FUNCS(setdomainname)
 	AC_CHECK_FUNCS(fgetgrent)
@@ -1749,6 +1762,8 @@ SQLITE="libsqlite.so.0"
 SQLITE3="libsqlite3.so.0"
 X11="libX11.so"
 
+sizeof_register="SIZEOF_VOID_P"
+
 jit_wanted=false
 interp_wanted=false
 case "$host" in
@@ -1762,6 +1777,20 @@ case "$host" in
 		ACCESS_UNALIGNED="no"
 		JIT_SUPPORTED=yes
 		jit_wanted=true
+
+		AC_MSG_CHECKING(for mips n32)
+		AC_TRY_COMPILE([], [
+		void main () {
+		#if _MIPS_SIM != _ABIN32
+		#error Not mips n32
+		#endif
+   		}
+		],[
+		AC_MSG_RESULT(yes)
+		sizeof_register=8
+		],[
+		AC_MSG_RESULT(no)
+		])
 		;;
 	i*86-*-*)
 		TARGET=X86;
@@ -1870,8 +1899,11 @@ case "$host" in
         powerpc-*-sysv* | powerpc-*-darwin* | powerpc-*-netbsd* )
 		if test "x$ac_cv_sizeof_void_p" = "x8"; then
 			TARGET=POWERPC64;
+			CPPFLAGS="$CPPFLAGS -D__mono_ppc__ -D__mono_ppc64__"
+			CFLAGS="$CFLAGS -mminimal-toc"
 		else
 			TARGET=POWERPC;
+			CPPFLAGS="$CPPFLAGS -D__mono_ppc__"
 		fi
 		AC_DEFINE(MONO_ARCH_REGPARMS,1,[Architecture uses registers for Parameters])
 		arch_target=ppc;
@@ -1921,6 +1953,14 @@ case "$host" in
 		jit_wanted=true
 		;;
 esac
+
+if test "x$sizeof_register" = "x4"; then
+   AC_DEFINE(SIZEOF_REGISTER,4,[size of machine integer registers])
+elif test "x$sizeof_register" = "x8"; then
+   AC_DEFINE(SIZEOF_REGISTER,8,[size of machine integer registers])
+else
+   AC_DEFINE(SIZEOF_REGISTER,SIZEOF_VOID_P,[size of machine integer registers])
+fi
 
 if test "x$have_visibility_hidden" = "xyes"; then
    AC_DEFINE(HAVE_VISIBILITY_HIDDEN, 1, [Support for the visibility ("hidden") attribute])
@@ -2118,12 +2158,16 @@ AC_ARG_WITH(moonlight,[ --with-moonlight=yes,no   If you want to build the Moonl
 ])
 
 OPROFILE=no
-AC_ARG_WITH(oprofile,[ --with-oprofile=no,<path>   Enable oprofile support (defaults to NO)],[
+AC_ARG_WITH(oprofile,[ --with-oprofile=no,<oprofile install dir>   Enable oprofile support (defaults to NO)],[
 	if test x$with_oprofile != xno; then
-	      OPROFILE=yes
-	      OPROFILE_CFLAGS="-I$with_oprofile/include"
-	      OPROFILE_LIBS=
-	      AC_DEFINE(HAVE_OPROFILE,1,[Have oprofile support])
+	    oprofile_include=$with_oprofile/include
+	    if test ! -f $oprofile_include/opagent.h; then
+	   	  AC_MSG_ERROR([oprofile include file not found at $oprofile_include/opagent.h])
+		fi
+	    OPROFILE=yes
+		OPROFILE_CFLAGS="-I$oprofile_include"
+	    OPROFILE_LIBS="-L$with_oprofile/lib/oprofile -lopagent"
+	    AC_DEFINE(HAVE_OPROFILE,1,[Have oprofile support])
 	fi
 ])
 
@@ -2313,7 +2357,6 @@ mono/tests/cas/inheritance/Makefile
 mono/tests/cas/linkdemand/Makefile
 mono/tests/cas/threads/Makefile
 mono/benchmark/Makefile
-mono/monoburg/Makefile
 mono/monograph/Makefile
 mono/io-layer/Makefile
 mono/mini/Makefile
@@ -2403,6 +2446,14 @@ fi
     echo "MONO_VERSION = $myver" >> $srcdir/$mcsdir/build/config.make
   fi
 
+  if test x$platform_darwin = xyes; then
+	echo "PLATFORM = darwin" >> $srcdir/$mcsdir/build/config.make
+  fi
+
+  if test x$TARGET = xAMD64 -a x$platform_win32 = xno -a "x$AOT_SUPPORTED" = "xyes"; then
+  	 echo "ENABLE_AOT = 1" >> $srcdir/$mcsdir/build/config.make
+  fi
+
   # if we have an olive folder, override the default settings
   if test -d $olivedir; then
 
@@ -2444,7 +2495,7 @@ echo "
 
 "
 if test x$with_static_mono = xno -a "x$platform_win32" != "xyes"; then
-   AC_MSG_WARN(Turning off static Mono is a risk, you might run into unexepcted bugs)
+   AC_MSG_WARN(Turning off static Mono is a risk, you might run into unexpected bugs)
 fi
 
 if test x$gc = xsgen; then

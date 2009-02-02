@@ -102,6 +102,11 @@ namespace System.Windows.Forms
 		public virtual void Clear ()
 		{
 			base.List.Clear ();
+			
+			// When we clear the column collection, all rows get deleted
+			dataGridView.Rows.Clear ();
+			dataGridView.PrepareEditingRow (false, true);
+			
 			RegenerateSortedList ();
 		}
 
@@ -218,8 +223,9 @@ namespace System.Windows.Forms
 
 		protected virtual void OnCollectionChanged (CollectionChangeEventArgs e)
 		{
+			RegenerateIndexes ();
 			RegenerateSortedList ();
-			
+
 			if (CollectionChanged != null)
 				CollectionChanged(this, e);
 		}
@@ -232,6 +238,12 @@ namespace System.Windows.Forms
 			get { return display_index_sorted; }
 		}
 
+		private void RegenerateIndexes ()
+		{
+			for (int i = 0; i < Count; i++)
+				this[i].SetIndex (i);
+		}
+		
 		internal void RegenerateSortedList ()
 		{
 			DataGridViewColumn[] array = (DataGridViewColumn[])base.List.ToArray (typeof (DataGridViewColumn));

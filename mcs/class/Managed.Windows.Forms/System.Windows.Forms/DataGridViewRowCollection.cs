@@ -98,7 +98,7 @@ namespace System.Windows.Forms
 		[DesignerSerializationVisibility (DesignerSerializationVisibility.Hidden)]
 		public virtual int Add ()
 		{
-			return Add (dataGridView.RowTemplate.Clone () as DataGridViewRow);
+			return Add (dataGridView.RowTemplateFull as DataGridViewRow);
 		}
 
 		int IList.Add (object value)
@@ -185,7 +185,7 @@ namespace System.Windows.Forms
 			raiseEvent = false;
 			int result = 0;
 			for (int i = 0; i < count; i++)
-				result = Add (dataGridView.RowTemplate.Clone () as DataGridViewRow);
+				result = Add (dataGridView.RowTemplateFull as DataGridViewRow);
 			DataGridView.OnRowsAdded (new DataGridViewRowsAddedEventArgs (result - count + 1, count));
 			raiseEvent = true;
 			return result;
@@ -240,7 +240,18 @@ namespace System.Windows.Forms
 
 		public virtual void Clear ()
 		{
-			list.Clear();
+			int total = list.Count;
+			
+			for (int i = 0; i < total; i++) {
+				DataGridViewRow row = (DataGridViewRow)list[0];
+				
+				// We can exit because the NewRow is always last
+				if (row.IsNewRow)
+					break;
+					
+				list.Remove (row);
+				ReIndex ();
+			}
 		}
 
 		bool IList.Contains (object value)
@@ -391,7 +402,7 @@ namespace System.Windows.Forms
 			int index = rowIndex;
 			raiseEvent = false;
 			for (int i = 0; i < count; i++)
-				Insert (index++, dataGridView.RowTemplate.Clone ());
+				Insert (index++, dataGridView.RowTemplateFull);
 			DataGridView.OnRowsAdded (new DataGridViewRowsAddedEventArgs (rowIndex, count));
 			raiseEvent = true;
 		}
@@ -442,19 +453,35 @@ namespace System.Windows.Forms
 
 		public virtual void Remove (DataGridViewRow dataGridViewRow)
 		{
+			if (dataGridViewRow.IsNewRow)
+				throw new InvalidOperationException ("Cannot delete the new row");
+				
 			list.Remove (dataGridViewRow);
 			ReIndex ();
 			OnCollectionChanged (new CollectionChangeEventArgs (CollectionChangeAction.Remove, dataGridViewRow));
-			DataGridView.OnRowsRemoved (new DataGridViewRowsRemovedEventArgs (dataGridViewRow.Index, 1));
+			DataGridView.OnRowsRemovedInternal (new DataGridViewRowsRemovedEventArgs (dataGridViewRow.Index, 1));
 		}
 
+		internal virtual void RemoveInternal (DataGridViewRow dataGridViewRow)
+		{
+			list.Remove (dataGridViewRow);
+			ReIndex ();
+			OnCollectionChanged (new CollectionChangeEventArgs (CollectionChangeAction.Remove, dataGridViewRow));
+			DataGridView.OnRowsRemovedInternal (new DataGridViewRowsRemovedEventArgs (dataGridViewRow.Index, 1));
+		}
+		
 		public virtual void RemoveAt (int index)
 		{
 			DataGridViewRow row = this [index];
-			list.RemoveAt (index);
-			ReIndex ();
-			OnCollectionChanged (new CollectionChangeEventArgs (CollectionChangeAction.Remove, row));
-			DataGridView.OnRowsRemoved (new DataGridViewRowsRemovedEventArgs (index, 1));
+			
+			Remove (row);
+		}
+
+		internal void RemoveAtInternal (int index)
+		{
+			DataGridViewRow row = this [index];
+			
+			RemoveInternal (row);
 		}
 
 		public DataGridViewRow SharedRow (int rowIndex)

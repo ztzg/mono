@@ -1,3 +1,34 @@
+2009-01-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : implement InvokeAsync(). Not sure if it works yet.
+
+2009-01-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientProxyGenerator.cs : fix reflection-based GetConstructor()
+	  so that it can work in 2.1 profile (.ctor is made internal).
+
+2009-01-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServerTooBusyException.cs, CommunicationObjectAbortedException.cs,
+	  ServiceActivationException.cs : new exception types.
+
+2009-01-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs, ClientRuntimeChannel.cs : added support for
+	  interactive channel initializers.
+
+2009-01-12  Geoff Norton  <gnorton@novell.com>
+
+	* ClientBase.cs: Added a few delegates missing from ChannelBase
+
+2009-01-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : added ChannelBase class inside.
+
+2009-01-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* OperationContext.cs : changes to include this in net_2_1_raw.
+
 2008-05-28  Noam Lampert <noaml@mainsoft.com>
 	* ServiceHost.cs: Allow services to implement more than one contract.
 

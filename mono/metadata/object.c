@@ -1504,7 +1504,7 @@ mono_method_add_generic_virtual_invocation (MonoDomain *domain, gpointer *vtable
 
 		entry = g_new0 (MonoImtBuilderEntry, 1);
 		entry->key = list->inst;
-		entry->value.target_code = list->code;
+		entry->value.target_code = mono_get_addr_from_ftnptr (list->code);
 		if (entries)
 			entry->children = entries->children + 1;
 		entry->next = entries;
@@ -3255,12 +3255,17 @@ mono_runtime_exec_main (MonoMethod *method, MonoArray *args, MonoObject **exc)
 
 		assembly = method->klass->image->assembly;
 		domain->entry_assembly = assembly;
-		MONO_OBJECT_SETREF (domain->setup, application_base, mono_string_new (domain, assembly->basedir));
+		/* Domains created from another domain already have application_base and configuration_file set */
+		if (domain->setup->application_base == NULL) {
+			MONO_OBJECT_SETREF (domain->setup, application_base, mono_string_new (domain, assembly->basedir));
+		}
 
-		str = g_strconcat (assembly->image->name, ".config", NULL);
-		MONO_OBJECT_SETREF (domain->setup, configuration_file, mono_string_new (domain, str));
-		g_free (str);
-		mono_set_private_bin_path_from_config (domain);
+		if (domain->setup->configuration_file == NULL) {
+			str = g_strconcat (assembly->image->name, ".config", NULL);
+			MONO_OBJECT_SETREF (domain->setup, configuration_file, mono_string_new (domain, str));
+			g_free (str);
+			mono_set_private_bin_path_from_config (domain);
+		}
 	}
 
 	cinfo = mono_custom_attrs_from_method (method);
@@ -3774,7 +3779,7 @@ mono_array_full_copy (MonoArray *src, MonoArray *dest)
 #ifdef HAVE_SGEN_GC
 	if (klass->element_class->valuetype) {
 		if (klass->element_class->has_references)
-			mono_value_copy_array (dest, 0, src, mono_array_length (src));
+			mono_value_copy_array (dest, 0, mono_array_addr_with_size (src, 0, 0), mono_array_length (src));
 		else
 			memcpy (&dest->vector, &src->vector, size);
 	} else {
@@ -3811,7 +3816,7 @@ mono_array_clone_in_domain (MonoDomain *domain, MonoArray *array)
 #ifdef HAVE_SGEN_GC
 		if (klass->element_class->valuetype) {
 			if (klass->element_class->has_references)
-				mono_value_copy_array (o, 0, array, mono_array_length (array));
+				mono_value_copy_array (o, 0, mono_array_addr_with_size (array, 0, 0), mono_array_length (array));
 			else
 				memcpy (&o->vector, &array->vector, size);
 		} else {
@@ -3834,7 +3839,7 @@ mono_array_clone_in_domain (MonoDomain *domain, MonoArray *array)
 #ifdef HAVE_SGEN_GC
 	if (klass->element_class->valuetype) {
 		if (klass->element_class->has_references)
-			mono_value_copy_array (o, 0, array, mono_array_length (array));
+			mono_value_copy_array (o, 0, mono_array_addr_with_size (array, 0, 0), mono_array_length (array));
 		else
 			memcpy (&o->vector, &array->vector, size);
 	} else {
@@ -4270,8 +4275,8 @@ mono_value_copy (gpointer dest, gpointer src, MonoClass *klass)
  * @src: source pointer
  * @count: number of items
  *
- * Copy @count valuetype items from @src to @dest. This function must be used
- * when @klass contains references fields.
+ * Copy @count valuetype items from @src to the array @dest at index @dest_idx. 
+ * This function must be used when @klass contains references fields.
  * Overlap is handled.
  */
 void

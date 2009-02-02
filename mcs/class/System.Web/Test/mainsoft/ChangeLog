@@ -1,9 +1,25 @@
+2008-12-23  Marek Habersack  <mhabersack@novell.com>
+
+	* NunitWeb/Makefile (NunitWeb.dll): added NunitWeb/CustomSection.cs
+
+	* NunitWebResources/CustomSectionEmptyCollection.aspx: added
+
+2008-12-10  Marek Habersack  <mhabersack@novell.com>
+
+	* NunitWebResources/MissingMasterFile.aspx: added
+
 2008-12-08  Marek Habersack  <mhabersack@novell.com>
 
 	* NunitWebResources/ValidPropertyBind5.aspx: added
 
 	* NunitWebResources/ReadWritePropertyControl.ascx: added a
 	writable string property.
+
+2008-12-01  Marek Habersack  <mhabersack@novell.com>
+
+	* NunitWebResources/ContentPlaceHolderInTemplate.master: added
+
+	* NunitWebResources/ContentPlaceHolderInTemplate.aspx: added
 
 2008-11-21  Marek Habersack  <mhabersack@novell.com>
 

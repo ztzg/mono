@@ -29,7 +29,7 @@ alloc_preg (MonoCompile *cfg)
 static inline guint32
 alloc_lreg (MonoCompile *cfg)
 {
-#if SIZEOF_VOID_P == 8
+#if SIZEOF_REGISTER == 8
 	return cfg->next_vreg ++;
 #else
 	/* Use a pair of consecutive vregs */
@@ -81,7 +81,8 @@ alloc_dreg (MonoCompile *cfg, MonoStackType stack_type)
  */
 #define MONO_INST_NEW(cfg,dest,op) do {	\
 		(dest) = mono_mempool_alloc ((cfg)->mempool, sizeof (MonoInst));	\
-        (dest)->inst_p0 = (dest)->inst_p1 = (dest)->next = (dest)->prev = NULL; \
+		(dest)->inst_c0 = (dest)->inst_c1 = 0; \
+		(dest)->next = (dest)->prev = NULL;    \
 		(dest)->opcode = (op);	\
         (dest)->flags = 0; \
         (dest)->type = 0; \
@@ -289,7 +290,7 @@ alloc_dreg (MonoCompile *cfg, MonoStackType stack_type)
 		(dest)->type = STACK_MP;	\
 		(dest)->klass = (var)->klass;	\
         (dest)->dreg = alloc_dreg ((cfg), STACK_MP); \
-		if (SIZEOF_VOID_P == 4 && DECOMPOSE_INTO_REGPAIR ((var)->type)) { MonoInst *var1 = get_vreg_to_inst (cfg, (var)->dreg + 1); MonoInst *var2 = get_vreg_to_inst (cfg, (var)->dreg + 2); g_assert (var1); g_assert (var2); var1->flags |= MONO_INST_INDIRECT; var2->flags |= MONO_INST_INDIRECT; } \
+		if (SIZEOF_REGISTER == 4 && DECOMPOSE_INTO_REGPAIR ((var)->type)) { MonoInst *var1 = get_vreg_to_inst (cfg, (var)->dreg + 1); MonoInst *var2 = get_vreg_to_inst (cfg, (var)->dreg + 2); g_assert (var1); g_assert (var2); var1->flags |= MONO_INST_INDIRECT; var2->flags |= MONO_INST_INDIRECT; } \
 	} while (0)
 
 #define NEW_VARSTORE(cfg,dest,var,vartype,inst) do {	\
@@ -714,6 +715,38 @@ static int ccount = 0;
             mono_link_bblock ((cfg), (cfg)->cbb, (bblock)); \
 	    (cfg)->cbb->next_bb = (bblock); \
 	    (cfg)->cbb = (bblock); \
+    } while (0)
+
+/*Object Model related macros*/
+
+#ifndef MONO_ARCH_EMIT_BOUNDS_CHECK
+#define MONO_ARCH_EMIT_BOUNDS_CHECK(cfg, array_reg, offset, index_reg) do { \
+			int _length_reg = alloc_ireg (cfg); \
+			MONO_EMIT_NEW_LOAD_MEMBASE_OP (cfg, OP_LOADI4_MEMBASE, _length_reg, array_reg, offset); \
+			MONO_EMIT_NEW_BIALU (cfg, OP_COMPARE, -1, _length_reg, index_reg); \
+			MONO_EMIT_NEW_COND_EXC (cfg, LE_UN, "IndexOutOfRangeException"); \
+	} while (0)
+#endif
+
+/* cfg is the MonoCompile been used
+ * array_reg is the vreg holding the array object
+ * array_type is a struct (usually MonoArray or MonoString)
+ * array_length_field is the field in the previous struct with the length
+ * index_reg is the vreg holding the index
+ */
+#define MONO_EMIT_BOUNDS_CHECK(cfg, array_reg, array_type, array_length_field, index_reg) do { \
+            if (!(cfg->opt & MONO_OPT_ABCREM)) { \
+                MONO_ARCH_EMIT_BOUNDS_CHECK ((cfg), (array_reg), G_STRUCT_OFFSET (array_type, array_length_field), (index_reg)); \
+            } else { \
+                MonoInst *ins; \
+                MONO_INST_NEW ((cfg), ins, OP_BOUNDS_CHECK); \
+                ins->sreg1 = array_reg; \
+                ins->sreg2 = index_reg; \
+                ins->inst_imm = G_STRUCT_OFFSET (array_type, array_length_field); \
+                MONO_ADD_INS ((cfg)->cbb, ins); \
+			    (cfg)->flags |= MONO_CFG_HAS_ARRAY_ACCESS; \
+                (cfg)->cbb->has_array_access = TRUE; \
+            } \
     } while (0)
 
 G_END_DECLS

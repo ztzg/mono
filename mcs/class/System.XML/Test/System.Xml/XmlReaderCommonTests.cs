@@ -1952,6 +1952,34 @@ namespace MonoTests.System.Xml
 		}
 
 		[Test]
+		public void ReadContentStringOnEndElement ()
+		{
+			XmlReader xr = XmlReader.Create (new StringReader ("<a>test</a>"));
+			xr.Read ();
+			xr.Read ();
+			xr.Read ();
+			AssertEquals (String.Empty, xr.ReadContentAsString ()); // does not fail, unlike at Element!
+		}
+
+		[Test]
+		public void ReadContentStringOnPI ()
+		{
+			XmlReader xr = XmlReader.Create (new StringReader ("<?pi ?><a>test</a>"));
+			xr.Read ();
+			AssertEquals (String.Empty, xr.ReadContentAsString ());
+		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))] // unlike ReadContentAsString()
+		public void ReadElementContentStringOnPI ()
+		{
+			XmlReader xr = XmlReader.Create (new StringReader ("<?pi ?><a>test</a>"));
+			xr.Read ();
+			AssertEquals (XmlNodeType.ProcessingInstruction, xr.NodeType);
+			xr.ReadElementContentAsString ();
+		}
+
+		[Test]
 		[ExpectedException (typeof (XmlException))]
 		public void ReadElementContentStringMixedContent ()
 		{
@@ -2075,6 +2103,7 @@ namespace MonoTests.System.Xml
 			r.ReadSubtree ();
 		}
 
+		[Test]
 		public void ReadSubtreeEmptyElement ()
 		{
 			string xml = @"<x/>";
@@ -2087,6 +2116,7 @@ namespace MonoTests.System.Xml
 			AssertEquals ("#4", XmlNodeType.None, s.NodeType);
 		}
 
+		[Test]
 		public void ReadSubtreeEmptyElementWithAttribute ()
 		{
 			string xml = @"<root><x a='b'/></root>";
@@ -2106,6 +2136,31 @@ namespace MonoTests.System.Xml
 			r2.Close ();
 			Assert ("#5", r.IsEmptyElement);
 			Assert ("#6", r2.IsEmptyElement);
+		}
+
+		[Test]
+		public void ReadContentAsBase64 ()
+		{
+			byte[] randomData = new byte[24];
+			for (int i = 0; i < randomData.Length; i++)
+				randomData [i] = (byte) i;
+
+			string xmlString = "<?xml version=\"1.0\"?><data>" +
+			Convert.ToBase64String (randomData) + "</data>";
+			TextReader textReader = new StringReader (xmlString);
+			XmlReader xmlReader = XmlReader.Create (textReader);
+			xmlReader.ReadToFollowing ("data");
+
+			int readBytes = 0;
+			byte[] buffer = new byte [24];
+
+			xmlReader.ReadStartElement ();
+			readBytes = xmlReader.ReadContentAsBase64 (buffer, 0, buffer.Length);
+			AssertEquals ("#1", 24, readBytes);
+			AssertEquals ("#2", 0, xmlReader.ReadContentAsBase64 (buffer, 0, buffer.Length));
+			StringWriter sw = new StringWriter ();
+			foreach (byte b in buffer) sw.Write ("{0:X02}", b);
+			AssertEquals ("#3", "000102030405060708090A0B0C0D0E0F1011121314151617", sw.ToString ());
 		}
 #endif
 	}

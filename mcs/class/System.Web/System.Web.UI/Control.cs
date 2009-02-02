@@ -585,7 +585,20 @@ namespace System.Web.UI
 
 		internal void ResetChildNames ()
 		{
-			defaultNumberID = 0;
+			ResetChildNames (-1);
+		}
+
+		internal void ResetChildNames (int value)
+		{
+			if (value < 0)
+				defaultNumberID = 0;
+			else
+				defaultNumberID = value;
+		}
+
+		internal int GetDefaultNumberID ()
+		{
+			return defaultNumberID;
 		}
 
 		string GetDefaultName ()
@@ -1609,7 +1622,10 @@ namespace System.Web.UI
 			if (Adapter != null)
 				thisAdapterViewState = Adapter.SaveAdapterViewState ();
 #endif
-			object thisState = SaveViewState ();
+			object thisState = null;
+
+			if (EnableViewState)
+				thisState = SaveViewState ();
 
 			if (thisState == null && controlList == null && controlStates == null) {
 				if (trace != null) {

@@ -538,6 +538,7 @@ static dis_map_t method_flags_map [] = {
 /*	{ METHOD_ATTRIBUTE_HAS_SECURITY,        "hassecurity" }, */
 	{ METHOD_ATTRIBUTE_REQUIRE_SEC_OBJECT,  "requiresecobj" },
 	{ METHOD_ATTRIBUTE_PINVOKE_IMPL,        "pinvokeimpl " }, 
+	{ METHOD_ATTRIBUTE_STRICT,	            "strict " }, 
 	{ 0, NULL }
 };
 

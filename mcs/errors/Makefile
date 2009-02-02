@@ -50,6 +50,8 @@ ifdef VALID_PROFILE
 
 test-local: $(TEST_SUPPORT_FILES)
 
+check: run-test-local
+
 # again, run-test is when the tests actually happen, so
 # don't compile on make test.
 
@@ -79,7 +81,7 @@ TESTER = MONO_RUNTIME='$(RUNTIME)' $(TEST_RUNTIME) $(RUNTIME_FLAGS) $(LOCAL_RUNT
 run-mcs-tests: $(TEST_SUPPORT_FILES)
 
 run-mcs-tests:
-	rm -f *.exe
+	rm -f *.exe *.mdb
 	$(TESTER) -mode:neg -files:$(TEST_PATTERN) -compiler:$(COMPILER) -issues:known-issues-$(COMPILER_NAME) -log:$(COMPILER_NAME).log $(TESTER_OPTIONS)
 
 clean-local:

@@ -8,6 +8,7 @@ host_alias=sh4-linux
 cross_compiling=yes
 
 CC=sh4-linux-gcc
+CFLAGS="-O1 -g"
 CPPFLAGS=-D__SH4A__
 LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
 

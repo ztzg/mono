@@ -1,15 +1,44 @@
+2008-12-12  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-porting.txt: Added some details about function descriptors
+	and emulated opcodes.
+
+2008-12-08  Jonathan Pryor  <jpryor@novell.com>
+
+	* mono-file-formats.source, mono-tools.source: Place these under the
+	  new "Commands and Files" node, and remove nay intermediate nodes.
+
+2008-11-20  Jonathan Pryor  <jpryor@novell.com>
+
+	* Makefile.am (sources_DATA): Add mono-file-formats.source,
+	  mono-tools.source.
+
+2008-11-20  Raja R Harinath  <harinath@hurrynot.org>
+
+	Remove unnecessary rebuilds of the html directory
+	* docs.make (monoapi.zip): Make slightly more unforgiving, by
+	using '&&' instead of ';' to sequence commands.
+	(mono-tools.zip, mono-file-formats.zip): Likewise.
+	* Makefile.am (monoapi.zip, mono-tools.zip, mono-fileformats.zip):
+	Likewise.
+	(convert.exe): Don't depend on Makefile.am or docs.make.
+
+2008-11-19  Raja R Harinath  <harinath@hurrynot.org>
+
+	Fix srcdir != builddir, and add idiom for multi-output commands
+	* docs.make (monoapi.zip): Handle the case where 'monoapi.tree'
+	exists but 'monoapi.zip' doesn't.  IOW, we should rebuild
+	monoapi.zip with 'rm monoapi.zip; make'.
+	(mono-tools.zip, mono-file-formats.zip): Likewise.
+	* Makefile.am (monoapi.zip, mono-tools.zip, mono-fileformats.zip):
+	Likewise.
+	(monoapi.tree): Don't use $< in an explicit rule.
+	(mono-tools.tree, mono-file-formats.tree): Likewise.
+
 2008-11-18  Jonathan Pryor  <jpryor@novell.com>
 
 	* Makefile.am (EXTRA_DIST): Add mono-file-formats{.config,.source} and
 	  mono-tools{.config,.source} (fixes the build).
-
-2008-11-18  Jonathan Pryor  <jpryor@novell.com>
-
-	* docs.make, Makefile.am: Build mono-file-formats{.tree,.zip},
-	  mono-tool{.tree,.zip} files.
-	* mono-file-formats.config, mono-tools.config: Alter paths to man
-	  pages so that they're valid for building from mono/docs.
-	* monoapi.make: Rename to docs.make.
 
 2008-11-18  Jonathan Pryor  <jpryor@novell.com>
 

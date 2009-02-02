@@ -28,10 +28,10 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.using System;
 
-
 using System;
 using System.Data;
 using System.Data.Common;
+
 using Mono.Data;
 
 using NUnit.Framework;
@@ -42,21 +42,174 @@ namespace MonoTests.System.Data
 	[Category ("odbc"), Category ("sqlserver")]
 	public class CommandTest
 	{
-		[Test]
-		public void ExecuteScalarTest ()
+		IDbConnection conn;
+		IDbCommand cmd;
+
+		[SetUp]
+		public void SetUp ()
 		{
-			IDbConnection conn = ConnectionManager.Singleton.Connection;
+			conn = ConnectionManager.Singleton.Connection;
+			ConnectionManager.Singleton.OpenConnection ();
+			cmd = conn.CreateCommand ();
+		}
+
+		[TearDown]
+		public void TearDown ()
+		{
+			if (cmd != null)
+				cmd.Dispose ();
+			ConnectionManager.Singleton.CloseConnection ();
+		}
+
+		[Test]
+		public void ExecuteNonQuery_CommandText_Empty ()
+		{
 			try {
-				ConnectionManager.Singleton.OpenConnection ();
-				IDbCommand cmd = conn.CreateCommand ();
-				cmd.CommandType = CommandType.Text;
-				cmd.CommandText = "select count(*) from employee where id < 3";
-				Assert.AreEqual (2, (int) Convert.ChangeType (cmd.ExecuteScalar (),
-									      typeof (int)),
-						 "#1 there should be 2 records");
-			} finally {
-				ConnectionManager.Singleton.CloseConnection ();
+				cmd.ExecuteNonQuery ();
+				Assert.Fail ("#A1");
+			} catch (InvalidOperationException ex) {
+				// ExecuteNonQuery: CommandText property
+				// has not been initialized
+				Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#A2");
+				Assert.IsNull (ex.InnerException, "#A3");
+				Assert.IsNotNull (ex.Message, "#A4");
+				Assert.IsTrue (ex.Message.StartsWith ("ExecuteNonQuery"), "#A5:" + ex.Message);
 			}
-		}		
+
+			cmd.CommandText = string.Empty;
+
+			try {
+				cmd.ExecuteNonQuery ();
+				Assert.Fail ("#B1");
+			} catch (InvalidOperationException ex) {
+				// ExecuteNonQuery: CommandText property
+				// has not been initialized
+				Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#B2");
+				Assert.IsNull (ex.InnerException, "#B3");
+				Assert.IsNotNull (ex.Message, "#B4");
+				Assert.IsTrue (ex.Message.StartsWith ("ExecuteNonQuery"), "#B5:" + ex.Message);
+			}
+
+			cmd.CommandText = null;
+
+			try {
+				cmd.ExecuteNonQuery ();
+				Assert.Fail ("#C1");
+			} catch (InvalidOperationException ex) {
+				// ExecuteNonQuery: CommandText property
+				// has not been initialized
+				Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#C2");
+				Assert.IsNull (ex.InnerException, "#C3");
+				Assert.IsNotNull (ex.Message, "#C4");
+				Assert.IsTrue (ex.Message.StartsWith ("ExecuteNonQuery"), "#C5:" + ex.Message);
+			}
+		}
+
+		[Test]
+		public void ExecuteReader_CommandText_Empty ()
+		{
+			try {
+				cmd.ExecuteReader ();
+				Assert.Fail ("#A1");
+			} catch (InvalidOperationException ex) {
+				// ExecuteReader: CommandText property
+				// has not been initialized
+				Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#A2");
+				Assert.IsNull (ex.InnerException, "#A3");
+				Assert.IsNotNull (ex.Message, "#A4");
+				Assert.IsTrue (ex.Message.StartsWith ("ExecuteReader"), "#A5:" + ex.Message);
+			}
+
+			cmd.CommandText = string.Empty;
+
+			try {
+				cmd.ExecuteReader ();
+				Assert.Fail ("#B1");
+			} catch (InvalidOperationException ex) {
+				// ExecuteReader: CommandText property
+				// has not been initialized
+				Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#B2");
+				Assert.IsNull (ex.InnerException, "#B3");
+				Assert.IsNotNull (ex.Message, "#B4");
+				Assert.IsTrue (ex.Message.StartsWith ("ExecuteReader"), "#B5:" + ex.Message);
+			}
+
+			cmd.CommandText = null;
+
+			try {
+				cmd.ExecuteReader ();
+				Assert.Fail ("#C1");
+			} catch (InvalidOperationException ex) {
+				// ExecuteReader: CommandText property
+				// has not been initialized
+				Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#C2");
+				Assert.IsNull (ex.InnerException, "#C3");
+				Assert.IsNotNull (ex.Message, "#C4");
+				Assert.IsTrue (ex.Message.StartsWith ("ExecuteReader"), "#C5:" + ex.Message);
+			}
+		}
+
+		[Test] // bug #462947
+		public void ExecuteReader_Connection_Reuse ()
+		{
+			cmd.CommandText = "SELECT type_blob FROM binary_family where id = 1";
+
+			CommandBehavior behavior = CommandBehavior.SequentialAccess |
+				CommandBehavior.SingleResult;
+
+			using (IDataReader reader = cmd.ExecuteReader (behavior)) {
+				Assert.IsTrue (reader.Read (), "#A1");
+
+				long totalsize = reader.GetBytes (0, 0, null, 0, 0);
+				byte [] val = new byte [totalsize];
+				long ret = reader.GetBytes (0, 0, val, 0, val.Length);
+				Assert.AreEqual (5, ret, "#A2");
+				Assert.AreEqual (new byte [] { 0x32, 0x56, 0x00, 0x44, 0x22 }, val, "#A3");
+			}
+
+			ConnectionManager.Singleton.CloseConnection ();
+			conn = ConnectionManager.Singleton.Connection;
+			ConnectionManager.Singleton.OpenConnection ();
+
+			using (IDataReader reader = cmd.ExecuteReader (behavior)) {
+				Assert.IsTrue (reader.Read (), "#B1");
+
+				long totalsize = reader.GetBytes (0, 0, null, 0, 0);
+				byte [] val = new byte [totalsize];
+				long ret = reader.GetBytes (0, 0, val, 0, val.Length);
+				Assert.AreEqual (5, ret, "#B2");
+				Assert.AreEqual (new byte [] { 0x32, 0x56, 0x00, 0x44, 0x22 }, val, "#B3");
+			}
+
+			using (IDataReader reader = cmd.ExecuteReader (behavior)) {
+				Assert.IsTrue (reader.Read (), "#C");
+			}
+
+			ConnectionManager.Singleton.CloseConnection ();
+			conn = ConnectionManager.Singleton.Connection;
+			ConnectionManager.Singleton.OpenConnection ();
+
+			using (IDataReader reader = cmd.ExecuteReader (behavior)) {
+				Assert.IsTrue (reader.Read (), "#D");
+			}
+
+			using (IDataReader reader = cmd.ExecuteReader (behavior)) {
+				Assert.IsTrue (reader.Read (), "#E");
+			}
+		}
+
+		[Test]
+		public void ExecuteScalar ()
+		{
+			cmd.CommandText = "select count(*) from employee where id < 3";
+			Assert.AreEqual (2, (int) Convert.ChangeType (cmd.ExecuteScalar (),
+								      typeof (int)),
+					 "#1");
+			cmd.Dispose ();
+
+			cmd = conn.CreateCommand ();
+			cmd.CommandText = "select id from employee where id = 666";
+			Assert.IsNull (cmd.ExecuteScalar (), "#2");
+		}
 	}
 }

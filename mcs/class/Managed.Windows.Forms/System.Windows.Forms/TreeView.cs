@@ -204,6 +204,10 @@ namespace System.Windows.Forms {
 					root_node.CollapseAllUncheck ();
 
 				Invalidate ();
+#if NET_2_0
+				// UIA Framework Event: CheckBoxes Changed
+				OnUIACheckBoxesChanged (EventArgs.Empty);
+#endif
 			}
 		}
 
@@ -323,7 +327,13 @@ namespace System.Windows.Forms {
 		[DefaultValue(false)]
 		public bool LabelEdit {
 			get { return label_edit; }
-			set { label_edit = value; }
+			set {
+				label_edit = value;
+#if NET_2_0
+				// UIA Framework Event: LabelEdit Changed
+				OnUIALabelEditChanged (EventArgs.Empty);
+#endif
+			}
 		}
 
 		[DesignerSerializationVisibility(DesignerSerializationVisibility.Content)]
@@ -688,6 +698,19 @@ namespace System.Windows.Forms {
 #endif
 		#endregion	// Public Instance Properties
 
+		#region UIA Framework Properties
+
+#if NET_2_0
+		internal ScrollBar UIAHScrollBar {
+			get { return hbar; }
+		}
+		
+		internal ScrollBar UIAVScrollBar {
+			get { return vbar; }
+		}
+#endif
+		#endregion	// UIA Framework Properties
+
 		#region Protected Instance Properties
 		protected override CreateParams CreateParams {
 			get {
@@ -783,19 +806,12 @@ namespace System.Windows.Forms {
 		
 		public void CollapseAll ()
 		{
-			TreeNode walk = TopNode;
-			
-			if (walk == null)
-				return;
-				
-			while (walk.parent != root_node)
-				walk = walk.parent;
-
 			BeginUpdate ();
 			root_node.CollapseAll ();
 			EndUpdate ();
 
-			SetTop (walk);
+			if (IsHandleCreated && vbar.VisibleInternal)
+				vbar.Value = vbar.Maximum - VisibleCount + 1;
 		}
 
 		public TreeNode GetNodeAt (Point pt) {
@@ -1812,25 +1828,22 @@ namespace System.Windows.Forms {
 
 			bool vert = false;
 			bool horz = false;
-			int height = -1;
+			int height = 0;
 			int width = -1;
 
+			int item_height = ActualItemHeight;
 			if (scrollable) {
 				OpenTreeNodeEnumerator walk = new OpenTreeNodeEnumerator (root_node);
 				
 				while (walk.MoveNext ()) {
 					int r = walk.CurrentNode.Bounds.Right;
-					int b = walk.CurrentNode.Bounds.Bottom;
-
 					if (r > width)
 						width = r;
-					if (b > height)
-						height = b;
+
+					height += item_height;
 				}
 
-				// Remove scroll adjustments
-				if (nodes.Count > 0)
-					height -= nodes [0].Bounds.Top;
+				height -= item_height; // root_node adjustment
 				width += hbar_offset;
 
 				if (height > ClientRectangle.Height) {
@@ -1876,6 +1889,7 @@ namespace System.Windows.Forms {
 				skipped_nodes = 0;
 				RecalculateVisibleOrder (root_node);
 				vbar.Visible = false;
+				vbar.Value = 0;
 				vbar_bounds_set = false;
 			}
 
@@ -1928,6 +1942,9 @@ namespace System.Windows.Forms {
 
 		private void SetVScrollPos (int pos, TreeNode new_top)
 		{
+			if (!vbar.VisibleInternal)
+				return;
+
 			if (pos < 0)
 				pos = 0;
 
@@ -2146,18 +2163,24 @@ namespace System.Windows.Forms {
 				focused_node = highlighted_node;
 				OnAfterSelect (new TreeViewEventArgs (selected_node, TreeViewAction.ByMouse));
 
-				if (prev_focused_node != null) {
-					invalid = Rectangle.Union (Bloat (prev_focused_node.Bounds),
-							Bloat (prev_highlighted_node.Bounds));
-				} else {
-					invalid = Bloat (prev_highlighted_node.Bounds);
+				if (prev_highlighted_node != null) {
+					if (prev_focused_node != null) {
+						invalid = Rectangle.Union (Bloat (prev_focused_node.Bounds),
+								Bloat (prev_highlighted_node.Bounds));
+					} else {
+						invalid = Bloat (prev_highlighted_node.Bounds);
+					}
+
+					invalid.X = 0;
+					invalid.Width = ViewportRectangle.Width;
+
+					Invalidate (invalid);
 				}
 
-				invalid.X = 0;
-				invalid.Width = ViewportRectangle.Width;
-
-				Invalidate (invalid);
 			} else {
+				if (highlighted_node != null)
+					Invalidate (highlighted_node.Bounds);
+
 				highlighted_node = focused_node;
 				selected_node = focused_node;
 			}
@@ -2440,6 +2463,71 @@ namespace System.Windows.Forms {
 			add { base.TextChanged += value; }
 			remove { base.TextChanged -= value; }
 		}
+
+		#region UIA Framework Events
+#if NET_2_0
+		static object UIACheckBoxesChangedEvent = new object ();
+
+		internal event EventHandler UIACheckBoxesChanged {
+			add { Events.AddHandler (UIACheckBoxesChangedEvent, value); }
+			remove { Events.RemoveHandler (UIACheckBoxesChangedEvent, value); }
+		}
+
+		internal void OnUIACheckBoxesChanged (EventArgs e)
+		{
+			EventHandler eh = (EventHandler) Events [UIACheckBoxesChangedEvent];
+			if (eh != null)
+				eh (this, e);
+		}
+
+		static object UIALabelEditChangedEvent = new object ();
+
+		internal event EventHandler UIALabelEditChanged {
+			add { Events.AddHandler (UIALabelEditChangedEvent, value); }
+			remove { Events.RemoveHandler (UIALabelEditChangedEvent, value); }
+		}
+
+		internal void OnUIALabelEditChanged (EventArgs e)
+		{
+			EventHandler eh = (EventHandler) Events [UIALabelEditChangedEvent];
+			if (eh != null)
+				eh (this, e);
+		}
+		
+		static object UIANodeTextChangedEvent = new object ();
+
+		internal event TreeViewEventHandler UIANodeTextChanged {
+			add { Events.AddHandler (UIANodeTextChangedEvent, value); }
+			remove { Events.RemoveHandler (UIANodeTextChangedEvent, value); }
+		}
+
+		internal void OnUIANodeTextChanged (TreeViewEventArgs e)
+		{
+			TreeViewEventHandler eh =
+				(TreeViewEventHandler) Events [UIANodeTextChangedEvent];
+			if (eh != null)
+				eh (this, e);
+		}
+		
+		static object UIACollectionChangedEvent = new object ();
+
+		internal event CollectionChangeEventHandler UIACollectionChanged {
+			add { Events.AddHandler (UIACollectionChangedEvent, value); }
+			remove { Events.RemoveHandler (UIACollectionChangedEvent, value); }
+		}
+
+		internal void OnUIACollectionChanged (object sender, CollectionChangeEventArgs e)
+		{
+			CollectionChangeEventHandler eh =
+				(CollectionChangeEventHandler) Events [UIACollectionChangedEvent];
+			if (eh != null) {
+				if (sender == root_node)
+					sender = this;
+				eh (sender, e);
+			}
+		}
+#endif
+		#endregion	// UIA Framework Events
 		#endregion	// Events
 	}
 }

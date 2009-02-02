@@ -534,6 +534,8 @@ namespace System.Windows.Forms
 		public TreeNode NextVisibleNode {
 			get {
 				OpenTreeNodeEnumerator o = new OpenTreeNodeEnumerator (this);
+				o.MoveNext (); // move to the node itself
+
 				if (!o.MoveNext ())
 					return null;
 				TreeNode c = o.CurrentNode;
@@ -607,6 +609,8 @@ namespace System.Windows.Forms
 		public TreeNode PrevVisibleNode {
 			get {
 				OpenTreeNodeEnumerator o = new OpenTreeNodeEnumerator (this);
+				o.MovePrevious (); // move to the node itself
+
 				if (!o.MovePrevious ())
 					return null;
 				TreeNode c = o.CurrentNode;
@@ -697,6 +701,12 @@ namespace System.Windows.Forms
 					return;
 				text = value;
 				InvalidateWidth ();
+#if NET_2_0
+				// UIA Framework Event: Text Changed
+				TreeView view = TreeView;
+				if (view != null)
+					view.OnUIANodeTextChanged (new TreeViewEventArgs (this));
+#endif
 			}
 		}
 

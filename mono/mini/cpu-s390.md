@@ -165,8 +165,6 @@ bigmul_un: len:2 dest:l src1:a src2:i
 endfilter: src1:i len:12
 rethrow: src1:i len:8
 oparglist: src1:i len:20
-outarg: src1:i len:1
-outarg_imm: len:5
 r4const: dest:f len:22
 r8const: dest:f len:18
 s390_bkchain: len:16 dest:i src1:i
@@ -175,7 +173,6 @@ s390_setf4ret: dest:f src1:f len:4
 tls_get: dest:i len:44
 sbb: dest:i src1:i src2:i len:8
 setlret: src1:i src2:i len:12
-setret: dest:a src1:i len:6
 sqrt: dest:f src1:f len:4
 start_handler: len:18
 store_membase_imm: dest:b len:32

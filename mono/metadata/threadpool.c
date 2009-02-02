@@ -40,7 +40,9 @@
 #include <unistd.h>
 #endif
 #include <string.h>
-
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
 #include <mono/utils/mono-poll.h>
 #ifdef HAVE_EPOLL
 #include <sys/epoll.h>
@@ -337,7 +339,7 @@ async_invoke_io_thread (gpointer data)
 			
 				timeout -= mono_msec_ticks () - start_time;
 			
-				if (wr != WAIT_TIMEOUT)
+				if (wr != WAIT_TIMEOUT && wr != WAIT_IO_COMPLETION)
 					data = dequeue_job (&io_queue_lock, &async_io_queue);
 			}
 			while (!data && timeout > 0);
@@ -1408,7 +1410,7 @@ async_invoke_thread (gpointer data)
 			
 				timeout -= mono_msec_ticks () - start_time;
 			
-				if (wr != WAIT_TIMEOUT)
+				if (wr != WAIT_TIMEOUT && wr != WAIT_IO_COMPLETION)
 					data = dequeue_job (&mono_delegate_section, &async_call_queue);
 			}
 			while (!data && timeout > 0);

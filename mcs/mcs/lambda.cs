@@ -17,18 +17,14 @@ using System.Reflection.Emit;
 namespace Mono.CSharp {
 	public class LambdaExpression : AnonymousMethodExpression
 	{
-		readonly bool explicit_parameters;
-
 		//
 		// The parameters can either be:
 		//    A list of Parameters (explicitly typed parameters)
 		//    An ImplicitLambdaParameter
 		//
-		public LambdaExpression (Parameters parameters, Location loc)
-			: base (parameters, loc)
+		public LambdaExpression (Location loc)
+			: base (loc)
 		{
-			if (parameters.Count > 0)
-				explicit_parameters = !(parameters.FixedParameters [0] is ImplicitLambdaParameter);
 		}
 
 		protected override Expression CreateExpressionTree (EmitContext ec, Type delegate_type)
@@ -45,13 +41,13 @@ namespace Mono.CSharp {
 			arguments.Add (new Argument (expr));
 			arguments.Add (new Argument (args));
 			return CreateExpressionFactoryCall ("Lambda",
-				new TypeArguments (loc, new TypeExpression (delegate_type, loc)),
+				new TypeArguments (new TypeExpression (delegate_type, loc)),
 				arguments);
 		}
 
 		public override bool HasExplicitParameters {
 			get {
-				return explicit_parameters;
+				return Parameters.Count > 0 && !(Parameters.FixedParameters [0] is ImplicitLambdaParameter);
 			}
 		}
 
@@ -62,7 +58,7 @@ namespace Mono.CSharp {
 
 			AParametersCollection d_params = TypeManager.GetDelegateParameters (delegateType);
 
-			if (explicit_parameters) {
+			if (HasExplicitParameters) {
 				if (!VerifyExplicitParameters (delegateType, d_params, ec.IsInProbingMode))
 					return null;
 
@@ -109,7 +105,7 @@ namespace Mono.CSharp {
 			//
 			// Only explicit parameters can be resolved at this point
 			//
-			if (explicit_parameters) {
+			if (HasExplicitParameters) {
 				if (!Parameters.Resolve (ec))
 					return null;
 			}
@@ -139,6 +135,11 @@ namespace Mono.CSharp {
 		{
 		}
 
+		protected override void CloneTo (CloneContext clonectx, Expression target)
+		{
+			// TODO: nothing ??
+		}
+
 		public override string ContainerType {
 			get {
 				return "lambda expression";
@@ -156,7 +157,7 @@ namespace Mono.CSharp {
 			arguments.Add (new Argument (expr));
 			arguments.Add (new Argument (args));
 			return CreateExpressionFactoryCall ("Lambda",
-				new TypeArguments (loc, new TypeExpression (type, loc)),
+				new TypeArguments (new TypeExpression (type, loc)),
 				arguments);
 		}
 	}

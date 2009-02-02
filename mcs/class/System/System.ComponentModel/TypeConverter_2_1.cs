@@ -26,40 +26,58 @@
 #if NET_2_1
 
 using System;
+using System.Globalization;
 
 namespace System.ComponentModel {
 
 	public class TypeConverter {
 
-		public virtual bool CanConvertFrom (Type sourceType)
+		public bool CanConvertFrom (Type sourceType)
 		{
-			if (sourceType == null)
-				return false;
-
-			return sourceType == typeof (string);
+			return CanConvertFrom (null, sourceType);
 		}
 
-		public virtual object ConvertFrom (object value)
-		{
-			return null;
-		}
-
-		public virtual object ConvertFromString (string text)
-		{
-			return ConvertFrom (text);
-		}
-
-		public virtual bool CanConvertTo (Type destinationType)
+		public virtual bool CanConvertFrom (ITypeDescriptorContext context, Type sourceType)
 		{
 			return false;
 		}
 
-		public virtual object ConvertTo (object value, Type destinationType)
+		public object ConvertFrom (object value)
+		{
+			return ConvertFrom (null, CultureInfo.CurrentCulture, value);
+		}
+
+		public virtual object ConvertFrom (ITypeDescriptorContext context, CultureInfo culture, object value)
 		{
 			throw new NotImplementedException ();
 		}
 
-		public virtual string ConvertToString (object value)
+		public object ConvertFromString (string text)
+		{
+			return ConvertFrom (null, null, text);
+		}
+
+		public bool CanConvertTo (Type destinationType)
+		{
+			return CanConvertTo (null, destinationType);
+		}
+
+		public virtual bool CanConvertTo (ITypeDescriptorContext context, Type destinationType)
+		{
+			return false;
+		}
+
+		public object ConvertTo (object value, Type destinationType)
+		{
+			return ConvertTo (null, CultureInfo.CurrentCulture, value, destinationType);
+		}
+
+		public virtual object ConvertTo (ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
+		{
+			throw new NotImplementedException ();
+		}
+
+		public string ConvertToString (object value)
 		{
 			throw new NotImplementedException ();
 		}

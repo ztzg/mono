@@ -120,7 +120,9 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 #endif
 
 	for (i = 0; id [i]; ++i) {
-		if (!isalnum (id [i]))
+		if (i == 0 && isdigit (id [i]))
+			fprintf (ofd, "_");
+		else if (!isalnum (id [i]))
 			fprintf (ofd, "_");
 		else
 			fprintf (ofd, "%c", id [i]);
@@ -180,8 +182,12 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 #if defined(sparc)
 #define AS_CMD "as -xarch=v9"
 #elif defined(__i386__) || defined(__x86_64__)
-#define AS_CMD "as -gstabs"
-#elif defined(__mips__)
+#  if defined(__APPLE__)
+#    define AS_CMD "as"
+#  else
+#    define AS_CMD "as -gstabs"
+#endif
+#elif defined(__mips__) && (_MIPS_SIM == _ABIO32)
 #define AS_CMD "as -mips32"
 #elif defined(__ppc64__)
 #define AS_CMD "as -arch ppc64"

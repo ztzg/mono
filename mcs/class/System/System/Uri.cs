@@ -703,27 +703,38 @@ namespace System {
 			if (IsDomainAddress (name))
 				return UriHostNameType.Dns;				
 				
-			try {
-				IPv6Address.Parse (name);
+			IPv6Address addr;
+			if (IPv6Address.TryParse (name, out addr))
 				return UriHostNameType.IPv6;
-			} catch (FormatException) {}
 			
 			return UriHostNameType.Unknown;
 		}
 		
 		internal static bool IsIPv4Address (string name)
-		{		
+		{
 			string [] captures = name.Split (new char [] {'.'});
 			if (captures.Length != 4)
 				return false;
+
 			for (int i = 0; i < 4; i++) {
+				int length;
+
+				length = captures [i].Length;
+				if (length == 0)
+					return false;
+				uint number;
+#if NET_2_0
+				if (!UInt32.TryParse (captures [i], out number))
+					return false;
+#else
 				try {
-					int d = Int32.Parse (captures [i], CultureInfo.InvariantCulture);
-					if (d < 0 || d > 255)
-						return false;
+					number = UInt32.Parse (captures [i]);
 				} catch (Exception) {
 					return false;
 				}
+#endif
+				if (number > 255)
+					return false;
 			}
 			return true;
 		}			
@@ -1529,8 +1540,19 @@ namespace System {
 				else
 					badhost = true;
 			}
-			if (badhost) 
+#if NET_2_0
+			if (badhost && (Parser is DefaultUriParser || Parser == null))
 				return Locale.GetText ("Invalid URI: The hostname could not be parsed. (" + host + ")");
+
+			UriFormatException ex = null;
+			if (Parser != null)
+				Parser.InitializeAndValidate (this, out ex);
+			if (ex != null)
+				return ex.Message;
+#else
+			if (badhost)
+				return Locale.GetText ("Invalid URI: The hostname could not be parsed. (" + host + ")");
+#endif
 
 			if ((scheme != Uri.UriSchemeMailto) &&
 					(scheme != Uri.UriSchemeNews) &&
@@ -1970,8 +1992,18 @@ namespace System {
 		{
 			if (uriString == null)
 				return false;
-			Uri uri = new Uri (uriString, uriKind);
-			return uri.IsWellFormedOriginalString ();
+
+			if (uriKind != UriKind.RelativeOrAbsolute &&
+				uriKind != UriKind.Absolute &&
+				uriKind != UriKind.Relative) {
+				string msg = Locale.GetText ("Invalid UriKind value '{0}'.", uriKind);
+                                throw new ArgumentException ("uriKind", msg);
+			}
+
+			Uri uri;
+			if (Uri.TryCreate (uriString, uriKind, out uri))
+				return uri.IsWellFormedOriginalString ();
+			return false;
 		}
 
 		public static bool TryCreate (string uriString, UriKind uriKind, out Uri result)

@@ -163,11 +163,35 @@ namespace System
 				vt = (short)VarEnum.VT_BOOL;
 				lVal = ((bool)obj) ? -1 : 0;
 			}
+#if NET_2_0
+			else if (t == typeof (BStrWrapper))
+			{
+				vt = (short)VarEnum.VT_BSTR;
+				bstrVal = Marshal.StringToBSTR(((BStrWrapper)obj).WrappedObject);
+			}
+			else if (t == typeof (UnknownWrapper))
+			{
+				vt = (short)VarEnum.VT_UNKNOWN;
+				pdispVal = Marshal.GetIUnknownForObject(((UnknownWrapper)obj).WrappedObject);
+			}
+			else if (t == typeof (DispatchWrapper))
+			{
+				vt = (short)VarEnum.VT_DISPATCH;
+				pdispVal = Marshal.GetIDispatchForObject(((DispatchWrapper)obj).WrappedObject);
+			}
+#endif
 			else
 			{
 				try 
 				{
+					pdispVal = Marshal.GetIDispatchForObject(obj);
 					vt = (short)VarEnum.VT_DISPATCH;
+					return;
+				}
+				catch { }
+				try 
+				{
+					vt = (short)VarEnum.VT_UNKNOWN;
 					pdispVal = Marshal.GetIUnknownForObject(obj);
 				}
 				catch (Exception ex)
@@ -219,7 +243,8 @@ namespace System
 				break;
 			case VarEnum.VT_UNKNOWN:
 			case VarEnum.VT_DISPATCH:
-				obj = Marshal.GetObjectForIUnknown(pdispVal);
+				if (pdispVal != IntPtr.Zero)
+					obj = Marshal.GetObjectForIUnknown(pdispVal);
 				break;
 			}
 			return obj;

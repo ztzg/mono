@@ -93,6 +93,9 @@ namespace Mono.CSharp {
 			if (TypeManager.IsReferenceType (targetType))
 				return new EmptyConstantCast (this, targetType);
 
+			if (TypeManager.IsNullableType (targetType))
+				return Nullable.LiftedNull.Create (targetType, loc);
+
 			return null;
 		}
 

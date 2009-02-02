@@ -101,8 +101,16 @@ mono_double_ParseImpl (char *ptr, double *result)
 	if (*ptr)
 		*result = strtod (ptr, &endptr);
 #else
-	if (*ptr)
+	if (*ptr){
+#ifdef _EGLIB_MAJOR
+		/* Need to lock here because EGLIB (#464316) has locking defined as no-ops, and that breaks mono_strtod */
+		EnterCriticalSection (&mono_strtod_mutex);
 		*result = mono_strtod (ptr, &endptr);
+		LeaveCriticalSection (&mono_strtod_mutex);
+#else
+		*result = mono_strtod (ptr, &endptr);
+#endif
+	}
 #endif
 
 	if (!*ptr || (endptr && *endptr))
@@ -1162,6 +1170,24 @@ get_caller (MonoMethod *m, gint32 no, gint32 ilo, gboolean managed, gpointer dat
 		return FALSE;
 	}
 	if (!(*dest)) {
+		*dest = m;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean
+get_executing (MonoMethod *m, gint32 no, gint32 ilo, gboolean managed, gpointer data)
+{
+	MonoMethod **dest = data;
+
+	/* skip unmanaged frames */
+	if (!managed)
+		return FALSE;
+
+	if (!(*dest)) {
+		if (!strcmp (m->klass->name_space, "System.Reflection"))
+			return FALSE;
 		*dest = m;
 		return TRUE;
 	}
@@ -3115,10 +3141,14 @@ ves_icall_InternalExecute (MonoReflectionMethod *method, MonoObject *this, MonoA
 
 					if (field_klass->valuetype) {
 						size = mono_type_size (field->type, &align);
+#ifdef HAVE_SGEN_GC
+						mono_gc_wbarrier_value_copy ((char *)this + field->offset, (char*)val + sizeof (MonoObject), 1, field_klass);
+#endif
 						memcpy ((char *)this + field->offset, 
 							((char *)val) + sizeof (MonoObject), size);
-					} else 
-						*(MonoObject**)((char *)this + field->offset) = val;
+					} else {
+						mono_gc_wbarrier_set_field (this, (char*)this + field->offset, val);
+					}
 				
 					out_args = mono_array_new (domain, mono_defaults.object_class, 0);
 					*outArgs = out_args;
@@ -4922,11 +4952,12 @@ ves_icall_System_Reflection_MethodBase_GetMethodBodyInternal (MonoMethod *method
 static MonoReflectionAssembly*
 ves_icall_System_Reflection_Assembly_GetExecutingAssembly (void)
 {
-	MonoMethod *m = mono_method_get_last_managed ();
+	MonoMethod *dest = NULL;
 
 	MONO_ARCH_SAVE_REGS;
 
-	return mono_assembly_get_object (mono_domain_get (), m->klass->image->assembly);
+	mono_stack_walk_no_il (get_executing, &dest);
+	return mono_assembly_get_object (mono_domain_get (), dest->klass->image->assembly);
 }
 
 
@@ -4946,11 +4977,14 @@ ves_icall_System_Reflection_Assembly_GetEntryAssembly (void)
 static MonoReflectionAssembly*
 ves_icall_System_Reflection_Assembly_GetCallingAssembly (void)
 {
-	MonoMethod *m = mono_method_get_last_managed ();
-	MonoMethod *dest = m;
+	MonoMethod *m;
+	MonoMethod *dest;
 
 	MONO_ARCH_SAVE_REGS;
 
+	dest = NULL;
+	mono_stack_walk_no_il (get_executing, &dest);
+	m = dest;
 	mono_stack_walk_no_il (get_caller, &dest);
 	if (!dest)
 		dest = m;
@@ -6709,6 +6743,14 @@ ves_icall_System_Environment_get_HasShutdownStarted (void)
 }
 
 static void
+ves_icall_System_Environment_BroadcastSettingChange (void)
+{
+#ifdef PLATFORM_WIN32
+	SendMessageTimeout (HWND_BROADCAST, WM_SETTINGCHANGE, NULL, L"Environment", SMTO_ABORTIFHUNG, 2000, 0);
+#endif
+}
+
+static void
 ves_icall_MonoMethodMessage_InitMessage (MonoMethodMessage *this, 
 					 MonoReflectionMethod *method,
 					 MonoArray *out_args)
@@ -6822,6 +6864,44 @@ ves_icall_System_IO_get_temp_path (void)
 	MONO_ARCH_SAVE_REGS;
 
 	return mono_string_new (mono_domain_get (), g_get_tmp_dir ());
+}
+
+static MonoBoolean
+ves_icall_System_IO_DriveInfo_GetDiskFreeSpace (MonoString *path_name, guint64 *free_bytes_avail,
+						guint64 *total_number_of_bytes, guint64 *total_number_of_free_bytes,
+						gint32 *error)
+{
+	gboolean result;
+	ULARGE_INTEGER wapi_free_bytes_avail;
+	ULARGE_INTEGER wapi_total_number_of_bytes;
+	ULARGE_INTEGER wapi_total_number_of_free_bytes;
+
+	MONO_ARCH_SAVE_REGS;
+
+	*error = ERROR_SUCCESS;
+	result = GetDiskFreeSpaceEx (mono_string_chars (path_name), &wapi_free_bytes_avail, &wapi_total_number_of_bytes,
+				     &wapi_total_number_of_free_bytes);
+
+	if (result) {
+		*free_bytes_avail = wapi_free_bytes_avail.QuadPart;
+		*total_number_of_bytes = wapi_total_number_of_bytes.QuadPart;
+		*total_number_of_free_bytes = wapi_total_number_of_free_bytes.QuadPart;
+	} else {
+		*free_bytes_avail = 0;
+		*total_number_of_bytes = 0;
+		*total_number_of_free_bytes = 0;
+		*error = GetLastError ();
+	}
+
+	return result;
+}
+
+static guint32
+ves_icall_System_IO_DriveInfo_GetDriveType (MonoString *root_path_name)
+{
+	MONO_ARCH_SAVE_REGS;
+
+	return GetDriveType (mono_string_chars (root_path_name));
 }
 
 static gpointer
@@ -7032,9 +7112,15 @@ mono_ArgIterator_IntGetNextArg (MonoArgIterator *iter)
 
 	res.type = iter->sig->params [i];
 	res.klass = mono_class_from_mono_type (res.type);
-	/* FIXME: endianess issue... */
 	res.value = iter->args;
 	arg_size = mono_type_stack_size (res.type, &align);
+#if G_BYTE_ORDER != G_LITTLE_ENDIAN
+	if (arg_size <= sizeof (gpointer)) {
+		int dummy;
+		int padding = arg_size - mono_type_size (res.type, &dummy);
+		res.value = (guint8*)res.value + padding;
+	}
+#endif
 	iter->args = (char*)iter->args + arg_size;
 	iter->next_arg++;
 

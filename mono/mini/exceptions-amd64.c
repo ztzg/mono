@@ -589,6 +589,10 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 			new_ctx->r13 = lmf_addr->r13;
 			new_ctx->r14 = lmf_addr->r14;
 			new_ctx->r15 = lmf_addr->r15;
+#ifdef PLATFORM_WIN32
+			new_ctx->rdi = lmf_addr->rdi;
+			new_ctx->rsi = lmf_addr->rsi;
+#endif
 		}
 		else {
 			offset = omit_fp ? 0 : -1;
@@ -625,6 +629,14 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 					case AMD64_RBP:
 						new_ctx->rbp = reg;
 						break;
+#ifdef PLATFORM_WIN32
+					case AMD64_RDI:
+						new_ctx->rdi = reg;
+						break;
+					case AMD64_RSI:
+						new_ctx->rsi = reg;
+						break;
+#endif
 					default:
 						g_assert_not_reached ();
 					}
@@ -679,12 +691,8 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 
 		ji = mono_jit_info_table_find (domain, (gpointer)rip);
 		if (!ji) {
-			if (!(*lmf)->method)
-				/* Top LMF entry */
-				return (gpointer)-1;
-			/* Trampoline lmf frame */
-			memset (res, 0, sizeof (MonoJitInfo));
-			res->method = (*lmf)->method;
+			// FIXME: This can happen with multiple appdomains (bug #444383)
+			return (gpointer)-1;
 		}
 
 		new_ctx->rip = rip;
@@ -696,6 +704,10 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 		new_ctx->r13 = (*lmf)->r13;
 		new_ctx->r14 = (*lmf)->r14;
 		new_ctx->r15 = (*lmf)->r15;
+#ifdef PLATFORM_WIN32
+		new_ctx->rdi = (*lmf)->rdi;
+		new_ctx->rsi = (*lmf)->rsi;
+#endif
 
 		*lmf = (gpointer)(((guint64)(*lmf)->previous_lmf) & ~1);
 
@@ -1047,6 +1059,13 @@ mono_arch_notify_pending_exc (void)
 	lmf->previous_lmf = (gpointer)((guint64)lmf->previous_lmf | 1);
 
 	*(gpointer*)(lmf->rsp - 8) = get_throw_pending_exception ();
+}
+
+void
+mono_arch_exceptions_init (void)
+{
+	/* Call this to avoid initialization races */
+	get_throw_pending_exception ();
 }
 
 #ifdef PLATFORM_WIN32

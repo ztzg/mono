@@ -74,6 +74,13 @@ typedef struct
 
 CRITICAL_SECTION mono_delegate_section;
 
+#ifdef _EGLIB_MAJOR
+/* Need to lock here because EGLIB has locking defined as no-ops, we can not depend on mono_strtod do the right locking */
+/* Ideally this will be fixed in eglib */
+CRITICAL_SECTION mono_strtod_mutex;
+#endif
+
+
 static gunichar2 process_guid [36];
 static gboolean process_guid_set = FALSE;
 
@@ -100,8 +107,8 @@ mono_domain_fire_assembly_load (MonoAssembly *assembly, gpointer user_data);
 static void
 add_assemblies_to_domain (MonoDomain *domain, MonoAssembly *ass, GHashTable *hash);
 
-static void
-mono_domain_unload (MonoDomain *domain);
+static MonoAppDomain *
+mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *setup);
 
 static MonoLoadFunc load_function = NULL;
 
@@ -188,6 +195,11 @@ mono_runtime_init (MonoDomain *domain, MonoThreadStartCB start_cb,
 
 	InitializeCriticalSection (&mono_delegate_section);
 
+#ifdef _EGLIB_MAJOR
+	/* Needed until EGLIB is fixed #464316 */
+	InitializeCriticalSection (&mono_strtod_mutex);
+#endif
+	
 	mono_thread_attach (domain);
 	mono_context_init (domain);
 	mono_context_set (domain->default_context);
@@ -339,6 +351,68 @@ gboolean
 mono_runtime_is_shutting_down (void)
 {
 	return shutting_down;
+}
+
+/**
+ * mono_domain_create_appdomain:
+ * @friendly_name: The friendly name of the appdomain to create
+ * @configuration_file: The configuration file to initialize the appdomain with
+ * 
+ * Returns a MonoDomain initialized with the appdomain
+ */
+MonoDomain *
+mono_domain_create_appdomain (char *friendly_name, char *configuration_file)
+{
+	MonoAppDomain *ad;
+	MonoAppDomainSetup *setup;
+	MonoClass *class;
+
+	class = mono_class_from_name (mono_defaults.corlib, "System", "AppDomainSetup");
+	setup = (MonoAppDomainSetup *) mono_object_new (mono_domain_get (), class);
+	setup->configuration_file = configuration_file != NULL ? mono_string_new (mono_domain_get (), configuration_file) : NULL;
+
+	ad = mono_domain_create_appdomain_internal (friendly_name, setup);
+
+	return mono_domain_from_appdomain (ad);
+}
+
+static MonoAppDomain *
+mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *setup)
+{
+	MonoClass *adclass;
+	MonoAppDomain *ad;
+	MonoDomain *data;
+	
+	MONO_ARCH_SAVE_REGS;
+
+	adclass = mono_class_from_name (mono_defaults.corlib, "System", "AppDomain");
+
+	/* FIXME: pin all those objects */
+	data = mono_domain_create();
+
+	ad = (MonoAppDomain *) mono_object_new (data, adclass);
+	ad->data = data;
+	data->domain = ad;
+	data->setup = setup;
+	data->friendly_name = g_strdup (friendly_name);
+	// FIXME: The ctor runs in the current domain
+	// FIXME: Initialize null_reference_ex and stack_overflow_ex
+	data->out_of_memory_ex = mono_exception_from_name_domain (data, mono_defaults.corlib, "System", "OutOfMemoryException");
+
+	if (!setup->application_base) {
+		/* Inherit from the root domain since MS.NET does this */
+		MonoDomain *root = mono_get_root_domain ();
+		if (root->setup->application_base)
+			MONO_OBJECT_SETREF (setup, application_base, mono_string_new_utf16 (data, mono_string_chars (root->setup->application_base), mono_string_length (root->setup->application_base)));
+	}
+
+	mono_context_init (data);
+
+	mono_set_private_bin_path_from_config (data);
+	
+	add_assemblies_to_domain (data, mono_defaults.corlib->assembly, NULL);
+
+	return ad;
 }
 
 /**
@@ -663,38 +737,10 @@ mono_set_private_bin_path_from_config (MonoDomain *domain)
 MonoAppDomain *
 ves_icall_System_AppDomain_createDomain (MonoString *friendly_name, MonoAppDomainSetup *setup)
 {
-	MonoClass *adclass;
-	MonoAppDomain *ad;
-	MonoDomain *data;
+	char *fname = mono_string_to_utf8 (friendly_name);
+	MonoAppDomain *ad = mono_domain_create_appdomain_internal (fname, setup);
 	
-	MONO_ARCH_SAVE_REGS;
-
-	adclass = mono_class_from_name (mono_defaults.corlib, "System", "AppDomain");
-
-	/* FIXME: pin all those objects */
-	data = mono_domain_create();
-
-	ad = (MonoAppDomain *) mono_object_new (data, adclass);
-	ad->data = data;
-	data->domain = ad;
-	data->setup = setup;
-	data->friendly_name = mono_string_to_utf8 (friendly_name);
-	// FIXME: The ctor runs in the current domain
-	// FIXME: Initialize null_reference_ex and stack_overflow_ex
-	data->out_of_memory_ex = mono_exception_from_name_domain (data, mono_defaults.corlib, "System", "OutOfMemoryException");
-
-	if (!setup->application_base) {
-		/* Inherit from the root domain since MS.NET does this */
-		MonoDomain *root = mono_get_root_domain ();
-		if (root->setup->application_base)
-			MONO_OBJECT_SETREF (setup, application_base, mono_string_new_utf16 (data, mono_string_chars (root->setup->application_base), mono_string_length (root->setup->application_base)));
-	}
-
-	mono_set_private_bin_path_from_config (data);
-	
-	mono_context_init (data);
-
-	add_assemblies_to_domain (data, mono_defaults.corlib->assembly, NULL);
+	g_free (fname);
 
 	return ad;
 }
@@ -1086,23 +1132,13 @@ get_cstring_hash (const char *str)
 }
 
 static char *
-get_shadow_assembly_location (const char *filename)
+get_shadow_assembly_location_base (MonoDomain *domain)
 {
-	gint32 hash = 0, hash2 = 0;
-	char name_hash [9];
-	char path_hash [30];
-	char *bname = g_path_get_basename (filename);
-	char *dirname = g_path_get_dirname (filename);
-	char *location;
-	MonoDomain *domain = mono_domain_get ();
 	MonoAppDomainSetup *setup;
 	char *cache_path, *appname;
 	char *userdir;
+	char *location;
 	
-	hash = get_cstring_hash (bname);
-	hash2 = get_cstring_hash (dirname);
-	g_snprintf (name_hash, sizeof (name_hash), "%08x", hash);
-	g_snprintf (path_hash, sizeof (path_hash), "%08x_%08x_%08x", hash ^ hash2, hash2, domain->shadow_serial);
 	setup = domain->setup;
 	if (setup->cache_path != NULL && setup->application_name != NULL) {
 		cache_path = mono_string_to_utf8 (setup->cache_path);
@@ -1116,18 +1152,35 @@ get_shadow_assembly_location (const char *filename)
 #endif
 
 		appname = mono_string_to_utf8 (setup->application_name);
-		location = g_build_filename (cache_path, appname, "assembly", "shadow",
-						name_hash, path_hash, bname, NULL);
+		location = g_build_filename (cache_path, appname, "assembly", "shadow", NULL);
 		g_free (appname);
 		g_free (cache_path);
 	} else {
 		userdir = g_strdup_printf ("%s-mono-cachepath", g_get_user_name ());
-		location = g_build_filename (g_get_tmp_dir (), userdir, "assembly", "shadow",
-						name_hash, path_hash, bname, NULL);
+		location = g_build_filename (g_get_tmp_dir (), userdir, "assembly", "shadow", NULL);
 		g_free (userdir);
 	}
-	g_free (bname);
-	g_free (dirname);
+	return location;
+}
+
+static char *
+get_shadow_assembly_location (const char *filename)
+{
+	gint32 hash = 0, hash2 = 0;
+	char name_hash [9];
+	char path_hash [30];
+	char *bname = g_path_get_basename (filename);
+	char *dirname = g_path_get_dirname (filename);
+	char *location, *tmploc;
+	MonoDomain *domain = mono_domain_get ();
+	
+	hash = get_cstring_hash (bname);
+	hash2 = get_cstring_hash (dirname);
+	g_snprintf (name_hash, sizeof (name_hash), "%08x", hash);
+	g_snprintf (path_hash, sizeof (path_hash), "%08x_%08x_%08x", hash ^ hash2, hash2, domain->shadow_serial);
+	tmploc = get_shadow_assembly_location_base (domain);
+	location = g_build_filename (tmploc, name_hash, path_hash, bname, NULL);
+	g_free (tmploc);
 	return location;
 }
 
@@ -1247,6 +1300,7 @@ shadow_copy_create_ini (const char *shadow, const char *filename)
 	gboolean result;
 	guint32 n;
 	HANDLE *handle;
+	gchar *full_path;
 
 	dir_name = g_path_get_dirname (shadow);
 	ini_file = g_build_filename (dir_name, "__AssemblyInfo__.ini", NULL);
@@ -1268,7 +1322,9 @@ shadow_copy_create_ini (const char *shadow, const char *filename)
 		return FALSE;
 	}
 
-	result = WriteFile (handle, filename, strlen (filename), &n, NULL);
+	full_path = mono_path_resolve_symlinks (filename);
+	result = WriteFile (handle, full_path, strlen (full_path), &n, NULL);
+	g_free (full_path);
 	CloseHandle (handle);
 	return result;
 }
@@ -1282,6 +1338,7 @@ mono_is_shadow_copy_enabled (MonoDomain *domain, const gchar *dir_name)
 	gchar **dir_ptr;
 	gchar **directories;
 	gchar *shadow_status_string;
+	gchar *base_dir;
 	gboolean shadow_enabled;
 	gboolean found = FALSE;
 
@@ -1302,6 +1359,14 @@ mono_is_shadow_copy_enabled (MonoDomain *domain, const gchar *dir_name)
 
 	if (setup->shadow_copy_directories == NULL)
 		return TRUE;
+
+	/* Is dir_name a shadow_copy destination already? */
+	base_dir = get_shadow_assembly_location_base (domain);
+	if (strstr (dir_name, base_dir) == dir_name) {
+		g_free (base_dir);
+		return TRUE;
+	}
+	g_free (base_dir);
 
 	all_dirs = mono_string_to_utf8 (setup->shadow_copy_directories);
 	directories = g_strsplit (all_dirs, G_SEARCHPATH_SEPARATOR_S, 1000);
@@ -1629,11 +1694,8 @@ ves_icall_System_AppDomain_LoadAssembly (MonoAppDomain *ad,  MonoString *assRef,
 	g_free (name);
 
 	if (!parsed) {
-		MonoException *exc;
-
 		/* This is a parse error... */
-		exc = mono_get_exception_file_not_found2 (NULL, assRef);
-		mono_raise_exception (exc);
+		return NULL;
 	}
 
 	ass = mono_assembly_load_full_nosearch (&aname, NULL, &status, refOnly);
@@ -1646,9 +1708,7 @@ ves_icall_System_AppDomain_LoadAssembly (MonoAppDomain *ad,  MonoString *assRef,
 		else
 			refass = NULL;
 		if (!refass) {
-			/* FIXME: it doesn't make much sense since we really don't have a filename ... */
-			MonoException *exc = mono_get_exception_file_not_found2 (NULL, assRef);
-			mono_raise_exception (exc);
+			return NULL;
 		}
 	}
 
@@ -1925,7 +1985,7 @@ unload_thread_main (void *arg)
  *  'simple' way, which means do everything needed to avoid crashes and
  *  memory leaks, but not much else.
  */
-static void
+void
 mono_domain_unload (MonoDomain *domain)
 {
 	HANDLE thread_handle;

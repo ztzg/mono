@@ -6,7 +6,7 @@
 
 label: len:0
 break: len:48
-jmp: len:48
+jmp: len:128
 br: len:48
 throw: src1:i len:96
 rethrow: src1:i len:48
@@ -24,9 +24,6 @@ compare_imm: src1:i len:48
 icompare_imm: src1:i len:48
 fcompare: src1:f src2:f clob:a len:48
 oparglist: src1:b len:48
-outarg: src1:i len:48
-outarg_imm: len:48
-setret: dest:r src1:i len:48
 setlret: dest:r src1:i src2:i len:48
 checkthis: src1:b len:48
 call: dest:r clob:c len:80
