@@ -1952,6 +1952,12 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	MonoInst *inst = NULL;
 	MonoInst *next_inst = NULL;
 
+	if (cfg->verbose_level >= 3) {
+		printf("BEFORE LOWERING BLOCK %d:\n", basic_block->block_num);
+		MONO_BB_FOR_EACH_INS(basic_block, inst)
+			mono_print_ins(inst);
+	}
+
 #define register_not_assigned(reg) ((reg) < 0 || (reg) >= MONO_MAX_IREGS)
 
 	/* Setup the virtual-register allocator. */
@@ -2252,6 +2258,12 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	/* Save the state of the virtual-register allocator. */
 	basic_block->max_vreg = cfg->rs->next_vreg;
+
+	if (cfg->verbose_level >= 3) {
+		printf("AFTER LOWERING BLOCK %d:\n", basic_block->block_num);
+		MONO_BB_FOR_EACH_INS(basic_block, inst)
+			mono_print_ins(inst);
+	}
 
 	return;
 }
