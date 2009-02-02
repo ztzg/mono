@@ -272,7 +272,8 @@ common_sources = \
 	trivial-virtual.cs	\
 	trivial-load_store.cs	\
 	trivial-compare.cs	\
-	trivial-switch.cs
+	trivial-switch.cs	\
+	trivial-conv.cs
 
 test_sources = 		\
 	basic-calls.cs 	\

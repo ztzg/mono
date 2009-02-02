@@ -102,7 +102,13 @@ voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
 call_handler: len:16
 throw: src1:i len:20
+int_conv_to_i4: dest:i src1:i len:2
+int_conv_to_u4: dest:i src1:i len:2
 move: dest:i src1:i len:2
+int_conv_to_i1: dest:i src1:i len:2
+int_conv_to_u1: dest:i src1:i len:2
+int_conv_to_i2: dest:i src1:i len:2
+int_conv_to_u2: dest:i src1:i len:2
 start_handler: len:6
 endfilter: src1:z len:10
 endfinally: len:10

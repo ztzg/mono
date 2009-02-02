@@ -2444,10 +2444,34 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_nop(cfg, &buffer); /* delay slot */
 			break;
 
+		case OP_ICONV_TO_I4:
+			/* MD: int_conv_to_i4: dest:i src1:i len:2 */
+		case OP_ICONV_TO_U4:
+			/* MD: int_conv_to_u4: dest:i src1:i len:2 */
 		case OP_MOVE:
 			/* MD: move: dest:i src1:i len:2 */
 			if (inst->sreg1 != inst->dreg)
 				sh4_mov(cfg, &buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_ICONV_TO_I1:
+			/* MD: int_conv_to_i1: dest:i src1:i len:2 */
+			sh4_extsb(cfg, &buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_ICONV_TO_U1:
+			/* MD: int_conv_to_u1: dest:i src1:i len:2 */
+			sh4_extub(cfg, &buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_ICONV_TO_I2:
+			/* MD: int_conv_to_i2: dest:i src1:i len:2 */
+			sh4_extsw(cfg, &buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_ICONV_TO_U2:
+			/* MD: int_conv_to_u2: dest:i src1:i len:2 */
+			sh4_extuw(cfg, &buffer, inst->sreg1, inst->dreg);
 			break;
 
 		/**
