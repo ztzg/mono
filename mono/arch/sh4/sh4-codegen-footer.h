@@ -82,4 +82,21 @@ static inline int is_sh4_load(guint16 *code, SH4IntRegister sh4_rX)
 	return 0;
 }
 
+/**
+ * Checks if a code sequence is a call site.
+ *
+ * The calling sequence is (for OP_.*CALL opcodes):
+ *
+ *          -X: LOAD address, r3
+ *          -4: jsr  @r3
+ *          -2: nop
+ *           0: <- code points here
+ */
+static inline int is_sh4_call_site(guint16 *code)
+{
+	return (is_sh4_nop(code[-1]) &&
+		is_sh4_jsr_indRx(code[-2], sh4_temp) &&
+		is_sh4_load(&code[-3], sh4_temp));
+}
+
 #endif /* __MONO_SH4_CODEGEN_FOOTER_H__ */

@@ -384,31 +384,6 @@ gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMe
 }
 
 /**
- * The calling sequence is (for OP_.*CALL opcodes):
- *
- *          -X: LOAD address, r3
- *          -4: jsr  @r3
- *          -2: nop
- *           0: <- code points here
- */
-static inline void assert_sh4_call_site(guint8 *code)
-{
-	char name[] = "unknown call site";
-	guint16 *code16 = (void *)code;
-
-#define CALL_SITE_SIZE 16
-
-	g_assert(sh4_temp == sh4_r3);
-
-	if (!is_sh4_nop(code16[-1])               ||
-	    !is_sh4_jsr_indRx(code16[-2], sh4_r3) ||
-	    !is_sh4_load(&code16[-3], sh4_r3)) {
-		mono_disassemble_code(NULL, code - CALL_SITE_SIZE * 2, CALL_SITE_SIZE * 2, name);
-		NOT_IMPLEMENTED;
-	}
-}
-
-/**
  * Avoid a call to a "class init trampoline".
  */
 void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
@@ -418,13 +393,13 @@ void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 	SH4_EXTRA_DEBUG("args => %p, %p", code, registers);
 
 	/* Sanity check. */
-	assert_sh4_call_site(code);
+	g_assert(is_sh4_call_site((void *)code));
 
 	/* Patch the call. */
 	sh4_nop(NULL, &call_site);
 
 	/* Flush instruction cache, since we've generated code. */
-	mono_arch_flush_icache(code - CALL_SITE_SIZE, CALL_SITE_SIZE);
+	mono_arch_flush_icache(call_site - 2, 2);
 
 	return;
 }
@@ -447,13 +422,13 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
 	/* Sanity check. */
-	assert_sh4_call_site(code);
+	g_assert(is_sh4_call_site((void *)code));
 
 	/* Patch the address. */
 	sh4_emit32(&constant_site, (guint32)address);
 
 	/* Flush instruction cache, since we've generated code. */
-	mono_arch_flush_icache(code - CALL_SITE_SIZE, CALL_SITE_SIZE);
+	mono_arch_flush_icache(constant_site - 4, 4);
 
 	return;
 }
