@@ -156,13 +156,15 @@
  *                       guint8          **pcval,  // PC current value
  *                       float             f);
  *     Generate a mova instruction that enables the next instruction
- *     to load a float constant.
+ *     to load a float constant. Note that register r0 is clobbered
+ *     in this routine.
  *
  * void sh4_cstpool_addd(MonoCompile      *cfg,
  *                       guint8          **pcval,  // PC current value
  *                       double            d);
  *     Generate a mova instruction that enables next instructions
- *     to load a double constant.
+ *     to load a double constant. Note that register r0 is clobbered
+ *     in this routine.
  *
  * gboolean sh4_cstpool_get_bb_address(MonoCompile *cfg,
  *                                     guint32      bb_id
@@ -182,10 +184,7 @@
  * III Algorithms
  * ==============
  *
- * We have devised a simple sub-optimal two pass algorithm.
- * The first pass performs most of the job, while the second
- * one is reserved for patching data pools with labels values.
- * For this second pass, we heavily rely on the Mono patch mechanism.
+ * TODO
  *
  * Remark: Since native code buffer can change, it is necessary to store
  *         address pool information (see MonoSH4CstPool) as OFFSETS.
@@ -414,8 +413,6 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 	guint8   *patch0;
 	guint8   *patch1;
 	guint8   *dest;
-	guint32   offset;
-	guint32   length_max;
 	guint32   value1, value2;
 	guint32   nb_int_const;
 	gboolean  is_float_or_double;
@@ -423,19 +420,15 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 	index  = cur_pool->pool_nbcst_emitted;
 	SH4_CFG_DEBUG(4) SH4_DEBUG("emit constant nr %d (cfg %p)",index,cfg);
 
-	/* Evaluate if we have enough space. If not, reassign a buffer.   */
-	/* Following sequence generates at most 14 bytes.                 */
-	offset    = *pcval - cfg->native_code;
-	length_max = offset + 14U;
-	sh4_realloc_buf_if_needed(cfg,offset,length_max,pcval);
-
+	/* We generate at most 14 bytes. In the following comment, we     */
+	/* track the overall code size allocated (see sz "metavariable"). */
 	patch1 = *pcval;
 
-	sh4_bra(NO_recur,pcval, 0x0); /* 0x0 to be patched   */
-	sh4_nop(NO_recur,pcval);      /* delay slot          */
+	sh4_bra(NO_recur,pcval, 0x0); /* 0x0 to be patched. sz = 2   */
+	sh4_nop(NO_recur,pcval);      /* delay slot.        sz = 4   */
 
-	if(((guint32)*pcval & 0x3)) {
-		sh4_nop(NO_recur,pcval);    /* Align constant pool */
+	if(((guint32)*pcval & 0x3)) {                     /* sz<=6   */
+		sh4_nop(NO_recur,pcval);      /* Align constant pool */
 	}
 
 	/* constant pool is here. */
@@ -449,6 +442,7 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 				    cur_pool->type[index],
 				    cur_pool->pool_cst[index]);
 		sh4_emit32(pcval,0U);        /* constant pool allocation  - patched later*/
+		                             /* sz <= 10 */
 		nb_int_const = 1U;
 	} else {
 		g = (CstPool_Const_Values*) (cur_pool->pool_cst[index]);
@@ -458,7 +452,7 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 		switch(sh4_cst_type(g)) {
 		case cstpool_type_int:
 			value1 = sh4_get_int(g);
-			sh4_emit32(pcval,value1);   /* constant pool allocation */
+			sh4_emit32(pcval,value1);   /* constant pool allocation - sz <= 10*/
 			nb_int_const = 1U;
 
 			SH4_CFG_DEBUG(4) SH4_DEBUG("constant value 0x%08x\n",value1);
@@ -466,7 +460,7 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 
 		case cstpool_type_float:
 			value1 = sh4_get_int_from_float(g);
-			sh4_emit32(pcval,value1);    /* constant pool allocation */
+			sh4_emit32(pcval,value1);    /* constant pool allocation - sz <= 10*/
 			nb_int_const = 1U;
 			is_float_or_double = TRUE;   /* Default value */
 
@@ -476,8 +470,8 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 		case cstpool_type_double:
 			value1 = sh4_get_32low_from_double(g);
 			value2 = sh4_get_32high_from_double(g);
-			sh4_emit32(pcval,value1);    /* constant pool allocation */
-			sh4_emit32(pcval,value2);    /* constant pool allocation */
+			sh4_emit32(pcval,value1);    /* constant pool allocation - sz <= 10*/
+			sh4_emit32(pcval,value2);    /* constant pool allocation - sz <= 14*/
 			nb_int_const = 2U;
 			is_float_or_double = TRUE;
 
@@ -485,12 +479,13 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 						   value2,value1);
 			break;
 
-		default:                   /* Should never happen */
+		default:			/* Should never happen */
 			g_assert(FALSE);
-			nb_int_const = 0U;         /* Prevent compilation warnings */
+			nb_int_const = 0U;	/* Prevent compilation warnings */
 			break;
 		}
 	}
+	/* sz <= 14 or more precisely sz <= 10 if not a double, sz <= 14 otherwise*/
 
 	/* patch sh4_movl_dispPC instruction emitted previously. */
 	patch0 = cfg->native_code + cur_pool->off_inst[index];
@@ -518,7 +513,7 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 
 /**
  * Decide whether a constant pool is to be emitted
- * bb(MonoBasicBlock) param. is meaningfull only if end_bb flag is set.
+ * Param. bb(MonoBasicBlock) is meaningfull only if flag end_bb is set.
  *
  * There are cases where basic block emission is mandatory
  * For instance, if constant pool is full or if pc range
@@ -583,19 +578,28 @@ void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d)
 
 void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval, MonoJumpInfoType type, gconstpointer target, SH4IntRegister reg)
 {
-	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
-	CstPool_Const_Values *g;       /* Default value */
+	MonoSH4CstPool_Env 	*env = cfg->arch.poolenv;
+	CstPool_Const_Values 	*g;       /* Default value */
+	guint32			 imm_value;
 
 	g_assert(env!=NULL);
 
 	if(type == MONO_PATCH_INFO_NONE) {
-		g = sh4_build_cst_int(env->mempool,*(guint32*)target);
+		imm_value = *(guint32*)target;
+
+		/* A special case: constant is tiny enough to be encoded */
+		/* directly. If so, generate a mov instruction and exit. */
+		if(SH4_CHECK_RANGE_mov_imm(imm_value)) {
+			sh4_mov_imm(cfg,pcval,imm_value,reg);
+			return;
+		}
+
+		g = sh4_build_cst_int(env->mempool,imm_value);
 	} else {
 		g = NULL;
 	}
 
 	sh4_cstpool_add_internal(cfg, pcval, type, target, reg, g); 
-
 	return;
 }
 
@@ -656,14 +660,12 @@ static void sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
 	tmp->pool_nbcst += nb_int_const;
 	env->nbcst      += nb_int_const;
 
-	/* Check that we have enough space in code buffer */
-	sh4_realloc_buf_if_needed(cfg,offset, offset+2U,pcval);
-
-	/* Allocate space in code buffer. We know that emission of the
-	 * current constant pool might be delayed.
+	/* Print a dummy instruction in code buffer. We know that
+	 * emission of the current constant pool might be delayed.
 	 * Note that we don't care if the real instruction is a
 	 * movl_disPC or a mova instruction (for float and double): 
-	 * in both case, we allocate 2 bytes.
+	 * in both cases, we assume that current buffer is big enough
+         * to make it possible to allocate 2 more bytes.
 	 */
 	sh4_movl_dispPC(NO_recur,pcval, 0, reg);   /* 0 to be patched       */
 
@@ -718,48 +720,6 @@ void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **pcv
 				    TRUE, /* not at the end of a bb */
 				    bb,
 				    pcval);
-	return;
-}
-
-/**
- *   Realloc a buffer if we haven't got enough size. Otherwise
- *   do nothing.
- *
- *   offset     (guint32)  current offset in the native code buffer
- *   length_max (guint32)  length max to be allocated.
- *   pcval      (**guint8) current pointer in the buffer.
- *
- *   Returns TRUE if a buffer has been allocated, and FALSE otherwise.
- *
- *   Note: this routine is not strictly related to constant pools.
- *   It is also called by mono_arch_output_basic_block.
- */
-void sh4_realloc_buf_if_needed(MonoCompile *cfg, guint32 offset, guint32 length_max, guint8 **pcval)
-{
-#ifndef NDEBUG
-	guint8 *oldpcval = *pcval;
-#endif
-
-	g_assert(offset<=length_max);
-
-	if(length_max <= cfg->code_size)
-		return;
-
-	/* Get the correct size */
-	while (length_max > cfg->code_size) {
-		cfg->code_size *= 2U;
-	}
-
-	cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
-	*pcval = cfg->native_code + offset;
-
-	SH4_CFG_DEBUG(4) SH4_DEBUG("buffer reallocation pcval 0x%08x -> 0x%08x",
-				   (guint32)oldpcval,(guint32)pcval);
-	SH4_CFG_DEBUG(4) SH4_DEBUG("current offset %d, required offset %d, new buffer size %d",
-				   offset, length_max, cfg->code_size);
-
-	mono_jit_stats.code_reallocs++;
-
 	return;
 }
 
