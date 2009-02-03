@@ -34,6 +34,7 @@
 #include "mini.h"
 #include "ir-emit.h"
 #include "cpu-sh4.h"
+#include "cstpool-sh4.h"
 
 int sh4_extra_debug = 0;
 
@@ -685,6 +686,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		NOT_IMPLEMENTED;
 	}
 
+	/* Initialize constant pools */
+	sh4_cstpool_init(cfg);
+
 	signature = mono_method_signature(cfg->method);
 
 	cfg->code_size = 46 + 80 + signature->param_count * 10;
@@ -1004,6 +1008,16 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	return buffer;
 }
 
+static guint8 *get_code_buffer(MonoCompile *cfg, guint32 size)
+{
+        while (cfg->code_len + size > cfg->code_size) {
+                cfg->code_size *= 2;
+		cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
+		mono_jit_stats.code_reallocs++;
+	}
+	return cfg->native_code + cfg->code_len;
+}
+
 void mono_arch_emit_epilog(MonoCompile *cfg)
 {
 	guint8 *buffer = NULL;
@@ -1018,13 +1032,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	/* Reallocate enough room to store the SH4 instructions
 	   used to implement an epilogue. */
-        while (cfg->code_len + EPILOGUE_SIZE > cfg->code_size) {
-                cfg->code_size *= 2;
-		cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
-		mono_jit_stats.code_reallocs++;
-	}
-	buffer = cfg->native_code + cfg->code_len;
-	code = buffer;
+	code = buffer = get_code_buffer(cfg, EPILOGUE_SIZE);
 
 	/* Reset the stack pointer. */
 	sh4_mov(NULL, &buffer, sh4_r14, sh4_r15);
@@ -1158,13 +1166,7 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 	/* Reallocate enough room to store the SH4 instructions
 	   used to implement exceptions. */
-        while (cfg->code_len + exceptions_size > cfg->code_size) {
-                cfg->code_size *= 2;
-		cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
-		mono_jit_stats.code_reallocs++;
-	}
-	buffer = cfg->native_code + cfg->code_len;
-	code = buffer;
+	code = buffer = get_code_buffer(cfg, exceptions_size);
 
 	/* Patch code to raise exceptions. */
 	for (patch_info = cfg->patch_info; patch_info != NULL; patch_info = patch_info->next) {
@@ -1235,6 +1237,10 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 	/* Sanity checks. */
 	g_assert(buffer - code <= exceptions_size);
 	g_assert(cfg->code_len <= cfg->code_size);
+
+	/* Free constant pools. It's safer to do it there
+	 * than in function mono_arch_emit_epilog(). */
+	sh4_cstpool_end(cfg);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
 
@@ -2031,7 +2037,7 @@ static inline void free_args_area(MonoCompile *cfg, guint8 **buffer, MonoCallIns
 	else {
 		/* sh4_temp belongs to clobbered registers during a call,
 		   so we can reuse it here. */
-		sh4_load(buffer, call->stack_usage, sh4_temp);
+		sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &call->stack_usage, sh4_temp);
 		sh4_add(cfg, buffer, sh4_temp, sh4_sp);
 	}
 }
@@ -2053,6 +2059,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	mono_debug_open_block(cfg, basic_block, cfg->code_len);
 
+	sh4_cstpool_check_begin_bb(cfg, basic_block, &buffer);
+
 	MONO_BB_FOR_EACH_INS(basic_block, inst) {
 		guint32 length_max = 0;
 		int length   = 0;
@@ -2063,17 +2071,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		/* Reallocate enough room to store the SH4 instructions
 		   used to implement the current opcode. */
-		while (cfg->code_len + length_max > cfg->code_size) {
-			cfg->code_size *= 2;
-			cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
-			mono_jit_stats.code_reallocs++;
-		}
-
-		/* A chunk of code memory was previously allocated (native_code)
-		   then partially used (code_len) into mono_arch_emit_prolog
-		   and/or into this function. */
-		buffer = cfg->native_code + cfg->code_len;
-		code   = buffer; /* Save the start address to make sanity checks later. */
+		code = buffer = get_code_buffer(cfg, length_max);
 
 		mono_debug_record_line_number(cfg, inst, buffer - cfg->native_code);
 
@@ -2376,7 +2374,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (SH4_CHECK_RANGE_mov_imm(inst->inst_c0))
 				sh4_mov_imm(cfg, &buffer, inst->inst_c0, inst->dreg);
 			else
-				sh4_load(&buffer, inst->inst_c0, inst->dreg);
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &(inst->inst_c0), inst->dreg);
 			break;
 
 		case OP_VOIDCALL:
@@ -2400,8 +2398,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* TODO - CV : optimize with sh4_bsr if possible. */
 
-			sh4_load(&buffer, 0, sh4_temp);
-			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code, type, target);
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
 			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer); /* delay slot */
@@ -2425,8 +2422,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_CALL_HANDLER:
 			/* MD: call_handler: len:16 */
-			sh4_load(&buffer, 0, sh4_temp);
-			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code, MONO_PATCH_INFO_BB, inst->inst_target_bb);
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_BB, inst->inst_target_bb, sh4_temp);
 
 			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer); /* delay slot */
@@ -2437,8 +2433,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
 				sh4_mov(cfg, &buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
 
-			sh4_load(&buffer, 0, sh4_temp);
-			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_throw_exception");
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_throw_exception", sh4_temp);
 
 			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer); /* delay slot */
@@ -2548,8 +2543,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				break;
 			}
 
-			sh4_load(&buffer, 0, sh4_temp);
-			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code, type, target);
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
 			sh4_jmp_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer);
@@ -2601,8 +2595,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			patch = buffer;
 			sh4_die(cfg, &buffer); /* patch slot for : bf/t_label "skip_jump" */
 
-			sh4_load(&buffer, 0, sh4_temp);
-			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code, type, target);
+			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
 			sh4_jmp_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer);
@@ -2711,6 +2704,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		cfg->code_len = buffer - cfg->native_code;
 	}
+
+	sh4_cstpool_check_end_bb(cfg, basic_block, &buffer);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
 

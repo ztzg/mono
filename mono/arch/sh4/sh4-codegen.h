@@ -8,7 +8,7 @@
 
 #include "sh4-codegen-header.h"
 
-#define sh4_cstpool_check(a, b) 0
+extern void sh4_cstpool_check(void *cfg, guint8 **code);
 
 #define SH4_CHECK_RANGE_add_imm(imm) ((imm) >= -128 && (imm) <= 127)
 
