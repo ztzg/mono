@@ -1008,13 +1008,17 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	return buffer;
 }
 
-static guint8 *get_code_buffer(MonoCompile *cfg, guint32 size)
+static inline guint8 *get_code_buffer(MonoCompile *cfg, guint32 size)
 {
+	if (cfg->code_len + size <= cfg->code_size)
+		return cfg->native_code + cfg->code_len;
+
         while (cfg->code_len + size > cfg->code_size) {
-                cfg->code_size *= 2;
-		cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
-		mono_jit_stats.code_reallocs++;
+		cfg->code_size *= 2U;
 	}
+
+	cfg->native_code = g_realloc(cfg->native_code, cfg->code_size);
+	mono_jit_stats.code_reallocs++;
 	return cfg->native_code + cfg->code_len;
 }
 
