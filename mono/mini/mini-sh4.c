@@ -1394,7 +1394,7 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
  *
  *   // Load the VTable:
  *
- *           mov.l @(rZ, 0), rY
+ *           mov.l @(0, rZ), rY
  *
  *   // Load the method address, that is, VTable[method_index] (load_membase):
  *
@@ -1406,8 +1406,8 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
  *           #else
  *               LOAD big_index, rW
  *           #endif
- *           add   rW, rY
- *           mov.l @rY, rX
+ *           add   rY, rW
+ *           mov.l @rW, rX
  *       #endif
  *
  *   // Jump to the method (call_reg):
@@ -1444,13 +1444,13 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	 *         #else
 	 *             LOAD big_index, rW
 	 *         #endif
-	 *         add   rW, rY
-	 *         mov.l @rY, rX
+	 *         add   rY, rW
+	 *         mov.l @rW, rX
 	 */
-	sh4_rY = get_Ry_sh4_movl_indRy(code16[-3]);
-	if (is_sh4_movl_indRy(code16[-3], sh4_rY, sh4_rX)) {
-		sh4_rW = get_Ry_sh4_add(code16[-4]);
-		if (!is_sh4_add(code16[-4], sh4_rW, sh4_rY))
+	sh4_rW = get_Ry_sh4_movl_indRy(code16[-3]);
+	if (is_sh4_movl_indRy(code16[-3], sh4_rW, sh4_rX)) {
+		sh4_rY = get_Ry_sh4_add(code16[-4]);
+		if (!is_sh4_add(code16[-4], sh4_rY, sh4_rW))
 			return NULL;
 
 		index = get_imm_sh4_mov_imm(code16[-5]);
@@ -1634,21 +1634,19 @@ static inline void decompose_op_offset2base(MonoCompile *cfg, MonoBasicBlock *ba
 	new_inst->inst_c0 = inst->inst_offset;
 	new_inst->dreg = mono_alloc_ireg(cfg);
 
-	/* Add the base register to this new register (dest == sreg1 for the SH4). */
+	/* Add the base register to this new register,
+	   remember dest == sreg1 for OP_IADD on SH4. */
 	MONO_INST_NEW(cfg, new_inst2, OP_IADD);
-	new_inst2->sreg2 = new_inst->dreg;
-	if (is_store != 0) {
-		new_inst2->dreg  = inst->inst_destbasereg;
-		new_inst2->sreg1 = inst->inst_destbasereg;
-	}
-	else {
-		new_inst2->dreg  = inst->inst_basereg;
-		new_inst2->sreg1 = inst->inst_basereg;
-	}
+	new_inst2->dreg = new_inst2->sreg1 = new_inst->dreg;
+	if (is_store != 0)
+		new_inst2->sreg2 = inst->inst_destbasereg;
+	else
+		new_inst2->sreg2 = inst->inst_basereg;
 
 	mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
 	mono_bblock_insert_before_ins(basic_block, new_inst2, new_inst);
 
+	/* Adjust the original opcode. */
 	inst->inst_offset = 0;
 	if (is_store != 0)
 		inst->inst_destbasereg = new_inst2->dreg;

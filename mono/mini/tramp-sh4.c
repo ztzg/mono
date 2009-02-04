@@ -393,7 +393,11 @@ void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 	SH4_EXTRA_DEBUG("args => %p, %p", code, registers);
 
 	/* Sanity check. */
-	g_assert(is_sh4_call_site((void *)code));
+	if(!is_sh4_call_site((void *)code)) {
+		char name[] = "call site in nullify_class_init_trampoline";
+		mono_disassemble_code(NULL, code - 20, 20, name);
+		g_assert_not_reached();
+	}
 
 	/* Patch the call. */
 	sh4_nop(NULL, &call_site);
@@ -422,7 +426,11 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
 	/* Sanity check. */
-	g_assert(is_sh4_call_site((void *)code));
+	if(!is_sh4_call_site((void *)code)) {
+		char name[] = "call site in patch_callsite";
+		mono_disassemble_code(NULL, code - 20, 20, name);
+		g_assert_not_reached();
+	}
 
 	/* Patch the address. */
 	sh4_emit32(&constant_site, (guint32)address);
