@@ -2431,11 +2431,22 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_THROW:
-			/* MD: throw: src1:i len:20 */
+			/* MD: throw: src1:i len:18 */
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
 				sh4_mov(cfg, &buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
 
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_throw_exception", sh4_temp);
+
+			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
+			sh4_nop(cfg, &buffer); /* delay slot */
+			break;
+
+		case OP_RETHROW:
+			/* MD: rethrow: src1:i len:18 */
+			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
+				sh4_mov(cfg, &buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
+
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_rethrow_exception", sh4_temp);
 
 			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
 			sh4_nop(cfg, &buffer); /* delay slot */

@@ -101,7 +101,8 @@ call: dest:z clob:c len:30
 voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
 call_handler: len:16
-throw: src1:i len:20
+throw: src1:i len:18
+rethrow: src1:i len:18
 int_conv_to_i4: dest:i src1:i len:2
 int_conv_to_u4: dest:i src1:i len:2
 move: dest:i src1:i len:2
