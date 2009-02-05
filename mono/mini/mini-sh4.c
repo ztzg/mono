@@ -2492,10 +2492,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		 */
 		case OP_START_HANDLER:
 			/* MD: start_handler: len:6 */
+			sh4_stsl_PR_decRx(cfg, &buffer, sh4_sp);
+
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
+			g_assert(spvar->inst_basereg == sh4_fp);
 
 			if (SH4_CHECK_RANGE_movl_dispRx(spvar->inst_offset)) {
-				sh4_movl_dispRx(cfg, &buffer, sh4_sp, spvar->inst_offset, sh4_temp);
+				sh4_movl_dispRx(cfg, &buffer, sh4_sp, spvar->inst_offset, spvar->inst_basereg);
 			}
 			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
 				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_temp);
@@ -2516,9 +2519,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ENDFINALLY:
 			/* MD: endfinally: len:10 */
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
+			g_assert(spvar->inst_basereg == sh4_fp);
 
 			if (SH4_CHECK_RANGE_movl_dispRy(spvar->inst_offset)) {
-				sh4_movl_dispRy(cfg, &buffer, spvar->inst_offset, sh4_temp, sh4_sp);
+				sh4_movl_dispRy(cfg, &buffer, spvar->inst_offset, spvar->inst_basereg, sh4_sp);
 			}
 			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
 				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_temp);
@@ -2528,6 +2532,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			else {
 				NOT_IMPLEMENTED;
 			}
+
+			sh4_ldsl_incRx_PR(cfg, &buffer, sh4_sp);
 
 			sh4_rts(cfg, &buffer);
 			sh4_nop(cfg, &buffer);
