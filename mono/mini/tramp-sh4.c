@@ -61,14 +61,13 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 	code = buffer = mono_code_manager_reserve(domain->code_mp, SPECIFIC_TRAMPOLINE_SIZE);
 	mono_domain_unlock(domain);
 
-	/* Patch slot for : sh4_r0 <- methode2compile */
+	/* Patch slot for : sh4_temp <- methode2compile */
 	patch1 = buffer;
 	sh4_die(NULL, &buffer);
 
 	/* Push the address of the method to compile onto the stack.
-	   The trampoline will automatically pop this "hidden" parameter.
-	   TODO - CV : May be I could use a caller-saved register instead ? */
-	sh4_movl_decRx(NULL, &buffer, sh4_r0, sh4_r15);
+	   The trampoline will automatically pop this "hidden" parameter. */
+	sh4_movl_decRx(NULL, &buffer, sh4_temp, sh4_r15);
 
 	/* If possible, branch to the trampoline in an optimized way,
 	   that is, without the need of the constant pool. */
@@ -76,11 +75,11 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 		NOT_IMPLEMENTED;
 		sh4_bra(NULL, &buffer, 0 /* Fake value. */);
 	} else {
-		/* Patch slot for : sh4_r0 <- trampoline */
+		/* Patch slot for : sh4_temp <- trampoline */
 		patch2 = buffer;
 		sh4_die(NULL, &buffer);
 
-		sh4_jmp_indRx(NULL, &buffer, sh4_r0);
+		sh4_jmp_indRx(NULL, &buffer, sh4_temp);
 	}
 	sh4_nop(NULL, &buffer);
 
@@ -92,11 +91,11 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 		sh4_nop(NULL, &buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r0);
+	sh4_movl_PCrel(NULL, &patch1, buffer, sh4_temp);
 	sh4_emit32(&buffer, (guint32)methode2compile);
 
 	if (short_branch == 0) {
-		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_r0);
+		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_temp);
 		sh4_emit32(&buffer, (guint32)trampoline);
 	}
 
