@@ -117,7 +117,7 @@
  *
  * The following functions (or macros) are also defined:
  *
- * void sh4_cstpool_init(MonoCompile *cfg).
+ * void sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode).
  *
  *     Initialization steps.
  *
@@ -209,7 +209,8 @@ static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, doub
 static inline void  sh4_cstpool_addpool(MonoCompile*);
 
 static void         sh4_cstpool_decide_emission(MonoCompile*, gboolean, MonoBasicBlock*, guint8 **pcval);
-static void         sh4_emit_current_pool(MonoCompile*, MonoSH4CstPool*, gboolean, guint8 **pcval);
+static void         sh4_emit_pool(MonoCompile*, MonoSH4CstPool*, gboolean, guint8 **pcval);
+static void         sh4_emit_pool_lowperf(MonoCompile*, MonoSH4CstPool*, gboolean, guint8 **pcval);
 static void         sh4_cstpool_add_internal(MonoCompile *cfg,
                                              guint8 **pcval,
 				             MonoJumpInfoType type,
@@ -342,9 +343,9 @@ static inline void sh4_cstpool_addpool(MonoCompile *cfg)
 }
 
 /**
- * Overall initialization
+ * Overall initialization.
  */
-void sh4_cstpool_init(MonoCompile *cfg)
+void sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode)
 {
 	MonoSH4CstPool_Env *env ;
 	MonoMemPool        *mempool;
@@ -359,6 +360,8 @@ void sh4_cstpool_init(MonoCompile *cfg)
 	cfg->arch.poolenv = sh4_cstpool_malloc(mempool,sizeof(MonoSH4CstPool_Env));
 	env = cfg->arch.poolenv;
 	env->mempool = mempool;
+
+	env->mode = (mode == cstpool_mode_fullperf ? mode : cstpool_mode_lowperf);
 
 	env->nbcst = 0;
 	env->nbpool= 0;
@@ -401,15 +404,14 @@ void sh4_cstpool_end(MonoCompile *cfg)
 	return;
 }
 
-static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
-				  gboolean end_bb, guint8 **pcval)
+static void sh4_emit_pool_lowperf(MonoCompile *cfg,
+		MonoSH4CstPool *current, gboolean end_bb, guint8 **pcval)
 {
 	MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
 
 	guint32 index;        /* Index of current item in data pool */
 	CstPool_Const_Values *g;
 
-/* This piece of code is very temporary. Adapted from Denis' work......*/
 	guint8   *patch0;
 	guint8   *patch1;
 	guint8   *dest;
@@ -506,8 +508,14 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 	if(cur_pool->pool_nbcst_emitted > SH4_MAX_CSTPOOL -2U) {
 		current->state = cstpool_allocated;
 	}
-/* End of temporary code ...........................................*/
 
+	return;
+}
+
+static void sh4_emit_pool(MonoCompile *cfg, MonoSH4CstPool *current,
+			  gboolean end_bb, guint8 **pcval)
+{
+	NOT_IMPLEMENTED;
 	return;
 }
 
@@ -524,7 +532,8 @@ static void sh4_emit_current_pool(MonoCompile *cfg, MonoSH4CstPool *current,
 static void
 sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb, MonoBasicBlock *bb, guint8 **pcval)
 {
-	MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
+	MonoSH4CstPool_Env *env = (MonoSH4CstPool_Env*)(cfg->arch.poolenv);
+	MonoSH4CstPool *cur_pool = env->last;
 
 	/* No pool, no constant pool or pool already emitted */
 	if(cur_pool == NULL              ||
@@ -532,16 +541,18 @@ sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb, MonoBasicBlock *bb
 	   cur_pool->state != cstpool_filling)
 		return;
 
-	/* Temporary */
-	if(cur_pool->pool_nbcst_emitted==cur_pool->pool_nbcst)
+	/* Low performance mode. If constants are to be emitted,*/
+	/* do the job and exit early.				*/
+	if(env->mode == cstpool_mode_lowperf) {
+		if(cur_pool->pool_nbcst_emitted!=cur_pool->pool_nbcst)
+			sh4_emit_pool_lowperf(cfg, cur_pool,end_bb,pcval);
 		return;
+	}
 
 
 	/* TODO */
-#if 0
 	if(cur_pool->pool_nbcst == SH4_MAX_CSTPOOL)
-#endif
-		sh4_emit_current_pool(cfg, cur_pool,end_bb,pcval);
+		sh4_emit_pool(cfg, cur_pool,end_bb,pcval);
 
 	return;
 }

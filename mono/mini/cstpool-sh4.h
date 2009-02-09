@@ -35,16 +35,22 @@
 /* Tackling constant pools */
 typedef enum {
 	cstpool_undef     = 0,
-	cstpool_filling   = 1,   /* The only state where you can add data */
+	cstpool_filling   = 1,	/* The only state where you can add data */
 	cstpool_allocated = 2,
 	cstpool_patched   = 3,
 } CstPool_State;
 
-/* Float and double values add some complexity */
+typedef enum {
+	cstpool_mode_undef = 0,		/* Mode is unspecified.		*/
+	cstpool_mode_fullperf = 1,	/* Full optimization mode.	*/
+	cstpool_mode_lowperf  = 2,	/* Low perf. mode (debug).	*/
+} CstPool_Mode;
+
+/* Float and double values add some complexity. */
 enum CstPool_Const_Type {
-	cstpool_type_int     = 0,     /* Integer */
-	cstpool_type_float   = 1,     /* Float   */
-	cstpool_type_double  = 2,     /* Double: 32 low  bits */
+	cstpool_type_int     = 0,	/* Integer */
+	cstpool_type_float   = 1,	/* Float   */
+	cstpool_type_double  = 2,	/* Double: 32 low  bits */
 };
 
 /* This structure should only be used in file cstpool-sh4.c
@@ -85,7 +91,7 @@ typedef struct MonoSH4CstPool{
 	gconstpointer   pool_cst[SH4_MAX_CSTPOOL];
 	guint32         off_inst[SH4_MAX_CSTPOOL];
 
-	guint32  pool_nbcst_emitted; /* Temporary -                   */
+	guint32  pool_nbcst_emitted;
 } MonoSH4CstPool;
 
 typedef struct {
@@ -98,11 +104,13 @@ typedef struct {
 
 	guint32         nb_bblocks;
 	guint32        *tab_bb_offset;
+
+	CstPool_Mode	mode;
 } MonoSH4CstPool_Env;
 
 void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval, MonoJumpInfoType type, gconstpointer target, SH4IntRegister reg);
 
-void sh4_cstpool_init(MonoCompile *cfg);
+void sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode);
 void sh4_cstpool_end(MonoCompile *cfg);
 void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f);
 void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d);

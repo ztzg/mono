@@ -686,8 +686,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		NOT_IMPLEMENTED;
 	}
 
-	/* Initialize constant pools */
-	sh4_cstpool_init(cfg);
+	/* Initialize cst pools - for the moment keep running in low perf mode.*/
+	sh4_cstpool_init(cfg, cstpool_mode_lowperf);
 
 	signature = mono_method_signature(cfg->method);
 
