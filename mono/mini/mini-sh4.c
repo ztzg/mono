@@ -954,29 +954,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			sh4_sub(NULL, &buffer, sh4_temp, sh4_r15);
 		}
 		else {
-			guint8 *patch0 = NULL;
-			guint8 *patch1 = NULL;
-
-			/* Patch slot for : sh4_temp <- localloc_size */
-			patch0 = buffer;
-			sh4_die(NULL, &buffer);
-
+			sh4_load(&buffer, localloc_size, sh4_temp);
 			sh4_sub(NULL, &buffer, sh4_temp, sh4_r15);
-
-			/* Patch slot for : bra_label "skip_cstpool" */
-			patch1 = buffer;
-			sh4_die(NULL, &buffer);
-			sh4_nop(NULL, &buffer);
-
-			/* Align the constant pool. */
-			while (((guint32)buffer % 4) != 0)
-				sh4_nop(NULL, &buffer);
-
-			/* Build the constant pool & patch the corresponding instruction. */
-			sh4_movl_PCrel(NULL, &patch0, buffer, sh4_temp);
-			sh4_emit32(&buffer, (guint32)localloc_size);
-
-			sh4_bra_label(NULL, &patch1, buffer);
 		}
 	}
 
@@ -1026,7 +1005,6 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 {
 	guint8 *buffer = NULL;
 	guint8 *code   = NULL;
-	guint8 *patch1 = NULL;
 	int localloc_size = 0;
 	int i = 0;
 
@@ -1056,13 +1034,15 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	/* Free the space used by local variables and the spill area. */
 	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
 	if (localloc_size != 0) {
-		if (SH4_CHECK_RANGE_add_imm(localloc_size))
+		if (SH4_CHECK_RANGE_add_imm(localloc_size)) {
 			sh4_add_imm(NULL, &buffer, localloc_size, sh4_r15);
+		}
+		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
+			sh4_mov_imm(NULL, &buffer, localloc_size, sh4_temp);
+			sh4_add(NULL, &buffer, sh4_temp, sh4_r15);
+		}
 		else {
-			/* Patch slot for : sh4_temp <- localloc_size */
-			patch1 = buffer;
-			sh4_die(NULL, &buffer);
-
+			sh4_load(&buffer, localloc_size, sh4_temp);
 			sh4_add(NULL, &buffer, sh4_temp, sh4_r15);
 		}
 	}
@@ -1126,15 +1106,6 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	sh4_rts(NULL, &buffer);
 	sh4_nop(NULL, &buffer);
-
-	/* Align & build the constant pool & patch the corresponding instructions. */
-	if (patch1 != NULL) {
-		while (((guint32)buffer % 4) != 0)
-			sh4_nop(NULL, &buffer);
-
-		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_temp);
-		sh4_emit32(&buffer, (guint32)localloc_size);
-	}
 
 	cfg->code_len = buffer - cfg->native_code;
 
