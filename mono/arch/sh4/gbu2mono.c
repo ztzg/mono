@@ -357,30 +357,49 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 	return;
 }
 
-static void printf_get_field(char *name, const char *field, int length, int size, int scaling)
+static void printf_get_field(char *name, const char *field, int length, int size, int force_sign, int scaling)
 {
 	printf("static inline int get_%s_sh4_%s(guint16 code)\n", field, name);
 	printf("{\n");
+	printf("	int result = ");
 	switch (size) {
 	case 4:
-		printf("	return ((code >> %d) & 0xF) << %d;\n", 12 - length, scaling);
+		printf("((code >> %d) & 0xF) << %d;\n", 12 - length, scaling);
+		if (force_sign != 0) {
+			printf("	if ((result & 0x8) != 0)\n");
+			printf("		result |= 0xFFFFFFF0;\n");
+		}
 		break;
 	case 8:
-		printf("	return ((code >> %d) & 0xFF) << %d;\n", 8 - length, scaling);
+		printf("((code >> %d) & 0xFF) << %d;\n", 8 - length, scaling);
+		if (force_sign != 0) {
+			printf("	if ((result & 0x80) != 0)\n");
+			printf("		result |= 0xFFFFFF00;\n");
+		}
 		break;
 	case 12:
-		printf("	return ((code >> %d) & 0xFFF) << %d;\n", 4 - length, scaling);
+		printf("((code >> %d) & 0xFFF) << %d;\n", 4 - length, scaling);
+		if (force_sign != 0) {
+			printf("	if ((result & 0x800) != 0)\n");
+			printf("		result |= 0xFFFFF000;\n");
+		}
 		break;
 	default:
 		assert(0);
 		break;
 	}
+
+	/* Sanity checks. */
+	if (force_sign != 0)
+		printf("	g_assert(SH4_CHECK_RANGE_%s(result));\n", name);
+	if (scaling != 0)
+		printf("	g_assert(SH4_CHECK_ALIGN_%s(result));\n", name);
+
+	printf("	return result;\n");
 	printf("}\n");
-	printf("\n");
 }
 
-
-static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int scaling)
+static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int force_sign, int scaling)
 {
 	int i = 0;
 	int length = 0;
@@ -388,12 +407,12 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 	for (i = 0; i < 9; i++) {
 		switch (nibbles[i]) {
 		case REG_N:
-			printf_get_field(name, "Rx", length, 4, 0);
+			printf_get_field(name, "Rx", length, 4, 0, 0);
 			length += 4;
 			break;
 
 		case REG_M:
-			printf_get_field(name, "Ry", length, 4, 0);
+			printf_get_field(name, "Ry", length, 4, 0, 0);
 			length += 4;
 			break;
 
@@ -403,7 +422,7 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 		case IMM1_4BY2:
 		case IMM0_4BY4:
 		case IMM1_4BY4:
-			printf_get_field(name, "imm", length, 4, scaling);
+			printf_get_field(name, "imm", length, 4, force_sign, scaling);
 			length += 4;
 			break;
 
@@ -439,12 +458,12 @@ static void printf_get_fields(char *name, const sh_nibble_type nibbles[9], int s
 		case PCRELIMM_8BY4:
 		case IMM0_8BY4:
 		case IMM1_8BY4:
-			printf_get_field(name, "imm", length, 8, scaling);
+			printf_get_field(name, "imm", length, 8, force_sign, scaling);
 			length += 8;
 			break;
 
 		case BRANCH_12:
-			printf_get_field(name, "imm", length, 12, scaling);
+			printf_get_field(name, "imm", length, 12, force_sign, scaling);
 			length += 12;
 			break;
 
@@ -818,7 +837,7 @@ int main(void)
 		printf("}\n");
 		printf("\n");
 
-		printf_get_fields(name, sh_table[i].nibbles, scaling);
+		printf_get_fields(name, sh_table[i].nibbles, force_sign, scaling);
 	}
 
 	printf("#include \"sh4-codegen-footer.h\"\n");
