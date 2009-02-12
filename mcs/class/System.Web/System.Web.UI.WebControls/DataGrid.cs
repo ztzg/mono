@@ -410,19 +410,15 @@ namespace System.Web.UI.WebControls {
 			protected override void AddAttributesToRender (HtmlTextWriter writer)
 			{
 				base.AddAttributesToRender (writer);
-				if (ID == null)
-					writer.AddAttribute ("id", parent.ClientID);
+				if (parent.ID != null)
+					writer.AddAttribute(HtmlTextWriterAttribute.Id, parent.ClientID);
 			}
 		}
 		
 		private Table RenderTable {
 			get {
 				if (render_table == null) {
-#if ONLY_1_1
 					render_table = new TableID (this);
-#else
-					render_table = new ChildTable ();
-#endif
 					render_table.AutoID = false;
 				}
 				return render_table;
