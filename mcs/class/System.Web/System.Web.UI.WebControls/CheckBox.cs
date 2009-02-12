@@ -352,7 +352,7 @@ namespace System.Web.UI.WebControls {
 				if (!IsInputOrCommonAttr (key))
 					continue;
 				if (common_attrs == null)
-					common_attrs = new AttributeCollection (new StateBag ());
+					common_attrs = new AttributeCollection (new StateBag (true));
 				common_attrs [key] = Attributes [key];
 				Attributes.Remove (key);
 			}
@@ -436,7 +436,7 @@ namespace System.Web.UI.WebControls {
 #if NET_2_0
 				string onclick = Page.ClientScript.GetPostBackEventReference (GetPostBackOptions (), true);
 				onclick = String.Concat ("setTimeout('", onclick.Replace ("\\", "\\\\").Replace ("'", "\\'"), "', 0)");
-				w.AddAttribute (HtmlTextWriterAttribute.Onclick, BuildScriptAttribute ("onclick", onclick));
+				w.AddAttribute (HtmlTextWriterAttribute.Onclick, BuildScriptAttribute (common_attrs, "onclick", onclick));
 #else
 					w.AddAttribute (HtmlTextWriterAttribute.Onclick,
 							BuildScriptAttribute ("onclick", Page.ClientScript.GetPostBackEventReference (this, String.Empty)));

@@ -478,9 +478,16 @@ namespace System.Web.UI.WebControls {
 		}
 
 		static char[] _script_trim_chars = {';'};
-		internal string BuildScriptAttribute (string name, string tail)
+		internal string BuildScriptAttribute(string name, string tail)
 		{
-			AttributeCollection attrs = Attributes;
+			return BuildScriptAttribute(Attributes, name, tail);
+		}
+
+		internal string BuildScriptAttribute(AttributeCollection attrs, string name, string tail)
+		{
+			if (attrs == null)
+				return tail;
+
 			string attr = attrs [name];
 			
 			if (attr == null || attr.Length == 0)
