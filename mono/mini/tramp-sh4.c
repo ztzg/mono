@@ -388,11 +388,12 @@ gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMe
 void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 {
 	guint8 *call_site = code - 4;
+	guint8 *constant_address = NULL;
 
 	SH4_EXTRA_DEBUG("args => %p, %p", code, registers);
 
-	/* Sanity check. */
-	if(!is_sh4_call_site((void *)code)) {
+	constant_address = get_imm_sh4_call_site((void *)code);
+	if(constant_address == NULL) {
 		char name[] = "call site in nullify_class_init_trampoline";
 		mono_disassemble_code(NULL, code - 20, 20, name);
 		g_assert_not_reached();
@@ -420,22 +421,22 @@ void mono_arch_nullify_plt_entry(guint8 *code)
  */
 void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 {
-	guint8 *constant_site = code - 8;
+	guint8 *constant_address = NULL;
 
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
-	/* Sanity check. */
-	if(!is_sh4_call_site((void *)code)) {
+	constant_address = get_imm_sh4_call_site((void *)code);
+	if(constant_address == NULL) {
 		char name[] = "call site in patch_callsite";
 		mono_disassemble_code(NULL, code - 20, 20, name);
 		g_assert_not_reached();
 	}
 
 	/* Patch the address. */
-	sh4_emit32(&constant_site, (guint32)address);
+	sh4_emit32(&constant_address, (guint32)address);
 
 	/* Flush instruction cache, since we've generated code. */
-	mono_arch_flush_icache(constant_site - 4, 4);
+	mono_arch_flush_icache(constant_address - 4, 4);
 
 	return;
 }

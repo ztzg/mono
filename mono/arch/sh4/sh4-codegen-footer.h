@@ -83,20 +83,31 @@ static inline int is_sh4_load(guint16 *code, SH4IntRegister sh4_rX)
 }
 
 /**
- * Checks if a code sequence is a call site.
+ * Return the address of the constant used to call a method.
  *
  * The calling sequence is (for OP_.*CALL opcodes):
  *
- *          -X: LOAD address, r3
- *          -4: jsr  @r3
+ *          -6: mov.l address, r3
+ *          -4: jsr   @r3
  *          -2: nop
  *           0: <- code points here
  */
-static inline int is_sh4_call_site(guint16 *code)
+static inline guint8 *get_imm_sh4_call_site(guint16 *code)
 {
-	return (is_sh4_nop(code[-1]) &&
-		is_sh4_jsr_indRx(code[-2], sh4_temp) &&
-		is_sh4_load(&code[-3], sh4_temp));
+	int imm = get_imm_sh4_movl_dispPC(code[-3]);
+	unsigned int pc = 0;
+
+	if (!is_sh4_nop(code[-1]) ||
+	    !is_sh4_jsr_indRx(code[-2], sh4_temp) ||
+	    !is_sh4_movl_dispPC(code[-3], imm, sh4_temp))
+		return NULL;
+
+	/* The virtual address is formed by calculating PC + 4,
+	   clearing the lowest 2 bits, and adding the immediate. */
+	pc = (unsigned int)&code[-3];
+	pc += 4;
+	pc &= ~0x3;
+	return (guint8 *)pc + imm;
 }
 
 #endif /* __MONO_SH4_CODEGEN_FOOTER_H__ */
