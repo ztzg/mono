@@ -115,14 +115,17 @@ void sh4_cstpool_end(MonoCompile *cfg);
 void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f);
 void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d);
 void sh4_cstpool_check(void *cfg, guint8 **pcval);
-void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb,
-                              guint8 **pcval);
+void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb);
 void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb,
 				guint8 **pcval);
 gboolean sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb,
                                     guint32 *offset);
 
-void sh4_realloc_buf_if_needed(MonoCompile *cfg, guint32 offset,
-                               guint32 length_max,guint8 **pcval);
+gboolean sh4_cstpool_decide_emission(MonoCompile *cfg, gboolean end_bb,
+				     MonoBasicBlock *bb, guint32 *size);
+void sh4_emit_pool(MonoCompile *cfg, gboolean end_bb, guint8 **pcval);
+
+/* Function defined in mini-sh4.c. Not the best place to do this work */
+guint8* get_code_buffer(MonoCompile *cfg, guint32 size);
 
 #endif  /* CSTPOOL_SH4_H  */

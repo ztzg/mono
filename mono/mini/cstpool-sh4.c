@@ -175,6 +175,13 @@
  *      FALSE otherwise.
  *      This function should help some decisions in emit basic block routines.
  *
+ * gboolean sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb,
+ *					MonoBasicBlock *bb, guint32 *size)
+ *
+ *	Decide whether current pool is to be emitted right away. Returns TRUE
+ *	if so, otherwise returns FALSE. If constant pool is to be emitted,
+ *	returns the size of the memory required by constant pool emission.
+ *
  * void sh4_cstpool_end(MonoCompile *cfg)
  *
  *     Final call. To be called after the last instruction of the
@@ -208,9 +215,8 @@ static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, doub
 
 static inline void  sh4_cstpool_addpool(MonoCompile*);
 
-static void         sh4_cstpool_decide_emission(MonoCompile*, gboolean, MonoBasicBlock*, guint8 **pcval);
-static void         sh4_emit_pool(MonoCompile*, MonoSH4CstPool*, gboolean, guint8 **pcval);
-static void         sh4_emit_pool_lowperf(MonoCompile*, MonoSH4CstPool*, gboolean, guint8 **pcval);
+static void         sh4_emit_pool_lowperf(MonoCompile*, gboolean, guint8 **pcval);
+static void         sh4_emit_pool_fullperf(MonoCompile*, gboolean, guint8 **pcval);
 static void         sh4_cstpool_add_internal(MonoCompile *cfg,
                                              guint8 **pcval,
 				             MonoJumpInfoType type,
@@ -404,8 +410,8 @@ void sh4_cstpool_end(MonoCompile *cfg)
 	return;
 }
 
-static void sh4_emit_pool_lowperf(MonoCompile *cfg,
-		MonoSH4CstPool *current, gboolean end_bb, guint8 **pcval)
+static void
+sh4_emit_pool_lowperf(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
 {
 	MonoSH4CstPool *cur_pool = ((MonoSH4CstPool_Env *)cfg->arch.poolenv)->last;
 
@@ -419,11 +425,9 @@ static void sh4_emit_pool_lowperf(MonoCompile *cfg,
 	guint32   nb_int_const;
 	gboolean  is_float_or_double;
 
-	index  = cur_pool->pool_nbcst_emitted;
-	SH4_CFG_DEBUG(4) SH4_DEBUG("emit constant nr %d (cfg %p)",index,cfg);
-
-	/* We generate at most 14 bytes. In the following comment, we     */
-	/* track the overall code size allocated (see sz "metavariable"). */
+	/* We generate a sequence of 6 + n*4 bytes (n beeing the nb of 	*/
+	/* variables emitted). In the following, we track the overall 	*/
+	/* code size allocated (see sz "metavariable"). 		*/
 	patch1 = *pcval;
 
 	sh4_bra(NO_recur,pcval, 0x0); /* 0x0 to be patched. sz = 2   */
@@ -433,89 +437,109 @@ static void sh4_emit_pool_lowperf(MonoCompile *cfg,
 		sh4_nop(NO_recur,pcval);      /* Align constant pool */
 	}
 
-	/* constant pool is here. */
-	dest = *pcval;
+	while(cur_pool->pool_nbcst_emitted < cur_pool->pool_nbcst) {
+		index  = cur_pool->pool_nbcst_emitted;
+		SH4_CFG_DEBUG(4) SH4_DEBUG("emit constant nr %d (cfg %p)",index,cfg);
 
-	is_float_or_double = FALSE;       /* Default value */
+		/* constant is here. */
+		dest = *pcval;
 
-	if(cur_pool->type[index] != MONO_PATCH_INFO_NONE) {
-		mono_add_patch_info(cfg,
-				    *pcval - cfg->native_code,
-				    cur_pool->type[index],
-				    cur_pool->pool_cst[index]);
-		sh4_emit32(pcval,0U);        /* constant pool allocation  - patched later*/
-		                             /* sz <= 10 */
-		nb_int_const = 1U;
-	} else {
-		g = (CstPool_Const_Values*) (cur_pool->pool_cst[index]);
+		is_float_or_double = FALSE;       /* Default value */
 
-		g_assert(g!=NULL);
-
-		switch(sh4_cst_type(g)) {
-		case cstpool_type_int:
-			value1 = sh4_get_int(g);
-			sh4_emit32(pcval,value1);   /* constant pool allocation - sz <= 10*/
+		if(cur_pool->type[index] != MONO_PATCH_INFO_NONE) {
+			mono_add_patch_info(cfg,
+					    *pcval - cfg->native_code,
+					    cur_pool->type[index],
+					    cur_pool->pool_cst[index]);
+			sh4_emit32(pcval,0U); /* constant pool allocation  - patched later*/
+						/* sz <= 10 */
 			nb_int_const = 1U;
+		} else {
+			g = (CstPool_Const_Values*) (cur_pool->pool_cst[index]);
 
-			SH4_CFG_DEBUG(4) SH4_DEBUG("constant value 0x%08x\n",value1);
+			g_assert(g!=NULL);
+
+			switch(sh4_cst_type(g)) {
+			case cstpool_type_int:
+				value1 = sh4_get_int(g);
+				sh4_emit32(pcval,value1);   /* constant pool allocation - sz <= 6 + n*4*/
+				nb_int_const = 1U;
+
+				SH4_CFG_DEBUG(4) SH4_DEBUG("constant value 0x%08x\n",value1);
 			break;
 
-		case cstpool_type_float:
-			value1 = sh4_get_int_from_float(g);
-			sh4_emit32(pcval,value1);    /* constant pool allocation - sz <= 10*/
-			nb_int_const = 1U;
-			is_float_or_double = TRUE;   /* Default value */
+			case cstpool_type_float:
+				value1 = sh4_get_int_from_float(g);
+				sh4_emit32(pcval,value1);    /* constant pool allocation - sz <= 6 + n*4*/
+				nb_int_const = 1U;
+				is_float_or_double = TRUE;   /* Default value */
 
-			SH4_CFG_DEBUG(4) SH4_DEBUG("constant float value 0x%08x\n",value1);
+				SH4_CFG_DEBUG(4) SH4_DEBUG("constant float value 0x%08x\n",value1);
 			break;
 
-		case cstpool_type_double:
-			value1 = sh4_get_32low_from_double(g);
-			value2 = sh4_get_32high_from_double(g);
-			sh4_emit32(pcval,value1);    /* constant pool allocation - sz <= 10*/
-			sh4_emit32(pcval,value2);    /* constant pool allocation - sz <= 14*/
-			nb_int_const = 2U;
-			is_float_or_double = TRUE;
+			case cstpool_type_double:
+				value1 = sh4_get_32low_from_double(g);
+				value2 = sh4_get_32high_from_double(g);
+				sh4_emit32(pcval,value1);    /* constant pool allocation - sz <= 6 + n*4*/
+				sh4_emit32(pcval,value2);    /* constant pool allocation - sz <= 6 + n*4*/
+				nb_int_const = 2U;
+				is_float_or_double = TRUE;
 
-			SH4_CFG_DEBUG(4) SH4_DEBUG("constant double value 0x%08x%08x\n",
-						   value2,value1);
+				SH4_CFG_DEBUG(4) SH4_DEBUG("constant double value 0x%08x%08x\n",
+							   value2,value1);
 			break;
 
-		default:			/* Should never happen */
-			g_assert(FALSE);
-			nb_int_const = 0U;	/* Prevent compilation warnings */
+			default:			/* Should never happen */
+				g_assert(FALSE);
+				nb_int_const = 0U;	/* Prevent compilation warnings */
 			break;
+			}
 		}
-	}
-	/* sz <= 14 or more precisely sz <= 10 if not a double, sz <= 14 otherwise*/
+	/* sz <= 6 + n*4*/
 
 	/* patch sh4_movl_dispPC instruction emitted previously. */
-	patch0 = cfg->native_code + cur_pool->off_inst[index];
-	if(is_float_or_double) {
-		sh4_mova_PCrel_R0(NO_recur,&patch0,dest);
-	} else {
-		sh4_movl_PCrel(NO_recur,&patch0, dest, cur_pool->reg[index]);
-	}
+		patch0 = cfg->native_code + cur_pool->off_inst[index];
+		if(is_float_or_double) {
+			sh4_mova_PCrel_R0(NO_recur,&patch0,dest);
+		} else {
+			sh4_movl_PCrel(NO_recur,&patch0, dest, cur_pool->reg[index]);
+		}
+
+	/* A double requires two inputs in tables (second entry is a
+	 * dummy one). We also have sequences where more than two consecutives
+	 * calls in emit_basic_block are emitted.
+	 */
+		cur_pool->pool_nbcst_emitted += nb_int_const;
+
+	}  /* End while */
 
 	/* patch instruction at patch1 */
 	sh4_bra_label(NO_recur,&patch1, *pcval);
 
-	/* A double requires two inputs in tables (second entry is a
-	 * dummy one).
-	 */
-	cur_pool->pool_nbcst_emitted += nb_int_const;
-
 	if(cur_pool->pool_nbcst_emitted > SH4_MAX_CSTPOOL -2U) {
-		current->state = cstpool_allocated;
+		cur_pool->state = cstpool_allocated;
 	}
 
 	return;
 }
 
-static void sh4_emit_pool(MonoCompile *cfg, MonoSH4CstPool *current,
-			  gboolean end_bb, guint8 **pcval)
+void
+sh4_emit_pool_fullperf(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
 {
 	NOT_IMPLEMENTED;
+	return;
+}
+
+void
+sh4_emit_pool(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
+{
+	MonoSH4CstPool_Env *env = (MonoSH4CstPool_Env*)(cfg->arch.poolenv);
+
+	if(env->mode == cstpool_mode_fullperf) {
+		sh4_emit_pool_fullperf(cfg, end_bb, pcval);
+	} else {
+		sh4_emit_pool_lowperf(cfg, end_bb, pcval);
+	}
 	return;
 }
 
@@ -529,32 +553,41 @@ static void sh4_emit_pool(MonoCompile *cfg, MonoSH4CstPool *current,
  * current pc is big enough, we have no choice but to emit
  * the constant pool. In other cases, we use some heuristics
  */
-static void
-sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb, MonoBasicBlock *bb, guint8 **pcval)
+gboolean
+sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb,
+			MonoBasicBlock *bb, guint32 *size)
 {
 	MonoSH4CstPool_Env *env = (MonoSH4CstPool_Env*)(cfg->arch.poolenv);
 	MonoSH4CstPool *cur_pool = env->last;
+
+	*size = 0U;			/* Default value */
 
 	/* No pool, no constant pool or pool already emitted */
 	if(cur_pool == NULL              ||
 	   cur_pool->pool_nbcst == 0     ||
 	   cur_pool->state != cstpool_filling)
-		return;
+		return FALSE;
 
 	/* Low performance mode. If constants are to be emitted,*/
 	/* do the job and exit early.				*/
 	if(env->mode == cstpool_mode_lowperf) {
-		if(cur_pool->pool_nbcst_emitted!=cur_pool->pool_nbcst)
-			sh4_emit_pool_lowperf(cfg, cur_pool,end_bb,pcval);
-		return;
+		gint32 pool_nbcst;
+
+		pool_nbcst = cur_pool->pool_nbcst - cur_pool->pool_nbcst_emitted;
+		if(pool_nbcst > 0) {
+			/* See function sh4_emit_pool_lowperf */
+			*size = 6U + (pool_nbcst * 4U);
+			return TRUE;
+		}
+		return FALSE;
 	}
 
+	if(cur_pool->pool_nbcst > SH4_MAX_CSTPOOL - 2U) {
+		NOT_IMPLEMENTED;
+		return TRUE;
+	}
 
-	/* TODO */
-	if(cur_pool->pool_nbcst == SH4_MAX_CSTPOOL)
-		sh4_emit_pool(cfg, cur_pool,end_bb,pcval);
-
-	return;
+	return FALSE;
 }
 
 /* API routine for float constants */
@@ -568,7 +601,6 @@ void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f)
 
 	sh4_cstpool_add_internal(cfg, pcval, MONO_PATCH_INFO_NONE,
 				 NULL,sh4_r0,g);
-
 	return;
 }
 
@@ -679,11 +711,6 @@ static void sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
          * to make it possible to allocate 2 more bytes.
 	 */
 	sh4_movl_dispPC(NO_recur,pcval, 0, reg);   /* 0 to be patched       */
-
-	sh4_cstpool_decide_emission(cfg,
-				    FALSE /* not at the end of a bb */,
-				    NULL,
-				    pcval);
 	return;
 }
 
@@ -697,12 +724,6 @@ void sh4_cstpool_check(void *cfg, guint8 **pcval)
 	/* Unsafe cast, but we have to avoid circular dependencies in
 	 * header files.
 	 */
-	MonoCompile *cfg2 = (MonoCompile*) cfg;
-
-	sh4_cstpool_decide_emission(cfg2,
-				    FALSE /* not at the end of a bb */,
-				    NULL,
-				    pcval);
 	return;
 }
 
@@ -725,12 +746,17 @@ void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **p
 	return;
 }
 
-void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **pcval)
+/* Called at the end of a basic block */
+void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb)
 {
-	sh4_cstpool_decide_emission(cfg,
-				    TRUE, /* not at the end of a bb */
-				    bb,
-				    pcval);
+	guint32 size;
+	guint8 *buffer;
+
+	if(sh4_cstpool_decide_emission(cfg,TRUE,bb,&size)) {
+		buffer = get_code_buffer(cfg,size);
+		sh4_emit_pool(cfg, TRUE /* end of bb */, &buffer);
+		cfg->code_len = buffer - cfg->native_code;
+	}
 	return;
 }
 

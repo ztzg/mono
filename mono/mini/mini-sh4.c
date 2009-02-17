@@ -987,7 +987,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	return buffer;
 }
 
-static inline guint8 *get_code_buffer(MonoCompile *cfg, guint32 size)
+guint8 *get_code_buffer(MonoCompile *cfg, guint32 size)
 {
 	if (cfg->code_len + size <= cfg->code_size)
 		return cfg->native_code + cfg->code_len;
@@ -2036,15 +2036,25 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	MONO_BB_FOR_EACH_INS(basic_block, inst) {
 		guint32 length_max = 0;
+		guint32 size_buffer;
+		gboolean emit_buffer;
 		int length   = 0;
 		guint8 *code = NULL;
 
 		/* Get the 'len' field of this opcode, specify into cpu-sh4.md. */
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
-		/* Reallocate enough room to store the SH4 instructions
-		   used to implement the current opcode. */
-		code = buffer = get_code_buffer(cfg, length_max);
+		/* Check if constant pool is to be emitted right now. */
+		emit_buffer = sh4_cstpool_decide_emission(cfg, FALSE, NULL, &size_buffer);
+		if(emit_buffer)
+			length_max += size_buffer;
+
+		/* Reallocate enough room to store the SH4 instructions (and possibly
+		   constant pool) used to implement the current opcode. */
+		buffer = get_code_buffer(cfg, length_max);
+		if(emit_buffer)
+			sh4_emit_pool(cfg, FALSE, &buffer);
+		code = buffer;
 
 		mono_debug_record_line_number(cfg, inst, buffer - cfg->native_code);
 
@@ -2695,7 +2705,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		cfg->code_len = buffer - cfg->native_code;
 	}
 
-	sh4_cstpool_check_end_bb(cfg, basic_block, &buffer);
+	sh4_cstpool_check_end_bb(cfg, basic_block);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
 
