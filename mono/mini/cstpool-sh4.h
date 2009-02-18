@@ -114,7 +114,6 @@ void sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode);
 void sh4_cstpool_end(MonoCompile *cfg);
 void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f);
 void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d);
-void sh4_cstpool_check(void *cfg, guint8 **pcval);
 void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb);
 void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb,
 				guint8 **pcval);

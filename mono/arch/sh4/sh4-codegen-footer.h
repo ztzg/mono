@@ -31,22 +31,22 @@ static inline void sh4_load(guint8 **code, guint32 value, SH4IntRegister Rx)
 
 	/* Patch slot for : Rx <- value */
 	patch0 = *code;
-	sh4_die(NULL, code);
+	sh4_die(code);
 
 	/* Patch slot for : bra_label "skip_cstpool" */
 	patch1 = *code;
-	sh4_die(NULL, code);
-	sh4_nop(NULL, code);
+	sh4_die(code);
+	sh4_nop(code);
 
 	/* Align the constant pool. */
 	while (((guint32)*code % 4) != 0)
-		sh4_nop(NULL, code);
+		sh4_nop(code);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_PCrel(NULL, &patch0, *code, Rx);
+	sh4_movl_PCrel(&patch0, *code, Rx);
 	sh4_emit32(code, (guint32)value);
 
-	sh4_bra_label(NULL, &patch1, *code);
+	sh4_bra_label(&patch1, *code);
 }
 
 /**

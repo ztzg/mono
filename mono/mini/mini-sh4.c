@@ -710,13 +710,13 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	/* Save global registers (sh4_r8 -> sh4_r13). */
 	for (i = sh4_r8; i <= sh4_r13; i++)
 		if (cfg->used_int_regs & (1 << i))
-			sh4_movl_decRx(NULL, &buffer, (SH4IntRegister)i, sh4_r15);
+			sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_r15);
 
 	/* Save the previous frame pointer (sh4_r14). */
-	sh4_movl_decRx(NULL, &buffer, sh4_r14, sh4_r15);
+	sh4_movl_decRx(&buffer, sh4_r14, sh4_r15);
 
 	/* Save the PR. */
-	sh4_stsl_PR_decRx(NULL, &buffer, sh4_r15);
+	sh4_stsl_PR_decRx(&buffer, sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -744,15 +744,15 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					if (inst->dreg != arg_info->reg)
-						sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+						sh4_mov(&buffer, arg_info->reg, inst->dreg);
 					break;
 
 				case integer64:
 					NOT_IMPLEMENTED;
 					if (inst->dreg != arg_info->reg) {
 						/* TODO - CV : check the order. */
-						sh4_mov(NULL, &buffer, arg_info->reg + 1, inst->dreg + 1);
-						sh4_mov(NULL, &buffer, arg_info->reg, inst->dreg);
+						sh4_mov(&buffer, arg_info->reg + 1, inst->dreg + 1);
+						sh4_mov(&buffer, arg_info->reg, inst->dreg);
 					}
 					break;
 
@@ -775,7 +775,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				case integer32:
 					offset = cfg->arch.regsave_size + arg_info->offset;
 					if (SH4_CHECK_RANGE_movl_dispRy(offset))
-						sh4_movl_dispRy(NULL, &buffer, offset, sh4_r15, inst->dreg);
+						sh4_movl_dispRy(&buffer, offset, sh4_r15, inst->dreg);
 					else
 						NOT_IMPLEMENTED;
 					break;
@@ -812,7 +812,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				case integer32:
 					g_assert(inst->inst_basereg == sh4_r15);
 					g_assert_not_reached(); /* Not yet tested. */
-					sh4_movl_dispRx(NULL, &buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
+					sh4_movl_dispRx(&buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
 					break;
 
 				case integer64:
@@ -877,69 +877,69 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		   "save_lmf" is set. */
 
 		/* pseudo-code: MonoLMF.registers[] = { %R0, ..., %R15 }; */
-		sh4_add_imm(NULL, &buffer, -sizeof(MonoLMF) + offsetof(MonoLMF, registers), sh4_r15);
+		sh4_add_imm(&buffer, -sizeof(MonoLMF) + offsetof(MonoLMF, registers), sh4_r15);
 		for (i = 0; i <= 15; i++)
-			sh4_movl_dispRx(NULL, &buffer, (SH4IntRegister)i, i * 4, sh4_r15);
+			sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_r15);
 
 		/* Patch slot for : sh4_r0 <- cfg->method */
 		patch0 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
-		sh4_add_imm(NULL, &buffer, -offsetof(MonoLMF, registers), sh4_r15);
+		sh4_add_imm(&buffer, -offsetof(MonoLMF, registers), sh4_r15);
 
 		/* pseudo-code: MonoLMF.method = cfg->method; */
-		sh4_movl_dispRx(NULL, &buffer, sh4_r0, offsetof(MonoLMF, method), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, method), sh4_r15);
 
 		/* Patch slot for : sh4_r0 <- %PC */
 		patch1 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* pseudo-code: MonoLMF.pc = %PC; */
-		sh4_movl_dispRx(NULL, &buffer, sh4_r0, offsetof(MonoLMF, pc), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, pc), sh4_r15);
 
 		/* Patch slot for : sh4_r0 <- mono_get_lmf_addr */
 		patch2 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* pseudo-code: MonoLMF.lmf_addr = mono_get_lmf_addr(); */
-		sh4_jsr_indRx(NULL, &buffer, sh4_r0);
-		sh4_nop(NULL, &buffer);
+		sh4_jsr_indRx(&buffer, sh4_r0);
+		sh4_nop(&buffer);
 
-		sh4_movl_dispRx(NULL, &buffer, sh4_r0, offsetof(MonoLMF, lmf_addr), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, lmf_addr), sh4_r15);
 
 		/*
 		 * Insert the new LMF at the beginning of the LMF list.
 		 */
 
 		/* pseudo-code: MonoLMF.previous_lmf = *(MonoLMF.lmf_addr); */
-		sh4_movl_indRy(NULL, &buffer, sh4_r0, sh4_temp);
-		sh4_movl_dispRx(NULL, &buffer, sh4_temp, offsetof(MonoLMF, previous_lmf), sh4_r15);
+		sh4_movl_indRy(&buffer, sh4_r0, sh4_temp);
+		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, previous_lmf), sh4_r15);
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = &MonoLMF;  */
-		sh4_movl_indRx(NULL, &buffer, sh4_r15, sh4_r0);
+		sh4_movl_indRx(&buffer, sh4_r15, sh4_r0);
 
 		/* Patch slot for : bra_label "skip_cstpool" */
 		patch3 = buffer;
-		sh4_die(NULL, &buffer);
-		sh4_nop(NULL, &buffer);
+		sh4_die(&buffer);
+		sh4_nop(&buffer);
 
 		/* Align the constant pool. */
 		while (((guint32)buffer % 4) != 0)
-			sh4_nop(NULL, &buffer);
+			sh4_nop(&buffer);
 
 		/* Build the constant pool & patch the corresponding instructions. */
-		sh4_movl_PCrel(NULL, &patch0, buffer, sh4_r0);
+		sh4_movl_PCrel(&patch0, buffer, sh4_r0);
 		sh4_emit32(&buffer, (guint32)cfg->method);
 
-		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r0);
+		sh4_movl_PCrel(&patch1, buffer, sh4_r0);
 		patch1 -= (guint32)cfg->native_code;
 		mono_add_patch_info(cfg, buffer - cfg->native_code, MONO_PATCH_INFO_IP, patch1);
 		sh4_emit32(&buffer, (guint32)0);
 
-		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_r0);
+		sh4_movl_PCrel(&patch2, buffer, sh4_r0);
 		sh4_emit32(&buffer, (guint32)mono_get_lmf_addr);
 
-		sh4_bra_label(NULL, &patch3, buffer);
+		sh4_bra_label(&patch3, buffer);
 	}
 
 	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
@@ -947,22 +947,22 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
 	if (localloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
-			sh4_add_imm(NULL, &buffer, -localloc_size, sh4_r15);
+			sh4_add_imm(&buffer, -localloc_size, sh4_r15);
 		}
 		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
-			sh4_mov_imm(NULL, &buffer, localloc_size, sh4_temp);
-			sh4_sub(NULL, &buffer, sh4_temp, sh4_r15);
+			sh4_mov_imm(&buffer, localloc_size, sh4_temp);
+			sh4_sub(&buffer, sh4_temp, sh4_r15);
 		}
 		else {
 			sh4_load(&buffer, localloc_size, sh4_temp);
-			sh4_sub(NULL, &buffer, sh4_temp, sh4_r15);
+			sh4_sub(&buffer, sh4_temp, sh4_r15);
 		}
 	}
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("%s::localloc_size = %d", cfg->method->name, localloc_size);
 
 	/* Set the frame pointer. */
-	sh4_mov(NULL, &buffer, sh4_r15, sh4_r14);
+	sh4_mov(&buffer, sh4_r15, sh4_r14);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1017,7 +1017,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	code = buffer = get_code_buffer(cfg, EPILOGUE_SIZE);
 
 	/* Reset the stack pointer. */
-	sh4_mov(NULL, &buffer, sh4_r14, sh4_r15);
+	sh4_mov(&buffer, sh4_r14, sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1035,15 +1035,15 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
 	if (localloc_size != 0) {
 		if (SH4_CHECK_RANGE_add_imm(localloc_size)) {
-			sh4_add_imm(NULL, &buffer, localloc_size, sh4_r15);
+			sh4_add_imm(&buffer, localloc_size, sh4_r15);
 		}
 		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
-			sh4_mov_imm(NULL, &buffer, localloc_size, sh4_temp);
-			sh4_add(NULL, &buffer, sh4_temp, sh4_r15);
+			sh4_mov_imm(&buffer, localloc_size, sh4_temp);
+			sh4_add(&buffer, sh4_temp, sh4_r15);
 		}
 		else {
 			sh4_load(&buffer, localloc_size, sh4_temp);
-			sh4_add(NULL, &buffer, sh4_temp, sh4_r15);
+			sh4_add(&buffer, sh4_temp, sh4_r15);
 		}
 	}
 
@@ -1051,7 +1051,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
-		sh4_mov(NULL, &buffer, sh4_r15, sh4_temp);
+		sh4_mov(&buffer, sh4_r15, sh4_temp);
 
 		/* At this point, the stack looks like :
 		 *	:              :
@@ -1066,11 +1066,11 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		 */
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
-		sh4_movl_dispRy(NULL, &buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_r4);
-		sh4_movl_dispRx(NULL, &buffer, sh4_temp, offsetof(MonoLMF, lmf_addr), sh4_r15);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_r4);
+		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, lmf_addr), sh4_r15);
 
 		/* Adjust sh4_r15 to free of the "hidden" LMF. */
-		sh4_add_imm(NULL, &buffer, sizeof(MonoLMF), sh4_r15);
+		sh4_add_imm(&buffer, sizeof(MonoLMF), sh4_r15);
 	}
 
 	/* At this point, the stack looks like :
@@ -1084,15 +1084,15 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	 */
 
 	/* Restore the PR. */
-	sh4_ldsl_incRx_PR(NULL, &buffer, sh4_r15);
+	sh4_ldsl_incRx_PR(&buffer, sh4_r15);
 
 	/* Restore the previous frame pointer (sh4_r14). */
-	sh4_movl_incRy(NULL, &buffer, sh4_r15, sh4_r14);
+	sh4_movl_incRy(&buffer, sh4_r15, sh4_r14);
 
 	/* Restore global registers (sh4_r13 -> sh4_r8). */
 	for (i = sh4_r13; i >= sh4_r8; i--)
 		if (cfg->used_int_regs & (1 << i))
-			sh4_movl_incRy(NULL, &buffer, sh4_r15, (SH4IntRegister)i);
+			sh4_movl_incRy(&buffer, sh4_r15, (SH4IntRegister)i);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1104,8 +1104,8 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	/* At this point, the stack is fully restored (as caller's point of view). */
 
-	sh4_rts(NULL, &buffer);
-	sh4_nop(NULL, &buffer);
+	sh4_rts(&buffer);
+	sh4_nop(&buffer);
 
 	cfg->code_len = buffer - cfg->native_code;
 
@@ -1172,34 +1172,34 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 		/* Patch slot for : sh4_r4 <- type token */
 		patch0 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* Patch slot for : sh4_r5 <- current PC - throw PC */
 		patch1 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* Patch slot for : sh4_temp <- mono_arch_throw_exception_by_name */
 		patch2 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
-		sh4_jsr_indRx(NULL, &buffer, sh4_temp);
-		sh4_nop(NULL, &buffer); /* delay slot */
+		sh4_jsr_indRx(&buffer, sh4_temp);
+		sh4_nop(&buffer); /* delay slot */
 
 		/* Should never return. */
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* Align the constant pool. */
 		while (((guint32)buffer % 4) != 0)
-			sh4_nop(NULL, &buffer);
+			sh4_nop(&buffer);
 
 		/* Build the constant pool & patch the corresponding instructions. */
-		sh4_movl_PCrel(NULL, &patch0, buffer, MONO_SH4_REG_FIRST_ARG);
+		sh4_movl_PCrel(&patch0, buffer, MONO_SH4_REG_FIRST_ARG);
 		sh4_emit32(&buffer, (guint32)(class->type_token - MONO_TOKEN_TYPE_DEF));
 
-		sh4_movl_PCrel(NULL, &patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1);
+		sh4_movl_PCrel(&patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1);
 		sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i - 6));
 
-		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_temp);
+		sh4_movl_PCrel(&patch2, buffer, sh4_temp);
 		/* Reuse this path_info to set the jump in mono_arch_patch_code(). */
 		patch_info->type = MONO_PATCH_INFO_INTERNAL_METHOD;
 		patch_info->data.name = "mono_arch_throw_exception_by_name";
@@ -1992,7 +1992,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	/* Save the state of the virtual-register allocator. */
 	basic_block->max_vreg = cfg->next_vreg;
 
-
 	if (cfg->verbose_level >= 3) {
 		printf("AFTER LOWERING BLOCK %d:\n", basic_block->block_num);
 		MONO_BB_FOR_EACH_INS(basic_block, inst)
@@ -2006,12 +2005,12 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 static inline void free_args_area(MonoCompile *cfg, guint8 **buffer, MonoCallInst *call)
 {
 	if (SH4_CHECK_RANGE_add_imm(call->stack_usage))
-		sh4_add_imm(cfg, buffer, call->stack_usage, sh4_sp);
+		sh4_add_imm(buffer, call->stack_usage, sh4_sp);
 	else {
 		/* sh4_temp belongs to clobbered registers during a call,
 		   so we can reuse it here. */
 		sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &call->stack_usage, sh4_temp);
-		sh4_add(cfg, buffer, sh4_temp, sh4_sp);
+		sh4_add(buffer, sh4_temp, sh4_sp);
 	}
 }
 
@@ -2080,107 +2079,107 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_add_imm: clob:1 dest:i src1:i len:2 */
 			/* MD: add_imm: clob:1 dest:i src1:i len:2 */
 			g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_imm));
-			sh4_add_imm(cfg, &buffer, inst->inst_imm, inst->dreg);
+			sh4_add_imm(&buffer, inst->inst_imm, inst->dreg);
 			break;
 
 		case CEE_ADD:
 		case OP_IADD:
 			/* MD: int_add: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_add(cfg, &buffer, inst->sreg2, inst->dreg);
+			sh4_add(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_ISUB:
 			/* MD: int_sub: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_sub(cfg, &buffer, inst->sreg2, inst->dreg);
+			sh4_sub(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_SH4_OR_IMM_R0:
 			/* MD: sh4_or_imm_R0: clob:1 dest:z src1:z len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_or_imm_R0(cfg, &buffer, inst->inst_imm);
+			sh4_or_imm_R0(&buffer, inst->inst_imm);
 			break;
 
 		case OP_IOR:
 			/* MD: int_or: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_or(cfg, &buffer, inst->sreg2, inst->dreg);
+			sh4_or(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_SH4_XOR_IMM_R0:
 			/* MD: sh4_xor_imm_R0: clob:1 dest:z src1:z len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_xor_imm_R0(cfg, &buffer, inst->inst_imm);
+			sh4_xor_imm_R0(&buffer, inst->inst_imm);
 			break;
 
 		case OP_IXOR:
 			/* MD: int_xor: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_xor(cfg, &buffer, inst->sreg2, inst->dreg);
+			sh4_xor(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_SH4_AND_IMM_R0:
 			/* MD: sh4_and_imm_R0: clob:1 dest:z src1:z len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_and_imm_R0(cfg, &buffer, inst->inst_imm);
+			sh4_and_imm_R0(&buffer, inst->inst_imm);
 			break;
 
 		case OP_IAND:
 			/* MD: int_and: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_and(cfg, &buffer, inst->sreg2, inst->sreg1);
+			sh4_and(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_SHLL1:
 			/* MD: sh4_shll1: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shll(cfg, &buffer, inst->dreg);
+			sh4_shll(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLL2:
 			/* MD: sh4_shll2: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shll2(cfg, &buffer, inst->dreg);
+			sh4_shll2(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLL8:
 			/* MD: sh4_shll8: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shll8(cfg, &buffer, inst->dreg);
+			sh4_shll8(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLL16:
 			/* MD: sh4_shll16: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shll16(cfg, &buffer, inst->dreg);
+			sh4_shll16(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLR1:
 			/* MD: sh4_shlr1: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shlr(cfg, &buffer, inst->dreg);
+			sh4_shlr(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLR2:
 			/* MD: sh4_shlr2: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shlr2(cfg, &buffer, inst->dreg);
+			sh4_shlr2(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLR8:
 			/* MD: sh4_shlr8: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shlr8(cfg, &buffer, inst->dreg);
+			sh4_shlr8(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_SHLR16:
 			/* MD: sh4_shlr16: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shlr16(cfg, &buffer, inst->dreg);
+			sh4_shlr16(&buffer, inst->dreg);
 			break;
 
 		case OP_ISHL:
@@ -2202,160 +2201,160 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* MD: int_shl: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_shld(cfg,&buffer,inst->sreg2,inst->dreg);
+			sh4_shld(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_IMUL:
 			/* MD: int_mul: dest:i src1:i src2:i len:4 */
 			/* 32*32 bit multiplication -> result in MACL reg.
 			 * transfer MACL into destination reg. */
-			sh4_mull(cfg,&buffer,inst->sreg1,inst->sreg2);
-			sh4_sts_MACL(cfg,&buffer,inst->dreg);
+			sh4_mull(&buffer, inst->sreg1, inst->sreg2);
+			sh4_sts_MACL(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_CMPEQ:
 			/* MD: sh4_cmpeq: src1:i src2:i len:2 */
-			sh4_cmpeq(cfg, &buffer, inst->sreg1, inst->sreg2);
+			sh4_cmpeq(&buffer, inst->sreg1, inst->sreg2);
 			break;
 
 		case OP_SH4_CMPEQ_IMM_R0:
 			/* MD: sh4_cmpeq_imm_R0: src1:z len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_cmpeq_imm_R0(cfg, &buffer, inst->inst_imm);
+			sh4_cmpeq_imm_R0(&buffer, inst->inst_imm);
 			break;
 
 		case OP_SH4_CMPGT:
 			/* MD: sh4_cmpgt: src1:i src2:i len:2 */
-			sh4_cmpgt(cfg, &buffer, inst->sreg2, inst->sreg1);
+			sh4_cmpgt(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPHI:
 			/* MD: sh4_cmphi: src1:i src2:i len:2 */
-			sh4_cmphi(cfg, &buffer, inst->sreg2, inst->sreg1);
+			sh4_cmphi(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPGE:
 			/* MD: sh4_cmpge: src1:i src2:i len:6 */
-			sh4_cmpge(cfg, &buffer, inst->sreg2, inst->sreg1);
+			sh4_cmpge(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPHS:
 			/* MD: sh4_cmphs: src1:i src2:i len:6 */
-			sh4_cmphs(cfg, &buffer, inst->sreg2, inst->sreg1);
+			sh4_cmphs(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_MOVT:
 			/* MD: sh4_movt: dest:i len:2 */
-			sh4_movt(cfg, &buffer, inst->dreg);
+			sh4_movt(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_PUSH_ARG:
 			/* MD: sh4_push_arg: src1:i len:2 */
-			sh4_movl_decRx(cfg, &buffer, inst->sreg1, sh4_sp);
+			sh4_movl_decRx(&buffer, inst->sreg1, sh4_sp);
 			break;
 
 		case OP_SH4_STOREI1_MEMBASE_R0:
 			/* MD: sh4_storei1_membase_R0: src1:z dest:b len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_movb_R0_dispRx(cfg, &buffer, inst->inst_offset, inst->inst_destbasereg);
+			sh4_movb_R0_dispRx(&buffer, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 		case OP_SH4_STOREI1:
 			/* MD: sh4_storei1: src1:i dest:b len:2 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movb_indRx(cfg, &buffer, inst->sreg1, inst->inst_destbasereg);
+			sh4_movb_indRx(&buffer, inst->sreg1, inst->inst_destbasereg);
 			break;
 
 		case OP_SH4_STOREI2_MEMBASE_R0:
 			/* MD: sh4_storei2_membase_R0: src1:z dest:b len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
-			sh4_movw_R0_dispRx(cfg, &buffer, inst->inst_offset, inst->inst_destbasereg);
+			sh4_movw_R0_dispRx(&buffer, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 		case OP_SH4_STOREI2:
 			/* MD: sh4_storei2: src1:i dest:b len:2 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movw_indRx(cfg, &buffer, inst->sreg1, inst->inst_destbasereg);
+			sh4_movw_indRx(&buffer, inst->sreg1, inst->inst_destbasereg);
 			break;
 
 		case OP_SH4_STOREI4_MEMBASE:
 			/* MD: sh4_storei4_membase: src1:i dest:b len:2 */
-			sh4_movl_dispRx(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
+			sh4_movl_dispRx(&buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 		case OP_SH4_STOREI4:
 			/* MD: sh4_storei4: src1:i dest:b len:2 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movl_indRx(cfg, &buffer, inst->sreg1, inst->inst_destbasereg);
+			sh4_movl_indRx(&buffer, inst->sreg1, inst->inst_destbasereg);
 			break;
 
 		case OP_SH4_LOADI1_MEMBASE_R0:
 			/* MD: sh4_loadi1_membase_R0: dest:z src1:b len:2 */
 			g_assert(inst->dreg == 0);
-			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
+			sh4_movb_dispRy_R0(&buffer, inst->inst_offset, inst->inst_basereg);
 			break;
 
 		case OP_SH4_LOADI1:
 			/* MD: sh4_loadi1: dest:i src1:b len:2 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movb_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			sh4_movb_indRy(&buffer, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_SH4_LOADI2_MEMBASE_R0:
 			/* MD: sh4_loadi2_membase_R0: dest:z src1:b len:2 */
 			g_assert(inst->dreg == 0);
-			sh4_movw_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
+			sh4_movw_dispRy_R0(&buffer, inst->inst_offset, inst->inst_basereg);
 			break;
 
 		case OP_SH4_LOADI2:
 			/* MD: sh4_loadi2: dest:i src1:b len:2 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movw_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			sh4_movw_indRy(&buffer, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_SH4_LOADU1_MEMBASE_R0:
 			/* MD: sh4_loadu1_membase_R0: dest:z src1:b len:4 */
 			g_assert(inst->dreg == 0);
-			sh4_movb_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
-			sh4_extub(cfg, &buffer, sh4_r0, sh4_r0); /* Adjust the sign. */
+			sh4_movb_dispRy_R0(&buffer, inst->inst_offset, inst->inst_basereg);
+			sh4_extub(&buffer, sh4_r0, sh4_r0); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADU1:
 			/* MD: sh4_loadu1: dest:i src1:b len:4 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movb_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
-			sh4_extub(cfg, &buffer, inst->dreg, inst->dreg); /* Adjust the sign. */
+			sh4_movb_indRy(&buffer, inst->inst_basereg, inst->dreg);
+			sh4_extub(&buffer, inst->dreg, inst->dreg); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADU2_MEMBASE_R0:
 			/* MD: sh4_loadu2_membase_R0: dest:z src1:b len:4 */
 			g_assert(inst->dreg == 0);
-			sh4_movw_dispRy_R0(cfg, &buffer, inst->inst_offset, inst->inst_basereg);
-			sh4_extuw(cfg, &buffer, sh4_r0, sh4_r0); /* Adjust the sign. */
+			sh4_movw_dispRy_R0(&buffer, inst->inst_offset, inst->inst_basereg);
+			sh4_extuw(&buffer, sh4_r0, sh4_r0); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADU2:
 			/* MD: sh4_loadu2: dest:i src1:b len:4 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movw_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
-			sh4_extuw(cfg, &buffer, inst->dreg, inst->dreg); /* Adjust the sign. */
+			sh4_movw_indRy(&buffer, inst->inst_basereg, inst->dreg);
+			sh4_extuw(&buffer, inst->dreg, inst->dreg); /* Adjust the sign. */
 			break;
 
 		case OP_SH4_LOADI4_MEMBASE:
 			/* MD: sh4_loadi4_membase: dest:i src1:b len:2 */
-			sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
+			sh4_movl_dispRy(&buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_SH4_LOADI4:
 			/* MD: sh4_loadi4: dest:i src1:i len:2 */
 			g_assert(inst->inst_offset == 0);
-			sh4_movl_indRy(cfg, &buffer, inst->inst_basereg, inst->dreg);
+			sh4_movl_indRy(&buffer, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_ICONST:
 			/* MD: iconst: dest:i len:12 */
 			if (SH4_CHECK_RANGE_mov_imm(inst->inst_c0))
-				sh4_mov_imm(cfg, &buffer, inst->inst_c0, inst->dreg);
+				sh4_mov_imm(&buffer, inst->inst_c0, inst->dreg);
 			else
 				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &(inst->inst_c0), inst->dreg);
 			break;
@@ -2383,8 +2382,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
-			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer); /* delay slot */
+			sh4_jsr_indRx(&buffer, sh4_temp);
+			sh4_nop(&buffer); /* delay slot */
 
 			if (call->stack_usage != 0)
 				free_args_area(cfg, &buffer, call);
@@ -2396,8 +2395,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: call_reg: dest:z src1:i clob:c len:18 */
 			call = (MonoCallInst*)inst;
 
-			sh4_jsr_indRx(cfg, &buffer, inst->sreg1);
-			sh4_nop(cfg, &buffer); /* delay slot */
+			sh4_jsr_indRx(&buffer, inst->sreg1);
+			sh4_nop(&buffer); /* delay slot */
 
 			if (call->stack_usage != 0)
 				free_args_area(cfg, &buffer, call);
@@ -2407,30 +2406,30 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: call_handler: len:16 */
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_BB, inst->inst_target_bb, sh4_temp);
 
-			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer); /* delay slot */
+			sh4_jsr_indRx(&buffer, sh4_temp);
+			sh4_nop(&buffer); /* delay slot */
 			break;
 
 		case OP_THROW:
 			/* MD: throw: src1:i len:18 */
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
-				sh4_mov(cfg, &buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
+				sh4_mov(&buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
 
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_throw_exception", sh4_temp);
 
-			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer); /* delay slot */
+			sh4_jsr_indRx(&buffer, sh4_temp);
+			sh4_nop(&buffer); /* delay slot */
 			break;
 
 		case OP_RETHROW:
 			/* MD: rethrow: src1:i len:18 */
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
-				sh4_mov(cfg, &buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
+				sh4_mov(&buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
 
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_rethrow_exception", sh4_temp);
 
-			sh4_jsr_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer); /* delay slot */
+			sh4_jsr_indRx(&buffer, sh4_temp);
+			sh4_nop(&buffer); /* delay slot */
 			break;
 
 		case OP_ICONV_TO_I4:
@@ -2440,27 +2439,27 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_MOVE:
 			/* MD: move: dest:i src1:i len:2 */
 			if (inst->sreg1 != inst->dreg)
-				sh4_mov(cfg, &buffer, inst->sreg1, inst->dreg);
+				sh4_mov(&buffer, inst->sreg1, inst->dreg);
 			break;
 
 		case OP_ICONV_TO_I1:
 			/* MD: int_conv_to_i1: dest:i src1:i len:2 */
-			sh4_extsb(cfg, &buffer, inst->sreg1, inst->dreg);
+			sh4_extsb(&buffer, inst->sreg1, inst->dreg);
 			break;
 
 		case OP_ICONV_TO_U1:
 			/* MD: int_conv_to_u1: dest:i src1:i len:2 */
-			sh4_extub(cfg, &buffer, inst->sreg1, inst->dreg);
+			sh4_extub(&buffer, inst->sreg1, inst->dreg);
 			break;
 
 		case OP_ICONV_TO_I2:
 			/* MD: int_conv_to_i2: dest:i src1:i len:2 */
-			sh4_extsw(cfg, &buffer, inst->sreg1, inst->dreg);
+			sh4_extsw(&buffer, inst->sreg1, inst->dreg);
 			break;
 
 		case OP_ICONV_TO_U2:
 			/* MD: int_conv_to_u2: dest:i src1:i len:2 */
-			sh4_extuw(cfg, &buffer, inst->sreg1, inst->dreg);
+			sh4_extuw(&buffer, inst->sreg1, inst->dreg);
 			break;
 
 		/**
@@ -2473,18 +2472,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		 */
 		case OP_START_HANDLER:
 			/* MD: start_handler: len:6 */
-			sh4_stsl_PR_decRx(cfg, &buffer, sh4_sp);
+			sh4_stsl_PR_decRx(&buffer, sh4_sp);
 
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 			g_assert(spvar->inst_basereg == sh4_fp);
 
 			if (SH4_CHECK_RANGE_movl_dispRx(spvar->inst_offset)) {
-				sh4_movl_dispRx(cfg, &buffer, sh4_sp, spvar->inst_offset, spvar->inst_basereg);
+				sh4_movl_dispRx(&buffer, sh4_sp, spvar->inst_offset, spvar->inst_basereg);
 			}
 			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
-				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_temp);
-				sh4_add_imm(cfg, &buffer, spvar->inst_offset, sh4_temp);
-				sh4_movl_indRx(cfg, &buffer, sh4_sp, sh4_temp);
+				sh4_mov(&buffer, spvar->inst_basereg, sh4_temp);
+				sh4_add_imm(&buffer, spvar->inst_offset, sh4_temp);
+				sh4_movl_indRx(&buffer, sh4_sp, sh4_temp);
 			}
 			else {
 				NOT_IMPLEMENTED;
@@ -2503,21 +2502,21 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			g_assert(spvar->inst_basereg == sh4_fp);
 
 			if (SH4_CHECK_RANGE_movl_dispRy(spvar->inst_offset)) {
-				sh4_movl_dispRy(cfg, &buffer, spvar->inst_offset, spvar->inst_basereg, sh4_sp);
+				sh4_movl_dispRy(&buffer, spvar->inst_offset, spvar->inst_basereg, sh4_sp);
 			}
 			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
-				sh4_mov(cfg, &buffer, spvar->inst_basereg, sh4_temp);
-				sh4_add_imm(cfg, &buffer, spvar->inst_offset, sh4_temp);
-				sh4_movl_indRy(cfg, &buffer, sh4_temp, sh4_sp);
+				sh4_mov(&buffer, spvar->inst_basereg, sh4_temp);
+				sh4_add_imm(&buffer, spvar->inst_offset, sh4_temp);
+				sh4_movl_indRy(&buffer, sh4_temp, sh4_sp);
 			}
 			else {
 				NOT_IMPLEMENTED;
 			}
 
-			sh4_ldsl_incRx_PR(cfg, &buffer, sh4_sp);
+			sh4_ldsl_incRx_PR(&buffer, sh4_sp);
 
-			sh4_rts(cfg, &buffer);
-			sh4_nop(cfg, &buffer);
+			sh4_rts(&buffer);
+			sh4_nop(&buffer);
 
 			break;
 
@@ -2538,22 +2537,22 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Use the optimal instruction if possible. */
 			if (displace != 0 && SH4_CHECK_RANGE_bra_label(buffer, address)) {
-				sh4_bra_label(cfg, &buffer, address);
-				sh4_nop(cfg, &buffer);
+				sh4_bra_label(&buffer, address);
+				sh4_nop(&buffer);
 				break;
 			}
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
-			sh4_jmp_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer);
+			sh4_jmp_indRx(&buffer, sh4_temp);
+			sh4_nop(&buffer);
 
 			break;
 
 		case OP_BR_REG:
 			/* MD: br_reg: src1:i len:4 */
-			sh4_jmp_indRx(cfg, &buffer, inst->sreg1);
-			sh4_nop(cfg, &buffer);
+			sh4_jmp_indRx(&buffer, inst->sreg1);
+			sh4_nop(&buffer);
 			break;
 
 		case OP_SH4_BT:
@@ -2583,29 +2582,29 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			   Note: CHECK_RANGE(bt) and CHECK_RANGE(bf) are equivalent. */
 			if (displace != 0 && SH4_CHECK_RANGE_bt_label(buffer, address)) {
 				if (inst->opcode == OP_SH4_BT) {
-					sh4_bt_label(cfg, &buffer, address);
+					sh4_bt_label(&buffer, address);
 				}
 				else {
-					sh4_bf_label(cfg, &buffer, address);
+					sh4_bf_label(&buffer, address);
 				}
 				break;
 			}
 
 			/* Reverse the test to skip the unconditional jump. */
 			patch = buffer;
-			sh4_die(cfg, &buffer); /* patch slot for : bf/t_label "skip_jump" */
+			sh4_die(&buffer); /* patch slot for : bf/t_label "skip_jump" */
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
-			sh4_jmp_indRx(cfg, &buffer, sh4_temp);
-			sh4_nop(cfg, &buffer);
+			sh4_jmp_indRx(&buffer, sh4_temp);
+			sh4_nop(&buffer);
 
 			/* Back patch the reversed test. */
 			if (inst->opcode == OP_SH4_BT) {
-				sh4_bf_label(NULL, &patch, buffer);
+				sh4_bf_label(&patch, buffer);
 			}
 			else {
-				sh4_bt_label(NULL, &patch, buffer);
+				sh4_bt_label(&patch, buffer);
 			}
 
 			break;
@@ -2619,7 +2618,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: checkthis: src1:i len:2 */
 			/* Trig an exception if sreg1 can not be dereferenced,
 			   might be misaligned in case of vtypes so use a byte load. */
-			sh4_movb_indRy(cfg, &buffer, inst->sreg1, sh4_temp);
+			sh4_movb_indRy(&buffer, inst->sreg1, sh4_temp);
 			break;
 
 			/* Support for spilled variables. */
@@ -2627,17 +2626,17 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: store_membase_reg: len:16 */
 			g_assert(inst->inst_destbasereg == sh4_fp);
 			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
-				sh4_movl_dispRx(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
+				sh4_movl_dispRx(&buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			}
 			else if (SH4_CHECK_RANGE_add_imm(inst->inst_offset)) {
-				sh4_mov(cfg, &buffer, inst->inst_destbasereg, sh4_temp);
-				sh4_add_imm(cfg, &buffer, inst->inst_offset, sh4_temp);
-				sh4_movl_indRx(cfg, &buffer, inst->sreg1, sh4_temp);
+				sh4_mov(&buffer, inst->inst_destbasereg, sh4_temp);
+				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+				sh4_movl_indRx(&buffer, inst->sreg1, sh4_temp);
 			}
 			else {
 				sh4_load(&buffer, inst->inst_offset, sh4_temp);
-				sh4_add(cfg, &buffer, inst->inst_destbasereg, sh4_temp);
-				sh4_movl_indRx(cfg, &buffer, inst->sreg1, sh4_temp);
+				sh4_add(&buffer, inst->inst_destbasereg, sh4_temp);
+				sh4_movl_indRx(&buffer, inst->sreg1, sh4_temp);
 			}
 			break;
 
@@ -2646,17 +2645,17 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: load_membase: len:16 */
 			g_assert(inst->inst_basereg == sh4_fp);
 			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
-				sh4_movl_dispRy(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
+				sh4_movl_dispRy(&buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			}
 			else if (SH4_CHECK_RANGE_add_imm(inst->inst_offset)) {
-				sh4_mov(cfg, &buffer, inst->inst_basereg, sh4_temp);
-				sh4_add_imm(cfg, &buffer, inst->inst_offset, sh4_temp);
-				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
+				sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+				sh4_movl_indRy(&buffer, sh4_temp, inst->dreg);
 			}
 			else {
 				sh4_load(&buffer, inst->inst_offset, sh4_temp);
-				sh4_add(cfg, &buffer, inst->inst_basereg, sh4_temp);
-				sh4_movl_indRy(cfg, &buffer, sh4_temp, inst->dreg);
+				sh4_add(&buffer, inst->inst_basereg, sh4_temp);
+				sh4_movl_indRy(&buffer, sh4_temp, inst->dreg);
 			}
 			break;
 
@@ -2667,7 +2666,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
-			sh4_die(cfg, &buffer);
+			sh4_die(&buffer);
 			break;
 
 		case OP_JUMP_TABLE:

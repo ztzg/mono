@@ -121,21 +121,6 @@
  *
  *     Initialization steps.
  *
- * void sh4_cstpool_check(MonoCompile *cfg,
- *                        guint8      *pcval) // PC current value
- *
- *     To be called for each generated (SH4) instruction whatever the
- *     instruction.
- *
- *     In most cases, this routine just updates some internal
- *     offset counter. For end block instructions, it may generate a
- *     constant pool if required.
- *
- *     In case generation of a constant pool is necessary within
- *     a basic block (things that may happen for large basic blocks),
- *     it also generates the constant pool as well as the necessary
- *     jump above the generated constant pool.
- *
  * void sh4_cstpool_check_end_bb(MonoCompile *cfg,
  *                               guint8      *pcval)
  *                               
@@ -223,11 +208,6 @@ static void         sh4_cstpool_add_internal(MonoCompile *cfg,
                                              gconstpointer target,
                                              guint32  reg,
                                              CstPool_Const_Values *g);
-
-/* We don't want to call recursively sh4_cstpool_check in
- * routines that actually generate code for constant pool.
- */
-#define NO_recur NULL
 
 /* Beginning of code .....................................................*/
 
@@ -430,11 +410,11 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
 	/* code size allocated (see sz "metavariable"). 		*/
 	patch1 = *pcval;
 
-	sh4_bra(NO_recur,pcval, 0x0); /* 0x0 to be patched. sz = 2   */
-	sh4_nop(NO_recur,pcval);      /* delay slot.        sz = 4   */
+	sh4_bra(pcval, 0x0); /* 0x0 to be patched. sz = 2   */
+	sh4_nop(pcval);      /* delay slot.        sz = 4   */
 
 	if(((guint32)*pcval & 0x3)) {                     /* sz<=6   */
-		sh4_nop(NO_recur,pcval);      /* Align constant pool */
+		sh4_nop(pcval);      /* Align constant pool */
 	}
 
 	while(cur_pool->pool_nbcst_emitted < cur_pool->pool_nbcst) {
@@ -500,9 +480,9 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
 	/* patch sh4_movl_dispPC instruction emitted previously. */
 		patch0 = cfg->native_code + cur_pool->off_inst[index];
 		if(is_float_or_double) {
-			sh4_mova_PCrel_R0(NO_recur,&patch0,dest);
+			sh4_mova_PCrel_R0(&patch0,dest);
 		} else {
-			sh4_movl_PCrel(NO_recur,&patch0, dest, cur_pool->reg[index]);
+			sh4_movl_PCrel(&patch0, dest, cur_pool->reg[index]);
 		}
 
 	/* A double requires two inputs in tables (second entry is a
@@ -514,7 +494,7 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
 	}  /* End while */
 
 	/* patch instruction at patch1 */
-	sh4_bra_label(NO_recur,&patch1, *pcval);
+	sh4_bra_label(&patch1, *pcval);
 
 	if(cur_pool->pool_nbcst_emitted > SH4_MAX_CSTPOOL -2U) {
 		cur_pool->state = cstpool_allocated;
@@ -633,7 +613,7 @@ void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval, MonoJumpInfoType type, gc
 		/* A special case: constant is tiny enough to be encoded */
 		/* directly. If so, generate a mov instruction and exit. */
 		if(SH4_CHECK_RANGE_mov_imm(imm_value)) {
-			sh4_mov_imm(cfg,pcval,imm_value,reg);
+			sh4_mov_imm(pcval,imm_value,reg);
 			return;
 		}
 
@@ -710,20 +690,7 @@ static void sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
 	 * in both cases, we assume that current buffer is big enough
          * to make it possible to allocate 2 more bytes.
 	 */
-	sh4_movl_dispPC(NO_recur,pcval, 0, reg);   /* 0 to be patched       */
-	return;
-}
-
-/**
- * WARNING: any change in the prototype of this routine
- * has to be reproduced in header file sh4-codegen.h and thus in
- * gbu2mono!!!!!!!
- */
-void sh4_cstpool_check(void *cfg, guint8 **pcval)
-{
-	/* Unsafe cast, but we have to avoid circular dependencies in
-	 * header files.
-	 */
+	sh4_movl_dispPC(pcval, 0, reg);   /* 0 to be patched       */
 	return;
 }
 

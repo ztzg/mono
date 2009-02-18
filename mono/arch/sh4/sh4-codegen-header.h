@@ -120,26 +120,26 @@ static inline void sh4_emit32(guint8 **address, unsigned int value)
 #define SH4_IS_UIMM32(value) ((value) > 0 && (value) < UINT32_MAX)
 #define SH4_IS_UIMM64(value) ((value) > 0 && (value) < UINT64_MAX)
 
-#define sh4_movl_PCrel(cfg, code, address, Rx)	\
-	sh4_movl_dispPC((cfg), (code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
+#define sh4_movl_PCrel(code, address, Rx)	\
+	sh4_movl_dispPC((code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3), Rx)
 
-#define sh4_mova_PCrel_R0(cfg,code,address)     \
-	sh4_mova_dispPC_R0((cfg), (code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3))
+#define sh4_mova_PCrel_R0(code, address)     \
+	sh4_mova_dispPC_R0((code), (guint32)(address) - (((guint32)(*code) + 4) & ~0x3))
 
-#define sh4_die(cfg, code) sh4_ldtlb(cfg, code)
+#define sh4_die(code) sh4_ldtlb(code)
 
 #define SH4_LABEL(from, to) (guint32)((guint32)(to) - (guint32)(from) - 4)
 
 #define SH4_CHECK_RANGE_bra_label(from, to) SH4_CHECK_RANGE_bra(SH4_LABEL((from), (to)))
 #define SH4_CHECK_ALIGN_bra_label(from, to) SH4_CHECK_ALIGN_bra(SH4_LABEL((from), (to)))
-#define sh4_bra_label(cfg, code, address) sh4_bra(cfg, code, SH4_LABEL(*code, address))
+#define sh4_bra_label(code, address) sh4_bra(code, SH4_LABEL(*code, address))
 
 #define SH4_CHECK_RANGE_bt_label(from, to) SH4_CHECK_RANGE_bt(SH4_LABEL((from), (to)))
 #define SH4_CHECK_ALIGN_bt_label(from, to) SH4_CHECK_ALIGN_bt(SH4_LABEL((from), (to)))
-#define sh4_bt_label(cfg, code, address) sh4_bt(cfg, code, SH4_LABEL(*code, address))
+#define sh4_bt_label(code, address) sh4_bt(code, SH4_LABEL(*code, address))
 
 #define SH4_CHECK_RANGE_bf_label(from, to) SH4_CHECK_RANGE_bf(SH4_LABEL((from), (to)))
 #define SH4_CHECK_ALIGN_bf_label(from, to) SH4_CHECK_ALIGN_bf(SH4_LABEL((from), (to)))
-#define sh4_bf_label(cfg, code, address) sh4_bf(cfg, code, SH4_LABEL(*code, address))
+#define sh4_bf_label(code, address) sh4_bf(code, SH4_LABEL(*code, address))
 
 #endif /* __MONO_SH4_CODEGEN_HEADER_H__ */

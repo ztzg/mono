@@ -186,10 +186,10 @@ gpointer mono_arch_get_call_filter(void)
 	code = buffer = mono_global_codeman_reserve(CALL_FILTER_SIZE);
 
 	/* Save the return address. */
-	sh4_stsl_PR_decRx(NULL, &buffer, sh4_r15);
+	sh4_stsl_PR_decRx(&buffer, sh4_r15);
 
 	/* pseudo-code: unsigned int registers[8]; */
-	sh4_add_imm(NULL, &buffer, - (7 * 4), sh4_r15);
+	sh4_add_imm(&buffer, - (7 * 4), sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:             :
@@ -210,26 +210,26 @@ gpointer mono_arch_get_call_filter(void)
 
 	/* pseudo-code: registers[] = { %R8, %R9, %R10, %R11, %R12, %R13, %R14 }; */
 	for (i = 8; i <= 14; i++)
-		sh4_movl_dispRx(NULL, &buffer, (SH4IntRegister)i, (i - 8) * 4, sh4_r15);
+		sh4_movl_dispRx(&buffer, (SH4IntRegister)i, (i - 8) * 4, sh4_r15);
 
 	/*
 	 * Restore all global registers from the MonoContext, except the stack pointer.
 	 */
 
 	/* R4 is now used to point to "context.registers[]". */
-	sh4_add_imm(NULL, &buffer, offsetof(MonoContext, registers), sh4_r4);
+	sh4_add_imm(&buffer, offsetof(MonoContext, registers), sh4_r4);
 
 	/* pseudo-code: { %R8, ... , %R14 } = context.registers[8..14]; */
 	for (i = 8; i <= 14; i++)
-		sh4_movl_dispRy(NULL, &buffer, i * 4, sh4_r4, (SH4IntRegister)i);
+		sh4_movl_dispRy(&buffer, i * 4, sh4_r4, (SH4IntRegister)i);
 
 	/*
 	 * Call the handler.
 	 */
 
 	/* pseudo-code: handler(); */
-	sh4_jsr_indRx(NULL, &buffer, sh4_r5);
-	sh4_nop(NULL, &buffer);
+	sh4_jsr_indRx(&buffer, sh4_r5);
+	sh4_nop(&buffer);
 
 	/*
 	 * Restore all callee-saved registers from the stack.
@@ -237,13 +237,13 @@ gpointer mono_arch_get_call_filter(void)
 
 	/* pseudo-code: { %R8, ... , %R14 } = registers[]; */
 	for (i = 8; i <= 14; i++)
-		sh4_movl_dispRy(NULL, &buffer, (i - 8) * 4, sh4_r15, (SH4IntRegister)i);
+		sh4_movl_dispRy(&buffer, (i - 8) * 4, sh4_r15, (SH4IntRegister)i);
 
 	/* pseudo-code: return; */
-	sh4_add_imm(NULL, &buffer, (7 * 4), sh4_r15);
-	sh4_ldsl_incRx_PR(NULL, &buffer, sh4_r15);
-	sh4_rts(NULL, &buffer);
-	sh4_nop(NULL, &buffer);
+	sh4_add_imm(&buffer, (7 * 4), sh4_r15);
+	sh4_ldsl_incRx_PR(&buffer, sh4_r15);
+	sh4_rts(&buffer);
+	sh4_nop(&buffer);
 
 	/* Sanity checks. */
 	g_assert(buffer - code <= CALL_FILTER_SIZE);
@@ -293,8 +293,8 @@ gpointer mono_arch_get_restore_context(void)
 	code = buffer = mono_global_codeman_reserve(RESTORE_CONTEXT_SIZE);
 
 	/* R15 now points to "context.registers[]" (used later). */
-	sh4_mov(NULL, &buffer, sh4_r4, sh4_r15);
-	sh4_add_imm(NULL, &buffer, offsetof(MonoContext, registers), sh4_r15);
+	sh4_mov(&buffer, sh4_r4, sh4_r15);
+	sh4_add_imm(&buffer, offsetof(MonoContext, registers), sh4_r15);
 
 	/*
 	 * Mimic a return from an ordinary routine by setting the
@@ -302,8 +302,8 @@ gpointer mono_arch_get_restore_context(void)
 	 */
 
 	/* pseudo-code: %PR = context.pc; */
-	sh4_movl_dispRy(NULL, &buffer, offsetof(MonoContext, pc), sh4_r4, sh4_r4);
-	sh4_lds_PR(NULL, &buffer, sh4_r4);
+	sh4_movl_dispRy(&buffer, offsetof(MonoContext, pc), sh4_r4, sh4_r4);
+	sh4_lds_PR(&buffer, sh4_r4);
 
 	/*
 	 * Restore all registers.
@@ -311,11 +311,11 @@ gpointer mono_arch_get_restore_context(void)
 
 	/* pseudo-code: { %R0, ..., %R15 } = context.registers[]; */
 	for (i = 0; i <= 15; i++)
-		sh4_movl_dispRy(NULL, &buffer, i * 4, sh4_r15, (SH4IntRegister)i);
+		sh4_movl_dispRy(&buffer, i * 4, sh4_r15, (SH4IntRegister)i);
 
 	/* pseudo-code: return; */
-	sh4_rts(NULL, &buffer);
-	sh4_nop(NULL, &buffer);
+	sh4_rts(&buffer);
+	sh4_nop(&buffer);
 
 	/* Sanity checks. */
 	g_assert(buffer - code <= RESTORE_CONTEXT_SIZE);
@@ -399,7 +399,7 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	 */
 
 	/* Adjust SP to allocate the stacked registers[]. */
-	sh4_add_imm(NULL, &buffer, -16 * 4, sh4_r15);
+	sh4_add_imm(&buffer, -16 * 4, sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:             :
@@ -414,41 +414,41 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 
 	/* pseudo-code: registers[] = { %R0, ..., %R15 }; */
 	for (i = 0; i <= 14; i++)
-		sh4_movl_dispRx(NULL, &buffer, (SH4IntRegister)i, i * 4, sh4_r15);
+		sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_r15);
 
 	/* Compute the previous value of SP before saving into registers[]. */
-	sh4_mov(NULL, &buffer, sh4_r15, sh4_r0);
-	sh4_add_imm(NULL, &buffer, 16 * 4, sh4_r0);
-	sh4_movl_dispRx(NULL, &buffer, sh4_r0, 15 * 4, sh4_r15);
+	sh4_mov(&buffer, sh4_r15, sh4_r0);
+	sh4_add_imm(&buffer, 16 * 4, sh4_r0);
+	sh4_movl_dispRx(&buffer, sh4_r0, 15 * 4, sh4_r15);
 
 	if (by_name != 0) {
 		/* The current return address have to be preserved through
 		   the next call because it is used later. */
-		sh4_sts_PR(NULL, &buffer, sh4_r8);
+		sh4_sts_PR(&buffer, sh4_r8);
 
 		/* Currently, sh4_r4 holds the name of the exception. */
-		sh4_mov(NULL, &buffer, sh4_r4, sh4_r6);
+		sh4_mov(&buffer, sh4_r4, sh4_r6);
 
 		/* Patch slot for : sh4_r4 <- mono_defaults.corlib */
 		patch1 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* Patch slot for : sh4_r5 <- "System" */
 		patch2 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* Patch slot for : sh4_r0 <- mono_exception_from_name */
 		patch3 = buffer;
-		sh4_die(NULL, &buffer);
+		sh4_die(&buffer);
 
 		/* pseudo-code: exception = mono_exception_from_name(mono_defaults.corlib, "System", exception); */
-		sh4_jsr_indRx(NULL, &buffer, sh4_r0);
-		sh4_nop(NULL, &buffer);
+		sh4_jsr_indRx(&buffer, sh4_r0);
+		sh4_nop(&buffer);
 
 		/* Overwrite the variable 'exception'. */
-		sh4_mov(NULL, &buffer, sh4_r0, sh4_r4);
+		sh4_mov(&buffer, sh4_r0, sh4_r4);
 
-		sh4_lds_PR(NULL, &buffer, sh4_r8);
+		sh4_lds_PR(&buffer, sh4_r8);
 	}
 
 	/*
@@ -457,32 +457,32 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 
 	/* Fill parameters passed to the throw_exception(),
 	   sh4_r4 already holds the variable 'exception'. */
-	sh4_sts_PR(NULL, &buffer, sh4_r5);
-	sh4_mov(NULL, &buffer, sh4_r15, sh4_r6);
-	sh4_mov_imm(NULL, &buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
+	sh4_sts_PR(&buffer, sh4_r5);
+	sh4_mov(&buffer, sh4_r15, sh4_r6);
+	sh4_mov_imm(&buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
 
 	/* Patch slot for : sh4_r0 <- throw_exception */
 	patch0 = buffer;
-	sh4_die(NULL, &buffer);
+	sh4_die(&buffer);
 
 	/* pseudo-code: goto throw_exception(exception, pc, sp, rethrow); */
-	sh4_jmp_indRx(NULL, &buffer, sh4_r0);
-	sh4_nop(NULL, &buffer);
+	sh4_jmp_indRx(&buffer, sh4_r0);
+	sh4_nop(&buffer);
 
 	/* Align the constant pool. */
 	while (((guint32)buffer % 4) != 0)
-		sh4_nop(NULL, &buffer);
+		sh4_nop(&buffer);
 
 	/* Build the constant pool & patch the corresponding instructions. */
-	sh4_movl_PCrel(NULL, &patch0, buffer, sh4_r0);
+	sh4_movl_PCrel(&patch0, buffer, sh4_r0);
 	sh4_emit32(&buffer, (guint32)throw_exception);
 
 	if (by_name != 0) {
-		sh4_movl_PCrel(NULL, &patch1, buffer, sh4_r4);
+		sh4_movl_PCrel(&patch1, buffer, sh4_r4);
 		sh4_emit32(&buffer, (guint32)mono_defaults.corlib);
-		sh4_movl_PCrel(NULL, &patch2, buffer, sh4_r5);
+		sh4_movl_PCrel(&patch2, buffer, sh4_r5);
 		sh4_emit32(&buffer, (guint32)"System");
-		sh4_movl_PCrel(NULL, &patch3, buffer, sh4_r0);
+		sh4_movl_PCrel(&patch3, buffer, sh4_r0);
 		sh4_emit32(&buffer, (guint32)mono_exception_from_name);
 	}
 

@@ -645,7 +645,7 @@ static void disambiguate(const sh_arg_type args[4], char *name, int size)
 	return;
 }
 
-static void printf_args(const sh_arg_type args[4], int cfg, int* double_arg)
+static void printf_args(const sh_arg_type args[4], int* double_arg)
 {
 	int i = 0;
 
@@ -769,8 +769,6 @@ int main(void)
 	printf("\n");
 	printf("#include \"sh4-codegen-header.h\"\n");
 	printf("\n");
-	printf("extern void sh4_cstpool_check(void *cfg, guint8 **code);\n");
-	printf("\n");
 
 	for (i = 0; sh_table[i].name != (char *)0; i++) {
 		int force_sign = 0;
@@ -810,12 +808,10 @@ int main(void)
 
 		scaling = printf_checks(sh_table[i].nibbles, force_sign, name);
 		printf("\n");
-		printf("static inline void sh4_%s(void *cfg, guint8 **code", name);
-		printf_args(sh_table[i].arg, 1, &double_args);
+		printf("static inline void sh4_%s(guint8 **code", name);
+		printf_args(sh_table[i].arg, &double_args);
 		printf(")\n");
 		printf("{\n");
-		printf("	if (cfg != NULL)\n");
-		printf("		sh4_cstpool_check(cfg, code);\n");
 		printf("	g_assert(1");
 		printf_tests(sh_table[i].nibbles, force_sign, double_args, name, scaling);
 		printf(");\n");
@@ -826,7 +822,7 @@ int main(void)
 		printf("\n");
 
 		printf("static inline int is_sh4_%s(guint16 code", name);
-		printf_args(sh_table[i].arg, 0, &double_args);
+		printf_args(sh_table[i].arg, &double_args);
 		printf(")\n");
 		printf("{\n");
 		printf("	return (1");
