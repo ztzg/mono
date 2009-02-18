@@ -2634,7 +2634,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_movl_indRx(&buffer, inst->sreg1, sh4_temp);
 			}
 			else {
-				sh4_load(&buffer, inst->inst_offset, sh4_temp);
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &inst->inst_offset, sh4_temp);
 				sh4_add(&buffer, inst->inst_destbasereg, sh4_temp);
 				sh4_movl_indRx(&buffer, inst->sreg1, sh4_temp);
 			}
@@ -2653,7 +2653,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_movl_indRy(&buffer, sh4_temp, inst->dreg);
 			}
 			else {
-				sh4_load(&buffer, inst->inst_offset, sh4_temp);
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &inst->inst_offset, sh4_temp);
 				sh4_add(&buffer, inst->inst_basereg, sh4_temp);
 				sh4_movl_indRy(&buffer, sh4_temp, inst->dreg);
 			}
@@ -2671,9 +2671,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_JUMP_TABLE:
 			/* MD: jump_table: dest:i len:12 */
-			sh4_load(&buffer, 0, inst->dreg);
-			mono_add_patch_info(cfg, buffer - 4 - cfg->native_code,
-					    (MonoJumpInfoType)inst->inst_i1, inst->inst_p0);
+			sh4_cstpool_add(cfg, &buffer, (MonoJumpInfoType)inst->inst_i1, inst->inst_p0, inst->dreg);
 			break;
 
 		default:
