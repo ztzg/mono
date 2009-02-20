@@ -643,6 +643,40 @@ void mono_arch_create_vars(MonoCompile *cfg)
 	return;
 }
 
+static inline void sh4_base_store(MonoCompile *cfg, guint8 **buffer, SH4IntRegister src, int offset, SH4IntRegister base)
+{
+	if (SH4_CHECK_RANGE_movl_dispRx(offset)) {
+		sh4_movl_dispRx(buffer, src, offset, base);
+	}
+	else if (SH4_CHECK_RANGE_add_imm(offset)) {
+		sh4_mov(buffer, base, sh4_temp);
+		sh4_add_imm(buffer, offset, sh4_temp);
+		sh4_movl_indRx(buffer, src, sh4_temp);
+	}
+	else {
+		sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
+		sh4_add(buffer, base, sh4_temp);
+		sh4_movl_indRx(buffer, src, sh4_temp);
+	}
+}
+
+static inline void sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4IntRegister dest)
+{
+	if (SH4_CHECK_RANGE_movl_dispRy(offset)) {
+		sh4_movl_dispRy(buffer, offset, base, dest);
+	}
+	else if (SH4_CHECK_RANGE_add_imm(offset)) {
+		sh4_mov(buffer, base, sh4_temp);
+		sh4_add_imm(buffer, offset, sh4_temp);
+		sh4_movl_indRy(buffer, sh4_temp, dest);
+	}
+	else {
+		sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
+		sh4_add(buffer, base, sh4_temp);
+		sh4_movl_indRy(buffer, sh4_temp, dest);
+	}
+}
+
 /**
  * Create the instruction sequence for a function prologue.
  */
@@ -786,10 +820,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					offset = saved_regs_size + arg_info->offset;
-					if (SH4_CHECK_RANGE_movl_dispRy(offset))
-						sh4_movl_dispRy(&buffer, offset, sh4_sp, inst->dreg);
-					else
-						NOT_IMPLEMENTED;
+					sh4_base_load(cfg, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
 				case integer64:
@@ -823,10 +854,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					g_assert(inst->inst_basereg == sh4_fp);
-					if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
-						sh4_movl_dispRx(&buffer, arg_info->reg, inst->inst_offset, sh4_fp);
-					else
-						NOT_IMPLEMENTED;
+					sh4_base_store(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
@@ -852,14 +880,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				case integer32:
 					/* TODO - CV : optimization => adjust correctly in allocate_vars(). */
 					offset = saved_regs_size + arg_info->offset;
-					if (SH4_CHECK_RANGE_movl_dispRy(offset))
-						sh4_movl_dispRy(&buffer, offset, sh4_sp, sh4_temp);
-					else
-						NOT_IMPLEMENTED;
-					if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
-						sh4_movl_dispRx(&buffer, sh4_temp, inst->inst_offset, sh4_fp);
-					else
-						NOT_IMPLEMENTED;
+					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_temp);
+					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
@@ -2496,17 +2518,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 			g_assert(spvar->inst_basereg == sh4_fp);
 
-			if (SH4_CHECK_RANGE_movl_dispRx(spvar->inst_offset)) {
-				sh4_movl_dispRx(&buffer, sh4_sp, spvar->inst_offset, spvar->inst_basereg);
-			}
-			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
-				sh4_mov(&buffer, spvar->inst_basereg, sh4_temp);
-				sh4_add_imm(&buffer, spvar->inst_offset, sh4_temp);
-				sh4_movl_indRx(&buffer, sh4_sp, sh4_temp);
-			}
-			else {
-				NOT_IMPLEMENTED;
-			}
+			sh4_base_store(cfg, &buffer, sh4_sp, spvar->inst_offset, spvar->inst_basereg);
 
 			break;
 
@@ -2520,17 +2532,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 			g_assert(spvar->inst_basereg == sh4_fp);
 
-			if (SH4_CHECK_RANGE_movl_dispRy(spvar->inst_offset)) {
-				sh4_movl_dispRy(&buffer, spvar->inst_offset, spvar->inst_basereg, sh4_sp);
-			}
-			else if (SH4_CHECK_RANGE_add_imm(spvar->inst_offset)) {
-				sh4_mov(&buffer, spvar->inst_basereg, sh4_temp);
-				sh4_add_imm(&buffer, spvar->inst_offset, sh4_temp);
-				sh4_movl_indRy(&buffer, sh4_temp, sh4_sp);
-			}
-			else {
-				NOT_IMPLEMENTED;
-			}
+			sh4_base_load(cfg, &buffer, spvar->inst_offset, spvar->inst_basereg, sh4_sp);
 
 			sh4_ldsl_incRx_PR(&buffer, sh4_sp);
 
@@ -2644,38 +2646,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_STORE_MEMBASE_REG:
 			/* MD: store_membase_reg: len:16 */
 			g_assert(inst->inst_destbasereg == sh4_fp);
-			if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset)) {
-				sh4_movl_dispRx(&buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
-			}
-			else if (SH4_CHECK_RANGE_add_imm(inst->inst_offset)) {
-				sh4_mov(&buffer, inst->inst_destbasereg, sh4_temp);
-				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-				sh4_movl_indRx(&buffer, inst->sreg1, sh4_temp);
-			}
-			else {
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &inst->inst_offset, sh4_temp);
-				sh4_add(&buffer, inst->inst_destbasereg, sh4_temp);
-				sh4_movl_indRx(&buffer, inst->sreg1, sh4_temp);
-			}
+			sh4_base_store(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 			/* Support for spilled variables. */
 		case OP_LOAD_MEMBASE:
 			/* MD: load_membase: len:16 */
 			g_assert(inst->inst_basereg == sh4_fp);
-			if (SH4_CHECK_RANGE_movl_dispRy(inst->inst_offset)) {
-				sh4_movl_dispRy(&buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
-			}
-			else if (SH4_CHECK_RANGE_add_imm(inst->inst_offset)) {
-				sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-				sh4_movl_indRy(&buffer, sh4_temp, inst->dreg);
-			}
-			else {
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &inst->inst_offset, sh4_temp);
-				sh4_add(&buffer, inst->inst_basereg, sh4_temp);
-				sh4_movl_indRy(&buffer, sh4_temp, inst->dreg);
-			}
+			sh4_base_load(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_NOP:		/* MD: nop: len:0 */
