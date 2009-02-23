@@ -481,10 +481,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->frame_reg = sh4_r14;
 	cfg->used_int_regs |= 1 << sh4_r14;
 
-	/* Allocate space to save the LMF just before "regular" local variables. */
-	if (cfg->method->save_lmf != 0)
-		;
-
 	/* Compute space used by local variables and specify how to access them. */
 	for (i = cfg->locals_start; i < cfg->num_varinfo; i++) {
 		MonoInst *inst = cfg->varinfo[i];
@@ -864,7 +860,41 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		}
 	}
 
-	/* Save the LMF just before "regular" local variables, in fact
+	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
+	   and the size of the spill area (cfg->stack_offset) is computed into mini-codegen.c. */
+	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
+	if (localloc_size != 0) {
+		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
+			sh4_add_imm(&buffer, -localloc_size, sh4_r15);
+		}
+		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
+			sh4_mov_imm(&buffer, localloc_size, sh4_temp);
+			sh4_sub(&buffer, sh4_temp, sh4_r15);
+		}
+		else {
+			sh4_load(&buffer, localloc_size, sh4_temp);
+			sh4_sub(&buffer, sh4_temp, sh4_r15);
+		}
+	}
+
+	SH4_CFG_DEBUG(4) SH4_DEBUG("%s::localloc_size = %d", cfg->method->name, localloc_size);
+
+	/* Set the frame pointer. */
+	sh4_mov(&buffer, sh4_r15, sh4_r14);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------|
+	 *	|  local var.  |
+	 *	|--------------| <- FP, SP
+	 *	:              :
+	 */
+
+	/* Save the LMF just after "regular" local variables, in fact
 	   this structure is "hidden" in the local stack frame. */
 	if (cfg->method->save_lmf != 0) {
 		guint8 *patch0 = NULL;
@@ -940,41 +970,21 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		sh4_emit32(&buffer, (guint32)mono_get_lmf_addr);
 
 		sh4_bra_label(&patch3, buffer);
+
+		/* At this point, the stack looks like :
+		 *	:              :
+		 *	|--------------| Caller's frame.
+		 *	|  parameters  |
+		 *	|==============|
+		 *	|  saved reg.  | Callee's frame.
+		 *	|--------------|
+		 *	|  local var.  |
+		 *	|--------------| <- FP
+		 *	|   MonoLMF    |
+		 *	|--------------| <- SP
+		 *	:              :
+		 */
 	}
-
-	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
-	   and the size of the spill area (cfg->stack_offset) is computed into mini-codegen.c. */
-	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
-	if (localloc_size != 0) {
-		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
-			sh4_add_imm(&buffer, -localloc_size, sh4_r15);
-		}
-		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
-			sh4_mov_imm(&buffer, localloc_size, sh4_temp);
-			sh4_sub(&buffer, sh4_temp, sh4_r15);
-		}
-		else {
-			sh4_load(&buffer, localloc_size, sh4_temp);
-			sh4_sub(&buffer, sh4_temp, sh4_r15);
-		}
-	}
-
-	SH4_CFG_DEBUG(4) SH4_DEBUG("%s::localloc_size = %d", cfg->method->name, localloc_size);
-
-	/* Set the frame pointer. */
-	sh4_mov(&buffer, sh4_r15, sh4_r14);
-
-	/* At this point, the stack looks like :
-	 *	:              :
-	 *	|--------------| Caller's frame.
-	 *	|  parameters  |
-	 *	|==============|
-	 *	|  saved reg.  | Callee's frame.
-	 *	|--------------|
-	 *	|  local var.  |
-	 *	|--------------| <- FP, SP
-	 *	:              :
-	 */
 
 	cfg->code_len = buffer - cfg->native_code;
 
@@ -1019,6 +1029,34 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	/* Reset the stack pointer. */
 	sh4_mov(&buffer, sh4_r14, sh4_r15);
 
+	/* Restore the previous LMF & free the space used by the local one. */
+	if (cfg->method->save_lmf != 0) {
+		/* Adjust SP to point to the "hidden" LMF. */
+		sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
+		sh4_mov(&buffer, sh4_sp, sh4_temp);
+
+		/* At this point, the stack looks like :
+		 *	:              :
+		 *	|--------------| Caller's frame.
+		 *	|  parameters  |
+		 *	|==============|
+		 *	|  saved reg.  | Callee's frame.
+		 *	|--------------|
+		 *	|  local var.  |
+		 *	|--------------| <- FP
+		 *	|   MonoLMF    |
+		 *	|--------------| <- SP, temp
+		 *	:              :
+		 */
+
+		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_temp);
+		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, lmf_addr), sh4_sp);
+
+		/* Adjust SP to free of the "hidden" LMF. */
+		sh4_add_imm(&buffer, sizeof(MonoLMF), sh4_sp);
+	}
+
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -1048,30 +1086,6 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	}
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("localloc_size = %d", localloc_size);
-
-	/* Restore the previous LMF & free the space used by the local one. */
-	if (cfg->method->save_lmf != 0) {
-		sh4_mov(&buffer, sh4_r15, sh4_temp);
-
-		/* At this point, the stack looks like :
-		 *	:              :
-		 *	|--------------| Caller's frame.
-		 *	|  parameters  |
-		 *	|==============|
-		 *	|  saved reg.  | Callee's frame.
-		 *	|--------------|
-		 *	|    MonoLMF   |
-		 *	|--------------| <- sh4_r15, sh4_temp
-		 *	:              :
-		 */
-
-		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
-		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_r4);
-		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, lmf_addr), sh4_r15);
-
-		/* Adjust sh4_r15 to free of the "hidden" LMF. */
-		sh4_add_imm(&buffer, sizeof(MonoLMF), sh4_r15);
-	}
 
 	/* At this point, the stack looks like :
 	 *	:              :
