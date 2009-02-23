@@ -515,12 +515,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		SH4_CFG_DEBUG(4) SH4_DEBUG("local '%d' offset = %d", i, locals_offset);
 	}
 
-	/* Record the amount of space needed by local variables, for mono_arch_emit_prolog(). */
-	cfg->arch.localloc_size = locals_offset;
-
-	/* Allocate space for local variables. */
-	;
-
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -544,42 +538,43 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		NOT_IMPLEMENTED;
 	}
 
-	/* The stack size is now fully known so specify how to access parameters. */
+	/* The locals area size is now fully known so specify where are saved parameters. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
 		MonoInst *inst = cfg->args[i];
-		struct arg_info *arg_info = &call_info->args[i];
+		guint32 align = 0;
+		guint32 size = 0;
 
-		/* Nothing to do if the variable is already allocated to a register.
-		   TODO - CV : When does this happen ? */
-		if (inst->opcode == OP_REGVAR)
+		/* Nothing to do if the variable is already allocated to a [global] register. */
+		if (inst->opcode == OP_REGVAR) {
+			SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' reg = %d", i, inst->dreg);
 			continue;
-
-		switch (arg_info->storage) {
-		case into_register:
-			inst->opcode = OP_REGVAR;
-			inst->dreg = arg_info->reg;
-
-			SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' reg = %d", i, arg_info->reg);
-			break;
-
-		case onto_stack:
-			inst->opcode = OP_REGOFFSET;
-			inst->inst_basereg = cfg->frame_reg;
-			inst->inst_offset = arg_info->offset;
-
-			/* The parameter area is before local variables and
-			   saved registers area (the stack grows to low address,
-			   offsets are positively computed). */
-			inst->inst_offset += locals_offset + cfg->arch.regsave_size;
-
-			SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' offset = %d", i, arg_info->offset);
-			break;
-
-		case nowhere:
-		default:
-			g_assert_not_reached();
 		}
+
+		if (signature->hasthis != 0 && i == 0) {
+			size = sizeof(gpointer);
+			align = sizeof(gpointer);
+		}
+		else if (signature->pinvoke != 0)
+			size = mono_type_native_stack_size(signature->params[i], &align);
+		else
+			size = mono_type_size(signature->params[i], (int *)&align);
+
+                /* Align the access on a `align`-bytes boundary. */
+		locals_offset += align - 1;
+		locals_offset &= ~(align - 1);
+
+		/* Specify how to access this argument. */
+		inst->opcode = OP_REGOFFSET;
+		inst->inst_basereg = cfg->frame_reg;
+		inst->inst_offset = locals_offset;
+
+		SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' stack = %d", i, locals_offset);
+
+		locals_offset += size;
 	}
+
+	/* Record the amount of space needed by local variables, for mono_arch_emit_prolog(). */
+	cfg->arch.localloc_size = locals_offset;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("return type = %d", call_info->ret.type);
 
@@ -724,7 +719,44 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 *	:              :
 	 */
 
-	/* TODO - CV : Should the LMF be saved here ? */
+	/* TODO - CV: optimizations => use SP only if needed, that is,
+	   only if there is a parameted passed onto the stack. */
+	sh4_mov(&buffer, sh4_sp, sh4_fp);
+
+	/* The SH4 is a 16-bits instruction length CPU, so "immediate"
+	 * values used for displacement addressing are really-really
+	 * small, that's why we keep SP close to stacked parameters. */
+
+	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
+	   and the size of the spill area (cfg->stack_offset) is computed into mini-codegen.c. */
+	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
+	if (localloc_size != 0) {
+		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
+			sh4_add_imm(&buffer, -localloc_size, sh4_fp);
+		}
+		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
+			sh4_mov_imm(&buffer, localloc_size, sh4_temp);
+			sh4_sub(&buffer, sh4_temp, sh4_fp);
+		}
+		else {
+			sh4_load(&buffer, localloc_size, sh4_temp);
+			sh4_sub(&buffer, sh4_temp, sh4_fp);
+		}
+	}
+
+	SH4_CFG_DEBUG(4) SH4_DEBUG("%s::localloc_size = %d", cfg->method->name, localloc_size);
+
+	/* At this point, the stack looks like :
+	 *	:              :
+	 *	|--------------| Caller's frame.
+	 *	|  parameters  |
+	 *	|==============|
+	 *	|  saved reg.  | Callee's frame.
+	 *	|--------------| <- SP
+	 *	|  local var.  |
+	 *	|--------------| <- FP
+	 *	:              :
+	 */
 
 	/* Copy arguments at the expected place : into register or onto the stack. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
@@ -771,7 +803,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				case integer32:
 					offset = cfg->arch.regsave_size + arg_info->offset;
 					if (SH4_CHECK_RANGE_movl_dispRy(offset))
-						sh4_movl_dispRy(&buffer, offset, sh4_r15, inst->dreg);
+						sh4_movl_dispRy(&buffer, offset, sh4_sp, inst->dreg);
 					else
 						NOT_IMPLEMENTED;
 					break;
@@ -806,9 +838,11 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			case into_register:
 				switch (arg_info->type) {
 				case integer32:
-					g_assert(inst->inst_basereg == sh4_r15);
-					g_assert_not_reached(); /* Not yet tested. */
-					sh4_movl_dispRx(&buffer, arg_info->reg, inst->inst_offset, inst->inst_basereg);
+					g_assert(inst->inst_basereg == sh4_fp);
+					if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
+						sh4_movl_dispRx(&buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					else
+						NOT_IMPLEMENTED;
 					break;
 
 				case integer64:
@@ -832,7 +866,16 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			case onto_stack:
 				switch (arg_info->type) {
 				case integer32:
-					/* Nothing because it is already correctly set in allocate_vars(). */
+					/* TODO - CV : optimization => adjust correctly in allocate_vars(). */
+					offset = cfg->arch.regsave_size + arg_info->offset;
+					if (SH4_CHECK_RANGE_movl_dispRy(offset))
+						sh4_movl_dispRy(&buffer, offset, sh4_sp, sh4_temp);
+					else
+						NOT_IMPLEMENTED;
+					if (SH4_CHECK_RANGE_movl_dispRx(inst->inst_offset))
+						sh4_movl_dispRx(&buffer, sh4_temp, inst->inst_offset, sh4_fp);
+					else
+						NOT_IMPLEMENTED;
 					break;
 
 				case integer64:
@@ -860,27 +903,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		}
 	}
 
-	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
-	   and the size of the spill area (cfg->stack_offset) is computed into mini-codegen.c. */
-	localloc_size = cfg->arch.localloc_size + cfg->stack_offset;
-	if (localloc_size != 0) {
-		if (SH4_CHECK_RANGE_add_imm(-localloc_size)) {
-			sh4_add_imm(&buffer, -localloc_size, sh4_r15);
-		}
-		else if (SH4_CHECK_RANGE_mov_imm(localloc_size)) {
-			sh4_mov_imm(&buffer, localloc_size, sh4_temp);
-			sh4_sub(&buffer, sh4_temp, sh4_r15);
-		}
-		else {
-			sh4_load(&buffer, localloc_size, sh4_temp);
-			sh4_sub(&buffer, sh4_temp, sh4_r15);
-		}
-	}
-
-	SH4_CFG_DEBUG(4) SH4_DEBUG("%s::localloc_size = %d", cfg->method->name, localloc_size);
-
 	/* Set the frame pointer. */
-	sh4_mov(&buffer, sh4_r15, sh4_r14);
+	if (localloc_size != 0)
+		sh4_mov(&buffer, sh4_fp, sh4_sp);
 
 	/* At this point, the stack looks like :
 	 *	:              :
