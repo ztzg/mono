@@ -43,19 +43,9 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 				     MonoLMF **lmf, gboolean *managed)
 {
 	MonoJitInfo *jit_info = NULL;
-	gpointer pc = MONO_CONTEXT_GET_IP(context);
+	gpointer pc = (gpointer)context->pc;
 
-	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %p, %p, %p, %p",
-			domain, jit_tls, result, previous_jit_info, context,
-			new_context, lmf, managed);
-
-	/* Avoid costly table lookup during stack overflow. */
-	if (previous_jit_info != NULL &&
-	    (pc > previous_jit_info->code_start &&
-	     ((guint8 *)pc < (guint8 *)previous_jit_info->code_start + previous_jit_info->code_size)))
-		jit_info = previous_jit_info;
-	else
-		jit_info = mono_jit_info_table_find(domain, pc);
+	jit_info = mono_jit_info_table_find(domain, pc);
 
 	if (managed != NULL)
 		*managed = FALSE;
@@ -63,9 +53,22 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 	if (jit_info != NULL) {
 		*new_context = *context;
 
-		if (managed != NULL)
-			if (jit_info->method->wrapper_type == 0)
-				*managed = TRUE;
+		if (managed != NULL &&
+		    jit_info->method->wrapper_type == 0)
+			*managed = TRUE;
+
+		/*
+		 * Unwind one stack frame, here comes a typical one:
+		 *	:              :
+		 *	|==============|
+		 *	|  saved reg.  |
+		 *	|--------------|
+		 *	|  local var.  |
+		 *	|--------------| <- FP
+		 *	|    MonoLMF   |
+		 *	|--------------| <- SP (only if method->save_lmf is set)
+		 *	:              :
+		 */
 
 		/* Some managed methods like pinvoke wrappers might have save_lmf
 		   set. In this case, register save/restore code is not generated
@@ -74,57 +77,126 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 			/* We only need to do this if the exception was raised in managed
 			   code, since otherwise the LMF was already popped off the stack. */
 			if (*lmf != NULL &&
-			    (MONO_CONTEXT_GET_BP(context) >= (gpointer)(*lmf)->registers[sh4_r14])) {
+			    *lmf != jit_tls->first_lmf &&
+			    context->registers[sh4_fp] >= (*lmf)->registers[sh4_fp]) {
 				memcpy(new_context->registers, (*lmf)->registers, sizeof(new_context->registers));
 				new_context->pc = (*lmf)->pc;
 			}
 		}
 		else {
-			NOT_IMPLEMENTED;
-#if 0
-			offset = 0;
+			int i = 0;
+			guint stack_offset = 0;
+			guint16 *code = NULL;
+			guint32 *registers = NULL;
 
-			for (i = 8; i <= 15; i++) {
-				if (jit_info->used_regs & (1 << i)) {
-					offset += sizeof(guint32);
-					new_context->registers[i] = XXX; //*(gulong*)((char*)sframe->sp - offset);
-				}
+			/*
+			 * A prologue looks like that on Mono/SH4:
+			 *
+			 * 	mov.l	r8, @-r15	// if r8 is used
+			 * 	mov.l	r9, @-r15	// if r9 is used
+			 * 	mov.l	r10, @-r15	// if r10 is used
+			 * 	mov.l	r11, @-r15	// if r11 is used
+			 * 	mov.l	r12, @-r15	// if r12 is used
+			 * 	mov.l	r13, @-r15	// if r13 is used
+			 * 	mov.l	r14, @-r15
+			 * 	sts.l	pr, @-r15
+			 * 	mov	r15, r14
+			 * #if stack_offset is small
+			 * 	add	-#stack_offset, r14
+			 * #else if stack_offset is medium
+			 * 	mov	#stack_offset, temp
+			 * 	sub	temp, r14
+			 * #else if stack_offset is large
+			 * 	LOAD	#stack_offset, temp
+			 * 	sub	temp, r14
+			 * #else if stack_offset is 0
+			 * #endif
+			 *      [...]
+			 * 	mov	r14, r15	// if stack_offset != 0
+			 */
+
+			SH4_EXTRA_DEBUG("start: %p", jit_info->code_start);
+
+			/* Walk forward to find the space used by local variables. */
+			for (code = jit_info->code_start; !is_sh4_mov(*code, sh4_sp, sh4_fp); code++) {
+				/* Sanity check. */
+				g_assert((guint8 *)code < (guint8 *)jit_info->code_start + jit_info->code_size);
+			}
+			code++;
+
+			SH4_EXTRA_DEBUG("code: %p", code);
+
+			/* stack_offset is small? */
+			if (stack_offset = get_imm_sh4_add_imm(code[0]),
+			    is_sh4_add_imm(code[0], stack_offset, sh4_fp)) {
+				/* Remember stack_offset was negated due to
+				   the use of "add_imm" instead of "sub_imm". */
+				stack_offset = -stack_offset;
+			}
+			/* stack_offset is medium? */
+			else if (stack_offset = get_imm_sh4_mov_imm(code[0]),
+				 is_sh4_mov_imm(code[0], stack_offset, sh4_temp) &&
+				 is_sh4_sub(code[1], sh4_temp, sh4_fp)) {
+				/* stack_offset is already extracted. */;
+			}
+			/* stack_offset is large? */
+			else if (stack_offset = get_imm_sh4_movl_dispPC(code[0]),
+				 is_sh4_movl_dispPC(code[0], stack_offset, sh4_temp)) {
+				/* The virtual address is formed by calculating PC + 4,
+				   clearing the lowest 2 bits, and adding the immediate. */
+				guint address = (guint)code;
+				address += 4;
+				address &= ~0x3;
+				stack_offset = *(guint8 *)(address + stack_offset);
+			}
+			/* stack_offset is 0! */
+			else {
+				stack_offset = 0;
 			}
 
-			new_context->pc = XXX;
-#endif
+			/* Now we know exactly where are saved global registers. */
+			registers = (guint32 *)(context->registers[sh4_fp] + stack_offset);
+
+			SH4_EXTRA_DEBUG("stack_offset: %d", stack_offset);
+			SH4_EXTRA_DEBUG("registers: %p", registers);
+
+			/* Extract the previous value of PC. */
+			new_context->pc = *registers;
+			registers++;
+
+			/* Extract the previous value of global registers. */
+			for (i = sh4_r14; i >= sh4_r8; i--) {
+				if (jit_info->used_regs & (1 << i)) {
+					new_context->registers[i] = *registers;
+					registers++;
+
+					SH4_EXTRA_DEBUG("back reg%d: 0x%x -> 0x%x", i, context->registers[i], new_context->registers[i]);
+				}
+				else
+					new_context->registers[i] = context->registers[i];
+			}
+
+			SH4_EXTRA_DEBUG("back pc: 0x%x -> 0x%x", context->pc, new_context->pc);
 		}
 
 		/* Remove any unused LMF. */
-		if (*lmf && MONO_CONTEXT_GET_BP(context) >= (gpointer)(*lmf)->registers[sh4_r14])
+		if (*lmf != NULL &&
+		    *lmf != jit_tls->first_lmf &&
+		    context->registers[sh4_fp] >= (*lmf)->registers[sh4_fp])
 			*lmf = (*lmf)->previous_lmf;
-
-		NOT_IMPLEMENTED;
-
-		/* Unwind one stack frame. Here comes a typical prologue :
-		       mov.l   r14,@-r15
-		       sts.l   pr,@-r15
-		       [...]   // stack noops
-		       mov     r15,r14
-
-		   This functionality is not yet implemented because I do not
-		   have enough time, however it is in good way. If you try to
-		   make it works, take care about the offset due to the save
-		   of the LMF. CV */
-
-		MONO_CONTEXT_SET_IP(new_context, *((guint32 *)MONO_CONTEXT_GET_BP(context) + 1) - 4);
-		MONO_CONTEXT_SET_BP(new_context, *((guint32 *)MONO_CONTEXT_GET_BP(context) + 2));
-		MONO_CONTEXT_SET_SP(new_context, MONO_CONTEXT_GET_BP(new_context));
 
 		return jit_info;
 	}
 	else if (*lmf != NULL) {
 		*new_context = *context;
 
+		/* Top LMF entry? */
+		if (*lmf == jit_tls->first_lmf)
+			return (gpointer)-1;
+
 		/* Check if it is a trampoline LMF. */
 		jit_info = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
 		if (jit_info == NULL) {
-			/* Top LMF entry. */
 			if ((*lmf)->method == NULL)
 				return (gpointer)-1;
 
@@ -135,6 +207,8 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		/* Adjust the new context with information from the LMF. */
 		new_context->pc = (*lmf)->pc;
 		memcpy(new_context->registers, (*lmf)->registers, sizeof(new_context->registers));
+
+		/* Remove the current LMF. */
 		*lmf = (*lmf)->previous_lmf;
 
 		if (jit_info != NULL)
@@ -351,7 +425,6 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 			((MonoException*)exception)->stack_trace = NULL;
 	}
 
-	/* Adjust PC to point to the call instruction. */
 	mono_handle_exception(&context, exception, (gpointer)pc, FALSE);
 	restore_context(&context);
 

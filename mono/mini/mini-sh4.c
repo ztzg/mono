@@ -679,6 +679,7 @@ static inline void sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, 
 
 /**
  * Create the instruction sequence for a function prologue.
+ * Keep in sync with mono_arch_find_jit_info().
  */
 guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 {
@@ -741,7 +742,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 */
 
 	/* TODO - CV: optimizations => use SP only if needed, that is,
-	   only if there is a parameted passed onto the stack. */
+	 * only if there is a parameted passed onto the stack.
+	 * Keep in sync with mono_arch_find_jit_info(). */
 	sh4_mov(&buffer, sh4_sp, sh4_fp);
 
 	/* The SH4 is a 16-bits instruction length CPU, so "immediate"
@@ -749,7 +751,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 * small, that's why we keep SP close to stacked parameters. */
 
 	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
-	   and the size of the spill area is computed into mini-codegen.c. */
+	 * and the size of the spill area is computed into mini-codegen.c.
+	 * Keep in sync with mono_arch_find_jit_info(). */
 	if (cfg->stack_offset != 0) {
 		if (SH4_CHECK_RANGE_add_imm(-cfg->stack_offset)) {
 			sh4_add_imm(&buffer, -cfg->stack_offset, sh4_fp);
@@ -1288,8 +1291,6 @@ void mono_arch_flush_register_windows(void)
 
 void mono_arch_free_jit_tls_data(MonoJitTlsData *tls)
 {
-	/* TODO - CV */
-	g_assert(0);
 	return;
 }
 
@@ -1312,7 +1313,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
 	for (i = 0; i < cfg->num_varinfo; i++) {
-		MonoInst *ins = cfg->varinfo [i];
+		MonoInst *ins = cfg->varinfo[i];
 		MonoMethodVar *var = MONO_VARINFO(cfg, i);
 
 		/* Skip unused variables. */

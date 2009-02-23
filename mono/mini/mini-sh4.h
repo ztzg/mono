@@ -274,7 +274,7 @@ struct MonoLMF {
 };
 
 #ifndef NDEBUG
-#  define SH4_DEBUG(format, ...) fprintf(stderr, "! %s:%d: " format "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
+#  define SH4_DEBUG(format, ...) fprintf(stdout, "! %s:%d: " format "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
 #  define SH4_CFG_DEBUG(LVL) if (cfg->verbose_level >= LVL)
 #  define SH4_EXTRA_DEBUG(format, ...) if (sh4_extra_debug != 0) SH4_DEBUG(format, __VA_ARGS__)
 #else
