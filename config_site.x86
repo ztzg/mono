@@ -1,12 +1,24 @@
 # -*- sh -*-
 
-# env NOCONFIGURE=1 ./autogen.sh
-# cd eglib; env NOCONFIGURE=1 ./autogen.sh; cd ..
-# cp `which libtool` .
-# ./configure CONFIG_SITE=${PWD}/config_site.x86
+# Run the following command if you get the sources from a repository:
+# env NOCONFIGURE=1 ./autogen.sh; cd eglib; env NOCONFIGURE=1 ./autogen.sh; cd ..; cp `which libtool` .; ./configure CONFIG_SITE=${PWD}/config_site.x86
 
+CC=/sw/st/gnu_compil/gnu/linux-rh-ws-3/gcc/gcc-3.4.4/bin/gcc
+CFLAGS="-O1 -g -Wall"
 LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
-with_glib=embedded
-enable_mcs_build=no
 
 prefix=/home/compwork/vincent/WIP/Mono-SH4/sysroot-x86
+
+CC_FOR_BUILD=/sw/st/gnu_compil/gnu/linux-rh-ws-3/gcc/gcc-3.4.4/bin/gcc
+
+# These values are OK :
+mono_cv_uscore=no
+with_glib=embedded
+enable_mcs_build=no
+ac_cv_c_bigendian=no
+
+# These values are for devel. purpose :
+with_tls=pthread
+with_sigaltstack=no
+large_offt=no
+with_gc=none

@@ -264,17 +264,7 @@ common_sources = \
 	simd-methods.h	\
 	simd-intrinsics.c	\
 	unwind.h	\
-	unwind.c	\
-	trivial-return_int.cs	\
-	trivial-add_int.cs	\
-	trivial-fibonacci.cs	\
-	trivial-outarg.cs	\
-	trivial-outarg2.cs	\
-	trivial-virtual.cs	\
-	trivial-load_store.cs	\
-	trivial-compare.cs	\
-	trivial-switch.cs	\
-	trivial-conv.cs
+	unwind.c
 
 test_sources = 		\
 	basic-calls.cs 	\
@@ -419,9 +409,6 @@ basic-simd.exe: basic-simd.cs
 generics.exe: generics.cs TestDriver.dll generics-variant-types.dll
 	$(MCS) -out:$@ $< -r:TestDriver.dll -r:generics-variant-types.dll
 
-trivial-%.exe: trivial-%.cs
-	$(MCS) -out:$@ $<
-
 %.exe: %.cs TestDriver.dll
 	$(MCS) -out:$@ -unsafe $< -r:TestDriver.dll
 
@@ -505,56 +492,6 @@ aotcheck: mono $(regtests)
 	$(RUNTIME) --aot $(regtests) || exit 1
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
-
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch
-
-trivial-exes: mono trivial-return_int.exe trivial-add_int.exe trivial-fibonacci.exe trivial-outarg.exe trivial-outarg2.exe trivial-virtual.exe trivial-load_store.exe trivial-compare.exe trivial-switch.exe
-
-trivial-return_int: trivial-return_int.exe
-	$(RUNTIME) $<; test $$? = 3
-
-trivial-add_int: trivial-add_int.exe
-	$(RUNTIME) $<; test $$? = 3
-	$(RUNTIME) $< x x; test $$? = 5
-
-trivial-fibonacci: trivial-fibonacci.exe
-	$(RUNTIME) $<; test $$? = 0
-	$(RUNTIME) $< x; test $$? = 1
-	$(RUNTIME) $< x x; test $$? = 1
-	$(RUNTIME) $< x x x; test $$? = 2
-	$(RUNTIME) $< x x x x; test $$? = 3
-	$(RUNTIME) $< x x x x x; test $$? = 5
-	$(RUNTIME) $< x x x x x x; test $$? = 8
-
-trivial-outarg: trivial-outarg.exe
-	$(RUNTIME) $<; test $$? = 28
-	$(RUNTIME) $< x; test $$? = 33
-	$(RUNTIME) $< x x; test $$? = 38
-
-trivial-outarg2: trivial-outarg2.exe
-	$(RUNTIME) $<; test $$? = 70
-	$(RUNTIME) $< x; test $$? = 80
-	$(RUNTIME) $< x x; test $$? = 90
-
-trivial-virtual: trivial-virtual.exe
-	$(RUNTIME) $<; test $$? = 13
-
-trivial-load_store: trivial-load_store.exe
-	$(RUNTIME) $<; test $$? = 16
-
-trivial-compare: trivial-compare.exe
-	$(RUNTIME) $< ; test $$? = 3
-	$(RUNTIME) $< x ; test $$? = 3
-	$(RUNTIME) $< x x ; test $$? = 10
-	$(RUNTIME) $< x x x ; test $$? = 12
-	$(RUNTIME) $< x x x x; test $$? = 12
-
-trivial-switch: trivial-switch.exe
-	$(RUNTIME) $< ; test $$? = 3
-	$(RUNTIME) $< x ; test $$? = 2
-	$(RUNTIME) $< x x ; test $$? = 5
-	$(RUNTIME) $< x x x ; test $$? = 9
-	$(RUNTIME) $< x x x x; test $$? = 3
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe
