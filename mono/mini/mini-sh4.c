@@ -82,7 +82,6 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 	}
 	else {
 		arg_info->storage = onto_stack;
-		arg_info->reg = sh4_r15;
 		(*stack_size) += 4;
 	}
 
@@ -419,12 +418,39 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	return;
 }
 
-/* Emits IR to move its argument to the proper return register. */
+/* Emits IR to move its argument to the proper return register(s). */
 void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
 {
-	/* Complex return types (as aggregates) not yet supported. */
-	MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
-	return;
+	MonoType *ret = mini_type_get_underlying_type(cfg->generic_sharing_context, mono_method_signature(method)->ret);
+	printf("%s:%d\n", cfg->method->name, ret->type);
+
+	if (ret->byref != 0) {
+		g_warning("return 'byref' not yet supported\n");
+                NOT_IMPLEMENTED;
+	}
+
+        switch (ret->type) {
+        case MONO_TYPE_VOID:
+                break;
+
+        case MONO_TYPE_BOOLEAN:
+        case MONO_TYPE_I1:
+        case MONO_TYPE_U1:
+        case MONO_TYPE_I2:
+        case MONO_TYPE_U2:
+        case MONO_TYPE_I4:
+        case MONO_TYPE_U4:
+	case MONO_TYPE_OBJECT:
+                MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
+                break;
+
+        default:
+                g_warning("return types '0x%x' not yet supported\n", ret->type);
+                NOT_IMPLEMENTED;
+                break;
+        }
+
+        return;
 }
 
 /**
@@ -447,14 +473,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 	call_info = get_call_info(cfg->generic_sharing_context, signature);
-
-	/* At this point, the stack looks like :
-	 *	:              :
-	 *	|--------------| Caller's frame.
-	 *	|  parameters  |
-	 *	|==============| <- SP
-	 *	:              : Callee's frame.
-	 */
 
 	/* At this point, the stack looks like :
 	 *	:              :
