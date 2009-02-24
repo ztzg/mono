@@ -2131,6 +2131,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_add(&buffer, inst->sreg2, inst->dreg);
 			break;
 
+		case OP_IADDCC:
+			/* MD: int_addcc: clob:1 dest:i src1:i src2:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_addv(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_IADC:
+			/* MD: int_adc: clob:1 dest:i src1:i src2:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_addc(&buffer, inst->sreg2, inst->dreg);
+			break;
+
 		case OP_ISUB:
 			/* MD: int_sub: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);

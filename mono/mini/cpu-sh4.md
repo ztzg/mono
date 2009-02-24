@@ -54,6 +54,8 @@
 int_add_imm: clob:1 dest:i src1:i len:2
 add_imm: clob:1 dest:i src1:i len:2
 int_add: clob:1 dest:i src1:i src2:i len:2
+int_addcc: clob:1 dest:i src1:i src2:i len:2
+int_adc: clob:1 dest:i src1:i src2:i len:2
 int_sub: clob:1 dest:i src1:i src2:i len:2
 sh4_or_imm_R0: clob:1 dest:z src1:z len:2
 int_or: clob:1 dest:i src1:i src2:i len:2
