@@ -112,7 +112,7 @@ int_conv_to_i1: dest:i src1:i len:2
 int_conv_to_u1: dest:i src1:i len:2
 int_conv_to_i2: dest:i src1:i len:2
 int_conv_to_u2: dest:i src1:i len:2
-start_handler: len:6
+start_handler: len:8
 endfilter: src1:z len:10
 endfinally: len:10
 br: len:16
@@ -121,8 +121,8 @@ sh4_bt: len:18
 sh4_bf: len:18
 label: len:0
 checkthis: src1:i len:2
-store_membase_reg: len:16
-load_membase: len:16
+store_membase_reg: dest:b src1:i len:16
+load_membase: dest:i src1:b len:16
 nop: len:0
 dummy_use: len:0
 dummy_store: len:0

@@ -2543,7 +2543,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		 * variable.
 		 */
 		case OP_START_HANDLER:
-			/* MD: start_handler: len:6 */
+			/* MD: start_handler: len:8 */
 			sh4_stsl_PR_decRx(&buffer, sh4_sp);
 
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
@@ -2675,14 +2675,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			/* Support for spilled variables. */
 		case OP_STORE_MEMBASE_REG:
-			/* MD: store_membase_reg: len:16 */
+			/* MD: store_membase_reg: dest:b src1:i len:16 */
 			g_assert(inst->inst_destbasereg == sh4_fp);
 			sh4_base_store(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 			/* Support for spilled variables. */
 		case OP_LOAD_MEMBASE:
-			/* MD: load_membase: len:16 */
+			/* MD: load_membase: dest:i src1:b len:16 */
 			g_assert(inst->inst_basereg == sh4_fp);
 			sh4_base_load(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
