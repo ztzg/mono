@@ -109,6 +109,17 @@ namespace System.Net
 			return _hasResponse;
 		}
 
+		string _localhostName = null;
+		private string GetLocalHostName ()
+		{
+			if (_localhostName == null) {
+				java.net.InetAddress ia = java.net.InetAddress.getLocalHost ();
+				if (ia != null)
+					_localhostName = ia.getHostName ();
+			}
+			return _localhostName;
+		}
+
 		private void SetJavaCredential(NetworkCredential nc, string type)
 		{
 			SetJavaCredential(nc, type, false);
@@ -116,14 +127,8 @@ namespace System.Net
 
 		private void SetJavaCredential(NetworkCredential nc, string type, bool proxyCredentials)
 		{
-			string host = null;
-			
-			if(!proxyCredentials)
-				host = GetOriginalAddress().Host;
-			else
-				host = ((WebProxy)this.Proxy).Address.Host;
-
-			string domain = (nc.Domain == null) ? host : nc.Domain;
+			string host = GetLocalHostName ();
+			string domain = (nc.Domain == null) ? string.Empty : nc.Domain;
 
 			if(String.Compare (type, "any", StringComparison.InvariantCultureIgnoreCase) == 0)
 			{
