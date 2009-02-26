@@ -31,6 +31,7 @@ my $header = << 'EOF';
 # register may have the following values:
 #	i  integer register
 #	z  sh4_r0 register
+#	Z  sh4_r0:1 registers
 #	t  sh4_temp register
 #	I  any integer register but sh4_temp
 #	b  base register (used in address references)

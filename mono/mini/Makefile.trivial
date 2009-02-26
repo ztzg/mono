@@ -1,5 +1,8 @@
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long
+
+trivial-%.exe: trivial-%.cs
+	$(MCS) -out:$@ $<
 
 trivial-return_int: trivial-return_int.exe
 	$(RUNTIME) $<; test $$? = 3
@@ -64,3 +67,9 @@ trivial-exception2: trivial-exception2.exe
 	$(RUNTIME) $< x x x x ; test $$? = 8
 	$(RUNTIME) $< x x x x x ; test $$? = 5
 	$(RUNTIME) $< x x x x x x ; test $$? = 6
+
+trivial-long: trivial-long.exe
+	$(RUNTIME) --optimize=-inline $< ; test $$? = 5
+	$(RUNTIME) --optimize=-inline $< x ; test $$? = 6
+	$(RUNTIME) --optimize=-inline $< x x ; test $$? = 7
+	$(RUNTIME) --optimize=-inline $< x x x ; test $$? = 8

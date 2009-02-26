@@ -139,21 +139,21 @@
  * This macro provides, from the machine-description of an instruction,
  * the fixed hreg corresponding to that value. This macro is mandatory.
  */
-#define MONO_ARCH_INST_FIXED_REG(desc) ((desc) == 'z' ? sh4_r0 : -1)
+#define MONO_ARCH_INST_FIXED_REG(desc) ((desc) == 'z' || (desc) == 'Z' ? sh4_r0 : -1)
 
 /*
  * This macro tests if a register denotes a register pair (from
  * the machine-description of an instruction). Usually it looks like
  * (desc == 'l' || desc == 'L'). This macro is mandatory.
  */
-#define MONO_ARCH_INST_IS_REGPAIR(a) FALSE
+#define MONO_ARCH_INST_IS_REGPAIR(desc) ((desc) == 'Z')
 
 /*
  * This macro provides, from the first register of a pair, the bitmask
  * selecting the hregs which can be used for allocating the second
  * register.
  */
-#define MONO_ARCH_INST_REGPAIR_REG2(a, b) (-1)
+#define MONO_ARCH_INST_REGPAIR_REG2(desc, hreg) (((desc) == 'Z') ? sh4_r1 : -1)
 
 /*
  * This macro is only used by the ARM support but other

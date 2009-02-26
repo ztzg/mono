@@ -15,6 +15,7 @@
 # register may have the following values:
 #	i  integer register
 #	z  sh4_r0 register
+#	Z  sh4_r0:1 registers
 #	t  sh4_temp register
 #	I  any integer register but sh4_temp
 #	b  base register (used in address references)
@@ -99,6 +100,7 @@ sh4_loadi4_membase: dest:i src1:b len:2
 sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
 voidcall: clob:c len:30
+lcall: dest:Z clob:c len:30
 call: dest:z clob:c len:30
 voidcall_reg: src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
@@ -129,3 +131,4 @@ dummy_store: len:0
 not_null: len:0
 not_reached: len:2
 jump_table: dest:i len:12
+setlret: src1:i src2:i len:2

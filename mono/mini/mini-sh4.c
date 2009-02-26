@@ -89,6 +89,30 @@ static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
 }
 
+static inline void add_int64_arg(SH4IntRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
+{
+	arg_info->size = 8;
+	arg_info->type = integer64;
+	arg_info->offset = *stack_size;
+
+	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
+
+	/* "last_arg - 1" because the argument is either
+	   entirely into 2 registers, or entirely onto the stack. */
+	if (*arg_reg <= MONO_SH4_REG_LAST_ARG - 1) {
+		arg_info->storage = into_register;
+		arg_info->reg = *arg_reg;
+		(*arg_reg) += 2;
+	}
+	else {
+		arg_info->storage = onto_stack;
+		(*stack_size) += 8;
+	}
+
+	SH4_EXTRA_DEBUG("arg_reg = %d", *arg_reg);
+	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
+}
+
 /**
  * Obtain information about a call according to the calling convention and
  * determine the amount of space required for code and stack. In addition
@@ -139,10 +163,9 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
-		NOT_IMPLEMENTED;
-		/* call_info->ret.storage = into_register; */
-		/* call_info->ret.type = integer64; */
-		/* call_info->ret.reg = sh4_r0; */
+		call_info->ret.storage = into_register;
+		call_info->ret.type = integer64;
+		call_info->ret.reg = sh4_r0;
 		break;
 
 	case MONO_TYPE_R4:
@@ -232,8 +255,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 
 		case MONO_TYPE_I8:
 		case MONO_TYPE_U8:
-			NOT_IMPLEMENTED;
-			/* add_int64_arg(&arg_reg, &stack_size, arg_info); */
+			add_int64_arg(&arg_reg, &stack_size, arg_info);
 			break;
 
 		case MONO_TYPE_R4:
@@ -356,28 +378,49 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		    signature->call_convention == MONO_CALL_VARARG)
 			emit_signature_cookie2(cfg, call);
 
-		MONO_INST_NEW(cfg, arg, OP_NOP);
-		arg->cil_code  = call->args[i]->cil_code;
-		arg->type      = call->args[i]->type;
-		arg->sreg1     = call->args[i]->dreg;
-
-		g_assert(arg->sreg1 != -1);
-
 		switch (arg_info->type) {
-		case integer64:
-			NOT_IMPLEMENTED;
-			/* Fall through. */
 		case integer32:
 			switch (arg_info->storage) {
 			case into_register:
-				arg->opcode = OP_MOVE;
-				arg->dreg   = mono_alloc_ireg(cfg);
+				MONO_INST_NEW(cfg, arg, OP_MOVE);
+				arg->sreg1 = call->args[i]->dreg;
+				arg->dreg  = mono_alloc_ireg(cfg);
 				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+				MONO_ADD_INS(cfg->cbb, arg);
 				break;
 
 			case onto_stack:
-				arg->opcode = OP_SH4_PUSH_ARG;
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+				arg->sreg1 = call->args[i]->dreg;
+				MONO_ADD_INS(cfg->cbb, arg);
 				call->stack_usage += 4;
+				break;
+
+			case nowhere:
+			default:
+				g_assert_not_reached();
+			}
+			break;
+
+		case integer64:
+			switch (arg_info->storage) {
+			case into_register:
+				/* A long register N is splitted into two interger registers N+1, N+2. */
+				MONO_INST_NEW(cfg, arg, OP_MOVE);
+				arg->sreg1 = call->args[i]->dreg + 1;
+				arg->dreg  = mono_alloc_ireg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+				MONO_ADD_INS(cfg->cbb, arg);
+
+				MONO_INST_NEW(cfg, arg, OP_MOVE);
+				arg->sreg1 = call->args[i]->dreg + 2;
+				arg->dreg  = mono_alloc_ireg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg + 1, FALSE);
+				MONO_ADD_INS(cfg->cbb, arg);
+				break;
+
+			case onto_stack:
+				NOT_IMPLEMENTED;
 				break;
 
 			case nowhere:
@@ -402,7 +445,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			g_assert_not_reached();
 			break;
 		}
-		MONO_ADD_INS(cfg->cbb, arg);
 	}
 
 	/* Emit the signature cookie in case no implicit arguments are specified. */
@@ -422,35 +464,44 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
 {
 	MonoType *ret = mini_type_get_underlying_type(cfg->generic_sharing_context, mono_method_signature(method)->ret);
-	printf("%s:%d\n", cfg->method->name, ret->type);
+	MonoInst *inst = NULL;
 
 	if (ret->byref != 0) {
 		g_warning("return 'byref' not yet supported\n");
-                NOT_IMPLEMENTED;
+		NOT_IMPLEMENTED;
 	}
 
-        switch (ret->type) {
-        case MONO_TYPE_VOID:
-                break;
+	switch (ret->type) {
+	case MONO_TYPE_VOID:
+		break;
 
-        case MONO_TYPE_BOOLEAN:
-        case MONO_TYPE_I1:
-        case MONO_TYPE_U1:
-        case MONO_TYPE_I2:
-        case MONO_TYPE_U2:
-        case MONO_TYPE_I4:
-        case MONO_TYPE_U4:
+	case MONO_TYPE_BOOLEAN:
+	case MONO_TYPE_I1:
+	case MONO_TYPE_U1:
+	case MONO_TYPE_I2:
+	case MONO_TYPE_U2:
+	case MONO_TYPE_I4:
+	case MONO_TYPE_U4:
 	case MONO_TYPE_OBJECT:
-                MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
-                break;
+		MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
+		break;
 
-        default:
-                g_warning("return types '0x%x' not yet supported\n", ret->type);
-                NOT_IMPLEMENTED;
-                break;
-        }
+	case MONO_TYPE_I8:
+	case MONO_TYPE_U8:
+		/* A long register N is splitted into two interger registers N+1, N+2. */
+		MONO_INST_NEW (cfg, inst, OP_SETLRET);
+		inst->sreg1 = result->dreg + 1;
+		inst->sreg2 = result->dreg + 2;
+		MONO_ADD_INS (cfg->cbb, inst);
+		break;
 
-        return;
+	default:
+		g_warning("return types '0x%x' not yet supported\n", ret->type);
+		NOT_IMPLEMENTED;
+		break;
+	}
+
+	return;
 }
 
 /**
@@ -879,7 +930,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case integer64:
-					NOT_IMPLEMENTED;
+					sh4_base_store(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					sh4_base_store(cfg, &buffer, arg_info->reg + 1, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case float64:
@@ -2433,6 +2485,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:30 */
+		case OP_LCALL:
+			/* MD: lcall: dest:Z clob:c len:30 */
 		case OP_CALL:
 			/* MD: call: dest:z clob:c len:30 */
 			call = (MonoCallInst*)inst;
@@ -2700,6 +2754,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_JUMP_TABLE:
 			/* MD: jump_table: dest:i len:12 */
 			sh4_cstpool_add(cfg, &buffer, (MonoJumpInfoType)inst->inst_i1, inst->inst_p0, inst->dreg);
+			break;
+
+		case OP_SETLRET:
+			/* MD: setlret: src1:i src2:i len:2 */
+			g_assert(inst->sreg1 == sh4_r0);
+			g_assert(inst->sreg2 == sh4_r1);
 			break;
 
 		default:
