@@ -67,6 +67,14 @@ struct call_info {
 	struct arg_info *args;
 };
 
+
+/* Prevent following arguments from being passed into registers */
+static inline void force_stack(SH4IntRegister *arg_reg)
+{
+	*arg_reg = MONO_SH4_REG_LAST_ARG + 1;
+	return;
+}
+
 static inline void add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
 {
 	arg_info->size = 4;
@@ -105,6 +113,8 @@ static inline void add_int64_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 		(*arg_reg) += 2;
 	}
 	else {
+		if(*arg_reg == MONO_SH4_REG_LAST_ARG)
+			force_stack(arg_reg);
 		arg_info->storage = onto_stack;
 		(*stack_size) += 8;
 	}
