@@ -360,6 +360,9 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	if (call_info->ret.type == aggregate)
 		NOT_IMPLEMENTED;
 
+	if (MONO_TYPE_ISSTRUCT(signature->ret))
+		NOT_IMPLEMENTED;
+
 	if (signature->pinvoke == 0 &&
 	    signature->call_convention == MONO_CALL_VARARG)
 		sentinelpos = signature->sentinelpos + (signature->hasthis ? 1 : 0);
@@ -378,6 +381,10 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		    signature->call_convention == MONO_CALL_VARARG)
 			emit_signature_cookie2(cfg, call);
 
+		if (MONO_TYPE_ISSTRUCT(signature->params[i - signature->hasthis]))
+			NOT_IMPLEMENTED;
+
+		/* Arguments passed by reference are already handled in get_call_info(). */
 		switch (arg_info->type) {
 		case integer32:
 			switch (arg_info->storage) {
@@ -476,6 +483,8 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		break;
 
 	case MONO_TYPE_BOOLEAN:
+	case MONO_TYPE_I:
+	case MONO_TYPE_U:
 	case MONO_TYPE_I1:
 	case MONO_TYPE_U1:
 	case MONO_TYPE_I2:
@@ -483,6 +492,10 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	case MONO_TYPE_I4:
 	case MONO_TYPE_U4:
 	case MONO_TYPE_OBJECT:
+	case MONO_TYPE_STRING:
+	case MONO_TYPE_CLASS:
+	case MONO_TYPE_SZARRAY:
+	case MONO_TYPE_PTR:
 		MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
 		break;
 
@@ -496,7 +509,7 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		break;
 
 	default:
-		g_warning("return types '0x%x' not yet supported\n", ret->type);
+		g_warning("return type '0x%x' not yet supported\n", ret->type);
 		NOT_IMPLEMENTED;
 		break;
 	}
@@ -610,9 +623,11 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 			align = sizeof(gpointer);
 		}
 		else if (signature->pinvoke != 0)
-			size = mono_type_native_stack_size(signature->params[i], &align);
+			size = mono_type_native_stack_size(signature->params[i - signature->hasthis], &align);
 		else
-			size = mono_type_size(signature->params[i], (int *)&align);
+			size = mono_type_size(signature->params[i - signature->hasthis], (int *)&align);
+
+		g_assert(size != 0);
 
 		/* Align the access on a `align`-bytes boundary. */
 		cfg->stack_offset += align - 1;
@@ -623,7 +638,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		inst->inst_basereg = cfg->frame_reg;
 		inst->inst_offset = cfg->stack_offset;
 
-		SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' stack = %d", i, cfg->stack_offset);
+		SH4_CFG_DEBUG(4) SH4_DEBUG("arg '%d' stack = %d, size = %d", i, cfg->stack_offset, size);
 
 		cfg->stack_offset += size;
 	}
@@ -1394,7 +1409,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 
 		/* Allocate 32 bit variables only. */
 		if (mono_is_regsize_var(ins->inst_vtype)) {
-			g_assert(MONO_VARINFO (cfg, i)->reg == -1);
+			g_assert(MONO_VARINFO(cfg, i)->reg == -1);
 			g_assert(i == var->idx);
 
 			SH4_CFG_DEBUG(4) SH4_DEBUG("var '%p' allocated to a register", var);
