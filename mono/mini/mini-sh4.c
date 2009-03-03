@@ -1364,15 +1364,22 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 void mono_arch_flush_icache(guint8 *code, gint size)
 {
 #if defined (__SH4A__)
-	guint32 addr = (guint32)code & ~0xF;
-	guint32 end  = (guint32)code + size;
+#define CACHE_BLOCK_LENGTH 32
+
+	guint32 start = (guint32)code;
+	guint32 end   = (guint32)code + size;
+	guint32 address = 0;
 
 	SH4_EXTRA_DEBUG("args => %p, %d", code, size);
 
-	while (addr <= end) {
-		__asm__ __volatile__ ("ocbp @%0" : : "r"(addr));
-		__asm__ __volatile__ ("icbi @%0" : : "r"(addr));
-		addr += 32;
+	/* Align frontiers on a CACHE_BLOCK_LENGTH. */
+	start &= ~(CACHE_BLOCK_LENGTH - 1);
+	end += CACHE_BLOCK_LENGTH - 1;
+	end &= ~(CACHE_BLOCK_LENGTH - 1);
+
+	for (address = start; address <= end; address += CACHE_BLOCK_LENGTH) {
+		__asm__ __volatile__ ("ocbp @%0" : : "r"(address));
+		__asm__ __volatile__ ("icbi @%0" : : "r"(address));
 	}
 #endif
 	return;
