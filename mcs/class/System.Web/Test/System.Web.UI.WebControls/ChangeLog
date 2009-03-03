@@ -1,3 +1,20 @@
+2009-02-10  Marek Habersack  <mhabersack@novell.com>
+
+	* ImageButtonTest.cs: added test for bug #463939
+
+2009-02-09  Marek Habersack  <mhabersack@novell.com>
+
+	* ObjectDataSourceViewTest.cs: added test for bug #471767
+
+2009-02-06  Marek Habersack  <mhabersack@novell.com>
+
+	* StyleTest.cs: added tests for CssClass and BorderStyle. 
+	Renamed the Style_CssClass method to Style_RegisteredCssClass.
+
+2009-02-05  Marek Habersack  <mhabersack@novell.com>
+
+	* LoginTest.cs: added test for Bug #468359
+
 2009-01-21  Marek Habersack  <mhabersack@novell.com>
 
 	* MenuTest.cs: temporarily disabled the Menu_DefaultRender test

@@ -850,14 +850,43 @@ mono_get_inflated_method (MonoMethod *method)
 	return method;
 }
 
+/*
+ * mono_method_get_context_general:
+ * @method: a method
+ * @uninflated: handle uninflated methods?
+ *
+ * Returns the generic context of a method or NULL if it doesn't have
+ * one.  For an inflated method that's the context stored in the
+ * method.  Otherwise it's in the method's generic container or in the
+ * generic container of the method's class.
+ */
+MonoGenericContext*
+mono_method_get_context_general (MonoMethod *method, gboolean uninflated)
+{
+	if (method->is_inflated) {
+		MonoMethodInflated *imethod = (MonoMethodInflated *) method;
+		return &imethod->context;
+	}
+	if (!uninflated)
+		return NULL;
+	if (method->is_generic)
+		return &(mono_method_get_generic_container (method)->context);
+	if (method->klass->generic_container)
+		return &method->klass->generic_container->context;
+	return NULL;
+}
+
+/*
+ * mono_method_get_context:
+ * @method: a method
+ *
+ * Returns the generic context for method if it's inflated, otherwise
+ * NULL.
+ */
 MonoGenericContext*
 mono_method_get_context (MonoMethod *method)
 {
-	MonoMethodInflated *imethod;
-	if (!method->is_inflated)
-		return NULL;
-	imethod = (MonoMethodInflated *) method;
-	return &imethod->context;
+	return mono_method_get_context_general (method, FALSE);
 }
 
 /*
@@ -4195,8 +4224,18 @@ mono_class_create_from_typedef (MonoImage *image, guint32 type_token)
 	}
 
 	if (cols [MONO_TYPEDEF_EXTENDS]) {
-		parent = mono_class_get_full (
-			image, mono_metadata_token_from_dor (cols [MONO_TYPEDEF_EXTENDS]), context);
+		guint32 parent_token = mono_metadata_token_from_dor (cols [MONO_TYPEDEF_EXTENDS]);
+
+		if (mono_metadata_token_table (parent_token) == MONO_TABLE_TYPESPEC) {
+			/*WARNING: this must satisfy mono_metadata_type_hash*/
+			class->this_arg.byref = 1;
+			class->this_arg.data.klass = class;
+			class->this_arg.type = MONO_TYPE_CLASS;
+			class->byval_arg.data.klass = class;
+			class->byval_arg.type = MONO_TYPE_CLASS;
+		}
+		parent = mono_class_get_full (image, parent_token, context);
+
 		if (parent == NULL){
 			mono_internal_hash_table_remove (&image->class_cache, GUINT_TO_POINTER (type_token));
 			mono_loader_unlock ();

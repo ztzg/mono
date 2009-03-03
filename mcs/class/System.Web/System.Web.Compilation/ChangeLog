@@ -1,3 +1,65 @@
+2009-02-26  Marek Habersack  <mhabersack@novell.com>
+
+	* TagAttributes.cs: modified ToString to return string formatted
+	in a more helpful way.
+
+	* AspParser.cs: added ToString, helpful when debugging.
+
+	* AspGenerator.cs: properly print leading and trailing plain text
+	when looking for embedded tags in ProcessTagsInAttributes.
+
+2009-02-25  Marek Habersack  <mhabersack@novell.com>
+ 
+ 	* AspTokenizer.cs: put_back now uses a stack and allows more than
+ 	one invocation when called inside a tag.
+ 
+ 	* AspGenerator.cs: when a nested parser is used, pay attention to
+ 	server tags found inside client tags and add them to the control
+ 	tree.
+
+2009-02-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* BuildManager.cs: updated comment.
+
+2009-02-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TemplateControlCompiler.cs: lowercase place holder names
+	* BuildManager.cs: initial support for precompiled sites.
+
+2009-02-13  Marek Habersack  <mhabersack@novell.com>
+
+	* AspParser.cs: added an event raised when parsing is complete.
+
+	* AspGenerator.cs: added support for PageParserFilter which, if
+	found, is used to control certain aspects of code parsing
+	(accepting/rejecting control types, accepting/rejecting code
+	snippets, parsing completion)
+	Added the AddControl method, used by PageParserFilter when a
+	custom filter wants to inject a control in the current control
+	builder tree.
+
+2009-02-05  Marek Habersack  <mhabersack@novell.com>
+
+	* AppResourcesCompiler.cs: implemented a type resolver for
+	ResXResourceReader so that it can correctly resolve
+	System.Resources types which are normally found in
+	System.Windows.Forms but are included by System.Web
+	directly. Without the type resolver, code comparing types inside
+	ResXResourceReader when file references are used in side the .resx
+	file will not work correctly. The reason for that is that .resx
+	files will name "System.Resources.ResXFileRef,
+	System.Windows.Forms" as the file reference handler, while inside
+	System.Web ResXFileRef will be of type
+	"System.Resources.ResXFileRef, System.Web". Fixes bug #466059
+
+	* GenericBuildProvider.cs: added a new virtual method, MapPath,
+	which can be overriden by builders which need special handling of
+	virtual path mapping.
+
+	* PageBuildProvider.cs: provide implementation of
+	GenericBuildProvider.MapPath which takes into account fake virtual
+	paths. Fixes bug #463950
+
 2009-01-26  Marek Habersack  <mhabersack@novell.com>
 
 	* CompilationException.cs: added a Message override to make error

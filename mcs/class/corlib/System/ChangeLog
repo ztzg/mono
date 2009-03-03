@@ -1,3 +1,37 @@
+2009-02-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* String.cs (FormatHelper): If all the arguments are strings, compute an
+	initial length for the stringbuilder to avoid reallocations.
+
+2009-02-25  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r127929.
+	
+	* Enum.cs (GetInfo): Add a global cache in addition to the thread-local
+	caches to accomodate short living threads like threadpool threads.
+
+2009-02-21  Jb Evain  <jbevain@novell.com>
+
+	backport of r127628.
+
+	* MonoType.cs (InvokeMember): don't pass a null args to
+	Binder.BindToMethod. Fix for #471275.
+
+2009-02-12  Lluis Sanchez Gual  <lluis@novell.com>
+
+	* MarshalByRefObject.cs: Implemented MemberwiseClone(bool).
+
+2009-02-10 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* AppDomain.cs: this fixes the remoting tests.
+	Zoltan found out that there was a domain improperly using shadow
+	copy.
+
+2009-02-04 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* DateTime.cs: check for null and empty strings before anything else
+	in CoreParse.
+
 2009-01-24 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* AppDomain.cs: LoadAssembly() returns null instead of throwing now.

@@ -118,8 +118,8 @@ mono_class_check_context_used (MonoClass *class)
  * Guards the two global rgctx (template) hash tables and all rgctx
  * templates.
  *
- * Ordering: The loader lock can be taken while the templates lock is
- * held.
+ * Ordering: Domain locks and the loader lock must not be taken while
+ * the templates lock is held.
  */
 static CRITICAL_SECTION templates_mutex;
 
@@ -159,7 +159,7 @@ get_other_info_templates (MonoRuntimeGenericContextTemplate *template, int type_
 }
 
 /*
- * LOCKING: templates lock
+ * LOCKING: loader lock and templates lock
  */
 static void
 set_other_info_templates (MonoMemPool *mp, MonoRuntimeGenericContextTemplate *template, int type_argc,
@@ -402,7 +402,7 @@ alloc_oti (MonoImage *image)
 #define MONO_RGCTX_SLOT_USED_MARKER	((gpointer)&mono_defaults.object_class->byval_arg)
 
 /*
- * LOCKING: templates lock
+ * LOCKING: loader lock and templates lock
  */
 static void
 rgctx_template_set_other_slot (MonoImage *image, MonoRuntimeGenericContextTemplate *template, int type_argc,
@@ -425,8 +425,6 @@ rgctx_template_set_other_slot (MonoImage *image, MonoRuntimeGenericContextTempla
 	g_assert (slot >= 0);
 	g_assert (data);
 
-	mono_loader_lock ();
-
 	i = 0;
 	while (i <= slot) {
 		if (i > 0)
@@ -435,8 +433,6 @@ rgctx_template_set_other_slot (MonoImage *image, MonoRuntimeGenericContextTempla
 			*oti = alloc_oti (image);
 		++i;
 	}
-
-	mono_loader_unlock ();
 
 	g_assert (!(*oti)->data);
 	(*oti)->data = data;
@@ -646,8 +642,8 @@ mono_class_get_runtime_generic_context_template (MonoClass *class)
 		inst = NULL;
 
 	mono_loader_lock ();
+
 	template = alloc_template (class);
-	mono_loader_unlock ();
 
 	templates_lock ();
 
@@ -706,6 +702,8 @@ mono_class_get_runtime_generic_context_template (MonoClass *class)
 	}
 
 	templates_unlock ();
+
+	mono_loader_unlock ();
 
 	return template;
 }
@@ -842,7 +840,7 @@ instantiate_other_info (MonoDomain *domain, MonoRuntimeGenericContextOtherInfoTe
 }
 
 /*
- * LOCKING: templates lock
+ * LOCKING: loader lock and templates lock
  */
 static void
 fill_in_rgctx_template_slot (MonoClass *class, int type_argc, int index, gpointer data, int info_type)
@@ -877,7 +875,7 @@ fill_in_rgctx_template_slot (MonoClass *class, int type_argc, int index, gpointe
 }
 
 /*
- * LOCKING: templates lock
+ * LOCKING: loader lock and templates lock
  */
 static int
 register_other_info (MonoClass *class, int type_argc, gpointer data, int info_type)
@@ -953,33 +951,101 @@ lookup_or_register_other_info (MonoClass *class, int type_argc, gpointer data, i
 
 	MonoRuntimeGenericContextTemplate *rgctx_template =
 		mono_class_get_runtime_generic_context_template (class);
-	MonoRuntimeGenericContextOtherInfoTemplate *oti;
-	int i;
+	MonoRuntimeGenericContextOtherInfoTemplate *oti_list, *oti, *copy;
+	int i, length;
 
 	g_assert (!class->generic_class);
 	g_assert (class->generic_container || type_argc);
 
+	/*
+	 * We must not call inflate_other_info() with the templates
+	 * lock held, because it calls metadata functions which might
+	 * cause the loader lock to be taken, which must not happen if
+	 * the templates lock is held.
+	 *
+	 * Only two things can happen to an oti list: An unused
+	 * (data==NULL) node can be filled in and nodes can be
+	 * appended at the end of the list.
+	 *
+	 * To solve the lock problem we first count the number of
+	 * nodes in the list, then copy all the data into a separate
+	 * array.  With the templates lock not held we then search for
+	 * our info in the array - this is where the calls to
+	 * inflate_other_info() happen.  If we don't find the info
+	 * we're looking for, we take the templates lock again and
+	 * check if the oti list has changed since we've copied it.
+	 * If it has, we start again.  If it hasn't, we register the
+	 * info.
+	 */
+
 	templates_lock ();
 
-	for (oti = get_other_info_templates (rgctx_template, type_argc), i = 0; oti; oti = oti->next, ++i) {
+ restart:
+	oti_list = get_other_info_templates (rgctx_template, type_argc);
+
+	length = 0;
+	for (oti = oti_list; oti; oti = oti->next)
+		++length;
+
+	copy = g_new (MonoRuntimeGenericContextOtherInfoTemplate, length);
+
+	for (oti = oti_list, i = 0; oti; oti = oti->next, ++i) {
+		copy [i].info_type = oti->info_type;
+		copy [i].data = oti->data;
+	}
+	g_assert (i == length);
+
+	templates_unlock ();
+
+	/* We've copied the list.  Now look for the info. */
+
+	for (i = 0; i < length; ++i) {
 		gpointer inflated_data;
 
-		if (!oti || oti->info_type != info_type || !oti->data)
+		if (copy [i].info_type != info_type || !copy [i].data)
 			continue;
 
-		inflated_data = inflate_other_info (oti, generic_context, class, TRUE);
+		inflated_data = inflate_other_info (&copy [i], generic_context, class, TRUE);
 
 		if (other_info_equal (data, inflated_data, info_type)) {
-			templates_unlock ();
-			free_inflated_info (oti->info_type, inflated_data);
+			free_inflated_info (info_type, inflated_data);
+			g_free (copy);
 			return i;
 		}
 		free_inflated_info (info_type, inflated_data);
 	}
 
+	/* We haven't found the info, so check if the list is still
+	   the same. */
+
+	mono_loader_lock ();
+	templates_lock ();
+
+	/* We need to fetch oti_list again here because the list could
+	   have been empty. */
+	oti_list = get_other_info_templates (rgctx_template, type_argc);
+
+	for (oti = oti_list, i = 0; i < length; oti = oti->next, ++i) {
+		g_assert (oti);
+
+		if (copy [i].info_type != oti->info_type || copy [i].data != oti->data) {
+			mono_loader_unlock ();
+			g_free (copy);
+			goto restart;
+		}
+	}
+	g_free (copy);
+	if (oti) {
+		mono_loader_unlock ();
+		goto restart;
+	}
+
+	/* The list is still the same - success. */
+
 	i = register_other_info (class, type_argc, data, info_type);
 
 	templates_unlock ();
+	mono_loader_unlock ();
 
 	if (!inited) {
 		mono_counters_register ("RGCTX max slot number", MONO_COUNTER_GENERICS | MONO_COUNTER_INT, &max_slot);
@@ -1084,9 +1150,6 @@ alloc_rgctx_array (MonoDomain *domain, int n, gboolean is_mrgctx)
 	return array;
 }
 
-/*
- * LOCKING: domain lock
- */
 static gpointer
 fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContext *rgctx, guint32 slot,
 		MonoGenericInst *method_inst)
@@ -1102,6 +1165,8 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 	gboolean do_free;
 
 	g_assert (rgctx);
+
+	mono_domain_lock (domain);
 
 	/* First check whether that slot isn't already instantiated.
 	   This might happen because lookup doesn't lock.  Allocate
@@ -1121,8 +1186,10 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 		if (slot < first_slot + size - 1) {
 			rgctx_index = slot - first_slot + 1 + offset;
 			info = rgctx [rgctx_index];
-			if (info)
+			if (info) {
+				mono_domain_unlock (domain);
 				return info;
+			}
 			break;
 		}
 		if (!rgctx [offset + 0])
@@ -1134,15 +1201,28 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 
 	g_assert (!rgctx [rgctx_index]);
 
+	mono_domain_unlock (domain);
+
 	oti = class_get_rgctx_template_oti (class_uninstantiated (class),
 			method_inst ? method_inst->type_argc : 0, slot, TRUE, &do_free);
+	/* This might take the loader lock */
+	info = instantiate_other_info (domain, &oti, &context, class);
 
 	/*
 	if (method_inst)
 		g_print ("filling mrgctx slot %d table %d index %d\n", slot, i, rgctx_index);
 	*/
 
-	info = rgctx [rgctx_index] = instantiate_other_info (domain, &oti, &context, class);
+	mono_domain_lock (domain);
+
+	/* Check whether the slot hasn't been instantiated in the
+	   meantime. */
+	if (rgctx [rgctx_index])
+		info = rgctx [rgctx_index];
+	else
+		rgctx [rgctx_index] = info;
+
+	mono_domain_unlock (domain);
 
 	if (do_free)
 		free_inflated_info (oti.info_type, oti.data);
@@ -1181,9 +1261,9 @@ mono_class_fill_runtime_generic_context (MonoVTable *class_vtable, guint32 slot)
 		num_alloced++;
 	}
 
-	info = fill_runtime_generic_context (class_vtable, rgctx, slot, 0);
-
 	mono_domain_unlock (domain);
+
+	info = fill_runtime_generic_context (class_vtable, rgctx, slot, 0);
 
 	return info;
 }
@@ -1201,12 +1281,8 @@ mono_method_fill_runtime_generic_context (MonoMethodRuntimeGenericContext *mrgct
 	MonoDomain *domain = mrgctx->class_vtable->domain;
 	gpointer info;
 
-	mono_domain_lock (domain);
-
 	info = fill_runtime_generic_context (mrgctx->class_vtable, (MonoRuntimeGenericContext*)mrgctx, slot,
 		mrgctx->method_inst);
-
-	mono_domain_unlock (domain);
 
 	return info;
 }
@@ -1424,4 +1500,93 @@ mono_method_needs_static_rgctx_invoke (MonoMethod *method, gboolean allow_type_v
 	return ((method->flags & METHOD_ATTRIBUTE_STATIC) ||
 			method->klass->valuetype) &&
 		(method->klass->generic_class || method->klass->generic_container);
+}
+
+static MonoGenericInst*
+get_object_generic_inst (int type_argc)
+{
+	MonoType **type_argv;
+	int i;
+
+	type_argv = alloca (sizeof (MonoType*) * type_argc);
+
+	for (i = 0; i < type_argc; ++i)
+		type_argv [i] = &mono_defaults.object_class->byval_arg;
+
+	return mono_metadata_get_generic_inst (type_argc, type_argv);
+}
+
+/*
+ * mono_method_construct_object_context:
+ * @method: a method
+ *
+ * Returns a generic context for method with all type variables for
+ * class and method instantiated with Object.
+ */
+MonoGenericContext
+mono_method_construct_object_context (MonoMethod *method)
+{
+	MonoGenericContext object_context;
+
+	g_assert (method->wrapper_type == MONO_WRAPPER_NONE);
+	g_assert (!method->klass->generic_class);
+	if (method->klass->generic_container) {
+		int type_argc = method->klass->generic_container->type_argc;
+
+		object_context.class_inst = get_object_generic_inst (type_argc);
+	} else {
+		object_context.class_inst = NULL;
+	}
+
+	if (mono_method_get_context_general (method, TRUE)->method_inst) {
+		int type_argc = mono_method_get_context_general (method, TRUE)->method_inst->type_argc;
+
+		object_context.method_inst = get_object_generic_inst (type_argc);
+	} else {
+		object_context.method_inst = NULL;
+	}
+
+	g_assert (object_context.class_inst || object_context.method_inst);
+
+	return object_context;
+}
+
+/*
+ * mono_domain_lookup_shared_generic:
+ * @domain: a domain
+ * @open_method: an open generic method
+ *
+ * Looks up the jit info for method via the domain's jit code hash.
+ */
+MonoJitInfo*
+mono_domain_lookup_shared_generic (MonoDomain *domain, MonoMethod *open_method)
+{
+	static gboolean inited = FALSE;
+	static int lookups = 0;
+	static int failed_lookups = 0;
+
+	MonoGenericContext object_context;
+	MonoMethod *object_method;
+	MonoJitInfo *ji;
+
+	object_context = mono_method_construct_object_context (open_method);
+	object_method = mono_class_inflate_generic_method (open_method, &object_context);
+
+	mono_domain_jit_code_hash_lock (domain);
+	ji = mono_internal_hash_table_lookup (&domain->jit_code_hash, object_method);
+	if (ji && !ji->has_generic_jit_info)
+		ji = NULL;
+	mono_domain_jit_code_hash_unlock (domain);
+
+	if (!inited) {
+		mono_counters_register ("Shared generic lookups", MONO_COUNTER_INT|MONO_COUNTER_GENERICS, &lookups);
+		mono_counters_register ("Failed shared generic lookups", MONO_COUNTER_INT|MONO_COUNTER_GENERICS, &failed_lookups);
+		inited = TRUE;
+	}
+
+	++lookups;
+	if (!ji)
+		++failed_lookups;
+
+	return ji;
 }

@@ -177,7 +177,7 @@ static int
 get_stack_type (MonoType *type);
 
 static gboolean
-mono_delegate_signature_equal (MonoMethodSignature *sig1, MonoMethodSignature *sig2);
+mono_delegate_signature_equal (MonoMethodSignature *delegate_sig, MonoMethodSignature *method_sig, gboolean is_static_ldftn);
 
 static gboolean
 mono_class_is_valid_generic_instantiation (VerifyContext *ctx, MonoClass *klass);
@@ -872,6 +872,49 @@ stack_slot_get_name (ILStackDesc *value)
 {
 	return type_names [value->stype & TYPE_MASK];
 }
+
+#define APPEND_WITH_PREDICATE(PRED,NAME) do {\
+	if (PRED (value)) { \
+		if (!first) \
+			g_string_append (str, ", "); \
+		g_string_append (str, NAME); \
+		first = FALSE; \
+	} } while (0)
+
+static char*
+stack_slot_stack_type_full_name (ILStackDesc *value)
+{
+	GString *str = g_string_new ("");
+	char *result;
+
+	if ((value->stype & TYPE_MASK) != value->stype) {
+		gboolean first = TRUE;
+		g_string_append(str, "[");
+		APPEND_WITH_PREDICATE (stack_slot_is_this_pointer, "this");
+		APPEND_WITH_PREDICATE (stack_slot_is_boxed_value, "boxed");
+		APPEND_WITH_PREDICATE (stack_slot_is_null_literal, "null");
+		APPEND_WITH_PREDICATE (stack_slot_is_managed_mutability_pointer, "cmmp");
+		APPEND_WITH_PREDICATE (stack_slot_is_managed_pointer, "mp");
+		g_string_append(str, "] ");
+	}
+
+	g_string_append (str, stack_slot_get_name (value));
+	result = str->str;
+	g_string_free (str, FALSE);
+	return result;
+}
+
+static char*
+stack_slot_full_name (ILStackDesc *value)
+{
+	char *type_name = mono_type_full_name (value->type);
+	char *stack_name = stack_slot_stack_type_full_name (value);
+	char *res = g_strdup_printf ("%s (%s)", type_name, stack_name);
+	g_free (type_name);
+	g_free (stack_name);
+	return res;
+}
+
 //////////////////////////////////////////////////////////////////
 void
 mono_free_verify_list (GSList *list)
@@ -2545,7 +2588,7 @@ get_generic_param (VerifyContext *ctx, MonoType *param)
  * @type The source type. It it tested to be of the proper type.    
  * @candidate type of the boxed valuetype.
  * @stack stack slot of the boxed valuetype, separate from @candidade since one could be changed before calling this function
- * @strict if TRUE candidate must be boxed compatible to type otherwise it's enough
+ * @strict if TRUE candidate must be boxed compatible to the target type
  * 
  */
 static gboolean
@@ -2569,10 +2612,9 @@ is_compatible_boxed_valuetype (VerifyContext *ctx, MonoType *type, MonoType *can
 		return FALSE;
 
 	if (!strict)
-		return MONO_TYPE_IS_REFERENCE (type);
+		return TRUE;
 
-	/*All boxed valuetypes are compatible to System.Object*/
-	return MONO_TYPE_IS_REFERENCE (type) && (type->type == MONO_TYPE_OBJECT || verify_type_compatibility_full (ctx, type, candidate, FALSE));
+	return MONO_TYPE_IS_REFERENCE (type) && mono_class_is_assignable_from (mono_class_from_mono_type (type), mono_class_from_mono_type (candidate));
 }
 
 static int
@@ -2635,7 +2677,7 @@ mono_delegate_type_equal (MonoType *target, MonoType *candidate)
 	case MONO_TYPE_FNPTR:
 		if (candidate->type != MONO_TYPE_FNPTR)
 			return FALSE;
-		return mono_delegate_signature_equal (mono_type_get_signature (target), mono_type_get_signature (candidate));
+		return mono_delegate_signature_equal (mono_type_get_signature (target), mono_type_get_signature (candidate), FALSE);
 
 	case MONO_TYPE_GENERICINST: {
 		MonoClass *target_klass;
@@ -2710,24 +2752,26 @@ mono_delegate_ret_equal (MonoType *delegate, MonoType *method)
  * FIXME can this function be eliminated and proper metadata functionality be used?
  */
 static gboolean
-mono_delegate_signature_equal (MonoMethodSignature *sig1, MonoMethodSignature *sig2)
+mono_delegate_signature_equal (MonoMethodSignature *delegate_sig, MonoMethodSignature *method_sig, gboolean is_static_ldftn)
 {
 	int i;
-	if (sig1->param_count != sig2->param_count) 
+	int method_offset = is_static_ldftn ? 1 : 0;
+
+	if (delegate_sig->param_count + method_offset != method_sig->param_count) 
 		return FALSE;
 
-	if (sig1->call_convention != sig2->call_convention)
+	if (delegate_sig->call_convention != method_sig->call_convention)
 		return FALSE;
 
-	for (i = 0; i < sig1->param_count; i++) { 
-		MonoType *p1 = sig1->params [i];
-		MonoType *p2 = sig2->params [i];
+	for (i = 0; i < delegate_sig->param_count; i++) { 
+		MonoType *p1 = delegate_sig->params [i];
+		MonoType *p2 = method_sig->params [i + method_offset];
 
 		if (!mono_delegate_param_equal (p1, p2))
 			return FALSE;
 	}
 
-	if (!mono_delegate_ret_equal (sig1->ret, sig2->ret))
+	if (!mono_delegate_ret_equal (delegate_sig->ret, method_sig->ret))
 		return FALSE;
 
 	return TRUE;
@@ -2779,6 +2823,7 @@ verify_delegate_compatibility (VerifyContext *ctx, MonoClass *delegate, ILStackD
 	MonoMethod *invoke, *method;
 	const guint8 *ip = ctx->header->code;
 	guint32 ip_offset = ctx->ip_offset;
+	gboolean is_static_ldftn = FALSE, is_first_arg_bound = FALSE;
 	
 	if (stack_slot_get_type (funptr) != TYPE_PTR || !funptr->method) {
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Invalid function pointer parameter for delegate constructor at 0x%04x", ctx->ip_offset));
@@ -2788,7 +2833,12 @@ verify_delegate_compatibility (VerifyContext *ctx, MonoClass *delegate, ILStackD
 	invoke = mono_get_delegate_invoke (delegate);
 	method = funptr->method;
 
-	if (!mono_delegate_signature_equal (mono_method_signature (invoke), mono_method_signature (method)))
+	is_static_ldftn = (ip_offset > 5 && IS_LOAD_FUN_PTR (CEE_LDFTN)) && method->flags & METHOD_ATTRIBUTE_STATIC;
+
+	if (is_static_ldftn)
+		is_first_arg_bound = mono_method_signature (invoke)->param_count + 1 ==  mono_method_signature (method)->param_count;
+
+	if (!mono_delegate_signature_equal (mono_method_signature (invoke), mono_method_signature (method), is_first_arg_bound))
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Function pointer parameter for delegate constructor has diferent signature at 0x%04x", ctx->ip_offset));
 
 	/* 
@@ -2812,8 +2862,13 @@ verify_delegate_compatibility (VerifyContext *ctx, MonoClass *delegate, ILStackD
 	ctx->code [ip_offset].flags |= IL_CODE_DELEGATE_SEQUENCE;
 
 	//general tests
-	if (!verify_stack_type_compatibility_full (ctx, &method->klass->byval_arg, value, FALSE, TRUE) && !stack_slot_is_null_literal (value))
-		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("This object not compatible with function pointer for delegate creation at 0x%04x", ctx->ip_offset));
+	if (is_first_arg_bound) {
+		if (!verify_stack_type_compatibility_full (ctx, mono_method_signature (method)->params [0], value, FALSE, TRUE))
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("This object not compatible with function pointer for delegate creation at 0x%04x", ctx->ip_offset));
+	} else {
+		if (!verify_stack_type_compatibility_full (ctx, &method->klass->byval_arg, value, FALSE, TRUE) && !stack_slot_is_null_literal (value))
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("This object not compatible with function pointer for delegate creation at 0x%04x", ctx->ip_offset));
+	}
 
 	if (stack_slot_get_type (value) != TYPE_COMPLEX)
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Invalid first parameter for delegate creation at 0x%04x", ctx->ip_offset));
@@ -3195,8 +3250,13 @@ do_invoke_method (VerifyContext *ctx, int method_token, gboolean virtual)
 	for (i = sig->param_count - 1; i >= 0; --i) {
 		VERIFIER_DEBUG ( printf ("verifying argument %d\n", i); );
 		value = stack_pop (ctx);
-		if (!verify_stack_type_compatibility (ctx, sig->params[i], value))
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible parameter value with function signature at 0x%04x", ctx->ip_offset));
+		if (!verify_stack_type_compatibility (ctx, sig->params[i], value)) {
+			char *stack_name = stack_slot_full_name (value);
+			char *sig_name = mono_type_full_name (sig->params [i]);
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible parameter value with function signature: %s X %s at 0x%04x", sig_name, stack_name, ctx->ip_offset));
+			g_free (stack_name);
+			g_free (sig_name);
+		}
 
 		if (stack_slot_is_managed_mutability_pointer (value))
 			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot use a readonly pointer as argument of %s at 0x%04x", virtual ? "callvirt" : "call",  ctx->ip_offset));
@@ -3440,6 +3500,7 @@ do_box_value (VerifyContext *ctx, int klass_token)
 {
 	ILStackDesc *value;
 	MonoType *type = get_boxable_mono_type (ctx, klass_token, "box");
+	MonoClass *klass;	
 
 	if (!type)
 		return;
@@ -3459,6 +3520,9 @@ do_box_value (VerifyContext *ctx, int klass_token)
 	if (!verify_stack_type_compatibility (ctx, type, value))
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Invalid type at stack for boxing operation at 0x%04x", ctx->ip_offset));
 
+	klass = mono_class_from_mono_type (type);
+	if (mono_class_is_nullable (klass))
+		type = &mono_class_get_nullable_param (klass)->byval_arg;
 	stack_push_val (ctx, TYPE_COMPLEX | BOXED_MASK, type);
 }
 
@@ -3762,8 +3826,13 @@ do_newobj (VerifyContext *ctx, int token)
 		for (i = sig->param_count - 1; i >= 0; --i) {
 			VERIFIER_DEBUG ( printf ("verifying constructor argument %d\n", i); );
 			value = stack_pop (ctx);
-			if (!verify_stack_type_compatibility (ctx, sig->params [i], value))
-				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible parameter value with function signature at 0x%04x", ctx->ip_offset));
+			if (!verify_stack_type_compatibility (ctx, sig->params [i], value)) {
+				char *stack_name = stack_slot_full_name (value);
+				char *sig_name = mono_type_full_name (sig->params [i]);
+				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible parameter value with constructor signature: %s X %s at 0x%04x", sig_name, stack_name, ctx->ip_offset));
+				g_free (stack_name);
+				g_free (sig_name);
+			}
 
 			if (stack_slot_is_managed_mutability_pointer (value))
 				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot use a readonly pointer as argument of newobj at 0x%04x", ctx->ip_offset));
@@ -4483,7 +4552,11 @@ merge_stacks (VerifyContext *ctx, ILCodeDesc *from, ILCodeDesc *to, gboolean sta
 		}
 
 		if (mono_type_is_generic_argument (old_type) || mono_type_is_generic_argument (new_type)) {
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Could not merge stack at depth %d, types not compatible old [%s] new [%s] at 0x%04x", i, stack_slot_get_name (old_slot), stack_slot_get_name (new_slot), ctx->ip_offset)); 
+			char *old_name = stack_slot_full_name (old_slot); 
+			char *new_name = stack_slot_full_name (new_slot);
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Could not merge stack at depth %d, types not compatible: %s X %s at 0x%04x", i, old_name, new_name, ctx->ip_offset));
+			g_free (old_name);
+			g_free (new_name);
 			goto end_verify;			
 		} 
 
@@ -4515,9 +4588,15 @@ merge_stacks (VerifyContext *ctx, ILCodeDesc *from, ILCodeDesc *to, gboolean sta
 		} else if (is_compatible_boxed_valuetype (ctx,old_type, new_type, new_slot, FALSE) || is_compatible_boxed_valuetype (ctx, new_type, old_type, old_slot, FALSE)) {
 			match_class = mono_defaults.object_class;
 			goto match_found;
-		} 
+		}
 
-		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Could not merge stack at depth %d, types not compatible old [%s] new [%s] at 0x%04x", i, stack_slot_get_name (old_slot), stack_slot_get_name (new_slot), ctx->ip_offset)); 
+		{
+		char *old_name = stack_slot_full_name (old_slot); 
+		char *new_name = stack_slot_full_name (new_slot);
+		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Could not merge stack at depth %d, types not compatible: %s X %s at 0x%04x", i, old_name, new_name, ctx->ip_offset)); 
+		g_free (old_name);
+		g_free (new_name);
+		}
 		set_stack_value (ctx, old_slot, &new_class->byval_arg, stack_slot_is_managed_pointer (old_slot));
 		goto end_verify;
 

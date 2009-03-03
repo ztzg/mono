@@ -3438,7 +3438,12 @@ mini_emit_ldelema_1_ins (MonoCompile *cfg, MonoClass *klass, MonoInst *arr, Mono
 	index2_reg = alloc_preg (cfg);
 	MONO_EMIT_NEW_UNALU (cfg, OP_SEXT_I4, index2_reg, index_reg);
 #else
-	index2_reg = index_reg;
+	if (index->type == STACK_I8) {
+		index2_reg = alloc_preg (cfg);
+		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I4, index2_reg, index_reg);
+	} else {
+		index2_reg = index_reg;
+	}
 #endif
 
 	MONO_EMIT_BOUNDS_CHECK (cfg, array_reg, MonoArray, max_length, index2_reg);
@@ -5918,7 +5923,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 					CHECK_CFG_EXCEPTION;
 				}
 
-				if (cmethod->string_ctor)
+				if (cmethod->string_ctor && method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE)
 					g_assert_not_reached ();
 			}
 

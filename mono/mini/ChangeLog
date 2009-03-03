@@ -1,3 +1,197 @@
+2009-02-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* mini-x86.c (mono_arch_get_this_arg_from_call): Avoid expensive calls
+	to  get_generic_context_from_code () + get_call_info () if possible.
+
+2009-02-22  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r127665.
+
+	* tramp-ppc.c (mono_arch_create_trampoline_code): Store the
+	correct frame pointer in the LMF.  Should fix #478394.
+
+2009-02-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* method-to-ir.c (mono_method_to_ir): Don't assert if string ctors
+	are called from runtime invoke wrappers.
+
+2009-02-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* cpu-ppc.md (store_memindex): Increase the size of this.
+
+2009-02-16  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r126983 + r127069.
+
+	* ssa.c (visit_inst): Fix a crash if the instruction following a switch
+	was optimized away.
+
+	Backport of r126980.
+
+	* mini-x86.c (mono_arch_get_vcall_slot): Handle yet another
+	code sequence which matches a non-virtual call. Fixes #472654.
+
+	Backport of r124419.
+
+	* mini-amd64.c (mono_arch_get_vcall_slot): Handle yet another
+	code sequence which matches a non-virtual call.
+
+2009-01-23  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125679.
+
+	Contributed under the terms of the MIT/X11 license by Steven
+	Munroe <munroesj@us.ibm.com>.
+
+	* mini-ppc.c (mono_arch_output_basic_block): Generate better code
+	for LOADI4_MEMBASE.  Use addi instead of addic if it's not
+	necessary.
+
+2009-02-16  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125676.
+
+	Contributed under the terms of the MIT/X11 license by Steven
+	Munroe <munroesj@us.ibm.com>.
+
+	* exceptions-ppc.c (mono_arch_get_restore_context): Code size
+	comparison fix.
+
+	* tramp-ppc.c (mono_arch_create_generic_class_init_trampoline):
+	The trampoline can be longer on PPC64.
+
+2009-02-16  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125672.
+
+	Contributed under the terms of the MIT/X11 license by Steven
+	Munroe <munroesj@us.ibm.com>.
+
+	* mini-ppc.c: Compiler warning fixes and trivial code
+	simplifications.
+
+2009-02-16  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125443.
+
+	Contributed under the terms of the MIT/X11 license by Steven
+	Munroe <munroesj@us.ibm.com>.
+
+	* exceptions-ppc.c (restore_regs_from_context): Correct operand
+	order (offset then base reg) for ppc_load_multiple_regs.
+	(emit_save_saved_regs) Correct operand order for
+	ppc_store_multiple_regs.
+	(mono_arch_get_call_filter): Correct operand order for
+	ppc_load_multiple_regs.
+
+	* mini-ppc.c (emit_memcpy): Fix operand order for
+	ppc_load_reg_update and ppc_store_reg_update.
+	(mono_arch_output_basic_block): Correct operand order for ppc_lha.
+	(mono_arch_emit_epilog): Correct operand order for
+	ppc_load_multiple_regs.
+
+	* tramp-ppc.c (mono_arch_create_trampoline_code): Correct operand
+	order for ppc_store_multiple_regs and ppc_load_multiple_regs.
+
+2009-02-16  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125430.
+
+	* cpu-ppc64.md: Fixed storer4_memindex length.
+
+2009-02-14  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r126897.
+	
+	* method-to-ir.c (mini_emit_ldelema_1_ins): If the array index is a long,
+	convert it to an in32. Fixes #475859.
+
+	* arrays.cs: Add a test.
+
+2009-02-12  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r126717.
+
+	* mini-amd64.c (mono_arch_build_imt_thunk): Fix size calculation after
+	the fail_tramp changes. Hopefully fixes #475132.
+
+2009-02-12  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r126737.
+
+	* mini-s390x.c (mono_arch_output_basic_block): Fix the shift amounts in 
+	OP_LCONV_TO_U2.
+
+	* basic-long.cs: Add a test.
+
+2009-02-12  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r126668.
+	
+	* ssa.c (fold_ins): Use MONO_IS_JUMP_TABLE () and MONO_JUMP_TABLE_FROM_INS ()
+	for processing jump tables. Fixes #473787.
+
+2009-02-11  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r126631.
+
+	* mini-generic-sharing.c: mini_method_get_context() just calls
+	mono_method_get_context_general() now.
+
+	* mini.c, mini.h: Moved get_object_generic_inst(),
+	construct_object_context_for_method() and
+	mono_domain_lookup_shared_generic() to metadata/generic-sharing.c.
+
+2009-02-11  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of 126604.
+
+	* branch-opts.c (mono_if_conversion): Handle the case where the merged 
+	basic block fell through to its successor bblock without a branch. Fixes
+	#474718.
+
+	* iltests.il.in: Add a test.
+
+2009-02-10  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r126467.
+
+	* mini-x86.c (mono_arch_context_get_int_reg): Handle all registers
+	individually.  Fixes #473482.
+
+2009-02-09  Geoff Norton  <gnorton@novell.com>
+
+	* mini-s390.c: Fix the signature of emit_sig_cookie.
+
+2009-02-05  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125887.
+
+	* jit-icalls.c (mono_helper_compile_generic_method): Don't inflate
+	the method we get from mono_object_get_virtual_method() because
+	that function does it properly, now.
+
+2009-02-05  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125839.
+
+	* mini-exceptions.c (ves_icall_get_frame_info): Account for the
+	fact that mono_find_jit_info() sometimes returns the context
+	corresponding to the jit info in new_ctx.  Fixes #472600.
+
+2009-02-04  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of 125697.
+
+	* mini-exceptions.c (mono_setup_altstack): Use a more reasonable altstack
+	size on systems with 64k pages. Fixes #471389.
+
+2009-02-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125459.
+
+	* arrays.cs: Test for Get/SetValue of array with negate lower bounds.
+	
 2009-01-31  Rodrigo Kumpera  <rkumpera@novell.com>
 
 	Backport of r125172, r125205 and r125206 

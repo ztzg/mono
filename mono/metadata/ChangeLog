@@ -1,3 +1,285 @@
+2009-02-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* appdomain.c: make the check to avoid copying when the assembly is
+	already shadow copied actually work.
+
+2009-02-25  Zoltan Varga  <vargaz@gmail.com>
+
+	* object.c (mono_get_delegate_invoke): Call setup_methods () to avoid the
+	slower search in metadata.
+
+2009-02-22 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: support SO_MAXCONN, SO_USELOOPBACK and
+	SO_EXLUSIVEADDRUSE where available.
+
+2009-02-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Fix _another_ bug sharing
+	runtime invoke wrappers, this time it is string ctor wrappers, which
+	pass a dummy string as 'this' instead of their obj argument. Fixes
+	#478473.
+
+2009-02-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* cil-coff.h:
+	* icall-def.h:
+	* icall.c: add new GetUnmanagedResourcePtr that returns a pointer to a
+	win32 resource loaded from a PE file.
+
+	* image.c: fix mono_image_lookup_resource.
+
+2009-02-19  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r127347.
+
+	* marshal.c (mono_ftnptr_to_delegate): Convert a NULL ftnptr to a null
+	delegate. Fixes #477396.
+
+2009-02-18  Bill Holmes  <billholmes54@gmail.com>
+
+	backport of r127279.
+
+	* marshal.c (cominterop_get_managed_wrapper_adjusted) :
+	  Adding exception handling for all CCW calls.
+
+	Code is contributed under MIT/X11 license.
+
+2009-02-18  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r127232.
+	
+	* marshal.c (emit_marshal_boolean): Add null checks to the new 
+	native->managed marshalling code. Fixes #476247.
+
+2009-02-02  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r125348.
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Disable sharing for
+	methods taking vtype/byref arguments, to fix yet another bug caused by
+	the sharing of runtime invoke wrappers. Partly fixes #471259.
+
+2009-02-15  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r125349.
+
+	* marshal.c (mono_marshal_free_dynamic_wrappers): New function for
+	freeing wrappers of dynamic methods.
+
+	* loader.c (mono_free_method): Call it. Fixes #463323.
+	
+	Backport of r126958.
+	
+	* reflection.c (clear_cached_object): New helper function.
+	(mono_method_clear_object): New function to clear the cached reflection
+	objects for a dynamic method.
+
+	* object.c (mono_runtime_free_method): Call mono_method_clear_object ().
+	Partly fixes # 463323.
+
+2009-02-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (method_from_memberref): Properly fix #474271 and
+	don't break the runtime bad.
+
+2009-02-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r127032.
+
+	* loader.c (method_from_memberref): Don't abort if the array
+	method is not found. A regular loader failure is more informative
+	and correct.
+
+	Fixes #474271.
+	
+2009-02-12  Bill Holmes  <billholmes54@gmail.com>
+
+	Backport of r126738.  This is a safer variant of the
+	  trunk for the 2.4 branch. The default in emit_marshal_boolean
+	  for this version is I1.
+
+	* object-internals.h : Fixing a typo in the 
+	  MonoReflectionComVisibleAttribute struct.
+
+	* marshal.c (cominterop_com_visible): Check the implemented 
+	  interfaces for ComImport.
+
+	* marshal.c (cominterop_get_native_wrapper_adjusted): For COM calls 
+	  assume that bools should be treated as VARIANTBOOLs.
+
+	* marshal.c (emit_marshal_boolean): Adding cases for 
+	  MARSHAL_ACTION_MANAGED_CONV_IN and MARSHAL_ACTION_MANAGED_CONV_OUT.
+
+	* marshal.c (mono_marshal_emit_managed_wrapper): Adding calls to 
+	  emit_marshal MARSHAL_ACTION_MANAGED_CONV_IN and OUT for bools.
+
+	* marshal.c (cominterop_get_ccw): For COM calls assume that bools
+	  should be treated as VARIANTBOOLs.	
+
+	Code is contributed under MIT/X11 license.
+
+2009-02-12  Mark Probst  <mark.probst@gmail.com>
+
+	* generic-sharing.c: Fixed a locking bug: The loader lock has to
+	be taken before the templates lock.  Fixes part of #473150.
+
+2009-02-11  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r126631.
+
+	* class.c, class-internals.h: mono_method_get_context_general()
+	combines the functionality of mono_method_get_context() and
+	mini_method_get_context().
+
+	* generic-sharing.c, domain-internals.h:
+	mono_method_construct_object_context() and
+	mono_domain_lookup_shared_generic() moved from mini.
+
+	* icall.c (ves_icall_InternalInvoke): Handle the case where the
+	method doesn't have the correct instantiation because it's shared
+	generic code.  Fixes #473999.
+
+2009-02-11  Bill Holmes  <billholmes54@gmail.com>
+
+	Backport of r126596.
+
+	* socket-io.c (ves_icall_System_Net_Sockets_Socket_Accept_internal):
+	  For Win32, add additional break conditions for accept.
+
+	Code is contributed under MIT/X11 license.
+
+2009-02-07 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: when requesting all the local ips, if there are no
+	interfaces up and running, MS returns 127.0.0.1.
+
+2009-02-07 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* mono-perfcounters-def.h: processor time is an inverse time.
+	Fixes bug #468625.
+
+2009-02-07 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: an empty host name returns the list of local IPs.
+	Fixes bug #386637 part 1/2.
+
+2009-02-06  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r126054.
+
+	* marshal.c (get_runtime_invoke_type): Avoid sharing enum types since they
+	need to be boxed.
+
+2009-02-05  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125887.
+
+	* object.c (mono_object_get_virtual_method): Properly inflate
+	generic methods.  Fixes #472692.
+
+2009-02-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125849.
+
+	* class.c (mono_class_create_from_typedef): The CLR supports SystemF
+	recursive types such as List<T>:Cons<T,List<T>> so when doing the lookup
+	for the parent type, the created type must be ready to be used on a generic
+	instantiation.
+	We fill this_arg/byval_arg if the parent is a generic instance to make sure
+	we won't have duplicated entries in generic_inst_cache.
+
+	Fixes #469553.
+
+
+2009-02-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125603.
+
+	* verify.c (is_compatible_boxed_valuetype): When checking if the boxed 
+	valuetype is compatible with target type, check by inheritance as a
+	VT is not really compatible with System.ValueType, for example.
+
+	* verify.c (do_invoke_method): Improve error message.
+
+	* verify.c (do_box_value): If boxing a nullable, use the type argument
+	on stack instead.
+
+	* verify.c (do_newobj): Improve error message.	
+
+	Fixes #469549.
+
+2009-02-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125581.
+
+	* verify.c (mono_delegate_signature_equal): Make it possible to check
+	first-arg-bound delegates to static method.
+
+	* verify.c (verify_delegate_compatibility): Correctly verify delegates to
+	static methods with the first arg bound.
+
+	Fixes #469529.
+
+2009-02-03  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125565.
+
+	* generic-sharing.c: Don't hold domain lock when calling
+	instantiate_other_info().  Fixes #471958.
+
+	* domain-internals.h, loader.c: Describe locking policy of domain
+	lock vs loader lock.
+
+
+2009-02-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125539.
+
+	* verify.c: Added stack_slot_full_name to provide decent and more meanfull
+	errors.
+
+	* verify.c (is_compatible_boxed_valuetype): Be less restrictive when not
+	under strict mode. Any type, when boxed can be seen as a reference type.
+
+	Fixes #469528.
+
+2009-02-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125458.
+
+	* object.h: The lower bound of an array is a signed integer value.
+	Introduce mono_array_lower_bound_t typedef. It should be used instead of
+	gint32 as under MONO_BIG_ARRAYS it will be a gint64.
+
+	* icall.c: Cast MonoArrayBounds::length to a signed value so correctly
+	calculate the upper bound.
+	
+	Fixes #471252.
+
+2009-02-02 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r125402.
+
+	* icall.c (type_from_name): Ignore reflection frames to find out the real caller.
+
+	Fixes #471255.
+
+2009-02-02  Mark Probst  <mark.probst@gmail.com>
+
+	Backport of r125388.
+
+	* generic-sharing.c (lookup_or_register_other_info): Make sure the
+	loader lock is not taken while the templates lock is held.  Fixes
+	#471089.
+
+2009-02-02  Mark Probst  <mark.probst@gmail.com>
+
+	Backport or r125371.
+
+	* metadata.c (type_in_image): Added a check to fix a monodis
+	crash.
+
 2009-01-24 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* appdomain.c: return NULL instead of throwing FileNotFoundException

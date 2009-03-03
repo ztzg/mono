@@ -229,6 +229,9 @@ namespace Mono.CSharp {
 		TypeExpr base_type;
 		TypeExpr[] iface_exprs;
 		Type GenericType;
+#if GMCS_SOURCE		
+		GenericTypeParameterBuilder[] nested_gen_params;
+#endif
 
 		protected ArrayList type_bases;
 
@@ -978,6 +981,11 @@ namespace Mono.CSharp {
 				GenericTypeParameterBuilder[] gen_params = TypeBuilder.DefineGenericParameters (param_names);
 
 				int offset = CountTypeParameters - CurrentTypeParameters.Length;
+				if (offset > 0) {
+					nested_gen_params = new GenericTypeParameterBuilder [offset];
+					Array.Copy (gen_params, nested_gen_params, offset);
+				}
+
 				for (int i = offset; i < gen_params.Length; i++)
 					CurrentTypeParameters [i - offset].Define (gen_params [i]);
 			}
@@ -1164,14 +1172,23 @@ namespace Mono.CSharp {
 				foreach (TypeContainer part in partial_parts)
 					UpdateTypeParameterConstraints (part);
 			}
-
-			foreach (TypeParameter type_param in TypeParameters) {
-				if (!type_param.DefineType (this)) {
-					error = true;
-					return false;
+#if GMCS_SOURCE
+			for (int i = 0; i < TypeParameters.Length; ++i) {
+				//
+				// FIXME: Same should be done for delegates
+				// TODO: Quite ugly way how to propagate constraints to
+				// nested types
+				//
+				if (nested_gen_params != null && i < nested_gen_params.Length) {
+					TypeParameters [i].SetConstraints (nested_gen_params [i]);
+				} else {
+					if (!TypeParameters [i].DefineType (this)) {
+						error = true;
+						return false;
+					}
 				}
 			}
-
+#endif
 			// TODO: Very strange, why not simple make generic type from
 			// current type parameters
 			current_type = new GenericTypeExpr (this, Location);
@@ -7132,7 +7149,12 @@ namespace Mono.CSharp {
 			if (!base.Define ())
 				return false;
 
-			if (IsInterface)
+			if (Initializer != null && (ModFlags & Modifiers.ABSTRACT) != 0) {
+				Report.Error (74, Location, "`{0}': abstract event cannot have an initializer",
+					GetSignatureForError ());
+			}
+
+			if (!HasBackingField)
 				return true;
 
 			// FIXME: We are unable to detect whether generic event is used because
@@ -7150,12 +7172,6 @@ namespace Mono.CSharp {
 			TypeManager.RegisterEventField (EventBuilder, this);
 
 			if (Initializer != null) {
-				if (((ModFlags & Modifiers.ABSTRACT) != 0)) {
-					Report.Error (74, Location, "`{0}': abstract event cannot have an initializer",
-						GetSignatureForError ());
-					return false;
-				}
-
 				((TypeContainer) Parent).RegisterFieldForInitialization (this,
 					new FieldInitializer (FieldBuilder, Initializer, this));
 			}
@@ -7163,10 +7179,16 @@ namespace Mono.CSharp {
 			return true;
 		}
 
+		bool HasBackingField {
+			get {
+				return !IsInterface && (ModFlags & Modifiers.ABSTRACT) == 0;
+			}
+		}
+
 		public override string[] ValidAttributeTargets 
 		{
 			get {
-				return IsInterface ? attribute_targets_interface : attribute_targets;
+				return HasBackingField ? attribute_targets : attribute_targets_interface;
 			}
 		}
 	}

@@ -1,3 +1,62 @@
+2009-02-25  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #479532
+	* expression.cs: Implement NewInitialize::AddressOf.
+
+2009-02-25  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #413633
+	* expression.cs: Iterate all base class-constraint types.
+
+2009-02-20  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #477447
+	* statement.cs: Add reference to correct parent storey when this
+	is accessible from deep children storey (more than 1 level).
+
+2009-02-18  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #472805
+	* typemanager.cs, namespace.cs: Import only visible extension method
+	types.
+
+2009-02-18  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #476266
+	* anonymous.cs: Mutate multi-dimensional arrays.
+
+2009-02-16  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #475965
+	* generics.cs: Check generic parameter type after extracting from
+	Expression<T>.
+
+2009-02-13  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #475327
+	* expression.cs (ArrayCreation): Don't mutate values optimized away.
+
+2009-02-12  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug ##475246
+	* expression.cs: More broken flowanalysis hacking needed.
+
+2009-02-03  Marek Safar  <marek.safar@gmail.com>
+
+	* class.cs, generic.cs: Emit type parameter constraints for nested
+	types.
+
+2009-02-02  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #471213
+	* class.cs: Avoid emitting backing field for abstract event fields.
+
+2009-02-01  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #359731
+	* cs-tokenizer.cs, cs-parser.jay: Correctly parse nested query
+	expressions.
+
 2009-01-30  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #470767

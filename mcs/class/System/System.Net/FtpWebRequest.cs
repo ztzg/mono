@@ -541,12 +541,13 @@ namespace System.Net
 		{
 			string result;
 			string local_path = Uri.UnescapeDataString (uri.LocalPath);
-			if (initial_path == null) {
+			if (initial_path == null || initial_path == "/") {
 				result = local_path;
 			} else {
 				if (local_path [0] == '/')
 					local_path = local_path.Substring (1);
-				Uri initial = new Uri (initial_path);
+
+				Uri initial = new Uri ("ftp://dummy-host" + initial_path);
 				result = new Uri (initial, local_path).LocalPath;
 			}
 
@@ -740,6 +741,7 @@ namespace System.Net
 
 		void OpenControlConnection ()
 		{
+			Exception exception = null;
 			Socket sock = null;
 			foreach (IPAddress address in hostEntry.AddressList) {
 				sock = new Socket (address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -754,7 +756,8 @@ namespace System.Net
 						sock.Connect (remote);
 						localEndPoint = (IPEndPoint) sock.LocalEndPoint;
 						break;
-					} catch (SocketException) {
+					} catch (SocketException exc) {
+						exception = exc;
 						sock.Close ();
 						sock = null;
 					}
@@ -763,7 +766,7 @@ namespace System.Net
 
 			// Couldn't connect to any address
 			if (sock == null)
-				throw new WebException ("Unable to connect to remote server", null,
+				throw new WebException ("Unable to connect to remote server", exception,
 						WebExceptionStatus.UnknownError, ftpResponse);
 
 			controlStream = new NetworkStream (sock);
@@ -786,8 +789,14 @@ namespace System.Net
 						WebExceptionStatus.UnknownError, null);
 
 			string msg = status.StatusDescription.Substring (4);
-			if (msg [0] == '"')
-				msg = msg.Substring (1, msg.Length - 2);
+			if (msg [0] == '"') {
+				int next_quote = msg.IndexOf ('\"', 1);
+				if (next_quote == -1)
+					throw new WebException ("Error getting current directory: PWD -> " + status.StatusDescription, null,
+								WebExceptionStatus.UnknownError, null);
+
+				msg = msg.Substring (1, next_quote - 1);
+			}
 
 			if (!msg.EndsWith ("/"))
 				msg += "/";

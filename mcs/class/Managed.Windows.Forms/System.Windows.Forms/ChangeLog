@@ -1,3 +1,93 @@
+2009-02-24  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewCell.cs: Invalidate the datagrid when the cell is selected 
+	or deselected.
+	[Fixes bug #479124]
+
+2009-02-23  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: Make the ScrollBars property work properly.
+
+2009-02-22  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: Fix row removal in the data-bound scenario.
+
+2009-02-19  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewCell.cs: Use strict equality comparison in order to 
+	prevent superfluous CellValueChanged events.
+
+2009-02-19  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: Do not reset the columns when the data list changes, 
+	but only the rows. Fixes multiple bugs related to sorting, custom 
+	column styles being reset and more.
+
+2009-02-07  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: End or if end fails then cancel the current edit 
+	operation before clearing the data source.
+
+2009-02-07  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: Data-bind only after the handle is created.
+	[Fixes bug #473680]
+
+2009-02-05  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewRowCollection.cs, DataGridView.cs: Fix row insertation: 
+	   - Use ArrayList.Insert instead of the Item property so that the item 
+	   is actually inserted and not an existing item replaced.
+	   - Call DataGridView.OnRowsAddedInternal and drop internal from 
+	   OnRowsAdded for binary compitability. This also fixes several 
+	   redrawing issues.
+	[Fixes bug #472968]
+
+2009-02-05  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+        * ToolBarButton.cs: OnTextChanged added.
+	(Backport of r125802.) r: jpobst
+
+2009-02-03  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewRowCollection.cs, DataGridView.cs: Move row completion 
+	code in the row collection code, so that the completion happens before 
+	the CollectionChanged event, also better encapsulation.
+	[Fixes bug #471987]
+
+2009-02-02  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: When editing is finished do not remove the editing 
+	row, because it has already become a real one. Instead add a new one.
+	[Fixes bug #471754]
+
+2009-02-02  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+        * ToolBar.cs: Add new UIAPerformClick method to be called by   
+        UIAutomationWinforms when someone calls Invoke() on the    
+        ToolBarButtonProvider. (Backport of r125354.) r: jpobst
+
+2009-02-01  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs: Complete incomplete rows when they are added to 
+	the grid.
+	[Fixes bug #471068]
+
+2009-02-01  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs, DataGridViewColumnCollection.cs: Ensure that the 
+	binding is cleared prior to setting it to null. Fixes a regression 
+	causing exceptions when the DataSource is set to null and then set 
+	again to a data source.
+
+2009-02-01  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridView.cs, DataGridViewImageColumn.cs, DataGridViewCell.cs: 
+	   - Make Image/Bitmap cells work.
+	   - Handle images with size greater than the cell.
+	   - Default to MiddleCenter alignment for image cells.
+	[Fixes bug #471101]
+
 2009-01-29  Carlos Alberto Cortez <calberto.cortez@gmail.com>
 
         * XplatUIX11.cs: We should use utf8 handling clipboard transference

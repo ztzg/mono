@@ -257,12 +257,22 @@ namespace System.Reflection {
 			return attrs;
 		}
 
+		static bool ShouldPrintFullName (Type type) {
+			return type.IsClass && (!type.IsPointer ||
+#if NET_2_0
+ 				(!type.GetElementType ().IsPrimitive && !type.GetElementType ().IsNested));
+#else
+				!type.GetElementType ().IsPrimitive);
+#endif
+		}
+
 		public override string ToString () {
 			StringBuilder sb = new StringBuilder ();
-			if (ReturnType.IsClass)
-				sb.Append (ReturnType.ToString ());
+			Type retType = ReturnType;
+			if (ShouldPrintFullName (retType))
+				sb.Append (retType.ToString ());
 			else
-				sb.Append (ReturnType.Name);
+				sb.Append (retType.Name);
 			sb.Append (" ");
 			sb.Append (Name);
 #if NET_2_0 || BOOTSTRAP_NET_2_0
@@ -286,7 +296,7 @@ namespace System.Reflection {
 				bool byref = pt.IsByRef;
 				if (byref)
 					pt = pt.GetElementType ();
-				if (pt.IsClass)
+				if (ShouldPrintFullName (pt))
 					sb.Append (pt.ToString ());
 				else
 					sb.Append (pt.Name);

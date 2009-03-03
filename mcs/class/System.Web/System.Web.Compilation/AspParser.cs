@@ -41,14 +41,18 @@ namespace System.Web.Compilation
 	delegate void ParseErrorHandler (ILocation location, string message);
 	delegate void TextParsedHandler (ILocation location, string text);
 	delegate void TagParsedHandler (ILocation location, TagType tagtype, string id, TagAttributes attributes);
-
+#if NET_2_0
+	delegate void ParsingCompleteHandler ();
+#endif
+	
 	class AspParser : ILocation
 	{
 		static readonly object errorEvent = new object ();
 		static readonly object tagParsedEvent = new object ();
 		static readonly object textParsedEvent = new object ();
-
 #if NET_2_0
+		static readonly object parsingCompleteEvent = new object();
+		
 		byte[] md5checksum;
 #endif
 		AspTokenizer tokenizer;
@@ -76,6 +80,13 @@ namespace System.Web.Compilation
 			remove { events.RemoveHandler (textParsedEvent, value); }
 		}
 
+#if NET_2_0
+		public event ParsingCompleteHandler ParsingComplete {
+			add { events.AddHandler (parsingCompleteEvent, value); }
+			remove { events.RemoveHandler (parsingCompleteEvent, value); }
+		}
+#endif
+		
 		public AspParser (string filename, TextReader input)
 		{
 			this.filename = filename;
@@ -217,6 +228,10 @@ namespace System.Web.Compilation
 				EndElement ();
 				OnTextParsed (text.ToString ());
 			}
+
+#if NET_2_0
+			OnParsingComplete ();
+#endif
 		}
 
 		bool GetInclude (string str, out string pathType, out string filename)
@@ -510,6 +525,16 @@ namespace System.Web.Compilation
 				  (varname ? TagType.CodeRenderExpression : TagType.CodeRender));
 		}
 
+		public override string ToString ()
+		{
+			StringBuilder sb = new StringBuilder ("AspParser {");
+			if (filename != null && filename.Length > 0)
+				sb.AppendFormat ("{0}:{1}.{2}", filename, beginLine, beginColumn);
+			sb.Append ('}');
+
+			return sb.ToString ();
+		}
+		
 		void OnError (string msg)
 		{
 			ParseErrorHandler eh = events [errorEvent] as ParseErrorHandler;
@@ -530,7 +555,15 @@ namespace System.Web.Compilation
 			if (eh != null)
 				eh (this, text);
 		}
-	}
 
+#if NET_2_0
+		void OnParsingComplete ()
+		{
+			ParsingCompleteHandler eh = events [parsingCompleteEvent] as ParsingCompleteHandler;
+			if (eh != null)
+				eh ();
+		}
+#endif
+	}
 }
 

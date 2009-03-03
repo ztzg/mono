@@ -746,8 +746,14 @@ namespace Mono.CSharp {
 				gc = (GenericConstraints) constraints;
 			}
 
+			SetConstraints (type);
+			return true;
+		}
+
+		public void SetConstraints (GenericTypeParameterBuilder type)
+		{
 			if (gc == null)
-				return true;
+				return;
 
 			if (gc.HasClassConstraint || gc.HasValueTypeConstraint)
 				type.SetBaseTypeConstraint (gc.EffectiveBaseClass);
@@ -755,8 +761,6 @@ namespace Mono.CSharp {
 			type.SetInterfaceConstraints (gc.InterfaceConstraints);
 			type.SetGenericParameterAttributes (gc.Attributes);
 			TypeManager.RegisterBuilder (type, gc.InterfaceConstraints);
-
-			return true;
 		}
 
 		/// <summary>
@@ -2450,8 +2454,6 @@ namespace Mono.CSharp {
 			ArrayList types_to_fix = new ArrayList (unfixed_types);
 			for (int i = 0; i < methodParameters.Length; ++i) {
 				Type t = methodParameters[i];
-				if (t.IsGenericParameter)
-					continue;
 
 				if (!TypeManager.IsDelegateType (t)) {
 					if (TypeManager.DropGenericTypeArguments (t) != TypeManager.expression_type)
@@ -2459,6 +2461,9 @@ namespace Mono.CSharp {
 
 					t = t.GetGenericArguments () [0];
 				}
+
+				if (t.IsGenericParameter)
+					continue;
 
 				MethodInfo invoke = Delegate.GetInvokeMethod (t, t);
 				Type rtype = invoke.ReturnType;

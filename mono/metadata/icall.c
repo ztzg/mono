@@ -173,7 +173,7 @@ ves_icall_System_Array_GetValue (MonoObject *this, MonoObject *idxs)
 	
 	for (i = 0; i < ac->rank; i++)
 		if ((ind [i] < ao->bounds [i].lower_bound) ||
-		    (ind [i] >= ao->bounds [i].length + ao->bounds [i].lower_bound))
+		    (ind [i] >=  (mono_array_lower_bound_t)ao->bounds [i].length + ao->bounds [i].lower_bound))
 			mono_raise_exception (mono_get_exception_index_out_of_range ());
 
 	pos = ind [0] - ao->bounds [0].lower_bound;
@@ -486,7 +486,7 @@ ves_icall_System_Array_SetValue (MonoArray *this, MonoObject *value,
 	
 	for (i = 0; i < ac->rank; i++)
 		if ((ind [i] < this->bounds [i].lower_bound) ||
-		    (ind [i] >= this->bounds [i].length + this->bounds [i].lower_bound))
+		    (ind [i] >= (mono_array_lower_bound_t)this->bounds [i].length + this->bounds [i].lower_bound))
 			mono_raise_exception (mono_get_exception_index_out_of_range ());
 
 	pos = ind [0] - this->bounds [0].lower_bound;
@@ -1194,6 +1194,32 @@ get_executing (MonoMethod *m, gint32 no, gint32 ilo, gboolean managed, gpointer 
 	return FALSE;
 }
 
+static gboolean
+get_caller_no_reflection (MonoMethod *m, gint32 no, gint32 ilo, gboolean managed, gpointer data)
+{
+	MonoMethod **dest = data;
+
+	/* skip unmanaged frames */
+	if (!managed)
+		return FALSE;
+
+	if (m->wrapper_type != MONO_WRAPPER_NONE)
+		return FALSE;
+
+	if (m->klass->image == mono_defaults.corlib && !strcmp (m->klass->name_space, "System.Reflection"))
+		return FALSE;
+
+	if (m == *dest) {
+		*dest = NULL;
+		return FALSE;
+	}
+	if (!(*dest)) {
+		*dest = m;
+		return TRUE;
+	}
+	return FALSE;
+}
+
 static MonoReflectionType *
 type_from_name (const char *str, MonoBoolean ignoreCase)
 {
@@ -1218,7 +1244,7 @@ type_from_name (const char *str, MonoBoolean ignoreCase)
 		MonoMethod *m = mono_method_get_last_managed ();
 		MonoMethod *dest = m;
 
-		mono_stack_walk_no_il (get_caller, &dest);
+		mono_stack_walk_no_il (get_caller_no_reflection, &dest);
 		if (!dest)
 			dest = m;
 
@@ -2988,6 +3014,32 @@ ensure_reflection_security (void)
 	}
 }
 
+static gboolean
+can_call_generic_shared_method_for_class (MonoDomain *domain, MonoMethod *method, MonoClass *class)
+{
+	MonoClass *method_class;
+
+	if (!mono_method_is_generic_sharable_impl (method, FALSE))
+		return FALSE;
+
+	method = mono_method_get_declaring_generic_method (method);
+	method_class = method->klass;
+	g_assert (!method_class->generic_class);
+
+	if (!mono_domain_lookup_shared_generic (domain, method))
+		return FALSE;
+
+	while (class) {
+		if (class->generic_class)
+			class = class->generic_class->container_class;
+		if (method_class == class)
+			return TRUE;
+		class = class->parent;
+	}
+
+	return FALSE;
+}
+
 static MonoObject *
 ves_icall_InternalInvoke (MonoReflectionMethod *method, MonoObject *this, MonoArray *params, MonoException **exc) 
 {
@@ -3010,7 +3062,8 @@ ves_icall_InternalInvoke (MonoReflectionMethod *method, MonoObject *this, MonoAr
 
 	if (!(m->flags & METHOD_ATTRIBUTE_STATIC)) {
 		if (this) {
-			if (!mono_object_isinst (this, m->klass)) {
+			if (!mono_object_isinst (this, m->klass) &&
+					!can_call_generic_shared_method_for_class (this->vtable->domain, m, this->vtable->klass)) {
 				*exc = mono_exception_from_name_msg (mono_defaults.corlib, "System.Reflection", "TargetException", "Object does not match target type.");
 				return NULL;
 			}
@@ -6975,6 +7028,34 @@ ves_icall_System_Web_Util_ICalls_get_machine_install_dir (void)
 	g_free (path);
 
 	return ipath;
+}
+
+static gboolean
+ves_icall_get_resources_ptr (MonoReflectionAssembly *assembly, gpointer *result, gint32 *size)
+{
+	MonoPEResourceDataEntry *entry;
+	MonoImage *image;
+
+	MONO_ARCH_SAVE_REGS;
+
+	if (!assembly || !result || !size)
+		return FALSE;
+
+	*result = NULL;
+	*size = 0;
+	image = assembly->assembly->image;
+	entry = mono_image_lookup_resource (image, MONO_PE_RESOURCE_ID_ASPNET_STRING, 0, NULL);
+	if (!entry)
+		return FALSE;
+
+	*result = mono_image_rva_map (image, entry->rde_data_offset);
+	if (!(*result)) {
+		g_free (entry);
+		return FALSE;
+	}
+	*size = entry->rde_size;
+	g_free (entry);
+	return TRUE;
 }
 
 static MonoBoolean

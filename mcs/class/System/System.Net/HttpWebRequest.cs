@@ -97,6 +97,7 @@ namespace System.Net
 		Exception saved_exc;
 		object locker = new object ();
 		bool is_ntlm_auth;
+		bool finished_reading;
 #if NET_1_1
 		int maxResponseHeadersLength;
 		static int defaultMaxResponseHeadersLength;
@@ -758,8 +759,8 @@ namespace System.Net
 			WebAsyncResult aread = asyncRead;
 			initialMethod = method;
 			if (haveResponse) {
+				Exception saved = saved_exc;
 				if (webResponse != null) {
-					Exception saved = saved_exc;
 					Monitor.Exit (locker);
 					if (saved == null) {
 						aread.SetCompleted (true, webResponse);
@@ -768,8 +769,9 @@ namespace System.Net
 					}
 					aread.DoCallback ();
 					return aread;
-				} else if (saved_exc != null) {
-					aread.SetCompleted (true, saved_exc);
+				} else if (saved != null) {
+					Monitor.Exit (locker);
+					aread.SetCompleted (true, saved);
 					aread.DoCallback ();
 					return aread;
 				}
@@ -812,23 +814,42 @@ namespace System.Net
 			return EndGetResponse (result);
 		}
 		
+		internal bool FinishedReading {
+			get { return finished_reading; }
+			set { finished_reading = value; }
+		}
+
 		public override void Abort ()
 		{
-			haveResponse = true;
+			if (aborted)
+				return;
+
 			aborted = true;
+			if (haveResponse && finished_reading)
+				return;
+
+			haveResponse = true;
 			if (asyncWrite != null) {
 				WebAsyncResult r = asyncWrite;
-				WebException wexc = new WebException ("Aborted.", WebExceptionStatus.RequestCanceled); 
-				r.SetCompleted (false, wexc);
-				r.DoCallback ();
+				if (!r.IsCompleted) {
+					try {
+						WebException wexc = new WebException ("Aborted.", WebExceptionStatus.RequestCanceled); 
+						r.SetCompleted (false, wexc);
+						r.DoCallback ();
+					} catch {}
+				}
 				asyncWrite = null;
 			}			
 
 			if (asyncRead != null) {
 				WebAsyncResult r = asyncRead;
-				WebException wexc = new WebException ("Aborted.", WebExceptionStatus.RequestCanceled); 
-				r.SetCompleted (false, wexc);
-				r.DoCallback ();
+				if (!r.IsCompleted) {
+					try {
+						WebException wexc = new WebException ("Aborted.", WebExceptionStatus.RequestCanceled); 
+						r.SetCompleted (false, wexc);
+						r.DoCallback ();
+					} catch {}
+				}
 				asyncRead = null;
 			}			
 
@@ -1114,22 +1135,32 @@ namespace System.Net
 		{
 			if (aborted)
 				return;
+			lock (locker) {
 			string msg = String.Format ("Error getting response stream ({0}): {1}", where, status);
 			WebAsyncResult r = asyncRead;
 			if (r == null)
 				r = asyncWrite;
 
+			WebException wexc;
+			if (e is WebException) {
+				wexc = (WebException) e;
+			} else {
+				wexc = new WebException (msg, e, status, null); 
+			}
 			if (r != null) {
-				WebException wexc;
-				if (e is WebException) {
-					wexc = (WebException) e;
-				} else {
-					wexc = new WebException (msg, e, status, null); 
+				if (!r.IsCompleted) {
+					r.SetCompleted (false, wexc);
+					r.DoCallback ();
+				} else if (r == asyncWrite) {
+					saved_exc = wexc;
 				}
-				r.SetCompleted (false, wexc);
-				r.DoCallback ();
+				haveResponse = true;
 				asyncRead = null;
 				asyncWrite = null;
+			} else {
+				haveResponse = true;
+				saved_exc = wexc;
+			}
 			}
 		}
 

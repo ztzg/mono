@@ -5158,6 +5158,9 @@ mono_arch_get_vcall_slot (guint8 *code, gpointer *regs, int *displacement)
 	 * A given byte sequence can match more than case here, so we have to be
 	 * really careful about the ordering of the cases. Longer sequences
 	 * come first.
+	 * Some of the rules are only needed because the imm in the mov could 
+	 * match the
+	 * code [2] == 0xe8 case below.
 	 */
 	if ((code [-2] == 0x8b) && (x86_modrm_mod (code [-1]) == 0x2) && (code [4] == 0xff) && (x86_modrm_reg (code [5]) == 0x2) && (x86_modrm_mod (code [5]) == 0x0)) {
 		/*
@@ -5176,6 +5179,13 @@ mono_arch_get_vcall_slot (guint8 *code, gpointer *regs, int *displacement)
 		reg = code [4] & 0x07;
 		disp = (signed char)code [5];
 #endif
+	} else if ((code [-2] >= 0xb8) && (code [-2] < 0xb8 + 8) && (code [3] == 0xff) && (x86_modrm_reg (code [4]) == 0x2) && (x86_modrm_mod (code [4]) == 0x1)) {
+		/* 
+		 * ba e8 e8 e8 e8     mov    $0xe8e8e8e8,%edx
+		 * ff 50 60              callq  *0x60(%eax)
+		 */
+		reg = x86_modrm_rm (code [4]);
+		disp = *(gint8*)(code + 5);
 	} else if ((code [1] != 0xe8) && (code [3] == 0xff) && ((code [4] & 0x18) == 0x10) && ((code [4] >> 6) == 1)) {
 		reg = code [4] & 0x07;
 		disp = (signed char)code [5];
@@ -5218,12 +5228,23 @@ mono_arch_get_this_arg_from_call (MonoGenericSharingContext *gsctx, MonoMethodSi
 		gssize *regs, guint8 *code)
 {
 	guint32 esp = regs [X86_ESP];
-	CallInfo *cinfo;
+	CallInfo *cinfo = NULL;
 	gpointer res;
+	int offset;
 
-	if (!gsctx && code)
-		gsctx = mono_get_generic_context_from_code (code);
-	cinfo = get_call_info (gsctx, NULL, sig, FALSE);
+	/* 
+	 * Avoid expensive calls to get_generic_context_from_code () + get_call_info 
+	 * if possible.
+	 */
+	if (MONO_TYPE_ISSTRUCT (sig->ret)) {
+		if (!gsctx && code)
+			gsctx = mono_get_generic_context_from_code (code);
+		cinfo = get_call_info (gsctx, NULL, sig, FALSE);
+
+		offset = cinfo->args [0].offset;
+	} else {
+		offset = 0;
+	}
 
 	/*
 	 * The stack looks like:
@@ -5233,8 +5254,9 @@ mono_arch_get_this_arg_from_call (MonoGenericSharingContext *gsctx, MonoMethodSi
 	 * <return addr>
 	 * <4 pointers pushed by mono_arch_create_trampoline_code ()>
 	 */
-	res = (((MonoObject**)esp) [5 + (cinfo->args [0].offset / 4)]);
-	g_free (cinfo);
+	res = (((MonoObject**)esp) [5 + (offset / 4)]);
+	if (cinfo)
+		g_free (cinfo);
 	return res;
 }
 
@@ -5337,11 +5359,15 @@ gpointer
 mono_arch_context_get_int_reg (MonoContext *ctx, int reg)
 {
 	switch (reg) {
+	case X86_EAX: return (gpointer)ctx->eax;
+	case X86_EBX: return (gpointer)ctx->ebx;
 	case X86_ECX: return (gpointer)ctx->ecx;
 	case X86_EDX: return (gpointer)ctx->edx;
-	case X86_EBP: return (gpointer)ctx->ebp;
 	case X86_ESP: return (gpointer)ctx->esp;
-	default: return ((gpointer)(&ctx->eax)[reg]);
+	case X86_EBP: return (gpointer)ctx->ebp;
+	case X86_ESI: return (gpointer)ctx->esi;
+	case X86_EDI: return (gpointer)ctx->edi;
+	default: g_assert_not_reached ();
 	}
 }
 

@@ -1,3 +1,86 @@
+2009-02-23 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebClient.cs: append the QueryString in DownloadData.
+	Fixes bug #323788.
+
+2009-02-21 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpWebResponse.cs: return a Null stream when there's no response to
+	be read.
+	* FtpWebRequest.cs: provide the error returned by the server in the
+	exception.
+	* WebClient.cs: set the correct method when doing a FTP upload.
+	Fixes bug #478451.
+
+2009-02-19 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpWebRequest.cs: avoid errors when creating a temporary Uri to get
+	the local path.
+	* WebClient.cs: when setting up the request for downloading, use the
+	default method. Fixes bug #477611.
+
+2009-02-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* WebConnectionStream.cs : use request only after it is set.
+
+2009-02-13 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConnectionStream.cs: implemente (Read|Write)Timeout.
+	Fixes bug #348159.
+
+2009-02-10 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* CookieContainer.cs: separate cookies with "; " instead of just ';'.
+	Fixes bug #386727.
+
+2009-02-08 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebRequest.cs: lock SetResponseError.
+
+2009-02-08  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* Dns.cs: BeginGetHostAddresses - renamed argument to match MS,
+	reject "any" IP addresses. BeginGetHostEntry - renamed argument
+	to match MS, reject "any" IP addresses. GetHostEntry - reject
+	"any" IP addresses. GetHostAddresses - reject "any" IP addresses.
+	GetHostByName - use "hostName" as paramname in ANE.
+
+2009-02-07 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Dns.cs: empty string for host (also 0.0.0.0) is just passed to the
+	runtime, which will then retrieve the local IP addresses. Fixes bug
+	#386637 part 2/2.
+
+2009-02-06 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpWebRequest.cs: some servers have a comment after the directory
+	name. Fixes bugs #471149 and #471216.
+
+2009-02-06 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConnectionStream.cs: set the content length to 0 when the
+	response is not supposed to have any content.
+
+2009-02-05  Miguel de Icaza  <miguel@novell.com>
+
+	* WebConnectionStream.cs: Prevent a nullref here.   This might
+	have to be backported to 2.2 and 2.4
+
+2009-02-03 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConnection.cs:
+	* HttpWebRequest.cs: calling Abort is safe now if the request has been
+	read entirely.
+
+2009-02-03 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebProxy.cs: use TryParse when checking for a localhost IP.
+
+2009-01-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebResponse.cs: avoid throwing an exception when
+	Content-Length is not present.
+
 2009-01-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* HttpWebRequest.cs: added locking in SetResponseData for the case

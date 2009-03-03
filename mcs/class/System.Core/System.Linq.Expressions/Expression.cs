@@ -241,7 +241,7 @@ namespace System.Linq.Expressions {
 				}
 
 				// Use IsNumber to avoid expensive reflection.
-				if (IsNumber (ultype)){
+				if (IsNumber (ultype)) {
 					if (ultype == urtype && ltype == rtype)
 						return null;
 
@@ -263,6 +263,9 @@ namespace System.Linq.Expressions {
 					// == and != allow reference types without operators defined.
 					//
 					if (!ltype.IsValueType && !rtype.IsValueType)
+						return null;
+
+					if (ltype == rtype && ultype.IsEnum)
 						return null;
 
 					if (ltype == rtype && ultype == typeof (bool))
@@ -2221,7 +2224,7 @@ namespace System.Linq.Expressions {
 			if (IsInt (t))
 				return true;
 
-			return t == typeof (float) || t == typeof (double) || t == typeof (decimal);
+			return t == typeof (float) || t == typeof (double);
 		}
 
 		static bool IsSignedNumber (Type t)

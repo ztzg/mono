@@ -35,6 +35,7 @@
 #include <mono/metadata/profiler.h>
 #include <mono/metadata/profiler-private.h>
 #include <mono/metadata/exception.h>
+#include <mono/metadata/marshal.h>
 #include <mono/utils/mono-logger.h>
 #include <mono/utils/mono-dl.h>
 #include <mono/utils/mono-membar.h>
@@ -44,6 +45,9 @@ MonoDefaults mono_defaults;
 /*
  * This lock protects the hash tables inside MonoImage used by the metadata 
  * loading functions in class.c and loader.c.
+ *
+ * See domain-internals.h for locking policy in combination with the
+ * domain lock.
  */
 static CRITICAL_SECTION loader_mutex;
 
@@ -863,7 +867,6 @@ method_from_memberref (MonoImage *image, guint32 idx, MonoGenericContext *typesp
 
 	case MONO_MEMBERREF_PARENT_TYPESPEC: {
 		MonoType *type;
-		MonoMethod *result;
 
 		type = &klass->byval_arg;
 
@@ -874,11 +877,7 @@ method_from_memberref (MonoImage *image, guint32 idx, MonoGenericContext *typesp
 		}
 
 		/* we're an array and we created these methods already in klass in mono_class_init () */
-		result = search_in_array_class (klass, mname, sig);
-		if (result)
-			return result;
-
-		g_assert_not_reached ();
+		method = search_in_array_class (klass, mname, sig);
 		break;
 	}
 	default:
@@ -1619,6 +1618,8 @@ mono_free_method  (MonoMethod *method)
 	if (method->dynamic) {
 		MonoMethodWrapper *mw = (MonoMethodWrapper*)method;
 		int i;
+
+		mono_marshal_free_dynamic_wrappers (method);
 
 		mono_loader_lock ();
 		mono_property_hash_remove_object (method->klass->image->property_hash, method);

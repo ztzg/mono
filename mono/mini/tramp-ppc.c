@@ -174,7 +174,7 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 	guint8 *buf, *code = NULL;
 	int i, offset;
 	gconstpointer tramp_handler;
-	int size = MONO_PPC_32_64_CASE (512, 688);
+	int size = MONO_PPC_32_64_CASE (516, 692);
 
 	/* Now we'll create in 'buf' the PowerPC trampoline code. This
 	   is the trampoline code common to all methods  */
@@ -193,7 +193,7 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 	 * now the integer registers.
 	 */
 	offset = STACK - sizeof (MonoLMF) + G_STRUCT_OFFSET (MonoLMF, iregs);
-	ppc_store_multiple_regs (buf, ppc_r13, ppc_r1, offset);
+	ppc_store_multiple_regs (buf, ppc_r13, offset, ppc_r1);
 
 	/* Now save the rest of the registers below the MonoLMF struct, first 14
 	 * fp regs and then the 13 gregs.
@@ -241,7 +241,9 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 		ppc_load_reg (buf, ppc_r5, GREGS_OFFSET, ppc_r1);
 	if ((tramp_type == MONO_TRAMPOLINE_JIT) || (tramp_type == MONO_TRAMPOLINE_JUMP))
 		ppc_store_reg (buf, ppc_r5, G_STRUCT_OFFSET(MonoLMF, method), ppc_r11);
-	ppc_store_reg (buf, ppc_sp, G_STRUCT_OFFSET(MonoLMF, ebp), ppc_r11);
+	/* store the frame pointer of the calling method */
+	ppc_addi (buf, ppc_r0, ppc_sp, STACK);
+	ppc_store_reg (buf, ppc_r0, G_STRUCT_OFFSET(MonoLMF, ebp), ppc_r11);
 	/* save the IP (caller ip) */
 	if (tramp_type == MONO_TRAMPOLINE_JUMP) {
 		ppc_li (buf, ppc_r0, 0);
@@ -297,7 +299,7 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 	/* *(lmf_addr) = previous_lmf */
 	ppc_store_reg (buf, ppc_r5, G_STRUCT_OFFSET(MonoLMF, previous_lmf), ppc_r6);
 	/* restore iregs */
-	ppc_load_multiple_regs (buf, ppc_r13, ppc_r11, G_STRUCT_OFFSET(MonoLMF, iregs));
+	ppc_load_multiple_regs (buf, ppc_r13, G_STRUCT_OFFSET(MonoLMF, iregs), ppc_r11);
 	/* restore fregs */
 	for (i = 14; i < 32; i++)
 		ppc_lfd (buf, i, G_STRUCT_OFFSET(MonoLMF, fregs) + ((i-14) * sizeof (gdouble)), ppc_r11);
@@ -505,7 +507,7 @@ mono_arch_create_generic_class_init_trampoline (void)
 	guint8 *jump;
 	int tramp_size;
 
-	tramp_size = 32;
+	tramp_size = MONO_PPC_32_64_CASE (32, 44);
 
 	code = buf = mono_global_codeman_reserve (tramp_size);
 

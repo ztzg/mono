@@ -1,3 +1,91 @@
+2009-02-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TemplateControl.cs: implement the other ReadStringResource method.
+	Patch from Kornel Pal.
+
+2009-02-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ResourceBasedLiteralControl.cs: new Control. It's just
+	like a LiteralControl but will render itself from the bytes pointed to
+	by an IntPtr and not create any string from the underlying data unless
+	needed.
+
+	* TemplateControl.cs: implemented a bunch of methods
+	that are used from the precompiled assemblies for a web project. The
+	most notable change needed is to be able to read a win32 resource from
+	the dll of the control. The resource is a concatenation of literals
+	with plain text for the control and a specialized LiteralControl is
+	generated from different chunks of the resource.
+
+	* HtmlTextWriter.cs: new method that returns the
+	HttpWriter in use.
+
+2009-02-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TemplateControl.cs: ReadStringResource returns null now.
+
+2009-02-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* MasterPage.cs: the items in ContentPlaceHolders are lowercase.
+
+2009-02-18  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateParser.cs: don't initialize PageParserFilter in
+	LoadConfigDefaults, postpone it till the first time the
+	PageParserFilter property is accessed.
+
+	* ApplicationFileParser.cs, UserControlParser.cs: make sure
+	VirtualPath is set in the constructors.
+
+2009-02-13  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateParser.cs: PageParserFilter handling moved to here.
+	PagesConfig must use the current virtual path when retrieving the
+	section, or otherwise we'll miss the lower level web.configs.
+	Added the AddControl method, used by PageParserFilter.
+	Implementing filtering of: parsed directives and the base type, if
+	a page parser filter is present.
+
+	* PageParserFilter.cs: added missing 3.5 members and implemented
+	everything.
+
+	* PageParser.cs: moved PageParserFilter processing to
+	TemplateParser.
+	VirtualPath must be set before anything else.
+	Call page parser filter's directive preprocessing code from
+	AddDirective if a filter is present and a mastertype or
+	previouspagetype directive is parsed.
+
+	* MasterPageParser.cs: when PageParserFilter is present use it to
+	preprocess the MasterType directive.
+
+2009-02-12  Marek Safar  <marek.safar@gmail.com>
+
+	* ControlBuilder.cs, PageParserFilter.cs, CodeConstructType.cs:
+	Add few missing members.
+
+2009-02-06  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* Control.cs: Make IsViewStateEnabled available on 1.0 profile
+	and use it to determine if viewstate needs to be saved instead of
+	the newly introduced ViewStateShouldBeSaved. Remove
+	ViewStateShouldBeSaved.
+
+2009-02-05  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: if a control has been added to the controls
+	collection, removed and added again do not call OnInit (). At the
+	same time OnInit() should be called more than once if a control is
+	added to a container which, in turn, is then added to another
+	control. To achieve that a new state mask flag has been added -
+	REMOVED. Fixes bug #471305
+
+2009-02-04  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: update of the fix for bug #470993 - view state of
+	the child controls isn't saved when any of their parents has it
+	disabled.
+
 2009-01-30  Marek Habersack  <mhabersack@novell.com>
 
 	* Control.cs: don't save the control's state if it's

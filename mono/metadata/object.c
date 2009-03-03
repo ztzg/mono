@@ -575,6 +575,8 @@ mono_runtime_free_method (MonoDomain *domain, MonoMethod *method)
 	if (default_mono_free_method != NULL)
 		default_mono_free_method (domain, method);
 
+	mono_method_clear_object (domain, method);
+
 	mono_free_method (method);
 }
 
@@ -2336,7 +2338,7 @@ mono_object_get_virtual_method (MonoObject *obj, MonoMethod *method)
 		else
 			res = mono_marshal_get_remoting_invoke (res);
 	} else {
-		if (method->is_inflated && !res->is_inflated) {
+		if (method->is_inflated) {
 			/* Have to inflate the result */
 			res = mono_class_inflate_generic_method (res, &((MonoMethodInflated*)method)->context);
 		}
@@ -2907,6 +2909,9 @@ MonoMethod *
 mono_get_delegate_invoke (MonoClass *klass)
 {
 	MonoMethod *im;
+
+	/* This is called at runtime, so avoid the slower search in metadata */
+	mono_class_setup_methods (klass);
 
 	im = mono_class_get_method_from_name (klass, "Invoke", -1);
 	g_assert (im);

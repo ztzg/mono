@@ -154,6 +154,11 @@ typedef struct _MonoThunkFreeList {
 typedef struct _MonoJitCodeHash MonoJitCodeHash;
 
 struct _MonoDomain {
+	/*
+	 * This lock must never be taken before the loader lock,
+	 * i.e. if both are taken by the same thread, the loader lock
+	 * must taken first.
+	 */
 	CRITICAL_SECTION    lock;
 	MonoMemPool        *mp;
 	MonoCodeManager    *code_mp;
@@ -293,6 +298,9 @@ mono_jit_info_get_generic_sharing_context (MonoJitInfo *ji) MONO_INTERNAL;
 
 void
 mono_jit_info_set_generic_sharing_context (MonoJitInfo *ji, MonoGenericSharingContext *gsctx) MONO_INTERNAL;
+
+MonoJitInfo*
+mono_domain_lookup_shared_generic (MonoDomain *domain, MonoMethod *method) MONO_INTERNAL;
 
 char *
 mono_make_shadow_copy (const char *filename) MONO_INTERNAL;

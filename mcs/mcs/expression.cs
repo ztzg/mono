@@ -4527,6 +4527,10 @@ namespace Mono.CSharp {
 			if (!DoResolveBase (ec))
 				return null;
 
+			// HACK: Variables are not captured in probing mode
+			if (ec.IsInProbingMode)
+				return this;
+
 			if (HasOutModifier && ec.DoFlowAnalysis &&
 			    (!ec.OmitStructFlowAnalysis || !VariableInfo.TypeInfo.IsStruct) && !IsAssigned (ec, loc))
 				return null;
@@ -5622,14 +5626,20 @@ namespace Mono.CSharp {
 			}
 		}
 
-		public void AddressOf (EmitContext ec, AddressOp Mode)
+		public void AddressOf (EmitContext ec, AddressOp mode)
 		{
+			EmitAddressOf (ec, mode);
+		}
+
+		protected virtual IMemoryLocation EmitAddressOf (EmitContext ec, AddressOp mode)
+		{
+			LocalTemporary value_target = new LocalTemporary (type);
+
 			if (is_type_parameter) {
-				LocalTemporary temp = new LocalTemporary (type);
 				DoEmitTypeParameter (ec);
-				temp.Store (ec);
-				temp.AddressOf (ec, Mode);
-				return;
+				value_target.Store (ec);
+				value_target.AddressOf (ec, mode);
+				return value_target;
 			}
 
 			if (!type.IsValueType){
@@ -5642,10 +5652,8 @@ namespace Mono.CSharp {
 				throw new Exception ("AddressOf should not be used for classes");
 			}
 
-			LocalTemporary	value_target = new LocalTemporary (type);
-			IMemoryLocation ml = (IMemoryLocation) value_target;
+			value_target.AddressOf (ec, AddressOp.Store);
 
-			ml.AddressOf (ec, AddressOp.Store);
 			if (method == null) {
 				ec.ig.Emit (OpCodes.Initobj, type);
 			} else {
@@ -5653,7 +5661,8 @@ namespace Mono.CSharp {
 				ec.ig.Emit (OpCodes.Call, (ConstructorInfo) method);
 			}
 			
-			((IMemoryLocation) value_target).AddressOf (ec, Mode);
+			value_target.AddressOf (ec, mode);
+			return value_target;
 		}
 
 		protected override void CloneTo (CloneContext clonectx, Expression t)
@@ -6200,8 +6209,13 @@ namespace Mono.CSharp {
 			}
 			
 			if (array_data != null) {
-				foreach (Expression e in array_data)
+				foreach (Expression e in array_data) {
+					// Don't mutate values optimized away
+					if (e == null)
+						continue;
+
 					e.MutateHoistedGenericType (storey);
+				}
 			}
 		}
 
@@ -8283,8 +8297,13 @@ namespace Mono.CSharp {
 					if (gc == null)
 						return ix;
 
-					if (gc.HasClassConstraint)
-						ix.Append (caller_type, GetIndexersForTypeOrInterface (caller_type, gc.ClassConstraint));
+					if (gc.HasClassConstraint) {
+						Type class_contraint = gc.ClassConstraint;
+						while (class_contraint != TypeManager.object_type && class_contraint != null) {
+							ix.Append (caller_type, GetIndexersForTypeOrInterface (caller_type, class_contraint));
+							class_contraint = class_contraint.BaseType;
+						}
+					}
 
 					Type[] ifaces = gc.InterfaceConstraints;
 					foreach (Type itype in ifaces)
@@ -9530,6 +9549,16 @@ namespace Mono.CSharp {
 			: base (requested_type, arguments, l)
 		{
 			this.initializers = initializers;
+		}
+
+		protected override IMemoryLocation EmitAddressOf (EmitContext ec, AddressOp Mode)
+		{
+			instance = base.EmitAddressOf (ec, Mode);
+
+			if (!initializers.IsEmpty)
+				initializers.Emit (ec);
+
+			return instance;
 		}
 
 		protected override void CloneTo (CloneContext clonectx, Expression t)

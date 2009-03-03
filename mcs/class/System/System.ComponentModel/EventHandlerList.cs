@@ -48,20 +48,21 @@ namespace System.ComponentModel {
 	public sealed class EventHandlerList : IDisposable
 	{
 #if NET_2_0
-		Dictionary <object, HandlerEntry> handlers;
+		Dictionary <object, Delegate> handlers;
 #else
 		Hashtable handlers;
 #endif
-		HandlerEntry nullEntry;
-		
+		Delegate null_entry;
+
 		public EventHandlerList ()
 		{
 		}
 
 		public Delegate this [object key] {
 			get {
-				HandlerEntry entry = FindEntry (key);
-				return entry == null ? null : entry.value;
+				if (key == null)
+					return null_entry;
+				return FindEntry (key);
 			}
 
 			set {
@@ -71,24 +72,22 @@ namespace System.ComponentModel {
 
 		public void AddHandler (object key, Delegate value)
 		{
-			HandlerEntry entry = FindEntry (key);
-			if (entry == null) {
+			if (key == null) {
+				null_entry = Delegate.Combine (null_entry, value);
+				return;
+			}
+
+			Delegate prev = FindEntry (key);
+			if (prev == null) {
 				if (handlers == null) {
 #if NET_2_0
-					handlers = new Dictionary <object, HandlerEntry> ();
+					handlers = new Dictionary <object, Delegate> ();
 #else
 					handlers = new Hashtable ();
 #endif
 				}
-
-				if (key != null)
-					handlers.Add (key, new HandlerEntry (value));
-				else
-					nullEntry = new HandlerEntry (value);
-
-				return;
 			}
-			entry.value = Delegate.Combine (entry.value, value);
+			handlers [key] = Delegate.Combine (prev, value);
 		}
 
 #if NET_2_0
@@ -97,18 +96,23 @@ namespace System.ComponentModel {
 			if (listToAddFrom == null)
 				return;
 
-			foreach (KeyValuePair <object, HandlerEntry> kvp in listToAddFrom.handlers)
-				AddHandler (kvp.Key, kvp.Value.value);
+			foreach (KeyValuePair <object, Delegate> kvp in listToAddFrom.handlers)
+				AddHandler (kvp.Key, kvp.Value);
 		}
 #endif
 
 		public void RemoveHandler (object key, Delegate value)
 		{
-			HandlerEntry entry = FindEntry (key);
+			if (key == null) {
+				null_entry = Delegate.Remove (null_entry, value);
+				return;
+			}
+
+			Delegate entry = FindEntry (key);
 			if (entry == null)
 				return;
 
-			entry.value = Delegate.Remove (entry.value, value);
+			handlers [key] = Delegate.Remove (entry, value);
 		}
 
 		public void Dispose ()
@@ -116,34 +120,20 @@ namespace System.ComponentModel {
 			handlers = null;
 		}
 		
-		private HandlerEntry FindEntry (object key)
+		private Delegate FindEntry (object key)
 		{
-			if (key == null)
-				return nullEntry;
-			
 			if (handlers == null)
 				return null;
-
 #if NET_2_0
-			HandlerEntry entry;
+			Delegate entry;
 			if (handlers.TryGetValue (key, out entry))
 				return entry;
 
 			return null;
 #else
-			return handlers [key] as HandlerEntry;
+			return handlers [key] as Delegate;
 #endif
-		}
-
-		[Serializable]
-		sealed class HandlerEntry
-		{
-			public Delegate value;
-			
-			public HandlerEntry (Delegate value)
-			{
-				this.value = value;
-			}
 		}
 	}
 }
+

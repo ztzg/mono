@@ -552,7 +552,7 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 	MonoJitTlsData *jit_tls = TlsGetValue (mono_jit_tls_id);
 	MonoLMF *lmf = mono_get_lmf ();
 	MonoJitInfo *ji, rji;
-	MonoContext ctx, new_ctx, old_ctx;
+	MonoContext ctx, new_ctx, ji_ctx;
 	MonoDebugSourceLocation *location;
 	MonoMethod *last_method = NULL, *actual_method;
 
@@ -567,9 +567,15 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 #endif
 
 	do {
-		old_ctx = ctx;
+		ji_ctx = ctx;
 		ji = mono_find_jit_info (domain, jit_tls, &rji, NULL, &ctx, &new_ctx, NULL, &lmf, native_offset, NULL);
 		ctx = new_ctx;
+
+		if (ji && ji != (gpointer)-1 &&
+				MONO_CONTEXT_GET_IP (&ctx) >= ji->code_start &&
+				(guint8*)MONO_CONTEXT_GET_IP (&ctx) < (guint8*)ji->code_start + ji->code_size) {
+			ji_ctx = ctx;
+		}
 
 		if (!ji || ji == (gpointer)-1 || MONO_CONTEXT_GET_SP (&ctx) >= jit_tls->end_of_stack)
 			return FALSE;
@@ -598,7 +604,7 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 
 	} while (skip >= 0);
 
-	actual_method = get_method_from_stack_frame (ji, get_generic_info_from_stack_frame (ji, &old_ctx));
+	actual_method = get_method_from_stack_frame (ji, get_generic_info_from_stack_frame (ji, &ji_ctx));
 
 	*method = mono_method_get_object (domain, actual_method, NULL);
 
@@ -1169,6 +1175,8 @@ mono_handle_exception (MonoContext *ctx, gpointer obj, gpointer original_ip, gbo
 #error "Can't use sigaltstack without sigaction"
 #endif
 
+#define ALIGN_TO(val,align) ((((guint64)val) + ((align) - 1)) & ~((align) - 1))
+
 void
 mono_setup_altstack (MonoJitTlsData *tls)
 {
@@ -1188,7 +1196,7 @@ mono_setup_altstack (MonoJitTlsData *tls)
 	/*g_print ("thread %p, stack_base: %p, stack_size: %d\n", (gpointer)pthread_self (), staddr, stsize);*/
 
 	tls->stack_ovf_guard_base = staddr + mono_pagesize ();
-	tls->stack_ovf_guard_size = mono_pagesize () * 8;
+	tls->stack_ovf_guard_size = ALIGN_TO (8 * 4096, mono_pagesize ());
 
 	if (mono_mprotect (tls->stack_ovf_guard_base, tls->stack_ovf_guard_size, MONO_MMAP_NONE)) {
 		/* mprotect can fail for the main thread stack */

@@ -1362,6 +1362,7 @@ if test x$platform_win32 = xno; then
 	AC_CHECK_HEADERS(net/if.h)
 	AC_MSG_CHECKING(for ifreq)
 	AC_TRY_COMPILE([
+		#include <stdio.h>
 		#include <sys/ioctl.h>
 		#include <net/if.h>
 		], [
@@ -2377,6 +2378,7 @@ data/mono-nunit.pc
 data/mono-options.pc
 data/mono-lineeditor.pc
 data/monodoc.pc
+data/mono.web.pc
 data/dotnet.pc
 data/dotnet35.pc
 data/wcf.pc

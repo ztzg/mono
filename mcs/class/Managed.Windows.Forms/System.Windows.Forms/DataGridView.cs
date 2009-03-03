@@ -215,6 +215,7 @@ namespace System.Windows.Forms {
 			selectionMode = DataGridViewSelectionMode.RowHeaderSelect;
 			showCellErrors = true;
 			showEditingIcon = true;
+			scrollBars = ScrollBars.Both;
 			userSetCursor = Cursor.Current;
 			virtualMode = false;
 
@@ -710,7 +711,8 @@ namespace System.Windows.Forms {
 			set {
 				if (dataMember != value) {
 					dataMember = value;
-					ReBind ();
+					if (IsHandleCreated)
+						ReBind ();
 					OnDataMemberChanged(EventArgs.Empty);
 				}
 			}
@@ -731,8 +733,10 @@ namespace System.Windows.Forms {
 				if (!(value == null || value is IList || value is IListSource || value is IBindingList || value is IBindingListView))
 					throw new NotSupportedException ("Type cannot be bound.");
 					
+				ClearBinding ();
 				dataSource = value;
-				ReBind ();
+				if (IsHandleCreated)
+					ReBind ();
 				OnDataSourceChanged (EventArgs.Empty);
 			}
 		}
@@ -1165,6 +1169,8 @@ namespace System.Windows.Forms {
 				/// or canceled.
 				///////////////////////////////////////////////////////////
 				scrollBars = value;
+				PerformLayout ();
+				Invalidate ();
 			}
 		}
 
@@ -3665,7 +3671,6 @@ namespace System.Windows.Forms {
 				//
 				if (!is_autogenerating_columns && columns.Count == 1)
 					ReBind ();
-
 				foreach (DataGridViewRow row in Rows)
 					row.Cells.Add ((DataGridViewCell)e.Column.CellTemplate.Clone ());
 			}
@@ -3966,6 +3971,7 @@ namespace System.Windows.Forms {
 		protected override void OnHandleCreated (EventArgs e)
 		{
 			base.OnHandleCreated(e);
+			ReBind ();
 			
 			if (CurrentCell == null && Rows.Count > 0 && Columns.Count > 0)
 				MoveCurrentCell (ColumnDisplayIndexToIndex (0), 0, true, false, false, false);
@@ -4612,23 +4618,25 @@ namespace System.Windows.Forms {
 			bool verticalVisible = false;
 			
 			if (AutoSize) {
-				if (gridWidth > Size.Width || gridHeight > Size.Height) {
+				if (gridWidth > Size.Width || gridHeight > Size.Height)
 					Size = new Size(gridWidth, gridHeight);
-				}
 			}
 			else {
-				if (gridWidth > Size.Width) {
+				if (gridWidth > Size.Width)
 					horizontalVisible = true;
-				}
-				if (gridHeight > Size.Height) {
+				if (gridHeight > Size.Height)
 					verticalVisible = true;
-				}
-				if (horizontalScrollBar.Visible && (gridHeight + horizontalScrollBar.Height) > Size.Height) {
+
+				if (horizontalScrollBar.Visible && (gridHeight + horizontalScrollBar.Height) > Size.Height)
 					verticalVisible = true;
-				}
-				if (verticalScrollBar.Visible && (gridWidth + verticalScrollBar.Width) > Size.Width) {
+				if (verticalScrollBar.Visible && (gridWidth + verticalScrollBar.Width) > Size.Width) 
 					horizontalVisible = true;
-				}
+
+				if (scrollBars != ScrollBars.Vertical && scrollBars != ScrollBars.Both)
+					verticalVisible = false;
+				if (scrollBars != ScrollBars.Horizontal && scrollBars != ScrollBars.Both)
+					horizontalVisible = false;
+
 				if (horizontalVisible) {
 					horizontalScrollBar.Minimum = 0;
 					horizontalScrollBar.Maximum = gridWidth;
@@ -4830,12 +4838,13 @@ namespace System.Windows.Forms {
 		{
 			if (hover_cell != null && hover_cell.RowIndex >= e.RowIndex)
 				hover_cell = null;
+
 			AutoResizeColumnsInternal ();
 			Invalidate ();
 			OnRowsAdded (e);
 		}
 
-		protected internal virtual void OnRowsAdded (DataGridViewRowsAddedEventArgs e)
+		protected virtual void OnRowsAdded (DataGridViewRowsAddedEventArgs e)
 		{
 			DataGridViewRowsAddedEventHandler eh = (DataGridViewRowsAddedEventHandler)(Events [RowsAddedEvent]);
 			if (eh != null) eh (this, e);
@@ -5029,7 +5038,7 @@ namespace System.Windows.Forms {
 
 		protected bool ProcessDeleteKey (Keys keyData)
 		{
-			if (!allowUserToDeleteRows || SelectedRows.Count == 0)
+			if (!AllowUserToDeleteRows || SelectedRows.Count == 0)
 				return false;
 
 			int index = Math.Max (selected_row - SelectedRows.Count + 1, 0);
@@ -5043,8 +5052,8 @@ namespace System.Windows.Forms {
 				if (hover_cell != null && hover_cell.OwningRow == row)
 					hover_cell = null;
 					
-				if (DataSource != null && DataSource is DataSet)
-					(DataSource as DataSet).Tables[dataMember].Rows.RemoveAt (row.Index);
+				if (DataManager != null)
+					DataManager.RemoveAt (row.Index);
 				else
 					Rows.RemoveAt (row.Index);
 			}
@@ -5787,7 +5796,7 @@ namespace System.Windows.Forms {
 			return bounds;
 		}
 
-		internal void PrepareEditingRow (bool cell_changed, bool column_changed)
+		private void PrepareEditingRow (bool cell_changed, bool column_changed)
 		{
 			if (new_row_editing)
 				return;
@@ -5796,16 +5805,14 @@ namespace System.Windows.Forms {
 			
 			show = ColumnCount > 0 && AllowUserToAddRows;
 
-			if (!show && editing_row != null) {
-				Rows.RemoveInternal (editing_row);
-				editing_row = null;
+			if (!show) {
+				RemoveEditingRow ();
 			} else if (show) {
 				if (editing_row != null && (cell_changed || column_changed)) {
 					// The row changed, it's no longer an editing row.
 					//    or
 					// The number of columns has changed, we need a new editing row.
-					Rows.RemoveInternal (editing_row);
-					editing_row = null;
+					RemoveEditingRow ();
 				}
 				if (editing_row == null) {
 					editing_row = RowTemplateFull;
@@ -5814,6 +5821,15 @@ namespace System.Windows.Forms {
 			}
 		}
 		
+		internal void RemoveEditingRow ()
+		{
+			if (editing_row != null) {
+				if (Rows.Contains (editing_row))
+				    Rows.RemoveInternal (editing_row);
+				editing_row = null;
+			}
+		}
+
 		internal DataGridViewRow EditingRow {
 			get { return editing_row; }
 		}
@@ -5858,19 +5874,37 @@ namespace System.Windows.Forms {
 		{
 			if (type == typeof (bool))
 				return new DataGridViewCheckBoxColumn ();
+			else if (typeof(Bitmap).IsAssignableFrom (type))
+				return new DataGridViewImageColumn ();
 				
 			return new DataGridViewTextBoxColumn ();
 		}
 		
 		private void ClearBinding ()
 		{
+			if (IsCurrentCellInEditMode && !EndEdit ())
+				CancelEdit ();
+			MoveCurrentCell (-1, -1, false, false, false, true);
+
 			if (DataManager != null) {
-				columns.ClearAutoGeneratedColumns ();
-				PrepareEditingRow (false, true);
-				rows.Clear ();
 				DataManager.ListChanged -= OnListChanged;
 				DataManager.PositionChanged -= OnListPositionChanged;
+				columns.ClearAutoGeneratedColumns ();
+				rows.Clear ();
+				RemoveEditingRow ();
 			}
+		}
+
+		private void ResetRows ()
+		{
+			rows.Clear ();
+			RemoveEditingRow ();
+			if (DataManager != null) {
+				foreach (object element in DataManager.List)
+					AddBoundRow (element);
+			}
+			PrepareEditingRow (false, true);
+			OnListPositionChanged (this, EventArgs.Empty);
 		}
 		
 		private void DoBinding ()
@@ -5927,6 +5961,7 @@ namespace System.Windows.Forms {
 					MoveCurrentCell (0, 0, true, false, false, false);
 			}
 
+			PrepareEditingRow (false, true);
 			PerformLayout();
 			Invalidate ();
 		}
@@ -6051,7 +6086,7 @@ namespace System.Windows.Forms {
 				case ListChangedType.ItemChanged:
 					break;
 				default:
-					ReBind ();
+					ResetRows ();
 					break;
 			}
 			
