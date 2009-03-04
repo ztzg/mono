@@ -2148,6 +2148,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_VOIDCALL_MEMBASE:
+		case OP_LCALL_MEMBASE:
 		case OP_CALL_MEMBASE:
 			/* The opcodes call*_membase are splitted into
 			   load_membase + call*_reg. */
@@ -2165,6 +2166,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* Convert call*_membase to call*_reg. */
 			if (inst->opcode == OP_VOIDCALL_MEMBASE)
 				inst->opcode = OP_VOIDCALL_REG;
+			else if (inst->opcode == OP_LCALL_MEMBASE)
+				inst->opcode = OP_LCALL_REG;
 			else
 				inst->opcode = OP_CALL_REG;
 
@@ -2639,8 +2642,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_VOIDCALL_REG:
-		case OP_CALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:18 */
+		case OP_LCALL_REG:
+			/* MD: lcall_reg: dest:Z src1:i clob:c len:18 */
+		case OP_CALL_REG:
 			/* MD: call_reg: dest:z src1:i clob:c len:18 */
 			call = (MonoCallInst*)inst;
 

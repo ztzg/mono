@@ -11,7 +11,7 @@
 MCS=mcs
 RUNTIME=mono
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world
 
 trivial-%.exe: trivial-%.cs
 	$(MCS) -out:$@ $<
@@ -85,3 +85,7 @@ trivial-long: trivial-long.exe
 	$(RUNTIME) --optimize=-inline $< x ; test $$? = 224
 	$(RUNTIME) --optimize=-inline $< x x ; test $$? = 152
 	$(RUNTIME) --optimize=-inline $< x x x ; test $$? = 80
+
+trivial-hello_world: trivial-hello_world.exe
+	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
+		echo "Hello world!" | diff - $$TMPFILE ; test $$? = 0
