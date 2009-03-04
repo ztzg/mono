@@ -1735,10 +1735,46 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
-	default:
-		g_warning("unsupported next_inst->opcode %s (0x%x) in %s()\n",
+	case OP_CEQ:
+	case OP_CGT:
+	case OP_CGT_UN:
+	case OP_CLT:
+	case OP_CLT_UN:
+	case OP_ICLT:
+	case OP_ICLT_UN:
+	case OP_COND_EXC_GE:
+	case OP_COND_EXC_GT:
+	case OP_COND_EXC_LE:
+	case OP_COND_EXC_LT:
+	case OP_COND_EXC_GE_UN:
+	case OP_COND_EXC_GT_UN:
+	case OP_COND_EXC_LT_UN:
+	case OP_COND_EXC_OV:
+	case OP_COND_EXC_NO:
+	case OP_COND_EXC_C:
+	case OP_COND_EXC_NC:
+	case OP_COND_EXC_IEQ:
+	case OP_COND_EXC_IGE:
+	case OP_COND_EXC_IGT:
+	case OP_COND_EXC_ILE:
+	case OP_COND_EXC_ILT:
+	case OP_COND_EXC_INE_UN:
+	case OP_COND_EXC_IGE_UN:
+	case OP_COND_EXC_IGT_UN:
+	case OP_COND_EXC_ILE_UN:
+	case OP_COND_EXC_ILT_UN:
+	case OP_COND_EXC_IOV:
+	case OP_COND_EXC_INO:
+	case OP_COND_EXC_IC:
+	case OP_COND_EXC_INC:
+		g_warning("unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
 			  mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
 		NOT_IMPLEMENTED;
+
+	default:
+		/* The conditional branch was removed due to [some] dead-code
+		   elimination, so we can replace this comparison by a nop. */
+		inst->opcode = OP_NOP;
 	}
 }
 
