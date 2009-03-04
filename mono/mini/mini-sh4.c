@@ -470,7 +470,8 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	    signature->call_convention == MONO_CALL_VARARG)
 		emit_signature_cookie2(cfg, call);
 
-	call->stack_usage = call_info->stack_usage;
+	/* get_call_info() and emit_call() have to be kept in sync. */
+	g_assert(call->stack_usage == call_info->stack_usage);
 
 	g_free(call_info->args);
 	g_free(call_info);
@@ -871,6 +872,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 *	|  local var.  |
 	 *	|--------------| <- FP
 	 *	:              :
+	 *
+	 * If you want to load parameters stored in the stack, you have to remember
+	 * they are pushed down from "saved_regs_size + call_info->stack_usage".
 	 */
 
 	/* Copy arguments at the expected place : into register or onto the stack. */
@@ -916,7 +920,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			case onto_stack:
 				switch (arg_info->type) {
 				case integer32:
-					offset = saved_regs_size + arg_info->offset;
+					offset = saved_regs_size + call_info->stack_usage - arg_info->offset - 4;
 					sh4_base_load(cfg, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
@@ -976,8 +980,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			case onto_stack:
 				switch (arg_info->type) {
 				case integer32:
-					/* TODO - CV : optimization => adjust correctly in allocate_vars(). */
-					offset = saved_regs_size + arg_info->offset;
+					offset = saved_regs_size + call_info->stack_usage - arg_info->offset - 4;
 					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_temp);
 					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					break;
