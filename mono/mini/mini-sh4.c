@@ -1878,6 +1878,13 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_ADDCC_IMM:	/* Fall through */
+		case OP_ADC_IMM:	/* Fall through */
+		case OP_SUBCC_IMM:	/* Fall through */
+		case OP_SBB_IMM:
+			mono_decompose_op_imm(cfg, basic_block, inst);
+			break;
+
 		case OP_OR_IMM:
 		case OP_IOR_IMM:
 			if((inst->sreg1 == sh4_r0 || register_not_assigned(inst->sreg1)) &&
@@ -2148,6 +2155,25 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	return;
 }
 
+void mono_arch_decompose_long_opts(MonoCompile *cfg, MonoInst *long_inst)
+{
+	/* Use of cfg->cbb in mono_decompose_long_opts is tricky and
+	 * explains why the macros hereafter work fine.
+	 */
+	if(long_inst->opcode == OP_LNEG) {
+		MonoInst *new_inst;
+
+		MONO_INST_NEW((cfg),new_inst,OP_SH4_CLRT);	/* Reset carry */
+		MONO_ADD_INS((cfg)->cbb,new_inst);
+		MONO_EMIT_NEW_UNALU((cfg),OP_SH4_NEGC, long_inst->dreg + 1, long_inst->sreg1 + 1);
+		MONO_EMIT_NEW_UNALU((cfg),OP_SH4_NEGC, long_inst->dreg + 2, long_inst->sreg1 + 2);
+
+		NULLIFY_INS(long_inst);
+	}
+
+	return;
+}
+
 /* Free the space used by parameters, computed into mono_arch_call_opcode(). */
 static inline void free_args_area(MonoCompile *cfg, guint8 **buffer, MonoCallInst *call)
 {
@@ -2236,12 +2262,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_add(&buffer, inst->sreg2, inst->dreg);
 			break;
 
+		case OP_ADDCC:
+			/* MD: addcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* Fall through */
 		case OP_IADDCC:
 			/* MD: int_addcc: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_addv(&buffer, inst->sreg2, inst->dreg);
 			break;
 
+		case OP_ADC:
+			/* MD: adc: clob:1 dest:i src1:i src2:i len:2 */
+			/* Fall through */
 		case OP_IADC:
 			/* MD: int_adc: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
@@ -2252,6 +2284,21 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_sub: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_sub(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_SUBCC:
+			/* MD: subcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* Fall through */
+		case OP_ISUBCC:
+			/* MD: int_subcc: clob:1 dest:i src1:i src2:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_subv(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_ISBB:
+			/* MD: int_sbb: clob:1 dest:i src1:i src2:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_subc(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_SH4_OR_IMM_R0:
@@ -2748,6 +2795,16 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_bt_label(&patch, buffer);
 			}
 
+			break;
+
+		case OP_SH4_CLRT:
+			/* MD: sh4_clrt: len:2 */
+			sh4_clrt(&buffer);
+			break;
+
+		case OP_SH4_NEGC:
+			/* MD: sh4_negc: dest:i src1:i len:2 */
+			sh4_negc(&buffer,inst->sreg1,inst->dreg);
 			break;
 
 		case OP_LABEL:

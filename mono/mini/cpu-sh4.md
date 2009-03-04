@@ -55,9 +55,14 @@
 int_add_imm: clob:1 dest:i src1:i len:2
 add_imm: clob:1 dest:i src1:i len:2
 int_add: clob:1 dest:i src1:i src2:i len:2
+addcc: clob:1 dest:i src1:i src2:i len:2
 int_addcc: clob:1 dest:i src1:i src2:i len:2
+adc: clob:1 dest:i src1:i src2:i len:2
 int_adc: clob:1 dest:i src1:i src2:i len:2
 int_sub: clob:1 dest:i src1:i src2:i len:2
+subcc: clob:1 dest:i src1:i src2:i len:2
+int_subcc: clob:1 dest:i src1:i src2:i len:2
+int_sbb: clob:1 dest:i src1:i src2:i len:2
 sh4_or_imm_R0: clob:1 dest:z src1:z len:2
 int_or: clob:1 dest:i src1:i src2:i len:2
 sh4_xor_imm_R0: clob:1 dest:z src1:z len:2
@@ -121,6 +126,8 @@ br: len:16
 br_reg: src1:i len:4
 sh4_bt: len:18
 sh4_bf: len:18
+sh4_clrt: len:2
+sh4_negc: dest:i src1:i len:2
 label: len:0
 checkthis: src1:i len:2
 store_membase_reg: dest:b src1:i len:16

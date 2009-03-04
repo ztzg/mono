@@ -22,7 +22,8 @@
  * THE SOFTWARE.
  *
  * Authors:
- *   Cedric VINCENT (cedric.vincent@gmail.com)
+ *   Cedric VINCENT (cedric.vincent@st.com)
+ *   Yves JANIN (yves.janin@st.com)
  */
 
 #ifndef MONO_SH4_H
@@ -117,6 +118,15 @@
  * Not used.
  */
 #define MONO_ARCH_EMULATE_LONG_MUL_OPTS 1
+
+/*
+ * This macro is set when decomposition of long operators is
+ * made in target specific parts of the backend.
+ *
+ * In our case, this decomposition is only partial and we rely
+ * on the generic one in decompose.c.
+ */
+#define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 
 /*
  * This macro defines the size of the floating-point stack.
