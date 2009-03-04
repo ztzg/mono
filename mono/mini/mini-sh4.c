@@ -640,6 +640,11 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 		g_assert(size != 0);
 
+		/* For the moment we save parameters into a 32 bits slot (at least).
+		   If you want to change this behaviour, don't forget to adjust emit_prolog(). */
+		if (align < 4)
+			align = 4;
+
 		/* Align the access on a `align`-bytes boundary. */
 		cfg->stack_offset += align - 1;
 		cfg->stack_offset &= ~(align - 1);
