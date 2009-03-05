@@ -659,6 +659,10 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		cfg->stack_offset += size;
 	}
 
+	/* Align the frame on a 4-bytes boundary to avoid SIGBUS in prologue. */
+	cfg->stack_offset += 4 - 1;
+	cfg->stack_offset &= ~(4 - 1);
+
 	SH4_CFG_DEBUG(4) SH4_DEBUG("return type = %d", call_info->ret.type);
 
 	/* Specify how to access the return value, see mono_arch_emit_setret().
@@ -1015,7 +1019,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		}
 	}
 
-	/* Set the frame pointer. */
+	/* Set the stack pointer. */
 	if (cfg->stack_offset != 0)
 		sh4_mov(&buffer, sh4_fp, sh4_sp);
 
@@ -1498,7 +1502,6 @@ MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
 MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
 {
 	/* TODO - CV */
-	g_assert(0);
 	return NULL;
 }
 
