@@ -1166,12 +1166,10 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	   used to implement an epilogue. */
 	code = buffer = get_code_buffer(cfg, EPILOGUE_SIZE);
 
-	/* Reset the stack pointer. */
-	sh4_mov(&buffer, sh4_r14, sh4_r15);
-
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
 		/* Adjust SP to point to the "hidden" LMF. */
+		sh4_mov(&buffer, sh4_r14, sh4_r15);
 		sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
 		sh4_mov(&buffer, sh4_sp, sh4_temp);
 
@@ -1191,11 +1189,12 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
 		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_temp);
-		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, lmf_addr), sh4_sp);
-
-		/* Adjust SP to free of the "hidden" LMF. */
-		sh4_add_imm(&buffer, sizeof(MonoLMF), sh4_sp);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_r15, sh4_r15);
+		sh4_movl_indRx(&buffer, sh4_temp, sh4_r15);
 	}
+
+	/* Reset the stack pointer. */
+	sh4_mov(&buffer, sh4_r14, sh4_r15);
 
 	/* At this point, the stack looks like :
 	 *	:              :
