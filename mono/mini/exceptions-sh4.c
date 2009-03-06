@@ -51,6 +51,11 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		*managed = FALSE;
 
 	if (jit_info != NULL) {
+		int i = 0;
+		guint stack_offset = 0;
+		guint16 *code = NULL;
+		guint32 *registers = NULL;
+
 		*new_context = *context;
 
 		if (managed != NULL &&
@@ -68,116 +73,94 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		 *	|    MonoLMF   |
 		 *	|--------------| <- SP (only if method->save_lmf is set)
 		 *	:              :
+		 *
+		 * A prologue looks like that on Mono/SH4:
+		 *
+		 * 	mov.l	r8, @-r15	// if r8 is used
+		 * 	mov.l	r9, @-r15	// if r9 is used
+		 * 	mov.l	r10, @-r15	// if r10 is used
+		 * 	mov.l	r11, @-r15	// if r11 is used
+		 * 	mov.l	r12, @-r15	// if r12 is used
+		 * 	mov.l	r13, @-r15	// if r13 is used
+		 * 	mov.l	r14, @-r15
+		 * 	sts.l	pr, @-r15
+		 * 	mov	r15, r14
+		 * #if stack_offset is small
+		 * 	add	-#stack_offset, r14
+		 * #else if stack_offset is medium
+		 * 	mov	#stack_offset, temp
+		 * 	sub	temp, r14
+		 * #else if stack_offset is large
+		 * 	LOAD	#stack_offset, temp
+		 * 	sub	temp, r14
+		 * #else if stack_offset is 0
+		 * #endif
+		 *      [...]
+		 * 	mov	r14, r15	// if stack_offset != 0
 		 */
 
-		/* Some managed methods like pinvoke wrappers might have save_lmf
-		   set. In this case, register save/restore code is not generated
-		   by the JIT, so we have to restore registers from the LMF. */
-		if (jit_info->method->save_lmf != 0) {
-			/* We only need to do this if the exception was raised in managed
-			   code, since otherwise the LMF was already popped off the stack. */
-			if (*lmf != NULL &&
-			    *lmf != jit_tls->first_lmf &&
-			    context->registers[sh4_fp] >= (*lmf)->registers[sh4_fp]) {
-				memcpy(new_context->registers, (*lmf)->registers, sizeof(new_context->registers));
-				new_context->pc = (*lmf)->pc;
-			}
+		SH4_EXTRA_DEBUG("start: %p", jit_info->code_start);
+
+		/* Walk forward to find the space used by local variables. */
+		for (code = jit_info->code_start; !is_sh4_mov(*code, sh4_sp, sh4_fp); code++) {
+			/* Sanity check. */
+			g_assert((guint8 *)code < (guint8 *)jit_info->code_start + jit_info->code_size);
 		}
+		code++;
+
+		SH4_EXTRA_DEBUG("code: %p", code);
+
+		/* stack_offset is small? */
+		if (stack_offset = get_imm_sh4_add_imm(code[0]),
+		    is_sh4_add_imm(code[0], stack_offset, sh4_fp)) {
+			/* Remember stack_offset was negated due to
+			   the use of "add_imm" instead of "sub_imm". */
+			stack_offset = -stack_offset;
+		}
+		/* stack_offset is medium? */
+		else if (stack_offset = get_imm_sh4_mov_imm(code[0]),
+			 is_sh4_mov_imm(code[0], stack_offset, sh4_temp) &&
+			 is_sh4_sub(code[1], sh4_temp, sh4_fp)) {
+			/* stack_offset is already extracted. */;
+		}
+		/* stack_offset is large? */
+		else if (stack_offset = get_imm_sh4_movl_dispPC(code[0]),
+			 is_sh4_movl_dispPC(code[0], stack_offset, sh4_temp)) {
+			/* The virtual address is formed by calculating PC + 4,
+			   clearing the lowest 2 bits, and adding the immediate. */
+			guint address = (guint)code;
+			address += 4;
+			address &= ~0x3;
+			stack_offset = *(guint8 *)(address + stack_offset);
+		}
+		/* stack_offset is 0! */
 		else {
-			int i = 0;
-			guint stack_offset = 0;
-			guint16 *code = NULL;
-			guint32 *registers = NULL;
-
-			/*
-			 * A prologue looks like that on Mono/SH4:
-			 *
-			 * 	mov.l	r8, @-r15	// if r8 is used
-			 * 	mov.l	r9, @-r15	// if r9 is used
-			 * 	mov.l	r10, @-r15	// if r10 is used
-			 * 	mov.l	r11, @-r15	// if r11 is used
-			 * 	mov.l	r12, @-r15	// if r12 is used
-			 * 	mov.l	r13, @-r15	// if r13 is used
-			 * 	mov.l	r14, @-r15
-			 * 	sts.l	pr, @-r15
-			 * 	mov	r15, r14
-			 * #if stack_offset is small
-			 * 	add	-#stack_offset, r14
-			 * #else if stack_offset is medium
-			 * 	mov	#stack_offset, temp
-			 * 	sub	temp, r14
-			 * #else if stack_offset is large
-			 * 	LOAD	#stack_offset, temp
-			 * 	sub	temp, r14
-			 * #else if stack_offset is 0
-			 * #endif
-			 *      [...]
-			 * 	mov	r14, r15	// if stack_offset != 0
-			 */
-
-			SH4_EXTRA_DEBUG("start: %p", jit_info->code_start);
-
-			/* Walk forward to find the space used by local variables. */
-			for (code = jit_info->code_start; !is_sh4_mov(*code, sh4_sp, sh4_fp); code++) {
-				/* Sanity check. */
-				g_assert((guint8 *)code < (guint8 *)jit_info->code_start + jit_info->code_size);
-			}
-			code++;
-
-			SH4_EXTRA_DEBUG("code: %p", code);
-
-			/* stack_offset is small? */
-			if (stack_offset = get_imm_sh4_add_imm(code[0]),
-			    is_sh4_add_imm(code[0], stack_offset, sh4_fp)) {
-				/* Remember stack_offset was negated due to
-				   the use of "add_imm" instead of "sub_imm". */
-				stack_offset = -stack_offset;
-			}
-			/* stack_offset is medium? */
-			else if (stack_offset = get_imm_sh4_mov_imm(code[0]),
-				 is_sh4_mov_imm(code[0], stack_offset, sh4_temp) &&
-				 is_sh4_sub(code[1], sh4_temp, sh4_fp)) {
-				/* stack_offset is already extracted. */;
-			}
-			/* stack_offset is large? */
-			else if (stack_offset = get_imm_sh4_movl_dispPC(code[0]),
-				 is_sh4_movl_dispPC(code[0], stack_offset, sh4_temp)) {
-				/* The virtual address is formed by calculating PC + 4,
-				   clearing the lowest 2 bits, and adding the immediate. */
-				guint address = (guint)code;
-				address += 4;
-				address &= ~0x3;
-				stack_offset = *(guint8 *)(address + stack_offset);
-			}
-			/* stack_offset is 0! */
-			else {
-				stack_offset = 0;
-			}
-
-			/* Now we know exactly where are saved global registers. */
-			registers = (guint32 *)(context->registers[sh4_fp] + stack_offset);
-
-			SH4_EXTRA_DEBUG("stack_offset: %d", stack_offset);
-			SH4_EXTRA_DEBUG("registers: %p", registers);
-
-			/* Extract the previous value of PC. */
-			new_context->pc = *registers;
-			registers++;
-
-			/* Extract the previous value of global registers. */
-			for (i = sh4_r14; i >= sh4_r8; i--) {
-				if (jit_info->used_regs & (1 << i)) {
-					new_context->registers[i] = *registers;
-					registers++;
-
-					SH4_EXTRA_DEBUG("back reg%d: 0x%x -> 0x%x", i, context->registers[i], new_context->registers[i]);
-				}
-				else
-					new_context->registers[i] = context->registers[i];
-			}
-
-			SH4_EXTRA_DEBUG("back pc: 0x%x -> 0x%x", context->pc, new_context->pc);
+			stack_offset = 0;
 		}
+
+		/* Now we know exactly where are saved global registers. */
+		registers = (guint32 *)(context->registers[sh4_fp] + stack_offset);
+
+		SH4_EXTRA_DEBUG("stack_offset: %d", stack_offset);
+		SH4_EXTRA_DEBUG("registers: %p", registers);
+
+		/* Extract the previous value of PC. */
+		new_context->pc = *registers;
+		registers++;
+
+		/* Extract the previous value of global registers. */
+		for (i = sh4_r14; i >= sh4_r8; i--) {
+			if (jit_info->used_regs & (1 << i)) {
+				new_context->registers[i] = *registers;
+				registers++;
+
+				SH4_EXTRA_DEBUG("back reg%d: 0x%x -> 0x%x", i, context->registers[i], new_context->registers[i]);
+			}
+			else
+				new_context->registers[i] = context->registers[i];
+		}
+
+		SH4_EXTRA_DEBUG("back pc: 0x%x -> 0x%x", context->pc, new_context->pc);
 
 		/* Remove any unused LMF. */
 		if (*lmf != NULL &&
