@@ -2852,7 +2852,17 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_SH4_NEGC:
 			/* MD: sh4_negc: dest:i src1:i len:2 */
-			sh4_negc(&buffer,inst->sreg1,inst->dreg);
+			sh4_negc(&buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_INOT:
+			/* MD: int_not: dest:i src1:i len:2 */
+			sh4_not(&buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_INEG:
+			/* MD: int_neg: dest:i src1:i len:2 */
+			sh4_neg(&buffer, inst->sreg1, inst->dreg);
 			break;
 
 		case OP_LABEL:

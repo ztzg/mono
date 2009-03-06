@@ -81,10 +81,10 @@ trivial-exception2: trivial-exception2.exe
 	$(RUNTIME) $< x x x x x x ; test $$? = 6
 
 trivial-long: trivial-long.exe
-	$(RUNTIME) --optimize=-inline $< ; test $$? = 40
-	$(RUNTIME) --optimize=-inline $< x ; test $$? = 224
-	$(RUNTIME) --optimize=-inline $< x x ; test $$? = 152
-	$(RUNTIME) --optimize=-inline $< x x x ; test $$? = 80
+	$(RUNTIME) --optimize=-inline $< ; test $$? = 134
+	$(RUNTIME) --optimize=-inline $< x ; test $$? = 220
+	$(RUNTIME) --optimize=-inline $< x x ; test $$? = 205
+	$(RUNTIME) --optimize=-inline $< x x x ; test $$? = 237
 
 trivial-hello_world: trivial-hello_world.exe
 	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
