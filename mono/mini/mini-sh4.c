@@ -2023,6 +2023,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_MUL_IMM:
+			/* mono_decompose_op_imm() knows OP_IMUL_IMM. */
+			inst->opcode = OP_IMUL_IMM;
 		case OP_IMUL_IMM:
 			switch (inst->inst_imm) {
 			case 0:
@@ -2908,6 +2910,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
 			sh4_die(&buffer);
+			break;
+
+		case OP_BREAK:
+			/* MD: break: len:2 */
+			sh4_trapa_imm(&buffer, 0x40);
 			break;
 
 		case OP_JUMP_TABLE:

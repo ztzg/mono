@@ -140,5 +140,6 @@ dummy_use: len:0
 dummy_store: len:0
 not_null: len:0
 not_reached: len:2
+break: len:2
 jump_table: dest:i len:12
 setlret: src1:i src2:i len:2
