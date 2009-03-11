@@ -1975,6 +1975,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SHL_IMM:
+			/* mono_decompose_op_imm() knows OP_ISHL_IMM. */
+			inst->opcode = OP_ISHL_IMM;
 		case OP_ISHL_IMM:
 			switch (inst->inst_imm) {
 			case 0:
@@ -1999,6 +2001,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SHR_IMM:
+			/* mono_decompose_op_imm() knows OP_ISHR_IMM. */
+			inst->opcode = OP_ISHR_IMM;
 		case OP_ISHR_IMM:
 			switch (inst->inst_imm) {
 			case 0:
@@ -2017,7 +2021,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				inst->opcode = OP_SH4_SHLR16;
 				break;
 			default:
-				NOT_IMPLEMENTED;
+				mono_decompose_op_imm(cfg, basic_block, inst);
 				break;
 			}
 			break;
@@ -2465,6 +2469,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: int_shl: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_shld(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_ISHR:
+			/* MD: int_shr: clob:1 dest:i src1:i src2:i len:4 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_neg(&buffer, inst->sreg2, sh4_temp);
+			sh4_shld(&buffer, sh4_temp, inst->dreg);
 			break;
 
 		case OP_IMUL:

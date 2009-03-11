@@ -78,6 +78,7 @@ sh4_shlr2: clob:1 dest:i src1:i len:2
 sh4_shlr8: clob:1 dest:i src1:i len:2
 sh4_shlr16: clob:1 dest:i src1:i len:2
 int_shl: clob:1 dest:i src1:i src2:i len:2
+int_shr: clob:1 dest:i src1:i src2:i len:4
 int_mul: dest:i src1:i src2:i len:4
 sh4_cmpeq: src1:i src2:i len:2
 sh4_cmpeq_imm_R0: src1:z len:2
