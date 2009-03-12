@@ -2165,6 +2165,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_VCALL_MEMBASE:
+		case OP_VCALL2_MEMBASE:
 		case OP_VOIDCALL_MEMBASE:
 		case OP_LCALL_MEMBASE:
 		case OP_CALL_MEMBASE:
@@ -2182,7 +2184,9 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			inst->sreg1 = new_inst->dreg;
 
 			/* Convert call*_membase to call*_reg. */
-			if (inst->opcode == OP_VOIDCALL_MEMBASE)
+			if ((inst->opcode == OP_VOIDCALL_MEMBASE) ||
+			    (inst->opcode == OP_VCALL_MEMBASE) ||
+			    (inst->opcode == OP_VCALL2_MEMBASE))
 				inst->opcode = OP_VOIDCALL_REG;
 			else if (inst->opcode == OP_LCALL_MEMBASE)
 				inst->opcode = OP_LCALL_REG;
