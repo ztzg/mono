@@ -359,6 +359,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	int sentinelpos = -1;
 	int arg_count = 0;
 	int i = 0;
+	int j = 0;
 
 	SH4_CFG_DEBUG(4)
 		SH4_DEBUG("args => %p, %p", cfg, call);
@@ -381,6 +382,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	   to free the space used by parameters after a call. */
 	call->stack_usage = 0;
 
+	/* First, put in order parameters passed into registers. */
 	for (i = 0; i < arg_count; i++) {
 		struct arg_info *arg_info = &(call_info->args[i]);
 		MonoInst *arg = NULL;
@@ -394,75 +396,81 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		if (MONO_TYPE_ISSTRUCT(signature->params[i - signature->hasthis]))
 			NOT_IMPLEMENTED;
 
+		/* Check if it is the last parameter passed into registers. */
+		if (arg_info->storage != into_register)
+			break;
+
 		/* Arguments passed by reference are already handled in get_call_info(). */
 		switch (arg_info->type) {
 		case integer32:
-			switch (arg_info->storage) {
-			case into_register:
-				MONO_INST_NEW(cfg, arg, OP_MOVE);
-				arg->sreg1 = call->args[i]->dreg;
-				arg->dreg  = mono_alloc_ireg(cfg);
-				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
-				MONO_ADD_INS(cfg->cbb, arg);
-				break;
-
-			case onto_stack:
-				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
-				arg->sreg1 = call->args[i]->dreg;
-				MONO_ADD_INS(cfg->cbb, arg);
-				call->stack_usage += 4;
-				break;
-
-			case nowhere:
-			default:
-				g_assert_not_reached();
-			}
+			MONO_INST_NEW(cfg, arg, OP_MOVE);
+			arg->sreg1 = call->args[i]->dreg;
+			arg->dreg  = mono_alloc_ireg(cfg);
+			mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+			MONO_ADD_INS(cfg->cbb, arg);
 			break;
 
 		case integer64:
-			switch (arg_info->storage) {
-			case into_register:
-				/* A long register N is splitted into two interger registers N+1, N+2. */
-				MONO_INST_NEW(cfg, arg, OP_MOVE);
-				arg->sreg1 = call->args[i]->dreg + 1;
-				arg->dreg  = mono_alloc_ireg(cfg);
-				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
-				MONO_ADD_INS(cfg->cbb, arg);
+			/* A long register N is splitted into two interger registers N+1, N+2. */
+			MONO_INST_NEW(cfg, arg, OP_MOVE);
+			arg->sreg1 = call->args[i]->dreg + 1;
+			arg->dreg  = mono_alloc_ireg(cfg);
+			mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+			MONO_ADD_INS(cfg->cbb, arg);
 
-				MONO_INST_NEW(cfg, arg, OP_MOVE);
-				arg->sreg1 = call->args[i]->dreg + 2;
-				arg->dreg  = mono_alloc_ireg(cfg);
-				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg + 1, FALSE);
-				MONO_ADD_INS(cfg->cbb, arg);
-				break;
-
-			case onto_stack:
-				NOT_IMPLEMENTED;
-				break;
-
-			case nowhere:
-			default:
-				g_assert_not_reached();
-			}
-			break;
-
-		case float32:
-			NOT_IMPLEMENTED;
-			break;
-
-		case float64:
-			NOT_IMPLEMENTED;
-			break;
-
-		case aggregate:
-			NOT_IMPLEMENTED;
+			MONO_INST_NEW(cfg, arg, OP_MOVE);
+			arg->sreg1 = call->args[i]->dreg + 2;
+			arg->dreg  = mono_alloc_ireg(cfg);
+			mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg + 1, FALSE);
+			MONO_ADD_INS(cfg->cbb, arg);
 			break;
 
 		default:
+			NOT_IMPLEMENTED;
 			g_assert_not_reached();
 			break;
 		}
 	}
+
+	/*
+	 * Then, push in reverse order parameters passed onto the stack.
+	 *
+	 *	:              :
+	 *	|--------------| <- SP before parameter passing
+	 *	| stacked arg3 |
+	 *	|--------------|
+	 *	| stacked arg2 |
+	 *	|--------------|
+	 *	| stacked arg1 |
+	 *	|--------------| <- SP after parameter passing
+	 *	:              :
+	 */
+	for (j = arg_count - 1; j >= i; j--) {
+		struct arg_info *arg_info = &(call_info->args[j]);
+		MonoInst *arg = NULL;
+
+		/* Check if it is the last parameter passed onto the stack. */
+		if (arg_info->storage != onto_stack)
+			break;
+
+		/* Arguments passed by reference are already handled in get_call_info(). */
+		switch (arg_info->type) {
+		case integer32:
+			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+			arg->sreg1 = call->args[j]->dreg;
+			MONO_ADD_INS(cfg->cbb, arg);
+			call->stack_usage += 4;
+			break;
+
+		default:
+			NOT_IMPLEMENTED;
+			g_assert_not_reached();
+			break;
+		}
+	}
+
+	/* Sanity check. */
+	g_assert(j == i - 1);
 
 	/* Emit the signature cookie in case no implicit arguments are specified. */
 	if (signature->pinvoke == 0 &&
@@ -507,6 +515,7 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	case MONO_TYPE_CLASS:
 	case MONO_TYPE_SZARRAY:
 	case MONO_TYPE_PTR:
+	case MONO_TYPE_CHAR:
 		MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
 		break;
 
@@ -929,7 +938,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			case onto_stack:
 				switch (arg_info->type) {
 				case integer32:
-					offset = saved_regs_size + call_info->stack_usage - arg_info->offset - 4;
+					offset = saved_regs_size + arg_info->offset;
 					sh4_base_load(cfg, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
@@ -989,7 +998,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			case onto_stack:
 				switch (arg_info->type) {
 				case integer32:
-					offset = saved_regs_size + call_info->stack_usage - arg_info->offset - 4;
+					offset = saved_regs_size + arg_info->offset;
 					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_temp);
 					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					break;
