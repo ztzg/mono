@@ -144,3 +144,19 @@ not_reached: len:2
 break: len:2
 jump_table: dest:i len:12
 setlret: src1:i src2:i len:2
+int_mul_ovf: dest:i src1:i src2:i len:0
+int_mul_ovf_un: dest:i src1:i src2:i len:0
+cond_exc_iov: len:0
+cond_exc_ic: len:0
+compare_imm: src1:i len:0
+cond_exc_igt: len:0
+cond_exc_ilt: len:0
+cond_exc_igt_un: len:0
+icompare: src1:i src2:i len:0
+int_clt_un: dest:i len:0
+sbb: dest:i src1:i src2:i len:0
+cond_exc_ov: len:0
+cond_exc_c: len:0
+cond_exc_lt: len:0
+cond_exc_gt: len:0
+cond_exc_gt_un: len:0

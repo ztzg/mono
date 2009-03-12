@@ -1783,9 +1783,10 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 	case OP_COND_EXC_INO:
 	case OP_COND_EXC_IC:
 	case OP_COND_EXC_INC:
-		g_warning("unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
+		fprintf(stderr, "unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
 			  mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
-		NOT_IMPLEMENTED;
+		//NOT_IMPLEMENTED;
+		break;
 
 	default:
 		/* The conditional branch was removed due to [some] dead-code
@@ -2937,6 +2938,28 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: setlret: src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
 			g_assert(inst->sreg2 == sh4_r1);
+			break;
+
+		/* These opcodes are missing for basic.cs. */
+		case OP_IMUL_OVF:	 /* MD: int_mul_ovf: dest:i src1:i src2:i len:0 */
+		case OP_IMUL_OVF_UN:	 /* MD: int_mul_ovf_un: dest:i src1:i src2:i len:0 */
+		case OP_COND_EXC_IOV:	 /* MD: cond_exc_iov: len:0 */
+		case OP_COND_EXC_IC:	 /* MD: cond_exc_ic: len:0 */
+		case OP_COMPARE_IMM:	 /* MD: compare_imm: src1:i len:0 */
+		case OP_COND_EXC_IGT:	 /* MD: cond_exc_igt: len:0 */
+		case OP_COND_EXC_ILT:	 /* MD: cond_exc_ilt: len:0 */
+		case OP_COND_EXC_IGT_UN: /* MD: cond_exc_igt_un: len:0 */
+		case OP_ICOMPARE:	 /* MD: icompare: src1:i src2:i len:0 */
+		case OP_ICLT_UN:	 /* MD: int_clt_un: dest:i len:0 */
+
+		/* These opcodes are missing for basic-long.cs. */
+		case OP_SBB:		 /* MD: sbb: dest:i src1:i src2:i len:0 */
+		case OP_COND_EXC_OV:	 /* MD: cond_exc_ov: len:0 */
+		case OP_COND_EXC_C:	 /* MD: cond_exc_c: len:0 */
+		case OP_COND_EXC_LT:	 /* MD: cond_exc_lt: len:0 */
+		case OP_COND_EXC_GT:	 /* MD: cond_exc_gt: len:0 */
+		case OP_COND_EXC_GT_UN:	 /* MD: cond_exc_gt_un: len:0 */
+			fprintf(stderr, "opcode %s (0x%x) not yet implemented\n", mono_inst_name(inst->opcode), inst->opcode);
 			break;
 
 		default:
