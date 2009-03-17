@@ -32,10 +32,9 @@ my $header = << 'EOF';
 #	i  integer register
 #	z  sh4_r0 register
 #	Z  sh4_r0:1 registers
-#	t  sh4_temp register
-#	I  any integer register but sh4_temp
 #	b  base register (used in address references)
 #	f  floating point register
+#	y  sh4_dr0 register
 #
 # len:number         describe the maximun length in bytes of the instruction
 # 		     number is a positive integer.  If the length is not specified

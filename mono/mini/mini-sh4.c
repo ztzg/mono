@@ -133,6 +133,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 {
 	struct call_info *call_info = NULL;
 	SH4IntRegister arg_reg = MONO_SH4_REG_FIRST_ARG;
+	SH4FloatRegister arg_freg = MONO_SH4_FREG_FIRST_ARG;
 	MonoType *basic_type = NULL;
 	guint32 stack_size = 0;
 	guint32 i = 0;
@@ -270,12 +271,12 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 
 		case MONO_TYPE_R4:
 			NOT_IMPLEMENTED;
-			/* add_float32_arg(&arg_reg, &stack_size, arg_info); */
+			/* add_float32_arg(&arg_freg, &stack_size, arg_info); */
 			break;
 
 		case MONO_TYPE_R8:
 			NOT_IMPLEMENTED;
-			/* add_float64_arg(&arg_reg, &stack_size, arg_info); */
+			/* add_float64_arg(&arg_freg, &stack_size, arg_info); */
 			break;
 
 		case MONO_TYPE_GENERICINST:
@@ -381,6 +382,8 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	/* Used into mono_arch_output_basic_block():*CALL*
 	   to free the space used by parameters after a call. */
 	call->stack_usage = 0;
+
+	/* TODO - CV: floating point. */
 
 	/* First, put in order parameters passed into registers. */
 	for (i = 0; i < arg_count; i++) {
@@ -528,6 +531,8 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		MONO_ADD_INS (cfg->cbb, inst);
 		break;
 
+	/* TODO - CV floating point. */
+
 	default:
 		g_warning("return type '0x%x' not yet supported\n", ret->type);
 		NOT_IMPLEMENTED;
@@ -551,6 +556,8 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	int i = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
+
+	/* TODO - CV: floating point. */
 
 	/* Spill variables slots are allocated from bottom to top. */
 	cfg->flags |= MONO_CFG_HAS_SPILLUP;
@@ -706,6 +713,14 @@ gpointer mono_arch_context_get_int_reg(MonoContext *ctx, int reg)
  */
 void mono_arch_cpu_init(void)
 {
+#if 0
+	int fpscr = 0;
+
+	__asm__ __volatile__ ("sts fpscr, %0" : : "r"(fpscr));
+	fpscr |= (1 << 19); /* Set the precision mode to 'double'. */
+	fpscr |= (1 << 20); /* Set the transfer size mode to 'double'. */
+	__asm__ __volatile__ ("lds %0, fpscr" : : "r"(fpscr));
+#endif
 	return;
 }
 
@@ -1414,13 +1429,6 @@ void mono_arch_flush_register_windows(void)
 void mono_arch_free_jit_tls_data(MonoJitTlsData *tls)
 {
 	return;
-}
-
-const char *mono_arch_fregname(int reg)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
 }
 
 /**
@@ -2944,6 +2952,58 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			g_assert(inst->sreg2 == sh4_r1);
 			break;
 
+		case OP_FMOVE:
+			/* MD: fmove: dest:f src1:f len:2 */
+			if (inst->sreg1 != inst->dreg)
+				sh4_fmov(&buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_R8CONST:
+			/* MD: r8const: dest:f clob:z len:24 */
+			/* TODO - CV: decompose in the lowering pass when value == '0.0' || value == '1.0'. */
+			/* TODO - CV: sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_R8, inst->inst_p0, inst->dreg); */
+			sh4_cstpool_addd(cfg, &buffer, *(double *)inst->inst_p0);
+			sh4_fmovs_incRy(&buffer, sh4_r0, inst->dreg + 1);
+			sh4_fmovs_indRy(&buffer, sh4_r0, inst->dreg);
+			break;
+
+		case OP_ICONV_TO_R8:
+			/* MD: int_conv_to_r8: dest:f src1:i len:4 */
+			sh4_lds_FPUL(&buffer, inst->sreg1);
+			sh4_float_FPUL_double(&buffer, inst->dreg);
+			break;
+
+		case OP_FCONV_TO_I4:
+			/* MD: float_conv_to_i4: dest:i src1:f len:4 */
+			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
+			sh4_sts_FPUL(&buffer, inst->dreg);
+			break;
+
+		case OP_FADD:
+			/* MD: float_add: clob:1 dest:f src1:f src2:f len:2 */
+			sh4_fadd_double(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_FSUB:
+			/* MD: float_sub: clob:1 dest:f src1:f src2:f len:2 */
+			sh4_fsub_double(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_FMUL:
+			/* MD: float_mul: clob:1 dest:f src1:f src2:f len:2 */
+			sh4_fmul_double(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_FDIV:
+			/* MD: float_div: clob:1 dest:f src1:f src2:f len:2 */
+			sh4_fdiv_double(&buffer, inst->sreg2, inst->dreg);
+			break;
+
+		case OP_FNEG:
+			/* MD: float_neg: dest:f src1:f len:2 */
+			sh4_fneg_double(&buffer, inst->dreg);
+			break;
+
 		/* These opcodes are missing for basic.cs. */
 		case OP_IMUL_OVF:	 /* MD: int_mul_ovf: dest:i src1:i src2:i len:0 */
 		case OP_IMUL_OVF_UN:	 /* MD: int_mul_ovf_un: dest:i src1:i src2:i len:0 */
@@ -3146,6 +3206,29 @@ const char *mono_arch_regname(int reg)
 	case sh4_r13: return "sh4_r13";
 	case sh4_r14: return "sh4_r14";
 	case sh4_r15: return "sh4_r15";
+	}
+	return "unknown";
+}
+
+const char *mono_arch_fregname(int reg)
+{
+	switch (reg) {
+	case sh4_dr0: return "sh4_dr0";
+	case sh4_fr1: return "sh4_fr1";
+	case sh4_dr2: return "sh4_dr2";
+	case sh4_fr3: return "sh4_fr3";
+	case sh4_dr4: return "sh4_dr4";
+	case sh4_fr5: return "sh4_fr5";
+	case sh4_dr6: return "sh4_dr6";
+	case sh4_fr7: return "sh4_fr7";
+	case sh4_dr8: return "sh4_dr8";
+	case sh4_fr9: return "sh4_fr9";
+	case sh4_dr10: return "sh4_dr10";
+	case sh4_fr11: return "sh4_fr11";
+	case sh4_dr12: return "sh4_dr12";
+	case sh4_fr13: return "sh4_fr13";
+	case sh4_dr14: return "sh4_dr14";
+	case sh4_fr15: return "sh4_fr15";
 	}
 	return "unknown";
 }

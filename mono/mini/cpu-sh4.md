@@ -16,10 +16,9 @@
 #	i  integer register
 #	z  sh4_r0 register
 #	Z  sh4_r0:1 registers
-#	t  sh4_temp register
-#	I  any integer register but sh4_temp
 #	b  base register (used in address references)
 #	f  floating point register
+#	y  sh4_dr0 register
 #
 # len:number         describe the maximun length in bytes of the instruction
 # 		     number is a positive integer.  If the length is not specified
@@ -144,6 +143,15 @@ not_reached: len:2
 break: len:2
 jump_table: dest:i len:12
 setlret: src1:i src2:i len:2
+fmove: dest:f src1:f len:2
+r8const: dest:f clob:z len:24
+int_conv_to_r8: dest:f src1:i len:4
+float_conv_to_i4: dest:i src1:f len:4
+float_add: clob:1 dest:f src1:f src2:f len:2
+float_sub: clob:1 dest:f src1:f src2:f len:2
+float_mul: clob:1 dest:f src1:f src2:f len:2
+float_div: clob:1 dest:f src1:f src2:f len:2
+float_neg: dest:f src1:f len:2
 int_mul_ovf: dest:i src1:i src2:i len:0
 int_mul_ovf_un: dest:i src1:i src2:i len:0
 cond_exc_iov: len:0

@@ -36,7 +36,7 @@
  * these are usually used for local allocation. This macro is
  * mandatory even if the soft floating-point support is enabled.
  */
-#define MONO_ARCH_CALLEE_FREGS 0xF
+#define MONO_ARCH_CALLEE_FREGS ((1<<sh4_dr0) | (1<<sh4_dr2) | (1<<sh4_dr4) | (1<<sh4_dr6) | (1<<sh4_dr8) | (1<<sh4_dr10))
 
 /*
  * Bitmask selecting the caller-saved general registers, these
@@ -49,7 +49,7 @@
  * these are usually used for global allocation. This macro is
  * mandatory even if the soft floating-point support is enabled.
  */
-#define MONO_ARCH_CALLEE_SAVED_FREGS 0
+#define MONO_ARCH_CALLEE_SAVED_FREGS ((1<<sh4_dr12) | (1<<sh4_dr14))
 
 /*
  * Bitmask selecting the callee-saved general registers, these
@@ -83,8 +83,8 @@
 /*
  * If this macro is defined, the opcode to convert a double float to
  * a 64 bits integer will be emulated.
- */
 #define MONO_ARCH_EMULATE_FCONV_TO_I8 1
+ */
 
 /*
  * Not used.
@@ -149,7 +149,8 @@
  * This macro provides, from the machine-description of an instruction,
  * the fixed hreg corresponding to that value. This macro is mandatory.
  */
-#define MONO_ARCH_INST_FIXED_REG(desc) ((desc) == 'z' || (desc) == 'Z' ? sh4_r0 : -1)
+#define MONO_ARCH_INST_FIXED_REG(desc) ((desc) == 'z' || (desc) == 'Z' ? sh4_r0 : \
+					(desc) == 'y' ? sh4_dr0 : -1)
 
 /*
  * This macro tests if a register denotes a register pair (from
@@ -157,6 +158,13 @@
  * (desc == 'l' || desc == 'L'). This macro is mandatory.
  */
 #define MONO_ARCH_INST_IS_REGPAIR(desc) ((desc) == 'Z')
+
+/*
+ * This macro tests if a register denotes a floating point (from
+ * the machine-description of an instruction). Usually it looks like
+ * (desc == 'f').
+ */
+#define MONO_ARCH_INST_IS_FLOAT(desc) ((desc == 'f') || (desc == 'y'))
 
 /*
  * This macro provides, from the first register of a pair, the bitmask
@@ -170,13 +178,6 @@
  * architectures define it to "(0)".
  */
 #define MONO_ARCH_INST_SREG2_MASK(a) (0)
-
-/*
- * If this macro is defined, the software floating point support will
- * be enabled. This macro is required if your architecture does not
- * have hardware support for floating point.
- */
-#define MONO_ARCH_SOFT_FLOAT 1
 
 /*
  * This macro defines whether the architecture uses a floating point
@@ -240,7 +241,7 @@
  * This macro defines the maximum number of floating point registers.
  * Obviously, this macro is mandatory.
  */
-#define MONO_MAX_FREGS 16
+#define MONO_MAX_FREGS 8
 
 /*
  * This macro defines the maximum number of integer registers (even ones
@@ -257,6 +258,16 @@
  * This macro defines the last argument used in the calling convention.
  */
 #define MONO_SH4_REG_LAST_ARG sh4_r7
+
+/*
+ * This macro defines the first float argument used in the calling convention.
+ */
+#define MONO_SH4_FREG_FIRST_ARG sh4_dr2
+
+/*
+ * This macro defines the last float argument used in the calling convention.
+ */
+#define MONO_SH4_FREG_LAST_ARG sh4_dr10
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */
