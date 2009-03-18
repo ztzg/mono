@@ -2967,6 +2967,24 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_fmovs_indRy(&buffer, sh4_r0, inst->dreg);
 			break;
 
+		case OP_R4CONST:
+			/* MD: r4const: dest:f clob:z len:20 */
+			/* TODO - CV: decompose in the lowering pass when value == '0.0' || value == '1.0'. */
+			/* TODO - CV: sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_R4, inst->inst_p0, inst->dreg); */
+			sh4_cstpool_addf(cfg, &buffer, *(float *)inst->inst_p0);
+			sh4_fmovs_indRy(&buffer, sh4_r0, inst->dreg);
+
+			/* Convert [internally] to double precision, as specified by the ECMA. */
+			sh4_flds_FPUL(&buffer, inst->dreg);
+			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
+			break;
+
+		case OP_ICONV_TO_R4:
+			/* MD: int_conv_to_r4: dest:f src1:i len:4 */
+			sh4_lds_FPUL(&buffer, inst->sreg1);
+			sh4_float_FPUL(&buffer, inst->dreg);
+			break;
+
 		case OP_ICONV_TO_R8:
 			/* MD: int_conv_to_r8: dest:f src1:i len:4 */
 			sh4_lds_FPUL(&buffer, inst->sreg1);
@@ -3002,6 +3020,34 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_FNEG:
 			/* MD: float_neg: dest:f src1:f len:2 */
 			sh4_fneg_double(&buffer, inst->dreg);
+			break;
+
+		case OP_STORER4_MEMBASE_REG:
+			/* MD: storer4_membase_reg: dest:b src1:f len:10 */
+			/* FIXME - CV: decompose in the lowering pass. */
+			sh4_mov(&buffer, inst->inst_destbasereg, sh4_temp);
+			if (inst->inst_offset != 0)
+				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+
+			/* Convert back to simple precision.  */
+			sh4_fcnvds_double_FPUL(&buffer, inst->sreg1);
+			sh4_fsts_FPUL(&buffer, inst->sreg1);
+
+			sh4_fmovs_indRx(&buffer, inst->sreg1, sh4_temp);
+			break;
+
+		case OP_LOADR4_MEMBASE:
+			/* MD: loadr4_membase: dest:f src1:b len:10 */
+			/* FIXME - CV: decompose in the lowering pass. */
+			sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+			if (inst->inst_offset != 0)
+				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+
+			sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg);
+
+			/* Convert [internally] to double precision, as specified by the ECMA. */
+			sh4_flds_FPUL(&buffer, inst->dreg);
+			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
 			break;
 
 		/* These opcodes are missing for basic.cs. */
