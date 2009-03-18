@@ -327,7 +327,7 @@ static void printf_nibbles(const sh_nibble_type nibbles[9], int scaling)
 			break;
 
 		case REG_N_D:
-			printf("(((Rx & 0xF) << 1) << %d)", 12 - length);
+			printf("((Rx & 0xF) << %d)", 12 - length);
 			length += 4;
 			break;
 

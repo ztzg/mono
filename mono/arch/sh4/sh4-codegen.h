@@ -3958,26 +3958,26 @@ static inline int get_Ry_sh4_fcmpgt_double(guint16 code)
 static inline void sh4_fcnvds_double_FPUL(guint8 **code, SH4FloatRegister Rx)
 {
 	g_assert(1 && !(Rx & 0x1));
-	sh4_emit16(code, (0xF << 12) | (((Rx & 0xF) << 1) << 8) | (0xB << 4) | (0xD << 0));
+	sh4_emit16(code, (0xF << 12) | ((Rx & 0xF) << 8) | (0xB << 4) | (0xD << 0));
 }
 
 static inline int is_sh4_fcnvds_double_FPUL(guint16 code, SH4FloatRegister Rx)
 {
 	return (1 && !(Rx & 0x1)
-		&& code == ((0xF << 12) | (((Rx & 0xF) << 1) << 8) | (0xB << 4) | (0xD << 0)));
+		&& code == ((0xF << 12) | ((Rx & 0xF) << 8) | (0xB << 4) | (0xD << 0)));
 }
 
 
 static inline void sh4_fcnvsd_FPUL_double(guint8 **code, SH4FloatRegister Rx)
 {
 	g_assert(1 && !(Rx & 0x1));
-	sh4_emit16(code, (0xF << 12) | (((Rx & 0xF) << 1) << 8) | (0xA << 4) | (0xD << 0));
+	sh4_emit16(code, (0xF << 12) | ((Rx & 0xF) << 8) | (0xA << 4) | (0xD << 0));
 }
 
 static inline int is_sh4_fcnvsd_FPUL_double(guint16 code, SH4FloatRegister Rx)
 {
 	return (1 && !(Rx & 0x1)
-		&& code == ((0xF << 12) | (((Rx & 0xF) << 1) << 8) | (0xA << 4) | (0xD << 0)));
+		&& code == ((0xF << 12) | ((Rx & 0xF) << 8) | (0xA << 4) | (0xD << 0)));
 }
 
 
@@ -4862,13 +4862,13 @@ static inline int is_sh4_frchg(guint16 code)
 static inline void sh4_fsca_FPUL_double(guint8 **code, SH4FloatRegister Rx)
 {
 	g_assert(1 && !(Rx & 0x1));
-	sh4_emit16(code, (0xF << 12) | (((Rx & 0xF) << 1) << 8) | (0xF << 4) | (0xD << 0));
+	sh4_emit16(code, (0xF << 12) | ((Rx & 0xF) << 8) | (0xF << 4) | (0xD << 0));
 }
 
 static inline int is_sh4_fsca_FPUL_double(guint16 code, SH4FloatRegister Rx)
 {
 	return (1 && !(Rx & 0x1)
-		&& code == ((0xF << 12) | (((Rx & 0xF) << 1) << 8) | (0xF << 4) | (0xD << 0)));
+		&& code == ((0xF << 12) | ((Rx & 0xF) << 8) | (0xF << 4) | (0xD << 0)));
 }
 
 
