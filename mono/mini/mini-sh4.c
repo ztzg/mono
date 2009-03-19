@@ -2033,10 +2033,10 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
-		case OP_SHR_IMM:
-			/* mono_decompose_op_imm() knows OP_ISHR_IMM. */
-			inst->opcode = OP_ISHR_IMM;
-		case OP_ISHR_IMM:
+		case OP_SHR_UN_IMM:
+			/* mono_decompose_op_imm() knows OP_ISHR_UN_IMM. */
+			inst->opcode = OP_ISHR_UN_IMM;
+		case OP_ISHR_UN_IMM:
 			switch (inst->inst_imm) {
 			case 0:
 				inst->opcode = OP_MOVE;
@@ -2052,6 +2052,23 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				break;
 			case 16:
 				inst->opcode = OP_SH4_SHLR16;
+				break;
+			default:
+				mono_decompose_op_imm(cfg, basic_block, inst);
+				break;
+			}
+			break;
+
+		case OP_SHR_IMM:
+			/* mono_decompose_op_imm() knows OP_ISHR_IMM. */
+			inst->opcode = OP_ISHR_IMM;
+		case OP_ISHR_IMM:
+			switch (inst->inst_imm) {
+			case 0:
+				inst->opcode = OP_MOVE;
+				break;
+			case 1:
+				inst->opcode = OP_SH4_SHAR1;
 				break;
 			default:
 				mono_decompose_op_imm(cfg, basic_block, inst);
@@ -2462,6 +2479,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_shll16(&buffer, inst->dreg);
 			break;
 
+		case OP_SH4_SHAR1:
+			/* MD: sh4_shar1: clob:1 dest:i src1:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shar(&buffer, inst->dreg);
+			break;
+
 		case OP_SH4_SHLR1:
 			/* MD: sh4_shlr1: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
@@ -2508,11 +2531,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_shld(&buffer, inst->sreg2, inst->dreg);
 			break;
 
+		case OP_ISHR_UN:
+			/* MD: int_shr_un: clob:1 dest:i src1:i src2:i len:4 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_neg(&buffer, inst->sreg2, sh4_temp);
+			sh4_shld(&buffer, sh4_temp, inst->dreg);
+			break;
+
 		case OP_ISHR:
 			/* MD: int_shr: clob:1 dest:i src1:i src2:i len:4 */
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_neg(&buffer, inst->sreg2, sh4_temp);
-			sh4_shld(&buffer, sh4_temp, inst->dreg);
+			sh4_shad(&buffer, sh4_temp, inst->dreg);
 			break;
 
 		case OP_IMUL:
