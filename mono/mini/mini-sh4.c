@@ -36,6 +36,8 @@
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
+#define ALIGN_TO(val, align) ((((guint32)val) + ((align) - 1)) & ~((align) - 1))
+
 int sh4_extra_debug = 0;
 
 struct arg_info {
@@ -303,7 +305,7 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 		add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
 
 	/* Align the stack frame on a 4-bytes boundary. */
-	call_info->stack_usage = (stack_size + 0x3) & ~0x3;
+	call_info->stack_usage = ALIGN_TO(stack_size, 0x4);
 	call_info->stack_align_amount = call_info->stack_usage - stack_size;
 
 	return call_info;
@@ -596,8 +598,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 							(guint32 *)&cfg->stack_offset,
 							&locals_alignement);
 	if (locals_alignement != 0) {
-		locals_padding += locals_alignement - 1;
-		locals_padding &= ~(locals_alignement - 1);
+		locals_padding = ALIGN_TO(locals_padding, locals_alignement);
 	}
 	cfg->stack_offset += locals_padding;
 
@@ -675,8 +676,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 			align = 4;
 
 		/* Align the access on a `align`-bytes boundary. */
-		cfg->stack_offset += align - 1;
-		cfg->stack_offset &= ~(align - 1);
+		cfg->stack_offset = ALIGN_TO(cfg->stack_offset, align);
 
 		/* Specify how to access this argument. */
 		inst->opcode = OP_REGOFFSET;
@@ -689,8 +689,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	}
 
 	/* Align the frame on a 4-bytes boundary to avoid SIGBUS in prologue. */
-	cfg->stack_offset += 4 - 1;
-	cfg->stack_offset &= ~(4 - 1);
+	cfg->stack_offset = ALIGN_TO(cfg->stack_offset, 0x4);
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("return type = %d", call_info->ret.type);
 
@@ -1433,8 +1432,7 @@ void mono_arch_flush_icache(guint8 *code, gint size)
 
 	/* Align frontiers on a CACHE_BLOCK_LENGTH. */
 	start &= ~(CACHE_BLOCK_LENGTH - 1);
-	end += CACHE_BLOCK_LENGTH - 1;
-	end &= ~(CACHE_BLOCK_LENGTH - 1);
+	end = ALIGN_TO(end, CACHE_BLOCK_LENGTH);
 
 	for (address = start; address <= end; address += CACHE_BLOCK_LENGTH) {
 		__asm__ __volatile__ ("ocbp @%0" : : "r"(address));
