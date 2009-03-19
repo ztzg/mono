@@ -1966,6 +1966,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ADDCC_IMM:	/* Fall through */
 		case OP_ADC_IMM:	/* Fall through */
 		case OP_SUBCC_IMM:	/* Fall through */
+		case OP_ISBB_IMM:	/* Fall through */
 		case OP_SBB_IMM:
 			mono_decompose_op_imm(cfg, basic_block, inst);
 			break;
@@ -2410,6 +2411,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_subv(&buffer, inst->sreg2, inst->dreg);
 			break;
 
+		case OP_SBB:
+			/* MD: sbb: clob:1 dest:i src1:i src2:i len:2 */
+			/* Fall through */
 		case OP_ISBB:
 			/* MD: int_sbb: clob:1 dest:i src1:i src2:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
@@ -3117,7 +3121,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ICLT_UN:	 /* MD: int_clt_un: dest:i len:0 */
 
 		/* These opcodes are missing for basic-long.cs. */
-		case OP_SBB:		 /* MD: sbb: dest:i src1:i src2:i len:0 */
 		case OP_COND_EXC_OV:	 /* MD: cond_exc_ov: len:0 */
 		case OP_COND_EXC_C:	 /* MD: cond_exc_c: len:0 */
 		case OP_COND_EXC_LT:	 /* MD: cond_exc_lt: len:0 */

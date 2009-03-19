@@ -61,6 +61,7 @@ int_adc: clob:1 dest:i src1:i src2:i len:2
 int_sub: clob:1 dest:i src1:i src2:i len:2
 subcc: clob:1 dest:i src1:i src2:i len:2
 int_subcc: clob:1 dest:i src1:i src2:i len:2
+sbb: clob:1 dest:i src1:i src2:i len:2
 int_sbb: clob:1 dest:i src1:i src2:i len:2
 sh4_or_imm_R0: clob:1 dest:z src1:z len:2
 int_or: clob:1 dest:i src1:i src2:i len:2
@@ -168,7 +169,6 @@ cond_exc_ilt: len:0
 cond_exc_igt_un: len:0
 icompare: src1:i src2:i len:0
 int_clt_un: dest:i len:0
-sbb: dest:i src1:i src2:i len:0
 cond_exc_ov: len:0
 cond_exc_c: len:0
 cond_exc_lt: len:0
