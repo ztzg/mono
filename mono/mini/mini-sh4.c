@@ -465,6 +465,19 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			call->stack_usage += 4;
 			break;
 
+		case integer64:
+			/* A long register N is splitted into two interger registers N+1, N+2. */
+			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+			arg->sreg1 = call->args[j]->dreg + 2;
+			MONO_ADD_INS(cfg->cbb, arg);
+
+			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+			arg->sreg1 = call->args[j]->dreg + 1;
+			MONO_ADD_INS(cfg->cbb, arg);
+
+			call->stack_usage += 8;
+			break;
+
 		default:
 			NOT_IMPLEMENTED;
 			g_assert_not_reached();
@@ -929,15 +942,16 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 				case integer64:
 					NOT_IMPLEMENTED;
-					if (inst->dreg != arg_info->reg) {
-						/* TODO - CV : check the order. */
-						sh4_mov(&buffer, arg_info->reg + 1, inst->dreg + 1);
-						sh4_mov(&buffer, arg_info->reg, inst->dreg);
-					}
 					break;
 
 				case float64:
+					NOT_IMPLEMENTED;
+					break;
+
 				case float32:
+					NOT_IMPLEMENTED;
+					break;
+
 				case aggregate:
 					NOT_IMPLEMENTED;
 					break;
@@ -962,7 +976,13 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case float64:
+					NOT_IMPLEMENTED;
+					break;
+
 				case float32:
+					NOT_IMPLEMENTED;
+					break;
+
 				case aggregate:
 					NOT_IMPLEMENTED;
 					break;
@@ -1019,7 +1039,11 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case integer64:
-					NOT_IMPLEMENTED;
+					offset = saved_regs_size + arg_info->offset;
+					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_temp);
+					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
+					sh4_base_load(cfg, &buffer, offset + 4, sh4_sp, sh4_temp);
+					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case float64:
