@@ -86,8 +86,10 @@ sh4_cmpeq: src1:i src2:i len:2
 sh4_cmpeq_imm_R0: src1:z len:2
 sh4_cmpgt: src1:i src2:i len:2
 sh4_cmphi: src1:i src2:i len:2
-sh4_cmpge: src1:i src2:i len:6
-sh4_cmphs: src1:i src2:i len:6
+sh4_cmpge: src1:i src2:i len:2
+sh4_cmphs: src1:i src2:i len:2
+sh4_not_cmpge: src1:i src2:i len:2
+sh4_not_cmphs: src1:i src2:i len:2
 sh4_movt: dest:i len:2
 sh4_push_arg: src1:i len:2
 sh4_storei1_membase_R0: src1:z dest:b len:2

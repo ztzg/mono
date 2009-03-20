@@ -1719,6 +1719,16 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_ICLT:
+		inst->opcode = OP_SH4_NOT_CMPGE;
+		next_inst->opcode = OP_SH4_MOVT;
+		break;
+
+	case OP_ICLT_UN:
+		inst->opcode = OP_SH4_NOT_CMPHS;
+		next_inst->opcode = OP_SH4_MOVT;
+		break;
+
 	case OP_COND_EXC_EQ:
 		/* Trick used in output_basic_block(). */
 		next_inst->backend.data = (gpointer)-1;
@@ -1786,8 +1796,6 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 	case OP_CGT_UN:
 	case OP_CLT:
 	case OP_CLT_UN:
-	case OP_ICLT:
-	case OP_ICLT_UN:
 	case OP_COND_EXC_GE:
 	case OP_COND_EXC_GT:
 	case OP_COND_EXC_LE:
@@ -2577,13 +2585,23 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_CMPGE:
-			/* MD: sh4_cmpge: src1:i src2:i len:6 */
+			/* MD: sh4_cmpge: src1:i src2:i len:2 */
 			sh4_cmpge(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
 		case OP_SH4_CMPHS:
-			/* MD: sh4_cmphs: src1:i src2:i len:6 */
+			/* MD: sh4_cmphs: src1:i src2:i len:2 */
 			sh4_cmphs(&buffer, inst->sreg2, inst->sreg1);
+			break;
+
+		case OP_SH4_NOT_CMPGE:
+			/* MD: sh4_not_cmpge: src1:i src2:i len:2 */
+			sh4_cmpge(&buffer, inst->sreg1, inst->sreg2);
+			break;
+
+		case OP_SH4_NOT_CMPHS:
+			/* MD: sh4_not_cmphs: src1:i src2:i len:2 */
+			sh4_cmphs(&buffer, inst->sreg1, inst->sreg2);
 			break;
 
 		case OP_SH4_MOVT:
