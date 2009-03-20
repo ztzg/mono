@@ -307,7 +307,7 @@ mono_imul_ovf (gint32 a, gint32 b)
 
 	res = (gint64)a * (gint64)b;
 
-	if ((res > 0x7fffffffL) || (res < -2147483648))
+	if ((res > 0x7fffffffL) || (res < (-2147483647-1)))
 		mono_raise_exception (mono_get_exception_overflow ());
 
 	return res;
