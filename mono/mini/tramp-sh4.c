@@ -375,11 +375,56 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	return code;
 }
 
-gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMethod *m, gpointer addr)
+/**
+ * When value type methods are called through the vtable we need to
+ * unbox the this argument. This method returns a pointer to a
+ * trampoline which does unboxing before calling the method. Remember
+ * this trampoline executes in the context of the caller.
+ */
+gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMethod *method, gpointer address)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	guint8 *code   = NULL;
+	guint8 *buffer = NULL;
+	guint8 *patch0 = NULL;
+	MonoDomain *domain = mono_domain_get();
+
+#define UNBOX_TRAMPOLINE_SIZE 14
+
+	if (MONO_TYPE_ISSTRUCT(mono_method_signature(method)->ret) != 0)
+		NOT_IMPLEMENTED;
+
+	mono_domain_lock(domain);
+	code = buffer = mono_code_manager_reserve(domain->code_mp, UNBOX_TRAMPOLINE_SIZE);
+	mono_domain_unlock(domain);
+
+	/* Adjust 'this' by the size of MonoObject. */
+	sh4_add_imm(&buffer, sizeof(MonoObject), MONO_SH4_REG_FIRST_ARG);
+
+	/* TODO - CV : optimize with sh4_bsr if possible. */
+
+	/* Patch slot for : sh4_temp <- address */
+	patch0 = buffer;
+	sh4_die(&buffer);
+
+	/* Finally, call the method. */
+	sh4_jmp_indRx(&buffer, sh4_temp);
+	sh4_nop(&buffer);
+
+	/* Align the constant pool. */
+	while (((guint32)buffer % 4) != 0)
+		sh4_nop(&buffer);
+
+	/* Build the constant pool & patch the corresponding instructions. */
+	sh4_movl_PCrel(&patch0, buffer, sh4_temp);
+	sh4_emit32(&buffer, (guint32)address);
+
+	/* Sanity checks. */
+	g_assert(buffer - code <= UNBOX_TRAMPOLINE_SIZE);
+
+	/* Flush instruction cache, since we've generated code. */
+	mono_arch_flush_icache(code, UNBOX_TRAMPOLINE_SIZE);
+
+	return code;
 }
 
 /**

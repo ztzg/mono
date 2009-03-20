@@ -1556,9 +1556,7 @@ MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
  * We have to analyse the following calling sequence backward because
  * we don't known [yet] if a constant-pool is required:
  *
- *   // Load the VTable:
- *
- *           mov.l @(0, rZ), rY
+ *   // Load the VTable
  *
  *   // Load the method address, that is, VTable[method_index] (load_membase):
  *
@@ -1642,11 +1640,6 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 
 		offset = -4;
 	}
-
-	/* Check if it is not a load of the VTable. */
-	sh4_rZ = get_Ry_sh4_movl_dispRy(code16[offset]);
-	if (!is_sh4_movl_dispRy(code16[offset], 0, sh4_rZ, sh4_rY))
-		return NULL;
 
 	/* So far, so good! */
 	return (gpointer*)(regs[sh4_rX]);

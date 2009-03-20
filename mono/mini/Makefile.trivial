@@ -11,7 +11,7 @@
 MCS=mcs
 RUNTIME=mono
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world trivial-double_float trivial-return_float
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world trivial-double_float trivial-unboxing
 
 trivial-%.exe: trivial-%.cs
 	$(MCS) -out:$@ $<
@@ -104,3 +104,12 @@ trivial-return_float: trivial-return_float.exe
 	$(RUNTIME) --optimize=-inline $< x x x x ; test $$? = 7
 	$(RUNTIME) --optimize=-inline $< x x x x x ; test $$? = 10
 
+trivial-unboxing: trivial-unboxing.exe
+	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
+		echo "Number of arguments: 0" | diff - $$TMPFILE ; test $$? = 0
+	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< x | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
+		echo "Number of arguments: 1" | diff - $$TMPFILE ; test $$? = 0
+	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< x x | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
+		echo "Number of arguments: 2" | diff - $$TMPFILE ; test $$? = 0
+	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< x x x | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
+		echo "Number of arguments: 3" | diff - $$TMPFILE ; test $$? = 0
