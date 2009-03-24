@@ -1133,6 +1133,8 @@ if test x$platform_win32 = xno; then
 	AC_MSG_CHECKING(for working __thread)
 	if test "x$with_tls" != "x__thread"; then
 		AC_MSG_RESULT(disabled)
+	elif test "x$with_tls" == "x__thread"; then
+		AC_MSG_RESULT(yes)
 	else
 		AC_TRY_RUN([
 			#include <pthread.h>

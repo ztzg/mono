@@ -24,7 +24,7 @@ enable_mcs_build=no
 ac_cv_c_bigendian=no
 
 # These values are for devel. purpose :
-with_tls=pthread
+with_tls=__thread
 with_sigaltstack=no
 large_offt=no
 with_gc=none

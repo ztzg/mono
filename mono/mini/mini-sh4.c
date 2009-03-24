@@ -1584,7 +1584,6 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	SH4IntRegister sh4_rW = sh4_r0;
 	SH4IntRegister sh4_rX = sh4_r0;
 	SH4IntRegister sh4_rY = sh4_r0;
-	SH4IntRegister sh4_rZ = sh4_r0;
 	int offset = 0;
 	int index = 0;
 
@@ -3135,7 +3134,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_COND_EXC_LT:	 /* MD: cond_exc_lt: len:0 */
 		case OP_COND_EXC_GT:	 /* MD: cond_exc_gt: len:0 */
 		case OP_COND_EXC_GT_UN:	 /* MD: cond_exc_gt_un: len:0 */
-			fprintf(stderr, "opcode %s (0x%x) not yet implemented\n", mono_inst_name(inst->opcode), inst->opcode);
+			fprintf(stderr, "Method %s:%s opcode %s (0x%x) not yet implemented\n",
+				cfg->method->klass->name,
+				cfg->method->name,
+				mono_inst_name(inst->opcode), inst->opcode);
 			break;
 
 		default:
