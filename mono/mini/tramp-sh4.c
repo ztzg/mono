@@ -280,7 +280,11 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	sh4_add_imm(&buffer, offsetof(MonoLMF, registers), sh4_r4);
 	sh4_mov(&buffer, sh4_r10, sh4_r5); /* R10 is currently used as "new_lmf.pc". */
 	sh4_mov(&buffer, sh4_r9, sh4_r6);  /* R9 is currently used as "new_lmf.method". */
-	sh4_mov_imm(&buffer, 0, sh4_r7);
+
+	/* The last parameter is in fact not used, however it eases debug
+	   session when breaking on mono_magic_trampoline(). */
+	sh4_mova_dispPC_R0(&buffer, 0);
+	sh4_mov(&buffer, sh4_r0, sh4_r7);
 
 	/* Patch slot for : sh4_r8 <- trampoline */
 	patch2 = buffer;
@@ -289,6 +293,9 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	/* pseudo-code: compiled_methode = trampoline(new_lmf.registers, new_lmf.pc, new_lmf.method, NULL); */
 	sh4_jsr_indRx(&buffer, sh4_r8);
 	sh4_nop(&buffer);
+
+	/* Save the result of trampoline() in Rtemp. */
+	sh4_mov(&buffer, sh4_r0, sh4_temp);
 
 	/*
 	 * Restore the previous LMF list.
@@ -320,9 +327,10 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	 */
 
 	/* pseudo-code: { %R1, ..., %R14 } = new_lmf.registers[]; */
-	/* Do not restore R0 and R15 because there are used later. */
-	for (i = 1; i <= 14; i++)
-		sh4_movl_dispRy(&buffer, i * 4, sh4_r15, (SH4IntRegister)i);
+	/* R15 is retored later. */
+	for (i = 0; i <= 14; i++)
+		if (i != sh4_temp)
+			sh4_movl_dispRy(&buffer, i * 4, sh4_r15, (SH4IntRegister)i);
 
 	/* pseudo-code: %PR = %Caller_PR; */
 	sh4_add_imm(&buffer, sizeof(MonoLMF) - offsetof(MonoLMF, registers), sh4_r15);
@@ -346,8 +354,8 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	if (trampoline_type != MONO_TRAMPOLINE_CLASS_INIT)
 		/* pseudo-code: goto compiled_methode; */
-		/* R0 is the result from the call to trampoline(). */
-		sh4_jmp_indRx(&buffer, sh4_r0);
+		/* Rtemp is the result from the call to trampoline(). */
+		sh4_jmp_indRx(&buffer, sh4_temp);
 	else
 		/* pseudo-code: return; */
 		sh4_rts(&buffer);
