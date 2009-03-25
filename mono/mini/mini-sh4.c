@@ -2972,7 +2972,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_CHECK_THIS:
-			/* MD: checkthis: src1:i len:2 */
+			/* MD: checkthis: src1:b len:2 */
 			/* Trig an exception if sreg1 can not be dereferenced,
 			   might be misaligned in case of vtypes so use a byte load. */
 			sh4_movb_indRy(&buffer, inst->sreg1, sh4_temp);

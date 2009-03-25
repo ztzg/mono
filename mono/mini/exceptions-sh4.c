@@ -583,28 +583,28 @@ gpointer mono_arch_get_throw_exception_by_name(void)
 	return code;
 }
 
-void mono_arch_sigctx_to_monoctx(void *sigcontext, MonoContext *mono_context)
+void mono_arch_sigctx_to_monoctx(void *context, MonoContext *mono_context)
 {
-	struct sigcontext *signal_context = sigcontext;
+	ucontext_t *ucontext = context;
 	int i = 0;
 
-	mono_context->pc = signal_context->sc_pc;
+	mono_context->pc = ucontext->uc_mcontext.pc;
 
 	for (i = 0; i < 16; i++)
-		mono_context->registers[i] = signal_context->sc_regs[i];
+		mono_context->registers[i] = ucontext->uc_mcontext.gregs[i];
 
 	return;
 }
 
-void mono_arch_monoctx_to_sigctx(MonoContext *mono_context, void *sigcontext)
+void mono_arch_monoctx_to_sigctx(MonoContext *mono_context, void *context)
 {
-	struct sigcontext *signal_context = sigcontext;
+	ucontext_t *ucontext = context;
 	int i = 0;
 
-	signal_context->sc_pc = mono_context->pc;
+	ucontext->uc_mcontext.pc = mono_context->pc;
 
 	for (i = 0; i < 16; i++)
-		signal_context->sc_regs[i] = mono_context->registers[i];
+		ucontext->uc_mcontext.gregs[i] = mono_context->registers[i];
 
 	return;
 }
@@ -612,17 +612,17 @@ void mono_arch_monoctx_to_sigctx(MonoContext *mono_context, void *sigcontext)
 /**
  * This is the function called from the signal handler
  */
-gboolean mono_arch_handle_exception(void *signal_context, gpointer object, gboolean test_only)
+gboolean mono_arch_handle_exception(void *ucontext, gpointer object, gboolean test_only)
 {
 	MonoContext mono_context;
 
-	mono_arch_sigctx_to_monoctx(signal_context, &mono_context);
+	mono_arch_sigctx_to_monoctx(ucontext, &mono_context);
 
 	mono_handle_exception(&mono_context, object, (gpointer)mono_context.pc, test_only);
 
 	/* Restore the context so that returning from the signal handler
 	   will invoke the catch clause. */
-	mono_arch_monoctx_to_sigctx(&mono_context, signal_context);
+	mono_arch_monoctx_to_sigctx(&mono_context, ucontext);
 
 	return TRUE;
 }
