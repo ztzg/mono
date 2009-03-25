@@ -171,8 +171,25 @@ cond_exc_ilt: len:0
 cond_exc_igt_un: len:0
 icompare: src1:i src2:i len:0
 int_clt_un: dest:i len:0
+fcompare: src1:f src2:f len:0
+float_beq: len:0
+float_bne_un: len:0
 cond_exc_ov: len:0
 cond_exc_c: len:0
 cond_exc_lt: len:0
 cond_exc_gt: len:0
 cond_exc_gt_un: len:0
+localloc_imm: dest:i len:0
+ckfinite: dest:f src1:f len:0
+jmp: len:0
+storer8_membase_reg: dest:b src1:f len:0
+loadr8_membase: dest:f src1:b len:0
+cond_exc_lt_un: len:0
+long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0
+float_conv_to_i: dest:i src1:f len:0
+float_ceq: dest:i src1:f src2:f len:0
+float_bge_un: len:0
+float_bge: len:0
+float_ble: len:0
+float_blt: len:0
+float_bgt: len:0

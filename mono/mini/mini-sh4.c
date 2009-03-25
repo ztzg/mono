@@ -3128,12 +3128,38 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ICOMPARE:	 /* MD: icompare: src1:i src2:i len:0 */
 		case OP_ICLT_UN:	 /* MD: int_clt_un: dest:i len:0 */
 
+		/* These opcodes are missing for basic-float.cs. */
+		case OP_FCOMPARE:	 /* MD: fcompare: src1:f src2:f len:0 */
+		case OP_FBEQ:	 	 /* MD: float_beq: len:0 */
+		case OP_FBNE_UN:	 /* MD: float_bne_un: len:0 */
+
 		/* These opcodes are missing for basic-long.cs. */
 		case OP_COND_EXC_OV:	 /* MD: cond_exc_ov: len:0 */
 		case OP_COND_EXC_C:	 /* MD: cond_exc_c: len:0 */
 		case OP_COND_EXC_LT:	 /* MD: cond_exc_lt: len:0 */
 		case OP_COND_EXC_GT:	 /* MD: cond_exc_gt: len:0 */
 		case OP_COND_EXC_GT_UN:	 /* MD: cond_exc_gt_un: len:0 */
+
+		/* These opcodes are missing for iltests.il. */
+		case OP_LOCALLOC_IMM:	 /* MD: localloc_imm: dest:i len:0 */
+		case OP_CKFINITE:	 /* MD: ckfinite: dest:f src1:f len:0 */
+		case OP_JMP:	 	 /* MD: jmp: len:0 */
+
+		/* These opcodes are missing for objects.cs. */
+		case OP_STORER8_MEMBASE_REG:	/* MD: storer8_membase_reg: dest:b src1:f len:0 */
+		case OP_LOADR8_MEMBASE:		/* MD: loadr8_membase: dest:f src1:b len:0 */
+		case OP_COND_EXC_LT_UN: 	/* MD: cond_exc_lt_un: len:0 */
+
+		/* These opcodes are missing for objects.cs. */
+		case OP_LCONV_TO_OVF_I4_2: /* MD: long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0 */
+		case OP_FCONV_TO_I:	 /* MD: float_conv_to_i: dest:i src1:f len:0 */
+		case OP_FCEQ:		 /* MD: float_ceq: dest:i src1:f src2:f len:0 */
+		case OP_FBGE_UN:	 /* MD: float_bge_un: len:0 */
+		case OP_FBGE:	 	 /* MD: float_bge: len:0 */
+		case OP_FBLE:	 	 /* MD: float_ble: len:0 */
+		case OP_FBLT:	 	 /* MD: float_blt: len:0 */
+		case OP_FBGT:	 	 /* MD: float_bgt: len:0 */
+
 			fprintf(stderr, "Method %s:%s opcode %s (0x%x) not yet implemented\n",
 				cfg->method->klass->name,
 				cfg->method->name,
