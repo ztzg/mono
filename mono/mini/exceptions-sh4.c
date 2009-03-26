@@ -473,9 +473,9 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 		sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_r15);
 
 	/* Compute the previous value of SP before saving into registers[]. */
-	sh4_mov(&buffer, sh4_r15, sh4_r0);
-	sh4_add_imm(&buffer, 16 * 4, sh4_r0);
-	sh4_movl_dispRx(&buffer, sh4_r0, 15 * 4, sh4_r15);
+	sh4_mov(&buffer, sh4_r15, sh4_temp);
+	sh4_add_imm(&buffer, 16 * 4, sh4_temp);
+	sh4_movl_dispRx(&buffer, sh4_temp, 15 * 4, sh4_r15);
 
 	if (by_name != 0) {
 		/* The current return address have to be preserved through
@@ -579,6 +579,110 @@ gpointer mono_arch_get_throw_exception_by_name(void)
 
 	if (code == NULL)
 		code = get_throw_exception(TRUE, FALSE);
+
+	return code;
+}
+
+/**
+ * Returns a function pointer which can be used to raise corlib exceptions.
+ *
+ * void throw_corlib_exception(guint32 token, guint32 offset)
+ * {
+ *      // Get the exception object.
+ *      MonoException *exception = mono_exception_from_token(
+ *                                         mono_defaults.exception_class->image,
+ *                                         MONO_TOKEN_TYPE_DEF + token);
+ *
+ *
+ *      // Adjust the caller IP to get the IP of the throw.
+ *      %PR = %PR - offset;
+ *
+ * #def throw_exception = mono_arch_get_throw_exception();
+ *      goto throw_exception(exception);
+ * }
+ *
+ * Here, offset is the offset which needs to be substracted from the
+ * caller IP to get the IP of the throw. Passing the offset has the
+ * advantage that it needs no relocations in the caller.
+ */
+gpointer mono_arch_get_throw_corlib_exception(void)
+{
+	guint8 *code   = NULL;
+	guint8 *buffer = NULL;
+	guint8 *patch0 = NULL;
+	guint8 *patch1 = NULL;
+	guint8 *patch2 = NULL;
+
+#define THROW_CORLIB_EXCEPTION_SIZE 46
+
+	code = buffer = mono_global_codeman_reserve(THROW_CORLIB_EXCEPTION_SIZE);
+
+	/* Save the parameter 'offset' and the return address onto the stack. */
+	sh4_movl_decRx(&buffer, sh4_r5, sh4_sp);
+	sh4_stsl_PR_decRx(&buffer, sh4_sp);
+
+	/*
+	 * Get the exception object.
+	 */
+
+	sh4_mov(&buffer, sh4_r4, sh4_r5);
+
+	/* Patch slot for : sh4_r4 <- mono_defaults.exception_class->image */
+	patch0 = buffer;
+	sh4_die(&buffer);
+
+	/* Patch slot for : sh4_temp <- mono_exception_from_token */
+	patch1 = buffer;
+	sh4_die(&buffer);
+
+	/* pseudo-code: exception = mono_exception_from_token(... */
+	sh4_jsr_indRx(&buffer, sh4_temp);
+	sh4_nop(&buffer);
+
+	sh4_mov(&buffer, sh4_r0, sh4_r4);
+
+	/*
+	 * Adjust the caller IP to get the IP of the throw.
+	 */
+
+	/* Restore the parameter 'offset' from the stack. */
+	sh4_movl_incRy(&buffer, sh4_sp, sh4_temp);
+	sh4_movl_incRy(&buffer, sh4_sp, sh4_r5);
+
+	/* pseudo-code: %PR = %PR - offset; */
+	sh4_sub(&buffer, sh4_r5, sh4_temp);
+	sh4_lds_PR(&buffer, sh4_temp);
+
+	/* Patch slot for : sh4_temp <- throw_exception */
+	patch2 = buffer;
+	sh4_die(&buffer);
+
+	/* pseudo-code: goto throw_exception(exception); */
+	sh4_jmp_indRx(&buffer, sh4_temp);
+	sh4_nop(&buffer);
+
+	/* Should never return. */
+	sh4_die(&buffer);
+
+	/* Align the constant pool. */
+	while (((guint32)buffer % 4) != 0)
+		sh4_nop(&buffer);
+
+	/* Build the constant pool & patch the corresponding instructions. */
+	sh4_movl_PCrel(&patch0, buffer, sh4_r4);
+	sh4_emit32(&buffer, (guint32)mono_defaults.exception_class->image);
+	sh4_movl_PCrel(&patch1, buffer, sh4_temp);
+	sh4_emit32(&buffer, (guint32)mono_exception_from_token);
+	sh4_movl_PCrel(&patch2, buffer, sh4_temp);
+	sh4_emit32(&buffer, (guint32)mono_arch_get_throw_exception());
+
+	/* Sanity checks. */
+	g_assert(buffer - code <= THROW_CORLIB_EXCEPTION_SIZE);
+
+	/* Flush instruction cache, since we've generated code. */
+	mono_arch_flush_icache(code, THROW_CORLIB_EXCEPTION_SIZE);
+
+	SH4_EXTRA_DEBUG("code = %p", code);
 
 	return code;
 }

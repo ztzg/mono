@@ -416,7 +416,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 
 		case integer64:
-			/* A long register N is splitted into two interger registers N+1, N+2. */
+			/* A long register N is splitted into two integer registers N+1, N+2. */
 			MONO_INST_NEW(cfg, arg, OP_MOVE);
 			arg->sreg1 = call->args[i]->dreg + 1;
 			arg->dreg  = mono_alloc_ireg(cfg);
@@ -468,7 +468,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 
 		case integer64:
-			/* A long register N is splitted into two interger registers N+1, N+2. */
+			/* A long register N is splitted into two integer registers N+1, N+2. */
 			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
 			arg->sreg1 = call->args[j]->dreg + 2;
 			MONO_ADD_INS(cfg->cbb, arg);
@@ -539,7 +539,7 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
-		/* A long register N is splitted into two interger registers N+1, N+2. */
+		/* A long register N is splitted into two integer registers N+1, N+2. */
 		MONO_INST_NEW (cfg, inst, OP_SETLRET);
 		inst->sreg1 = result->dreg + 1;
 		inst->sreg2 = result->dreg + 2;
@@ -1363,6 +1363,9 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		}
 #endif
 
+		/* Patch the constant used to jump to this exception. */
+		mono_add_patch_info(cfg, patch_info->ip.i, MONO_PATCH_INFO_IP, (guint8 *)(buffer - cfg->native_code));
+
 		/* Pass parameters to the exception handler:
 		      1. type token
 		      2. offset between the "throw" site and the current PC. */
@@ -1375,7 +1378,7 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		patch1 = buffer;
 		sh4_die(&buffer);
 
-		/* Patch slot for : sh4_temp <- mono_arch_throw_exception_by_name */
+		/* Patch slot for : sh4_temp <- mono_arch_throw_corlib_exception */
 		patch2 = buffer;
 		sh4_die(&buffer);
 
@@ -1391,15 +1394,15 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 		/* Build the constant pool & patch the corresponding instructions. */
 		sh4_movl_PCrel(&patch0, buffer, MONO_SH4_REG_FIRST_ARG);
-		sh4_emit32(&buffer, (guint32)(class->type_token - MONO_TOKEN_TYPE_DEF));
+		sh4_emit32(&buffer, (guint32)class->type_token);
 
 		sh4_movl_PCrel(&patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1);
-		sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i - 6));
+		sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i));
 
 		sh4_movl_PCrel(&patch2, buffer, sh4_temp);
-		/* Reuse this path_info to set the jump in mono_arch_patch_code(). */
+		/* Reuse this patch_info to set the jump in mono_arch_patch_code(). */
 		patch_info->type = MONO_PATCH_INFO_INTERNAL_METHOD;
-		patch_info->data.name = "mono_arch_throw_exception_by_name";
+		patch_info->data.name = "mono_arch_throw_corlib_exception";
 		patch_info->ip.i = buffer - cfg->native_code;
 		sh4_emit32(&buffer, (guint32)0);
 	}

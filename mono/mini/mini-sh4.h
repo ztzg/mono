@@ -129,6 +129,11 @@
 #define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 
 /*
+ * TODO: COMMENT
+ */
+#define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION 1
+
+/*
  * This macro defines the size of the floating-point stack.
  * Use the value 0 if no floating-point stack is available.
  */
