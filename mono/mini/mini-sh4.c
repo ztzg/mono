@@ -794,7 +794,10 @@ static inline void sh4_base_store(MonoCompile *cfg, guint8 **buffer, SH4IntRegis
 		sh4_movl_indRx(buffer, src, sh4_temp);
 	}
 	else {
-		sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
+		if (cfg == NULL)
+			sh4_load(buffer, offset, sh4_temp);
+		else
+			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
 		sh4_add(buffer, base, sh4_temp);
 		sh4_movl_indRx(buffer, src, sh4_temp);
 	}
@@ -811,7 +814,10 @@ static inline void sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, 
 		sh4_movl_indRy(buffer, sh4_temp, dest);
 	}
 	else {
-		sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
+		if (cfg == NULL)
+			sh4_load(buffer, offset, sh4_temp);
+		else
+			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
 		sh4_add(buffer, base, sh4_temp);
 		sh4_movl_indRy(buffer, sh4_temp, dest);
 	}
@@ -967,7 +973,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					offset = saved_regs_size + arg_info->offset;
-					sh4_base_load(cfg, &buffer, offset, sh4_sp, inst->dreg);
+					sh4_base_load(NULL, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
 				case integer64:
@@ -1007,12 +1013,12 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					g_assert(inst->inst_basereg == sh4_fp);
-					sh4_base_store(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					sh4_base_store(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
-					sh4_base_store(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
-					sh4_base_store(cfg, &buffer, arg_info->reg + 1, inst->inst_offset + 4, sh4_fp);
+					sh4_base_store(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					sh4_base_store(NULL, &buffer, arg_info->reg + 1, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case float64:
@@ -1033,16 +1039,16 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					offset = saved_regs_size + arg_info->offset;
-					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_temp);
-					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
+					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
+					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
 					offset = saved_regs_size + arg_info->offset;
-					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_temp);
-					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
-					sh4_base_load(cfg, &buffer, offset + 4, sh4_sp, sh4_temp);
-					sh4_base_store(cfg, &buffer, sh4_temp, inst->inst_offset + 4, sh4_fp);
+					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
+					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
+					sh4_base_load(NULL, &buffer, offset + 4, sh4_sp, sh4_temp);
+					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case float64:
@@ -2325,23 +2331,23 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	MONO_BB_FOR_EACH_INS(basic_block, inst) {
 		guint32 length_max = 0;
-		guint32 size_buffer;
-		gboolean emit_buffer;
+		guint32 size_cstpool;
+		gboolean emit_cstpool;
 		int length   = 0;
 		guint8 *code = NULL;
 
 		/* Get the 'len' field of this opcode, specify into cpu-sh4.md. */
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
-		/* Check if constant pool is to be emitted right now. */
-		emit_buffer = sh4_cstpool_decide_emission(cfg, FALSE, NULL, &size_buffer);
-		if(emit_buffer)
-			length_max += size_buffer;
+		/* Check if the constant pool has to be emitted right now. */
+		emit_cstpool = sh4_cstpool_decide_emission(cfg, FALSE, NULL, &size_cstpool);
+		if (emit_cstpool)
+			length_max += size_cstpool;
 
 		/* Reallocate enough room to store the SH4 instructions (and possibly
 		   constant pool) used to implement the current opcode. */
 		buffer = get_code_buffer(cfg, length_max);
-		if(emit_buffer)
+		if (emit_cstpool)
 			sh4_emit_pool(cfg, FALSE, &buffer);
 		code = buffer;
 
