@@ -50,7 +50,8 @@ struct arg_info {
 		integer64,
 		float32,
 		float64,
-		aggregate,
+		valuetype,
+		typedbyref,
 		none,
 	} type;
 
@@ -125,19 +126,51 @@ static inline void add_int64_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
 }
 
+static void add_valuetype(MonoCompile *cfg, MonoGenericSharingContext *context, MonoMethodSignature *signature,
+			  MonoType *type, struct arg_info *arg_info, guint32 *stack_size)
+{
+	guint32 size;
+	MonoClass *klass;
+
+	/* Currently, valuetypes are always transmitted onto the stack. */
+
+	klass = mono_class_from_mono_type(type);
+
+	if (signature->pinvoke)
+		size = mono_type_native_stack_size(&klass->byval_arg, NULL);
+	else
+		size = mini_type_stack_size(context, &klass->byval_arg, NULL);
+
+	size = ALIGN_TO(size,0x4);
+
+	arg_info->type    = valuetype;
+	arg_info->storage = onto_stack;
+	arg_info->offset  = *stack_size;
+	arg_info->size    = size;
+	*stack_size       += size;
+
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("add_valuetype - method %s, size %d, offset %d, stack_size %d",
+			  cfg->method->name, size, arg_info->offset, *stack_size);
+
+	return;
+}
+
+
 /**
  * Obtain information about a call according to the calling convention and
  * determine the amount of space required for code and stack. In addition
  * determine starting points for stack-based arguments, and area for
  * aggregates being returned on the stack.
  */
-static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoMethodSignature *signature)
+static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingContext *context, MonoMethodSignature *signature)
 {
 	struct call_info *call_info = NULL;
 	SH4IntRegister arg_reg = MONO_SH4_REG_FIRST_ARG;
 	SH4FloatRegister arg_freg = MONO_SH4_FREG_FIRST_ARG;
 	MonoType *basic_type = NULL;
 	guint32 stack_size = 0;
+	guint32 size = 0;
 	guint32 i = 0;
 
 	SH4_EXTRA_DEBUG("args => %p, %p", context, signature);
@@ -209,9 +242,20 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 		}
 		/* else fall through. */
 	case MONO_TYPE_VALUETYPE:
+		add_valuetype(cfg, context, signature, signature->ret, &call_info->ret, &size /* unused */);
+		/* SH4 ABI specifies register containing the @ of the aggregate. */
+		call_info->ret.reg = sh4_r2;
+		break;
+
 	case MONO_TYPE_TYPEDBYREF:
-		/* Used to return aggregate, for instance. */
-		NOT_IMPLEMENTED;
+		/* Something "à la" S390 looks better than options taken by others backends. */
+		size = sizeof(MonoTypedRef);
+		call_info->ret.reg     = sh4_r2;
+		call_info->ret.type    = typedbyref;
+		call_info->ret.size    = size;
+		call_info->ret.storage = onto_stack;
+		call_info->ret.offset  = stack_size;
+		stack_size += ALIGN_TO(size, 4);
 		break;
 
 	default:
@@ -282,14 +326,24 @@ static struct call_info *get_call_info(MonoGenericSharingContext *context, MonoM
 			break;
 
 		case MONO_TYPE_GENERICINST:
-		if (mono_type_generic_inst_is_valuetype(signature->params[i]) == 0) {
-			add_int32_arg(&arg_reg, &stack_size, arg_info);
-			break;
-		}
+			if (mono_type_generic_inst_is_valuetype(signature->params[i]) == 0) {
+				add_int32_arg(&arg_reg, &stack_size, arg_info);
+				break;
+			}
 		/* else fall through. */
 		case MONO_TYPE_VALUETYPE:
+			NOT_IMPLEMENTED;
+			add_valuetype(cfg, context, signature, signature->params[i], arg_info, &stack_size);
+			break;
+
 		case MONO_TYPE_TYPEDBYREF:
 			NOT_IMPLEMENTED;
+			size = sizeof(MonoTypedRef);
+			arg_info->type    = typedbyref;
+			arg_info->size    = size;
+			arg_info->storage = onto_stack;
+			arg_info->offset  = stack_size;
+			stack_size += ALIGN_TO(size, 4);
 			break;
 
 		default:
@@ -369,13 +423,17 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 	signature = call->signature;
 	arg_count = signature->param_count + signature->hasthis;
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
 
-	if (call_info->ret.type == aggregate)
-		NOT_IMPLEMENTED;
+	if (MONO_TYPE_ISSTRUCT(signature->ret)) {
+		MonoInst *inst;
 
-	if (MONO_TYPE_ISSTRUCT(signature->ret))
-		NOT_IMPLEMENTED;
+		MONO_INST_NEW(cfg, inst, OP_MOVE);
+		inst->sreg1 = call->vret_var->dreg;
+		inst->dreg  = mono_alloc_ireg(cfg);
+		MONO_ADD_INS(cfg->cbb, inst);
+		mono_call_inst_add_outarg_reg(cfg, call, inst->dreg, call_info->ret.reg, FALSE);
+	}
 
 	if (signature->pinvoke == 0 &&
 	    signature->call_convention == MONO_CALL_VARARG)
@@ -398,12 +456,16 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		    signature->call_convention == MONO_CALL_VARARG)
 			emit_signature_cookie2(cfg, call);
 
-		if (MONO_TYPE_ISSTRUCT(signature->params[i - signature->hasthis]))
+		if (i >= signature->hasthis &&
+		    MONO_TYPE_ISSTRUCT(signature->params[i - signature->hasthis])) {
 			NOT_IMPLEMENTED;
+			continue;
+		}
 
-		/* Check if it is the last parameter passed into registers. */
-		if (arg_info->storage != into_register)
+		if (arg_info->storage != into_register) {
+			/* Otherwise, check if it is the last parameter passed into registers */
 			break;
+		}
 
 		/* Arguments passed by reference are already handled in get_call_info(). */
 		switch (arg_info->type) {
@@ -480,6 +542,11 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			call->stack_usage += 8;
 			break;
 
+		case valuetype:		/* Fall through */
+		case typedbyref:
+			NOT_IMPLEMENTED;
+			break;
+
 		default:
 			NOT_IMPLEMENTED;
 			g_assert_not_reached();
@@ -511,7 +578,6 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	MonoInst *inst = NULL;
 
 	if (ret->byref != 0) {
-		g_warning("return 'byref' not yet supported\n");
 		NOT_IMPLEMENTED;
 	}
 
@@ -540,10 +606,10 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
 		/* A long register N is splitted into two integer registers N+1, N+2. */
-		MONO_INST_NEW (cfg, inst, OP_SETLRET);
+		MONO_INST_NEW(cfg, inst, OP_SETLRET);
 		inst->sreg1 = result->dreg + 1;
 		inst->sreg2 = result->dreg + 2;
-		MONO_ADD_INS (cfg->cbb, inst);
+		MONO_ADD_INS(cfg->cbb, inst);
 		break;
 
 	/* TODO - CV floating point. */
@@ -578,7 +644,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->flags |= MONO_CFG_HAS_SPILLUP;
 
 	signature = mono_method_signature(cfg->method);
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -693,12 +759,34 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("return type = %d", call_info->ret.type);
 
-	/* Specify how to access the return value, see mono_arch_emit_setret().
-	   Complex return types (as aggregates) not yet supported. */
-	if (call_info->ret.type != none) {
+	/* Specify how to access the return value, see mono_arch_emit_setret(). */
+	switch(call_info->ret.type) {
+	case float32:
+	case float64:
+	case integer64:
+	case integer32:
 		cfg->ret->opcode  = OP_REGVAR;
 		cfg->ret->inst_c0 = call_info->ret.reg;
 		cfg->ret->dreg    = call_info->ret.reg;
+		break;
+
+	case valuetype:
+	case typedbyref:
+		/* In the new IR, the cfg->vret_addr variable represents the
+		 * vtype return value. */
+		cfg->vret_addr->opcode       = OP_REGOFFSET;
+		cfg->vret_addr->inst_basereg = cfg->frame_reg;
+		cfg->vret_addr->inst_offset  = cfg->stack_offset;
+		/* We allocate 4 more bytes in the stack: it's the space
+		 * that is needed to store the address of the structure. */
+		cfg->stack_offset += sizeof(gpointer);
+		break;
+
+	case none: /* Nothing to do. */
+		break;
+
+	default:
+		g_assert_not_reached();
 	}
 
 	g_free(call_info->args);
@@ -748,14 +836,14 @@ guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 
 void mono_arch_create_vars(MonoCompile *cfg)
 {
-	MonoMethodSignature *signature = NULL;
-	struct call_info *call_info = NULL;
+	MonoMethodSignature *signature;
+	struct call_info *call_info;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
 	signature = mono_method_signature(cfg->method);
 
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
 
 	switch (call_info->ret.storage) {
 	case into_register:
@@ -763,10 +851,8 @@ void mono_arch_create_vars(MonoCompile *cfg)
 		break;
 
 	case onto_stack:
-		if (MONO_TYPE_ISSTRUCT(signature->ret)) {
-			NOT_IMPLEMENTED;
+		if (MONO_TYPE_ISSTRUCT(signature->ret))
 			cfg->vret_addr = mono_compile_create_var(cfg, &mono_defaults.int_class->byval_arg, OP_ARG);
-		}
 		break;
 
 	case nowhere:
@@ -846,13 +932,13 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 
-	cfg->code_size = 46 + 80 + signature->param_count * 10;
+	/* Allocate buffer memory. Each time you modifiy this prolog
+	 * please modify the code size accordingly, or debugging is
+	 * going to be painful! */
+	cfg->code_size = 6 + 46 + 80 + signature->param_count * 10;
 	buffer = cfg->native_code = g_malloc(cfg->code_size);
 
-	call_info = get_call_info(cfg->generic_sharing_context, signature);
-
-	if (call_info->ret.type == aggregate)
-		NOT_IMPLEMENTED;
+	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -863,11 +949,12 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 */
 
 	/* Save global registers (sh4_r8 -> sh4_r13). */
-	for (i = sh4_r8; i <= sh4_r13; i++)
+	for (i = sh4_r8; i <= sh4_r13; i++) {
 		if (cfg->used_int_regs & (1 << i)) {
 			sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_r15);
 			saved_regs_size += 4;
 		}
+	}
 
 	/* Save the previous frame pointer (sh4_r14). */
 	sh4_movl_decRx(&buffer, sh4_r14, sh4_r15);
@@ -928,6 +1015,21 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 * they are pushed down from "saved_regs_size + call_info->stack_usage".
 	 */
 
+	if (call_info->ret.type == valuetype || call_info->ret.type == typedbyref) {
+		struct arg_info *ret_info = &call_info->ret;
+		MonoInst *inst_ret = cfg->vret_addr;
+
+		SH4_CFG_DEBUG(4)
+			SH4_DEBUG("Method %s, prolog ret.type = %s, offset value %d, size %d, return reg %s",
+				  cfg->method->name,
+				  ret_info->type == valuetype ? "valuetype" : "typedbyref",
+				  inst_ret->inst_offset,
+				  ret_info->size,
+				  mono_arch_regname(ret_info->reg));
+
+		sh4_base_store(NULL, &buffer, ret_info->reg, inst_ret->inst_offset, inst_ret->inst_basereg);
+	}
+
 	/* Copy arguments at the expected place : into register or onto the stack. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
 		struct arg_info *arg_info = &call_info->args[i];
@@ -957,10 +1059,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					NOT_IMPLEMENTED;
 					break;
 
-				case aggregate:
-					NOT_IMPLEMENTED;
-					break;
-
+				case valuetype:		/* Fall through - always on the stack currently */
+				case typedbyref:	/* Fall through - always on the stack currently */
 				case none:
 				default:
 					g_assert_not_reached();
@@ -988,10 +1088,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					NOT_IMPLEMENTED;
 					break;
 
-				case aggregate:
-					NOT_IMPLEMENTED;
-					break;
-
+				case typedbyref:	/* Fall through - always on the stack currently */
+				case valuetype:		/* Fall through - always on the stack currently */
 				case none:
 				default:
 					g_assert_not_reached();
@@ -1023,10 +1121,13 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 				case float64:
 				case float32:
-				case aggregate:
 					NOT_IMPLEMENTED;
 					break;
 
+				case typedbyref:	/* Always onto the stack currently */
+				case valuetype:		/* Always onto the stack currently */
+					NOT_IMPLEMENTED;
+					break;
 				case none:
 				default:
 					g_assert_not_reached();
@@ -1053,7 +1154,11 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 				case float64:
 				case float32:
-				case aggregate:
+					NOT_IMPLEMENTED;
+					break;
+
+				case valuetype:
+				case typedbyref:
 					NOT_IMPLEMENTED;
 					break;
 
@@ -2723,6 +2828,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:30 */
+		case OP_VCALL:
+			/* MD: vcall: clob:c len:30 */
+		case OP_VCALL2:
+			/* MD: vcall2: clob:c len:30 */
 		case OP_LCALL:
 			/* MD: lcall: dest:Z clob:c len:30 */
 		case OP_CALL:
@@ -3391,7 +3500,11 @@ void mono_arch_setup_jit_tls_data(MonoJitTlsData *tls)
 /* Emits IR to push a vtype to the stack. */
 void mono_arch_emit_outarg_vt(MonoCompile *cfg, MonoInst *inst, MonoInst *src)
 {
-	/* TODO - CV */
-	NOT_IMPLEMENTED;
+	guint32 size = inst->backend.size;
+
+	/* To be optimized later on.*/
+	MONO_EMIT_NEW_BIALU_IMM(cfg, OP_SUB_IMM, sh4_sp, sh4_sp, size);
+	mini_emit_memcpy(cfg, sh4_sp, 0, src->dreg, 0, size, 4);
+
 	return;
 }

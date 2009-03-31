@@ -11,7 +11,7 @@
 MCS=mcs
 RUNTIME=mono
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world trivial-double_float trivial-unboxing
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world trivial-double_float trivial-unboxing trivial-return_struct
 
 trivial-%.exe: trivial-%.cs
 	$(MCS) -out:$@ $<
@@ -113,3 +113,10 @@ trivial-unboxing: trivial-unboxing.exe
 		echo "Number of arguments: 2" | diff - $$TMPFILE ; test $$? = 0
 	TMPFILE=`mktemp -t $<.XXXXXX` ; $(RUNTIME) $< x x x | grep -v 'Using non-atomic functions' > $$TMPFILE ; \
 		echo "Number of arguments: 3" | diff - $$TMPFILE ; test $$? = 0
+
+trivial-return_struct: trivial-return_struct.exe
+	$(RUNTIME) $< ; test $$? = 3
+	$(RUNTIME) $< x ; test $$? = 4
+	$(RUNTIME) $< x x ; test $$? = 5
+	$(RUNTIME) $< x x x; test $$? = 6
+	$(RUNTIME) $< x x x x; test $$? = 7

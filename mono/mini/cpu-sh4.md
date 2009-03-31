@@ -110,6 +110,8 @@ sh4_loadi4_membase: dest:i src1:b len:2
 sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
 voidcall: clob:c len:30
+vcall: clob:c len:30
+vcall2: clob:c len:30
 lcall: dest:Z clob:c len:30
 call: dest:z clob:c len:30
 voidcall_reg: src1:i clob:c len:18
