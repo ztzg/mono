@@ -246,7 +246,7 @@
  * This macro defines the maximum number of floating point registers.
  * Obviously, this macro is mandatory.
  */
-#define MONO_MAX_FREGS 8
+#define MONO_MAX_FREGS 16
 
 /*
  * This macro defines the maximum number of integer registers (even ones
@@ -267,12 +267,12 @@
 /*
  * This macro defines the first float argument used in the calling convention.
  */
-#define MONO_SH4_FREG_FIRST_ARG sh4_dr2
+#define MONO_SH4_FREG_FIRST_ARG sh4_fr4
 
 /*
  * This macro defines the last float argument used in the calling convention.
  */
-#define MONO_SH4_FREG_LAST_ARG sh4_dr10
+#define MONO_SH4_FREG_LAST_ARG sh4_fr11
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */

@@ -7,11 +7,11 @@ class Class
 
 	static float test02(int a)
 	{
-		return (float)0.7 * a;
+		return (float)0.3 * a;
 	}
 
 	static int Main(string[] args)
 	{
-		return (int)(test01(args.Length) + test02(args.Length));
+		return (int)(test01(args.Length) + (double)test02(args.Length));
 	}
 }

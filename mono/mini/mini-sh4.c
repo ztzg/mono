@@ -27,6 +27,7 @@
  *   Denis FERRANTI (denis.ferranti@st.com)
  *   Yvan Roux (yvan.roux@st.com)
  *   Julien Villette (julien.villette@st.com)
+ *   Hervé Knochel (herve.knochel@st.com)
  */
 
 #include <glib.h>
@@ -156,6 +157,36 @@ static void add_valuetype(MonoCompile *cfg, MonoGenericSharingContext *context, 
 	return;
 }
 
+static inline void add_float64_arg(SH4FloatRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
+{
+	arg_info->size = 8;
+	arg_info->type = float64;
+	arg_info->offset = *stack_size;
+
+	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
+
+	/* "last_arg - 1" because the argument is either
+	   entirely into 2 registers, or entirely onto the stack. */
+	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG - 1) {
+		arg_info->storage = into_register;
+		arg_info->reg = *arg_reg;
+		(*arg_reg) += 2;
+	}
+	else {
+		arg_info->storage = onto_stack;
+		(*stack_size) += 8;
+	}
+
+	SH4_EXTRA_DEBUG("arg_reg = %d", *arg_reg);
+	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
+}
+
+static inline void add_float32_arg(SH4FloatRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
+{
+	/* Currently float32 arguments are handled as float64, except in emit_prolog(). */
+	add_float64_arg(arg_reg, stack_size, arg_info);
+	arg_info->type = float32;
+}
 
 /**
  * Obtain information about a call according to the calling convention and
@@ -215,17 +246,15 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 		break;
 
 	case MONO_TYPE_R4:
-		NOT_IMPLEMENTED;
-		/* call_info->ret.storage = into_register; */
-		/* call_info->ret.type = float32; */
-		/* call_info->ret.reg = sh4_fr0; */
+		call_info->ret.storage = into_register;
+		call_info->ret.type = float32;
+		call_info->ret.reg = sh4_fr0;
 		break;
 
 	case MONO_TYPE_R8:
-		NOT_IMPLEMENTED;
-		/* call_info->ret.storage = into_register; */
-		/* call_info->ret.type = float64; */
-		/* call_info->ret.reg = sh4_fr0; */
+		call_info->ret.storage = into_register;
+		call_info->ret.type = float64;
+		call_info->ret.reg = sh4_dr0;
 		break;
 
 	case MONO_TYPE_VOID:
@@ -316,13 +345,13 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 			break;
 
 		case MONO_TYPE_R4:
-			NOT_IMPLEMENTED;
-			/* add_float32_arg(&arg_freg, &stack_size, arg_info); */
+			/* HK: TODO, handle pinvoke case */
+			g_assert(signature->pinvoke == 0);
+			add_float32_arg(&arg_freg, &stack_size, arg_info);
 			break;
 
 		case MONO_TYPE_R8:
-			NOT_IMPLEMENTED;
-			/* add_float64_arg(&arg_freg, &stack_size, arg_info); */
+			add_float64_arg(&arg_freg, &stack_size, arg_info);
 			break;
 
 		case MONO_TYPE_GENERICINST:
@@ -415,6 +444,8 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	struct call_info *call_info = NULL;
 	int sentinelpos = -1;
 	int arg_count = 0;
+	int flag_i = 0;
+	int flag_f = 0;
 	int i = 0;
 	int j = 0;
 
@@ -443,8 +474,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	   to free the space used by parameters after a call. */
 	call->stack_usage = 0;
 
-	/* TODO - CV: floating point. */
-
 	/* First, put in order parameters passed into registers. */
 	for (i = 0; i < arg_count; i++) {
 		struct arg_info *arg_info = &(call_info->args[i]);
@@ -462,34 +491,60 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			continue;
 		}
 
-		if (arg_info->storage != into_register) {
-			/* Otherwise, check if it is the last parameter passed into registers */
+		/* Set flag_i (resp. flag_f) if the number of integer (resp. fp) registers
+		   available is reached */
+
+		flag_i |= ((arg_info->type == integer32 || arg_info->type == integer64) &&
+			   (arg_info->storage != into_register));
+
+		flag_f |= ((arg_info->type == float32 || arg_info->type == float64) &&
+			   (arg_info->storage != into_register));
+
+		/* Check if it is the last parameter passed into registers. */
+		if (flag_i && flag_f)
 			break;
-		}
 
 		/* Arguments passed by reference are already handled in get_call_info(). */
 		switch (arg_info->type) {
 		case integer32:
-			MONO_INST_NEW(cfg, arg, OP_MOVE);
-			arg->sreg1 = call->args[i]->dreg;
-			arg->dreg  = mono_alloc_ireg(cfg);
-			mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
-			MONO_ADD_INS(cfg->cbb, arg);
+			if (!flag_i) {
+				MONO_INST_NEW(cfg, arg, OP_MOVE);
+				arg->sreg1 = call->args[i]->dreg;
+				arg->dreg  = mono_alloc_ireg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+				MONO_ADD_INS(cfg->cbb, arg);
+			}
 			break;
 
 		case integer64:
-			/* A long register N is splitted into two integer registers N+1, N+2. */
-			MONO_INST_NEW(cfg, arg, OP_MOVE);
-			arg->sreg1 = call->args[i]->dreg + 1;
-			arg->dreg  = mono_alloc_ireg(cfg);
-			mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
-			MONO_ADD_INS(cfg->cbb, arg);
+			if (!flag_i) {
+				/* A long register N is splitted into two interger registers N+1, N+2. */
+				MONO_INST_NEW(cfg, arg, OP_MOVE);
+				arg->sreg1 = call->args[i]->dreg + 1;
+				arg->dreg  = mono_alloc_ireg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, FALSE);
+				MONO_ADD_INS(cfg->cbb, arg);
 
-			MONO_INST_NEW(cfg, arg, OP_MOVE);
-			arg->sreg1 = call->args[i]->dreg + 2;
-			arg->dreg  = mono_alloc_ireg(cfg);
-			mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg + 1, FALSE);
-			MONO_ADD_INS(cfg->cbb, arg);
+				MONO_INST_NEW(cfg, arg, OP_MOVE);
+				arg->sreg1 = call->args[i]->dreg + 2;
+				arg->dreg  = mono_alloc_ireg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg + 1, FALSE);
+				MONO_ADD_INS(cfg->cbb, arg);
+			}
+			break;
+
+		case float32:
+			/* HK: TODO, handle pinvoke case */
+			g_assert(signature->pinvoke == 0);
+			/* Fall through. */
+		case float64:
+			if (!flag_f) {
+				MONO_INST_NEW(cfg, arg, OP_FMOVE);
+				arg->sreg1 = call->args[i]->dreg;
+				arg->dreg  = mono_alloc_freg(cfg);
+				mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, TRUE);
+				MONO_ADD_INS(cfg->cbb, arg);
+			}
 			break;
 
 		default:
@@ -512,34 +567,62 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	 *	|--------------| <- SP after parameter passing
 	 *	:              :
 	 */
-	for (j = arg_count - 1; j >= i; j--) {
+	flag_i = 0;
+	flag_f = 0;
+	for (j = arg_count - 1; j >= 0; j--) {
 		struct arg_info *arg_info = &(call_info->args[j]);
 		MonoInst *arg = NULL;
 
-		/* Check if it is the last parameter passed onto the stack. */
-		if (arg_info->storage != onto_stack)
+		/* Set flag_i (resp. flag_f) if the number of integer (resp. fp) parameters
+		   passed onto the stacked is reached */
+
+		flag_i |= ((arg_info->type == integer32 || arg_info->type == integer64) &&
+			   (arg_info->storage != onto_stack));
+
+		flag_f |= ((arg_info->type == float32 || arg_info->type == float64) &&
+			   (arg_info->storage != onto_stack));
+
+		/* Check if it is the last parameter passed  onto the stack. */
+		if (flag_i && flag_f)
 			break;
 
 		/* Arguments passed by reference are already handled in get_call_info(). */
 		switch (arg_info->type) {
 		case integer32:
-			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
-			arg->sreg1 = call->args[j]->dreg;
-			MONO_ADD_INS(cfg->cbb, arg);
-			call->stack_usage += 4;
+			if (!flag_i) {
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+				arg->sreg1 = call->args[j]->dreg;
+				MONO_ADD_INS(cfg->cbb, arg);
+				call->stack_usage += 4;
+			}
 			break;
 
 		case integer64:
-			/* A long register N is splitted into two integer registers N+1, N+2. */
-			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
-			arg->sreg1 = call->args[j]->dreg + 2;
-			MONO_ADD_INS(cfg->cbb, arg);
+			if (!flag_i) {
+			/* A long register N is splitted into two interger registers N+1, N+2. */
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+				arg->sreg1 = call->args[j]->dreg + 2;
+				MONO_ADD_INS(cfg->cbb, arg);
 
-			MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
-			arg->sreg1 = call->args[j]->dreg + 1;
-			MONO_ADD_INS(cfg->cbb, arg);
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_ARG);
+				arg->sreg1 = call->args[j]->dreg + 1;
+				MONO_ADD_INS(cfg->cbb, arg);
 
-			call->stack_usage += 8;
+				call->stack_usage += 8;
+			}
+			break;
+
+		case float32:
+			/* HK: TODO, handle pinvoke case */
+			g_assert(signature->pinvoke == 0);
+			/* Fall through. */
+		case float64:
+			if (!flag_f) {
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_FARG);
+				arg->sreg1 = call->args[j]->dreg;
+				MONO_ADD_INS(cfg->cbb, arg);
+				call->stack_usage += 8;
+			}
 			break;
 
 		case valuetype:		/* Fall through */
@@ -553,9 +636,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 		}
 	}
-
-	/* Sanity check. */
-	g_assert(j == i - 1);
 
 	/* Emit the signature cookie in case no implicit arguments are specified. */
 	if (signature->pinvoke == 0 &&
@@ -606,13 +686,17 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
 		/* A long register N is splitted into two integer registers N+1, N+2. */
+		/* TODO - CV: maybe I can do here something as simple as 2 x OP_MOVE. */
 		MONO_INST_NEW(cfg, inst, OP_SETLRET);
 		inst->sreg1 = result->dreg + 1;
 		inst->sreg2 = result->dreg + 2;
 		MONO_ADD_INS(cfg->cbb, inst);
 		break;
 
-	/* TODO - CV floating point. */
+	case MONO_TYPE_R4:
+	case MONO_TYPE_R8:
+		MONO_EMIT_NEW_UNALU(cfg, OP_FMOVE, cfg->ret->dreg, result->dreg);
+		break;
 
 	default:
 		g_warning("return type '0x%x' not yet supported\n", ret->type);
@@ -637,8 +721,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	int i = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
-
-	/* TODO - CV: floating point. */
 
 	/* Spill variables slots are allocated from bottom to top. */
 	cfg->flags |= MONO_CFG_HAS_SPILLUP;
@@ -1051,12 +1133,12 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					NOT_IMPLEMENTED;
 					break;
 
-				case float64:
-					NOT_IMPLEMENTED;
-					break;
-
 				case float32:
-					NOT_IMPLEMENTED;
+				case float64:
+					if (inst->dreg != arg_info->reg) {
+						sh4_fmov(&buffer, arg_info->reg, inst->dreg);
+						sh4_fmov(&buffer, arg_info->reg + 1, inst->dreg + 1);
+					}
 					break;
 
 				case valuetype:		/* Fall through - always on the stack currently */
@@ -1070,9 +1152,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 			/* ... but was onto the stack. */
 			case onto_stack:
+				offset = saved_regs_size + arg_info->offset;
 				switch (arg_info->type) {
 				case integer32:
-					offset = saved_regs_size + arg_info->offset;
 					sh4_base_load(NULL, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
@@ -1080,12 +1162,14 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					NOT_IMPLEMENTED;
 					break;
 
-				case float64:
-					NOT_IMPLEMENTED;
-					break;
-
 				case float32:
-					NOT_IMPLEMENTED;
+				case float64:
+					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+					g_assert(SH4_CHECK_RANGE_add_imm(offset)); /* FIXME - CV */
+					if (offset != 0)
+						sh4_add_imm(&buffer, offset, sh4_temp);
+					sh4_fmovs_incRy(&buffer, sh4_temp, inst->dreg);
+					sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg+1);
 					break;
 
 				case typedbyref:	/* Fall through - always on the stack currently */
@@ -1120,8 +1204,21 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case float64:
+					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+					g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_offset + 4)); /* FIXME - CV */
+					sh4_add_imm(&buffer, inst->inst_offset + 4, sh4_temp);
+					sh4_fmovs_indRx(&buffer, arg_info->reg + 1, sh4_temp);
+					sh4_fmovs_decRx(&buffer, arg_info->reg, sh4_temp);
+					break;
+
 				case float32:
-					NOT_IMPLEMENTED;
+					sh4_fcnvds_double_FPUL(&buffer, arg_info->reg);
+					sh4_fsts_FPUL(&buffer, arg_info->reg);
+					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+					g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_offset)); /* FIXME - CV */
+					if (inst->inst_offset != 0)
+						sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+					sh4_fmovs_indRx(&buffer, arg_info->reg, sh4_temp);
 					break;
 
 				case typedbyref:	/* Always onto the stack currently */
@@ -1137,24 +1234,20 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 			/* ... and was already onto the stack. */
 			case onto_stack:
+				offset = saved_regs_size + arg_info->offset;
 				switch (arg_info->type) {
 				case integer32:
-					offset = saved_regs_size + arg_info->offset;
+				case float32:
 					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
 					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
-					offset = saved_regs_size + arg_info->offset;
+				case float64:
 					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
 					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					sh4_base_load(NULL, &buffer, offset + 4, sh4_sp, sh4_temp);
 					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset + 4, sh4_fp);
-					break;
-
-				case float64:
-				case float32:
-					NOT_IMPLEMENTED;
 					break;
 
 				case valuetype:
@@ -2720,6 +2813,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movl_decRx(&buffer, inst->sreg1, sh4_sp);
 			break;
 
+		case OP_SH4_PUSH_FARG:
+			/* MD: sh4_push_farg: src1:f len:4 */
+			sh4_fmovs_decRx(&buffer, inst->sreg1 + 1, sh4_sp);
+			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_sp);
+			break;
+
 		case OP_SH4_STOREI1_MEMBASE_R0:
 			/* MD: sh4_storei1_membase_R0: src1:z dest:b len:2 */
 			g_assert(inst->sreg1 == sh4_r0);
@@ -2826,6 +2925,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &(inst->inst_c0), inst->dreg);
 			break;
 
+		case OP_FCALL:
+			/* MD: fcall: dest:y clob:c len:30 */
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:30 */
 		case OP_VCALL:
@@ -3137,9 +3238,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_FMOVE:
-			/* MD: fmove: dest:f src1:f len:2 */
-			if (inst->sreg1 != inst->dreg)
+			/* MD: fmove: dest:f src1:f len:4 */
+			if (inst->sreg1 != inst->dreg) {
 				sh4_fmov(&buffer, inst->sreg1, inst->dreg);
+				sh4_fmov(&buffer, inst->sreg1 + 1, inst->dreg + 1);
+			}
 			break;
 
 		case OP_R8CONST:
@@ -3206,6 +3309,27 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_fneg_double(&buffer, inst->dreg);
 			break;
 
+		case OP_STORER8_MEMBASE_REG:
+			/* MD: storer8_membase_reg: dest:b src1:f len:10 */
+			/* FIXME - CV: decompose in the lowering pass. */
+			sh4_mov(&buffer, inst->inst_destbasereg, sh4_temp);
+			sh4_add_imm(&buffer, 4, sh4_temp);
+			if (inst->inst_offset != 0)
+				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+			sh4_fmovs_indRx(&buffer, inst->sreg1 + 1, sh4_temp);
+			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_temp);
+			break;
+
+		case OP_LOADR8_MEMBASE:
+			/* MD: loadr8_membase: dest:f src1:b len:8 */
+			/* FIXME - CV: decompose in the lowering pass. */
+			sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+			if (inst->inst_offset != 0)
+				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+			sh4_fmovs_incRy(&buffer, sh4_temp, inst->dreg);
+			sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg+1);
+			break;
+
 		case OP_STORER4_MEMBASE_REG:
 			/* MD: storer4_membase_reg: dest:b src1:f len:10 */
 			/* FIXME - CV: decompose in the lowering pass. */
@@ -3264,8 +3388,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_JMP:	 	 /* MD: jmp: len:0 */
 
 		/* These opcodes are missing for objects.cs. */
-		case OP_STORER8_MEMBASE_REG:	/* MD: storer8_membase_reg: dest:b src1:f len:0 */
-		case OP_LOADR8_MEMBASE:		/* MD: loadr8_membase: dest:f src1:b len:0 */
 		case OP_COND_EXC_LT_UN: 	/* MD: cond_exc_lt_un: len:0 */
 
 		/* These opcodes are missing for objects.cs. */

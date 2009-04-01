@@ -92,6 +92,7 @@ sh4_not_cmpge: src1:i src2:i len:2
 sh4_not_cmphs: src1:i src2:i len:2
 sh4_movt: dest:i len:2
 sh4_push_arg: src1:i len:2
+sh4_push_farg: src1:f len:4
 sh4_storei1_membase_R0: src1:z dest:b len:2
 sh4_storei1: src1:i dest:b len:2
 sh4_storei2_membase_R0: src1:z dest:b len:2
@@ -109,6 +110,7 @@ sh4_loadu2: dest:i src1:b len:4
 sh4_loadi4_membase: dest:i src1:b len:2
 sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
+fcall: dest:y clob:c len:30
 voidcall: clob:c len:30
 vcall: clob:c len:30
 vcall2: clob:c len:30
@@ -150,7 +152,7 @@ not_reached: len:2
 break: len:2
 jump_table: dest:i len:12
 setlret: src1:i src2:i len:2
-fmove: dest:f src1:f len:2
+fmove: dest:f src1:f len:4
 r8const: dest:f clob:z len:24
 r4const: dest:f clob:z len:20
 int_conv_to_r4: dest:f src1:i len:4
@@ -161,6 +163,8 @@ float_sub: clob:1 dest:f src1:f src2:f len:2
 float_mul: clob:1 dest:f src1:f src2:f len:2
 float_div: clob:1 dest:f src1:f src2:f len:2
 float_neg: dest:f src1:f len:2
+storer8_membase_reg: dest:b src1:f len:10
+loadr8_membase: dest:f src1:b len:8
 storer4_membase_reg: dest:b src1:f len:10
 loadr4_membase: dest:f src1:b len:10
 int_mul_ovf: dest:i src1:i src2:i len:0
@@ -184,8 +188,6 @@ cond_exc_gt_un: len:0
 localloc_imm: dest:i len:0
 ckfinite: dest:f src1:f len:0
 jmp: len:0
-storer8_membase_reg: dest:b src1:f len:0
-loadr8_membase: dest:f src1:b len:0
 cond_exc_lt_un: len:0
 long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0
 float_conv_to_i: dest:i src1:f len:0
