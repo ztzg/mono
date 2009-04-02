@@ -55,7 +55,7 @@
  * Bitmask selecting the callee-saved general registers, these
  * are usually used for global allocation. This macro is mandatory.
  */
-#define MONO_ARCH_CALLEE_SAVED_REGS ((1<<sh4_r8) | (1<<sh4_r9) | (1<<sh4_r10) | (1<<sh4_r11) | (1<<sh4_r12) | (1<<sh4_r13) | (1<<sh4_r14) | (1<<sh4_r15))
+#define MONO_ARCH_CALLEE_SAVED_REGS ((1<<sh4_r8) | (1<<sh4_r9) | (1<<sh4_r10) | (1<<sh4_r11) | (1<<sh4_r12) | (1<<sh4_r13) | (1<<sh4_r14))
 
 /*
  * This macro is not yet used.

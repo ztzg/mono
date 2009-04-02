@@ -76,6 +76,9 @@ struct call_info {
 static inline void force_stack(SH4IntRegister *arg_reg)
 {
 	*arg_reg = MONO_SH4_REG_LAST_ARG + 1;
+#if 0
+	*arg_freg = MONO_SH4_FREG_LAST_ARG + 1;
+#endif
 	return;
 }
 
@@ -738,8 +741,8 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	 *	:              :
 	 */
 
-	cfg->frame_reg = sh4_r14;
-	cfg->used_int_regs |= 1 << sh4_r14;
+	cfg->frame_reg = sh4_fp;
+	cfg->used_int_regs |= 1 << sh4_fp;
 
 	/* Compute space used by local variables. */
 	locals_offsets = mono_allocate_stack_slots_full(cfg, FALSE,
@@ -1030,20 +1033,28 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	 *	:              : Callee's frame.
 	 */
 
-	/* Save global registers (sh4_r8 -> sh4_r13). */
-	for (i = sh4_r8; i <= sh4_r13; i++) {
-		if (cfg->used_int_regs & (1 << i)) {
-			sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_r15);
+	/* Save global registers. */
+	for (i = 0; i < MONO_MAX_IREGS; i++) {
+		if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0 &&
+		    (cfg->used_int_regs          & (1 << i)) != 0) {
+			sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_sp);
 			saved_regs_size += 4;
 		}
 	}
 
-	/* Save the previous frame pointer (sh4_r14). */
-	sh4_movl_decRx(&buffer, sh4_r14, sh4_r15);
-	saved_regs_size += 4;
+#if 0
+	/* Save global floating-point registers. */
+	for (i = 0; i < MONO_MAX_FREGS; i++) {
+		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&
+		    (cfg->used_float_regs         & (1 << i)) != 0) {
+			sh4_fmovl_decRx(&buffer, (SH4FloatRegister)i, sh4_sp);
+			saved_regs_size += 4;
+		}
+	}
+#endif
 
 	/* Save the PR. */
-	sh4_stsl_PR_decRx(&buffer, sh4_r15);
+	sh4_stsl_PR_decRx(&buffer, sh4_sp);
 	saved_regs_size += 4;
 
 	/* At this point, the stack looks like :
@@ -1298,26 +1309,36 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		   declared as clobbered into mono_arch_call_opcode() if
 		   "save_lmf" is set. */
 
+		/* Allocate the struct MonoLMF onto the stack. */
+		sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
+
 		/* pseudo-code: MonoLMF.registers[] = { %R0, ..., %R15 }; */
-		sh4_add_imm(&buffer, -sizeof(MonoLMF) + offsetof(MonoLMF, registers), sh4_r15);
-		for (i = 0; i <= 15; i++)
-			sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_r15);
+		sh4_mov(&buffer, sh4_sp, sh4_temp);
+		sh4_add_imm(&buffer, offsetof(MonoLMF, registers), sh4_temp);
+		for (i = 0; i < MONO_MAX_IREGS; i++)
+			sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_temp);
+
+#if 0
+		/* pseudo-code: MonoLMF.fregisters[] = { %FR0, ..., %FR15 }; */
+		sh4_mov(&buffer, sh4_sp, sh4_temp);
+		sh4_add_imm(&buffer, offsetof(MonoLMF, fregisters), sh4_temp);
+		for (i = 0; i < MONO_MAX_FREGS; i++)
+			sh4_fmovl_dispRx(&buffer, (SH4FloatRegister)i, i * 4, sh4_temp);
+#endif
 
 		/* Patch slot for : sh4_r0 <- cfg->method */
 		patch0 = buffer;
 		sh4_die(&buffer);
 
-		sh4_add_imm(&buffer, -offsetof(MonoLMF, registers), sh4_r15);
-
 		/* pseudo-code: MonoLMF.method = cfg->method; */
-		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, method), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, method), sh4_sp);
 
 		/* Patch slot for : sh4_r0 <- %PC */
 		patch1 = buffer;
 		sh4_die(&buffer);
 
 		/* pseudo-code: MonoLMF.pc = %PC; */
-		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, pc), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, pc), sh4_sp);
 
 		/* Patch slot for : sh4_r0 <- mono_get_lmf_addr */
 		patch2 = buffer;
@@ -1327,7 +1348,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		sh4_jsr_indRx(&buffer, sh4_r0);
 		sh4_nop(&buffer);
 
-		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, lmf_addr), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, lmf_addr), sh4_sp);
 
 		/*
 		 * Insert the new LMF at the beginning of the LMF list.
@@ -1335,10 +1356,10 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 		/* pseudo-code: MonoLMF.previous_lmf = *(MonoLMF.lmf_addr); */
 		sh4_movl_indRy(&buffer, sh4_r0, sh4_temp);
-		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, previous_lmf), sh4_r15);
+		sh4_movl_dispRx(&buffer, sh4_temp, offsetof(MonoLMF, previous_lmf), sh4_sp);
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = &MonoLMF;  */
-		sh4_movl_indRx(&buffer, sh4_r15, sh4_r0);
+		sh4_movl_indRx(&buffer, sh4_sp, sh4_r0);
 
 		/* Patch slot for : bra_label "skip_cstpool" */
 		patch3 = buffer;
@@ -1420,7 +1441,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
 		/* Adjust SP to point to the "hidden" LMF. */
-		sh4_mov(&buffer, sh4_r14, sh4_r15);
+		sh4_mov(&buffer, sh4_fp, sh4_sp);
 		sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
 		sh4_mov(&buffer, sh4_sp, sh4_temp);
 
@@ -1440,12 +1461,12 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
 		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_temp);
-		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_r15, sh4_r15);
-		sh4_movl_indRx(&buffer, sh4_temp, sh4_r15);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_sp, sh4_sp);
+		sh4_movl_indRx(&buffer, sh4_temp, sh4_sp);
 	}
 
 	/* Reset the stack pointer. */
-	sh4_mov(&buffer, sh4_r14, sh4_r15);
+	sh4_mov(&buffer, sh4_fp, sh4_sp);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1462,15 +1483,15 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	/* Free the space used by local variables and the spill area. */
 	if (cfg->stack_offset != 0) {
 		if (SH4_CHECK_RANGE_add_imm(cfg->stack_offset)) {
-			sh4_add_imm(&buffer, cfg->stack_offset, sh4_r15);
+			sh4_add_imm(&buffer, cfg->stack_offset, sh4_sp);
 		}
 		else if (SH4_CHECK_RANGE_mov_imm(cfg->stack_offset)) {
 			sh4_mov_imm(&buffer, cfg->stack_offset, sh4_temp);
-			sh4_add(&buffer, sh4_temp, sh4_r15);
+			sh4_add(&buffer, sh4_temp, sh4_sp);
 		}
 		else {
 			sh4_load(&buffer, cfg->stack_offset, sh4_temp);
-			sh4_add(&buffer, sh4_temp, sh4_r15);
+			sh4_add(&buffer, sh4_temp, sh4_sp);
 		}
 	}
 
@@ -1485,15 +1506,21 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	 */
 
 	/* Restore the PR. */
-	sh4_ldsl_incRx_PR(&buffer, sh4_r15);
+	sh4_ldsl_incRx_PR(&buffer, sh4_sp);
 
-	/* Restore the previous frame pointer (sh4_r14). */
-	sh4_movl_incRy(&buffer, sh4_r15, sh4_r14);
+#if 0
+	/* Restore global floating-point registers. */
+	for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
+		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&
+		    (cfg->used_int_regs           & (1 << i)) != 0)
+			sh4_fmovl_incRy(&buffer, sh4_sp, (SH4FloatRegister)i);
+#endif
 
-	/* Restore global registers (sh4_r13 -> sh4_r8). */
-	for (i = sh4_r13; i >= sh4_r8; i--)
-		if (cfg->used_int_regs & (1 << i))
-			sh4_movl_incRy(&buffer, sh4_r15, (SH4IntRegister)i);
+	/* Restore global registers. */
+	for (i = MONO_MAX_IREGS - 1; i >= 0; i--)
+		if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0 &&
+		    (cfg->used_int_regs          & (1 << i)) != 0)
+			sh4_movl_incRy(&buffer, sh4_sp, (SH4IntRegister)i);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1715,22 +1742,22 @@ MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* cfg)
  * Return a list of callee-saved registers (a.k.a global registers)
  * that can be used to allocate variables in the current method.
  *
- * The registers sh4_r14 and sh4_r15 are respectively used as the
+ * The registers sh4_fp and sh4_sp are respectively used as the
  * frame pointer and as the stack pointer. Maybe sh4_r12 will be
  * used one day as the global pointer.
  */
 GList *mono_arch_get_global_int_regs(MonoCompile *cfg)
 {
 	GList *regs = NULL;
+	int i = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	regs = g_list_prepend(regs, (gpointer)sh4_r8);
-	regs = g_list_prepend(regs, (gpointer)sh4_r9);
-	regs = g_list_prepend(regs, (gpointer)sh4_r10);
-	regs = g_list_prepend(regs, (gpointer)sh4_r11);
-	regs = g_list_prepend(regs, (gpointer)sh4_r12);
-	regs = g_list_prepend(regs, (gpointer)sh4_r13);
+	for (i = 0; i < MONO_MAX_IREGS; i++)
+		if (i != sh4_fp && /* Do not use the frame pointer... */
+		    i != sh4_sp && /* ... nor the stack pointer ;) */
+		    (MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0)
+			regs = g_list_prepend(regs, (gpointer)i);
 
 	return regs;
 }
@@ -3584,8 +3611,8 @@ const char *mono_arch_regname(int reg)
 	case sh4_r11: return "sh4_r11";
 	case sh4_r12: return "sh4_r12";
 	case sh4_r13: return "sh4_r13";
-	case sh4_r14: return "sh4_r14";
-	case sh4_r15: return "sh4_r15";
+	case sh4_fp: return "sh4_fp";
+	case sh4_sp: return "sh4_sp";
 	}
 	return "unknown";
 }

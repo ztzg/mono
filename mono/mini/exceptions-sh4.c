@@ -148,9 +148,26 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		new_context->pc = *registers;
 		registers++;
 
+#if 0
+		/* Extract the previous value of global floating-point registers. */
+		for (i = MONO_MAX_FREGS - 1; i >= 0; i--) {
+			if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&
+			    (jit_info->used_fregs         & (1 << i)) != 0) {
+				new_context->fregisters[i] = *registers;
+				registers++;
+
+				SH4_EXTRA_DEBUG("back freg%d: 0x%x -> 0x%x", i, context->registers[i], new_context->registers[i]);
+			}
+			else
+				new_context->registers[i] = context->registers[i];
+		}
+#endif
+
 		/* Extract the previous value of global registers. */
-		for (i = sh4_r14; i >= sh4_r8; i--) {
-			if (jit_info->used_regs & (1 << i)) {
+		/* Restore global registers. */
+		for (i = MONO_MAX_IREGS - 1; i >= 0; i--) {
+			if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0 &&
+			    (jit_info->used_regs         & (1 << i)) != 0) {
 				new_context->registers[i] = *registers;
 				registers++;
 
@@ -217,12 +234,14 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
  * 
  *  	// Restore all global registers from the MonoContext, except the stack pointer.
  * 	{ %R8, ... , %R14 } = context.registers[8..14];
+ * 	{ %FR12, ... , %FR15 } = context.fregisters[12..15];
  * 
  * 	// Call the handler.
  * 	handler();
  * 
  *  	// Restore all callee-saved registers from the stack, except the stack pointer.
- * 	{ %R8, ... , %R14 } = registers[];
+ * 	{ %FR12, ... , %FR15 } = fregisters[];
+ * 	{ %R8, ... , %R14 }    = registers[];
  * 
  * 	return;
  * }
@@ -242,12 +261,6 @@ gpointer mono_arch_get_call_filter(void)
 
 	code = buffer = mono_global_codeman_reserve(CALL_FILTER_SIZE);
 
-	/* Save the return address. */
-	sh4_stsl_PR_decRx(&buffer, sh4_r15);
-
-	/* pseudo-code: unsigned int registers[8]; */
-	sh4_add_imm(&buffer, - (7 * 4), sh4_r15);
-
 	/* At this point, the stack looks like :
 	 *	:             :
 	 *	|             | Caller's frame.
@@ -266,8 +279,19 @@ gpointer mono_arch_get_call_filter(void)
 	 */
 
 	/* pseudo-code: registers[] = { %R8, %R9, %R10, %R11, %R12, %R13, %R14 }; */
-	for (i = 8; i <= 14; i++)
-		sh4_movl_dispRx(&buffer, (SH4IntRegister)i, (i - 8) * 4, sh4_r15);
+	for (i = 0; i < MONO_MAX_IREGS; i++)
+		if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0)
+			sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_sp);
+
+#if 0
+	/* pseudo-code: fregisters[] = { %FR12, %FR13, %FR14, %FR15 }; */
+	for (i = 0; i < MONO_MAX_FREGS; i++)
+		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0)
+			sh4_fmovl_decRx(&buffer, (SH4FloatRegister)i, sh4_sp);
+#endif
+
+	/* Save the return address. */
+	sh4_stsl_PR_decRx(&buffer, sh4_sp);
 
 	/*
 	 * Restore all global registers from the MonoContext, except the stack pointer.
@@ -277,8 +301,16 @@ gpointer mono_arch_get_call_filter(void)
 	sh4_add_imm(&buffer, offsetof(MonoContext, registers), sh4_r4);
 
 	/* pseudo-code: { %R8, ... , %R14 } = context.registers[8..14]; */
-	for (i = 8; i <= 14; i++)
-		sh4_movl_dispRy(&buffer, i * 4, sh4_r4, (SH4IntRegister)i);
+	for (i = 0; i < MONO_MAX_IREGS; i++)
+		if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0)
+			sh4_movl_dispRy(&buffer, i * 4, sh4_r4, (SH4IntRegister)i);
+
+#if 0
+	/* pseudo-code: { %FR12, ... , %FR15 } = context.fregisters[12..15]; */
+	for (i = 0; i < MONO_MAX_FREGS; i++)
+		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0)
+			sh4_fmovl_dispRy(&buffer, i * 4, sh4_r4, (SH4FloatRegister)i);
+#endif
 
 	/*
 	 * Call the handler.
@@ -288,17 +320,26 @@ gpointer mono_arch_get_call_filter(void)
 	sh4_jsr_indRx(&buffer, sh4_r5);
 	sh4_nop(&buffer);
 
+	/* Restore the return address. */
+	sh4_ldsl_incRx_PR(&buffer, sh4_sp);
+
 	/*
 	 * Restore all callee-saved registers from the stack.
 	 */
 
+#if 0
+	/* pseudo-code: { %FR12, ... , %FR15 } = fregisters[]; */
+	for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
+		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0)
+			sh4_fmovl_incRy(&buffer, sh4_sp, (SH4FloatRegister)i);
+#endif
+
 	/* pseudo-code: { %R8, ... , %R14 } = registers[]; */
-	for (i = 8; i <= 14; i++)
-		sh4_movl_dispRy(&buffer, (i - 8) * 4, sh4_r15, (SH4IntRegister)i);
+	for (i = MONO_MAX_IREGS - 1; i >= 0; i--)
+		if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0)
+			sh4_movl_incRy(&buffer, sh4_sp, (SH4IntRegister)i);
 
 	/* pseudo-code: return; */
-	sh4_add_imm(&buffer, (7 * 4), sh4_r15);
-	sh4_ldsl_incRx_PR(&buffer, sh4_r15);
 	sh4_rts(&buffer);
 	sh4_nop(&buffer);
 
@@ -325,7 +366,8 @@ gpointer mono_arch_get_call_filter(void)
  * 	%PR = context.pc
  *
  * 	// Restore all registers.
- * 	{ %R0, ..., %R15 } = context.registers[];
+ * 	{ %R0, ..., %R15 }   = context.registers[];
+ * 	{ %FR0, ..., %FR15 } = context.fregisters[];
  * 
  *      return;
  * }
@@ -349,9 +391,9 @@ gpointer mono_arch_get_restore_context(void)
 
 	code = buffer = mono_global_codeman_reserve(RESTORE_CONTEXT_SIZE);
 
-	/* R15 now points to "context.registers[]" (used later). */
-	sh4_mov(&buffer, sh4_r4, sh4_r15);
-	sh4_add_imm(&buffer, offsetof(MonoContext, registers), sh4_r15);
+	/* Rtemp now points to "context.registers[]" (used later). */
+	sh4_mov(&buffer, sh4_r4, sh4_temp);
+	sh4_add_imm(&buffer, offsetof(MonoContext, registers), sh4_temp);
 
 	/*
 	 * Mimic a return from an ordinary routine by setting the
@@ -367,8 +409,16 @@ gpointer mono_arch_get_restore_context(void)
 	 */
 
 	/* pseudo-code: { %R0, ..., %R15 } = context.registers[]; */
-	for (i = 0; i <= 15; i++)
-		sh4_movl_dispRy(&buffer, i * 4, sh4_r15, (SH4IntRegister)i);
+	for (i = 0; i < MONO_MAX_IREGS; i++)
+		if (i != sh4_temp)
+			sh4_movl_dispRy(&buffer, i * 4, sh4_temp, (SH4IntRegister)i);
+
+#if 0
+	/* Rtemp now points to "context.fregisters[]". */
+	sh4_add_imm(&buffer, -offsetof(MonoContext, registers) + offsetof(MonoContext, fregisters), sh4_temp);
+	for (i = 0; i < MONO_MAX_FREGS; i++)
+		sh4_fmovl_dispRy(&buffer, i * 4, sh4_temp, (SH4FloatRegister)i);
+#endif
 
 	/* pseudo-code: return; */
 	sh4_rts(&buffer);
@@ -400,6 +450,9 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 
 	memset(&context, 0, sizeof(MonoContext));
 	memcpy(&(context.registers), registers, sizeof(context.registers));
+#if 0
+	memcpy(&(context.fregisters), registers, sizeof(context.fregisters));
+#endif
 	context.pc = pc;
 
 	if (rethrow != 0) {
@@ -420,9 +473,11 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
  * void throw_exception_trampoline(void *exception)
  * {
  * 	// Save all registers onto the stack.
- * 	registers[] = { %R0, ..., %R15 };
+ * 	registers[]  = { %R0, ..., %R15 };
+ * 	fregisters[] = { %FR0, ..., %FR15 };
  * 
  * 	unsigned int registers[16];
+ * 	unsigned int fregisters[16];
  * 
  * #if by_name != 0
  * 	exception = mono_exception_from_name(mono_defaults.corlib, "System", exception);
@@ -454,28 +509,30 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	 * Save all registers onto the stack.
 	 */
 
-	/* Adjust SP to allocate the stacked registers[]. */
-	sh4_add_imm(&buffer, -16 * 4, sh4_r15);
+	/* pseudo-code: registers[] = { %R0, ..., %R15 }; */
+	for (i = MONO_MAX_IREGS - 1; i >= 0; i--)
+		sh4_movl_decRx(&buffer, (SH4IntRegister)i, sh4_sp);
+
+#if 0
+	/* pseudo-code: fregisters[] = { %FR0, ..., %FR15 }; */
+	for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
+		sh4_fmovl_decRx(&buffer, (SH4FloatRegister)i, sh4_sp);
+#endif
 
 	/* At this point, the stack looks like :
-	 *	:             :
-	 *	|             | Caller's frame.
-	 *	|=============|
-	 *	|             | Current frame.
-	 *	| registers[] |
-	 *	|             |
-	 *	|-------------| <- SP
-	 *	:             :
+	 *	:              :
+	 *	|              | Caller's frame.
+	 *	|==============|
+	 *	|              | Current frame.
+	 *	| registers[]  |
+	 *	|              |
+	 *	|--------------|
+	 *	|              |
+	 *	| fregisters[] |
+	 *	|              |
+	 *	|--------------| <- SP
+	 *	:              :
 	 */
-
-	/* pseudo-code: registers[] = { %R0, ..., %R15 }; */
-	for (i = 0; i <= 14; i++)
-		sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_r15);
-
-	/* Compute the previous value of SP before saving into registers[]. */
-	sh4_mov(&buffer, sh4_r15, sh4_temp);
-	sh4_add_imm(&buffer, 16 * 4, sh4_temp);
-	sh4_movl_dispRx(&buffer, sh4_temp, 15 * 4, sh4_r15);
 
 	if (by_name != 0) {
 		/* The current return address have to be preserved through
@@ -514,7 +571,7 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	/* Fill parameters passed to the throw_exception(),
 	   sh4_r4 already holds the variable 'exception'. */
 	sh4_sts_PR(&buffer, sh4_r5);
-	sh4_mov(&buffer, sh4_r15, sh4_r6);
+	sh4_mov(&buffer, sh4_sp, sh4_r6);
 	sh4_mov_imm(&buffer, (rethrow != 0 ? 1 : 0), sh4_r7);
 
 	/* Patch slot for : sh4_r0 <- throw_exception */
@@ -694,8 +751,13 @@ void mono_arch_sigctx_to_monoctx(void *context, MonoContext *mono_context)
 
 	mono_context->pc = ucontext->uc_mcontext.pc;
 
-	for (i = 0; i < 16; i++)
+	for (i = 0; i < MONO_MAX_IREGS; i++)
 		mono_context->registers[i] = ucontext->uc_mcontext.gregs[i];
+
+#if 0
+	for (i = 0; i < MONO_MAX_FREGS; i++)
+		mono_context->fregisters[i] = ucontext->uc_mcontext.fregs[i];
+#endif
 
 	return;
 }
@@ -707,8 +769,13 @@ void mono_arch_monoctx_to_sigctx(MonoContext *mono_context, void *context)
 
 	ucontext->uc_mcontext.pc = mono_context->pc;
 
-	for (i = 0; i < 16; i++)
+	for (i = 0; i < MONO_MAX_IREGS; i++)
 		ucontext->uc_mcontext.gregs[i] = mono_context->registers[i];
+
+#if 0
+	for (i = 0; i < MONO_MAX_FREGS; i++)
+		ucontext->uc_mcontext.fregs[i] = mono_context->fregisters[i];
+#endif
 
 	return;
 }
