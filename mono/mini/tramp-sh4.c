@@ -178,7 +178,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	SH4_EXTRA_DEBUG("args => %d", trampoline_type);
 
-#define TRAMPOLINE_SIZE 146
+#define TRAMPOLINE_SIZE 220
 
 	code = buffer = mono_global_codeman_reserve(TRAMPOLINE_SIZE);
 
@@ -186,7 +186,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	sh4_stsl_PR_decRx(&buffer, sh4_sp);
 
 	/* pseudo-code: struct MonoLMF new_lmf; */
-	sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
+	sh4_multi_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -203,8 +203,6 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	 *	:              :
 	 */
 
-	/* TODO - CV: save only local registers and use them as temporary. */
-
 	/*
 	 * Save all registers.
 	 */
@@ -216,12 +214,12 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 		if (i != sh4_temp)
 			sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_temp);
 
-#if 0
-	sh4_add_imm(&buffer, -offsetof(MonoLMF, registers) + offsetof(MonoLMF, fregisters), sh4_temp);
+	sh4_multi_add_imm(&buffer, -offsetof(MonoLMF, registers) +
+				   offsetof(MonoLMF, fregisters) +
+				   MONO_MAX_FREGS * sizeof(guint32), sh4_temp);
 	/* pseudo-code: new_lmf.fregisters[] = { %FR0, ..., %FR15 }; */
-	for (i = 0; i < MONO_MAX_FREGS; i++)
-		sh4_fmovl_dispRx(&buffer, (SH4FloatRegister)i, i * 4, sh4_temp);
-#endif
+	for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
+		sh4_fmov_decRx(&buffer, (SH4FloatRegister)i, sh4_temp);
 
 	/*
 	 * This trampoline is called with the method's parameters, so the
@@ -230,7 +228,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 
 	/* pseudo-code: new_lmf.method = %Caller_SP[0]; */
 	sh4_mov(&buffer, sh4_sp, sh4_r8);
-	sh4_add_imm(&buffer, sizeof(MonoLMF) + 4 /* stacked PR. */, sh4_r8);
+	sh4_multi_add_imm(&buffer, sizeof(MonoLMF) + 4 /* stacked PR. */, sh4_r8);
 	sh4_movl_indRy(&buffer, sh4_r8, sh4_r9);
 	sh4_movl_dispRx(&buffer, sh4_r9, offsetof(MonoLMF, method), sh4_sp);
 
@@ -268,7 +266,7 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	/* Fill parameters passed to the trampoline. */
 	sh4_mov(&buffer, sh4_sp, sh4_r4);
 	sh4_add_imm(&buffer, offsetof(MonoLMF, registers), sh4_r4);
-#if 0
+#if 0 /* Mono trampolines does not need floating-point registers. */
 	sh4_mov(&buffer, sh4_sp, sh4_r5);
 	sh4_add_imm(&buffer, offsetof(MonoLMF, fregisters), sh4_r5);
 	sh4_mov(&buffer, sh4_r10, sh4_r6); /* R10 is currently used as "new_lmf.pc". */
@@ -327,15 +325,13 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 		if (i != sh4_temp)
 			sh4_movl_dispRy(&buffer, i * 4, sh4_temp, (SH4IntRegister)i);
 
-#if 0
 	sh4_add_imm(&buffer, -offsetof(MonoLMF, registers) + offsetof(MonoLMF, fregisters), sh4_temp);
 	/* pseudo-code: { %FR0, ..., %FR15 } = new_lmf.fregisters[]; */
 	for (i = 0; i < MONO_MAX_FREGS; i++)
-		sh4_fmovl_dispRy(&buffer, i * 4, sh4_temp, (SH4FloatRegister)i);
-#endif
+		sh4_fmov_incRy(&buffer, sh4_temp, (SH4FloatRegister)i);
 
 	/* pseudo-code: %PR = %Caller_PR; */
-	sh4_add_imm(&buffer, sizeof(MonoLMF), sh4_sp);
+	sh4_multi_add_imm(&buffer, sizeof(MonoLMF), sh4_sp);
 	sh4_ldsl_incRx_PR(&buffer, sh4_sp);
 
 	/*

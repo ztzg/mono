@@ -49,6 +49,7 @@
  * these are usually used for global allocation. This macro is
  * mandatory even if the soft floating-point support is enabled.
  */
+/* Mono does not support yet global floating-point register allocation. */
 #define MONO_ARCH_CALLEE_SAVED_FREGS ((1<<sh4_dr12) | (1<<sh4_dr14))
 
 /*
@@ -285,6 +286,7 @@ typedef struct {
 typedef struct {
 	guint32 pc;
 	guint32 registers[MONO_MAX_IREGS];
+	guint32 fregisters[MONO_MAX_FREGS];
 } MonoContext;
 
 /* When managed code needs to call into native code, it does through
@@ -297,6 +299,7 @@ struct MonoLMF {
 	MonoMethod *method;
 	guint32     pc;
 	guint32     registers[MONO_MAX_IREGS];
+	guint32     fregisters[MONO_MAX_FREGS];
 };
 
 #ifndef NDEBUG

@@ -76,9 +76,6 @@ struct call_info {
 static inline void force_stack(SH4IntRegister *arg_reg)
 {
 	*arg_reg = MONO_SH4_REG_LAST_ARG + 1;
-#if 0
-	*arg_freg = MONO_SH4_FREG_LAST_ARG + 1;
-#endif
 	return;
 }
 
@@ -176,6 +173,10 @@ static inline void add_float64_arg(SH4FloatRegister *arg_reg, guint32 *stack_siz
 		(*arg_reg) += 2;
 	}
 	else {
+#if 0 /* TODO - CV: Maybe we have to do something like that when supporting PInvoke calls. */
+		if(*arg_reg == MONO_SH4_FREG_LAST_ARG)
+			arg_reg = MONO_SH4_FREG_LAST_ARG + 1;
+#endif
 		arg_info->storage = onto_stack;
 		(*stack_size) += 8;
 	}
@@ -1042,7 +1043,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		}
 	}
 
-#if 0
+#if 0 /* Mono does not support yet global floating-point register allocation. */
 	/* Save global floating-point registers. */
 	for (i = 0; i < MONO_MAX_FREGS; i++) {
 		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&
@@ -1310,7 +1311,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		   "save_lmf" is set. */
 
 		/* Allocate the struct MonoLMF onto the stack. */
-		sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
+		sh4_multi_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
 
 		/* pseudo-code: MonoLMF.registers[] = { %R0, ..., %R15 }; */
 		sh4_mov(&buffer, sh4_sp, sh4_temp);
@@ -1318,13 +1319,12 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		for (i = 0; i < MONO_MAX_IREGS; i++)
 			sh4_movl_dispRx(&buffer, (SH4IntRegister)i, i * 4, sh4_temp);
 
-#if 0
 		/* pseudo-code: MonoLMF.fregisters[] = { %FR0, ..., %FR15 }; */
-		sh4_mov(&buffer, sh4_sp, sh4_temp);
-		sh4_add_imm(&buffer, offsetof(MonoLMF, fregisters), sh4_temp);
-		for (i = 0; i < MONO_MAX_FREGS; i++)
-			sh4_fmovl_dispRx(&buffer, (SH4FloatRegister)i, i * 4, sh4_temp);
-#endif
+		sh4_multi_add_imm(&buffer, -offsetof(MonoLMF, registers) +
+					   offsetof(MonoLMF, fregisters) +
+					   MONO_MAX_FREGS * sizeof(guint32), sh4_temp);
+		for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
+			sh4_fmov_decRx(&buffer, (SH4FloatRegister)i, sh4_temp);
 
 		/* Patch slot for : sh4_r0 <- cfg->method */
 		patch0 = buffer;
@@ -1442,7 +1442,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	if (cfg->method->save_lmf != 0) {
 		/* Adjust SP to point to the "hidden" LMF. */
 		sh4_mov(&buffer, sh4_fp, sh4_sp);
-		sh4_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
+		sh4_multi_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
 		sh4_mov(&buffer, sh4_sp, sh4_temp);
 
 		/* At this point, the stack looks like :
@@ -1508,7 +1508,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	/* Restore the PR. */
 	sh4_ldsl_incRx_PR(&buffer, sh4_sp);
 
-#if 0
+#if 0   /* Mono does not support yet global floating-point register allocation. */
 	/* Restore global floating-point registers. */
 	for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
 		if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&

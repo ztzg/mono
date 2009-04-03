@@ -110,4 +110,23 @@ static inline guint8 *get_imm_sh4_call_site(guint16 *code)
 	return (guint8 *)pc + imm;
 }
 
+/**
+ * Emulate a kinda "sh4_add_long_imm" thanks to several "sh4_add_imm".
+ */
+static inline void sh4_multi_add_imm(guint8 **code, int imm, SH4IntRegister Rx)
+{
+	int intermediate_imm = 0;
+	int current_imm = 0;
+	int sign = 1;
+
+	if (imm < 0)
+		sign = -1;
+
+	while (current_imm != imm) {
+		intermediate_imm = sign * MIN(127, ABS(imm) - ABS(current_imm));
+		sh4_add_imm(code, intermediate_imm, Rx);
+		current_imm += intermediate_imm;
+	}
+}
+
 #endif /* __MONO_SH4_CODEGEN_FOOTER_H__ */
