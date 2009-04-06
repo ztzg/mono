@@ -107,7 +107,7 @@ namespace System.Web {
 		static HttpResponse ()
 		{
 #if NET_2_0
-			HttpRuntimeSection config = WebConfigurationManager.GetSection ("system.web/httpRuntime") as HttpRuntimeSection;
+			HttpRuntimeSection config = WebConfigurationManager.GetWebApplicationSection ("system.web/httpRuntime") as HttpRuntimeSection;
 #else
 			HttpRuntimeConfig config = HttpContext.GetAppConfig ("system.web/httpRuntime") as HttpRuntimeConfig;
 #endif
@@ -532,7 +532,7 @@ namespace System.Web {
 
 			bool cookieless = false;
 #if NET_2_0
-			SessionStateSection config = WebConfigurationManager.GetSection ("system.web/sessionState") as SessionStateSection;
+			SessionStateSection config = WebConfigurationManager.GetWebApplicationSection ("system.web/sessionState") as SessionStateSection;
 			cookieless = SessionStateModule.IsCookieLess (context, config);
 #else
 			SessionConfig config = HttpContext.GetAppConfig ("system.web/sessionState") as SessionConfig;
@@ -581,7 +581,12 @@ namespace System.Web {
 			content_type = "text/html";
 			transfer_encoding = null;
 			user_cache_control = null;
-			headers.Clear ();
+			user_cache_control = "private";
+			if (cache_policy != null)
+				cache_policy.Cacheability = HttpCacheability.Private;
+
+			if (headers != null)
+				headers.Clear ();
 		}
 
 		internal bool HeadersSent {

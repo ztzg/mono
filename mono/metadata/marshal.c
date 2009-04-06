@@ -734,6 +734,18 @@ mono_delegate_to_ftnptr (MonoDelegate *delegate)
 
 	method = delegate->method;
 
+	if (mono_method_signature (method)->pinvoke) {
+		const char *exc_class, *exc_arg;
+		gpointer ftnptr;
+
+		ftnptr = mono_lookup_pinvoke_call (method, &exc_class, &exc_arg);
+		if (!ftnptr) {
+			g_assert (exc_class);
+			mono_raise_exception (mono_exception_from_name_msg (mono_defaults.corlib, "System", exc_class, exc_arg));
+		}
+		return ftnptr;
+	}
+
 	wrapper = mono_marshal_get_managed_wrapper (method, klass, delegate->target);
 
 	delegate->delegate_trampoline =  mono_compile_method (wrapper);
@@ -6881,17 +6893,19 @@ emit_marshal_object (EmitMarshalContext *m, int argnum, MonoType *t,
 	MonoClass *klass = mono_class_from_mono_type (t);
 	int pos, pos2, loc;
 
-	if (mono_class_from_mono_type (t) == mono_defaults.object_class) {
-		mono_raise_exception (mono_get_exception_not_implemented ("Marshalling of type object is not implemented"));
-	}
-
 	switch (action) {
 	case MARSHAL_ACTION_CONV_IN:
 		*conv_arg_type = &mono_defaults.int_class->byval_arg;
 		conv_arg = mono_mb_add_local (mb, &mono_defaults.int_class->byval_arg);
 
 		m->orig_conv_args [argnum] = 0;
-		
+
+		if (mono_class_from_mono_type (t) == mono_defaults.object_class) {
+			char *msg = g_strdup_printf ("Marshalling of type object is not implemented");
+			mono_mb_emit_exception_marshal_directive (mb, msg);
+			break;
+		}
+
 		if (klass->delegate) {
 			if (t->byref) {
 				if (!(t->attrs & PARAM_ATTRIBUTE_OUT)) {
@@ -8691,7 +8705,7 @@ emit_marshal (EmitMarshalContext *m, int argnum, MonoType *t,
 			return emit_marshal_com_interface (m, argnum, t, spec, conv_arg, conv_arg_type, action);
 #endif
 
-		if (mono_defaults.safehandle_class != NULL &&
+		if (mono_defaults.safehandle_class != NULL && t->data.klass &&
 		    mono_class_is_subclass_of (t->data.klass,  mono_defaults.safehandle_class, FALSE))
 			return emit_marshal_safehandle (m, argnum, t, spec, conv_arg, conv_arg_type, action);
 		
@@ -11619,6 +11633,8 @@ mono_marshal_load_type_info (MonoClass* klass)
 		info->native_size &= ~(min_align - 1);
 	}
 
+	info->min_align = min_align;
+
 	/* Update the class's blittable info, if the layouts don't match */
 	if (info->native_size != mono_class_value_size (klass, NULL))
 		klass->blittable = FALSE;
@@ -11663,7 +11679,7 @@ mono_class_native_size (MonoClass *klass, guint32 *align)
 	}
 
 	if (align)
-		*align = klass->min_align;
+		*align = klass->marshal_info->min_align;
 
 	return klass->marshal_info->native_size;
 }

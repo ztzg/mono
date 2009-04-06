@@ -448,7 +448,8 @@ namespace System.Web.Compilation
 		// KLUDGE WARNING!!
 		static readonly Regex runatServer=new Regex (@"<[\w:\.]+.*?runat=[""']?server[""']?.*?/>",
 							     RegexOptions.Compiled | RegexOptions.Singleline |
-							     RegexOptions.Multiline | RegexOptions.IgnoreCase);
+							     RegexOptions.Multiline | RegexOptions.IgnoreCase |
+							     RegexOptions.CultureInvariant);
 		bool ProcessTagsInAttributes (ILocation location, string tagid, TagAttributes attributes, TagType type)
 		{
 			if (attributes == null || attributes.Count == 0)
@@ -485,7 +486,7 @@ namespace System.Web.Compilation
 				length = group.Length;
 
 				TextParsed (location, String.Format (" {0}=\"{1}", key, index > 0 ? value.Substring (0, index) : String.Empty));;
-				FlushText ();				
+				FlushText ();
 				ParseAttributeTag (group.Value);
 				if (index + length < value.Length)
 					TextParsed (location, value.Substring (index + length) + "\"");
@@ -536,10 +537,12 @@ namespace System.Web.Compilation
 
 			if (0 == String.Compare (tagid, "script", true, CultureInfo.InvariantCulture)) {
 				bool in_script = (inScript || ignore_text);
-				if (in_script || (tagtype != TagType.Close && attributes != null)) {
-					if ((in_script || attributes.IsRunAtServer ()) && ProcessScript (tagtype, attributes))
+				if (in_script) {
+					if (ProcessScript (tagtype, attributes))
 						return;
-				}
+				} else
+					if (ProcessScript (tagtype, attributes))
+						return;
 			}
 
 			lastTag = tagtype;
@@ -834,7 +837,7 @@ namespace System.Web.Compilation
 			} else {
 				if (!isApplication && builder is ObjectTagBuilder) {
 					ObjectTagBuilder ot = (ObjectTagBuilder) builder;
-					if (ot.Scope != null && ot.Scope != "")
+					if (ot.Scope != null && ot.Scope.Length > 0)
 						throw new ParseException (location, "Scope not allowed here");
 
 					if (tagtype == TagType.Tag) {
@@ -1007,7 +1010,7 @@ namespace System.Web.Compilation
 				return;
 
 #if NET_2_0
-			CompilationSection section = (CompilationSection) WebConfigurationManager.GetSection ("system.web/compilation");
+			CompilationSection section = (CompilationSection) WebConfigurationManager.GetWebApplicationSection ("system.web/compilation");
 			if (section.Compilers[tparser.Language] != section.Compilers[lang])
 #else
 			CompilationConfiguration cfg = CompilationConfiguration.GetInstance (HttpContext.Current); 
@@ -1035,11 +1038,46 @@ namespace System.Web.Compilation
 			{
 				this.generator = generator;
 				int index = str.IndexOf ("<%");
-				if (index > 0) {
-					TextParsed (null, str.Substring (0, index));
-					str = str.Substring (index);
-				}
+				if (index > 0)
+					DoParseExpressions (str);
+				else
+					DoParse (str);
+			}
 
+			void DoParseExpressions (string str)
+			{
+				int startIndex = 0, index = 0;
+				Regex codeDirective = new Regex ("(<%(?!@)(?<code>.*?)%>)|(<[\\w:\\.]+.*?runat=[\"']?server[\"']?.*?/>)",
+								 RegexOptions.Multiline | RegexOptions.Compiled | RegexOptions.CultureInvariant);
+				Match match;
+				int strLen = str.Length;
+				
+				while (index > -1 && startIndex < strLen) {
+					match = codeDirective.Match (str, index);
+					
+					if (match.Success) {
+						string value = match.Value;
+						index = match.Index;
+						if (index > startIndex)
+							TextParsed (null, str.Substring (startIndex, index - startIndex));
+						DoParse (value);
+						index += value.Length;
+						startIndex = index;
+					} else
+						break;
+
+					if (index < strLen)
+						index = str.IndexOf ('<', index);
+					else
+						break;
+				}
+				
+				if (startIndex < strLen)
+					TextParsed (null, str.Substring (startIndex));
+			}
+			
+			void DoParse (string str)
+			{
 				AspParser parser = new AspParser ("@@nested_tag@@", new StringReader (str));
 				parser.Error += new ParseErrorHandler (ParseError);
 				parser.TagParsed += new TagParsedHandler (TagParsed);
@@ -1064,6 +1102,7 @@ namespace System.Web.Compilation
 
 					case TagType.Tag:
 					case TagType.SelfClosing:
+					case TagType.Close:
 						if (generator != null)
 							generator.TagParsed (location, tagtype, tagid, attributes);
 						else

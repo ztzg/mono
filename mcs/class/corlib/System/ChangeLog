@@ -1,3 +1,20 @@
+2009-03-23  Zoltan Varga  <vargaz@gmail.com>
+
+	* String.cs (LastIndexOf): Handle empty strings correctly. Fixes #486234.
+
+2009-03-06  Miguel de Icaza  <miguel@novell.com>
+ 
+	* Convert.cs: Apply patch from Tom Hindle that uses
+	IConvertible.ToType if there are no other possible conversions
+	defined. 
+ 
+	Fixes: #481687
+	
+2009-02-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* Enum.cs (FindName): Use a hash table for looking up names instead of
+	a linear search for enums with a lot of values.
+
 2009-02-26  Zoltan Varga  <vargaz@gmail.com>
 
 	* String.cs (FormatHelper): If all the arguments are strings, compute an

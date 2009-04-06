@@ -1607,19 +1607,19 @@ mini_emit_memset (MonoCompile *cfg, int destreg, int offset, int size, int val, 
 		switch (size) {
 		case 1:
 			MONO_EMIT_NEW_STORE_MEMBASE_IMM (cfg, OP_STOREI1_MEMBASE_IMM, destreg, offset, val);
-			break;
+			return;
 		case 2:
 			MONO_EMIT_NEW_STORE_MEMBASE_IMM (cfg, OP_STOREI2_MEMBASE_IMM, destreg, offset, val);
-			break;
+			return;
 		case 4:
 			MONO_EMIT_NEW_STORE_MEMBASE_IMM (cfg, OP_STOREI4_MEMBASE_IMM, destreg, offset, val);
-			break;
+			return;
 #if SIZEOF_REGISTER == 8
 		case 8:
 			MONO_EMIT_NEW_STORE_MEMBASE_IMM (cfg, OP_STOREI8_MEMBASE_IMM, destreg, offset, val);
+			return;
 #endif
 		}
-		return;
 	}
 
 	val_reg = alloc_preg (cfg);
@@ -5427,8 +5427,18 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 	/* We force the vtable variable here for all shared methods
 	   for the possibility that they might show up in a stack
 	   trace where their exact instantiation is needed. */
-	if (cfg->generic_sharing_context)
-		mono_get_vtable_var (cfg);
+	if (cfg->generic_sharing_context && method == cfg->method) {
+		if ((method->flags & METHOD_ATTRIBUTE_STATIC) ||
+				mini_method_get_context (method)->method_inst ||
+				method->klass->valuetype) {
+			mono_get_vtable_var (cfg);
+		} else {
+			/* FIXME: Is there a better way to do this?
+			   We need the variable live for the duration
+			   of the whole method. */
+			cfg->args [0]->flags |= MONO_INST_INDIRECT;
+		}
+	}
 
 	/* add a check for this != NULL to inlined methods */
 	if (is_virtual_call) {
@@ -5766,6 +5776,8 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 		case CEE_JMP: {
 			MonoCallInst *call;
 
+			INLINE_FAILURE;
+
 			CHECK_OPSIZE (5);
 			if (stack_start != sp)
 				UNVERIFIED;
@@ -5779,11 +5791,8 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 			if (cfg->generic_sharing_context && mono_method_check_context_used (cmethod))
 				GENERIC_SHARING_FAILURE (CEE_JMP);
 
-			if (mono_security_get_mode () == MONO_SECURITY_MODE_CAS) {
- 				if (check_linkdemand (cfg, method, cmethod))
- 					INLINE_FAILURE;
+			if (mono_security_get_mode () == MONO_SECURITY_MODE_CAS)
 				CHECK_CFG_EXCEPTION;
- 			}
 
 #ifdef __x86_64__
 			{
@@ -6149,7 +6158,7 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 			/* FIXME: runtime generic context pointer for jumps? */
 			/* FIXME: handle this for generic sharing eventually */
 			if ((ins_flag & MONO_INST_TAILCALL) && !cfg->generic_sharing_context && !vtable_arg && cmethod && (*ip == CEE_CALL) &&
-				 (mono_metadata_signature_equal (mono_method_signature (method), mono_method_signature (cmethod)))) {
+				(mono_metadata_signature_equal (mono_method_signature (method), mono_method_signature (cmethod))) && !MONO_TYPE_ISSTRUCT (mono_method_signature (cmethod)->ret)) {
 				MonoCallInst *call;
 
 				/* Prevent inlining of methods with tail calls (the call stack would be altered) */

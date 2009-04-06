@@ -1413,11 +1413,7 @@ mono_allocate_stack_slots_full2 (MonoCompile *cfg, gboolean backward, guint32 *s
 				nvtypes ++;
 			}
 			break;
-		case MONO_TYPE_CLASS:
-		case MONO_TYPE_OBJECT:
-		case MONO_TYPE_ARRAY:
-		case MONO_TYPE_SZARRAY:
-		case MONO_TYPE_STRING:
+
 		case MONO_TYPE_PTR:
 		case MONO_TYPE_I:
 		case MONO_TYPE_U:
@@ -1425,10 +1421,23 @@ mono_allocate_stack_slots_full2 (MonoCompile *cfg, gboolean backward, guint32 *s
 		case MONO_TYPE_I4:
 #else
 		case MONO_TYPE_I8:
+#endif
+#ifdef HAVE_SGEN_GC
+			slot_info = &scalar_stack_slots [MONO_TYPE_I];
+			break;
+#else
+			/* Fall through */
+#endif
+
+		case MONO_TYPE_CLASS:
+		case MONO_TYPE_OBJECT:
+		case MONO_TYPE_ARRAY:
+		case MONO_TYPE_SZARRAY:
+		case MONO_TYPE_STRING:
 			/* Share non-float stack slots of the same size */
 			slot_info = &scalar_stack_slots [MONO_TYPE_CLASS];
 			break;
-#endif
+
 		default:
 			slot_info = &scalar_stack_slots [t->type];
 		}
@@ -1677,11 +1686,7 @@ mono_allocate_stack_slots_full (MonoCompile *cfg, gboolean backward, guint32 *st
 					nvtypes ++;
 				}
 				break;
-			case MONO_TYPE_CLASS:
-			case MONO_TYPE_OBJECT:
-			case MONO_TYPE_ARRAY:
-			case MONO_TYPE_SZARRAY:
-			case MONO_TYPE_STRING:
+
 			case MONO_TYPE_PTR:
 			case MONO_TYPE_I:
 			case MONO_TYPE_U:
@@ -1690,9 +1695,22 @@ mono_allocate_stack_slots_full (MonoCompile *cfg, gboolean backward, guint32 *st
 #else
 			case MONO_TYPE_I8:
 #endif
+#ifdef HAVE_SGEN_GC
+				slot_info = &scalar_stack_slots [MONO_TYPE_I];
+				break;
+#else
+				/* Fall through */
+#endif
+
+			case MONO_TYPE_CLASS:
+			case MONO_TYPE_OBJECT:
+			case MONO_TYPE_ARRAY:
+			case MONO_TYPE_SZARRAY:
+			case MONO_TYPE_STRING:
 				/* Share non-float stack slots of the same size */
 				slot_info = &scalar_stack_slots [MONO_TYPE_CLASS];
 				break;
+
 			default:
 				slot_info = &scalar_stack_slots [t->type];
 			}
@@ -3561,48 +3579,38 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, gbool
 
 		gi->generic_sharing_context = cfg->generic_sharing_context;
 
-		/*
-		 * Non-generic static methods only get a "this" info
-		 * if they use the rgctx variable (which they are
-		 * forced to if they have any open catch clauses).
-		 */
-		if (cfg->rgctx_var ||
-				(!(method_to_compile->flags & METHOD_ATTRIBUTE_STATIC) &&
-				!mini_method_get_context (method_to_compile)->method_inst &&
-				!method_to_compile->klass->valuetype)) {
-			gi->has_this = 1;
+		if ((method_to_compile->flags & METHOD_ATTRIBUTE_STATIC) ||
+				mini_method_get_context (method_to_compile)->method_inst ||
+				method_to_compile->klass->valuetype) {
+			g_assert (cfg->rgctx_var);
+		}
 
-			if ((method_to_compile->flags & METHOD_ATTRIBUTE_STATIC) ||
-					mini_method_get_context (method_to_compile)->method_inst ||
-					method_to_compile->klass->valuetype) {
-				inst = cfg->rgctx_var;
-				g_assert (inst->opcode == OP_REGOFFSET);
-			} else {
-				inst = cfg->args [0];
-			}
+		gi->has_this = 1;
 
-			if (inst->opcode == OP_REGVAR) {
-				gi->this_in_reg = 1;
-				gi->this_reg = inst->dreg;
-
-				//g_print ("this in reg %d\n", inst->dreg);
-			} else {
-				g_assert (inst->opcode == OP_REGOFFSET);
-#ifdef __i386__
-				g_assert (inst->inst_basereg == X86_EBP);
-#elif defined(__x86_64__)
-				g_assert (inst->inst_basereg == X86_EBP || inst->inst_basereg == X86_ESP);
-#endif
-				g_assert (inst->inst_offset >= G_MININT32 && inst->inst_offset <= G_MAXINT32);
-
-				gi->this_in_reg = 0;
-				gi->this_reg = inst->inst_basereg;
-				gi->this_offset = inst->inst_offset;
-
-				//g_print ("this at offset %d from reg %d\n", gi->this_offset, gi->this_reg);
-			}
+		if ((method_to_compile->flags & METHOD_ATTRIBUTE_STATIC) ||
+				mini_method_get_context (method_to_compile)->method_inst ||
+				method_to_compile->klass->valuetype) {
+			inst = cfg->rgctx_var;
+			g_assert (inst->opcode == OP_REGOFFSET);
 		} else {
-			gi->has_this = 0;
+			inst = cfg->args [0];
+		}
+
+		if (inst->opcode == OP_REGVAR) {
+			gi->this_in_reg = 1;
+			gi->this_reg = inst->dreg;
+		} else {
+			g_assert (inst->opcode == OP_REGOFFSET);
+#ifdef __i386__
+			g_assert (inst->inst_basereg == X86_EBP);
+#elif defined(__x86_64__)
+			g_assert (inst->inst_basereg == X86_EBP || inst->inst_basereg == X86_ESP);
+#endif
+			g_assert (inst->inst_offset >= G_MININT32 && inst->inst_offset <= G_MAXINT32);
+
+			gi->this_in_reg = 0;
+			gi->this_reg = inst->inst_basereg;
+			gi->this_offset = inst->inst_offset;
 		}
 	}
 
@@ -4091,7 +4099,7 @@ mono_jit_free_method (MonoDomain *domain, MonoMethod *method)
 }
 
 gpointer
-mono_jit_find_compiled_method (MonoDomain *domain, MonoMethod *method)
+mono_jit_find_compiled_method_with_jit_info (MonoDomain *domain, MonoMethod *method, MonoJitInfo **ji)
 {
 	MonoDomain *target_domain;
 	MonoJitInfo *info;
@@ -4106,11 +4114,21 @@ mono_jit_find_compiled_method (MonoDomain *domain, MonoMethod *method)
 		/* We can't use a domain specific method in another domain */
 		if (! ((domain != target_domain) && !info->domain_neutral)) {
 			mono_jit_stats.methods_lookups++;
+			if (ji)
+				*ji = info;
 			return info->code_start;
 		}
 	}
 
+	if (ji)
+		*ji = NULL;
 	return NULL;
+}
+
+gpointer
+mono_jit_find_compiled_method (MonoDomain *domain, MonoMethod *method)
+{
+	return mono_jit_find_compiled_method_with_jit_info (domain, method, NULL);
 }
 
 /**
@@ -5275,7 +5293,7 @@ mini_init (const char *filename, const char *runtime_version)
 #endif
 
 	mono_profiler_runtime_initialized ();
-	
+
 	MONO_PROBE_VES_INIT_END ();
 	
 	return domain;

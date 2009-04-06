@@ -178,13 +178,14 @@ namespace System.Web.UI
 					return _appRelativeTemplateSourceDirectory;
 
 				string tempSrcDir = null;
-
 				TemplateControl templateControl = TemplateControl;
-				if (templateControl != null)
-					if (!string.IsNullOrEmpty (templateControl.AppRelativeVirtualPath))
-						tempSrcDir = VirtualPathUtility.GetDirectory (templateControl.AppRelativeVirtualPath, false);
-
-				_appRelativeTemplateSourceDirectory = (tempSrcDir != null) ? tempSrcDir : "~/";
+				if (templateControl != null) {
+					string templateVirtualPath = templateControl.AppRelativeVirtualPath;
+					if (!String.IsNullOrEmpty (templateVirtualPath))
+						tempSrcDir = VirtualPathUtility.GetDirectory (templateVirtualPath, false);
+				}
+				
+				_appRelativeTemplateSourceDirectory = (tempSrcDir != null) ? tempSrcDir : VirtualPathUtility.ToAppRelative (TemplateSourceDirectory);
 				return _appRelativeTemplateSourceDirectory;
 			}
 			[EditorBrowsable (EditorBrowsableState.Never)]
@@ -1341,14 +1342,15 @@ namespace System.Web.UI
 #else
 			string ts = TemplateSourceDirectory;
 #endif
-			if (ts == null || ts.Length == 0 ||
-				Context == null || Context.Response == null ||
-				relativeUrl.IndexOf (':') >= 0)
-				return relativeUrl;
 
-			HttpResponse resp = Context.Response;
+			HttpContext ctx = Context;
+			HttpResponse resp = ctx != null ? ctx.Response : null;
+			if (ts == null || ts.Length == 0 || resp == null || relativeUrl.IndexOf (':') >= 0)
+				return relativeUrl;
+			
 			if (!VirtualPathUtility.IsAppRelative (relativeUrl))
 				relativeUrl = VirtualPathUtility.Combine (VirtualPathUtility.AppendTrailingSlash (ts), relativeUrl);
+			
 			return resp.ApplyAppPathModifier (relativeUrl);
 		}
 
@@ -1573,7 +1575,7 @@ namespace System.Web.UI
 				}
 			}
 
-			if ((stateMask & REMOVED) == 0) {
+			if ((stateMask & REMOVED) == 0 && (stateMask & INITED) != INITED) {
 				stateMask |= INITING;
 #if NET_2_0
 				ApplyTheme ();
@@ -1757,6 +1759,7 @@ namespace System.Web.UI
 			}
 			control.NullifyUniqueID ();
 			control.SetMask (REMOVED, true);
+			ResetControlsCache ();
 		}
 		
 #if NET_2_0

@@ -28,6 +28,7 @@
 
 #include "mini.h"
 #include "mini-amd64.h"
+#include "debug-mini.h"
 
 #define ALIGN_TO(val,align) (((val) + ((align) - 1)) & ~((align) - 1))
 
@@ -314,37 +315,32 @@ mono_amd64_throw_exception (guint64 dummy1, guint64 dummy2, guint64 dummy3, guin
 	ctx.rcx = rcx;
 	ctx.rdx = rdx;
 
-	if (!rethrow && mono_debugger_throw_exception ((gpointer)(rip - 8), (gpointer)rsp, exc)) {
-		/*
-		 * The debugger wants us to stop on the `throw' instruction.
-		 * By the time we get here, it already inserted a breakpoint on
-		 * eip - 8 (which is the address of the `mov %r15,%rdi ; callq throw').
-		 */
-
-		/* FIXME FIXME
-		 *
-		 * In case of a rethrow, the JIT is emitting code like this:
-		 *
-		 *    mov    0xffffffffffffffd0(%rbp),%rax'
-		 *    mov    %rax,%rdi
-		 *    callq  throw
-		 *
-		 * Here, restore_context() wouldn't restore the %rax register correctly.
-		 */
-		ctx.rip = rip - 8;
-		ctx.rsp = rsp + 8;
-		restore_context (&ctx);
-		g_assert_not_reached ();
-	}
-
-	/* adjust eip so that it point into the call instruction */
-	ctx.rip -= 1;
-
 	if (mono_object_isinst (exc, mono_defaults.exception_class)) {
 		MonoException *mono_ex = (MonoException*)exc;
 		if (!rethrow)
 			mono_ex->stack_trace = NULL;
 	}
+
+	if (mono_debug_using_mono_debugger ()) {
+		guint8 buf [16], *code;
+
+		mono_breakpoint_clean_code (NULL, (gpointer)rip, 8, buf, sizeof (buf));
+		code = buf + 8;
+
+		if (buf [3] == 0xe8) {
+			MonoContext ctx_cp = ctx;
+			ctx_cp.rip = rip - 5;
+
+			if (mono_debugger_handle_exception (&ctx_cp, exc)) {
+				restore_context (&ctx_cp);
+				g_assert_not_reached ();
+			}
+		}
+	}
+
+	/* adjust eip so that it point into the call instruction */
+	ctx.rip -= 1;
+
 	mono_handle_exception (&ctx, exc, (gpointer)rip, FALSE);
 	restore_context (&ctx);
 
@@ -730,6 +726,9 @@ mono_arch_handle_exception (void *sigctx, gpointer obj, gboolean test_only)
 
 	mono_arch_sigctx_to_monoctx (sigctx, &mctx);
 
+	if (mono_debugger_handle_exception (&mctx, (MonoObject *)obj))
+		return TRUE;
+
 	mono_handle_exception (&mctx, obj, MONO_CONTEXT_GET_IP (&mctx), test_only);
 
 	mono_arch_monoctx_to_sigctx (&mctx, sigctx);
@@ -881,6 +880,13 @@ altstack_handle_and_restore (void *sigctx, gpointer obj, gboolean stack_ovf)
 
 	restore_context = mono_get_restore_context ();
 	mono_arch_sigctx_to_monoctx (sigctx, &mctx);
+
+	if (mono_debugger_handle_exception (&mctx, (MonoObject *)obj)) {
+		if (stack_ovf)
+			prepare_for_guard_pages (&mctx);
+		restore_context (&mctx);
+	}
+
 	mono_handle_exception (&mctx, obj, MONO_CONTEXT_GET_IP (&mctx), FALSE);
 	if (stack_ovf)
 		prepare_for_guard_pages (&mctx);

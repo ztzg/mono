@@ -300,6 +300,7 @@ BASE_TEST_CS_SRC=		\
 	recursive-generics.2.cs	\
 	bug-473482.2.cs	\
 	bug-473999.2.cs	\
+	bug-479763.2.cs	\
 	bug-80392.2.cs		\
 	dynamic-method-access.2.cs	\
 	bug-82194.2.cs	\
@@ -440,7 +441,8 @@ TEST_IL_SRC=			\
 	bug457574.il	\
 	bug445361.il	\
 	bug-463303.il	\
-	bug469742.2.il
+	bug469742.2.il	\
+	bug-481403.il
 
 #	bug-318677.il
 
@@ -469,7 +471,7 @@ EXTRA_DIST=test-driver $(TEST_CS_SRC) $(TEST_IL_SRC) \
 
 # mkbundle works on ppc, but the pkg-config POC doesn't when run with make test
 if POWERPC
-test_platform:
+test_platform:	testbundle
 else
 # Can't use mkbundle on win32 since there is no static build there
 # Can't run test-unhandled-exception on Windows because of all the debug popups...
@@ -747,7 +749,7 @@ test-generic-sharing : generics-sharing.2.exe shared-generic-methods.2.exe	\
 		generic-marshalbyref.2.exe bug-459285.2.exe bug-461198.2.exe	\
 		generic-sealed-virtual.2.exe generic-stack-traces.2.exe		\
 		generic-stack-traces2.2.exe bug-472600.2.exe bug-473482.2.exe	\
-		bug-473999.2.exe
+		bug-473999.2.exe bug-479763.2.exe
 	@for fn in $+ ; do	\
 		echo "Testing $$fn ...";	\
 		MONO_GENERIC_SHARING=all $(RUNTIME) -O=gshared                $$fn > $$fn.stdout || exit 1;	\

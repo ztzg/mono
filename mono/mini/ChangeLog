@@ -1,3 +1,147 @@
+2009-03-17  Zoltan Varga  <vargaz@gmail.com>
+
+	* mini-exceptions.c (get_generic_info_from_stack_frame): Avoid returning
+	a managed object which is later put into a GList. Return its class instead.
+
+	* mini.c (mono_allocate_stack_slots_full): Avoid sharing ref and non-ref
+	stack slots when using sgen.
+
+2009-03-27  Zoltan Varga  <vargaz@gmail.com>
+
+	* method-to-ir.c (mono_method_to_ir): Disable tail calls for calls which
+	return a valuetype. Fixes #487518.
+
+	* iltests.il: Add a test.
+	
+2009-03-23  Zoltan Varga  <vargaz@gmail.com>
+
+	* aot-runtime.c (decode_method_ref): Fix a warning.
+
+	* unwind.c (mono_unwind_frame): Ditto.	
+
+2009-03-19  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r129824.
+
+	* mini-amd64.c (mono_arch_compute_omit_fp): Add another check to avoid hitting
+	the stack_alloc_size < (1 << 16) assertion in emit_prolog ().
+
+2009-03-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* mini-amd64.c (mono_arch_output_basic_block): Fix % 1. Fixes #484323.
+
+	* basic.cs: Add a test.
+
+2009-03-11  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-x86.c (mono_arch_output_basic_block): Use different
+	registers in case the ones we want to overwrite are used by the
+	other operand.  Fixes regression in #480807.
+
+	Backport of r129058.
+
+2009-03-10  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r128924.
+	
+	* mini-s390x.c: Fix support for vtypes whose addresses are passed on the
+	stack.
+
+2009-03-09  Mark Probst  <mark.probst@gmail.com>
+
+	Contributed under the terms of the MIT/X11 license by Steven
+	Munroe <munroesj@us.ibm.com>.
+
+	* mini-ppc.c: Correct handling of OP_LOADI4_MEMINDEX for ppc64.
+	Fixes #483462.
+
+	Backport of r128904.
+
+2009-03-09  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-trampolines.c (mono_create_jump_trampoline): If the method
+	is shared generic code, return the trampoline, even if the method
+	has already been compiled.  Fixes #479763.
+
+	* mini.c, mini.h: New function
+	mono_jit_find_compiled_method_with_jit_info() which is the same as
+	mono_jit_find_compiled_method() but also returns the jit info.
+
+	Backport of r128723.
+
+2009-03-06  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r128749.
+	
+	* method-to-ir.c (mini_emit_memset): Fix the handling of size '3'. Fixes
+	#481458.
+
+	* iltests.il.in: Add a test.
+
+2009-03-05  Mark Probst  <mark.probst@gmail.com>
+
+	* method-to-ir.c (mono_method_to_ir): Only force the vtable var
+	for methods which actually have one.  For all other methods, make
+	sure the this argument var is live the whole method.
+
+	* mini.c (mini_method_compile): Every shared method has a
+	this/vtable/mrgctx info.  Fixes #480807.
+
+	Backport of r128720.
+
+2009-03-05  Mark Probst  <mark.probst@gmail.com>
+
+	Contributed under the terms of the MIT/X11 license by Steven
+	Munroe <munroesj@us.ibm.com>.
+
+	* mini-ppc.c, mini-ppc.h: Implement TLS for PPC64.
+
+	Backport of r127060.
+
+2009-03-04  Mark Probst  <mark.probst@gmail.com>
+
+	* exceptions-x86.c: Include debug-mini.h - fixes build.
+
+2009-03-04  Martin Baulig  <martin@ximian.com>
+
+	* debug-mini.c: Clean up the exception API and add documentation.
+	(mono_debugger_handle_exception): New public method; this is
+	called when throwing an exception or encountering an unhandled one.
+	(mono_debugger_call_exception_handler): Formerly known as
+	mono_debugger_handle_exception(); this is used to tell the
+	debugger that we're about to invoke an exception handler.
+
+2009-03-04  Martin Baulig  <martin@ximian.com>
+
+	* debug-mini.c (mono_debugger_runtime_invoke): Moved here from
+	../metadata/mono-debug-debugger.c; save and reset exception state.
+
+2009-03-02  Martin Baulig  <martin@ximian.com>
+
+	* debug-mini.c: Moved the debugger exception handling here from
+	../metadata/mono-debug-debugger.c.
+
+	* debug-mini.h
+	(MonoDebuggerExceptionAction): New exception typedef.
+
+	* debug-mini.c
+	(MonoDebuggerThreadInfo): Added `MonoObject *last_exception'.
+
+	* exceptions-amd64.c
+	(mono_amd64_throw_exception): Use the new debugger exception
+	handling code.
+
+	* mini-exceptions.c
+	(mono_handle_exception_internal): Don't call
+	mono_debugger_unhandled_exception() here.
+
+2009-03-04  Mark Probst  <mark.probst@gmail.com>
+
+	* method-to-ir.c: Don't inline methods that use JMP.  Fixes
+	#481403.
+
+	Backport of r128552.
+
 2009-02-26  Zoltan Varga  <vargaz@gmail.com>
 
 	* mini-x86.c (mono_arch_get_this_arg_from_call): Avoid expensive calls

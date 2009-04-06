@@ -1,3 +1,123 @@
+2009-03-31 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: don't fail if the SocketOptionsFlag has Partial or
+	* MaxIOVectorLength enabled, just ignore them.
+	Fixes bug #349688.
+
+2009-01-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_load_type_info): Fill out info->min_align.
+	(mono_class_native_size): Use klass->marshal_info->min_align instead of
+	klass->min_align, since klass->min_align contains the managed alignment,
+	while the native alignment can be different, like for longs on x86.
+	Fixes #469135.
+
+	* class-internals.h (MonoMarshalType): Add a min_align field.
+
+2009-03-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* appdomain.c:
+	* console-io.[ch]: added new mono_console_init() to make sure that
+	file descriptors 0, 1 and 2 are opened.
+	Bug #489019 fixed.
+
+2009-03-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (emit_marshal_object): Generate code to throw an exception
+	instead of throwing it. Fixes #488670.
+
+2009-03-23  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_delegate_to_ftnptr): For delegates wrapping pinvoke
+	methods, return the native function address itself. Fixes
+	#487758.
+
+2009-03-19  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r129798.
+
+	* locales.c (get_current_locale_name): Use g_malloc instead of malloc.
+
+2009-03-18  Zoltan Varga  <vargaz@gmail.com>
+
+	* icall.c: Handle user types in many Type icalls. Fixes #486303.
+
+2009-03-12 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* appdomain.c: if the assembly name is a shadow-copied file, return
+	TRUE from mono_is_shadow_copy_enabled but don't actually do anything
+	in mono_make_shadow_copy.
+	* icall.c: if the assembly name is a shadow-copied file, replace it
+	with the original assembly path.
+
+	Bug #484244 fixed. NUnit tests for corlib can be run without
+	--noshadow now.
+
+2009-03-08  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r128849 + r128490.
+
+	* domain-internals.h (struct _MonoDomain): Add new hash tables mapping
+	between GCHandles of type WeakTrackResurrection and the objects they
+	point to.
+
+	* gc.c: Partly implement the sematics of GCHandles of type 
+	WeakTrackResurrection: these handles should only be cleared after the
+	finalizer of the object they are pointing to has ran.
+
+	* domain-internals.h (struct _MonoDomain): Add a separate lock for the
+	finalize_objects_hash.
+
+	* gc.c: Use the separate lock to access the finalize_objects_hash field.
+	
+2009-03-10  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r129009.
+
+	* reflection.c (ensure_complete_type): New helper function to call
+	type resolve handlers for unfinished dynamic types.
+	(resolve_object): Call it for MonoClassFields. Fixes #483852.
+
+2009-03-09  Mark Probst  <mark.probst@gmail.com>
+
+	* generic-sharing.c (instantiate_other_info): Always return a jump
+	trampoline for method code.
+
+	Backport of r128723.
+
+2009-03-08 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Backport of r128853.
+
+	* appdomain.c (get_shadow_assembly_location): Fix memleak.
+
+2009-03-05  Marek Habersack  <mhabersack@novell.com>
+
+	* culture-info-tables.h: generated to include the en-tt culture.
+
+2009-03-04  Martin Baulig  <martin@ximian.com>
+
+	* mono-debug.h
+	(mono_debugger_runtime_invoke): Removed.
+
+	* mono-debug-debugger.c
+	(mono_runtime_invoke): Moved into ../mini/debug-mini.c.
+
+2009-03-02  Martin Baulig  <martin@ximian.com>
+
+	* mono-debug.h
+	(mono_debugger_unhandled_exception): Removed.
+	(mono_debugger_handle_exception): Removed.
+	(mono_debugger_throw_exception): Removed.
+
+	* mono-debug.h (MONO_DEBUGGER_MINOR_VERSION): Bump to 1.
+
+	* mono-debug.c
+	(mono_debug_debugger_version): Bump to 5.
+
+	* mono-debug-debugger.c: Moved the exception handling code to
+	../mini/debug-mini.c
+
 2009-02-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* appdomain.c: make the check to avoid copying when the assembly is

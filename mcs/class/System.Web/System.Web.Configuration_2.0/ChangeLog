@@ -1,3 +1,13 @@
+2009-03-12  Dean Brettle  <dean@brettle.com>
+
+	* nBrowser/Build.cs: made Browser() method thread-safe and moved the
+	actual tree creation to a private InitializeTree() method for clarity.
+
+2009-03-01  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: optimized GetWebApplicationSection a
+	bit
+
 2009-02-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* WebConfigurationManager.cs: generate a hash from the string hsah

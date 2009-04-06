@@ -42,6 +42,7 @@
 #include <mono/utils/mono-mmap.h>
 
 #include "mini.h"
+#include "debug-mini.h"
 #include "trace.h"
 
 #ifndef MONO_ARCH_CONTEXT_DEF
@@ -254,6 +255,7 @@ static gpointer
 get_generic_info_from_stack_frame (MonoJitInfo *ji, MonoContext *ctx)
 {
 	MonoGenericJitInfo *gi;
+	gpointer info;
 
 	if (!ji->has_generic_jit_info)
 		return NULL;
@@ -262,10 +264,20 @@ get_generic_info_from_stack_frame (MonoJitInfo *ji, MonoContext *ctx)
 		return NULL;
 
 	if (gi->this_in_reg)
-		return mono_arch_context_get_int_reg (ctx, gi->this_reg);
+		info = mono_arch_context_get_int_reg (ctx, gi->this_reg);
 	else
-		return *(gpointer*)(gpointer)((char*)mono_arch_context_get_int_reg (ctx, gi->this_reg) +
-				gi->this_offset);
+		info = *(gpointer*)(gpointer)((char*)mono_arch_context_get_int_reg (ctx, gi->this_reg) +
+									  gi->this_offset);
+	if (mono_method_get_context (ji->method)->method_inst) {
+		return info;
+	} else if ((ji->method->flags & METHOD_ATTRIBUTE_STATIC) || ji->method->klass->valuetype) {
+		return info;
+	} else {
+		/* Avoid returning a managed object */
+		MonoObject *this_obj = info;
+
+		return this_obj->vtable->klass;
+	}
 }
 
 static MonoGenericContext
@@ -288,9 +300,7 @@ get_generic_context_from_stack_frame (MonoJitInfo *ji, gpointer generic_info)
 
 		class = vtable->klass;
 	} else {
-		MonoObject *this = generic_info;
-
-		class = this->vtable->klass;
+		class = generic_info;
 	}
 
 	if (class->generic_class || class->generic_container)
@@ -915,19 +925,6 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 			// FIXME: This runs managed code so it might cause another stack overflow when
 			// we are handling a stack overflow
 			mono_unhandled_exception (obj);
-
-			if (mono_debugger_unhandled_exception (original_ip, MONO_CONTEXT_GET_SP (ctx), obj)) {
-				/*
-				 * If this returns true, then we're running inside the
-				 * Mono Debugger and the debugger wants us to restore the
-				 * context and continue (normally, the debugger inserts
-				 * a breakpoint on the `original_ip', so it regains control
-				 * immediately after restoring the context).
-				 */
-				MONO_CONTEXT_SET_IP (ctx, original_ip);
-				restore_context (ctx);
-				g_assert_not_reached ();
-			}
 		}
 	}
 
@@ -1017,7 +1014,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 						}
 
 						if (ei->flags == MONO_EXCEPTION_CLAUSE_FILTER) {
-							// mono_debugger_handle_exception (ei->data.filter, MONO_CONTEXT_GET_SP (ctx), obj);
+							// mono_debugger_call_exception_handler (ei->data.filter, MONO_CONTEXT_GET_SP (ctx), obj);
 							if (test_only) {
 								mono_perfcounters->exceptions_filters++;
 								filtered = call_filter (ctx, ei->data.filter);
@@ -1051,7 +1048,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 							if (mono_trace_is_enabled () && mono_trace_eval (ji->method))
 								g_print ("EXCEPTION: catch found at clause %d of %s\n", i, mono_method_full_name (ji->method, TRUE));
 							mono_profiler_exception_clause_handler (ji->method, ei->flags, i);
-							mono_debugger_handle_exception (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
+							mono_debugger_call_exception_handler (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
 							MONO_CONTEXT_SET_IP (ctx, ei->handler_start);
 							*(mono_get_lmf_addr ()) = lmf;
 							mono_perfcounters->exceptions_depth += frame_count;
@@ -1066,7 +1063,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 							if (mono_trace_is_enabled () && mono_trace_eval (ji->method))
 								g_print ("EXCEPTION: fault clause %d of %s\n", i, mono_method_full_name (ji->method, TRUE));
 							mono_profiler_exception_clause_handler (ji->method, ei->flags, i);
-							mono_debugger_handle_exception (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
+							mono_debugger_call_exception_handler (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
 							call_filter (ctx, ei->handler_start);
 						}
 						if (!test_only && ei->try_start <= MONO_CONTEXT_GET_IP (ctx) && 
@@ -1075,7 +1072,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 							if (mono_trace_is_enabled () && mono_trace_eval (ji->method))
 								g_print ("EXCEPTION: finally clause %d of %s\n", i, mono_method_full_name (ji->method, TRUE));
 							mono_profiler_exception_clause_handler (ji->method, ei->flags, i);
-							mono_debugger_handle_exception (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
+							mono_debugger_call_exception_handler (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
 							mono_perfcounters->exceptions_finallys++;
 							call_filter (ctx, ei->handler_start);
 						}

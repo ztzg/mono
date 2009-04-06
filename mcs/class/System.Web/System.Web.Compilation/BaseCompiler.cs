@@ -46,7 +46,7 @@ namespace System.Web.Compilation
 		const string DEFAULT_NAMESPACE = "ASP";
 
 #if NET_2_0
-		static Guid HashMD5 = new Guid(0x406ea660, 0x64cf, 0x4c82, 0xb6, 0xf0, 0x42, 0xd4, 0x81, 0x72, 0xa7, 0x99);
+		internal static Guid HashMD5 = new Guid(0x406ea660, 0x64cf, 0x4c82, 0xb6, 0xf0, 0x42, 0xd4, 0x81, 0x72, 0xa7, 0x99);
 		static BindingFlags replaceableFlags = BindingFlags.Public | BindingFlags.NonPublic |
 						  BindingFlags.Instance;
 #endif
@@ -434,7 +434,7 @@ namespace System.Web.Compilation
 		protected void CreateProfileProperty ()
 		{
 			string retType;
-			if (AppCodeCompiler.HaveCustomProfile (WebConfigurationManager.GetSection ("system.web/profile") as ProfileSection))
+			if (AppCodeCompiler.HaveCustomProfile (WebConfigurationManager.GetWebApplicationSection ("system.web/profile") as ProfileSection))
 				retType = "ProfileCommon";
 			else
 				retType = "System.Web.Profile.DefaultProfile";
@@ -635,7 +635,7 @@ namespace System.Web.Compilation
 			par = null;
 			
 #if NET_2_0
-			CompilationSection config = (CompilationSection) WebConfigurationManager.GetSection ("system.web/compilation");
+			CompilationSection config = (CompilationSection) WebConfigurationManager.GetWebApplicationSection ("system.web/compilation");
 			Compiler comp = config.Compilers[lang];
 			
 			if (comp == null) {

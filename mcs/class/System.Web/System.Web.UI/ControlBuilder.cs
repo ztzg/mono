@@ -268,6 +268,9 @@ namespace System.Web.UI {
 						return ct;
 
 					ct = cb.ControlType;
+					if (ct == null)
+						return typeof (Control);
+					
 					if (typeof (INonBindingContainer).IsAssignableFrom (ct) || !typeof (INamingContainer).IsAssignableFrom (ct))
 						return MyNamingContainer.BindingContainerType;
 
@@ -275,6 +278,9 @@ namespace System.Web.UI {
 				}
 
 				ct = cb.ControlType;
+				if (ct == null)
+					return typeof (Control);
+				
 				if (typeof (INonBindingContainer).IsAssignableFrom (ct) || !typeof (INamingContainer).IsAssignableFrom (ct))
 					return MyNamingContainer.BindingContainerType;
 				
@@ -451,7 +457,7 @@ namespace System.Web.UI {
 			if (tagType == null)
 				return null;
 			
-			PagesSection ps = WebConfigurationManager.GetSection ("system.web/pages") as PagesSection;
+			PagesSection ps = WebConfigurationManager.GetWebApplicationSection ("system.web/pages") as PagesSection;
 			if (ps == null)
 				return tagType;
 

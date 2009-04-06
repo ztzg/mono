@@ -1,3 +1,25 @@
+2009-03-23  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #487625
+	* namespace.cs: Use a warning for all predefined type conflicts.
+
+2009-03-08  Marek Safar  <marek.safar@gmail.com>
+
+	* class.cs: Use correct common base type for unmanaged delayed
+	check.
+
+	* rootcontext.cs: Wrap unhandled exception.
+
+2009-03-05  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #480100
+	* parameter.cs: A parameter is not hoisted when used directly as ET.
+
+2009-03-03  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #481258
+	* class.cs: Set extension method flag in partial container.
+
 2009-02-25  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #479532

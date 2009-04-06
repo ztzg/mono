@@ -43,6 +43,7 @@
 #include <mono/metadata/mono-debug.h>
 #include <mono/metadata/attach.h>
 #include <mono/metadata/file-io.h>
+#include <mono/metadata/console-io.h>
 #include <mono/utils/mono-uri.h>
 #include <mono/utils/mono-logger.h>
 #include <mono/utils/mono-path.h>
@@ -228,6 +229,7 @@ mono_runtime_init (MonoDomain *domain, MonoThreadStartCB start_cb,
 
 	mono_network_init ();
 
+	mono_console_init ();
 	mono_attach_init ();
 
 	/* mscorlib is loaded before we install the load hook */
@@ -1181,6 +1183,8 @@ get_shadow_assembly_location (const char *filename)
 	tmploc = get_shadow_assembly_location_base (domain);
 	location = g_build_filename (tmploc, name_hash, path_hash, bname, NULL);
 	g_free (tmploc);
+	g_free (bname);
+	g_free (dirname);
 	return location;
 }
 
@@ -1362,9 +1366,9 @@ mono_is_shadow_copy_enabled (MonoDomain *domain, const gchar *dir_name)
 
 	/* Is dir_name a shadow_copy destination already? */
 	base_dir = get_shadow_assembly_location_base (domain);
-	if (strstr (dir_name, base_dir) == dir_name) {
+	if (strstr (dir_name, base_dir)) {
 		g_free (base_dir);
-		return FALSE;
+		return TRUE;
 	}
 	g_free (base_dir);
 
@@ -1396,14 +1400,24 @@ mono_make_shadow_copy (const char *filename)
 	struct utimbuf utbuf;
 	char *dir_name = g_path_get_dirname (filename);
 	MonoDomain *domain = mono_domain_get ();
+	char *shadow_dir;
+
 	set_domain_search_path (domain);
 
 	if (!mono_is_shadow_copy_enabled (domain, dir_name)) {
 		g_free (dir_name);
 		return (char *) filename;
 	}
+	/* Is dir_name a shadow_copy destination already? */
+	shadow_dir = get_shadow_assembly_location_base (domain);
+	if (strstr (dir_name, shadow_dir)) {
+		g_free (shadow_dir);
+		g_free (dir_name);
+		return (char *) filename;
+	}
+	g_free (shadow_dir);
 	g_free (dir_name);
-	
+
 	shadow = get_shadow_assembly_location (filename);
 	if (ensure_directory_exists (shadow) == FALSE) {
 		g_free (shadow);
@@ -2074,7 +2088,7 @@ mono_domain_unload (MonoDomain *domain)
 		/* Roll back the state change */
 		domain->state = MONO_APPDOMAIN_CREATED;
 
-		g_warning (thread_data.failure_reason);
+		g_warning ("%s", thread_data.failure_reason);
 
 		ex = mono_get_exception_cannot_unload_appdomain (thread_data.failure_reason);
 

@@ -1,3 +1,110 @@
+2009-03-31  Marek Habersack  <mhabersack@novell.com>
+
+	* All of the below are part of the fix for bug #489687
+
+	* ThemeDirectoryCompiler.cs: pass VirtualPath instances to parser
+	constructors.
+
+	* BuildProvider.cs: associated virtual path is stored internally
+	as an instance of VirtualPath, accessible via new
+	VirtualPathInternal property.
+
+	* BuildManagerDirectoryBuilder.cs: VirtualPath.IsFake is used to
+	detect fake virtual paths.
+	GetBuildProvider now takes a VirtualPath instead of string for the
+	virtualPath parameter. The passed VirtualPath instance is passed
+	unchanged to BuildProvider.
+
+	* BuildManager.cs: AssertVirtualPathExists now uses
+	VirtualPath.IsFake to check for fake virtual paths.
+
+	* ApplicationFileBuildProvider.cs, GenericBuildProvider.cs,
+	MasterPageBuildProvider.cs, PageBuildProvider.cs,
+	ThemeBuildProvider.cs, UserControlBuildProvider.cs,
+	WebHandlerBuildProvider.cs, WebServiceBuildProvider.cs:
+	CreateParser overloads now take a VirtualPath instead of a string
+	for the virtualPath parameter.
+
+	* ThemeBuildProvider.cs: use new parser constructors which take
+	VirtualPath instances instead of strings.
+
+2009-03-30  Marek Habersack  <mhabersack@novell.com>
+
+	* AspTokenizer.cs: UpdateChecksum - fixed off-by-one bug when
+	processing the checksum buffer.
+
+	* AssemblyBuilder.cs: introduced a kludge to add #pragma checksum
+	and #pragma lines (or its vb equivalent - #ExternalSource) to
+	code-behind files named in the CodeFile/Src directives while
+	copying them to the dynamic directory for compilation. The kludge
+	works by recognizing the .cs and .vb extensions and wrapping the
+	file contents in the appropriate directives. This is done in this
+	way because the other possible way, using the
+	CodeSnippetCompileUnit, requires the entire file to be read in
+	memory and then passed to CodeDOM. We fall back to this way when
+	the file being copied is neither C# or VB.
+
+2009-03-25  Marek Habersack  <mhabersack@novell.com>
+
+	* AspTokenizer.cs: MD5 checksum calculation happens here. It's
+	done incrementally as characters are read.
+
+	* AspParser.cs: the MD5 checksum is no longer computed here. Moved
+	to AspTokenizer.
+	After parsing, both the tokenizer and the string reader are
+	disposed of.
+
+	* AssemblyBuilder.cs: renamed CopyFile to CopyFileWithChecksum, in
+	prepration for future inclusion of checksum and line pragmas in
+	the file being copied.
+	Files are copied chunk by chunk, not by reading the entire
+	contents.
+
+2009-03-23  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateBuildProvider.cs: add values of the CodeFile and Src
+	page/master/control directives to the list of file dependencies.
+	Extract language also for master/page, not only for controls.
+
+2009-03-16  Marek Habersack  <mhabersack@novell.com>
+
+	* AspGenerator.cs: when parsing nested tags (includes tags inside
+	client-side javascript script blocks) pass the closing tag up to
+	the containing parser.
+	Instead of parsing the whole plain text contents, plus the two
+	constructs we're interested in from it using regexs. This is
+	necessary as we might be passed JavaScript code and without
+	understanding its syntax we'll confuse the '<' character for the
+	start of a tag.
+	TagParsed now better handles <script> tags. For both server and
+	client tags ProcessScript is called and the input text, in case of
+	client tags, is read verbatim to be processed when ProcessScript
+	is called to close the tag. At this point the verbatim text is
+	checked whether it contains server-side tags and/or expressions.
+
+2009-03-16  Marek Habersack  <mhabersack@novell.com>
+
+	* AspGenerator.cs: when parsing nested tags (includes tags inside
+	client-side javascript script blocks) pass the closing tag up to
+	the containing parser.
+
+2009-02-28 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* AppResourcesAssemblyBuilder.cs:
+	* AspComponentFoundry.cs:
+	* AssemblyBuilder.cs:
+	* CachingCompiler.cs:
+	* AspGenerator.cs:
+	* WsdlBuildProvider.cs:
+	* BaseCompiler.cs:
+	* BuildProvider.cs:
+	* AppWebReferencesCompiler.cs:
+	* TemplateControlCompiler.cs:
+	* BuildManager.cs:
+	* AppCodeCompiler.cs: settings that have to be in
+	machine.config or the root level web.config now call
+	GetWebApplicationSection.
+
 2009-02-26  Marek Habersack  <mhabersack@novell.com>
 
 	* TagAttributes.cs: modified ToString to return string formatted

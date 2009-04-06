@@ -1009,7 +1009,7 @@ mono_arch_compute_omit_fp (MonoCompile *cfg)
 		locals_size += mono_type_size (ins->inst_vtype, &ialign);
 	}
 
-	if ((cfg->num_varinfo > 10000) || (locals_size >= (1 << 15))) {
+	if ((cfg->num_varinfo > 5000) || (locals_size >= (1 << 15)) || (header->code_size > 110000)) {
 		/* Avoid hitting the stack_alloc_size < (1 << 16) assertion in emit_epilog () */
 		cfg->arch.omit_fp = FALSE;
 	}
@@ -3058,6 +3058,11 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			g_assert (ins->sreg1 == X86_EAX);
 			g_assert (ins->dreg == X86_EAX);
 			g_assert (power >= 0);
+
+			if (power == 0) {
+				amd64_mov_reg_imm (code, ins->dreg, 0);
+				break;
+			}
 
 			/* Based on gcc code */
 

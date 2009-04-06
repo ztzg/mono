@@ -24,6 +24,7 @@
 
 #include "mini.h"
 #include "mini-x86.h"
+#include "debug-mini.h"
 
 #ifdef PLATFORM_WIN32
 static void (*restore_stack) (void *);
@@ -383,26 +384,32 @@ throw_exception (unsigned long eax, unsigned long ecx, unsigned long edx, unsign
 	ctx.ecx = ecx;
 	ctx.eax = eax;
 
-	if (mono_debugger_throw_exception ((gpointer)(eip - 5), (gpointer)esp, exc)) {
-		/*
-		 * The debugger wants us to stop on the `throw' instruction.
-		 * By the time we get here, it already inserted a breakpoint on
-		 * eip - 5 (which is the address of the call).
-		 */
-		ctx.eip = eip - 5;
-		ctx.esp = esp + sizeof (gpointer);
-		restore_context (&ctx);
-		g_assert_not_reached ();
-	}
-
-	/* adjust eip so that it point into the call instruction */
-	ctx.eip -= 1;
-
 	if (mono_object_isinst (exc, mono_defaults.exception_class)) {
 		MonoException *mono_ex = (MonoException*)exc;
 		if (!rethrow)
 			mono_ex->stack_trace = NULL;
 	}
+
+	if (mono_debug_using_mono_debugger ()) {
+		guint8 buf [16], *code;
+
+		mono_breakpoint_clean_code (NULL, (gpointer)eip, 8, buf, sizeof (buf));
+		code = buf + 8;
+
+		if (buf [3] == 0xe8) {
+			MonoContext ctx_cp = ctx;
+			ctx_cp.eip = eip - 5;
+
+			if (mono_debugger_handle_exception (&ctx_cp, exc)) {
+				restore_context (&ctx_cp);
+				g_assert_not_reached ();
+			}
+		}
+	}
+
+	/* adjust eip so that it point into the call instruction */
+	ctx.eip -= 1;
+
 	mono_handle_exception (&ctx, exc, (gpointer)eip, FALSE);
 	restore_context (&ctx);
 
@@ -791,6 +798,9 @@ mono_arch_handle_exception (void *sigctx, gpointer obj, gboolean test_only)
 
 	mono_arch_sigctx_to_monoctx (sigctx, &mctx);
 
+	if (mono_debugger_handle_exception (&mctx, (MonoObject *)obj))
+		return TRUE;
+
 	mono_handle_exception (&mctx, obj, (gpointer)mctx.eip, test_only);
 
 	mono_arch_monoctx_to_sigctx (&mctx, sigctx);
@@ -832,6 +842,13 @@ altstack_handle_and_restore (void *sigctx, gpointer obj, gboolean stack_ovf)
 
 	restore_context = mono_arch_get_restore_context ();
 	mono_arch_sigctx_to_monoctx (sigctx, &mctx);
+
+	if (mono_debugger_handle_exception (&mctx, (MonoObject *)obj)) {
+		if (stack_ovf)
+			prepare_for_guard_pages (&mctx);
+		restore_context (&mctx);
+	}
+
 	mono_handle_exception (&mctx, obj, (gpointer)mctx.eip, FALSE);
 	if (stack_ovf)
 		prepare_for_guard_pages (&mctx);
