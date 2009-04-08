@@ -30,6 +30,9 @@
  *   Hervé Knochel (herve.knochel@st.com)
  */
 
+#include <asm/cachectl.h> /* CACHEFLUSH_*, */
+#include <sys/syscall.h>  /* __NR_cacheflush, */
+#include <unistd.h>       /* syscall(2), */
 #include <glib.h>
 
 #include "mini.h"
@@ -1655,7 +1658,6 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 void mono_arch_flush_icache(guint8 *code, gint size)
 {
-#if defined (__SH4A__)
 #define CACHE_BLOCK_LENGTH 32
 
 	guint32 start = (guint32)code;
@@ -1664,15 +1666,11 @@ void mono_arch_flush_icache(guint8 *code, gint size)
 
 	SH4_EXTRA_DEBUG("args => %p, %d", code, size);
 
-	/* Align frontiers on a CACHE_BLOCK_LENGTH. */
-	start &= ~(CACHE_BLOCK_LENGTH - 1);
-	end = ALIGN_TO(end, CACHE_BLOCK_LENGTH);
-
-	for (address = start; address <= end; address += CACHE_BLOCK_LENGTH) {
-		__asm__ __volatile__ ("ocbp @%0" : : "r"(address));
-		__asm__ __volatile__ ("icbi @%0" : : "r"(address));
+	for (address = start; address < end; address += MIN(CACHE_BLOCK_LENGTH, end - address)) {
+		syscall(__NR_cacheflush, address, CACHE_BLOCK_LENGTH, CACHEFLUSH_D_WB);
+		syscall(__NR_cacheflush, address, CACHE_BLOCK_LENGTH, CACHEFLUSH_I);
 	}
-#endif
+
 	return;
 }
 
