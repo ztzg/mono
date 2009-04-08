@@ -83,9 +83,9 @@
 
 /*
  * If this macro is defined, the opcode to convert a double float to
- * a 64 bits integer will be emulated.
+ * a 64 bits integer will be emulated. */
 #define MONO_ARCH_EMULATE_FCONV_TO_I8 1
- */
+
 
 /*
  * Not used.

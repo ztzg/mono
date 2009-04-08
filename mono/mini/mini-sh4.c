@@ -191,8 +191,27 @@ static inline void add_float64_arg(SH4FloatRegister *arg_reg, guint32 *stack_siz
 static inline void add_float32_arg(SH4FloatRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
 {
 	/* Currently float32 arguments are handled as float64, except in emit_prolog(). */
-	add_float64_arg(arg_reg, stack_size, arg_info);
+	arg_info->size = 8;
 	arg_info->type = float32;
+	arg_info->offset = *stack_size;
+
+	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
+
+	/* "last_arg - 1" because the argument is either
+	   entirely into 2 registers, or entirely onto the stack. */
+	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG - 1) {
+		/* TODO - CV: PInvoke support. */
+		arg_info->storage = into_register;
+		arg_info->reg = *arg_reg;
+		(*arg_reg) += 2;
+	}
+	else {
+		arg_info->storage = onto_stack;
+		(*stack_size) += 4;
+	}
+
+	SH4_EXTRA_DEBUG("arg_reg = %d", *arg_reg);
+	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
 }
 
 /**
@@ -622,10 +641,17 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		case float32:
 			/* HK: TODO, handle pinvoke case */
 			g_assert(signature->pinvoke == 0);
-			/* Fall through. */
+			if (!flag_f) {
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_F32ARG);
+				arg->sreg1 = call->args[j]->dreg;
+				MONO_ADD_INS(cfg->cbb, arg);
+				call->stack_usage += 4;
+			}
+			break;
+
 		case float64:
 			if (!flag_f) {
-				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_FARG);
+				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_F64ARG);
 				arg->sreg1 = call->args[j]->dreg;
 				MONO_ADD_INS(cfg->cbb, arg);
 				call->stack_usage += 8;
@@ -1178,6 +1204,14 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case float32:
+					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+					if (inst->inst_offset != 0)
+						sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
+					sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg);
+					/* Convert [internally] to double precision, as specified by the ECMA. */
+					sh4_flds_FPUL(&buffer, inst->dreg);
+					sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
+
 				case float64:
 					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
 					g_assert(SH4_CHECK_RANGE_add_imm(offset)); /* FIXME - CV */
@@ -2057,6 +2091,58 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 	}
 }
 
+static inline void convert_fcomparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
+{
+	gint32 tmp_reg;
+
+	switch (next_inst->opcode) {
+	case OP_FBEQ:
+		inst->opcode = OP_SH4_FCMPEQ;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
+	case OP_FBGE_UN:
+	case OP_FBGE:
+		inst->opcode = OP_SH4_FCMPGT;
+		tmp_reg = inst->sreg1;
+		inst->sreg1 = inst->sreg2;
+		inst->sreg2 = tmp_reg;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
+	case OP_FBGT_UN:
+	case OP_FBGT:
+		inst->opcode = OP_SH4_FCMPGT;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
+	case OP_FBLE_UN:
+	case OP_FBLE:
+		inst->opcode = OP_SH4_FCMPGT;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
+	case OP_FBLT_UN:
+	case OP_FBLT:
+		inst->opcode = OP_SH4_FCMPGT;
+		tmp_reg = inst->sreg1;
+		inst->sreg1 = inst->sreg2;
+		inst->sreg2 = tmp_reg;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
+	case OP_FBNE_UN:
+		inst->opcode = OP_SH4_FCMPEQ;
+		next_inst->opcode = OP_SH4_BF;
+		break;
+
+	default:
+		fprintf(stderr, "unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
+			mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
+		NOT_IMPLEMENTED;
+		break;
+	}
+}
 static inline void decompose_op_offset2base(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst, int is_store)
 {
 	MonoInst *new_inst  = NULL;
@@ -2138,6 +2224,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 	MONO_BB_FOR_EACH_INS_SAFE(basic_block, next_inst, inst) {
 		MonoInst *new_inst = NULL;
+		gint32 tmp_reg;
 
 		switch (inst->opcode) {
 		case OP_COMPARE:
@@ -2145,6 +2232,38 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			next_inst = inst->next;
 			g_assert(next_inst != NULL);
 			convert_comparison_to_sh4(inst, next_inst);
+			break;
+
+		case OP_FCOMPARE:
+			next_inst = inst->next;
+			g_assert(next_inst != NULL);
+			convert_fcomparison_to_sh4(inst, next_inst);
+			break;
+
+		case OP_FCEQ:
+			inst->opcode = OP_SH4_FCMPEQ;
+			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+			new_inst->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+			break;
+
+		case OP_FCGT:
+		case OP_FCGT_UN:
+			inst->opcode = OP_SH4_FCMPGT;
+			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+			new_inst->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+			break;
+
+		case OP_FCLT:
+		case OP_FCLT_UN:
+			inst->opcode = OP_SH4_FCMPGT;
+			tmp_reg = inst->sreg1;
+			inst->sreg1 = inst->sreg2;
+			inst->sreg2 = tmp_reg;
+			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+			new_inst->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
 			break;
 
 		case OP_COMPARE_IMM:
@@ -2828,6 +2947,16 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_cmphs(&buffer, inst->sreg1, inst->sreg2);
 			break;
 
+		case OP_SH4_FCMPEQ:
+			/* MD: sh4_fcmpeq: src1:f src2:f len:2 */
+			sh4_fcmpeq_double(&buffer, inst->sreg1, inst->sreg2);
+			break;
+			
+		case OP_SH4_FCMPGT:
+			/* MD: sh4_fcmpgt: src1:f src2:f len:2 */
+			sh4_fcmpgt_double(&buffer, inst->sreg2, inst->sreg1);
+			break;
+			
 		case OP_SH4_MOVT:
 			/* MD: sh4_movt: dest:i len:2 */
 			sh4_movt(&buffer, inst->dreg);
@@ -2838,8 +2967,15 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_movl_decRx(&buffer, inst->sreg1, sh4_sp);
 			break;
 
-		case OP_SH4_PUSH_FARG:
-			/* MD: sh4_push_farg: src1:f len:4 */
+		case OP_SH4_PUSH_F32ARG:
+			/* MD: sh4_push_f32arg: src1:f len:6 */
+			sh4_fcnvds_double_FPUL(&buffer, inst->sreg1);
+			sh4_fsts_FPUL(&buffer, inst->sreg1);
+			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_sp);
+			break;
+
+		case OP_SH4_PUSH_F64ARG:
+			/* MD: sh4_push_f64arg: src1:f len:4 */
 			sh4_fmovs_decRx(&buffer, inst->sreg1 + 1, sh4_sp);
 			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_sp);
 			break;
@@ -3309,6 +3445,39 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_sts_FPUL(&buffer, inst->dreg);
 			break;
 
+		case OP_FCONV_TO_I2: /* MD: float_conv_to_i2: dest:i src1:f len:6 */
+			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
+			sh4_sts_FPUL(&buffer, inst->dreg);
+			sh4_extsw(&buffer, inst->dreg, inst->dreg);
+			break;
+
+		case OP_FCONV_TO_U2: /* MD: float_conv_to_u2: dest:i src1:f len:6 */
+			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
+			sh4_sts_FPUL(&buffer, inst->dreg);
+			sh4_extuw(&buffer, inst->dreg, inst->dreg);
+			break;
+
+		case OP_FCONV_TO_I1: /* MD: float_conv_to_i1: dest:i src1:f len:6 */
+			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
+			sh4_sts_FPUL(&buffer, inst->dreg);
+			sh4_extsb(&buffer, inst->dreg, inst->dreg);
+			break;
+
+		case OP_FCONV_TO_U1: /* MD: float_conv_to_u1: dest:i src1:f len:6 */
+			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
+			sh4_sts_FPUL(&buffer, inst->dreg);
+			sh4_extub(&buffer, inst->dreg, inst->dreg);
+			break;
+
+		case OP_FCONV_TO_R4: /* MD: float_conv_to_r4: dest:f src1:f len:0 */
+		case OP_FCONV_TO_R8: /* MD: float_conv_to_r8: dest:f src1:f len:0 */
+			break;
+
+		case OP_FCONV_TO_I8: /* MD: float_conv_to_i8: dest:l src1:f len:0 */
+		case OP_FCONV_TO_U8: /* MD: float_conv_to_u8: dest:l src1:f len:0 */
+			NOT_IMPLEMENTED;
+			break;
+
 		case OP_FADD:
 			/* MD: float_add: clob:1 dest:f src1:f src2:f len:2 */
 			sh4_fadd_double(&buffer, inst->sreg2, inst->dreg);
@@ -3395,11 +3564,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_ICOMPARE:	 /* MD: icompare: src1:i src2:i len:0 */
 		case OP_ICLT_UN:	 /* MD: int_clt_un: dest:i len:0 */
 
-		/* These opcodes are missing for basic-float.cs. */
-		case OP_FCOMPARE:	 /* MD: fcompare: src1:f src2:f len:0 */
-		case OP_FBEQ:	 	 /* MD: float_beq: len:0 */
-		case OP_FBNE_UN:	 /* MD: float_bne_un: len:0 */
-
 		/* These opcodes are missing for basic-long.cs. */
 		case OP_COND_EXC_OV:	 /* MD: cond_exc_ov: len:0 */
 		case OP_COND_EXC_C:	 /* MD: cond_exc_c: len:0 */
@@ -3417,13 +3581,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		/* These opcodes are missing for objects.cs. */
 		case OP_LCONV_TO_OVF_I4_2: /* MD: long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0 */
-		case OP_FCONV_TO_I:	 /* MD: float_conv_to_i: dest:i src1:f len:0 */
-		case OP_FCEQ:		 /* MD: float_ceq: dest:i src1:f src2:f len:0 */
-		case OP_FBGE_UN:	 /* MD: float_bge_un: len:0 */
-		case OP_FBGE:	 	 /* MD: float_bge: len:0 */
-		case OP_FBLE:	 	 /* MD: float_ble: len:0 */
-		case OP_FBLT:	 	 /* MD: float_blt: len:0 */
-		case OP_FBGT:	 	 /* MD: float_bgt: len:0 */
+		case OP_FCONV_TO_I:	   /* MD: float_conv_to_i: dest:i src1:f len:0 */
 
 			fprintf(stderr, "Method %s:%s opcode %s (0x%x) not yet implemented\n",
 				cfg->method->klass->name,
