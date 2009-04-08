@@ -984,22 +984,33 @@ void mono_arch_create_vars(MonoCompile *cfg)
 	return;
 }
 
+static inline void sh4_add_offset2base(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister new_base)
+{
+	if (offset == 0) {
+		sh4_mov(buffer, base, new_base);
+	}
+	else if (SH4_CHECK_RANGE_add_imm(offset)) {
+		sh4_mov(buffer, base, new_base);
+		sh4_add_imm(buffer, offset, new_base);
+	}
+	/* TODO - CV: optimize using sh4_multi_add_imm() if it
+	   produces less instructions than sh4_load(). */
+	else {
+		if (cfg == NULL)
+			sh4_load(buffer, offset, new_base);
+		else
+			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, new_base);
+		sh4_add(buffer, base, new_base);
+	}
+}
+
 static inline void sh4_base_store(MonoCompile *cfg, guint8 **buffer, SH4IntRegister src, int offset, SH4IntRegister base)
 {
 	if (SH4_CHECK_RANGE_movl_dispRx(offset)) {
 		sh4_movl_dispRx(buffer, src, offset, base);
 	}
-	else if (SH4_CHECK_RANGE_add_imm(offset)) {
-		sh4_mov(buffer, base, sh4_temp);
-		sh4_add_imm(buffer, offset, sh4_temp);
-		sh4_movl_indRx(buffer, src, sh4_temp);
-	}
 	else {
-		if (cfg == NULL)
-			sh4_load(buffer, offset, sh4_temp);
-		else
-			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
-		sh4_add(buffer, base, sh4_temp);
+		sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
 		sh4_movl_indRx(buffer, src, sh4_temp);
 	}
 }
@@ -1009,19 +1020,48 @@ static inline void sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, 
 	if (SH4_CHECK_RANGE_movl_dispRy(offset)) {
 		sh4_movl_dispRy(buffer, offset, base, dest);
 	}
-	else if (SH4_CHECK_RANGE_add_imm(offset)) {
-		sh4_mov(buffer, base, sh4_temp);
-		sh4_add_imm(buffer, offset, sh4_temp);
-		sh4_movl_indRy(buffer, sh4_temp, dest);
-	}
 	else {
-		if (cfg == NULL)
-			sh4_load(buffer, offset, sh4_temp);
-		else
-			sh4_cstpool_add(cfg, buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
-		sh4_add(buffer, base, sh4_temp);
+		sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
 		sh4_movl_indRy(buffer, sh4_temp, dest);
 	}
+}
+
+static inline void sh4_base_storef32(MonoCompile *cfg, guint8 **buffer, SH4FloatRegister src, int offset, SH4IntRegister base)
+{
+	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
+
+	/* Convert back to simple precision.  */
+	sh4_fcnvds_double_FPUL(buffer, src);
+	sh4_fsts_FPUL(buffer, src);
+
+	sh4_fmovs_indRx(buffer, src, sh4_temp);
+}
+
+static inline void sh4_base_loadf32(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister dest)
+{
+	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
+
+	sh4_fmovs_indRy(buffer, sh4_temp, dest);
+
+	/* Convert [internally] to double precision, as specified by the ECMA. */
+	sh4_flds_FPUL(buffer, dest);
+	sh4_fcnvsd_FPUL_double(buffer, dest);
+}
+
+static inline void sh4_base_storef64(MonoCompile *cfg, guint8 **buffer, SH4FloatRegister src, int offset, SH4IntRegister base)
+{
+	sh4_add_offset2base(cfg, buffer, offset + 4, base, sh4_temp);
+
+	sh4_fmovs_indRx(buffer, src + 1, sh4_temp);
+	sh4_fmovs_decRx(buffer, src, sh4_temp);
+}
+
+static inline void sh4_base_loadf64(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister dest)
+{
+	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
+
+	sh4_fmovs_incRy(buffer, sh4_temp, dest);
+	sh4_fmovs_indRy(buffer, sh4_temp, dest + 1);
 }
 
 /**
@@ -1204,21 +1244,11 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case float32:
-					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-					if (inst->inst_offset != 0)
-						sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-					sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg);
-					/* Convert [internally] to double precision, as specified by the ECMA. */
-					sh4_flds_FPUL(&buffer, inst->dreg);
-					sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
+					sh4_base_loadf32(NULL, &buffer, offset, sh4_sp, inst->dreg);
+					break;
 
 				case float64:
-					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-					g_assert(SH4_CHECK_RANGE_add_imm(offset)); /* FIXME - CV */
-					if (offset != 0)
-						sh4_add_imm(&buffer, offset, sh4_temp);
-					sh4_fmovs_incRy(&buffer, sh4_temp, inst->dreg);
-					sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg+1);
+					sh4_base_loadf64(NULL, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
 				case typedbyref:	/* Fall through - always on the stack currently */
@@ -1253,21 +1283,11 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case float64:
-					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-					g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_offset + 4)); /* FIXME - CV */
-					sh4_add_imm(&buffer, inst->inst_offset + 4, sh4_temp);
-					sh4_fmovs_indRx(&buffer, arg_info->reg + 1, sh4_temp);
-					sh4_fmovs_decRx(&buffer, arg_info->reg, sh4_temp);
+					sh4_base_storef64(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case float32:
-					sh4_fcnvds_double_FPUL(&buffer, arg_info->reg);
-					sh4_fsts_FPUL(&buffer, arg_info->reg);
-					sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-					g_assert(SH4_CHECK_RANGE_add_imm(inst->inst_offset)); /* FIXME - CV */
-					if (inst->inst_offset != 0)
-						sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-					sh4_fmovs_indRx(&buffer, arg_info->reg, sh4_temp);
+					sh4_base_storef32(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case typedbyref:	/* Always onto the stack currently */
@@ -1293,6 +1313,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 				case integer64:
 				case float64:
+					/* TODO - CV: optimize this case. */
 					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
 					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
 					sh4_base_load(NULL, &buffer, offset + 4, sh4_sp, sh4_temp);
@@ -2951,12 +2972,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: sh4_fcmpeq: src1:f src2:f len:2 */
 			sh4_fcmpeq_double(&buffer, inst->sreg1, inst->sreg2);
 			break;
-			
+
 		case OP_SH4_FCMPGT:
 			/* MD: sh4_fcmpgt: src1:f src2:f len:2 */
 			sh4_fcmpgt_double(&buffer, inst->sreg2, inst->sreg1);
 			break;
-			
+
 		case OP_SH4_MOVT:
 			/* MD: sh4_movt: dest:i len:2 */
 			sh4_movt(&buffer, inst->dreg);
@@ -3503,53 +3524,28 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_fneg_double(&buffer, inst->dreg);
 			break;
 
+			/* Support for spilled floating-point variables. */
 		case OP_STORER8_MEMBASE_REG:
-			/* MD: storer8_membase_reg: dest:b src1:f len:10 */
-			/* FIXME - CV: decompose in the lowering pass. */
-			sh4_mov(&buffer, inst->inst_destbasereg, sh4_temp);
-			sh4_add_imm(&buffer, 4, sh4_temp);
-			if (inst->inst_offset != 0)
-				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-			sh4_fmovs_indRx(&buffer, inst->sreg1 + 1, sh4_temp);
-			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_temp);
+			/* MD: storer8_membase_reg: dest:b src1:f len:16 */
+			sh4_base_storef64(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
+			/* Support for spilled floating-point variables. */
 		case OP_LOADR8_MEMBASE:
-			/* MD: loadr8_membase: dest:f src1:b len:8 */
-			/* FIXME - CV: decompose in the lowering pass. */
-			sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-			if (inst->inst_offset != 0)
-				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-			sh4_fmovs_incRy(&buffer, sh4_temp, inst->dreg);
-			sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg+1);
+			/* MD: loadr8_membase: dest:f src1:b len:16 */
+			sh4_base_loadf64(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
 		case OP_STORER4_MEMBASE_REG:
-			/* MD: storer4_membase_reg: dest:b src1:f len:10 */
-			/* FIXME - CV: decompose in the lowering pass. */
-			sh4_mov(&buffer, inst->inst_destbasereg, sh4_temp);
-			if (inst->inst_offset != 0)
-				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-
-			/* Convert back to simple precision.  */
-			sh4_fcnvds_double_FPUL(&buffer, inst->sreg1);
-			sh4_fsts_FPUL(&buffer, inst->sreg1);
-
-			sh4_fmovs_indRx(&buffer, inst->sreg1, sh4_temp);
+			/* MD: storer4_membase_reg: dest:b src1:f len:18 */
+			/* TODO - CV: decomposable in the lowering pass? */
+			sh4_base_storef32(cfg, &buffer, inst->sreg1, inst->inst_offset, inst->inst_destbasereg);
 			break;
 
 		case OP_LOADR4_MEMBASE:
-			/* MD: loadr4_membase: dest:f src1:b len:10 */
-			/* FIXME - CV: decompose in the lowering pass. */
-			sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
-			if (inst->inst_offset != 0)
-				sh4_add_imm(&buffer, inst->inst_offset, sh4_temp);
-
-			sh4_fmovs_indRy(&buffer, sh4_temp, inst->dreg);
-
-			/* Convert [internally] to double precision, as specified by the ECMA. */
-			sh4_flds_FPUL(&buffer, inst->dreg);
-			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
+			/* MD: loadr4_membase: dest:f src1:b len:18 */
+			/* TODO - CV: decomposable in the lowering pass? */
+			sh4_base_loadf32(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
 		/* These opcodes are missing for basic.cs. */

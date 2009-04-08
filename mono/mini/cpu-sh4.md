@@ -174,10 +174,10 @@ float_sub: clob:1 dest:f src1:f src2:f len:2
 float_mul: clob:1 dest:f src1:f src2:f len:2
 float_div: clob:1 dest:f src1:f src2:f len:2
 float_neg: dest:f src1:f len:2
-storer8_membase_reg: dest:b src1:f len:10
-loadr8_membase: dest:f src1:b len:8
-storer4_membase_reg: dest:b src1:f len:10
-loadr4_membase: dest:f src1:b len:10
+storer8_membase_reg: dest:b src1:f len:16
+loadr8_membase: dest:f src1:b len:16
+storer4_membase_reg: dest:b src1:f len:18
+loadr4_membase: dest:f src1:b len:18
 int_mul_ovf: dest:i src1:i src2:i len:0
 int_mul_ovf_un: dest:i src1:i src2:i len:0
 cond_exc_iov: len:0
