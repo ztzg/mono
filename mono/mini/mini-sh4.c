@@ -1980,6 +1980,7 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  */
 static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
 {
+	/* Trick used in output_basic_block(). */
 	next_inst->backend.data = NULL;
 
 	switch (next_inst->opcode) {
@@ -2115,6 +2116,9 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 static inline void convert_fcomparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
 {
 	gint32 tmp_reg;
+
+	/* Trick used in output_basic_block(). */
+	next_inst->backend.data = NULL;
 
 	switch (next_inst->opcode) {
 	case OP_FBEQ:

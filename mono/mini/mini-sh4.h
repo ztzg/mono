@@ -36,7 +36,7 @@
  * these are usually used for local allocation. This macro is
  * mandatory even if the soft floating-point support is enabled.
  */
-#define MONO_ARCH_CALLEE_FREGS ((1<<sh4_dr0) | (1<<sh4_dr2) | (1<<sh4_dr4) | (1<<sh4_dr6) | (1<<sh4_dr8) | (1<<sh4_dr10))
+#define MONO_ARCH_CALLEE_FREGS ((1<<sh4_dr0) | (1<<sh4_dr2) | (1<<sh4_dr4) | (1<<sh4_dr6) | (1<<sh4_dr8) | (1<<sh4_dr10) | (1<<sh4_dr12) | (1<<sh4_dr14))
 
 /*
  * Bitmask selecting the caller-saved general registers, these
@@ -49,8 +49,8 @@
  * these are usually used for global allocation. This macro is
  * mandatory even if the soft floating-point support is enabled.
  */
-/* Mono does not support yet global floating-point register allocation. */
-#define MONO_ARCH_CALLEE_SAVED_FREGS ((1<<sh4_dr12) | (1<<sh4_dr14))
+/* Only Mono/AMD64 supports global floating-point register allocation. */
+#define MONO_ARCH_CALLEE_SAVED_FREGS 0
 
 /*
  * Bitmask selecting the callee-saved general registers, these
