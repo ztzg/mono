@@ -1984,33 +1984,38 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 	next_inst->backend.data = NULL;
 
 	switch (next_inst->opcode) {
+	case OP_CEQ:
 	case OP_ICEQ:
 		inst->opcode = OP_SH4_CMPEQ;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_CGT:
 	case OP_ICGT:
 		inst->opcode = OP_SH4_CMPGT;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_CGT_UN:
 	case OP_ICGT_UN:
 		inst->opcode = OP_SH4_CMPHI;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_CLT:
 	case OP_ICLT:
 		inst->opcode = OP_SH4_NOT_CMPGE;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_CLT_UN:
 	case OP_ICLT_UN:
 		inst->opcode = OP_SH4_NOT_CMPHS;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
+	case OP_COND_EXC_IEQ:
 	case OP_COND_EXC_EQ:
-		/* Trick used in output_basic_block(). */
 		next_inst->backend.data = (gpointer)-1;
 	case CEE_BEQ:
 	case OP_IBEQ:
@@ -2018,8 +2023,8 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
+	case OP_COND_EXC_INE_UN:
 	case OP_COND_EXC_NE_UN:
-		/* Trick used in output_basic_block(). */
 		next_inst->backend.data = (gpointer)-1;
 	case CEE_BNE_UN:
 	case OP_IBNE_UN:
@@ -2027,76 +2032,75 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
+	case OP_COND_EXC_IGT:
+	case OP_COND_EXC_GT:
+		next_inst->backend.data = (gpointer)-1;
 	case OP_IBGT:
 		inst->opcode = OP_SH4_CMPGT;
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
+	case OP_COND_EXC_IGT_UN:
+	case OP_COND_EXC_GT_UN:
+		next_inst->backend.data = (gpointer)-1;
 	case OP_IBGT_UN:
 		inst->opcode = OP_SH4_CMPHI;
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
+	case OP_COND_EXC_ILE_UN:
 	case OP_COND_EXC_LE_UN:
-		/* Trick used in output_basic_block(). */
 		next_inst->backend.data = (gpointer)-1;
 	case OP_IBLE_UN:
 		inst->opcode = OP_SH4_CMPHI;
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
+	case OP_COND_EXC_ILE:
+	case OP_COND_EXC_LE:
+		next_inst->backend.data = (gpointer)-1;
 	case OP_IBLE:
 		inst->opcode = OP_SH4_CMPGT;
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
+	case OP_COND_EXC_IGE:
+	case OP_COND_EXC_GE:
+		next_inst->backend.data = (gpointer)-1;
 	case OP_IBGE:
 		inst->opcode = OP_SH4_CMPGE;
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
+	case OP_COND_EXC_IGE_UN:
+	case OP_COND_EXC_GE_UN:
+		next_inst->backend.data = (gpointer)-1;
 	case CEE_BGE_UN:
 	case OP_IBGE_UN:
 		inst->opcode = OP_SH4_CMPHS;
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
+	case OP_COND_EXC_ILT:
+	case OP_COND_EXC_LT:
+		next_inst->backend.data = (gpointer)-1;
 	case OP_IBLT:
 		inst->opcode = OP_SH4_CMPGE;
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
+	case OP_COND_EXC_ILT_UN:
+	case OP_COND_EXC_LT_UN:
+		next_inst->backend.data = (gpointer)-1;
 	case OP_IBLT_UN:
 		inst->opcode = OP_SH4_CMPHS;
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
-	case OP_CEQ:
-	case OP_CGT:
-	case OP_CGT_UN:
-	case OP_CLT:
-	case OP_CLT_UN:
-	case OP_COND_EXC_GE:
-	case OP_COND_EXC_GT:
-	case OP_COND_EXC_LE:
-	case OP_COND_EXC_LT:
-	case OP_COND_EXC_GE_UN:
-	case OP_COND_EXC_GT_UN:
-	case OP_COND_EXC_LT_UN:
 	case OP_COND_EXC_OV:
 	case OP_COND_EXC_NO:
 	case OP_COND_EXC_C:
 	case OP_COND_EXC_NC:
-	case OP_COND_EXC_IEQ:
-	case OP_COND_EXC_IGE:
-	case OP_COND_EXC_IGT:
-	case OP_COND_EXC_ILE:
-	case OP_COND_EXC_ILT:
-	case OP_COND_EXC_INE_UN:
-	case OP_COND_EXC_IGE_UN:
-	case OP_COND_EXC_IGT_UN:
-	case OP_COND_EXC_ILE_UN:
-	case OP_COND_EXC_ILT_UN:
 	case OP_COND_EXC_IOV:
 	case OP_COND_EXC_INO:
 	case OP_COND_EXC_IC:
@@ -3552,32 +3556,24 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_base_loadf32(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
+		/* Not yet supported. */
+		case OP_COND_EXC_OV:	/* MD: cond_exc_ov: len:0 */
+		case OP_COND_EXC_NO:	/* MD: cond_exc_no: len:0 */
+		case OP_COND_EXC_C:	/* MD: cond_exc_c: len:0 */
+		case OP_COND_EXC_NC:	/* MD: cond_exc_nc: len:0 */
+		case OP_COND_EXC_IOV:	/* MD: cond_exc_iov: len:0 */
+		case OP_COND_EXC_INO:	/* MD: cond_exc_ino: len:0 */
+		case OP_COND_EXC_IC:	/* MD: cond_exc_ic: len:0 */
+		case OP_COND_EXC_INC:	/* MD: cond_exc_inc: len:0 */
+
 		/* These opcodes are missing for basic.cs. */
 		case OP_IMUL_OVF:	 /* MD: int_mul_ovf: dest:i src1:i src2:i len:0 */
 		case OP_IMUL_OVF_UN:	 /* MD: int_mul_ovf_un: dest:i src1:i src2:i len:0 */
-		case OP_COND_EXC_IOV:	 /* MD: cond_exc_iov: len:0 */
-		case OP_COND_EXC_IC:	 /* MD: cond_exc_ic: len:0 */
-		case OP_COMPARE_IMM:	 /* MD: compare_imm: src1:i len:0 */
-		case OP_COND_EXC_IGT:	 /* MD: cond_exc_igt: len:0 */
-		case OP_COND_EXC_ILT:	 /* MD: cond_exc_ilt: len:0 */
-		case OP_COND_EXC_IGT_UN: /* MD: cond_exc_igt_un: len:0 */
-		case OP_ICOMPARE:	 /* MD: icompare: src1:i src2:i len:0 */
-		case OP_ICLT_UN:	 /* MD: int_clt_un: dest:i len:0 */
-
-		/* These opcodes are missing for basic-long.cs. */
-		case OP_COND_EXC_OV:	 /* MD: cond_exc_ov: len:0 */
-		case OP_COND_EXC_C:	 /* MD: cond_exc_c: len:0 */
-		case OP_COND_EXC_LT:	 /* MD: cond_exc_lt: len:0 */
-		case OP_COND_EXC_GT:	 /* MD: cond_exc_gt: len:0 */
-		case OP_COND_EXC_GT_UN:	 /* MD: cond_exc_gt_un: len:0 */
 
 		/* These opcodes are missing for iltests.il. */
 		case OP_LOCALLOC_IMM:	 /* MD: localloc_imm: dest:i len:0 */
 		case OP_CKFINITE:	 /* MD: ckfinite: dest:f src1:f len:0 */
 		case OP_JMP:	 	 /* MD: jmp: len:0 */
-
-		/* These opcodes are missing for objects.cs. */
-		case OP_COND_EXC_LT_UN: 	/* MD: cond_exc_lt_un: len:0 */
 
 		/* These opcodes are missing for objects.cs. */
 		case OP_LCONV_TO_OVF_I4_2: /* MD: long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0 */
