@@ -125,7 +125,9 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		}
 		/* stack_offset is large? */
 		else if (stack_offset = get_imm_sh4_movl_dispPC(code[0]),
-			 is_sh4_movl_dispPC(code[0], stack_offset, sh4_temp)) {
+			 is_sh4_movl_dispPC(code[0], stack_offset, sh4_temp) &&
+			 (is_sh4_sub(code[5], sh4_temp, sh4_fp) ||
+			  is_sh4_sub(code[6], sh4_temp, sh4_fp))) {
 			/* The virtual address is formed by calculating PC + 4,
 			   clearing the lowest 2 bits, and adding the immediate. */
 			guint address = (guint)code;
@@ -147,6 +149,8 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		/* Extract the previous value of PC. */
 		new_context->pc = *registers;
 		registers++;
+
+		SH4_EXTRA_DEBUG("back pc: 0x%x -> 0x%x", context->pc, new_context->pc);
 
 #if 0 /* Mono does not support yet global floating-point register allocation. */
 		/* Extract the previous value of global floating-point registers. */
@@ -176,8 +180,6 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 			else
 				new_context->registers[i] = context->registers[i];
 		}
-
-		SH4_EXTRA_DEBUG("back pc: 0x%x -> 0x%x", context->pc, new_context->pc);
 
 		/* Remove any unused LMF. */
 		if (*lmf != NULL &&
