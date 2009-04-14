@@ -2097,22 +2097,9 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
-	case OP_COND_EXC_OV:
-	case OP_COND_EXC_NO:
-	case OP_COND_EXC_C:
-	case OP_COND_EXC_NC:
-	case OP_COND_EXC_IOV:
-	case OP_COND_EXC_INO:
-	case OP_COND_EXC_IC:
-	case OP_COND_EXC_INC:
-		fprintf(stderr, "unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
-			  mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
-		//NOT_IMPLEMENTED;
-		break;
-
 	default:
 		/* The conditional branch was removed due to [some] dead-code
-		   elimination, so we can replace this comparison by a nop. */
+		   elimination, so we can replace safely this comparison with a nop. */
 		inst->opcode = OP_NOP;
 	}
 }
@@ -2629,7 +2616,13 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				decompose_op_offset2base(cfg, basic_block, new_inst, 0);
 				new_inst->opcode = OP_SH4_LOADI4;
 			}
+			break;
 
+		case OP_COND_EXC_IC:
+		case OP_COND_EXC_C:
+			/* The T-bit is [already] the carry. */
+			inst->backend.data = (gpointer)-1;
+			inst->opcode = OP_SH4_BT;
 			break;
 
 		default:
@@ -3559,18 +3552,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		/* Not yet supported. */
-		case OP_COND_EXC_OV:	/* MD: cond_exc_ov: len:0 */
-		case OP_COND_EXC_NO:	/* MD: cond_exc_no: len:0 */
-		case OP_COND_EXC_C:	/* MD: cond_exc_c: len:0 */
-		case OP_COND_EXC_NC:	/* MD: cond_exc_nc: len:0 */
 		case OP_COND_EXC_IOV:	/* MD: cond_exc_iov: len:0 */
-		case OP_COND_EXC_INO:	/* MD: cond_exc_ino: len:0 */
-		case OP_COND_EXC_IC:	/* MD: cond_exc_ic: len:0 */
-		case OP_COND_EXC_INC:	/* MD: cond_exc_inc: len:0 */
+		case OP_COND_EXC_OV:	/* MD: cond_exc_ov: len:0 */
 
-		/* These opcodes are missing for basic.cs. */
-		case OP_IMUL_OVF:	 /* MD: int_mul_ovf: dest:i src1:i src2:i len:0 */
-		case OP_IMUL_OVF_UN:	 /* MD: int_mul_ovf_un: dest:i src1:i src2:i len:0 */
+		case OP_COND_EXC_INO:	/* MD: cond_exc_ino: len:0 */
+		case OP_COND_EXC_NO:	/* MD: cond_exc_no: len:0 */
+
+		case OP_COND_EXC_INC:	/* MD: cond_exc_inc: len:0 */
+		case OP_COND_EXC_NC:	/* MD: cond_exc_nc: len:0 */
 
 		/* These opcodes are missing for iltests.il. */
 		case OP_LOCALLOC_IMM:	 /* MD: localloc_imm: dest:i len:0 */

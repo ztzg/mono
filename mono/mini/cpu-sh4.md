@@ -178,16 +178,12 @@ storer8_membase_reg: dest:b src1:f len:16
 loadr8_membase: dest:f src1:b len:16
 storer4_membase_reg: dest:b src1:f len:18
 loadr4_membase: dest:f src1:b len:18
-cond_exc_ov: len:0
-cond_exc_no: len:0
-cond_exc_c: len:0
-cond_exc_nc: len:0
 cond_exc_iov: len:0
+cond_exc_ov: len:0
 cond_exc_ino: len:0
-cond_exc_ic: len:0
+cond_exc_no: len:0
 cond_exc_inc: len:0
-int_mul_ovf: dest:i src1:i src2:i len:0
-int_mul_ovf_un: dest:i src1:i src2:i len:0
+cond_exc_nc: len:0
 localloc_imm: dest:i len:0
 ckfinite: dest:f src1:f len:0
 jmp: len:0

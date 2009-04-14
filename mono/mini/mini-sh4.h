@@ -77,9 +77,10 @@
 #define MONO_ARCH_EMULATE_CONV_R8_UN 1
 
 /*
- * If this macro is defined, the division opcodes will be emulated.
+ * If this macro is defined, the multiplication/division opcodes will be emulated.
  */
-#define MONO_ARCH_EMULATE_DIV 1
+#define MONO_ARCH_EMULATE_MUL_DIV 1
+#define MONO_ARCH_NEED_DIV_CHECK 1
 
 /*
  * If this macro is defined, the opcode to convert a double float to

@@ -1917,7 +1917,7 @@ class Tests {
 				exception = 1;
 			}
 		}
-		return 0;
+		return exception;
 	}
 
 	public static int test_1_ovf8 () {
