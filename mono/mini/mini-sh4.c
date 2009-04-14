@@ -2757,12 +2757,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_ADDCC:
-			/* MD: addcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: addcc: clob:1 dest:i src1:i src2:i len:4 */
 			/* Fall through */
 		case OP_IADDCC:
-			/* MD: int_addcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: int_addcc: clob:1 dest:i src1:i src2:i len:4 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_addv(&buffer, inst->sreg2, inst->dreg);
+			sh4_clrt(&buffer);
+			sh4_addc(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_ADC:
@@ -2781,12 +2782,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SUBCC:
-			/* MD: subcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: subcc: clob:1 dest:i src1:i src2:i len:4 */
 			/* Fall through */
 		case OP_ISUBCC:
-			/* MD: int_subcc: clob:1 dest:i src1:i src2:i len:2 */
+			/* MD: int_subcc: clob:1 dest:i src1:i src2:i len:4 */
 			g_assert(inst->sreg1 == inst->dreg);
-			sh4_subv(&buffer, inst->sreg2, inst->dreg);
+			sh4_clrt(&buffer);
+			sh4_subc(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_SBB:
