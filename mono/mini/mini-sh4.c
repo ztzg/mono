@@ -2580,6 +2580,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 			break;
 
+		case OP_FCALL_MEMBASE:
 		case OP_VCALL_MEMBASE:
 		case OP_VCALL2_MEMBASE:
 		case OP_VOIDCALL_MEMBASE:
@@ -2599,14 +2600,24 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			inst->sreg1 = new_inst->dreg;
 
 			/* Convert call*_membase to call*_reg. */
-			if ((inst->opcode == OP_VOIDCALL_MEMBASE) ||
-			    (inst->opcode == OP_VCALL_MEMBASE) ||
-			    (inst->opcode == OP_VCALL2_MEMBASE))
+			/* TODO - CV: replace this ugly code with something like:
+			   inst->opcode = call_membase2reg[inst->opcode]; */
+			switch (inst->opcode) {
+			case OP_VOIDCALL_MEMBASE:
+			case OP_VCALL_MEMBASE:
+			case OP_VCALL2_MEMBASE:
 				inst->opcode = OP_VOIDCALL_REG;
-			else if (inst->opcode == OP_LCALL_MEMBASE)
+				break;
+			case OP_LCALL_MEMBASE:
 				inst->opcode = OP_LCALL_REG;
-			else
+				break;
+			case OP_FCALL_MEMBASE:
+				inst->opcode = OP_FCALL_REG;
+				break;
+			default:
 				inst->opcode = OP_CALL_REG;
+				break;
+			}
 
 			/* See comment about OP_SH4_LOAD*. */
 			if (SH4_CHECK_RANGE_movl_dispRy(new_inst->inst_offset)) {
@@ -3148,6 +3159,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				free_args_area(cfg, &buffer, call);
 			break;
 
+		case OP_FCALL_REG:
+			/* MD: fcall_reg: dest:y src1:i clob:c len:18 */
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:18 */
 		case OP_LCALL_REG:
