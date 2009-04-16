@@ -11,7 +11,7 @@
 MCS=mcs
 RUNTIME=mono
 
-trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world trivial-double_float trivial-unboxing trivial-return_struct
+trivial-tests: trivial-return_int trivial-add_int trivial-fibonacci trivial-outarg trivial-outarg2 trivial-virtual trivial-load_store trivial-compare trivial-switch trivial-exception trivial-exception2 trivial-long trivial-hello_world trivial-double_float trivial-unboxing trivial-return_struct trivial-pass_struct
 
 trivial-%.exe: trivial-%.cs
 	$(MCS) -out:$@ $<
@@ -120,3 +120,10 @@ trivial-return_struct: trivial-return_struct.exe
 	$(RUNTIME) $< x x ; test $$? = 5
 	$(RUNTIME) $< x x x; test $$? = 6
 	$(RUNTIME) $< x x x x; test $$? = 7
+
+trivial-pass_struct: trivial-pass_struct.exe
+	$(RUNTIME) $< ; test $$? = 26
+	$(RUNTIME) $< x ; test $$? = 28
+	$(RUNTIME) $< x x ; test $$? = 30
+	$(RUNTIME) $< x x x; test $$? = 32
+	$(RUNTIME) $< x x x x; test $$? = 34

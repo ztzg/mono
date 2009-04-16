@@ -387,12 +387,10 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 			}
 		/* else fall through. */
 		case MONO_TYPE_VALUETYPE:
-			NOT_IMPLEMENTED;
 			add_valuetype(cfg, context, signature, signature->params[i], arg_info, &stack_size);
 			break;
 
 		case MONO_TYPE_TYPEDBYREF:
-			NOT_IMPLEMENTED;
 			size = sizeof(MonoTypedRef);
 			arg_info->type    = typedbyref;
 			arg_info->size    = size;
@@ -457,6 +455,51 @@ static inline void emit_signature_cookie2(MonoCompile *cfg, MonoCallInst *call)
 }
 
 /**
+ * Satellite routine of mono_arch_emit_call for value type and
+ * "typedbyref" arguments.
+ */
+static guint32 mono_emit_call_struct(MonoCompile *cfg, MonoCallInst *call,
+				     struct arg_info *arg_info, guint32 index)
+{
+	MonoMethodSignature *signature;
+	MonoInst *in;
+	MonoInst *arg;
+	guint32 size;
+	guint32 align;
+
+	in = call->args[index];
+	g_assert (in->klass);
+
+	signature = call->signature;
+
+	if (arg_info->type==typedbyref) {
+		size  = sizeof (MonoTypedRef);
+		align = sizeof(gpointer);
+	} else {
+		size = mini_type_stack_size_full(cfg->generic_sharing_context,
+						&in->klass->byval_arg, &align,
+						signature->pinvoke);
+	}
+
+	if(size>0) {
+		MONO_INST_NEW(cfg,arg,OP_OUTARG_VT);
+		arg->sreg1 = in->dreg;
+		arg->klass = in->klass;
+		arg->backend.size = size;
+		arg->inst_p0 = call;
+		arg->inst_p1 = mono_mempool_alloc (cfg->mempool, sizeof (struct arg_info));
+		memcpy (arg->inst_p1, arg_info, sizeof (struct arg_info));
+		MONO_ADD_INS (cfg->cbb, arg);
+	}
+
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("emit_call_struct - size => %d, ", size);
+
+	return size;
+}
+
+
+/**
  * Take the arguments and generate the Mono instructions in an
  * arch-specific way to properly call the function.
  *
@@ -513,7 +556,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 		if (i >= signature->hasthis &&
 		    MONO_TYPE_ISSTRUCT(signature->params[i - signature->hasthis])) {
-			NOT_IMPLEMENTED;
+			/* Currently structures are always passed onto the stack */
 			continue;
 		}
 
@@ -612,6 +655,13 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		if (flag_i && flag_f)
 			break;
 
+		if (j >= signature->hasthis &&
+		    MONO_TYPE_ISSTRUCT(signature->params[j - signature->hasthis])) {
+			/* Currently structures are always passed onto the stack */
+			call->stack_usage += mono_emit_call_struct(cfg,call,arg_info,j);
+			continue;
+		}
+
 		/* Arguments passed by reference are already handled in get_call_info(). */
 		switch (arg_info->type) {
 		case integer32:
@@ -656,11 +706,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 				MONO_ADD_INS(cfg->cbb, arg);
 				call->stack_usage += 8;
 			}
-			break;
-
-		case valuetype:		/* Fall through */
-		case typedbyref:
-			NOT_IMPLEMENTED;
 			break;
 
 		default:
@@ -1075,6 +1120,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	guint8 *buffer = NULL;
 	int saved_regs_size = 0;
 	int i = 0;
+	int j;
+	guint32 size_struct = 0;
+	guint32 nb_struct_on_stack = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
@@ -1087,13 +1135,41 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 
-	/* Allocate buffer memory. Each time you modifiy this prolog
+	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
+
+	/* Allocate buffer memory. Each time you modify this prolog
 	 * please modify the code size accordingly, or debugging is
-	 * going to be painful! */
-	cfg->code_size = 6 + 46 + 80 + signature->param_count * 10;
+	 * going to be painful!
+	 * Note that we're very pessimistic here. */
+	cfg->code_size = 0;
+	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
+		struct arg_info *arg_info = &call_info->args[i];
+		MonoInst *inst = cfg->args[i];
+
+		if(inst->opcode != OP_REGVAR &&
+		   arg_info->storage == onto_stack &&
+		  (arg_info->type == valuetype ||
+		   arg_info->type == typedbyref)) {
+
+			size_struct = ALIGN_TO(arg_info->size, 0x4);
+			cfg->code_size += (size_struct/4) * 32;
+			nb_struct_on_stack++;
+		}
+	}
+
+	cfg->code_size += 52 + (signature->param_count + signature->hasthis - nb_struct_on_stack) * 64;
+	if(cfg->method->save_lmf != 0)
+		cfg->code_size += 116;
+
 	buffer = cfg->native_code = g_malloc(cfg->code_size);
 
-	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("max prolog size %d, param_count %d, lmf %d, hasthis %d\n",
+			cfg->code_size,
+			signature->param_count,
+			cfg->method->save_lmf,
+			signature->hasthis);
+
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1292,8 +1368,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 				case typedbyref:	/* Always onto the stack currently */
 				case valuetype:		/* Always onto the stack currently */
-					NOT_IMPLEMENTED;
-					break;
 				case none:
 				default:
 					g_assert_not_reached();
@@ -1304,25 +1378,41 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			/* ... and was already onto the stack. */
 			case onto_stack:
 				offset = saved_regs_size + arg_info->offset;
+
+				/* In the following sequences of code, we need a temporary
+				 * register. We can't use r3 (aka sh4_temp) since it
+				 * might be used in sequences generated by sh4_base_load
+				 * and sh4_base_store. We've decided to use sh4_r0.
+				 * Since we're in the prolog there's no danger to break
+				 * a live range: register allocation hasn't been activated yet.
+				 */
 				switch (arg_info->type) {
 				case integer32:
 				case float32:
-					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
-					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
+					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_r0);
+					sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
 				case float64:
 					/* TODO - CV: optimize this case. */
-					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_temp);
-					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset, sh4_fp);
-					sh4_base_load(NULL, &buffer, offset + 4, sh4_sp, sh4_temp);
-					sh4_base_store(NULL, &buffer, sh4_temp, inst->inst_offset + 4, sh4_fp);
+					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_r0);
+					sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset, sh4_fp);
+					sh4_base_load(NULL, &buffer, offset + 4, sh4_sp, sh4_r0);
+					sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case valuetype:
 				case typedbyref:
-					NOT_IMPLEMENTED;
+					/* This sequence of code is quite ugly and we should avoid to
+					 * generate it. We can think of different ways to get round
+					 * the problem but for the time being we heading towards the
+					 * the completion of the VM, not its optimization!*/
+					size_struct = ALIGN_TO(arg_info->size, 0x4);
+					for(j=0;j<size_struct;j+=4) {
+						sh4_base_load(NULL,&buffer, offset + j, sh4_sp,sh4_r0);
+						sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset + j, sh4_fp);
+					}
 					break;
 
 				case none:
