@@ -142,6 +142,7 @@ sh4_bt: len:18
 sh4_bf: len:18
 sh4_clrt: len:2
 sh4_negc: dest:i src1:i len:2
+sh4_tst: src1:i src2:i len:2
 int_not: dest:i src1:i len:2
 int_neg: dest:i src1:i len:2
 label: len:0
@@ -179,12 +180,6 @@ storer8_membase_reg: dest:b src1:f len:16
 loadr8_membase: dest:f src1:b len:16
 storer4_membase_reg: dest:b src1:f len:18
 loadr4_membase: dest:f src1:b len:18
-cond_exc_iov: len:0
-cond_exc_ov: len:0
-cond_exc_ino: len:0
-cond_exc_no: len:0
-cond_exc_inc: len:0
-cond_exc_nc: len:0
 localloc_imm: dest:i len:0
 ckfinite: dest:f src1:f len:0
 jmp: len:0

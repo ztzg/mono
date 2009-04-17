@@ -122,6 +122,12 @@
 #define MONO_ARCH_EMULATE_LONG_MUL_OPTS 1
 
 /*
+ * This macro is set when decomposition of some int operators is
+ * made in target specific parts of the backend.
+ */
+#define MONO_ARCH_HAVE_DECOMPOSE_OPTS 1
+
+/*
  * This macro is set when decomposition of long operators is
  * made in target specific parts of the backend.
  *

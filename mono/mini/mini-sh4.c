@@ -2329,7 +2329,11 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 #define register_not_assigned(reg) ((reg) < 0 || (reg) >= MONO_MAX_IREGS)
 
 	MONO_BB_FOR_EACH_INS_SAFE(basic_block, next_inst, inst) {
-		MonoInst *new_inst = NULL;
+		MonoInst *new_inst  = NULL;
+		MonoInst *new_inst2 = NULL;
+		MonoInst *new_inst3 = NULL;
+		MonoInst *new_inst4 = NULL;
+		MonoInst *new_inst5 = NULL;
 		gint32 tmp_reg;
 
 		switch (inst->opcode) {
@@ -2724,6 +2728,85 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* The T-bit is [already] the carry. */
 			inst->backend.data = (gpointer)-1;
 			inst->opcode = OP_SH4_BT;
+			break;
+
+		case OP_SH4_IADD_OVF:
+		case OP_SH4_IADC_OVF:
+			/*
+			 * Implement OVF condition for signed addition:
+			 *     overflow = sign(~(x ^ y) & (s ^ y)), with s = x + y
+			 * cf. Hacker's Delight, p.28
+			 */
+
+			if (inst->opcode == OP_SH4_IADD_OVF)
+				inst->opcode = OP_IADD;
+			else
+				inst->opcode = OP_IADC;
+
+			MONO_INST_NEW(cfg, new_inst, OP_IXOR);
+			new_inst->sreg1 = inst->sreg1;
+			new_inst->sreg2 = inst->sreg2;
+			new_inst->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+			MONO_INST_NEW(cfg, new_inst2, OP_INOT);
+			new_inst2->sreg1 = new_inst->dreg;
+			new_inst2->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+			MONO_INST_NEW(cfg, new_inst3, OP_IXOR);
+			new_inst3->sreg1 = inst->dreg;
+			new_inst3->sreg2 = inst->sreg2;
+			new_inst3->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+			MONO_INST_NEW(cfg, new_inst4, OP_IAND);
+			new_inst4->sreg1 = new_inst2->dreg;
+			new_inst4->sreg2 = new_inst3->dreg;
+			new_inst4->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
+			MONO_INST_NEW(cfg, new_inst5, OP_SH4_SHLL1);
+			new_inst5->sreg1 = new_inst4->dreg;
+			new_inst5->dreg  = new_inst4->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst4, new_inst5);
+			break;
+
+		case OP_SH4_ISUB_OVF:
+		case OP_SH4_ISBB_OVF:
+			/*
+			 * Implement OVF condition for signed subtraction:
+			 *     overflow = sign((x ^ y) & (d ^ x)), with d = x - y
+			 * cf. Hacker's Delight, p.28
+			 */
+
+			if (inst->opcode == OP_SH4_ISUB_OVF)
+				inst->opcode = OP_ISUB;
+			else
+				inst->opcode = OP_ISBB;
+
+			MONO_INST_NEW(cfg, new_inst, OP_IXOR);
+			new_inst->sreg1 = inst->sreg1;
+			new_inst->sreg2 = inst->sreg2;
+			new_inst->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+			MONO_INST_NEW(cfg, new_inst2, OP_IXOR);
+			new_inst2->sreg1 = inst->dreg;
+			new_inst2->sreg2 = inst->sreg1;
+			new_inst2->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+			MONO_INST_NEW(cfg, new_inst3, OP_IAND);
+			new_inst3->sreg1 = new_inst->dreg;
+			new_inst3->sreg2 = new_inst2->dreg;
+			new_inst3->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+			MONO_INST_NEW(cfg, new_inst4, OP_SH4_SHLL1);
+			new_inst4->sreg1 = new_inst3->dreg;
+			new_inst4->dreg  = new_inst3->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
 			break;
 
 		default:
@@ -3463,6 +3546,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_negc(&buffer, inst->sreg1, inst->dreg);
 			break;
 
+		case OP_SH4_TST:
+			/* MD: sh4_tst: src1:i src2:i len:2 */
+			sh4_tst(&buffer, inst->sreg1, inst->sreg2);
+			break;
+
 		case OP_INOT:
 			/* MD: int_not: dest:i src1:i len:2 */
 			sh4_not(&buffer, inst->sreg1, inst->dreg);
@@ -3653,16 +3741,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* TODO - CV: decomposable in the lowering pass? */
 			sh4_base_loadf32(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
-
-		/* Not yet supported. */
-		case OP_COND_EXC_IOV:	/* MD: cond_exc_iov: len:0 */
-		case OP_COND_EXC_OV:	/* MD: cond_exc_ov: len:0 */
-
-		case OP_COND_EXC_INO:	/* MD: cond_exc_ino: len:0 */
-		case OP_COND_EXC_NO:	/* MD: cond_exc_no: len:0 */
-
-		case OP_COND_EXC_INC:	/* MD: cond_exc_inc: len:0 */
-		case OP_COND_EXC_NC:	/* MD: cond_exc_nc: len:0 */
 
 		/* These opcodes are missing for iltests.il. */
 		case OP_LOCALLOC_IMM:	 /* MD: localloc_imm: dest:i len:0 */
@@ -3902,4 +3980,42 @@ void mono_arch_emit_outarg_vt(MonoCompile *cfg, MonoInst *inst, MonoInst *src)
 	mini_emit_memcpy(cfg, sh4_sp, 0, src->dreg, 0, size, 4);
 
 	return;
+}
+
+void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
+{
+	/* The macros MONO_EMIT_NEW_* use internally a variable named "inst",
+	   so do not use something like "inst->XXX" as parameter. */
+
+        switch (ins->opcode) {
+        case OP_IADD_OVF:
+                ins->opcode = OP_SH4_IADD_OVF;
+                MONO_EMIT_NEW_COND_EXC(cfg, IC, "OverflowException");
+                break;
+
+        case OP_ISUB_OVF:
+                ins->opcode = OP_SH4_ISUB_OVF;
+                MONO_EMIT_NEW_COND_EXC(cfg, IC, "OverflowException");
+                break;
+
+        case OP_LADD_OVF:
+		/* A long register N is splitted into two integer registers N+1, N+2. */
+                MONO_EMIT_NEW_BIALU(cfg, OP_IADDCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
+                MONO_EMIT_NEW_BIALU(cfg, OP_SH4_IADC_OVF, ins->dreg + 2, ins->sreg1 + 2, ins->sreg2 + 2);
+                MONO_EMIT_NEW_COND_EXC(cfg, IC, "OverflowException");
+                ins->opcode = OP_NOP;
+                break;
+
+        case OP_LSUB_OVF:
+		/* A long register N is splitted into two integer registers N+1, N+2. */
+                MONO_EMIT_NEW_BIALU(cfg, OP_ISUBCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
+                MONO_EMIT_NEW_BIALU(cfg, OP_SH4_ISBB_OVF, ins->dreg + 2, ins->sreg1 + 2, ins->sreg2 + 2);
+                MONO_EMIT_NEW_COND_EXC(cfg, IC, "OverflowException");
+                ins->opcode = OP_NOP;
+                break;
+
+        default:
+                return;
+        }
+
 }
