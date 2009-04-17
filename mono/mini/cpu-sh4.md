@@ -162,6 +162,7 @@ r8const: dest:f clob:z len:24
 r4const: dest:f clob:z len:20
 int_conv_to_r4: dest:f src1:i len:4
 int_conv_to_r8: dest:f src1:i len:4
+float_conv_to_i: dest:i src1:f len:4
 float_conv_to_i4: dest:i src1:f len:4
 float_conv_to_i2: dest:i src1:f len:6
 float_conv_to_u2: dest:i src1:f len:6
@@ -184,4 +185,3 @@ localloc_imm: dest:i len:0
 ckfinite: dest:f src1:f len:0
 jmp: len:0
 long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0
-float_conv_to_i: dest:i src1:f len:0

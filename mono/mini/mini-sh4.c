@@ -3654,6 +3654,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_float_FPUL_double(&buffer, inst->dreg);
 			break;
 
+		case OP_FCONV_TO_I:
+			/* MD: float_conv_to_i: dest:i src1:f len:4 */
 		case OP_FCONV_TO_I4:
 			/* MD: float_conv_to_i4: dest:i src1:f len:4 */
 			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
@@ -3749,7 +3751,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		/* These opcodes are missing for objects.cs. */
 		case OP_LCONV_TO_OVF_I4_2: /* MD: long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0 */
-		case OP_FCONV_TO_I:	   /* MD: float_conv_to_i: dest:i src1:f len:0 */
 
 			fprintf(stderr, "Method %s:%s opcode %s (0x%x) not yet implemented\n",
 				cfg->method->klass->name,
