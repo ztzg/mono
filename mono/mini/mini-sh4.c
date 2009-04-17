@@ -772,6 +772,14 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		break;
 
 	case MONO_TYPE_R4:
+		g_assert(method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
+		if (method->wrapper_type == MONO_WRAPPER_MANAGED_TO_NATIVE) {
+ 			MONO_INST_NEW(cfg, inst, OP_SH4_FCNVSD);
+			inst->sreg1 = result->dreg;
+			inst->dreg = result->dreg;
+			MONO_ADD_INS(cfg->cbb, inst);
+		}
+	/* Fall through */
 	case MONO_TYPE_R8:
 		MONO_EMIT_NEW_UNALU(cfg, OP_FMOVE, cfg->ret->dreg, result->dreg);
 		break;
@@ -3684,6 +3692,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_ftrc_double_FPUL(&buffer, inst->sreg1);
 			sh4_sts_FPUL(&buffer, inst->dreg);
 			sh4_extub(&buffer, inst->dreg, inst->dreg);
+			break;
+
+		case OP_SH4_FCNVSD: /* MD: sh4_fcnvsd: dest:f src1:f len:4 */
+			sh4_flds_FPUL(&buffer, inst->dreg);
+			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
 			break;
 
 		case OP_FCONV_TO_R4: /* MD: float_conv_to_r4: dest:f src1:f len:0 */

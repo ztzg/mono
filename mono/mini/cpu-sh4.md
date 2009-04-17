@@ -168,6 +168,7 @@ float_conv_to_i2: dest:i src1:f len:6
 float_conv_to_u2: dest:i src1:f len:6
 float_conv_to_i1: dest:i src1:f len:6
 float_conv_to_u1: dest:i src1:f len:6
+sh4_fcnvsd: dest:f src1:f len:4
 float_conv_to_r4: dest:f src1:f len:0
 float_conv_to_r8: dest:f src1:f len:0
 float_conv_to_i8: dest:l src1:f len:0
