@@ -2202,8 +2202,12 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 	}
 }
 
-static inline void convert_fcomparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
+static inline void convert_fcomparison_to_sh4(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst, MonoInst *next_inst)
 {
+	MonoInst *new_inst = NULL;
+	MonoInst *new_inst2 = NULL;
+	MonoInst *new_inst3 = NULL;
+	MonoInst *new_inst4 = NULL;
 	gint32 tmp_reg;
 
 	/* Trick used in output_basic_block(). */
@@ -2211,12 +2215,24 @@ static inline void convert_fcomparison_to_sh4(MonoInst *inst, MonoInst *next_ins
 
 	switch (next_inst->opcode) {
 	case OP_FBEQ:
+		/* (A FBEQ B) <=> (A SH4_CMPEQ B)*/
 		inst->opcode = OP_SH4_FCMPEQ;
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
-	case OP_FBGE_UN:
 	case OP_FBGE:
+		/* (A FBGE B) <=> ((A SH4_CMPEQ B) || (A SH4_CMPGT B)) */
+		inst->opcode = OP_SH4_FCMPEQ;
+		next_inst->opcode = OP_SH4_BT;
+
+		MONO_INST_NEW(cfg, new_inst, OP_SH4_FCMPGT);
+		new_inst->sreg1 = inst->sreg1;
+		new_inst->sreg2 = inst->sreg2;
+		mono_bblock_insert_after_ins(basic_block, next_inst, new_inst);
+		break;
+
+	case OP_FBGE_UN:
+		/* (A FBGE_UN B) <=> !(B SH4_CMPGT A) */
 		inst->opcode = OP_SH4_FCMPGT;
 		tmp_reg = inst->sreg1;
 		inst->sreg1 = inst->sreg2;
@@ -2224,28 +2240,94 @@ static inline void convert_fcomparison_to_sh4(MonoInst *inst, MonoInst *next_ins
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
-	case OP_FBGT_UN:
 	case OP_FBGT:
+		/* (A FBGT B) <=> (A SH4_CMPGT B) */
 		inst->opcode = OP_SH4_FCMPGT;
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
-	case OP_FBLE_UN:
+	case OP_FBGT_UN:
+		/* (A FBGT_UN B) <=> !((A SH4_CMPEQ B) || (B SH4_CMPGT A))
+		                 <=> (!(A SH4_CMPEQ B) && !(B SH4_CMPGT A)) */
+		inst->opcode = OP_SH4_FCMPEQ;
+
+		MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+		new_inst->dreg = mono_alloc_ireg(cfg);
+		mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+		MONO_INST_NEW(cfg, new_inst2, OP_SH4_FCMPGT);
+		new_inst2->sreg1 = inst->sreg2;
+		new_inst2->sreg2 = inst->sreg1;
+		mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+		MONO_INST_NEW(cfg, new_inst3, OP_SH4_ROTCL);
+		new_inst3->sreg1 = new_inst->dreg;
+		new_inst3->dreg  = new_inst->dreg;
+		mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+		MONO_INST_NEW(cfg, new_inst4, OP_SH4_TST);
+		new_inst4->sreg1 = new_inst->dreg;
+		new_inst4->sreg2 = new_inst->dreg;
+		mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
 	case OP_FBLE:
+		/* (A FBLE B) <=> ((A SH4_CMPEQ B) || (B SH4_CMPGT A)) */
+		inst->opcode = OP_SH4_FCMPEQ;
+		next_inst->opcode = OP_SH4_BT;
+
+		MONO_INST_NEW(cfg, new_inst, OP_SH4_FCMPGT);
+		new_inst->sreg1 = inst->sreg2;
+		new_inst->sreg2 = inst->sreg1;
+		mono_bblock_insert_after_ins(basic_block, next_inst, new_inst);
+		break;
+
+	case OP_FBLE_UN:
+		/* (A FBLE_UN B) <=> !(A SH4_CMPGT B) */
 		inst->opcode = OP_SH4_FCMPGT;
 		next_inst->opcode = OP_SH4_BF;
 		break;
 
-	case OP_FBLT_UN:
 	case OP_FBLT:
+		/* (A FBLT B) <=> (B SH4_CMPGT A) */
 		inst->opcode = OP_SH4_FCMPGT;
 		tmp_reg = inst->sreg1;
 		inst->sreg1 = inst->sreg2;
 		inst->sreg2 = tmp_reg;
+		next_inst->opcode = OP_SH4_BT;
+		break;
+
+	case OP_FBLT_UN:
+		/* (A FBLT B) <=> !((A SH4_CMPEQ B) || (A SH4_CMPGT B))
+		              <=> (!(A SH4_CMPEQ B) && !(A SH4_CMPGT B)) */
+		inst->opcode = OP_SH4_FCMPEQ;
+
+		MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+		new_inst->dreg = mono_alloc_ireg(cfg);
+		mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+		MONO_INST_NEW(cfg, new_inst2, OP_SH4_FCMPGT);
+		new_inst2->sreg1 = inst->sreg1;
+		new_inst2->sreg2 = inst->sreg2;
+		mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+		MONO_INST_NEW(cfg, new_inst3, OP_SH4_ROTCL);
+		new_inst3->sreg1 = new_inst->dreg;
+		new_inst3->dreg  = new_inst->dreg;
+		mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+		MONO_INST_NEW(cfg, new_inst4, OP_SH4_TST);
+		new_inst4->sreg1 = new_inst->dreg;
+		new_inst4->sreg2 = new_inst->dreg;
+		mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
 		next_inst->opcode = OP_SH4_BT;
 		break;
 
 	case OP_FBNE_UN:
+		/* (A FBNE_UN B) <=> !(A SH4_CMPEQ B) */
 		inst->opcode = OP_SH4_FCMPEQ;
 		next_inst->opcode = OP_SH4_BF;
 		break;
@@ -2355,7 +2437,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_FCOMPARE:
 			next_inst = inst->next;
 			g_assert(next_inst != NULL);
-			convert_fcomparison_to_sh4(inst, next_inst);
+			convert_fcomparison_to_sh4(cfg, basic_block, inst, next_inst);
 			break;
 
 		case OP_FCEQ:
@@ -2366,15 +2448,39 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_FCGT:
-		case OP_FCGT_UN:
 			inst->opcode = OP_SH4_FCMPGT;
 			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
 			new_inst->dreg = inst->dreg;
 			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
 			break;
 
+		case OP_FCGT_UN:
+			inst->opcode = OP_SH4_FCMPEQ;
+			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+			new_inst->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+			MONO_INST_NEW(cfg, new_inst2, OP_SH4_FCMPGT);
+			new_inst2->sreg1 = inst->sreg2;
+			new_inst2->sreg2 = inst->sreg1;
+			mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+			MONO_INST_NEW(cfg, new_inst3, OP_SH4_ROTCL);
+			new_inst3->sreg1 = inst->dreg;
+			new_inst3->dreg  = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+			MONO_INST_NEW(cfg, new_inst4, OP_SH4_TST);
+			new_inst4->sreg1 = inst->dreg;
+			new_inst4->sreg2 = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
+			MONO_INST_NEW(cfg, new_inst5, OP_SH4_MOVT);
+			new_inst5->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst4, new_inst5);
+			break;
+
 		case OP_FCLT:
-		case OP_FCLT_UN:
 			inst->opcode = OP_SH4_FCMPGT;
 			tmp_reg = inst->sreg1;
 			inst->sreg1 = inst->sreg2;
@@ -2382,6 +2488,32 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
 			new_inst->dreg = inst->dreg;
 			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+			break;
+
+		case OP_FCLT_UN:
+			inst->opcode = OP_SH4_FCMPEQ;
+			MONO_INST_NEW(cfg, new_inst, OP_SH4_MOVT);
+			new_inst->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+			MONO_INST_NEW(cfg, new_inst2, OP_SH4_FCMPGT);
+			new_inst2->sreg1 = inst->sreg1;
+			new_inst2->sreg2 = inst->sreg2;
+			mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+			MONO_INST_NEW(cfg, new_inst3, OP_SH4_ROTCL);
+			new_inst3->sreg1 = inst->dreg;
+			new_inst3->dreg  = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+			MONO_INST_NEW(cfg, new_inst4, OP_SH4_TST);
+			new_inst4->sreg1 = inst->dreg;
+			new_inst4->sreg2 = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
+			MONO_INST_NEW(cfg, new_inst5, OP_SH4_MOVT);
+			new_inst5->dreg = inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst4, new_inst5);
 			break;
 
 		case OP_COMPARE_IMM:
@@ -3552,6 +3684,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_SH4_NEGC:
 			/* MD: sh4_negc: dest:i src1:i len:2 */
 			sh4_negc(&buffer, inst->sreg1, inst->dreg);
+			break;
+
+		case OP_SH4_ROTCL:
+			/* MD: sh4_rotcl: dest:i src1:i len:2 clob:1 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_rotcl(&buffer, inst->dreg);
 			break;
 
 		case OP_SH4_TST:

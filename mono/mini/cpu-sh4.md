@@ -142,6 +142,7 @@ sh4_bt: len:18
 sh4_bf: len:18
 sh4_clrt: len:2
 sh4_negc: dest:i src1:i len:2
+sh4_rotcl: dest:i src1:i len:2 clob:1
 sh4_tst: src1:i src2:i len:2
 int_not: dest:i src1:i len:2
 int_neg: dest:i src1:i len:2

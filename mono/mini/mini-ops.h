@@ -1264,4 +1264,5 @@ MINI_OP(OP_SH4_ISUB_OVF,		"sh4_isub_ovf",			IREG, IREG, IREG)
 MINI_OP(OP_SH4_IADC_OVF,		"sh4_iadc_ovf",			IREG, IREG, IREG)
 MINI_OP(OP_SH4_ISBB_OVF,		"sh4_isbb_ovf",			IREG, IREG, IREG)
 MINI_OP(OP_SH4_FCNVSD,			"sh4_fcnvsd",			FREG, FREG, NONE)
+MINI_OP(OP_SH4_ROTCL,			"sh4_rotcl",			IREG, IREG, NONE)
 #endif
