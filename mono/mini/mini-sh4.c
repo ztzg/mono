@@ -145,7 +145,7 @@ static void add_valuetype(MonoCompile *cfg, MonoGenericSharingContext *context, 
 	else
 		size = mini_type_stack_size(context, &klass->byval_arg, NULL);
 
-	size = ALIGN_TO(size,0x4);
+	size = ALIGN_TO(size, 0x4);
 
 	arg_info->type    = valuetype;
 	arg_info->storage = onto_stack;
@@ -2390,6 +2390,70 @@ static inline void decompose_op_imm2reg(MonoCompile *cfg, MonoBasicBlock *basic_
 	inst->sreg1 = new_inst->dreg;
 }
 
+static void mono_sh4_decompose_localloc(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst,
+					SH4IntRegister dreg, SH4IntRegister size_reg)
+{
+	MonoInst *new_inst = NULL;
+
+	/* Substract the requested & aligned size to the SP. */
+	inst->opcode = OP_ISUB;
+	inst->sreg2  = size_reg;
+	inst->sreg1  = sh4_sp;
+	inst->dreg   = sh4_sp;
+
+	if ((inst->flags & MONO_INST_INIT) != 0) {
+		MONO_INST_NEW(cfg, new_inst, OP_SH4_BZERO4);
+		new_inst->inst_basereg  = sh4_sp;
+		new_inst->inst_indexreg = size_reg;
+		new_inst->dreg          = dreg;
+	}
+	else {
+		MONO_INST_NEW(cfg, new_inst, OP_MOVE);
+		new_inst->sreg1 = sh4_sp;
+		new_inst->dreg  = dreg;
+	}
+	mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+}
+
+static SH4IntRegister mono_sh4_decompose_align(MonoCompile *cfg, MonoBasicBlock *basic_block, MonoInst *inst,
+					       SH4IntRegister reg, int alignement)
+{
+	MonoInst *new_inst  = NULL;
+	MonoInst *new_inst2 = NULL;
+	MonoInst *new_inst3 = NULL;
+	MonoInst *new_inst4 = NULL;
+	MonoInst *new_inst5 = NULL;
+
+	MONO_INST_NEW(cfg, new_inst, OP_MOVE);
+	new_inst->sreg1 = reg;
+	new_inst->dreg  = mono_alloc_ireg(cfg);
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst);
+
+	MONO_INST_NEW(cfg, new_inst2, OP_ICONST);
+	new_inst2->inst_c0 = (alignement - 1);
+	new_inst2->dreg    = mono_alloc_ireg(cfg);
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst2);
+
+	MONO_INST_NEW(cfg, new_inst3, OP_IADD);
+	new_inst3->sreg1 = new_inst->dreg;
+	new_inst3->sreg2 = new_inst2->dreg;
+	new_inst3->dreg  = new_inst->dreg;
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst3);
+
+	MONO_INST_NEW(cfg, new_inst4, OP_ICONST);
+	new_inst4->inst_c0 = ~(alignement - 1);
+	new_inst4->dreg    = mono_alloc_ireg(cfg);
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst4);
+
+	MONO_INST_NEW(cfg, new_inst5, OP_IAND);
+	new_inst5->sreg1 = new_inst->dreg;
+	new_inst5->sreg2 = new_inst4->dreg;
+	new_inst5->dreg  = new_inst->dreg;
+	mono_bblock_insert_before_ins(basic_block, inst, new_inst5);
+
+	return new_inst->dreg;
+}
+
 /**
  * Decompose some generic opcodes to architecture-specific ones.
  *
@@ -2957,6 +3021,17 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
 			break;
 
+		case OP_LOCALLOC_IMM:
+			inst->inst_imm = ALIGN_TO(inst->inst_imm, 4);
+			decompose_op_imm2reg(cfg, basic_block, inst);
+			mono_sh4_decompose_localloc(cfg, basic_block, inst, inst->dreg, inst->sreg1);
+			break;
+
+		case OP_LOCALLOC:
+			tmp_reg = mono_sh4_decompose_align(cfg, basic_block, inst, inst->sreg1, 4);
+			mono_sh4_decompose_localloc(cfg, basic_block, inst, inst->dreg, tmp_reg);
+			break;
+
 		default:
 			break;
 		}
@@ -3010,6 +3085,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 {
 	MonoInst *inst = NULL;
 	guint8 *buffer = NULL;
+	guint8 *loop   = NULL;
 	MonoCallInst *call = NULL;
 	MonoJumpInfoType type;
 	gpointer target = NULL;
@@ -3762,9 +3838,29 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SETLRET:
-			/* MD: setlret: src1:i src2:i len:2 */
+			/* MD: setlret: src1:i src2:i len:0 */
 			g_assert(inst->sreg1 == sh4_r0);
 			g_assert(inst->sreg2 == sh4_r1);
+			break;
+
+		case OP_SH4_BZERO4:
+			/* MD: sh4_bzero4: dest:i src1:b src2:i len:18 */
+			g_assert(inst->dreg != inst->inst_basereg);
+
+			/* Setup the iterator at the top of the block to clean. */
+			sh4_mov(&buffer, inst->inst_basereg, sh4_temp);
+			sh4_add(&buffer, inst->inst_indexreg, sh4_temp);
+			sh4_mov(&buffer, sh4_temp, inst->dreg);
+
+			sh4_mov_imm(&buffer, 0, sh4_temp);
+
+			/* Iterate down until dreg <= basereg */
+			loop = buffer;
+			sh4_cmphi(&buffer, inst->inst_basereg, inst->dreg);
+			sh4_bf_label(&buffer, buffer + 6); /* dreg > basereg ? */
+				sh4_movl_decRx(&buffer, sh4_temp, inst->dreg);
+			sh4_bra_label(&buffer, loop);
+			sh4_nop(&buffer);
 			break;
 
 		case OP_FMOVE:
@@ -3904,7 +4000,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		/* These opcodes are missing for iltests.il. */
-		case OP_LOCALLOC_IMM:	 /* MD: localloc_imm: dest:i len:0 */
 		case OP_CKFINITE:	 /* MD: ckfinite: dest:f src1:f len:0 */
 		case OP_JMP:	 	 /* MD: jmp: len:0 */
 

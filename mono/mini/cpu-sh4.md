@@ -157,7 +157,8 @@ not_null: len:0
 not_reached: len:2
 break: len:2
 jump_table: dest:i len:12
-setlret: src1:i src2:i len:2
+setlret: src1:i src2:i len:0
+sh4_bzero4: dest:i src1:b src2:i len:18
 fmove: dest:f src1:f len:4
 r8const: dest:f clob:z len:24
 r4const: dest:f clob:z len:20
@@ -183,7 +184,6 @@ storer8_membase_reg: dest:b src1:f len:16
 loadr8_membase: dest:f src1:b len:16
 storer4_membase_reg: dest:b src1:f len:18
 loadr4_membase: dest:f src1:b len:18
-localloc_imm: dest:i len:0
 ckfinite: dest:f src1:f len:0
 jmp: len:0
 long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0
