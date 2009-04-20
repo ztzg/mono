@@ -2229,6 +2229,10 @@ static inline void convert_fcomparison_to_sh4(MonoCompile *cfg, MonoBasicBlock *
 		new_inst->sreg1 = inst->sreg1;
 		new_inst->sreg2 = inst->sreg2;
 		mono_bblock_insert_after_ins(basic_block, next_inst, new_inst);
+
+		MONO_INST_NEW(cfg, new_inst2, OP_SH4_BT);
+		memcpy(new_inst2, next_inst, sizeof(MonoInst));
+		mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
 		break;
 
 	case OP_FBGE_UN:
@@ -2282,6 +2286,10 @@ static inline void convert_fcomparison_to_sh4(MonoCompile *cfg, MonoBasicBlock *
 		new_inst->sreg1 = inst->sreg2;
 		new_inst->sreg2 = inst->sreg1;
 		mono_bblock_insert_after_ins(basic_block, next_inst, new_inst);
+
+		MONO_INST_NEW(cfg, new_inst2, OP_SH4_BT);
+		memcpy(new_inst2, next_inst, sizeof(MonoInst));
+		mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
 		break;
 
 	case OP_FBLE_UN:
