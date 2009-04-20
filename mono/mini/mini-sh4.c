@@ -743,24 +743,6 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	case MONO_TYPE_VOID:
 		break;
 
-	case MONO_TYPE_BOOLEAN:
-	case MONO_TYPE_I:
-	case MONO_TYPE_U:
-	case MONO_TYPE_I1:
-	case MONO_TYPE_U1:
-	case MONO_TYPE_I2:
-	case MONO_TYPE_U2:
-	case MONO_TYPE_I4:
-	case MONO_TYPE_U4:
-	case MONO_TYPE_OBJECT:
-	case MONO_TYPE_STRING:
-	case MONO_TYPE_CLASS:
-	case MONO_TYPE_SZARRAY:
-	case MONO_TYPE_PTR:
-	case MONO_TYPE_CHAR:
-		MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
-		break;
-
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
 		/* A long register N is splitted into two integer registers N+1, N+2. */
@@ -785,8 +767,7 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		break;
 
 	default:
-		g_warning("return type '0x%x' not yet supported\n", ret->type);
-		NOT_IMPLEMENTED;
+		MONO_EMIT_NEW_UNALU(cfg, OP_MOVE, cfg->ret->dreg, result->dreg);
 		break;
 	}
 
@@ -3825,6 +3806,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
 			sh4_die(&buffer);
+			break;
+
+		case OP_MEMORY_BARRIER:
+			/* MD: memory_barrier: len:2 */
+#ifdef __SH4A__
+			sh4_synco(&buffer);
+#endif
 			break;
 
 		case OP_BREAK:
