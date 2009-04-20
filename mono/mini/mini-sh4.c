@@ -1792,19 +1792,8 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 
 void mono_arch_flush_icache(guint8 *code, gint size)
 {
-#define CACHE_BLOCK_LENGTH 32
-
-	guint32 start = (guint32)code;
-	guint32 end   = (guint32)code + size;
-	guint32 address = 0;
-
 	SH4_EXTRA_DEBUG("args => %p, %d", code, size);
-
-	for (address = start; address < end; address += MIN(CACHE_BLOCK_LENGTH, end - address)) {
-		syscall(__NR_cacheflush, address, CACHE_BLOCK_LENGTH, CACHEFLUSH_D_WB);
-		syscall(__NR_cacheflush, address, CACHE_BLOCK_LENGTH, CACHEFLUSH_I);
-	}
-
+	syscall(__NR_cacheflush, code, size, CACHEFLUSH_D_WB | CACHEFLUSH_I);
 	return;
 }
 
