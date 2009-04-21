@@ -78,6 +78,7 @@ sh4_shlr1: clob:1 dest:i src1:i len:2
 sh4_shlr2: clob:1 dest:i src1:i len:2
 sh4_shlr8: clob:1 dest:i src1:i len:2
 sh4_shlr16: clob:1 dest:i src1:i len:2
+sh4_shad: clob:1 dest:i src1:i src2:i len:2
 int_shl: clob:1 dest:i src1:i src2:i len:2
 int_shr_un: clob:1 dest:i src1:i src2:i len:4
 int_shr: clob:1 dest:i src1:i src2:i len:4
@@ -187,4 +188,3 @@ storer4_membase_reg: dest:b src1:f len:18
 loadr4_membase: dest:f src1:b len:18
 ckfinite: dest:f src1:f len:0
 jmp: len:0
-long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0

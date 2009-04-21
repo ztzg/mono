@@ -2466,6 +2466,8 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		MonoInst *new_inst3 = NULL;
 		MonoInst *new_inst4 = NULL;
 		MonoInst *new_inst5 = NULL;
+		MonoInst *new_inst6 = NULL;
+		MonoInst *new_inst7 = NULL;
 		gint32 tmp_reg;
 
 		switch (inst->opcode) {
@@ -2991,6 +2993,50 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
 			break;
 
+		case OP_LCONV_TO_OVF_I4_2:
+			/*
+			 * Implement OVF condition for int64 to int32 conversion:
+			 * if l = (high,low)
+			 *     overflow = (low >> 31) != high
+			 */
+			inst->opcode = OP_MOVE;
+
+			MONO_INST_NEW(cfg, new_inst, OP_ICONST);
+			new_inst->inst_c0 = (-1) << 5;
+			new_inst->dreg    = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+			MONO_INST_NEW(cfg, new_inst2, OP_SH4_SHAD);
+			new_inst2->sreg2 = new_inst->dreg;
+			new_inst2->sreg1 = inst->dreg;
+			new_inst2->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+			MONO_INST_NEW(cfg, new_inst3, OP_SH4_CMPEQ);
+			new_inst3->sreg1 = new_inst2->dreg;
+			new_inst3->sreg2 = inst->sreg2;
+			mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+			MONO_INST_NEW(cfg, new_inst4, OP_SH4_MOVT);
+			new_inst4->dreg = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
+			MONO_INST_NEW(cfg, new_inst5, OP_ICONST);
+			new_inst5->inst_c0 = 0;
+			new_inst5->dreg    = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst4, new_inst5);
+
+			MONO_INST_NEW(cfg, new_inst6, OP_SH4_CMPEQ);
+			new_inst6->sreg1 = new_inst4->dreg;
+			new_inst6->sreg2 = new_inst5->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst5, new_inst6);
+
+			MONO_INST_NEW(cfg, new_inst7, OP_SH4_BT);
+			new_inst7->backend.data = (gpointer)-1;
+			new_inst7->inst_p1      = (void *)"OverflowException";
+			mono_bblock_insert_after_ins(basic_block, new_inst6, new_inst7);
+			break;
+
 		case OP_LOCALLOC_IMM:
 			inst->inst_imm = ALIGN_TO(inst->inst_imm, 4);
 			decompose_op_imm2reg(cfg, basic_block, inst);
@@ -3024,17 +3070,16 @@ void mono_arch_decompose_long_opts(MonoCompile *cfg, MonoInst *long_inst)
 	/* Use of cfg->cbb in mono_decompose_long_opts is tricky and
 	 * explains why the macros hereafter work fine.
 	 */
-	if(long_inst->opcode == OP_LNEG) {
+	if (long_inst->opcode == OP_LNEG) {
 		MonoInst *new_inst;
 
-		MONO_INST_NEW((cfg),new_inst,OP_SH4_CLRT);	/* Reset carry */
-		MONO_ADD_INS((cfg)->cbb,new_inst);
-		MONO_EMIT_NEW_UNALU((cfg),OP_SH4_NEGC, long_inst->dreg + 1, long_inst->sreg1 + 1);
-		MONO_EMIT_NEW_UNALU((cfg),OP_SH4_NEGC, long_inst->dreg + 2, long_inst->sreg1 + 2);
+		MONO_INST_NEW(cfg, new_inst, OP_SH4_CLRT);	/* Reset carry */
+		MONO_ADD_INS(cfg->cbb, new_inst);
+		MONO_EMIT_NEW_UNALU(cfg, OP_SH4_NEGC, long_inst->dreg + 1, long_inst->sreg1 + 1);
+		MONO_EMIT_NEW_UNALU(cfg, OP_SH4_NEGC, long_inst->dreg + 2, long_inst->sreg1 + 2);
 
 		NULLIFY_INS(long_inst);
 	}
-
 	return;
 }
 
@@ -3262,6 +3307,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: sh4_shlr16: clob:1 dest:i src1:i len:2 */
 			g_assert(inst->sreg1 == inst->dreg);
 			sh4_shlr16(&buffer, inst->dreg);
+			break;
+
+		case OP_SH4_SHAD:
+			/* MD: sh4_shad: clob:1 dest:i src1:i src2:i len:2 */
+			g_assert(inst->sreg1 == inst->dreg);
+			sh4_shad(&buffer, inst->sreg2, inst->dreg);
 			break;
 
 		case OP_ISHL:
@@ -3980,9 +4031,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_CKFINITE:	 /* MD: ckfinite: dest:f src1:f len:0 */
 		case OP_JMP:	 	 /* MD: jmp: len:0 */
 
-		/* These opcodes are missing for objects.cs. */
-		case OP_LCONV_TO_OVF_I4_2: /* MD: long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:0 */
-
 			fprintf(stderr, "Method %s:%s opcode %s (0x%x) not yet implemented\n",
 				cfg->method->klass->name,
 				cfg->method->name,
@@ -4249,5 +4297,4 @@ void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
         default:
                 return;
         }
-
 }
