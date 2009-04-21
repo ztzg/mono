@@ -53,6 +53,7 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 	if (jit_info != NULL) {
 		int i = 0;
 		guint stack_offset = 0;
+		guint saved_regs   = 0;
 		guint16 *code = NULL;
 		guint32 *registers = NULL;
 
@@ -147,8 +148,8 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		SH4_EXTRA_DEBUG("registers: %p", registers);
 
 		/* Extract the previous value of PC. */
-		new_context->pc = *registers;
-		registers++;
+		new_context->pc = registers[saved_regs];
+		saved_regs++;
 
 		SH4_EXTRA_DEBUG("back pc: 0x%x -> 0x%x", context->pc, new_context->pc);
 
@@ -157,8 +158,8 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		for (i = MONO_MAX_FREGS - 1; i >= 0; i--) {
 			if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&
 			    (jit_info->used_fregs         & (1 << i)) != 0) {
-				new_context->fregisters[i] = *registers;
-				registers++;
+				new_context->fregisters[i] = registers[saved_regs];
+				saved_regs++;
 
 				SH4_EXTRA_DEBUG("back freg%d: 0x%x -> 0x%x", i, context->registers[i], new_context->registers[i]);
 			}
@@ -172,14 +173,20 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		for (i = MONO_MAX_IREGS - 1; i >= 0; i--) {
 			if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0 &&
 			    (jit_info->used_regs         & (1 << i)) != 0) {
-				new_context->registers[i] = *registers;
-				registers++;
+				new_context->registers[i] = registers[saved_regs];
+				saved_regs++;
 
 				SH4_EXTRA_DEBUG("back reg%d: 0x%x -> 0x%x", i, context->registers[i], new_context->registers[i]);
 			}
 			else
 				new_context->registers[i] = context->registers[i];
 		}
+
+		/* Extract the previous value of SP.
+		   TODO - CV: pop arguments off the stack */
+		new_context->registers[sh4_sp] = context->registers[sh4_fp] + stack_offset + saved_regs * 4;
+
+		SH4_EXTRA_DEBUG("back sp: 0x%x -> 0x%x", context->registers[sh4_sp], new_context->registers[sh4_sp]);
 
 		/* Remove any unused LMF. */
 		if (*lmf != NULL &&
