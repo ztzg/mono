@@ -617,7 +617,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 
 		default:
-			NOT_IMPLEMENTED;
 			g_assert_not_reached();
 			break;
 		}
@@ -709,7 +708,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 
 		default:
-			NOT_IMPLEMENTED;
 			g_assert_not_reached();
 			break;
 		}
@@ -1275,10 +1273,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 						sh4_mov(&buffer, arg_info->reg, inst->dreg);
 					break;
 
-				case integer64:
-					NOT_IMPLEMENTED;
-					break;
-
 				case float32:
 				case float64:
 					if (inst->dreg != arg_info->reg) {
@@ -1287,6 +1281,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					}
 					break;
 
+				case integer64:		/* Fall through - handled as 2 x integer32 */
 				case valuetype:		/* Fall through - always on the stack currently */
 				case typedbyref:	/* Fall through - always on the stack currently */
 				case none:
@@ -1304,10 +1299,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					sh4_base_load(NULL, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
-				case integer64:
-					NOT_IMPLEMENTED;
-					break;
-
 				case float32:
 					sh4_base_loadf32(NULL, &buffer, offset, sh4_sp, inst->dreg);
 					break;
@@ -1316,6 +1307,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					sh4_base_loadf64(NULL, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
+				case integer64:		/* Fall through - handled as 2 x integer32 */
 				case typedbyref:	/* Fall through - always on the stack currently */
 				case valuetype:		/* Fall through - always on the stack currently */
 				case none:
@@ -1725,7 +1717,7 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		for (i = 0; i < exceptions_count; i++) {
 			/* Reuse a throw sequence for the same exception class. */
 			if (classes[i] == class) {
-				NOT_IMPLEMENTED;
+				...
 				goto end_loop;
 			}
 		}
@@ -2313,7 +2305,7 @@ static inline void convert_fcomparison_to_sh4(MonoCompile *cfg, MonoBasicBlock *
 	default:
 		fprintf(stderr, "unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
 			mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
-		NOT_IMPLEMENTED;
+		g_assert_not_reached();
 		break;
 	}
 }
@@ -3973,11 +3965,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_FCONV_TO_R8: /* MD: float_conv_to_r8: dest:f src1:f len:0 */
 			break;
 
-		case OP_FCONV_TO_I8: /* MD: float_conv_to_i8: dest:l src1:f len:0 */
-		case OP_FCONV_TO_U8: /* MD: float_conv_to_u8: dest:l src1:f len:0 */
-			NOT_IMPLEMENTED;
-			break;
-
 		case OP_FADD:
 			/* MD: float_add: clob:1 dest:f src1:f src2:f len:2 */
 			sh4_fadd_double(&buffer, inst->sreg2, inst->dreg);
@@ -4128,7 +4115,7 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 			break;
 
 		default:
-			NOT_IMPLEMENTED;
+			g_assert_not_reached();
 			break;
 		}
 

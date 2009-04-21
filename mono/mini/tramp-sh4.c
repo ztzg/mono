@@ -72,7 +72,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
 	/* If possible, branch to the trampoline in an optimized way,
 	   that is, without the need of the constant pool. */
 	if (short_branch != 0) {
-		NOT_IMPLEMENTED;
+		g_assert_not_reached();
 		sh4_bra(&buffer, 0 /* Fake value. */);
 	} else {
 		/* Patch slot for : sh4_temp <- trampoline */
