@@ -9,7 +9,7 @@ cross_compiling=yes
 
 CC=sh4-linux-gcc
 CFLAGS="-O1 -g -Wall"
-CPPFLAGS=
+CPPFLAGS="-DTHREAD_LOCAL_ALLOC"
 LDFLAGS="-L${PWD}/eglib/src -L${PWD}/eglib/src/.libs"
 
 prefix=/home/compwork/vincent/WIP/Mono-SH4/sysroot-sh4
@@ -27,4 +27,4 @@ ac_cv_c_bigendian=no
 with_tls=__thread
 with_sigaltstack=no
 large_offt=no
-with_gc=none
+
