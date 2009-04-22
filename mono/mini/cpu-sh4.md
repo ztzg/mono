@@ -135,8 +135,8 @@ int_conv_to_u1: dest:i src1:i len:2
 int_conv_to_i2: dest:i src1:i len:2
 int_conv_to_u2: dest:i src1:i len:2
 start_handler: len:8
-endfilter: src1:z len:10
-endfinally: len:10
+endfilter: src1:z len:12
+endfinally: len:12
 br: len:16
 br_reg: src1:i len:4
 sh4_bt: len:18

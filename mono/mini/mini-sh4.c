@@ -3668,10 +3668,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		/* Restore the return address saved with the opcode "start_handler",
 		 * and return the value in "sreg1" if it is an "endfilter". */
 		case OP_ENDFILTER:
-			/* MD: endfilter: src1:z len:10 */
+			/* MD: endfilter: src1:z len:12 */
 			/* The local allocator will put the result into sh4_r0. */
 		case OP_ENDFINALLY:
-			/* MD: endfinally: len:10 */
+			/* MD: endfinally: len:12 */
 			spvar = mono_find_spvar_for_region(cfg, basic_block->region);
 			g_assert(spvar->inst_basereg == sh4_fp);
 
