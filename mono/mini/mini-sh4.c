@@ -297,20 +297,19 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 		}
 		/* else fall through. */
 	case MONO_TYPE_VALUETYPE:
+		/* We don't increase stack_size: stack allocation is done elsewhere. */
 		add_valuetype(cfg, context, signature, signature->ret, &call_info->ret, &size /* unused */);
 		/* SH4 ABI specifies register containing the @ of the aggregate. */
 		call_info->ret.reg = sh4_r2;
 		break;
 
 	case MONO_TYPE_TYPEDBYREF:
-		/* Something "à la" S390 looks better than options taken by others backends. */
+		/* Mechanism is very similar to MONO_TYPE_VALUETYPE. */
 		size = sizeof(MonoTypedRef);
 		call_info->ret.reg     = sh4_r2;
 		call_info->ret.type    = typedbyref;
 		call_info->ret.size    = size;
 		call_info->ret.storage = onto_stack;
-		call_info->ret.offset  = stack_size;
-		stack_size += ALIGN_TO(size, 4);
 		break;
 
 	default:
