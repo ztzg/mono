@@ -278,8 +278,9 @@ namespace System.Net
 			foreach (Cookie cookie in cookies) {
 				string domain = cookie.Domain;
 				string host = uri.Host;
-				if (!CheckDomain (domain, host))
-					continue;
+				//removed cookie domain check for incorrect forms authentication config
+				//if (!CheckDomain (domain, host))
+				//	continue;
 
 				if (cookie.Port != "" && cookie.Ports != null && uri.Port != -1) {
 					if (Array.IndexOf (cookie.Ports, uri.Port) == -1)
