@@ -186,5 +186,6 @@ storer8_membase_reg: dest:b src1:f len:16
 loadr8_membase: dest:f src1:b len:16
 storer4_membase_reg: dest:b src1:f len:18
 loadr4_membase: dest:f src1:b len:18
+tls_get: dest:i len:2
 ckfinite: dest:f src1:f len:0
 jmp: len:0

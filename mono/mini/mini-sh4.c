@@ -74,6 +74,8 @@ struct call_info {
 	struct arg_info *args;
 };
 
+static gint32 appdomain_tls_offset = -1;
+static gint32 thread_tls_offset    = -1;
 
 /* Prevent following arguments from being passed into registers */
 static inline void force_stack(SH4IntRegister *arg_reg)
@@ -1468,6 +1470,8 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		/* pseudo-code: MonoLMF.pc = %PC; */
 		sh4_movl_dispRx(&buffer, sh4_r0, offsetof(MonoLMF, pc), sh4_sp);
 
+		/* TODO - CV: optimization => use direct TLS access to "lmf_addr" when possible. */
+
 		/* Patch slot for : sh4_r0 <- mono_get_lmf_addr */
 		patch2 = buffer;
 		sh4_die(&buffer);
@@ -1843,13 +1847,6 @@ int mono_arch_get_argument_info(MonoMethodSignature *csig, int arg_count, MonoJi
 	return 0;
 }
 
-MonoInst *mono_arch_get_domain_intrinsic(MonoCompile* cfg)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
-}
-
 /**
  * Return a list of callee-saved registers (a.k.a global registers)
  * that can be used to allocate variables in the current method.
@@ -1883,10 +1880,30 @@ MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
 	return NULL;
 }
 
-MonoInst *mono_arch_get_thread_intrinsic(MonoCompile* cfg)
+MonoInst* mono_arch_get_domain_intrinsic(MonoCompile* cfg)
 {
-	/* TODO - CV */
+	MonoInst* ins;
+
 	return NULL;
+
+	if (appdomain_tls_offset == -1)
+		return NULL;
+
+	MONO_INST_NEW(cfg, ins, OP_TLS_GET);
+	ins->inst_offset = appdomain_tls_offset;
+	return ins;
+}
+
+MonoInst* mono_arch_get_thread_intrinsic(MonoCompile* cfg)
+{
+	MonoInst* ins;
+
+	if (thread_tls_offset == -1)
+		return NULL;
+
+	MONO_INST_NEW(cfg, ins, OP_TLS_GET);
+	ins->inst_offset = thread_tls_offset;
+	return ins;
 }
 
 /**
@@ -4059,6 +4076,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_base_loadf32(cfg, &buffer, inst->inst_offset, inst->inst_basereg, inst->dreg);
 			break;
 
+		case OP_TLS_GET:
+			/* MD: tls_get: dest:i len:2 */
+			sh4_die(&buffer); /* Not yet implemented. */
+			break;
+
 		/* These opcodes are missing for iltests.il. */
 		case OP_CKFINITE:	 /* MD: ckfinite: dest:f src1:f len:0 */
 		case OP_JMP:	 	 /* MD: jmp: len:0 */
@@ -4276,10 +4298,25 @@ const char *mono_arch_fregname(int reg)
 	return "unknown";
 }
 
-void mono_arch_setup_jit_tls_data(MonoJitTlsData *tls)
+void mono_arch_setup_jit_tls_data (MonoJitTlsData *tls)
 {
-	/* TODO - CV */
 	return;
+#if 0 /* Not yet implemented. */
+	static gboolean tls_offset_inited = FALSE;
+
+	if (tls_offset_inited == TRUE)
+		return;
+
+	tls_offset_inited = TRUE;
+
+	appdomain_tls_offset = mono_domain_get_tls_offset();
+	thread_tls_offset    = mono_thread_get_tls_offset();
+
+#  if 0 /* Optimization not yet implemented. */
+	lmf_tls_offset      = mono_get_lmf_tls_offset();
+	lmf_addr_tls_offset = mono_get_lmf_addr_tls_offset();
+#  endif
+#endif
 }
 
 /* Emits IR to push a vtype to the stack. */

@@ -110,6 +110,18 @@
 		"addi	%0,%0, " #var "@tprel@l\n" \
 	: "=r" (offset))
 #endif
+
+#elif defined(__SH4__)
+#	ifdef PIC
+#		ifdef PIC_INITIAL_EXEC
+#			error TLS model "initial-exec" not yet supported on SH4
+#		else
+#			error TLS model "local-dynamic" not yet supported on SH4
+#		endif
+#	else
+#		error TLS model "local-exec" not yet supported on SH4
+#	endif
+
 #else
 #define MONO_THREAD_VAR_OFFSET(var,offset) (offset) = -1
 #endif

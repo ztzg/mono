@@ -152,6 +152,11 @@
  */
 #define MONO_ARCH_FRAME_ALIGNMENT 32
 
+/* Not yet supported.
+#define MONO_ARCH_HAVE_TLS_GET 1
+#define MONO_ARCH_ENABLE_MONO_LMF_VAR 1
+*/
+
 /*
  * This macro is used to initialize the top LMF entry.
  * The register used to store the frame pointer has to be initialized to -1.
