@@ -170,6 +170,10 @@ static inline void add_float64_arg(SH4FloatRegister *arg_reg, guint32 *stack_siz
 
 	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
 
+	/* TODO - YV: comment! */
+	if ((*arg_reg & 0x1) == 0x1)
+		(*arg_reg) += 1;
+
 	/* "last_arg - 1" because the argument is either
 	   entirely into 2 registers, or entirely onto the stack. */
 	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG - 1) {
@@ -178,10 +182,6 @@ static inline void add_float64_arg(SH4FloatRegister *arg_reg, guint32 *stack_siz
 		(*arg_reg) += 2;
 	}
 	else {
-#if 0 /* TODO - CV: Maybe we have to do something like that when supporting PInvoke calls. */
-		if(*arg_reg == MONO_SH4_FREG_LAST_ARG)
-			arg_reg = MONO_SH4_FREG_LAST_ARG + 1;
-#endif
 		arg_info->storage = onto_stack;
 		(*stack_size) += 8;
 	}
@@ -202,10 +202,38 @@ static inline void add_float32_arg(SH4FloatRegister *arg_reg, guint32 *stack_siz
 	/* "last_arg - 1" because the argument is either
 	   entirely into 2 registers, or entirely onto the stack. */
 	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG - 1) {
-		/* TODO - CV: PInvoke support. */
 		arg_info->storage = into_register;
 		arg_info->reg = *arg_reg;
 		(*arg_reg) += 2;
+	}
+	else {
+		arg_info->storage = onto_stack;
+		(*stack_size) += 4;
+	}
+
+	SH4_EXTRA_DEBUG("arg_reg = %d", *arg_reg);
+	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
+}
+
+static inline void add_wrapper_float32_arg(SH4FloatRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
+{
+	arg_info->size = 4;
+	arg_info->type = float32;
+	arg_info->offset = *stack_size;
+
+	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
+
+	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG - 1) {
+		if ((*arg_reg & 0x1) == 0x0) {
+			arg_info->storage = into_register;
+			arg_info->reg = *arg_reg + 1;
+			(*arg_reg) += 1;
+		}
+		else if ((*arg_reg & 0x1) == 0x1) {
+			arg_info->storage = into_register;
+			arg_info->reg = *arg_reg - 1;
+			(*arg_reg) += 1;
+		}
 	}
 	else {
 		arg_info->storage = onto_stack;
@@ -372,9 +400,11 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 			break;
 
 		case MONO_TYPE_R4:
-			/* HK: TODO, handle pinvoke case */
-			g_assert(signature->pinvoke == 0);
-			add_float32_arg(&arg_freg, &stack_size, arg_info);
+			g_assert(cfg->method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
+			if (signature->pinvoke != 0)
+				add_wrapper_float32_arg(&arg_freg, &stack_size, arg_info);
+			else
+				add_float32_arg(&arg_freg, &stack_size, arg_info);
 			break;
 
 		case MONO_TYPE_R8:
@@ -476,7 +506,8 @@ static guint32 mono_emit_call_struct(MonoCompile *cfg, MonoCallInst *call,
 	if (arg_info->type==typedbyref) {
 		size  = sizeof (MonoTypedRef);
 		align = sizeof(gpointer);
-	} else {
+	}
+	else {
 		size = mini_type_stack_size_full(cfg->generic_sharing_context,
 						&in->klass->byval_arg, &align,
 						signature->pinvoke);
@@ -548,6 +579,8 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	for (i = 0; i < arg_count; i++) {
 		struct arg_info *arg_info = &(call_info->args[i]);
 		MonoInst *arg = NULL;
+		MonoInst *inst = NULL;
+		MonoInst *dummy_inst = NULL;
 
 		/* Emit the signature cookie just before the implicit arguments. */
 		if (sentinelpos == i &&
@@ -604,9 +637,43 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 
 		case float32:
-			/* HK: TODO, handle pinvoke case */
-			g_assert(signature->pinvoke == 0);
-			/* Fall through. */
+			if (!flag_f) {
+				g_assert(cfg->method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
+				if (signature->pinvoke != 0) {
+					MONO_INST_NEW(cfg, inst, OP_SH4_FCNVDS);
+					inst->sreg1 = call->args[i]->dreg;
+					inst->dreg  = mono_alloc_freg(cfg);
+					MONO_ADD_INS(cfg->cbb, inst);
+
+					if ((arg_info->reg & 0x1) == 0x1) {
+						MONO_INST_NEW(cfg, arg, OP_SH4_F32MOVEH);
+						arg->sreg1 = inst->dreg;
+						arg->dreg  = mono_alloc_freg(cfg);
+						mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg - 1, TRUE);
+						MONO_ADD_INS(cfg->cbb, arg);
+					}
+					else {
+						MONO_INST_NEW(cfg, arg, OP_SH4_F32MOVEL);
+						arg->sreg1 = inst->dreg;
+						arg->dreg  = mono_alloc_freg(cfg);
+						mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg + 1, TRUE);
+						MONO_ADD_INS(cfg->cbb, arg);
+					}
+
+					MONO_INST_NEW(cfg, dummy_inst, OP_SH4_DUMMY_FUSE);
+					dummy_inst->sreg1 = inst->sreg1;
+					MONO_ADD_INS(cfg->cbb, dummy_inst);
+				}
+				else {
+					MONO_INST_NEW(cfg, arg, OP_FMOVE);
+					arg->sreg1 = call->args[i]->dreg;
+					arg->dreg  = mono_alloc_freg(cfg);
+					mono_call_inst_add_outarg_reg(cfg, call, arg->dreg, arg_info->reg, TRUE);
+					MONO_ADD_INS(cfg->cbb, arg);
+				}
+			}
+			break;
+
 		case float64:
 			if (!flag_f) {
 				MONO_INST_NEW(cfg, arg, OP_FMOVE);
@@ -641,6 +708,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 	for (j = arg_count - 1; j >= 0; j--) {
 		struct arg_info *arg_info = &(call_info->args[j]);
 		MonoInst *arg = NULL;
+		MonoInst *inst = NULL;
 
 		/* Set flag_i (resp. flag_f) if the number of integer (resp. fp) parameters
 		   passed onto the stacked is reached */
@@ -689,13 +757,25 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			break;
 
 		case float32:
-			/* HK: TODO, handle pinvoke case */
-			g_assert(signature->pinvoke == 0);
 			if (!flag_f) {
-				MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_F32ARG);
-				arg->sreg1 = call->args[j]->dreg;
-				MONO_ADD_INS(cfg->cbb, arg);
-				call->stack_usage += 4;
+				g_assert(cfg->method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
+				if (signature->pinvoke != 0) {
+					MONO_INST_NEW(cfg, inst, OP_SH4_FCNVDS);
+					inst->sreg1 = call->args[j]->dreg;
+					inst->dreg = call->args[j]->dreg;
+					MONO_ADD_INS(cfg->cbb, inst);
+
+					MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_NATIVE_F32ARG);
+					arg->sreg1 = call->args[j]->dreg;
+					MONO_ADD_INS(cfg->cbb, arg);
+					call->stack_usage += 4;
+				}
+				else {
+					MONO_INST_NEW(cfg, arg, OP_SH4_PUSH_F32ARG);
+					arg->sreg1 = call->args[j]->dreg;
+					MONO_ADD_INS(cfg->cbb, arg);
+					call->stack_usage += 4;
+				}
 			}
 			break;
 
@@ -1085,16 +1165,16 @@ static inline void sh4_base_storef64(MonoCompile *cfg, guint8 **buffer, SH4Float
 {
 	sh4_add_offset2base(cfg, buffer, offset + 4, base, sh4_temp);
 
-	sh4_fmovs_indRx(buffer, src + 1, sh4_temp);
-	sh4_fmovs_decRx(buffer, src, sh4_temp);
+	sh4_fmovs_indRx(buffer, src, sh4_temp);
+	sh4_fmovs_decRx(buffer, src + 1, sh4_temp);
 }
 
 static inline void sh4_base_loadf64(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister dest)
 {
 	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
 
-	sh4_fmovs_incRy(buffer, sh4_temp, dest);
-	sh4_fmovs_indRy(buffer, sh4_temp, dest + 1);
+	sh4_fmovs_incRy(buffer, sh4_temp, dest + 1);
+	sh4_fmovs_indRy(buffer, sh4_temp, dest);
 }
 
 /**
@@ -3477,10 +3557,15 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_sp);
 			break;
 
+		case OP_SH4_PUSH_NATIVE_F32ARG:
+			/* MD: sh4_push_native_f32arg: src1:f len:2 */
+			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_sp);
+			break;
+
 		case OP_SH4_PUSH_F64ARG:
 			/* MD: sh4_push_f64arg: src1:f len:4 */
-			sh4_fmovs_decRx(&buffer, inst->sreg1 + 1, sh4_sp);
 			sh4_fmovs_decRx(&buffer, inst->sreg1, sh4_sp);
+			sh4_fmovs_decRx(&buffer, inst->sreg1 + 1, sh4_sp);
 			break;
 
 		case OP_SH4_STOREI1_MEMBASE_R0:
@@ -3893,7 +3978,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_NOP:		/* MD: nop: len:0 */
-		case OP_DUMMY_USE:	/* MD: dummy_use: len:0 */
+		case OP_DUMMY_USE:	/* MD: dummy_use: src1:i len:0 */
+		case OP_SH4_DUMMY_FUSE:	/* MD: sh4_dummy_fuse: src1:f len:0 */
 		case OP_DUMMY_STORE:	/* MD: dummy_store: len:0 */
 		case OP_NOT_NULL:	/* MD: not_null: len:0 */
 			break;
@@ -3951,6 +4037,18 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				sh4_fmov(&buffer, inst->sreg1, inst->dreg);
 				sh4_fmov(&buffer, inst->sreg1 + 1, inst->dreg + 1);
 			}
+			break;
+
+		case OP_SH4_F32MOVEH:
+			/* MD: sh4_f32moveh: dest:f src1:f len:2 */
+			if (inst->sreg1 != inst->dreg + 1)
+				sh4_fmov(&buffer, inst->sreg1, inst->dreg + 1);
+			break;
+
+		case OP_SH4_F32MOVEL:
+			/* MD: sh4_f32movel: dest:f src1:f len:2 */
+			if (inst->sreg1 != inst->dreg - 1)
+				sh4_fmov(&buffer, inst->sreg1, inst->dreg - 1);
 			break;
 
 		case OP_R8CONST:
@@ -4019,8 +4117,13 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_FCNVSD: /* MD: sh4_fcnvsd: dest:f src1:f len:4 */
-			sh4_flds_FPUL(&buffer, inst->dreg);
+			sh4_flds_FPUL(&buffer, inst->sreg1);
 			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
+			break;
+
+		case OP_SH4_FCNVDS: /* MD: sh4_fcnvds: dest:f src1:f len:4 */
+			sh4_fcnvds_double_FPUL(&buffer, inst->sreg1);
+			sh4_fsts_FPUL(&buffer, inst->dreg);
 			break;
 
 		case OP_FCONV_TO_R4: /* MD: float_conv_to_r4: dest:f src1:f len:0 */

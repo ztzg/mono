@@ -96,6 +96,7 @@ sh4_fcmpgt: src1:f src2:f len:2
 sh4_movt: dest:i len:2
 sh4_push_arg: src1:i len:2
 sh4_push_f32arg: src1:f len:6
+sh4_push_native_f32arg: src1:f len:2
 sh4_push_f64arg: src1:f len:4
 sh4_storei1_membase_R0: src1:z dest:b len:2
 sh4_storei1: src1:i dest:b len:2
@@ -154,7 +155,8 @@ checkthis: src1:b len:2
 store_membase_reg: dest:b src1:i len:16
 load_membase: dest:i src1:b len:16
 nop: len:0
-dummy_use: len:0
+dummy_use: src1:i len:0
+sh4_dummy_fuse: src1:f len:0
 dummy_store: len:0
 not_null: len:0
 not_reached: len:2
@@ -164,6 +166,8 @@ jump_table: dest:i len:12
 setlret: src1:i src2:i len:0
 sh4_bzero4: dest:i src1:b src2:i len:18
 fmove: dest:f src1:f len:4
+sh4_f32moveh: dest:f src1:f len:2
+sh4_f32movel: dest:f src1:f len:2
 r8const: dest:f clob:z len:24
 r4const: dest:f clob:z len:20
 int_conv_to_r4: dest:f src1:i len:4
@@ -175,6 +179,7 @@ float_conv_to_u2: dest:i src1:f len:6
 float_conv_to_i1: dest:i src1:f len:6
 float_conv_to_u1: dest:i src1:f len:6
 sh4_fcnvsd: dest:f src1:f len:4
+sh4_fcnvds: dest:f src1:f len:4
 float_conv_to_r4: dest:f src1:f len:0
 float_conv_to_r8: dest:f src1:f len:0
 float_add: clob:1 dest:f src1:f src2:f len:2

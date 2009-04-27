@@ -1761,7 +1761,11 @@ mono_local_regalloc (MonoCompile *cfg, MonoBasicBlock *bb)
 		}
 
 		/* Handle dreg==sreg1 */
+#ifdef __SH4__
+		if ((spec [MONO_INST_CLOB] == '1') && ins->dreg != ins->sreg1) {
+#else
 		if (((dreg_is_fp (spec) && sreg1_is_fp (spec)) || spec [MONO_INST_CLOB] == '1') && ins->dreg != ins->sreg1) {
+#endif
 			MonoInst *sreg2_copy = NULL;
 			MonoInst *copy;
 			int bank = reg_bank (spec_src1);
