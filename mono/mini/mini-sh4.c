@@ -3040,6 +3040,48 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			mono_sh4_decompose_localloc(cfg, basic_block, inst, inst->dreg, tmp_reg);
 			break;
 
+		case OP_CKFINITE:
+			/* Implement isfinite condition for a R8, that is:
+			 *
+			 *     isfinite(d) = !isnan(d) && !isinf(d)
+			 *                 = !isnan(d - d)
+			 *                 = ((d - d) == (d - d))
+			 *
+			 * Raise an ArithmeticException if this condition is not met. */
+
+			inst->opcode = OP_FMOVE;
+
+			MONO_INST_NEW(cfg, new_inst, OP_FSUB);
+			new_inst->sreg1 = inst->dreg;
+			new_inst->sreg2 = inst->dreg;
+			new_inst->dreg  = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, inst, new_inst);
+
+			MONO_INST_NEW(cfg, new_inst2, OP_SH4_FCMPEQ);
+			new_inst2->sreg1 = new_inst->dreg;
+			new_inst2->sreg2 = new_inst->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst, new_inst2);
+
+			MONO_INST_NEW(cfg, new_inst3, OP_SH4_MOVT);
+			new_inst3->dreg = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst2, new_inst3);
+
+			MONO_INST_NEW(cfg, new_inst4, OP_ICONST);
+			new_inst4->inst_c0 = 0;
+			new_inst4->dreg    = mono_alloc_ireg(cfg);
+			mono_bblock_insert_after_ins(basic_block, new_inst3, new_inst4);
+
+			MONO_INST_NEW(cfg, new_inst5, OP_SH4_CMPEQ);
+			new_inst5->sreg1 = new_inst3->dreg;
+			new_inst5->sreg2 = new_inst4->dreg;
+			mono_bblock_insert_after_ins(basic_block, new_inst4, new_inst5);
+
+			MONO_INST_NEW(cfg, new_inst6, OP_SH4_BT);
+			new_inst6->backend.data = (gpointer)-1;
+			new_inst6->inst_p1      = (void *)"ArithmeticException";
+			mono_bblock_insert_after_ins(basic_block, new_inst5, new_inst6);
+			break;
+
 		default:
 			break;
 		}
