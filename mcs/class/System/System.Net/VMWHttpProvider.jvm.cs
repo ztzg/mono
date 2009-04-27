@@ -136,15 +136,11 @@ namespace System.Net
 				{
 					_state.setCredentials(AuthScope.ANY,
 						new UsernamePasswordCredentials(nc.UserName, nc.Password));
-					_state.setCredentials(new AuthScope(AuthScope.ANY_HOST, AuthScope.ANY_PORT, AuthScope.ANY_REALM, "Ntlm"),
-						new NTCredentials(nc.UserName, nc.Password, host, domain));
 				}
 				else
 				{
 					_state.setProxyCredentials(AuthScope.ANY,
 						new UsernamePasswordCredentials(nc.UserName, nc.Password));
-					_state.setProxyCredentials(new AuthScope(AuthScope.ANY_HOST, AuthScope.ANY_PORT, AuthScope.ANY_REALM, "Ntlm"),
-						new NTCredentials(nc.UserName, nc.Password, host, domain));
 				}
 			}
 			else if(String.Compare (type, "basic", StringComparison.InvariantCultureIgnoreCase) == 0)
@@ -324,15 +320,14 @@ namespace System.Net
 					SetJavaCredential(nc, type, true);
 				}
 			}
-			else if (creds is NetworkCredential)
-			{
-				SetJavaCredential((NetworkCredential)creds, "any", true);
-			}
 			else
 			{
 				NetworkCredential nc = creds.GetCredential(proxy.Address, "any");
 				if(nc!=null)
 					SetJavaCredential(nc, "any", true);
+				nc = creds.GetCredential(proxy.Address, "ntlm");
+				if (nc != null)
+					SetJavaCredential(nc, "ntlm", true);
 			}
 
 			_method.setDoAuthentication(true);
@@ -367,15 +362,14 @@ namespace System.Net
 					SetJavaCredential(nc, type);
 				}
 			}
-			else if(_credentials is NetworkCredential)
-			{
-				SetJavaCredential((NetworkCredential)_credentials, "any");
-			}
 			else
 			{
 				NetworkCredential nc = _credentials.GetCredential(GetOriginalAddress(), "any");
 				if (nc != null)
 					SetJavaCredential(nc, "any");
+				nc = _credentials.GetCredential(GetOriginalAddress(), "ntlm");
+				if (nc != null)
+					SetJavaCredential(nc, "ntlm");
 			}
 
 			_method.setDoAuthentication(true);
