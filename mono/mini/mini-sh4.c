@@ -3614,6 +3614,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: fcall_reg: dest:y src1:i clob:c len:18 */
 		case OP_VOIDCALL_REG:
 			/* MD: voidcall_reg: src1:i clob:c len:18 */
+		case OP_VCALL_REG:
+			/* MD: vcall_reg: src1:i clob:c len:18 */
+		case OP_VCALL2_REG:
+			/* MD: vcall2_reg: src1:i clob:c len:18 */
 		case OP_LCALL_REG:
 			/* MD: lcall_reg: dest:Z src1:i clob:c len:18 */
 		case OP_CALL_REG:
