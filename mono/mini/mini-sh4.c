@@ -518,9 +518,6 @@ static guint32 mono_emit_call_struct(MonoCompile *cfg, MonoCallInst *call,
 		arg->sreg1 = inst->dreg;
 		arg->klass = inst->klass;
 		arg->backend.size = size;
-		arg->inst_p0 = call;
-		arg->inst_p1 = mono_mempool_alloc(cfg->mempool, sizeof(struct arg_info));
-		memcpy(arg->inst_p1, arg_info, sizeof(struct arg_info));
 		MONO_ADD_INS(cfg->cbb, arg);
 	}
 
