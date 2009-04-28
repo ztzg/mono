@@ -1116,6 +1116,9 @@ static inline void sh4_add_offset2base(MonoCompile *cfg, guint8 **buffer, int of
 
 static inline void sh4_base_store(MonoCompile *cfg, guint8 **buffer, SH4IntRegister src, int offset, SH4IntRegister base)
 {
+	g_assert(base != sh4_temp);
+	g_assert(src != sh4_temp);
+
 	if (SH4_CHECK_RANGE_movl_dispRx(offset)) {
 		sh4_movl_dispRx(buffer, src, offset, base);
 	}
@@ -1127,6 +1130,8 @@ static inline void sh4_base_store(MonoCompile *cfg, guint8 **buffer, SH4IntRegis
 
 static inline void sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4IntRegister dest)
 {
+	g_assert(base != sh4_temp);
+
 	if (SH4_CHECK_RANGE_movl_dispRy(offset)) {
 		sh4_movl_dispRy(buffer, offset, base, dest);
 	}
@@ -1138,6 +1143,8 @@ static inline void sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, 
 
 static inline void sh4_base_storef32(MonoCompile *cfg, guint8 **buffer, SH4FloatRegister src, int offset, SH4IntRegister base)
 {
+	g_assert(base != sh4_temp);
+
 	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
 
 	/* Convert back to simple precision.  */
@@ -1149,6 +1156,8 @@ static inline void sh4_base_storef32(MonoCompile *cfg, guint8 **buffer, SH4Float
 
 static inline void sh4_base_loadf32(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister dest)
 {
+	g_assert(base != sh4_temp);
+
 	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
 
 	sh4_fmovs_indRy(buffer, sh4_temp, dest);
@@ -1160,6 +1169,8 @@ static inline void sh4_base_loadf32(MonoCompile *cfg, guint8 **buffer, int offse
 
 static inline void sh4_base_storef64(MonoCompile *cfg, guint8 **buffer, SH4FloatRegister src, int offset, SH4IntRegister base)
 {
+	g_assert(base != sh4_temp);
+
 	sh4_add_offset2base(cfg, buffer, offset + 4, base, sh4_temp);
 
 	sh4_fmovs_indRx(buffer, src, sh4_temp);
@@ -1168,6 +1179,8 @@ static inline void sh4_base_storef64(MonoCompile *cfg, guint8 **buffer, SH4Float
 
 static inline void sh4_base_loadf64(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister dest)
 {
+	g_assert(base != sh4_temp);
+
 	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
 
 	sh4_fmovs_incRy(buffer, sh4_temp, dest + 1);
