@@ -396,9 +396,6 @@ gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMe
 
 #define UNBOX_TRAMPOLINE_SIZE 14
 
-	if (MONO_TYPE_ISSTRUCT(mono_method_signature(method)->ret) != 0)
-		NOT_IMPLEMENTED;
-
 	mono_domain_lock(domain);
 	code = buffer = mono_code_manager_reserve(domain->code_mp, UNBOX_TRAMPOLINE_SIZE);
 	mono_domain_unlock(domain);
