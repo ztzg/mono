@@ -1038,14 +1038,22 @@ gpointer mono_arch_context_get_int_reg(MonoContext *ctx, int reg)
  */
 void mono_arch_cpu_init(void)
 {
-#if 0
 	int fpscr = 0;
 
-	__asm__ __volatile__ ("sts fpscr, %0" : : "r"(fpscr));
-	fpscr |= (1 << 19); /* Set the precision mode to 'double'. */
-	fpscr |= (1 << 20); /* Set the transfer size mode to 'double'. */
-	__asm__ __volatile__ ("lds %0, fpscr" : : "r"(fpscr));
-#endif
+	__asm__ __volatile__ ("sts fpscr, %0": "=r" (fpscr));
+
+	if ((fpscr & (1 << 19)) == 0) {
+		g_error("%s\n%s\n",
+			"Only the 'double' precision mode is currently supported within Mono/SH4.",
+			"Please rebuild your run-time environment using the 'double' precision mode.");
+	}
+
+	if ((fpscr & (1 << 20)) != 0) {
+		g_error("%s\n%s\n",
+			"Only the 'simple' transfer size mode is currently supported within Mono/SH4.",
+			"Please rebuild your run-time environment using the 'simple' transfer size mode.");
+	}
+
 	return;
 }
 
