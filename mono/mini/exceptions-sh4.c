@@ -117,12 +117,14 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 			/* Remember stack_offset was negated due to
 			   the use of "add_imm" instead of "sub_imm". */
 			stack_offset = -stack_offset;
+			SH4_EXTRA_DEBUG("small offset: %d", stack_offset);
 		}
 		/* stack_offset is medium? */
 		else if (stack_offset = get_imm_sh4_mov_imm(code[0]),
 			 is_sh4_mov_imm(code[0], stack_offset, sh4_temp) &&
 			 is_sh4_sub(code[1], sh4_temp, sh4_fp)) {
 			/* stack_offset is already extracted. */;
+			SH4_EXTRA_DEBUG("medium offset: %d", stack_offset);
 		}
 		/* stack_offset is large? */
 		else if (stack_offset = get_imm_sh4_movl_dispPC(code[0]),
@@ -134,17 +136,18 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 			guint address = (guint)code;
 			address += 4;
 			address &= ~0x3;
-			stack_offset = *(guint8 *)(address + stack_offset);
+			stack_offset = *(guint32 *)(address + stack_offset);
+			SH4_EXTRA_DEBUG("large offset: %d", stack_offset);
 		}
 		/* stack_offset is 0! */
 		else {
 			stack_offset = 0;
+			SH4_EXTRA_DEBUG("null offset: %d", stack_offset);
 		}
 
 		/* Now we know exactly where are saved global registers. */
 		registers = (guint32 *)(context->registers[sh4_fp] + stack_offset);
 
-		SH4_EXTRA_DEBUG("stack_offset: %d", stack_offset);
 		SH4_EXTRA_DEBUG("registers: %p", registers);
 
 		/* Extract the previous value of PC. */
