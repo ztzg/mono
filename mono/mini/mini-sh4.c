@@ -343,7 +343,8 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 		break;
 
 	default:
-		g_error("Can't handle type '0x%x' as return value", signature->ret->type);
+		g_error("%s::%s: Can't handle type '0x%x' as return value.\n",
+			cfg->method->klass->name, cfg->method->name, signature->ret->type);
 		break;
 	}
 
@@ -431,7 +432,8 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 			break;
 
 		default:
-			g_error("Can't handle type '0x%x' as argument", signature->params[i]->type);
+			g_error("%s::%s: Can't handle type '0x%x' as argument.\n",
+				cfg->method->klass->name, cfg->method->name, signature->params[i]->type);
 			break;
 		}
 	}
@@ -811,9 +813,9 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 	MonoType *ret = mini_type_get_underlying_type(cfg->generic_sharing_context, mono_method_signature(method)->ret);
 	MonoInst *inst = NULL;
 
-	if (ret->byref != 0) {
-		NOT_IMPLEMENTED;
-	}
+	if (ret->byref != 0)
+		g_error("%s::%s: Returned value by reference not yet supported.\n",
+			cfg->method->klass->name, cfg->method->name);
 
 	switch (ret->type) {
 	case MONO_TYPE_VOID:
@@ -935,7 +937,8 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		   "gint32 sig_cookie" into MonoCompile is available. I don't
 		   like the idea to do like other backend, so I'm waiting for
 		   another solution. CV */
-		NOT_IMPLEMENTED;
+		g_error("%s::%s: Variadic functions not yet supported.\n",
+			cfg->method->klass->name, cfg->method->name);
 	}
 
 	/* The locals area size is now fully known so specify where are saved parameters. */
@@ -1212,9 +1215,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	if (cfg->method->wrapper_type == MONO_WRAPPER_NATIVE_TO_MANAGED) {
-		NOT_IMPLEMENTED;
-	}
+	if (cfg->method->wrapper_type == MONO_WRAPPER_NATIVE_TO_MANAGED)
+		g_error("%s::%s: Wrapper native -> managed not yet implemented.\n",
+			cfg->method->klass->name, cfg->method->name);
 
 	/* Initialize cst pools - for the moment keep running in low perf mode.*/
 	sh4_cstpool_init(cfg, cstpool_mode_lowperf);
