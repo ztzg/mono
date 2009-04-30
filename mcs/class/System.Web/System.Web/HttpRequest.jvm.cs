@@ -57,26 +57,12 @@ namespace System.Web
 
 		void LoadWwwForm ()
 		{
-			HttpServletRequest servletReq = context.ServletRequest;
-			if (servletReq == null) {
 				NameValueCollection requestParameters = context.RequestParameters;
 				if (requestParameters != null)
 					form.Add (requestParameters);
 				else
 					RawLoadWwwForm ();
 				return;
-			}
-
-			servletReq.setCharacterEncoding (ContentEncoding.WebName);
-
-			for (java.util.Enumeration e = servletReq.getParameterNames(); e.hasMoreElements() ;) {
-				string key = (string) e.nextElement();
-				string [] qvalue = QueryString.GetValues (key);
-				string [] qfvalue = servletReq.getParameterValues (key);
-
-				for (int i = (qvalue != null) ? qvalue.Length : 0; i < qfvalue.Length; i++)
-					form.Add (key, qfvalue [i]);
-			}
 		}
 
 		const int INPUT_BUFFER_SIZE = 1024;
