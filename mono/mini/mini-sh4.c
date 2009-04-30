@@ -1065,8 +1065,24 @@ void mono_arch_cpu_init(void)
  */
 guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 {
+	/* The SH4 backend converts the following code sequence:
+	 *
+	 *     compare
+	 *     branch_if_greater
+	 *
+	 * to:
+	 *
+	 *     compare_greater
+	 *     branch_if_true
+	 *
+	 * The "branch" optimization does not remove atomically the
+	 * two opcodes (at least sometimes), so the SH4 conversion is
+	 * totally messed up.
+	 *
+	 * TODO - CV: fix this correctly. */
+	*exclude_mask |= MONO_OPT_BRANCH;
+
 	/* No SH4-specific optimizations yet. */
-	*exclude_mask = 0;
 	return 0;
 }
 
@@ -4200,16 +4216,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_TLS_GET:
 			/* MD: tls_get: dest:i len:2 */
 			sh4_die(&buffer); /* Not yet implemented. */
-			break;
-
-		/* These opcodes are missing for iltests.il. */
-		case OP_CKFINITE:	 /* MD: ckfinite: dest:f src1:f len:0 */
-		case OP_JMP:	 	 /* MD: jmp: len:0 */
-
-			fprintf(stderr, "Method %s:%s opcode %s (0x%x) not yet implemented\n",
-				cfg->method->klass->name,
-				cfg->method->name,
-				mono_inst_name(inst->opcode), inst->opcode);
 			break;
 
 		default:
