@@ -1082,7 +1082,12 @@ guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 	 * TODO - CV: fix this correctly. */
 	*exclude_mask |= MONO_OPT_BRANCH;
 
-	/* No SH4-specific optimizations yet. */
+	/* In fact too many generic optimizations break SH4 specific
+	 * assumptions or trig SH4 specific bugs... Deactivate
+	 * optimizations for the Alpha1 release. */
+	*exclude_mask = (guint32)-1;
+
+	/* no SH4-specific optimizations yet. */
 	return 0;
 }
 
