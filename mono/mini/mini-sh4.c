@@ -962,8 +962,6 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 		else
 			size = mono_type_size(signature->params[i - signature->hasthis], (int *)&align);
 
-		g_assert(size != 0);
-
 		/* For the moment we save parameters into a 32 bits slot (at least).
 		   If you want to change this behaviour, don't forget to adjust emit_prolog(). */
 		if (align < 4)
