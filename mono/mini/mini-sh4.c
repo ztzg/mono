@@ -1063,27 +1063,10 @@ void mono_arch_cpu_init(void)
  */
 guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 {
-	/* The SH4 backend converts the following code sequence:
-	 *
-	 *     compare
-	 *     branch_if_greater
-	 *
-	 * to:
-	 *
-	 *     compare_greater
-	 *     branch_if_true
-	 *
-	 * The "branch" optimization does not remove atomically the
-	 * two opcodes (at least sometimes), so the SH4 conversion is
-	 * totally messed up.
-	 *
-	 * TODO - CV: fix this correctly. */
-	*exclude_mask |= MONO_OPT_BRANCH;
-
-	/* In fact too many generic optimizations break SH4 specific
-	 * assumptions or trig SH4 specific bugs... Deactivate
-	 * optimizations for the Alpha1 release. */
+	/* A generic optimization break a SH4 specific assumption:
+	 * http://code.google.com/p/mono-sh4/issues/detail?id=12 */
 	*exclude_mask = (guint32)-1;
+	*exclude_mask &= ~MONO_OPT_BRANCH;
 
 	/* no SH4-specific optimizations yet. */
 	return 0;
@@ -2174,6 +2157,13 @@ gboolean mono_arch_is_inst_imm(gint64 imm)
  */
 static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst)
 {
+	/* The conditional branch was removed due to [some] dead-code
+	   elimination, so we can replace safely this comparison with a nop. */
+	if (next_inst == NULL) {
+		inst->opcode = OP_NOP;
+		return;
+	}
+
 	/* Trick used in output_basic_block(). */
 	next_inst->backend.data = NULL;
 
@@ -2295,6 +2285,7 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 		/* The conditional branch was removed due to [some] dead-code
 		   elimination, so we can replace safely this comparison with a nop. */
 		inst->opcode = OP_NOP;
+		break;
 	}
 }
 
@@ -2305,6 +2296,13 @@ static inline void convert_fcomparison_to_sh4(MonoCompile *cfg, MonoBasicBlock *
 	MonoInst *new_inst3 = NULL;
 	MonoInst *new_inst4 = NULL;
 	gint32 tmp_reg;
+
+	/* The conditional branch was removed due to [some] dead-code
+	   elimination, so we can replace safely this comparison with a nop. */
+	if (next_inst == NULL) {
+		inst->opcode = OP_NOP;
+		return;
+	}
 
 	/* Trick used in output_basic_block(). */
 	next_inst->backend.data = NULL;
@@ -2437,9 +2435,9 @@ static inline void convert_fcomparison_to_sh4(MonoCompile *cfg, MonoBasicBlock *
 		break;
 
 	default:
-		fprintf(stderr, "unimplemented (yet) next_inst->opcode %s (0x%x) in %s()\n",
-			mono_inst_name(next_inst->opcode), next_inst->opcode, __FUNCTION__);
-		g_assert_not_reached();
+		/* The conditional branch was removed due to [some] dead-code
+		   elimination, so we can replace safely this comparison with a nop. */
+		inst->opcode = OP_NOP;
 		break;
 	}
 }
@@ -2600,13 +2598,11 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_COMPARE:
 		case OP_ICOMPARE:
 			next_inst = inst->next;
-			g_assert(next_inst != NULL);
 			convert_comparison_to_sh4(inst, next_inst);
 			break;
 
 		case OP_FCOMPARE:
 			next_inst = inst->next;
-			g_assert(next_inst != NULL);
 			convert_fcomparison_to_sh4(cfg, basic_block, inst, next_inst);
 			break;
 
@@ -2689,8 +2685,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_COMPARE_IMM:
 		case OP_ICOMPARE_IMM:
 			next_inst = inst->next;
-			g_assert(next_inst != NULL);
-
 			convert_comparison_to_sh4(inst, next_inst);
 
 			/* Optimize if possible. */
