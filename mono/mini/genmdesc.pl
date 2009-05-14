@@ -31,7 +31,7 @@ sub load_opcodes
 	$cpp = "cpp" unless defined $cpp;
 	$cpp .= " -undef ";
 	foreach (@defines) {
-		$cpp .= " -U$_";
+		$cpp .= " -U$_" if $arch ne $_;
 		$arch_found = 1 if $arch eq $_;
 	}
 	die "$arch arch is not supported.\n" unless $arch_found;
