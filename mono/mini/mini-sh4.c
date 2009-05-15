@@ -2188,13 +2188,13 @@ static inline void convert_comparison_to_sh4(MonoInst *inst, MonoInst *next_inst
 
 	case OP_CLT:
 	case OP_ICLT:
-		inst->opcode = OP_SH4_NOT_CMPGE;
+		inst->opcode = OP_SH4_REVERSE_CMPGT;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
 	case OP_CLT_UN:
 	case OP_ICLT_UN:
-		inst->opcode = OP_SH4_NOT_CMPHS;
+		inst->opcode = OP_SH4_REVERSE_CMPHI;
 		next_inst->opcode = OP_SH4_MOVT;
 		break;
 
@@ -3551,14 +3551,14 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_cmphs(&buffer, inst->sreg2, inst->sreg1);
 			break;
 
-		case OP_SH4_NOT_CMPGE:
-			/* MD: sh4_not_cmpge: src1:i src2:i len:2 */
-			sh4_cmpge(&buffer, inst->sreg1, inst->sreg2);
+		case OP_SH4_REVERSE_CMPGT:
+			/* MD: sh4_reverse_cmpgt: src1:i src2:i len:2 */
+			sh4_cmpgt(&buffer, inst->sreg1, inst->sreg2);
 			break;
 
-		case OP_SH4_NOT_CMPHS:
-			/* MD: sh4_not_cmphs: src1:i src2:i len:2 */
-			sh4_cmphs(&buffer, inst->sreg1, inst->sreg2);
+		case OP_SH4_REVERSE_CMPHI:
+			/* MD: sh4_reverse_cmphi: src1:i src2:i len:2 */
+			sh4_cmphi(&buffer, inst->sreg1, inst->sreg2);
 			break;
 
 		case OP_SH4_FCMPEQ:

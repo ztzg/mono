@@ -89,8 +89,8 @@ sh4_cmpgt: src1:i src2:i len:2
 sh4_cmphi: src1:i src2:i len:2
 sh4_cmpge: src1:i src2:i len:2
 sh4_cmphs: src1:i src2:i len:2
-sh4_not_cmpge: src1:i src2:i len:2
-sh4_not_cmphs: src1:i src2:i len:2
+sh4_reverse_cmpgt: src1:i src2:i len:2
+sh4_reverse_cmphi: src1:i src2:i len:2
 sh4_fcmpeq: src1:f src2:f len:2
 sh4_fcmpgt: src1:f src2:f len:2
 sh4_movt: dest:i len:2
