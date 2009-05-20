@@ -1,4 +1,4 @@
-#!/bin/env perl
+#!/usr/bin/env perl
 
 # This script extracts from the file 'mini-${arch}.c' information to build the file
 # 'cpu-${arch}.md'. The information should have the following format :
