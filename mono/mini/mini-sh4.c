@@ -40,7 +40,9 @@
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
-#define ALIGN_TO(val, align) ((((guint32)val) + ((align) - 1)) & ~((align) - 1))
+#define ALIGN_TO(value, alignment) (((value) & ~(alignment)) == 0 ?	\
+				    (value) :				\
+				    (((guint32)(value)) + ((alignment) - 1)) & ~((alignment) - 1))
 
 int sh4_extra_debug = 0;
 
