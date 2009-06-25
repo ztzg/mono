@@ -27,6 +27,8 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
+#define USE_HASH
+
 using System;
 using System.Collections;
 using System.IO;
@@ -121,6 +123,9 @@ namespace Mono.Xml.XPath
 		DTMXPathNamespaceNode2 [] namespaces;
 
 		// String pool
+#if USE_HASH
+		Hashtable uniqueStrings;
+#endif
 		string [] atomicStringPool;
 		int atomicIndex;
 		string [] nonAtomicStringPool;
@@ -157,7 +162,7 @@ namespace Mono.Xml.XPath
 			);
 		}
 
-		public void Compile ()
+		private void Compile ()
 		{
 			// string pool index 0 to 3 are fixed.
 			atomicStringPool [0] = nonAtomicStringPool [0] = "";
@@ -165,6 +170,9 @@ namespace Mono.Xml.XPath
 			atomicStringPool [2] = nonAtomicStringPool [2] = XmlNamespaces.XML;
 			atomicStringPool [3] = nonAtomicStringPool [3] = XmlNamespaces.XMLNS;
 			atomicIndex = nonAtomicIndex = 4;
+#if USE_HASH
+			uniqueStrings = new Hashtable();
+#endif
 
 			// index 0 is dummy. No node (including Root) is assigned to this index
 			// So that we can easily compare index != 0 instead of index < 0.
@@ -198,10 +206,13 @@ namespace Mono.Xml.XPath
 			Array.Copy (nonAtomicStringPool, newArr, nonAtomicIndex);
 			nonAtomicStringPool = newArr;
 
+#if USE_HASH
+			uniqueStrings = null;
+#endif
 			xmlReader = null;	// It is no more required.
 		}
 
-		public void Read ()
+		private void Read ()
 		{
 			if (!skipRead)
 				if (!xmlReader.Read ())
@@ -466,10 +477,16 @@ namespace Mono.Xml.XPath
 			if (s == null)
 				return 1;
 			int i = 2;
-
+#if USE_HASH
+			object res = uniqueStrings[s];
+			if (res != null)
+				return (int)res;
+			int max = 4; // Allow lookup of XML 7 XMLNS
+#else
 			// Here we don't compare all the entries (sometimes it
 			// goes extremely slow).
 			int max = nonAtomicIndex < 100 ? nonAtomicIndex : 100;
+#endif
 			for (; i < max; i++)
 				if (s == nonAtomicStringPool [i])
 					return i;
@@ -480,6 +497,9 @@ namespace Mono.Xml.XPath
 				nonAtomicStringPool = newArr;
 			}
 			nonAtomicStringPool [nonAtomicIndex] = s;
+#if USE_HASH
+			uniqueStrings[s] = nonAtomicIndex;
+#endif
 			return nonAtomicIndex++;
 		}
 
@@ -507,7 +527,7 @@ namespace Mono.Xml.XPath
 		}
 
 		// Here followings are skipped: firstChild, nextSibling, 
-		public void AddNode (int parent, int firstAttribute, int previousSibling, XPathNodeType nodeType, int baseUri, bool isEmptyElement, int localName, int ns, int prefix, int value, int xmlLang, int namespaceNode, int lineNumber, int linePosition)
+		private void AddNode (int parent, int firstAttribute, int previousSibling, XPathNodeType nodeType, int baseUri, bool isEmptyElement, int localName, int ns, int prefix, int value, int xmlLang, int namespaceNode, int lineNumber, int linePosition)
 		{
 			if (nodes.Length < nodeIndex + 1) {
 				nodeCapacity *= 4;
@@ -536,7 +556,7 @@ namespace Mono.Xml.XPath
 		}
 
 		// Followings are skipped: nextAttribute,
-		public void AddAttribute (int ownerElement, int localName, int ns, int prefix, int value, int lineNumber, int linePosition)
+		private void AddAttribute (int ownerElement, int localName, int ns, int prefix, int value, int lineNumber, int linePosition)
 		{
 			if (attributes.Length < attributeIndex + 1) {
 				attributeCapacity *= 4;
@@ -556,7 +576,7 @@ namespace Mono.Xml.XPath
 		}
 
 		// Followings are skipped: nextNsNode (may be next attribute in the same element, or ancestors' nsNode)
-		public void AddNsNode (int declaredElement, int name, int ns, int nextNs)
+		private void AddNsNode (int declaredElement, int name, int ns, int nextNs)
 		{
 			if (namespaces.Length < nsIndex + 1) {
 				nsCapacity *= 4;

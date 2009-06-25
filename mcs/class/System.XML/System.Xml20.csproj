@@ -14,10 +14,11 @@
     <GHProjectKind>framework</GHProjectKind>
     <Version>2.0</Version>
     <ProjectTypeGuids>{F6B19D50-1E2E-4e87-ADFB-10393B439DE0};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <jarserver>ipa</jarserver>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release_Java20|AnyCPU' ">
     <OutputPath>bin\Release_Java20\</OutputPath>
-    <DefineConstants>TRACE;NET_1_1;TARGET_JVM;NET_2_0;CONFIGURATION_DEP</DefineConstants>
+    <DefineConstants>TRACE;NET_1_1;TARGET_JVM;NET_2_0;CONFIGURATION_DEP;DTM_CLASS</DefineConstants>
     <BaseAddress>285212672</BaseAddress>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
@@ -41,7 +42,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug_Java\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;NET_1_1;TARGET_JVM</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;NET_1_1;TARGET_JVM;DTM_CLASS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <BaseAddress>285212672</BaseAddress>
@@ -56,7 +57,7 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release_Java\</OutputPath>
-    <DefineConstants>TRACE;NET_1_1;TARGET_JVM</DefineConstants>
+    <DefineConstants>TRACE;NET_1_1;TARGET_JVM;DTM_CLASS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <BaseAddress>285212672</BaseAddress>
@@ -70,7 +71,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Java20|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\Debug_Java20\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;NET_1_1;TARGET_JVM;NET_2_0;CONFIGURATION_DEP</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;NET_1_1;TARGET_JVM;NET_2_0;CONFIGURATION_DEP;DTM_CLASS</DefineConstants>
     <BaseAddress>285212672</BaseAddress>
     <DebugType>full</DebugType>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -91,7 +92,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug_Java20_Prepare|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\Debug_Java20_Prepare\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;NET_1_1;TARGET_JVM;NET_2_0</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;NET_1_1;TARGET_JVM;NET_2_0;DTM_CLASS</DefineConstants>
     <BaseAddress>285212672</BaseAddress>
     <DebugType>full</DebugType>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -111,7 +112,7 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release_Java20_Prepare|AnyCPU' ">
     <OutputPath>bin\Release_Java20_Prepare\</OutputPath>
-    <DefineConstants>TRACE;NET_1_1;TARGET_JVM;NET_2_0</DefineConstants>
+    <DefineConstants>TRACE;NET_1_1;TARGET_JVM;NET_2_0;DTM_CLASS</DefineConstants>
     <BaseAddress>285212672</BaseAddress>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
@@ -546,7 +547,7 @@
   -->
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties REFS-JarPath-rt="" REFS-RefInfo-rt="repository:jre:sun:1.4.2" REFS-JarPath-system="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.jar" REFS-JarPath-mscorlib="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mscorlib.jar" />
+      <UserProperties REFS-JarPath-mscorlib="..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\mscorlib.jar" REFS-JarPath-system="..\..\..\..\..\..\Program Files\Mainsoft\Visual MainWin for J2EE 2\java_refs\framework\System.jar" REFS-RefInfo-rt="repository:jre:sun:1.4.2" REFS-JarPath-rt="" />
     </VisualStudio>
   </ProjectExtensions>
   <PropertyGroup>
