@@ -45,7 +45,8 @@ namespace System.Net
         private GHWebAsyncResult _asyncWrite;
         private StreamProviderRequestEntity _reqEntity;
 		private bool _isConnectionOpened;
-		private bool _preAuthenticateNTLM = false;
+		private string _preAuthenticateScheme;
+		private string _authenticatedScheme;
 
         private const int DEFAULT_IDLE_CONNECTION_TIMEOUT = 0;
         private const int DEFAULT_IDLE_THREAD_TIMEOUT = 2;
@@ -604,8 +605,8 @@ namespace System.Net
 						case "OPTIONS": _method = new OptionsMethod(uriString);break;
 						default: _method = new GenericMethod(uriString, MethodName); break;
 					}
-					if (_preAuthenticateNTLM)
-						_method.getParams ().setPreauthenticateNTLM (_preAuthenticateNTLM);
+					if (_preAuthenticateScheme != null)
+						_method.getParams ().setPreauthenticateScheme(_preAuthenticateScheme);
 				}
 			}
 		}
@@ -621,9 +622,14 @@ namespace System.Net
 			}
 		}
 
-		public void SetPreAuthenticateNTLM (bool val) 
+		public void SetPreAuthenticateScheme (string val) 
 		{
-			_preAuthenticateNTLM = val;
+			_preAuthenticateScheme = val;
+		}
+
+		public string GetAuthenticatedScheme()
+		{
+			return _authenticatedScheme;
 		}
 
 		public void SetRequestStreamProvider (InputStreamProvider streamProvider) {
@@ -831,6 +837,7 @@ namespace System.Net
 						if(hostHeader != null)
 							Headers.SetInternal("Host", hostHeader.getValue());
 						FillRequestHeaders ();
+						_authenticatedScheme = _method.getParams().getAuthenticatedScheme();
 
 						_response = new HttpWebResponse(_method, _state, _stateCache, GetAddress(), this.MethodName);
 						
