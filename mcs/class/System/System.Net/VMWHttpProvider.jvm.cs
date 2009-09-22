@@ -17,6 +17,7 @@ using vmw.@internal.net;
 using vmw.common;
 using JInputStream = java.io.InputStream;
 using JOutputStream = java.io.OutputStream;
+using JIOException = java.io.IOException;
 
 namespace System.Net
 {
@@ -1072,6 +1073,7 @@ namespace System.Net
 				_contentLength = contentLength;
 				_len = 0;
 			}
+
 			public override bool CanRead
 			{
 				get    {return false;}
@@ -1500,18 +1502,25 @@ namespace System.Net
 
             int len;
             byte[] array = new byte[16384];
-            try {
-                while ((len = inputStream.Read(array, 0, array.Length)) > 0)
-                {
-                    if (saveContents != null)
-                        saveContents.Write(array, 0, len);
-                    output.write(TypeUtils.ToSByteArray(array), 0, len);
-                }
-            }
+			try {
+				while ((len = inputStream.Read(array, 0, array.Length)) > 0) {
+					if (saveContents != null)
+						saveContents.Write(array, 0, len);
+					output.write(TypeUtils.ToSByteArray(array), 0, len);
+				}
+			}
+			catch (IOException ex) {
+				throw new JIOException(ex.Message);
+			}
             finally {
-                if (saveContents != null)
-                    saveContents.Close();
-                inputStream.Close();
+				try {
+					if (saveContents != null)
+						saveContents.Close();
+					inputStream.Close();
+				}
+				catch (IOException ex) {
+					throw new JIOException(ex.Message);
+				}
             }
             if (saveContents is MemoryStream)
                 _savedContent = (saveContents as MemoryStream).ToArray();
