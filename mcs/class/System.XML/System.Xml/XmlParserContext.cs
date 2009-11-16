@@ -50,6 +50,8 @@ namespace System.Xml
 			public string BaseURI;
 			public string XmlLang;
 			public XmlSpace XmlSpace;
+			public ContextItem Previous;
+			public ContextItem Next;
 		}
 		#endregion
 
@@ -175,7 +177,7 @@ namespace System.Xml
 			this.XmlLang = xmlLang;
 			this.xmlSpace = xmlSpace;
 
-			contextItems = new ArrayList ();
+			lastItem = new ContextItem ();
 		}
 		#endregion
 
@@ -191,8 +193,7 @@ namespace System.Xml
 		private string systemID = String.Empty;
 		private string xmlLang = String.Empty;
 		private XmlSpace xmlSpace;
-		private ArrayList contextItems;
-		private int contextItemCount;
+		private ContextItem lastItem;
 		private DTDObjectModel dtd;
 
 		#endregion
@@ -259,28 +260,26 @@ namespace System.Xml
 		#region Methods
 		internal void PushScope ()
 		{
-			ContextItem item = null;
-			if (contextItems.Count == contextItemCount) {
+			ContextItem item = lastItem.Next;
+			if (item == null) {
 				item = new ContextItem ();
-				contextItems.Add (item);
+				item.Previous = lastItem;
+				lastItem.Next = item;
 			}
-			else
-				item = (ContextItem) contextItems [contextItemCount];
+			lastItem = item;
 			item.BaseURI = BaseURI;
 			item.XmlLang = XmlLang;
 			item.XmlSpace = XmlSpace;
-			contextItemCount++;
 		}
 
 		internal void PopScope ()
 		{
-			if (contextItemCount == 0)
+			if (lastItem.Previous == null)
 				throw new XmlException ("Unexpected end of element scope.");
-			contextItemCount--;
-			ContextItem prev = (ContextItem) contextItems [contextItemCount];
-			baseURI = prev.BaseURI;
-			xmlLang = prev.XmlLang;
-			xmlSpace = prev.XmlSpace;
+			baseURI = lastItem.BaseURI;
+			xmlLang = lastItem.XmlLang;
+			xmlSpace = lastItem.XmlSpace;
+			lastItem = lastItem.Previous;
 		}
 		#endregion
 	}

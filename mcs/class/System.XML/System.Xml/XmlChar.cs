@@ -57,13 +57,15 @@ namespace System.Xml
 
 		public static bool IsFirstNameChar (int ch)
 		{
-			if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
-				return true;
-			} else if ((uint) ch <= 0xFFFF) {
-				return (nameBitmap[(firstNamePages[ch >> 8] << 3) + ((ch & 0xFF) >> 5)] & (1 << (ch & 0x1F))) != 0;
-			}
+			if (ch < 0x80)
+				return ch > 0 && (asciiFirstNameBitmap [ch >> 5] & (1 << (ch & 0x1F))) != 0;
+			return IsFirstNameCharL (ch);
+		}
 
-			return false;
+		private static bool IsFirstNameCharL (int ch)
+		{
+			return ch <= 0xFFFF &&
+			       (nameBitmap [(firstNamePages [ch >> 8] << 3) + ((ch & 0xFF) >> 5)] & (1 << (ch & 0x1F))) != 0;
 		}
 
 		public static bool IsValid (int ch)
@@ -73,14 +75,8 @@ namespace System.Xml
 
 		public static bool IsInvalid (int ch)
 		{
-			switch (ch) {
-			case 9:
-			case 10:
-			case 13:
-				return false;
-			}
-			if (ch < 32)
-				return true;
+			if (ch <= 32)
+				return !IsWhitespace (ch);
 			if (ch < 0xD800)
 				return false;
 			if (ch < 0xE000)
@@ -130,28 +126,26 @@ namespace System.Xml
 			return -1;
 		}
 
+		private static bool IsNameCharL (int ch)
+		{
+			return ch <= 0xFFFF &&
+				   (nameBitmap [(namePages [ch >> 8] << 3) + ((ch & 0xFF) >> 5)] & (1 << (ch & 0x1F))) != 0;
+		}
+
 		public static bool IsNameChar (int ch)
 		{
-			if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
-				return true;
-			} else if ((uint) ch <= 0xFFFF) {
-				return (nameBitmap[(namePages[ch >> 8] << 3) + ((ch & 0xFF) >> 5)] & (1 << (ch & 0x1F))) != 0;
-			} else {
-				return false;
-			}
+			if (ch < 0x80)
+				return ch > 0 && (asciiNameBitmap [ch >> 5] & (1 << (ch & 0x1F))) != 0;
+			return IsNameCharL (ch);
 		}
 
 		public static bool IsNCNameChar (int ch)
 		{
-			bool result = false;
-
-			if (ch >= 0 && ch <= 0xFFFF && ch != ':')
-			{
-				result = (nameBitmap[(namePages[ch >> 8] << 3) + ((ch & 0xFF) >> 5)] & (1 << (ch & 0x1F))) != 0;
-			}
-
-			return result;
+			if (ch < 0x80)
+				return ch > 0 && ch != ':' && (asciiNameBitmap [ch >> 5] & (1 << (ch & 0x1F))) != 0;
+			return IsNameCharL (ch);
 		}
+
 
 		public static bool IsName (string str)
 		{
@@ -189,7 +183,7 @@ namespace System.Xml
 
 		public static bool IsPubidChar (int ch)
 		{
-			return (IsWhitespace(ch) && ch != '\t') | ('a' <= ch && ch <= 'z') | ('A' <= ch && ch <= 'Z') | ('0' <= ch && ch <= '9') | "-'()+,./:=?;!*#@$_%".IndexOf((char)ch) >= 0;
+			return (IsWhitespace (ch) && ch != '\t') || ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9') || "-'()+,./:=?;!*#@$_%".IndexOf((char)ch) >= 0;
 		}
 
 		public static bool IsPubid (string str)
@@ -410,5 +404,17 @@ namespace System.Xml
 			0x000000A0, 0x003EFFFE, 0xFFFFFFFE, 0xFFFFFFFF,
 			0x661FFFFF, 0xFFFFFFFE, 0xFFFFFFFF, 0x77FFFFFF
 		};
+
+		// Using int[] instead of uint[] for the sake of Grasshopper (#if JAVA) performance.
+		private static readonly int [] asciiFirstNameBitmap = 
+		{
+			0x00000000, 0x04000000, unchecked ((int)0x87FFFFFE), 0x07FFFFFE
+		};
+
+		private static readonly int [] asciiNameBitmap = 
+		{
+			0x00000000, 0x07FF6000, unchecked ((int)0x87FFFFFE), 0x07FFFFFE
+		};
+
 	}
 }
