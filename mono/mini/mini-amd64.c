@@ -7632,3 +7632,4 @@ mono_arch_get_seq_point_info (MonoDomain *domain, guint8 *code)
 }
 
 #endif
+
