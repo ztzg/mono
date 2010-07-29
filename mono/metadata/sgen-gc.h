@@ -235,3 +235,4 @@ void mono_sgen_internal_scan_pinned_objects (SgenInternalAllocator *alc, Iterate
 void** mono_sgen_find_optimized_pin_queue_area (void *start, void *end, int *num) MONO_INTERNAL;
 
 #endif /* __MONO_SGENGC_H__ */
+
