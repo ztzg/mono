@@ -1,3 +1,24 @@
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-amd64.[ch]: These, too.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* mini-amd64.c: This should go into mini and metadata.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: This should go into metadata as well as into mini. We
+	should also get a warning about an empty entry in mini.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	This should go into mini.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	Should go into metadata and mini.
+
 2010-07-27  Mark Mason <glowingpurple@gmail.com>
 
 	* mini-mips.c: Fix compilation errors.

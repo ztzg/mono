@@ -1,3 +1,50 @@
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Note that paragraphs are (re-)justified automatically
+	to 74 columns per line. Paragraphs are separated by empty lines.
+	This means that stuff like this will not look good:
+
+	- some stuff - other stuff - yet more stuff
+
+	Also, ASCII art will not work.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* metadata/sgen-gc.c: We can also give partial paths.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	This should go into metadata.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.*: Wildcards also work.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: This should go into mini and metadata.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: This should go into metadata as well as into mini. We
+	should also get a warning about an empty entry in mini.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: This should go into metadata.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: This goes into metadata.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	Should go into metadata and mini.
+
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	This should go in metadata.
+
 2010-07-30  Mark Probst  <mark.probst@gmail.com>
 
 	* sgen-archdep.h (ARCH_COPY_SIGCTX_REGS): Add casts to fix

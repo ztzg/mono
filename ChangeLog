@@ -1,3 +1,7 @@
+2010-07-29  Mark Probst  <mark.probst@gmail.com>
+
+	* mono-heapviz: Should end up in the root ChangeLog.
+
 2010-07-16  Zoltan Varga  <vargaz@gmail.com>
 
 	* configure.in: Remove the 'LLVM backend is experimental' warning.
