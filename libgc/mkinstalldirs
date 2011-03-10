@@ -4,7 +4,7 @@
 # Created: 1993-05-16
 # Public domain
 
-# $Id$
+# $Id: mkinstalldirs 36980 2004-12-03 01:08:33Z benm $
 
 errstatus=0
 dirmode=""
