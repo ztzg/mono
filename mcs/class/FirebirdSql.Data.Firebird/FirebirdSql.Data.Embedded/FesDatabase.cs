@@ -161,7 +161,7 @@ namespace FirebirdSql.Data.Embedded
 
 		#region Database Methods
 
-		public void CreateDatabase(DatabaseParameterBuffer dpb, string dataSource, int port, string database)
+		public void CreateDatabase(DatabaseParameterBuffer dpb, string database)
 		{
 			lock (this)
 			{
@@ -228,7 +228,7 @@ namespace FirebirdSql.Data.Embedded
 
 		#region Methods
 
-		public void Attach(DatabaseParameterBuffer dpb, string dataSource, int port, string database)
+		public void Attach(DatabaseParameterBuffer dpb, string database)
 		{
 			lock (this)
 			{
@@ -334,7 +334,7 @@ namespace FirebirdSql.Data.Embedded
 				IscCodes.isc_info_end
 			};
 
-			return this.GetDatabaseInfo(items, 50)[0].ToString();
+			return this.GetDatabaseInfo(items, IscCodes.BUFFER_SIZE_256)[0].ToString();
 		}
 
 		public ArrayList GetDatabaseInfo(byte[] items)

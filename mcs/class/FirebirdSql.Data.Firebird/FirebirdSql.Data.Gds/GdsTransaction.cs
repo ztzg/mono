@@ -142,7 +142,9 @@ namespace FirebirdSql.Data.Gds
 					this.db.Send.WriteBuffer(tpb.ToArray());
 					this.db.Send.Flush();
 
-					this.handle = db.ReadGenericResponse().ObjectHandle;
+                    GdsResponse r = db.ReadGenericResponse();
+
+					this.handle = r.ObjectHandle;
 					this.state = TransactionState.TransactionStarted;
 
 					this.db.TransactionCount++;

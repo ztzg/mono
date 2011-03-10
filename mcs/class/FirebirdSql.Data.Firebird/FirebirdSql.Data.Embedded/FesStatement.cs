@@ -37,7 +37,8 @@ namespace FirebirdSql.Data.Embedded
 		private DbStatementType statementType;
 		private bool			allRowsFetched;
 		private Queue			outputParams;
-		private int				recordsAffected;
+		private int				recordsAffected;	
+		private IntPtr			fetchSqlDa = IntPtr.Zero;
 
 		#endregion
 
@@ -338,7 +339,7 @@ namespace FirebirdSql.Data.Embedded
 
 				if (outSqlda != IntPtr.Zero)
 				{
-					Descriptor descriptor = marshaler.MarshalNativeToManaged(this.db.Charset, outSqlda);
+					Descriptor descriptor = marshaler.MarshalNativeToManaged(this.db.Charset, outSqlda, true);
 
 					// This	would be an	Execute	procedure
 					DbValue[] values = new DbValue[descriptor.Count];
@@ -362,6 +363,18 @@ namespace FirebirdSql.Data.Embedded
 				this.state = StatementState.Executed;
 			}
 		}
+
+
+		public override void Release() {
+			if (fetchSqlDa != IntPtr.Zero) {
+				if (!Environment.HasShutdownStarted) {					   
+					XsqldaMarshaler marshaler = XsqldaMarshaler.GetInstance();
+					marshaler.CleanUpNativeData(ref fetchSqlDa);
+				}
+			}
+			base.Release();
+		}
+
 
 		public override DbValue[] Fetch()
 		{
@@ -387,7 +400,10 @@ namespace FirebirdSql.Data.Embedded
 					// Reset actual	field values
 					this.fields.ResetValues();
 
-					IntPtr sqlda = marshaler.MarshalManagedToNative(this.db.Charset, fields);
+					if (fetchSqlDa == IntPtr.Zero) 
+					{
+						fetchSqlDa = marshaler.MarshalManagedToNative(this.db.Charset, fields);
+					}
 
 					int[] statusVector = FesConnection.GetNewStatusVector();
 					int stmtHandle = this.handle;
@@ -396,10 +412,10 @@ namespace FirebirdSql.Data.Embedded
 						statusVector,
 						ref	stmtHandle,
 						IscCodes.SQLDA_VERSION1,
-						sqlda);
+						fetchSqlDa);
 
 					// Obtain values
-					Descriptor rowDesc = marshaler.MarshalNativeToManaged(this.db.Charset, sqlda);
+					Descriptor rowDesc = marshaler.MarshalNativeToManaged(this.db.Charset, fetchSqlDa, true);
 
 					if (this.fields.Count == rowDesc.Count)
 					{
@@ -416,14 +432,13 @@ namespace FirebirdSql.Data.Embedded
 
 					this.fields = rowDesc;
 
-					// Free	memory
-					marshaler.CleanUpNativeData(ref	sqlda);
-
 					// Parse status	vector
 					this.db.ParseStatusVector(statusVector);
 
-					if (status == 100)
-					{
+					if (status == 100) 
+					{											   
+						// Free	memory
+						marshaler.CleanUpNativeData(ref fetchSqlDa);
 						this.allRowsFetched = true;
 					}
 					else

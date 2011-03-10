@@ -730,8 +730,8 @@ namespace FirebirdSql.Data.Firebird
 				}
 				finally
 				{
-					this.implicitTransaction = false;
-					this.transaction = null;
+                    this.implicitTransaction = false;
+                    this.transaction = null;
 					if (this.statement != null)
 					{
 						this.statement.Transaction = null;
@@ -791,7 +791,7 @@ namespace FirebirdSql.Data.Firebird
 
 		#endregion
 
-		#region Â· Input parameter descriptor generation methods Â·
+		#region · Input parameter descriptor generation methods ·
 
 		private void DescribeInput()
 		{
@@ -882,14 +882,13 @@ namespace FirebirdSql.Data.Firebird
 			// Check the parameter character set
 			if (parameter.Charset != FbCharset.Default)
 			{
-				int idx = Charset.SupportedCharsets.IndexOf((int)parameter.Charset);
-				charset = Charset.SupportedCharsets[idx];
+                charset = Charset.GetCharset((int)parameter.Charset);
 			}
 			else
 			{
 				if (type == FbDbType.Guid)
 				{
-					charset = Charset.SupportedCharsets["OCTETS"];
+					charset = Charset.GetCharset("OCTETS");
 				}
 			}
 
@@ -909,12 +908,12 @@ namespace FirebirdSql.Data.Firebird
 					break;
 
 				case FbDbType.Guid:
-					descriptor[index].SubType = (short)charset.ID;
+					descriptor[index].SubType = (short)charset.Identifier;
 					break;
 
 				case FbDbType.Char:
 				case FbDbType.VarChar:
-					descriptor[index].SubType = (short)charset.ID;
+                    descriptor[index].SubType = (short)charset.Identifier;
 					if (parameter.Size > 0)
 					{
 						short len = (short)(parameter.Size * charset.BytesPerCharacter);
@@ -1095,7 +1094,6 @@ namespace FirebirdSql.Data.Firebird
 					sql = this.BuildStoredProcedureSql(sql, returnsSet);
 				}
 
-
                 try
                 {
                     // Try to prepare the command
@@ -1238,7 +1236,7 @@ namespace FirebirdSql.Data.Firebird
                 }
                 else
                 {
-                    if (sym == '\'')
+                    if (sym == '\'' || sym == '\"')
                     {
                         inCommas = !inCommas;
                     }
@@ -1272,7 +1270,7 @@ namespace FirebirdSql.Data.Firebird
 			if (this.connection == null || 
 				this.connection.State != ConnectionState.Open)
 			{
-				throw new InvalidOperationException("Connection must valid and open");
+				throw new InvalidOperationException("Connection must be valid and open");
 			}
 
 			if (this.activeReader != null)

@@ -2,8 +2,159 @@ Firebird ADO.NET Data provider for .NET and Mono
 ================================================
 
 
------------------- 1.7.1 Release Candidate 1 ----------------------
+2008-10-09 Carlos Guzmán Álvarez <carlosga05@gmail.com>
 
+	* FirebirdSql.Data.Common/Charset.cs:
+	* FirebirdSql.Data.Common/CharsetCollection.cs:
+	* FirebirdSql.Data.Common/DbField.cs:
+	* FirebirdSql.Data.Common/DbValue.cs:
+	* FirebirdSql.Data.Common/IDatabase.cs:
+	* FirebirdSql.Data.Common/IServiceManager.cs:
+	* FirebirdSql.Data.Common/IscCodes.cs:
+	* FirebirdSql.Data.Common/TypeHelper.cs:
+	* FirebirdSql.Data.Embedded/FesDatabase.cs:
+	* FirebirdSql.Data.Embedded/FesServiceManager.cs:
+	* FirebirdSql.Data.Firebird/AssemblyInfo.cs:
+	* FirebirdSql.Data.Firebird/ClientFactory.cs:
+	* FirebirdSql.Data.Firebird/FbCommand.cs:
+	* FirebirdSql.Data.Firebird/FbConnection.cs:
+	* FirebirdSql.Data.Firebird/FbConnectionInternal.cs:
+	* FirebirdSql.Data.Firebird/Services/FbService.cs:
+	* FirebirdSql.Data.Firebird.UnitTest/App.config:
+	* FirebirdSql.Data.Gds/GdsArray.cs:
+	* FirebirdSql.Data.Gds/GdsConnection.cs:
+	* FirebirdSql.Data.Gds/GdsDatabase.cs:
+	* FirebirdSql.Data.Gds/GdsEventManager.cs:
+	* FirebirdSql.Data.Gds/GdsServiceManager.cs:
+	* FirebirdSql.Data.Gds/XdrStream.cs:
+
+		- Changes to allow v1.7 sources under .net 1.1 to connect to Firebird 2.1 ( backported from trunk sources ).
+
+2007-04-29 Carlos Guzmán Álvarez <carlosga05@gmail.com>
+
+	* FirebirdSql.Data.Firebird\FbConnection.cs:
+	* FirebirdSql.Data.Firebird\FbConnectionInternal.cs:
+
+		- Updates on connection disposing.
+
+2006-10-23 Carlos Guzmán Álvarez <carlosga05@gmail.com>
+
+	* FirebirdSql.Data.Firebird\Design\DataAdapter\FbDataAdapterDataSetGenerator.cs
+
+		- Fixed problem on untyped dataset generation
+
+2006-09-17 Carlos Guzmán Álvarez <carlosga05@gmail.com>
+
+	- Changes to Borland Data Provider to build using only the 
+	BDP version that comes with Delphi 2006 ( Carlos Guzman and Rick Hoover )
+
+2006-08-31 Carlos Guzmán Álvarez <carlosga05@gmail.com>
+
+	* Fixed bug #DNET-60
+
+2006-08-03 Carlos Guzman Alvarez <carlosga05@gmail.com>
+
+	* Committed changes and bugfixed done by Rick Hoover to the BDP implementation.
+
+2006-05-18 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird\Services\FbService.cs:
+
+		- Changes to allow the services to work against Firebird 2.0
+
+2006-04-14 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird\FbConnectionPool.cs:
+
+		- Added sasha changes to connection pooling implementation.
+
+	* FirebirdSql.Data.Firebird\FbCommand.cs:
+
+		- Fixes for bugs found running nhibernate nunit test suite.
+
+			1. Parsing named parameters, that should be fixed now in CVS, 
+			it was taken @ inside quoted identifier names as parameter names.
+
+2006-04-11 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Embedded\FesDatabase.cs:
+
+		- Changed buffer size on server veersion request.
+
+------------------ 1.7.1 Final Release ----------------------
+
+2006-03-27 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird\DbSchema\FbCheckConstraints.cs:
+	* FirebirdSql.Data.Firebird\FbCheckChecksByTable.cs:
+
+		- Fixed bug on sql commands ( Thanks to sunika for his feedback )
+
+2006-03-19 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	- Fixed bug #1417618 
+
+2006-03-17 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Client.Gds.GdsConnection.cs:
+
+		- Changes to try to avoid problems with IPV6.
+
+	* FirebirdSql.Data.Firebird.Isql.FbBatchExecution.cs:
+
+		- Added initial support for EXECUTE PROCEDURE commands.
+
+2006-02-24 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.FirebirdClient\FbConnectionString.cs:
+
+		- Added new synonym for the user identification ( userid )
+
+2006-02-19 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.FirebirdClient\FbParameter.cs:
+
+		- Minor fix on Guid datatype infer. ( Thanks to Alexander Gräf for his feedback. )
+
+
+------------------ 1.7.1 Release Candidate 4 ----------------------
+
+2006-01-20 Carlos Guzmán Álvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird\DbSchema\FbViewColumnUSage.cs:
+
+		- Fixed problem with the COLUMN_SIZE column value for char 
+		and varchar columns.
+
+------------------ 1.7.1 Release Candidate 3 ----------------------
+
+2005-12-20 Carlos Guzman Alvarez <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird\FirebirdCommandBuilder.cs:
+
+		- Fixed bug #1381252
+
+2005-10-11 Carlos Guzman Alvarez  <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird.FbConnectionPool.cs:
+
+		- Try to improve lock strategy.
+
+2005-10-10 Carlos Guzman Alvarez  <carlosga@telefonica.net>
+
+	* FirebirdSq.Data.Firebird\FbCommand.cs:
+		
+		- Backported Input parameter handling from 2.0 sources.
+
+------------------ 1.7.1 Release Candidate 2 ----------------------
+
+2005-09-12 Carlos Guzman Alvarez  <carlosga@telefonica.net>
+
+	* FirebirdSql.Data.Firebird\FbCommand.cs:
+
+		- Fix for RecordsAffected handling.
+
+------------------ 1.7.1 Release Candidate 1 ----------------------
 
 2005-08-27 Carlos Guzman Alvarez  <carlosga@telefonica.net>
 

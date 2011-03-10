@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -27,17 +27,17 @@ namespace FirebirdSql.Data.Firebird.Tests
 	/// All the test in this TestFixture are using implicit transaction support.
 	/// </summary>
 	[TestFixture]
-	public class FbStoredProcCallsTest : BaseTest 
+	public class FbStoredProcCallsTest : BaseTest
 	{
 		public FbStoredProcCallsTest() : base(false)
-		{		
+		{
 		}
 
 		[Test]
 		public void FirebirdLikeTest00()
 		{
 			FbCommand command = new FbCommand("EXECUTE PROCEDURE GETVARCHARFIELD(?)", Connection);
-				
+
 			command.CommandType = CommandType.StoredProcedure;
 
 			command.Parameters.Add("@ID", FbDbType.VarChar).Direction = ParameterDirection.Input;
@@ -48,17 +48,17 @@ namespace FirebirdSql.Data.Firebird.Tests
 			// This will fill output parameters values
 			command.ExecuteNonQuery();
 
-            // Check the value
-            Assert.AreEqual("IRow Number 1", command.Parameters[1].Value);
+			// Check the value
+			Assert.AreEqual("IRow Number 1", command.Parameters[1].Value);
 
-            // Dispose command - this will do a transaction commit
+			// Dispose command - this will do a transaction commit
 			command.Dispose();
 		}
 
 		[Test]
 		public void FirebirdLikeTest01()
 		{
-			FbCommand command = new FbCommand("SELECT * FROM GETVARCHARFIELD(?)", Connection);				
+			FbCommand command = new FbCommand("SELECT * FROM GETVARCHARFIELD(?)", Connection);
 			command.CommandType = CommandType.StoredProcedure;
 
 			command.Parameters.Add("@ID", FbDbType.VarChar).Direction = ParameterDirection.Input;
@@ -82,7 +82,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 		public void SqlServerLikeTest00()
 		{
 			FbCommand command = new FbCommand("GETVARCHARFIELD", Connection);
-				
+
 			command.CommandType = CommandType.StoredProcedure;
 
 			command.Parameters.Add("@ID", FbDbType.VarChar).Direction = ParameterDirection.Input;
@@ -104,7 +104,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 		[Test]
 		public void SqlServerLikeTest01()
 		{
-			FbCommand command = new FbCommand("GETRECORDCOUNT", Connection);			
+			FbCommand command = new FbCommand("GETRECORDCOUNT", Connection);
 			command.CommandType = CommandType.StoredProcedure;
 
 			command.Parameters.Add("@RECORDCOUNT", FbDbType.Integer).Direction = ParameterDirection.Output;

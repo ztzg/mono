@@ -78,14 +78,11 @@ namespace FirebirdSql.Data.Common
 					// Bits 8-17 hold collation_id for this value.
 					byte[] cs = BitConverter.GetBytes(value);
 
-					int index = Charset.SupportedCharsets.IndexOf(cs[0]);
-					if (index != -1)
+					this.charset = Charset.GetCharset(cs[0]);
+
+					if (this.charset == null)
 					{
-						this.charset = Charset.SupportedCharsets[index];
-					}
-					else
-					{
-						this.charset = Charset.SupportedCharsets[0];
+						this.charset = Charset.DefaultCharset;
 					}
 				}
 			}
@@ -545,110 +542,126 @@ namespace FirebirdSql.Data.Common
 
 		#region Private Methods
 
-		private DbDataType GetDbDataType()
-		{
-			// Special case for Guid handling
-			if (this.SqlType == IscCodes.SQL_TEXT && this.Length == 16 &&
-				(this.Charset != null && this.Charset.Name == "OCTETS"))
-			{
-				return DbDataType.Guid;
-			}
+        private DbDataType GetDbDataType()
+        {
+            // Special case for Guid handling
+            if (this.SqlType == IscCodes.SQL_TEXT && this.Length == 16 &&
+                (this.Charset != null && this.Charset.Name == "OCTETS"))
+            {
+                return DbDataType.Guid;
+            }
 
-			switch (this.SqlType)
-			{
-				case IscCodes.SQL_TEXT:
-					return DbDataType.Char;
+            switch (this.SqlType)
+            {
+                case IscCodes.SQL_TEXT:
+                    return DbDataType.Char;
 
-				case IscCodes.SQL_VARYING:
-					return DbDataType.VarChar;
+                case IscCodes.SQL_VARYING:
+                    return DbDataType.VarChar;
 
-				case IscCodes.SQL_SHORT:
-					if (this.subType == 2)
-					{
-						return DbDataType.Decimal;
-					}
-                    else if (subType == 1)
+                case IscCodes.SQL_SHORT:
+                    if (this.SubType == 2)
+                    {
+                        return DbDataType.Decimal;
+                    }
+                    else if (this.SubType == 1)
                     {
                         return DbDataType.Numeric;
                     }
+                    else if (this.NumericScale < 0)
+                    {
+                        return DbDataType.Decimal;
+                    }
                     else
-					{
-						return DbDataType.SmallInt;
-					}
+                    {
+                        return DbDataType.SmallInt;
+                    }
 
-				case IscCodes.SQL_LONG:
-					if (this.subType == 2)
-					{
-						return DbDataType.Decimal;
-					}
-                    else if (subType == 1)
+                case IscCodes.SQL_LONG:
+                    if (this.SubType == 2)
+                    {
+                        return DbDataType.Decimal;
+                    }
+                    else if (this.SubType == 1)
                     {
                         return DbDataType.Numeric;
                     }
+                    else if (this.NumericScale < 0)
+                    {
+                        return DbDataType.Decimal;
+                    }
                     else
-					{
-						return DbDataType.Integer;
-					}
+                    {
+                        return DbDataType.Integer;
+                    }
 
-				case IscCodes.SQL_QUAD:
-				case IscCodes.SQL_INT64:
-					if (this.subType == 2)
-					{
-						return DbDataType.Decimal;
-					}
-                    else if (subType == 1)
+                case IscCodes.SQL_QUAD:
+                case IscCodes.SQL_INT64:
+                    if (this.SubType == 2)
+                    {
+                        return DbDataType.Decimal;
+                    }
+                    else if (this.SubType == 1)
                     {
                         return DbDataType.Numeric;
                     }
+                    else if (this.NumericScale < 0)
+                    {
+                        return DbDataType.Decimal;
+                    }
                     else
-					{
-						return DbDataType.BigInt;
-					}
+                    {
+                        return DbDataType.BigInt;
+                    }
 
-				case IscCodes.SQL_FLOAT:
-					return DbDataType.Float;
+                case IscCodes.SQL_FLOAT:
+                    return DbDataType.Float;
 
-				case IscCodes.SQL_DOUBLE:
-				case IscCodes.SQL_D_FLOAT:
-					if (this.subType == 2)
-					{
-						return DbDataType.Decimal;
-					}
-                    else if (subType == 1)
+                case IscCodes.SQL_DOUBLE:
+                case IscCodes.SQL_D_FLOAT:
+                    if (this.SubType == 2)
+                    {
+                        return DbDataType.Decimal;
+                    }
+                    else if (this.SubType == 1)
                     {
                         return DbDataType.Numeric;
                     }
+                    else if (this.NumericScale < 0)
+                    {
+                        return DbDataType.Decimal;
+                    }
                     else
-					{
-						return DbDataType.Double;
-					}
+                    {
+                        return DbDataType.Double;
+                    }
 
-				case IscCodes.SQL_BLOB:
-					if (this.subType == 1)
-					{
-						return DbDataType.Text;
-					}
-					else
-					{
-						return DbDataType.Binary;
-					}
+                case IscCodes.SQL_BLOB:
+                    if (this.subType == 1)
+                    {
+                        return DbDataType.Text;
+                    }
+                    else
+                    {
+                        return DbDataType.Binary;
+                    }
 
-				case IscCodes.SQL_TIMESTAMP:
-					return DbDataType.TimeStamp;
+                case IscCodes.SQL_TIMESTAMP:
+                    return DbDataType.TimeStamp;
 
-				case IscCodes.SQL_TYPE_TIME:
-					return DbDataType.Time;
+                case IscCodes.SQL_TYPE_TIME:
+                    return DbDataType.Time;
 
-				case IscCodes.SQL_TYPE_DATE:
-					return DbDataType.Date;
+                case IscCodes.SQL_TYPE_DATE:
+                    return DbDataType.Date;
 
-				case IscCodes.SQL_ARRAY:
-					return DbDataType.Array;
+                case IscCodes.SQL_ARRAY:
+                    return DbDataType.Array;
 
-				default:
-					throw new SystemException("Invalid data type");
-			}
-		}
+                default:
+                    throw new SystemException("Invalid data type");
+            }
+        }
 
 		#endregion
 	}

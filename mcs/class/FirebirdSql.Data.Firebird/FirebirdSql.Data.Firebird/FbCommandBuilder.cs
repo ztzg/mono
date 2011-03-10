@@ -791,15 +791,18 @@ namespace FirebirdSql.Data.Firebird
 
 		private bool IncludedInWhereClause(DataRow schemaRow)
 		{
-			if (!(bool)schemaRow["IsKey"] &&
-				(this.commandBuilderBehavior == FbCommandBuilderBehavior.KeyFields ||
-				this.commandBuilderBehavior == FbCommandBuilderBehavior.KeyAndTimestampFields))
-			{
-				if (this.timestampColumnName != schemaRow["BaseColumnName"].ToString())
-				{
-					return false;
-				}
-			}
+            if (!(bool)schemaRow["IsKey"])
+            {
+                if (this.commandBuilderBehavior == FbCommandBuilderBehavior.KeyFields)
+                {
+                    return false;
+                }
+                else if (this.commandBuilderBehavior == FbCommandBuilderBehavior.KeyAndTimestampFields &&
+                    this.timestampColumnName != (string)schemaRow["BaseColumnName"])
+                {
+                    return false;
+                }
+            }
 
 			FbDbType dbType = (FbDbType)schemaRow["ProviderType"];
 

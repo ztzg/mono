@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -25,28 +25,28 @@ using FirebirdSql.Data.Firebird;
 namespace FirebirdSql.Data.Firebird.Tests
 {
 	[TestFixture]
-	public class FbBlobTest : BaseTest 
+	public class FbBlobTest : BaseTest
 	{
 		public FbBlobTest() : base(false)
-		{		
+		{
 		}
-		
+
 		[Test]
 		public void BinaryBlobTest()
 		{
 			int id_value = this.GetId();
-			
+
 			string selectText = "SELECT blob_field FROM TEST WHERE int_field = " + id_value.ToString();
 			string insertText = "INSERT INTO TEST (int_field, blob_field) values(@int_field, @blob_field)";
-			
+
 			Console.WriteLine("\r\n\r\nBinary Blob Test");
-			
+
 			Console.WriteLine("Generating an array of temp data");
 			// Generate an array of temp data
-			byte[] insert_values = new byte[100000*4];
+			byte[] insert_values = new byte[100000 * 4];
 			RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
 			rng.GetBytes(insert_values);
-			
+
 			Console.WriteLine("Executing insert command");
 
 			// Execute insert command
@@ -63,7 +63,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 
 			// Check that inserted values are correct
 			FbCommand select = new FbCommand(selectText, Connection);
-			byte[] select_values = (byte[])select.ExecuteScalar();			
+			byte[] select_values = (byte[])select.ExecuteScalar();
 
 			for (int i = 0; i < insert_values.Length; i++)
 			{
@@ -80,18 +80,18 @@ namespace FirebirdSql.Data.Firebird.Tests
 		public void ReaderGetBytes()
 		{
 			int id_value = this.GetId();
-			
+
 			string selectText = "SELECT blob_field FROM TEST WHERE int_field = " + id_value.ToString();
 			string insertText = "INSERT INTO TEST (int_field, blob_field) values(@int_field, @blob_field)";
-			
+
 			Console.WriteLine("\r\n\r\nFbDataReader.GetBytes with Binary Blob Test");
-			
+
 			Console.WriteLine("Generating an array of temp data");
 			// Generate an array of temp data
-			byte[] insert_values = new byte[100000*4];
+			byte[] insert_values = new byte[100000 * 4];
 			RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
 			rng.GetBytes(insert_values);
-			
+
 			Console.WriteLine("Executing insert command");
 
 			// Execute insert command
@@ -111,9 +111,9 @@ namespace FirebirdSql.Data.Firebird.Tests
 
 			FbDataReader reader = select.ExecuteReader();
 
-			int		index		= 0;
-			int		segmentSize	= 1000;
-			byte[]	select_values = new byte[100000*4];
+			int index = 0;
+			int segmentSize = 1000;
+			byte[] select_values = new byte[100000 * 4];
 			while (reader.Read())
 			{
 				while (index < 400000)

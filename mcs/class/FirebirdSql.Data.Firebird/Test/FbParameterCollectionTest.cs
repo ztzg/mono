@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -23,19 +23,19 @@ using FirebirdSql.Data.Firebird;
 namespace FirebirdSql.Data.Firebird.Tests
 {
 	[TestFixture]
-	public class FbParameterCollectionTest : BaseTest 
+	public class FbParameterCollectionTest : BaseTest
 	{
 		public FbParameterCollectionTest() : base()
-		{		
+		{
 		}
-		
+
 		[Test]
 		public void AddTest()
 		{
 			FbCommand command = new FbCommand();
-						
-			command.Parameters.Add(new FbParameter("@p292", 10000));			
-			command.Parameters.Add("@p01", FbDbType.Integer);			
+
+			command.Parameters.Add(new FbParameter("@p292", 10000));
+			command.Parameters.Add("@p01", FbDbType.Integer);
 			command.Parameters.Add("@p02", 289273);
 			command.Parameters.Add("#p3", FbDbType.SmallInt, 2, "sourceColumn");
 		}

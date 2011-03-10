@@ -48,7 +48,7 @@ namespace FirebirdSql.Data.Firebird.DbSchema
 					"trig.rdb$trigger_source AS CHECK_CLAUSULE, " +
 					"trig.rdb$description AS DESCRIPTION " +
 				"FROM RDB$CHECK_CONSTRAINTS chk " +
-					"left join rdb$triggers trig ON chk.rdb$trigger_name = trig.rdb$trigger_name"
+					"inner join rdb$triggers trig ON chk.rdb$trigger_name = trig.rdb$trigger_name"
 				);
 
 			if (restrictions != null)
@@ -78,38 +78,6 @@ namespace FirebirdSql.Data.Firebird.DbSchema
 			sql.Append(" ORDER BY chk.rdb$constraint_name");
 
 			return sql;
-		}
-
-		protected override object[] ParseRestrictions(object[] restrictions)
-		{
-			object[] parsed = restrictions;
-
-			if (parsed != null)
-			{
-				if (parsed.Length == 7 && parsed[6] != null)
-				{
-					switch (parsed[6].ToString().ToUpper(CultureInfo.CurrentCulture))
-					{
-						case "UNIQUE":
-							parsed[3] = "u";
-							break;
-
-						case "PRIMARY KEY":
-							parsed[3] = "p";
-							break;
-
-						case "FOREIGN KEY":
-							parsed[3] = "f";
-							break;
-
-						case "CHECK":
-							parsed[3] = "c";
-							break;
-					}
-				}
-			}
-
-			return parsed;
 		}
 
 		#endregion

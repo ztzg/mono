@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -25,51 +25,51 @@ using FirebirdSql.Data.Firebird;
 namespace FirebirdSql.Data.Firebird.Tests
 {
 	[TestFixture]
-	public class FbTransactionTest : BaseTest 
+	public class FbTransactionTest : BaseTest
 	{
 		public FbTransactionTest() : base(false)
-		{		
+		{
 		}
 
-        [Test]
-        public void DisposeTest()
-        {
-            bool result = true;
-            try
-            {
-                FbCommand cmd = new FbCommand("select * from test", this.Connection);
-                cmd.Transaction = this.Connection.BeginTransaction(IsolationLevel.RepeatableRead);
+		[Test]
+		public void DisposeTest()
+		{
+			bool result = true;
+			try
+			{
+				FbCommand cmd = new FbCommand("select * from test", this.Connection);
+				cmd.Transaction = this.Connection.BeginTransaction(IsolationLevel.RepeatableRead);
 
-                FbDataReader r = cmd.ExecuteReader();
-                while (r.Read())
-                {
-                }
-                r.Close();
+				FbDataReader r = cmd.ExecuteReader();
+				while (r.Read())
+				{
+				}
+				r.Close();
 
-                cmd.Transaction.Rollback();
-                cmd.Transaction.Dispose();
+				cmd.Transaction.Rollback();
+				cmd.Transaction.Dispose();
 
-                result = false;
-            }
-            catch
-            {
-            }
-            finally
-            {
-                if (!result)
-                {
-                    throw new Exception("Incorrect Dispose behavior");
-                }
-            }
-        }
+				result = false;
+			}
+			catch
+			{
+			}
+			finally
+			{
+				if (!result)
+				{
+					throw new Exception("Incorrect Dispose behavior");
+				}
+			}
+		}
 
-        [Test]
+		[Test]
 		public void CommitTest()
-		{			
+		{
 			Transaction = Connection.BeginTransaction();
 			Transaction.Commit();
 		}
-		
+
 		[Test]
 		public void RollbackTest()
 		{
@@ -77,29 +77,29 @@ namespace FirebirdSql.Data.Firebird.Tests
 			Transaction.Rollback();
 		}
 
-        [Test]
+		[Test]
 		public void SavePointTest()
 		{
 			FbCommand command = new FbCommand();
 
 			Console.WriteLine("Iniciada nueva transaccion");
-			
+
 			Transaction = Connection.BeginTransaction("InitialSavePoint");
-			
-			command.Connection	= Connection;
-			command.Transaction	= Transaction;
+
+			command.Connection = Connection;
+			command.Transaction = Transaction;
 
 			command.CommandText = "insert into TEST (INT_FIELD) values (200) ";
-			command.ExecuteNonQuery();			
+			command.ExecuteNonQuery();
 
 			Transaction.Save("FirstSavePoint");
 
 			command.CommandText = "insert into TEST (INT_FIELD) values (201) ";
-			command.ExecuteNonQuery();			
+			command.ExecuteNonQuery();
 			Transaction.Save("SecondSavePoint");
 
 			command.CommandText = "insert into TEST (INT_FIELD) values (202) ";
-			command.ExecuteNonQuery();			
+			command.ExecuteNonQuery();
 			Transaction.Rollback("InitialSavePoint");
 
 			Transaction.Commit();
@@ -112,8 +112,8 @@ namespace FirebirdSql.Data.Firebird.Tests
 			StringBuilder b1 = new StringBuilder();
 			b1.AppendFormat("ALTER TABLE \"{0}\" drop \"INT_FIELD\"", "TEST");
 
-			FbTransaction	transaction = null;
-			FbCommand		command		= null;
+			FbTransaction transaction = null;
+			FbCommand command = null;
 
 			try
 			{

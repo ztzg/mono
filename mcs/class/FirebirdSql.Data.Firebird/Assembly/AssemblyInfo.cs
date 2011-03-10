@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -28,9 +28,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("Firebird .NET Data Provider")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("FirebirdSQL")]
-[assembly: AssemblyProduct("Firebird .NET Data Provider")]
-[assembly: AssemblyCopyright("(c) 2002-2005. Carlos Guzman Alvarez")]
-[assembly: AssemblyVersion("1.7.1.0")]
+[assembly: AssemblyProduct("FirebirdClient")]
+[assembly: AssemblyCopyright("(c) 2002-2008.")]
+[assembly: AssemblyVersion("1.7.2.0")]
 [assembly: AssemblyDelaySign(false)]
 [assembly: AssemblyKeyFile("FirebirdSql.Data.Firebird.snk")]
 [assembly: AssemblyKeyName("")]

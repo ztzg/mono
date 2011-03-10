@@ -341,10 +341,6 @@ namespace FirebirdSql.Data.Firebird
 
 			switch (code)
 			{
-				case TypeCode.Object:
-					this.fbType = FbDbType.Binary;
-					break;
-
 				case TypeCode.Char:
 					this.fbType = FbDbType.Char;
 					break;
@@ -390,15 +386,19 @@ namespace FirebirdSql.Data.Firebird
 
 				case TypeCode.Empty:
 				default:
-					if (value is Guid)
-					{
-						this.fbType = FbDbType.Guid;
-					}
-					else
-					{
-						throw new SystemException("Value is of unknown data type");
-					}
-					break;
+                    if (value is Guid)
+                    {
+                        this.fbType = FbDbType.Guid;
+                    }
+                    else if (code == TypeCode.Object)
+                    {
+                        this.fbType = FbDbType.Binary;
+                    }
+                    else
+                    {
+                        throw new SystemException("Value is of unknown data type");
+                    } 
+                    break;
 			}
 		}
 

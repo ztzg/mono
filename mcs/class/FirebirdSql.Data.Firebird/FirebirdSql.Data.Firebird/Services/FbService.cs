@@ -146,26 +146,25 @@ namespace FirebirdSql.Data.Firebird.Services
 				if (this.svc == null)
 				{
 					// New instance	for	Service	handler
-					this.svc = ClientFactory.CreateServiceManager(this.csManager.ServerType);
+					this.svc = ClientFactory.CreateServiceManager(this.csManager);
 				}
 
-				// Set service name
-				string service = String.Empty;
+                //// Set service name
+                //string service = String.Empty;
 
-				switch (this.csManager.ServerType)
-				{
-					case 0:
-						service = this.csManager.DataSource + ":" + serviceName;
-						break;
+                //switch (this.csManager.ServerType)
+                //{
+                //    case 0:
+                //        service = this.csManager.DataSource + ":" + serviceName;
+                //        break;
 
-					default:
-						service = serviceName;
-						break;
-				}
+                //    default:
+                //        service = serviceName;
+                //        break;
+                //}
 
 				// Initialize Services API
-				this.svc.Attach(this.BuildSpb(), this.csManager.DataSource,
-								this.csManager.Port, service);
+				this.svc.Attach(this.BuildSpb(), this.serviceName);
 
 				this.state = FbServiceState.Open;
 			}
@@ -336,7 +335,7 @@ namespace FirebirdSql.Data.Firebird.Services
 			if (this.svc == null)
 			{
 				// New instance	for	Service	handler
-				this.svc = ClientFactory.CreateServiceManager(this.csManager.ServerType);
+				this.svc = ClientFactory.CreateServiceManager(this.csManager);
 			}
 
 			return this.svc.CreateParameterBuffer();

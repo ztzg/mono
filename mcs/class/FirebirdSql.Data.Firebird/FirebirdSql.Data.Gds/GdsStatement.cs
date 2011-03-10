@@ -525,10 +525,13 @@ namespace FirebirdSql.Data.Gds
 			{
 				try
 				{
-					this.db.Send.Write(IscCodes.op_free_statement);
-					this.db.Send.Write(this.handle);
-					this.db.Send.Write(option);
-					this.db.Send.Flush();
+					if (db.IsAssigned())        // RPH - Added to eliminate exception
+					{
+						this.db.Send.Write(IscCodes.op_free_statement);
+						this.db.Send.Write(this.handle);
+						this.db.Send.Write(option);
+						this.db.Send.Flush();
+					}
 
 					// Reset statement information
 					if (option == IscCodes.DSQL_drop)
@@ -540,7 +543,8 @@ namespace FirebirdSql.Data.Gds
 					this.Clear();
 					this.allRowsFetched = false;
 
-					this.db.ReadGenericResponse();
+					if (db.IsAssigned())        // RPH - Added to eliminate exception
+						this.db.ReadGenericResponse();
 				}
 				catch (IOException)
 				{

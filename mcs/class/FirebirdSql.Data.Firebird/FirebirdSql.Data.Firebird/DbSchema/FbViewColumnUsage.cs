@@ -152,7 +152,10 @@ namespace FirebirdSql.Data.Firebird.DbSchema
 
 				if (dbType == FbDbType.Char || dbType == FbDbType.VarChar)
 				{
-					row["COLUMN_SIZE"] = row["CHARACTER_LENGTH"];
+                    if (!row.IsNull("CHARACTER_LENGTH"))
+                    {
+                        row["COLUMN_SIZE"] = row["CHARACTER_LENGTH"];
+                    }
 				}
 				else
 				{

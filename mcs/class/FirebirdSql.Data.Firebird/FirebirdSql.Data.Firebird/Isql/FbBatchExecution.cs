@@ -286,7 +286,8 @@ namespace FirebirdSql.Data.Firebird.Isql
 						case SqlStatementType.EventWait:
 						case SqlStatementType.Execute:
 						case SqlStatementType.ExecuteImmediate:
-							// raise the event
+                        case SqlStatementType.ExecuteProcedure:
+                            // raise the event
 							this.OnCommandExecuting(this.sqlCommand);
 
 							rowsAffected = this.ExecuteCommand(this.sqlCommand,	autoCommit);
@@ -295,9 +296,8 @@ namespace FirebirdSql.Data.Firebird.Isql
 							// raise the event
 							this.OnCommandExecuted(sqlStatement, null, rowsAffected);
 							break;
-
-						case SqlStatementType.ExecuteProcedure:
-						case SqlStatementType.Fetch:
+                        
+                        case SqlStatementType.Fetch:
 							break;
 
 						case SqlStatementType.Grant:

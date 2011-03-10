@@ -20,7 +20,6 @@ using System;
 using System.Data;
 using System.Collections;
 using System.Threading;
-
 using FirebirdSql.Data.Common;
 
 namespace FirebirdSql.Data.Firebird
@@ -55,6 +54,19 @@ namespace FirebirdSql.Data.Firebird
 			}
 		}
 
+        public object SyncObject
+        {
+            get
+            {
+                if (this.syncObject == null)
+                {
+                    Interlocked.CompareExchange(ref this.syncObject, new object(), null);
+                }
+
+                return this.syncObject;
+            }
+        }
+
 		#endregion
 
 		#region Constructors
@@ -63,7 +75,6 @@ namespace FirebirdSql.Data.Firebird
 		{
 			this.pools		= Hashtable.Synchronized(new Hashtable());
 			this.handlers	= Hashtable.Synchronized(new Hashtable());
-			this.syncObject	= new object();
 		}
 
 		#endregion
@@ -74,7 +85,7 @@ namespace FirebirdSql.Data.Firebird
 		{
 			FbConnectionPool pool = null;
 
-			lock (this.syncObject)
+			lock (this.SyncObject)
 			{
 				if (this.pools.ContainsKey(connectionString.GetHashCode()))
 				{
@@ -89,7 +100,7 @@ namespace FirebirdSql.Data.Firebird
 		{
 			FbConnectionPool pool = null;
 
-			lock (this.syncObject)
+			lock (this.SyncObject)
 			{
 				pool = this.FindPool(connectionString);
 
@@ -119,7 +130,7 @@ namespace FirebirdSql.Data.Firebird
 
 		public void ClearAllPools()
 		{
-			lock (this.syncObject)
+			lock (this.SyncObject)
 			{
 				lock (this.pools.SyncRoot)
 				{
@@ -142,7 +153,7 @@ namespace FirebirdSql.Data.Firebird
 
 		public void ClearPool(string connectionString)
 		{
-			lock (this.syncObject)
+			lock (this.SyncObject)
 			{
 				lock (this.pools.SyncRoot)
 				{
@@ -192,6 +203,10 @@ namespace FirebirdSql.Data.Firebird
 
 	internal class FbConnectionPool : MarshalByRefObject
 	{
+		#region Types
+		private enum MoveType {LockedToUnlocked, UnlockedToLocked}
+		#endregion
+
 		#region Fields
 
 		private FbConnectionString	options;
@@ -215,8 +230,32 @@ namespace FirebirdSql.Data.Firebird
 
 		public int Count
 		{
-			get { return this.unlocked.Count + this.locked.Count; }
+			get 
+			{
+				lock (this.unlocked.SyncRoot)
+				{
+					return this.unlocked.Count + this.locked.Count;
+				} 
+			}
 		}
+
+		public bool HasUnlocked
+		{
+			get { return this.unlocked.Count > 0; }			
+		}
+
+        public object SyncObject
+        {
+            get
+            {
+                if (this.syncObject == null)
+                {
+                    Interlocked.CompareExchange(ref this.syncObject, new object(), null);
+                }
+
+                return this.syncObject;
+            }
+        }
 
 		#endregion
 
@@ -224,7 +263,6 @@ namespace FirebirdSql.Data.Firebird
 
 		public FbConnectionPool(string connectionString)
 		{
-			this.syncObject			= new object();
 			this.connectionString	= connectionString;
 			this.options			= new FbConnectionString(connectionString);
 			this.lifeTime			= this.options.ConnectionLifeTime * TimeSpan.TicksPerSecond;
@@ -260,32 +298,62 @@ namespace FirebirdSql.Data.Firebird
 
 		#region Methods
 
+		private void MoveConnection(FbConnectionInternal connection, MoveType moveType)
+		{
+            if (null == connection)
+            {
+                return;
+            }
+
+			lock (this.unlocked.SyncRoot)
+			{
+				switch (moveType)
+				{
+					case MoveType.LockedToUnlocked:
+						this.locked.Remove(connection);
+						this.unlocked.Add(connection);
+						break;
+
+					case MoveType.UnlockedToLocked:
+						this.unlocked.Remove(connection);
+						this.locked.Add(connection);
+						break;
+				}
+			}
+		}
+
 		public void CheckIn(FbConnectionInternal connection)
 		{
 			connection.OwningConnection = null;
 			connection.Created = System.DateTime.Now.Ticks;
 
-			this.locked.Remove(connection);
-			this.unlocked.Add(connection);
+			this.MoveConnection(connection, MoveType.LockedToUnlocked);
 		}
 
 		public FbConnectionInternal CheckOut()
 		{
 			FbConnectionInternal newConnection = null;
 
-			lock (this.syncObject)
+			lock (this.SyncObject)
 			{
+				// 1. Try to get a connection from the unlocked connection list
+				newConnection = this.GetConnection();
+                if (newConnection != null)
+                {
+                    return newConnection;
+                }
+
+				// 2. Check if we have reached the max number of allowed connections
 				this.CheckMaxPoolSize();
 
-				lock (this.unlocked.SyncRoot)
-				{
-					newConnection = this.GetConnection();
-					if (newConnection != null)
-					{
-						return newConnection;
-					}
-				}
+				// 3. Try to get a connection from the unlocked connection list
+				newConnection = this.GetConnection();
+                if (newConnection != null)
+                {
+                    return newConnection;
+                }
 
+				// 4. In any other case create a new connection
 				newConnection = this.Create();
 
 				// Set connection pooling settings to the new connection
@@ -301,7 +369,7 @@ namespace FirebirdSql.Data.Firebird
 
 		public void Clear()
 		{
-			lock (this.syncObject)
+			lock (this.SyncObject)
 			{
 				// Stop	cleanup	thread
 				if (this.cleanUpThread != null)
@@ -311,7 +379,7 @@ namespace FirebirdSql.Data.Firebird
 				}
 
 				// Close all unlocked connections
-				FbConnectionInternal[] list = (FbConnectionInternal[])this.unlocked.ToArray(typeof(FbConnectionInternal));
+				FbConnectionInternal[] list = (FbConnectionInternal[]) this.unlocked.ToArray(typeof(FbConnectionInternal));
 
 				foreach (FbConnectionInternal connection in list)
 				{
@@ -349,55 +417,49 @@ namespace FirebirdSql.Data.Firebird
 
 		#region Private	Methods
 
+        private void Initialize()
+        {
+            lock (this.SyncObject)
+            {
+                for (int i = 0; i < this.options.MinPoolSize; i++)
+                {
+                    this.unlocked.Add(this.Create());
+                }
+            }
+        }
+
 		private bool CheckMinPoolSize()
 		{
-			if (this.options.MinPoolSize > 0 && this.Count == this.options.MinPoolSize)
-			{
-				return false;
-			}
-			else
-			{
-				return true;
-			}
+			return !(this.options.MinPoolSize > 0 && this.Count <= this.options.MinPoolSize);
 		}
 
 		private void CheckMaxPoolSize()
 		{
-			lock (this.syncObject)
+			if (this.options.MaxPoolSize > 0 && this.Count >= this.options.MaxPoolSize)
 			{
-				if (this.options.MaxPoolSize > 0 &&
-					(this.Count + 1) >= this.options.MaxPoolSize)
+				long timeout = this.options.ConnectionTimeout * TimeSpan.TicksPerSecond;
+				long start = DateTime.Now.Ticks;
+
+				/* 
+				 Loop brakes without errors in next situations:
+					1. connection was returned from locked to unlocked by calling CheckIn in other thread (HasUnlocked = true) 
+					2. connection was moved from locked to unlocked (by Checkin) and then cleaned (removed from unlocked by Cleanup)
+				*/
+				while (true)
 				{
-					long timeout = this.options.ConnectionTimeout * TimeSpan.TicksPerSecond;
-					long start = DateTime.Now.Ticks;
+                    if (this.Count >= this.options.MaxPoolSize && this.HasUnlocked == false)
+                    {
+                        if ((DateTime.Now.Ticks - start) > timeout)
+                        {
+                            throw new SystemException("Timeout exceeded.");
+                        }
 
-					while (true)
-					{
-						if ((this.Count + 1) >= this.options.MaxPoolSize)
-						{
-							if ((DateTime.Now.Ticks - start) > timeout)
-							{
-								throw new SystemException("Timeout exceeded.");
-							}
-
-							Thread.Sleep(100);
-						}
-						else
-						{
-							break;
-						}
-					}
-				}
-			}
-		}
-
-		private void Initialize()
-		{
-			lock (this.syncObject)
-			{
-				for (int i = 0; i < this.options.MinPoolSize; i++)
-				{
-					this.unlocked.Add(this.Create());
+                        Thread.Sleep(100);
+                    }
+                    else
+                    {
+                        break;
+                    }
 				}
 			}
 		}
@@ -415,55 +477,56 @@ namespace FirebirdSql.Data.Firebird
 
 		private FbConnectionInternal GetConnection()
 		{
-			FbConnectionInternal[] list = (FbConnectionInternal[])this.unlocked.ToArray(typeof(FbConnectionInternal));
 			FbConnectionInternal result = null;
 			long check = -1;
 
-			Array.Reverse(list);
-
-			foreach (FbConnectionInternal connection in list)
+			lock (this.unlocked.SyncRoot)
 			{
-				if (connection.Verify())
-				{
-					if (this.lifeTime != 0)
-					{
-						long now = DateTime.Now.Ticks;
-						long expire = connection.Created + this.lifeTime;
+				FbConnectionInternal[] connections = (FbConnectionInternal[]) this.unlocked.ToArray(typeof(FbConnectionInternal));
 
-						if (now >= expire)
+				for (int i = connections.Length - 1; i >= 0; i--) 
+				{
+					if (connections[i].Verify())
+					{
+						if (this.lifeTime != 0)
 						{
-							if (this.CheckMinPoolSize())
+							long now    = DateTime.Now.Ticks;
+							long expire = connections[i].Created + this.lifeTime;
+
+							if (now >= expire)
 							{
-								this.unlocked.Remove(connection);
-								this.Expire(connection);
+								if (this.CheckMinPoolSize())
+								{
+									this.unlocked.Remove(connections[i]);
+									this.Expire(connections[i]);
+								}
+							}
+							else
+							{
+								if (expire > check)
+								{
+									check = expire;
+									result = connections[i];
+								}
 							}
 						}
 						else
 						{
-							if (expire > check)
-							{
-								check = expire;
-								result = connection;
-							}
+							result = connections[i];
+							break;
 						}
 					}
 					else
 					{
-						result = connection;
-						break;
+						this.unlocked.Remove(connections[i]);
+						this.Expire(connections[i]);
 					}
 				}
-				else
-				{
-					this.unlocked.Remove(connection);
-					this.Expire(connection);
-				}
-			}
 
-			if (result != null)
-			{
-				this.unlocked.Remove(result);
-				this.locked.Add(result);
+                if (result != null)
+                {
+                    this.MoveConnection(result, MoveType.UnlockedToLocked);
+                }
 			}
 
 			return result;
@@ -488,7 +551,7 @@ namespace FirebirdSql.Data.Firebird
 
 					if (this.Count == 0)
 					{
-						lock (this.syncObject)
+						lock (this.SyncObject)
 						{
 							// Empty pool
 							if (this.EmptyPool != null)
@@ -510,18 +573,19 @@ namespace FirebirdSql.Data.Firebird
 
 		private void Expire(FbConnectionInternal connection)
 		{
-			try
-			{
-				if (connection.Verify())
-				{
-					connection.Disconnect();
-				}
-			}
-			catch (Exception)
-			{
-				throw new FbException("Error closing database connection.");
-			}
-		}
+            try
+            {
+                if (connection.Verify())
+                {
+                    connection.Disconnect();
+                }
+            }
+            catch (Exception)
+            {
+                // Do not raise an exception as the connection could be invalid due to several reasons
+                // ( network problems, server shutdown, ... )
+            }
+        }
 
 		private void Cleanup()
 		{

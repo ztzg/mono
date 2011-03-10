@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -29,22 +29,22 @@ namespace FirebirdSql.Data.Firebird.Tests
 	public class FbImplicitTransactionTest : BaseTest
 	{
 		public FbImplicitTransactionTest() : base(false)
-		{		
+		{
 		}
-		
+
 		[Test]
 		public void DataAdapterFillTest()
 		{
-			FbCommand		command = new FbCommand("select * from TEST where DATE_FIELD = ?", Connection);
-			FbDataAdapter	adapter = new FbDataAdapter(command);
+			FbCommand command = new FbCommand("select * from TEST where DATE_FIELD = ?", Connection);
+			FbDataAdapter adapter = new FbDataAdapter(command);
 
 			adapter.SelectCommand.Parameters.Add("@DATE_FIELD", FbDbType.Date, 4, "DATE_FIELD").Value = new DateTime(2003, 1, 5);
-			
+
 			FbCommandBuilder builder = new FbCommandBuilder(adapter);
 
 			DataSet ds = new DataSet();
 			adapter.Fill(ds, "TEST");
-			
+
 			Console.WriteLine();
 			Console.WriteLine("Implicit transactions - DataAdapter Fill Method - Test");
 
@@ -54,9 +54,9 @@ namespace FirebirdSql.Data.Firebird.Tests
 				{
 					Console.Write(col.ColumnName + "\t\t");
 				}
-				
+
 				Console.WriteLine();
-				
+
 				foreach (DataRow row in table.Rows)
 				{
 					for (int i = 0; i < table.Columns.Count; i++)
@@ -72,20 +72,20 @@ namespace FirebirdSql.Data.Firebird.Tests
 			builder.Dispose();
 			command.Dispose();
 		}
-	
+
 		[Test]
 		public void MultipleDataAdapterFillTest()
 		{
-			FbCommand		command = new FbCommand("select * from TEST where DATE_FIELD = ?", Connection);
-			FbDataAdapter	adapter = new FbDataAdapter(command);
+			FbCommand command = new FbCommand("select * from TEST where DATE_FIELD = ?", Connection);
+			FbDataAdapter adapter = new FbDataAdapter(command);
 
 			adapter.SelectCommand.Parameters.Add("@DATE_FIELD", FbDbType.Date, 4, "DATE_FIELD").Value = new DateTime(2003, 1, 5);
-			
+
 			FbCommandBuilder builder = new FbCommandBuilder(adapter);
 
 			DataSet ds = new DataSet();
 			adapter.Fill(ds, "TEST");
-			
+
 			Console.WriteLine();
 			Console.WriteLine("Implicit transactions - DataAdapter Fill Method - Test");
 
@@ -95,9 +95,9 @@ namespace FirebirdSql.Data.Firebird.Tests
 				{
 					Console.Write(col.ColumnName + "\t\t");
 				}
-				
+
 				Console.WriteLine();
-				
+
 				foreach (DataRow row in table.Rows)
 				{
 					for (int i = 0; i < table.Columns.Count; i++)
@@ -113,7 +113,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 
 			ds = new DataSet();
 			adapter.Fill(ds, "TEST");
-			
+
 			Console.WriteLine();
 			Console.WriteLine("Implicit transactions - DataAdapter Fill Method - Test");
 
@@ -123,9 +123,9 @@ namespace FirebirdSql.Data.Firebird.Tests
 				{
 					Console.Write(col.ColumnName + "\t\t");
 				}
-				
+
 				Console.WriteLine();
-				
+
 				foreach (DataRow row in table.Rows)
 				{
 					for (int i = 0; i < table.Columns.Count; i++)
@@ -177,7 +177,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 
 			FbCommand command = new FbCommand("update TEST set blob_field = @blob_field where int_field = @int_field", Connection);
 			command.Parameters.Add("@int_field", FbDbType.Integer).Value = 1;
-			command.Parameters.Add("@blob_field", FbDbType.Binary).Value = 
+			command.Parameters.Add("@blob_field", FbDbType.Binary).Value =
 				Encoding.Default.GetBytes("Blob field update with implicit transaction");
 
 			int i = command.ExecuteNonQuery();
@@ -199,7 +199,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 			values[1] = 20;
 			values[2] = 30;
 			values[3] = 40;
-			
+
 			FbCommand command = new FbCommand("update TEST set iarray_field = @iarray_field where int_field = @int_field", Connection);
 			command.Parameters.Add("@int_field", FbDbType.Integer).Value = 1;
 			command.Parameters.Add("@iarray_field", FbDbType.Array).Value = values;

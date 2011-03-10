@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -30,8 +30,8 @@ using NUnit.Framework;
 namespace FirebirdSql.Data.Firebird.Tests
 {
 	[TestFixture]
-	public class FbServicesTest : BaseTest 
-	{	
+	public class FbServicesTest : BaseTest
+	{
 		public FbServicesTest() : base(false)
 		{
 		}
@@ -51,28 +51,28 @@ namespace FirebirdSql.Data.Firebird.Tests
 		public void BackupTest()
 		{
 			FbBackup backupSvc = new FbBackup();
-						
+
 			backupSvc.ConnectionString = this.BuildServicesConnectionString();
-			backupSvc.BackupFiles.Add(new FbBackupFile(@"c:\testdb.gbk", 2048));
+			backupSvc.BackupFiles.Add(new FbBackupFile(Path.GetTempPath() + "testdb.gbk", 2048));
 			backupSvc.Verbose = true;
-			
+
 			backupSvc.Options = FbBackupFlags.IgnoreLimbo;
 
 			backupSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
-			
+
 			backupSvc.Execute();
 		}
-		
+
 		[Test]
 		public void RestoreTest()
 		{
 			FbRestore restoreSvc = new FbRestore();
 
 			restoreSvc.ConnectionString = this.BuildServicesConnectionString();
-			restoreSvc.BackupFiles.Add(new FbBackupFile(@"c:\testdb.gbk", 2048));
-			restoreSvc.Verbose	= true;
+			restoreSvc.BackupFiles.Add(new FbBackupFile(Path.GetTempPath() + "testdb.gbk", 2048));
+			restoreSvc.Verbose = true;
 			restoreSvc.PageSize = 4096;
-			restoreSvc.Options	= FbRestoreFlags.Create | FbRestoreFlags.Replace; 
+			restoreSvc.Options = FbRestoreFlags.Create | FbRestoreFlags.Replace;
 
 			restoreSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
 
@@ -85,7 +85,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 			FbValidation validationSvc = new FbValidation();
 
 			validationSvc.ConnectionString = this.BuildServicesConnectionString();
-			validationSvc.Options = FbValidationFlags.ValidateDatabase; 
+			validationSvc.Options = FbValidationFlags.ValidateDatabase;
 
 			validationSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
 
@@ -125,13 +125,13 @@ namespace FirebirdSql.Data.Firebird.Tests
 			FbStatistical statisticalSvc = new FbStatistical();
 
 			statisticalSvc.ConnectionString = this.BuildServicesConnectionString();
-			statisticalSvc.Options			= FbStatisticalFlags.SystemTablesRelations;
-						
+			statisticalSvc.Options = FbStatisticalFlags.SystemTablesRelations;
+
 			statisticalSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
 
 			statisticalSvc.Execute();
 		}
-		
+
 		[Test]
 		public void FbLogTest()
 		{
@@ -140,7 +140,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 			logSvc.ConnectionString = this.BuildServicesConnectionString(false);
 
 			logSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
-						
+
 			logSvc.Execute();
 		}
 
@@ -152,13 +152,13 @@ namespace FirebirdSql.Data.Firebird.Tests
 			securitySvc.ConnectionString = this.BuildServicesConnectionString(false);
 
 			FbUserData user = new FbUserData();
-			
-			user.UserName 		= "new_user";
-			user.UserPassword 	= "1";
-			
+
+			user.UserName = "new_user";
+			user.UserPassword = "1";
+
 			securitySvc.AddUser(user);
 		}
-		
+
 		[Test]
 		public void DeleteUser()
 		{
@@ -167,9 +167,9 @@ namespace FirebirdSql.Data.Firebird.Tests
 			securitySvc.ConnectionString = this.BuildServicesConnectionString(false);
 
 			FbUserData user = new FbUserData();
-			
+
 			user.UserName = "new_user";
-						
+
 			securitySvc.DeleteUser(user);
 		}
 
@@ -201,7 +201,7 @@ namespace FirebirdSql.Data.Firebird.Tests
 				Console.WriteLine("User {0} name {1}", i, users[i].UserName);
 			}
 		}
-		
+
 		[Test]
 		public void ServerPropertiesTest()
 		{
@@ -209,9 +209,9 @@ namespace FirebirdSql.Data.Firebird.Tests
 
 			serverProp.ConnectionString = this.BuildServicesConnectionString(false);
 
-			FbServerConfig	serverConfig	= serverProp.ServerConfig;
-			FbDatabasesInfo databasesInfo	= serverProp.DatabasesInfo;
-			
+			FbServerConfig serverConfig = serverProp.ServerConfig;
+			FbDatabasesInfo databasesInfo = serverProp.DatabasesInfo;
+
 			Console.WriteLine(serverProp.MessageFile);
 			Console.WriteLine(serverProp.LockManager);
 			Console.WriteLine(serverProp.RootDirectory);

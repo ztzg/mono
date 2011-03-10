@@ -56,6 +56,7 @@ namespace FirebirdSql.Data.Embedded
 		{
 			if (pNativeData	!= IntPtr.Zero)
 			{
+				/*
 				// Obtain XSQLDA information
 				XSQLDA xsqlda = new	XSQLDA();
 			
@@ -85,6 +86,7 @@ namespace FirebirdSql.Data.Embedded
 					Marshal.DestroyStructure(
 						this.GetIntPtr(pNativeData,	this.ComputeLength(i)),	typeof(XSQLVAR));
 				}
+				*/
 
 				// Free	pointer	memory
 				Marshal.FreeHGlobal(pNativeData);
@@ -98,54 +100,76 @@ namespace FirebirdSql.Data.Embedded
 			// Set up XSQLDA structure
 			XSQLDA xsqlda = new XSQLDA();
 
-			xsqlda.version = descriptor.Version;
-			xsqlda.sqln	 = descriptor.Count;
-			xsqlda.sqld	 = descriptor.ActualCount;
+			xsqlda.version  = descriptor.Version;
+			xsqlda.sqln	    = descriptor.Count;
+			xsqlda.sqld	    = descriptor.ActualCount;
 			
 			XSQLVAR[] xsqlvar = new	XSQLVAR[descriptor.Count];
+
+			int nativeHeaderSize = ComputeLength(xsqlvar.Length);
+			int nativeSize = nativeHeaderSize;
+			byte[][] xsqlvarBuffers = new byte[xsqlvar.Length][];
 
 			for	(int i = 0;	i <	xsqlvar.Length;	i++)
 			{
 				// Create a	new	XSQLVAR	structure and fill it
 				xsqlvar[i] = new XSQLVAR();
 
-				xsqlvar[i].sqltype	 = descriptor[i].DataType;
-				xsqlvar[i].sqlscale	 = descriptor[i].NumericScale;
-				xsqlvar[i].sqlsubtype = descriptor[i].SubType;
-				xsqlvar[i].sqllen	 = descriptor[i].Length;
+				xsqlvar[i].sqltype	    = descriptor[i].DataType;
+				xsqlvar[i].sqlscale	    = descriptor[i].NumericScale;
+				xsqlvar[i].sqlsubtype   = descriptor[i].SubType;
+				xsqlvar[i].sqllen	    = descriptor[i].Length;
 
-				// Create a	new	pointer	for	the	xsqlvar	data
+				// Cache the data byte[]
 				byte[] buffer = this.GetBytes(descriptor[i]);
-				if (buffer.Length > 0)
-				{
-					xsqlvar[i].sqldata = Marshal.AllocHGlobal(buffer.Length);
-					Marshal.Copy(buffer, 0,	xsqlvar[i].sqldata,	buffer.Length);
-				}
+				xsqlvarBuffers[i] = buffer;
 
-				// Create a	new	pointer	for	the	sqlind value
-				xsqlvar[i].sqlind = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(Int16)));
-				Marshal.WriteInt16(xsqlvar[i].sqlind, descriptor[i].NullFlag);				  
-
+				// Calculate the sizes...
+				nativeSize += buffer.Length;
+				nativeSize += sizeofInt16;
+				
 				// Name
-				xsqlvar[i].sqlname		 = this.GetStringBuffer(charset,	descriptor[i].Name);
-				xsqlvar[i].sqlname_length = (short)xsqlvar[i].sqlname.Length;
+				xsqlvar[i].sqlname		    = this.GetStringBuffer(charset,	descriptor[i].Name);
+				xsqlvar[i].sqlname_length   = (short)xsqlvar[i].sqlname.Length;
 
 				// Relation	Name
-				xsqlvar[i].relname		 = this.GetStringBuffer(charset,	descriptor[i].Relation);
-				xsqlvar[i].relname_length = (short)xsqlvar[i].relname.Length;
+				xsqlvar[i].relname		    = this.GetStringBuffer(charset,	descriptor[i].Relation);
+				xsqlvar[i].relname_length   = (short)xsqlvar[i].relname.Length;
 
 				// Owner name
-				xsqlvar[i].ownername	 = this.GetStringBuffer(charset,	descriptor[i].Owner);
+				xsqlvar[i].ownername	    = this.GetStringBuffer(charset,	descriptor[i].Owner);
 				xsqlvar[i].ownername_length = (short)xsqlvar[i].ownername.Length;
 
 				// Alias name
-				xsqlvar[i].aliasname	 = this.GetStringBuffer(charset,	descriptor[i].Alias);
+				xsqlvar[i].aliasname	    = this.GetStringBuffer(charset,	descriptor[i].Alias);
 				xsqlvar[i].aliasname_length = (short)xsqlvar[i].aliasname.Length;
 			}
 
-			return this.MarshalManagedToNative(xsqlda, xsqlvar);
+			IntPtr result = Marshal.AllocHGlobal(nativeSize);	 
+			Marshal.StructureToPtr(xsqlda, result, false); // false - no need to cleanup!!!
+
+			int dataOffset = nativeHeaderSize;						   
+			for	(int i = 0;	i <	xsqlvar.Length;	i++) {
+				byte[] buffer = xsqlvarBuffers[i];
+
+				// Set the new pointer for the xsqlvar data
+				xsqlvar[i].sqldata = GetIntPtr(result, dataOffset);
+				Marshal.Copy(buffer, 0,	xsqlvar[i].sqldata,	buffer.Length);
+				dataOffset += buffer.Length;
+
+				// Set the new pointer for the sqlind value
+				xsqlvar[i].sqlind = GetIntPtr(result, dataOffset);
+				Marshal.WriteInt16(xsqlvar[i].sqlind, descriptor[i].NullFlag);			
+				dataOffset += sizeofInt16;	  
+
+				int	offset = this.ComputeLength(i);
+				Marshal.StructureToPtr(xsqlvar[i], this.GetIntPtr(result, offset), false); // false - no need to cleanup!!!
+			}
+
+			return result;//this.MarshalManagedToNative(xsqlda, xsqlvar);
 		}
 
+		/*
 		public IntPtr MarshalManagedToNative(XSQLDA	xsqlda,	XSQLVAR[] xsqlvar)
 		{
 			int		size = this.ComputeLength(xsqlda.sqln);
@@ -161,8 +185,14 @@ namespace FirebirdSql.Data.Embedded
 
 			return ptr;
 		}
+		*/
 
-		public Descriptor MarshalNativeToManaged(Charset charset, IntPtr pNativeData)
+        public Descriptor MarshalNativeToManaged(Charset charset, IntPtr pNativeData)
+        {
+            return this.MarshalNativeToManaged(charset, pNativeData, false);
+        }
+
+		public Descriptor MarshalNativeToManaged(Charset charset, IntPtr pNativeData, bool fetching)
 		{
 			// Obtain XSQLDA information
 			XSQLDA xsqlda = new	XSQLDA();
@@ -218,12 +248,21 @@ namespace FirebirdSql.Data.Embedded
 
 		private	IntPtr GetIntPtr(IntPtr	ptr, int offset)
 		{
-			return (IntPtr)(ptr.ToInt32() +	offset);
+			return new IntPtr(ptr.ToInt64() + offset);
+			// return (IntPtr)(ptr.ToInt32() +	offset);
 		}
+
+
+		private static readonly int sizeofInt16 = Marshal.SizeOf(typeof(Int16));
+
+		private static readonly int sizeofXSQLDA = Marshal.SizeOf(typeof(XSQLDA));
+
+		private static readonly int sizeofXSQLVAR = Marshal.SizeOf(typeof(XSQLVAR));
+
 
 		private	int	ComputeLength(int n)
 		{
-			return (Marshal.SizeOf(typeof(XSQLDA)) + n * Marshal.SizeOf(typeof(XSQLVAR)));
+			return (sizeofXSQLDA + n * sizeofXSQLVAR);
 		}
 
 		private	byte[] GetBytes(XSQLVAR	xsqlvar)
@@ -412,6 +451,7 @@ namespace FirebirdSql.Data.Embedded
 			}
 		}
 
+
 		private	byte[] GetStringBuffer(Charset charset,	string value)
 		{
 			byte[] buffer = new	byte[32];
@@ -421,11 +461,36 @@ namespace FirebirdSql.Data.Embedded
 			return buffer;
 		}
 
+
+		private static readonly char[] trimChars = new char[]{'\0', ' ', '\t', '\n', '\r'};
+
+
 		private	string GetString(Charset charset, byte[] buffer)
 		{
-			string value = charset.GetString(buffer);
+			if (charset.BytesPerCharacter <= 1) 
+			{
+				int lastValidIdx;
+				unchecked // we know what we are doing... unsafe would still be much faster but we don't want to introduce that
+				{
+					for (lastValidIdx = buffer.Length - 1; lastValidIdx >= 0; lastValidIdx--) 
+					{
+						if (buffer[lastValidIdx] != 0 && buffer[lastValidIdx] != (byte)' ') 
+						{
+							break;
+						}
+					}
+				}
 
-			return value.Replace('\0', ' ').Trim();
+				string value = charset.GetString(buffer, 0, lastValidIdx + 1);
+				
+				return value;
+			} 
+			else 
+			{
+				string value = charset.GetString(buffer);
+				
+				return value.TrimEnd(trimChars);
+			}
 		}
 
 		#endregion

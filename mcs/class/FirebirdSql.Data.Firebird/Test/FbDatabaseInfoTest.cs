@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2002, 2004 Carlos Guzman Alvarez
+ *  Copyright (c) 2002, 2005 Carlos Guzman Alvarez
  *  All Rights Reserved.
  */
 
@@ -24,17 +24,17 @@ using FirebirdSql.Data.Firebird;
 namespace FirebirdSql.Data.Firebird.Tests
 {
 	[TestFixture]
-	public class FbDatabaseInfoTest : BaseTest 
+	public class FbDatabaseInfoTest : BaseTest
 	{
 		public FbDatabaseInfoTest() : base(false)
-		{		
+		{
 		}
 
 		[Test]
 		public void DatabaseInfoTest()
 		{
 			FbDatabaseInfo dbInfo = new FbDatabaseInfo(Connection);
-			
+
 			Console.WriteLine("Server Version: {0}", dbInfo.ServerVersion);
 			Console.WriteLine("ISC Version : {0}", dbInfo.IscVersion);
 			Console.WriteLine("Server Class : {0}", dbInfo.ServerClass);
@@ -68,6 +68,6 @@ namespace FirebirdSql.Data.Firebird.Tests
 			Console.WriteLine("Number of the oldest active snapshot: {0}", dbInfo.OldestActiveSnapshot);
 			Console.WriteLine("Number of the next transaction: {0}", dbInfo.NextTransaction);
 			Console.WriteLine("Number of active transactions: {0}", dbInfo.ActiveTransactions);
-		}		
+		}
 	}
 }

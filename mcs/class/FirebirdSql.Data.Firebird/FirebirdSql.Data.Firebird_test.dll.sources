@@ -1,9 +1,11 @@
 AssemblyInfo.cs
 BaseTest.cs
+CharacterSetsTests.cs
 FbArrayTest.cs
 FbBlobTest.cs
 FbCommandBuilderTest.cs
 FbCommandTest.cs
+FbConnectionStringBuilderTest.cs
 FbConnectionTest.cs
 FbDataAdapterTest.cs
 FbDatabaseInfoTest.cs

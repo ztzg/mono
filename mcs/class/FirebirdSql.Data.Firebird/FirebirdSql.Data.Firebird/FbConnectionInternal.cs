@@ -123,14 +123,14 @@ namespace FirebirdSql.Data.Firebird
 
 		public void CreateDatabase(DatabaseParameterBuffer dpb)
 		{
-			IDatabase db = ClientFactory.CreateDatabase(this.options.ServerType);
-			db.CreateDatabase(dpb, this.options.DataSource, this.options.Port, this.options.Database);
+			IDatabase db = ClientFactory.CreateDatabase(this.options);
+			db.CreateDatabase(dpb, this.options.Database);
 		}
 
 		public void DropDatabase()
 		{
-			IDatabase db = ClientFactory.CreateDatabase(this.options.ServerType);
-			db.Attach(this.BuildDpb(db, this.options), this.options.DataSource, this.options.Port, this.options.Database);
+			IDatabase db = ClientFactory.CreateDatabase(this.options);
+			db.Attach(this.BuildDpb(db, this.options), this.options.Database);
 			db.DropDatabase();
 		}
 
@@ -142,14 +142,14 @@ namespace FirebirdSql.Data.Firebird
 		{
 			try
 			{
-				this.db = ClientFactory.CreateDatabase(this.options.ServerType);
-				this.db.Charset = Charset.SupportedCharsets[this.options.Charset];
-				this.db.Dialect = this.options.Dialect;
-				this.db.PacketSize = this.options.PacketSize;
+				this.db             = ClientFactory.CreateDatabase(this.options);
+				this.db.Charset     = Charset.GetCharset(this.options.Charset);
+				this.db.Dialect     = this.options.Dialect;
+				this.db.PacketSize  = this.options.PacketSize;
 
 				DatabaseParameterBuffer dpb = this.BuildDpb(this.db, options);
 
-				this.db.Attach(dpb, this.options.DataSource, this.options.Port, this.options.Database);
+				this.db.Attach(dpb, this.options.Database);
 			}
 			catch (IscException ex)
 			{
@@ -159,22 +159,25 @@ namespace FirebirdSql.Data.Firebird
 
 		public void Disconnect()
 		{
-			try
-			{
-				this.db.Dispose();
+            if (this.db != null)
+            {
+                try
+                {
+                    this.db.Dispose();
 
-				this.owningConnection	= null;
-				this.options			= null;
-				this.lifetime			= 0;
-				this.pooled				= false;
-				this.db					= null;
+                    this.owningConnection   = null;
+                    this.options            = null;
+                    this.lifetime           = 0;
+                    this.pooled             = false;
+                    this.db                 = null;
 
-				this.DisposePreparedCommands();
-			}
-			catch (IscException ex)
-			{
-				throw new FbException(ex.Message, ex);
-			}
+                    this.DisposePreparedCommands();
+                }
+                catch (IscException ex)
+                {
+                    throw new FbException(ex.Message, ex);
+                }
+            }
 		}
 
 		#endregion
@@ -320,7 +323,7 @@ namespace FirebirdSql.Data.Firebird
 
 		public void CloseEventManager()
 		{
-			if (this.db.HasRemoteEventSupport)
+            if (this.db != null && this.db.HasRemoteEventSupport)
 			{
 				lock (this.db)
 				{
