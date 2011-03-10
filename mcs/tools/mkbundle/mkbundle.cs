@@ -609,6 +609,7 @@ class MakeBundle {
 	static string GetEnv (string name, string defaultValue) 
 	{
 		string s = Environment.GetEnvironmentVariable (name);
+		Console.WriteLine("GetEnv: GetEnvironmentVariable ({0}) = {1}", name, s);
 		return s != null ? s : defaultValue;
 	}
 }
