@@ -4,10 +4,14 @@
  * Authors:
  *   Mark Mason (mason@broadcom.com)
  *
+ *    Port on MIPS 64-bit was done by N-iX (http://www.n-ix.com, mono@n-ix.com.ua)
+ *    for SiCortex, Inc. (http://www.sicortex.com)
+ *
  * Based on exceptions-ppc.c by:
  *   Dietmar Maurer (dietmar@ximian.com)
  *   Paolo Molaro (lupus@ximian.com)
  *
+ * (C) 2009 SiCortex, Inc.
  * (C) 2006 Broadcom
  * (C) 2001 Ximian, Inc.
  */
@@ -29,7 +33,7 @@
 #include "mini.h"
 #include "mini-mips.h"
 
-#define GENERIC_EXCEPTION_SIZE 256
+#define GENERIC_EXCEPTION_SIZE 304
 
 /* XXX */
 #if 1
@@ -80,7 +84,7 @@ mono_arch_get_restore_context (void)
 	}
 
 	/* Get the address to return to */
-	mips_lw (code, mips_t9, mips_a0, G_STRUCT_OFFSET (MonoContext, sc_pc));
+	MIPS_LW_P (code, mips_t9, mips_a0, G_STRUCT_OFFSET (MonoContext, sc_pc));
 
 	/* jump to the saved IP */
 	mips_jr (code, mips_t9);
@@ -122,11 +126,11 @@ mono_arch_get_call_filter (void)
 	inited = 1;
 	code = start;
 
-	alloc_size = 64;
+	alloc_size = 16 * IREG_SIZE;
 	g_assert ((alloc_size & (MIPS_STACK_ALIGNMENT-1)) == 0);
 
-	mips_addiu (code, mips_sp, mips_sp, -alloc_size);
-	mips_sw (code, mips_ra, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
+	MIPS_ADDIU (code, mips_sp, mips_sp, -alloc_size);
+	MIPS_SW_P (code, mips_ra, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
 
 	/* Save global registers on stack (s0 - s7) */
 	offset = 16;
@@ -152,7 +156,7 @@ mono_arch_get_call_filter (void)
 	MIPS_LW (code, mips_fp, mips_a0, G_STRUCT_OFFSET (MonoContext, sc_regs[mips_fp]));
 
 	/* a1 is the handler to call */
-	mips_move (code, mips_t9, mips_a1);
+	MIPS_MOVE (code, mips_t9, mips_a1);
 
 	/* jump to the saved IP */
 	mips_jalr (code, mips_t9, mips_ra);
@@ -171,8 +175,9 @@ mono_arch_get_call_filter (void)
 	MIPS_LW (code, mips_fp, mips_sp, offset); offset += IREG_SIZE;
 
 	/* epilog */
-	mips_lw (code, mips_ra, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
-	mips_addiu (code, mips_sp, mips_sp, alloc_size);
+	MIPS_LW_P (code, mips_ra, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
+
+	MIPS_ADDIU (code, mips_sp, mips_sp, alloc_size);
 	mips_jr (code, mips_ra);
 	mips_nop (code);
 
@@ -202,9 +207,9 @@ throw_exception (MonoObject *exc, unsigned long eip, unsigned long esp, gboolean
 
 	/*g_print  ("stack in throw: %p\n", esp);*/
 	memcpy (&ctx.sc_regs, (void *)(esp + MIPS_STACK_PARAM_OFFSET),
-		sizeof (gulong) * MONO_SAVED_GREGS);
+		IREG_SIZE * MONO_SAVED_GREGS);
 	memset (&ctx.sc_fpregs, 0, sizeof (mips_freg) * MONO_SAVED_FREGS);
-	MONO_CONTEXT_SET_IP (&ctx, eip);
+	MONO_CONTEXT_SET_IP (&ctx, (gpointer)eip);
 
 	if (mono_object_isinst (exc, mono_defaults.exception_class)) {
 		MonoException *mono_ex = (MonoException*)exc;
@@ -244,7 +249,7 @@ mono_arch_get_throw_exception_generic (guint8 *start, int size, int by_name, gbo
 	pos = 0;
 	/* XXX - save all the FP regs on the stack ? */
 
-	pos += MONO_MAX_IREGS * sizeof(guint32);
+	pos += MONO_MAX_IREGS * IREG_SIZE;
 
 	alloc_size = MIPS_MINIMAL_STACK_SIZE + pos + 64;
 	// align to MIPS_STACK_ALIGNMENT bytes
@@ -252,27 +257,27 @@ mono_arch_get_throw_exception_generic (guint8 *start, int size, int by_name, gbo
 	alloc_size &= ~(MIPS_STACK_ALIGNMENT - 1);
 
 	g_assert ((alloc_size & (MIPS_STACK_ALIGNMENT-1)) == 0);
-	mips_addiu (code, mips_sp, mips_sp, -alloc_size);
-	mips_sw (code, mips_ra, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
+	MIPS_ADDIU (code, mips_sp, mips_sp, -alloc_size);
+	MIPS_SW_P (code, mips_ra, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
 
 	/* Save all the regs on the stack */
 	for (i = 0; i < MONO_MAX_IREGS; i++) {
 		if (i != mips_sp)
 			MIPS_SW (code, i, mips_sp, i*IREG_SIZE + MIPS_STACK_PARAM_OFFSET);
 		else {
-			mips_addiu (code, mips_at, mips_sp, alloc_size);
+			MIPS_ADDIU (code, mips_at, mips_sp, alloc_size);
 			MIPS_SW (code, mips_at, mips_sp, i*IREG_SIZE + MIPS_STACK_PARAM_OFFSET);
 		}
 	}
 
 	if (by_name) {
-		mips_move (code, mips_a2, mips_a0);
-		mips_load (code, mips_a0, mono_defaults.corlib);
-		mips_load (code, mips_a1, "System");
-		mips_load (code, mips_t9, mono_exception_from_name);
+		MIPS_MOVE (code, mips_a2, mips_a0);
+		mips_load_const (code, mips_a0, mono_defaults.corlib);
+		mips_load_const (code, mips_a1, "System");
+		mips_load_const (code, mips_t9, mono_exception_from_name);
 		mips_jalr (code, mips_t9, mips_ra);
 		mips_nop (code);
-		mips_move (code, mips_a0, mips_v0);
+		MIPS_MOVE (code, mips_a0, mips_v0);
 	}
 	/* call throw_exception (exc, ip, sp, rethrow) */
 
@@ -280,15 +285,15 @@ mono_arch_get_throw_exception_generic (guint8 *start, int size, int by_name, gbo
 
 	/* pointer to ip */
 	if (by_name)
-		mips_lw (code, mips_a1, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
+		MIPS_LW_P (code, mips_a1, mips_sp, alloc_size + MIPS_RET_ADDR_OFFSET);
 	else
-		mips_move (code, mips_a1, mips_ra);
+		MIPS_MOVE (code, mips_a1, mips_ra);
 
 	/* current sp & rethrow */
-	mips_move (code, mips_a2, mips_sp);
-	mips_addiu (code, mips_a3, mips_zero, rethrow);
+	MIPS_MOVE (code, mips_a2, mips_sp);
+	MIPS_ADDIU (code, mips_a3, mips_zero, rethrow);
 
-	mips_load (code, mips_t9, throw_exception);
+	mips_load_const (code, mips_t9, throw_exception);
 	mips_jr (code, mips_t9);
 	mips_nop (code);
 	/* we should never reach this breakpoint */
@@ -370,25 +375,6 @@ mono_arch_get_throw_exception_by_name (void)
 	return start;
 }	
 
-static MonoArray *
-glist_to_array (GList *list, MonoClass *eclass) 
-{
-	MonoDomain *domain = mono_domain_get ();
-	MonoArray *res;
-	int len, i;
-
-	if (!list)
-		return NULL;
-
-	len = g_list_length (list);
-	res = mono_array_new (domain, eclass, len);
-
-	for (i = 0; list; list = list->next, i++)
-		mono_array_set (res, gpointer, i, list->data);
-
-	return res;
-}
-
 /* mono_arch_find_jit_info:
  *
  * This function is used to gather information from @ctx. It returns the 
@@ -398,6 +384,7 @@ glist_to_array (GList *list, MonoClass *eclass)
  * the @lmf if necessary. @native_offset return the IP offset from the 
  * start of the function or -1 if that info is not available.
  */
+#if _MIPS_SIM == _ABIO32
 MonoJitInfo *
 mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
 			 MonoJitInfo *res, MonoJitInfo *prev_ji,
@@ -517,6 +504,122 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
 
 	return NULL;
 }
+#else
+MonoJitInfo *
+mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
+			 MonoJitInfo *res, MonoJitInfo *prev_ji,
+			 MonoContext *ctx, MonoContext *new_ctx,
+			 MonoLMF **lmf, gboolean *managed)
+{
+	MonoJitInfo *ji;
+	gpointer ip = MONO_CONTEXT_GET_IP (ctx);
+	gpointer fp = MONO_CONTEXT_GET_BP (ctx);
+
+	/* Avoid costly table lookup during stack overflow */
+	if (prev_ji && (ip > prev_ji->code_start && ((guint8*)ip < ((guint8*)prev_ji->code_start) + prev_ji->code_size)))
+		ji = prev_ji;
+	else
+		ji = mono_jit_info_table_find (domain, ip);
+
+	if (managed)
+		*managed = FALSE;
+
+	memcpy (new_ctx, ctx, sizeof (MonoContext));
+
+	if (ji != NULL) {
+		if (*lmf && (MONO_CONTEXT_GET_BP (ctx) >= (gpointer)(*lmf)->ebp)) {
+			/* remove any unused lmf */
+			*lmf = (*lmf)->previous_lmf;
+		}
+
+		if (managed)
+			if (!ji->method->wrapper_type)
+				*managed = TRUE;
+
+		if (ji->method->save_lmf && 0) {
+			/* only enable this when prologue stops emitting
+			 * normal save of s-regs when save_lmf is true.
+			 * Will have to sync with prologue code at that point.
+			 */
+/*			memcpy (&new_ctx->sc_fpregs,
+				(char*)sp - sizeof (float) * MONO_SAVED_FREGS,
+				sizeof (float) * MONO_SAVED_FREGS);
+			memcpy (&new_ctx->sc_regs,
+				(char*)sp - sizeof (float) * MONO_SAVED_FREGS - sizeof (gulong) * MONO_SAVED_GREGS,
+				sizeof (gulong) * MONO_SAVED_GREGS);**/
+		} else if (ji->used_regs) {
+			guint32 *insn;
+			guint32 mask = ji->used_regs;
+			mask |= (1 << 31);
+			
+			insn = ((guint32 *)ji->code_start);
+			
+			while (((*insn & 0xfc000000) != 0x64000000)) {
+				insn++;
+			}
+			if ((*insn & 0xffff0000) == 0x67bd0000) {
+				fp -= ((short)(*insn & 0x0000ffff));
+			} else {
+				guint64 offset = ((short)(*insn & 0x0000ffff));
+				insn += 2;
+				while (((*insn & 0xfc000000) == 0x34000000)) {
+					offset <<= 16;
+					offset |= (gulong)(*insn & 0x0000ffff);
+					insn += 2;
+				}
+				fp -= offset;
+			}
+			
+			while (((*insn & 0xffe00000) != 0xff000000) && ((*insn & 0xffe00000) != 0xafa00000)) {
+                insn++;
+            }
+			while (!(*insn) || ((*insn & 0xffe00000) == 0xff000000) || ((*insn & 0xffe00000) == 0xafa00000)) {
+				int reg = (*insn >> 16) & 0x1f;
+				gulong addr = ((gulong)fp) + (short)(*insn & 0x0000ffff);
+				if ( ((mask >> reg) & 1) == 1 ){
+					if ((*insn & 0xffe00000) == 0xafa00000 )
+						new_ctx->sc_regs [reg] = *(guint32 *)addr;
+					else
+						new_ctx->sc_regs [reg] = *(guint64 *)addr;
+				}
+				mask &= ~(1 << reg);
+				
+				insn++;
+			}
+			
+			MONO_CONTEXT_SET_SP (new_ctx, new_ctx->sc_regs [mips_fp]);
+			MONO_CONTEXT_SET_BP (new_ctx, new_ctx->sc_regs [mips_fp]);
+			/* assert that we found all registers we were supposed to */
+			g_assert (!mask);
+		}
+		/* we substract 8, so that the IP points into the call instruction */
+		MONO_CONTEXT_SET_IP (new_ctx, new_ctx->sc_regs[mips_ra] - 8);
+
+		return ji;
+	} else if (*lmf) {
+		if ((ji = mono_jit_info_table_find (domain, (gpointer)(*lmf)->eip))) {
+		} else {
+			if (!(((guint64)(*lmf)->previous_lmf) & 1)) {
+#ifdef DEBUG_EXCEPTIONS			
+				g_print ("mono_arch_find_jit_info: bad lmf @ %p\n", (void *) *lmf);
+#endif
+				return (gpointer)-1;
+			}
+			memset (res, 0, sizeof (MonoJitInfo));
+			res->method = (*lmf)->method;
+		}
+		memcpy (&new_ctx->sc_regs, (*lmf)->iregs, IREG_SIZE * MONO_SAVED_GREGS);
+		memcpy (&new_ctx->sc_fpregs, (*lmf)->fregs, FREG_SIZE * MONO_SAVED_FREGS);
+		MONO_CONTEXT_SET_IP (new_ctx, (*lmf)->eip);
+
+		*lmf = (*lmf)->previous_lmf;
+
+		return ji ? ji : res;
+	}
+
+	return NULL;
+}
+#endif
 
 void
 mono_arch_sigctx_to_monoctx (void *sigctx, MonoContext *mctx)
@@ -524,7 +627,7 @@ mono_arch_sigctx_to_monoctx (void *sigctx, MonoContext *mctx)
 	int i;
 	struct sigcontext *ctx = (struct sigcontext *)sigctx;
 
-	mctx->sc_pc = ctx->sc_pc;
+	mctx->sc_pc = (gpointer)ctx->sc_pc;
 	for (i = 0; i < 32; ++i) {
 		mctx->sc_regs[i] = ctx->sc_regs[i];
 		mctx->sc_fpregs[i] = ctx->sc_fpregs[i];
@@ -537,7 +640,7 @@ mono_arch_monoctx_to_sigctx (MonoContext *mctx, void *sigctx)
 	int i;
 	struct sigcontext *ctx = (struct sigcontext *)sigctx;
 
-	ctx->sc_pc = mctx->sc_pc;
+	ctx->sc_pc = (gpointer)mctx->sc_pc;
 	for (i = 0; i < 32; ++i) {
 		ctx->sc_regs[i] = mctx->sc_regs[i];
 		ctx->sc_fpregs[i] = mctx->sc_fpregs[i];
@@ -548,7 +651,7 @@ gpointer
 mono_arch_ip_from_context (void *sigctx)
 {
 	struct sigcontext *ctx = (struct sigcontext *)sigctx;
-	return (gpointer)(guint32)ctx->sc_pc;
+	return (gpointer)ctx->sc_pc;
 }
 
 /*

@@ -55,16 +55,16 @@ memory_barrier: len:4
 nop: len:4
 relaxed_nop: len:4
 break: len:4
-jmp: len:92
-call: dest:v clob:c len:20
-br: len:16
+jmp: len:100
+call: dest:v clob:c len:36
+br: len:36
 switch: src1:i len:40
 
 callvirt: dest:v clob:c len:20
-int_conv_to_r_un: dest:f src1:i len:32
-throw: src1:i len:24
-rethrow: src1:i len:24
-ckfinite: dest:f src1:f len:52
+int_conv_to_r_un: dest:f src1:i len:48
+throw: src1:i len:44
+rethrow: src1:i len:44
+ckfinite: dest:f src1:f len:88
 start_handler: len:16
 endfinally: len:12
 ceq: dest:i len:16
@@ -80,15 +80,15 @@ oparglist: src1:i len:12
 setlret: src1:i src2:i len:12
 checkthis: src1:b len:4
 
-voidcall: len:20 clob:c
+voidcall: len:36 clob:c
 voidcall_reg: src1:i len:20 clob:c
 voidcall_membase: src1:b len:20 clob:c
 
-fcall: dest:g len:20 clob:c
+fcall: dest:g len:40 clob:c
 fcall_reg: dest:g src1:i len:20 clob:c
 fcall_membase: dest:g src1:b len:20 clob:c
 
-lcall: dest:V len:28 clob:c
+lcall: dest:V len:36 clob:c
 lcall_reg: dest:V src1:i len:28 clob:c
 lcall_membase: dest:V src1:b len:28 clob:c
 
@@ -99,39 +99,39 @@ vcall: len:16 clob:c
 vcall_reg: src1:i len:20 clob:c
 vcall_membase: src1:b len:20 clob:c
 
-vcall2: len:16 clob:c
+vcall2: len:36 clob:c
 vcall2_reg: src1:i len:20 clob:c
 vcall2_membase: src1:b len:20 clob:c
 
-jump_table: dest:i len:8
+jump_table: dest:i len:28
 
-iconst: dest:i len:12
-i8const: dest:l len:24
-r4const: dest:f len:20
-r8const: dest:f len:28
+iconst: dest:i len:28
+i8const: dest:l len:28
+r4const: dest:f len:40
+r8const: dest:f len:32
 label: len:0
 store_membase_imm: dest:b len:20
-store_membase_reg: dest:b src1:i len:16
+store_membase_reg: dest:b src1:i len:36
 storei1_membase_imm: dest:b len:20
-storei1_membase_reg: dest:b src1:i len:16
+storei1_membase_reg: dest:b src1:i len:4
 storei2_membase_imm: dest:b len:20
-storei2_membase_reg: dest:b src1:i len:16
+storei2_membase_reg: dest:b src1:i len:4
 storei4_membase_imm: dest:b len:20
-storei4_membase_reg: dest:b src1:i len:16
+storei4_membase_reg: dest:b src1:i len:4
 storei8_membase_imm: dest:b 
-storei8_membase_reg: dest:b src1:i len:16
-storer4_membase_reg: dest:b src1:f len:16
-storer8_membase_reg: dest:b src1:f len:16
-load_membase: dest:i src1:b len:16
-loadi1_membase: dest:i src1:b len:16
-loadu1_membase: dest:i src1:b len:16
-loadi2_membase: dest:i src1:b len:16
-loadu2_membase: dest:i src1:b len:16
-loadi4_membase: dest:i src1:b len:16
-loadu4_membase: dest:i src1:b len:16
-loadi8_membase: dest:i src1:b len:16
-loadr4_membase: dest:f src1:b len:16
-loadr8_membase: dest:f src1:b len:16
+storei8_membase_reg: dest:b src1:i len:36
+storer4_membase_reg: dest:b src1:f len:8
+storer8_membase_reg: dest:b src1:f len:36
+load_membase: dest:i src1:b len:36
+loadi1_membase: dest:i src1:b len:4
+loadu1_membase: dest:i src1:b len:4
+loadi2_membase: dest:i src1:b len:4
+loadu2_membase: dest:i src1:b len:4
+loadi4_membase: dest:i src1:b len:4
+loadu4_membase: dest:i src1:b len:4
+loadi8_membase: dest:i src1:b len:36
+loadr4_membase: dest:f src1:b len:12
+loadr8_membase: dest:f src1:b len:36
 loadu4_mem: dest:i len:8
 move: dest:i src1:i len:4
 fmove: dest:f src1:f len:8
@@ -151,6 +151,8 @@ xor_imm: dest:i src1:i len:12
 shl_imm: dest:i src1:i len:8
 shr_imm: dest:i src1:i len:8
 shr_un_imm: dest:i src1:i len:8
+atomic_add_new_i4: src1:b src2:i dest:i len:28
+atomic_add_new_i8: src1:b src2:i dest:i len:28
 
 # Linear IR opcodes
 dummy_use: len:0
@@ -161,11 +163,11 @@ not_null: src1:i len:0
 # 32 bit opcodes
 int_add: dest:i src1:i src2:i len:4
 int_sub: dest:i src1:i src2:i len:4
-int_mul: dest:i src1:i src2:i len:4
-int_div: dest:i src1:i src2:i len:76
-int_div_un: dest:i src1:i src2:i len:40
-int_rem: dest:i src1:i src2:i len:76
-int_rem_un: dest:i src1:i src2:i len:76
+int_mul: dest:i src1:i src2:i len:8
+int_div: dest:i src1:i src2:i len:156
+int_div_un: dest:i src1:i src2:i len:80
+int_rem: dest:i src1:i src2:i len:156
+int_rem_un: dest:i src1:i src2:i len:80
 int_and: dest:i src1:i src2:i len:4
 int_or: dest:i src1:i src2:i len:4
 int_xor: dest:i src1:i src2:i len:4
@@ -194,8 +196,8 @@ int_ble_un: len:8
 int_blt_un: len:8
 int_add_ovf: dest:i src1:i src2:i len:16
 int_add_ovf_un: dest:i src1:i src2:i len:16
-int_mul_ovf: dest:i src1:i src2:i len:56
-int_mul_ovf_un: dest:i src1:i src2:i len:56
+int_mul_ovf: dest:i src1:i src2:i len:88
+int_mul_ovf_un: dest:i src1:i src2:i len:84
 int_sub_ovf: dest:i src1:i src2:i len:16
 int_sub_ovf_un: dest:i src1:i src2:i len:16
 
@@ -264,18 +266,18 @@ long_add: dest:i src1:i src2:i len:4
 long_sub: dest:i src1:i src2:i len:4
 long_mul: dest:i src1:i src2:i len:8
 long_mul_imm: dest:i src1:i len:4
-long_div: dest:i src1:i src2:i len:40
-long_div_un: dest:i src1:i src2:i len:16
-long_rem: dest:i src1:i src2:i len:48
-long_rem_un: dest:i src1:i src2:i len:24
+long_div: dest:i src1:i src2:i len:156
+long_div_un: dest:i src1:i src2:i len:80
+long_rem: dest:i src1:i src2:i len:156
+long_rem_un: dest:i src1:i src2:i len:80
 long_and: dest:i src1:i src2:i len:4
 long_or: dest:i src1:i src2:i len:4
 long_xor: dest:i src1:i src2:i len:4
 long_shl: dest:i src1:i src2:i len:4
-long_shl_imm: dest:i src1:i len:4
+long_shl_imm: dest:i src1:i len:8
 long_shr: dest:i src1:i src2:i len:4
 long_shr_un: dest:i src1:i src2:i len:4
-long_shr_imm: dest:i src1:i len:4
+long_shr_imm: dest:i src1:i len:8
 long_shr_un_imm: dest:i src1:i len:4
 long_neg: dest:i src1:i len:4
 long_not: dest:i src1:i len:4
@@ -306,8 +308,8 @@ long_ble_un: len:8
 long_blt_un: len:8
 long_add_ovf: dest:i src1:i src2:i len:16
 long_add_ovf_un: dest:i src1:i src2:i len:16
-long_mul_ovf: dest:i src1:i src2:i len:16
-long_mul_ovf_un: dest:i src1:i src2:i len:16
+long_mul_ovf: dest:i src1:i src2:i len:88
+long_mul_ovf_un: dest:i src1:i src2:i len:84
 long_sub_ovf: dest:i src1:i src2:i len:16
 long_sub_ovf_un: dest:i src1:i src2:i len:16
 
@@ -319,14 +321,14 @@ long_clt_un: dest:i len:12
 
 long_add_imm: dest:i src1:i clob:1 len:4
 long_sub_imm: dest:i src1:i clob:1 len:4
-long_and_imm: dest:i src1:i clob:1 len:4
+long_and_imm: dest:i src1:i clob:1 len:28
 long_or_imm: dest:i src1:i clob:1 len:4
 long_xor_imm: dest:i src1:i clob:1 len:4
 
 lcompare: src1:i src2:i len:4
 lcompare_imm: src1:i len:12
 
-long_conv_to_r_un: dest:f src1:i src2:i len:37 
+long_conv_to_r_un: dest:f src1:i src2:i len:48
 
 float_beq:    len:16
 float_bne_un: len:16
@@ -344,7 +346,7 @@ float_sub: dest:f src1:f src2:f len:4
 float_mul: dest:f src1:f src2:f len:4
 float_div: dest:f src1:f src2:f len:4
 float_div_un: dest:f src1:f src2:f len:4
-float_rem: dest:f src1:f src2:f len:16
+float_rem: dest:f src1:f src2:f len:88
 float_rem_un: dest:f src1:f src2:f len:16
 float_neg: dest:f src1:f len:4
 float_not: dest:f src1:f len:4
@@ -364,7 +366,7 @@ float_cgt_un: dest:i src1:f src2:f len:20
 float_clt: dest:i src1:f src2:f len:20
 float_clt_un: dest:i src1:f src2:f len:20
 float_conv_to_u: dest:i src1:f len:36
-call_handler: len:20
+call_handler: len:36
 endfilter: src1:i len:16
 aot_const: dest:i len:8
 sqrt: dest:f src1:f len:4
@@ -382,12 +384,12 @@ br_reg: src1:i len:8
 bigmul: len:52 dest:l src1:i src2:i
 bigmul_un: len:52 dest:l src1:i src2:i
 tls_get: len:8 dest:i
-mips_beq: src1:i src2:i len:24
-mips_bgez: src1:i len:24
-mips_bgtz: src1:i len:24
-mips_blez: src1:i len:24
-mips_bltz: src1:i len:24
-mips_bne: src1:i src2:i len:24
+mips_beq: src1:i src2:i len:44
+mips_bgez: src1:i len:44
+mips_bgtz: src1:i len:44
+mips_blez: src1:i len:44
+mips_bltz: src1:i len:44
+mips_bne: src1:i src2:i len:44
 mips_cvtsd: dest:f src1:f len:8
 mips_fbeq: src1:f src2:f len:16
 mips_fbge: src1:f src2:f len:16
@@ -409,31 +411,31 @@ mips_slti: dest:i src1:i len:4
 mips_slt: dest:i src1:i src2:i len:4
 mips_sltiu: dest:i src1:i len:4
 mips_sltu: dest:i src1:i src2:i len:4
-mips_cond_exc_eq: src1:i src2:i len:44
-mips_cond_exc_ge: src1:i src2:i len:44
-mips_cond_exc_gt: src1:i src2:i len:44
-mips_cond_exc_le: src1:i src2:i len:44
-mips_cond_exc_lt: src1:i src2:i len:44
-mips_cond_exc_ne_un: src1:i src2:i len:44
-mips_cond_exc_ge_un: src1:i src2:i len:44
-mips_cond_exc_gt_un: src1:i src2:i len:44
-mips_cond_exc_le_un: src1:i src2:i len:44
-mips_cond_exc_lt_un: src1:i src2:i len:44
-mips_cond_exc_ov: src1:i src2:i len:44
-mips_cond_exc_no: src1:i src2:i len:44
-mips_cond_exc_c: src1:i src2:i len:44
-mips_cond_exc_nc: src1:i src2:i len:44
-mips_cond_exc_ieq: src1:i src2:i len:44
-mips_cond_exc_ige: src1:i src2:i len:44
-mips_cond_exc_igt: src1:i src2:i len:44
-mips_cond_exc_ile: src1:i src2:i len:44
-mips_cond_exc_ilt: src1:i src2:i len:44
-mips_cond_exc_ine_un: src1:i src2:i len:44
-mips_cond_exc_ige_un: src1:i src2:i len:44
-mips_cond_exc_igt_un: src1:i src2:i len:44
-mips_cond_exc_ile_un: src1:i src2:i len:44
-mips_cond_exc_ilt_un: src1:i src2:i len:44
-mips_cond_exc_iov: src1:i src2:i len:44
-mips_cond_exc_ino: src1:i src2:i len:44
-mips_cond_exc_ic: src1:i src2:i len:44
+mips_cond_exc_eq: src1:i src2:i len:80
+mips_cond_exc_ge: src1:i src2:i len:48
+mips_cond_exc_gt: src1:i src2:i len:84
+mips_cond_exc_le: src1:i src2:i len:52
+mips_cond_exc_lt: src1:i src2:i len:84
+mips_cond_exc_ne_un: src1:i src2:i len:80
+mips_cond_exc_ge_un: src1:i src2:i len:48
+mips_cond_exc_gt_un: src1:i src2:i len:84
+mips_cond_exc_le_un: src1:i src2:i len:84
+mips_cond_exc_lt_un: src1:i src2:i len:84
+mips_cond_exc_ov: src1:i src2:i len:48
+mips_cond_exc_no: src1:i src2:i len:48
+mips_cond_exc_c: src1:i src2:i len:48
+mips_cond_exc_nc: src1:i src2:i len:48
+mips_cond_exc_ieq: src1:i src2:i len:48
+mips_cond_exc_ige: src1:i src2:i len:48
+mips_cond_exc_igt: src1:i src2:i len:48
+mips_cond_exc_ile: src1:i src2:i len:48
+mips_cond_exc_ilt: src1:i src2:i len:48
+mips_cond_exc_ine_un: src1:i src2:i len:48
+mips_cond_exc_ige_un: src1:i src2:i len:48
+mips_cond_exc_igt_un: src1:i src2:i len:48
+mips_cond_exc_ile_un: src1:i src2:i len:48
+mips_cond_exc_ilt_un: src1:i src2:i len:48
+mips_cond_exc_iov: src1:i src2:i len:48
+mips_cond_exc_ino: src1:i src2:i len:48
+mips_cond_exc_ic: src1:i src2:i len:48
 mips_cond_exc_inc: src1:i src2:i len:44

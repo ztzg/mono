@@ -4,11 +4,15 @@
  * Authors:
  *    Mark Mason (mason@broadcom.com)
  *
+ *    Port on MIPS 64-bit was done by N-iX (http://www.n-ix.com, mono@n-ix.com.ua)
+ *    for SiCortex, Inc. (http://www.sicortex.com)
+ *
  * Based on tramp-ppc.c by:
  *   Dietmar Maurer (dietmar@ximian.com)
  *   Paolo Molaro (lupus@ximian.com)
  *   Carlos Valiente <yo@virutass.net>
  *
+ * (C) 2009 SiCortex, Inc.
  * (C) 2006 Broadcom
  * (C) 2001 Ximian, Inc.
  */
@@ -44,17 +48,44 @@ mono_arch_get_unbox_trampoline (MonoGenericSharingContext *gsctx, MonoMethod *m,
 	if (MONO_TYPE_ISSTRUCT (mono_method_signature (m)->ret))
 		this_pos = mips_a1;
 	    
-	start = code = mono_domain_code_reserve (domain, 20);
+	start = code = mono_domain_code_reserve (domain, MONO_MIPS_32_64_CASE(20, 40));
 
-	mips_load (code, mips_t9, addr);
-	mips_addiu (code, this_pos, this_pos, sizeof (MonoObject));
+	mips_load_const (code, mips_t9, addr);
+	MIPS_ADDIU (code, this_pos, this_pos, sizeof (MonoObject));
 	mips_jr (code, mips_t9);
 	mips_nop (code);
 
 	mono_arch_flush_icache (start, code - start);
-	g_assert ((code - start) <= 20);
+	g_assert ((code - start) <= MONO_MIPS_32_64_CASE(20, 40));
 	/*g_print ("unbox trampoline at %d for %s:%s\n", this_pos, m->klass->name, m->name);
 	g_print ("unbox code is at %p for method at %p\n", start, addr);*/
+
+	return start;
+}
+
+/*
+ * mono_arch_get_static_rgctx_trampoline:
+ *
+ *   Create a trampoline which sets RGCTX_REG to MRGCTX, then jumps to ADDR.
+ */
+gpointer
+mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericContext *mrgctx, gpointer addr)
+{
+	guint8 *code, *start;
+	int buf_len = (MIPS_ADDRESS_STUB_LEN * 4) * 2 + 8;
+
+	MonoDomain *domain = mono_domain_get ();
+
+	start = code = mono_domain_code_reserve (domain, buf_len);
+
+	mips_load_const (code, MONO_ARCH_RGCTX_REG, mrgctx);
+	mips_load_const (code, mips_at, addr);
+	mips_jr (code, mips_at);
+	mips_nop (code);
+
+	g_assert ((code - start) <= buf_len);
+
+	mono_arch_flush_icache (start, code - start);
 
 	return start;
 }
@@ -67,34 +98,34 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 	/* Locate the address of the method-specific trampoline. The call using
 	the vtable slot that took the processing flow to 'arch_create_jit_trampoline' 
 	looks something like this:
-
+---------------------------------------
 		jal	XXXXYYYY
 		nop
-
-		lui	t9, XXXX
-		addiu	t9, YYYY
+--------------------------------------
+		addiu/daddui	t9, XXXX
+		...
+		...
+		ori t9, YYYY
 		jalr	t9
 		nop
-
+--------------------------------------
 	On entry, 'code' points just after one of the above sequences.
 	*/
 	
 	/* The jal case */
 	if ((code[-2] >> 26) == 0x03) {
 		//g_print ("direct patching\n");
-		mips_patch ((code-2), (gsize)addr);
+		mips_patch ((code-2), addr);
 	} else {
 		/* Sanity check: look for the jalr */
 		g_assert((code[-2] & 0xfc1f003f) == 0x00000009);
 
 		//printf ("mips_magic_trampoline: jalr @ 0x%0x, w/ reg %d\n", code-2, reg);
 
-		/* The lui / addiu / jalr case */
-		if ((code [-4] >> 26) == 0x0f && (code [-3] >> 26) == 0x09 && (code [-2] >> 26) == 0) {
-			mips_patch ((code-4), (gsize)addr);
-		} else {
-			g_assert_not_reached ();
-		}
+	if (((code [-(MIPS_ADDRESS_STUB_LEN + 2)] >> 26) == 0x09 || (code [-(MIPS_ADDRESS_STUB_LEN + 2)] >> 26) == 0x19)  && (code [-3] >> 26) == 0x0d && (code [-2] >> 26) == 0)
+		mips_patch ((code-(MIPS_ADDRESS_STUB_LEN + 2)), addr);
+	else
+		g_assert_not_reached ();
 	}
 }
 
@@ -118,7 +149,6 @@ gpointer
 mono_arch_get_vcall_slot (guint8 *code_ptr, gpointer *regs, int *displacement)
 {
 	char *o = NULL;
-	char *vtable = NULL;
 	int reg, offset = 0;
 	guint32 base = 0;
 	guint32 *code = (guint32*)code_ptr;
@@ -140,35 +170,26 @@ mono_arch_get_vcall_slot (guint8 *code_ptr, gpointer *regs, int *displacement)
 
 	//printf ("mips_magic_trampoline: jalr @ 0x%0x, w/ reg %d\n", code-2, reg);
 
-	/* The lui / addiu / jalr case */
-	if ((code [-4] >> 26) == 0x0f && (code [-3] >> 26) == 0x09 && (code [-2] >> 26) == 0) {
+	/* The addiu/daddui / jalr case */
+	if (((code [-(MIPS_ADDRESS_STUB_LEN + 2)] >> 26) == 0x09 || (code [-(MIPS_ADDRESS_STUB_LEN + 2)] >> 26) == 0x19)  && (code [-3] >> 26) == 0x0d && (code [-2] >> 26) == 0)
 		return NULL;
-	}
 
 	/* Probably a vtable lookup */
 
 	/* Walk backwards to find 'lw reg,XX(base)' */
 	for(; --code;) {
 		guint32 mask = (0x3f << 26) | (0x1f << 16);
-		guint32 match = (0x23 << 26) | (reg << 16);
+		guint32 match = (MONO_MIPS_32_64_CASE(0x23, 0x37) << 26) | (reg << 16);
 		if((*code & mask) == match) {
 			gint16 soff;
-			gint reg_offset;
 
-			/* lw reg,XX(base) */
+			/* lw/ld reg,XX(base) */
 			base = (*code >> 21) & 0x1f;
 			soff = (*code & 0xffff);
 			if (soff & 0x8000)
 				soff |= 0xffff0000;
 			offset = soff;
-			if (1) {
-				MonoLMF *lmf = (MonoLMF*)((char *)regs + 12*IREG_SIZE);
-				g_assert (lmf->magic == MIPS_LMF_MAGIC2);
-				o = (gpointer)lmf->iregs [base];
-			}
-			else {
-				o = regs [base];
-			}
+			o = regs [base];
 			break;
 		}
 	}
@@ -207,6 +228,9 @@ mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
 		mips_nop (code32);
 		mono_arch_flush_icache ((gpointer)(code32 - 1), 4);
 		return;
+	} else if ((*code32) == 0x0) {
+		/* code was patched by another thread, NOP is already in place */
+		return;
 	} else {
 		g_assert_not_reached ();
 	}
@@ -238,10 +262,29 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 	   is the trampoline code common to all methods  */
 		
 	code = buf = mono_global_codeman_reserve (max_code_len);
-		
+	
+#if 0
+	{
+		static char* tramp_name [] = {"MONO_TRAMPOLINE_JIT",
+	    "MONO_TRAMPOLINE_JUMP",
+	    "MONO_TRAMPOLINE_CLASS_INIT",
+	    "MONO_TRAMPOLINE_GENERIC_CLASS_INIT",
+	    "MONO_TRAMPOLINE_RGCTX_LAZY_FETCH",
+	    "MONO_TRAMPOLINE_AOT",
+	    "MONO_TRAMPOLINE_AOT_PLT",
+	    "MONO_TRAMPOLINE_DELEGATE",
+	    "MONO_TRAMPOLINE_RESTORE_STACK_PROT",
+	    "MONO_TRAMPOLINE_GENERIC_VIRTUAL_REMOTING",
+	    "MONO_TRAMPOLINE_MONITOR_ENTER",
+	    "MONO_TRAMPOLINE_MONITOR_EXIT",
+	  	"MONO_TRAMPOLINE_NUM"};
+		printf("mono_arch_create_trampoline_code: tramp_type = %s, addr = %p\n", tramp_name[tramp_type], code);
+	}
+#endif
+
 	/* Allocate the stack frame, and save the return address */
-	mips_addiu (code, mips_sp, mips_sp, -STACK);
-	mips_sw (code, mips_ra, mips_sp, STACK + MIPS_RET_ADDR_OFFSET);
+	MIPS_ADDIU (code, mips_sp, mips_sp, -STACK);
+	MIPS_SW_P (code, mips_ra, mips_sp, (guint16)(STACK + MIPS_RET_ADDR_OFFSET));
 
 	/* we build the MonoLMF structure on the stack - see mini-mips.h */
 	/* offset of MonoLMF from sp */
@@ -252,82 +295,83 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 	for (i = 0; i < MONO_MAX_FREGS; i++)
 		MIPS_SWC1 (code, i, mips_sp, lmf + G_STRUCT_OFFSET (MonoLMF, fregs[i]));
 
-	/* Set the magic number */
-	mips_load_const (code, mips_at, MIPS_LMF_MAGIC2);
-	mips_sw (code, mips_at, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, magic));
-
 	/* save method info (it was in t8) */
-	mips_sw (code, mips_t8, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, method));
+	MIPS_SW_P (code, mips_t8, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, method));
 
 	/* save frame pointer (caller fp) */
 	MIPS_SW (code, mips_fp, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, ebp));
 
 	/* save the IP (caller ip) */
 	if (tramp_type == MONO_TRAMPOLINE_JUMP) {
-		mips_sw (code, mips_zero, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, eip));
+		MIPS_SW_P (code, mips_zero, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, eip));
 	} else {
-		mips_sw (code, mips_ra, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, eip));
+		MIPS_SW_P (code, mips_ra, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, eip));
 	}
 
 	/* jump to mono_get_lmf_addr here */
-	mips_load (code, mips_t9, mono_get_lmf_addr);
+	mips_load_const (code, mips_t9, mono_get_lmf_addr);
 	mips_jalr (code, mips_t9, mips_ra);
 	mips_nop (code);
 
 	/* v0 now points at the (MonoLMF **) for the current thread */
 
 	/* new_lmf->lmf_addr = lmf_addr -- useful when unwinding */
-	mips_sw (code, mips_v0, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, lmf_addr));
+	MIPS_SW_P (code, mips_v0, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, lmf_addr));
 
 	/* new_lmf->previous_lmf = *lmf_addr */
-	mips_lw (code, mips_at, mips_v0, 0);
-	mips_sw (code, mips_at, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, previous_lmf));
+	MIPS_LW_P (code, mips_at, mips_v0, 0);
+	MIPS_SW_P (code, mips_at, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, previous_lmf));
 
 	/* *(lmf_addr) = new_lmf */
-	mips_addiu (code, mips_at, mips_sp, lmf);
-	mips_sw (code, mips_at, mips_v0, 0);
+	MIPS_ADDIU (code, mips_at, mips_sp, lmf);
+	MIPS_SW_P (code, mips_at, mips_v0, 0);
 
 	/*
 	 * Now we're ready to call mips_magic_trampoline ().
 	 */
 
-	/* Arg 1: stack pointer so that the magic trampoline can access the
-	 * registers we saved above
+	/* Arg 1: pointer to the saved registers in MonoLMF structure
 	 */
-	mips_move (code, mips_a0, mips_sp);
+	MIPS_ADDIU (code, mips_a0, mips_sp, lmf + G_STRUCT_OFFSET (MonoLMF, iregs));
 		
 	/* Arg 2: code (next address to the instruction that called us) */
 	if (tramp_type == MONO_TRAMPOLINE_JUMP) {
-		mips_move (code, mips_a1, mips_zero);
+		MIPS_MOVE (code, mips_a1, mips_zero);
 	} else {
-		mips_lw (code, mips_a1, mips_sp, STACK + MIPS_RET_ADDR_OFFSET);
+		MIPS_LW_P (code, mips_a1, mips_sp, (guint16)(STACK + MIPS_RET_ADDR_OFFSET));
 	}
 
 	/* Arg 3: MonoMethod *method. */
-	mips_lw (code, mips_a2, mips_sp, lmf + G_STRUCT_OFFSET (MonoLMF, method));
+	MIPS_LW_P (code, mips_a2, mips_sp, lmf + G_STRUCT_OFFSET (MonoLMF, method));
 
 	/* Arg 4: Trampoline */
-	mips_move (code, mips_a3, mips_zero);
+	MIPS_MOVE (code, mips_a3, mips_zero);
 		
 	/* Now go to the trampoline */
 	tramp = (guint8*)mono_get_trampoline_func (tramp_type);
-	mips_load (code, mips_t9, (guint32)tramp);
+	mips_load_const (code, mips_t9, tramp);
 	mips_jalr (code, mips_t9, mips_ra);
 	mips_nop (code);
 		
 	/* Code address is now in v0, move it to at */
-	mips_move (code, mips_at, mips_v0);
+	MIPS_MOVE (code, mips_at, mips_v0);
 
 	/*
 	 * Now unwind the MonoLMF
 	 */
 
+	MIPS_SW (code, mips_at, mips_sp, lmf + G_STRUCT_OFFSET (MonoLMF, iregs[mips_t0]));
+	mips_load_const (code, mips_t9, mono_thread_force_interruption_checkpoint);
+	mips_jalr (code, mips_t9, mips_ra);
+	mips_nop (code);
+	MIPS_LW (code, mips_at, mips_sp, lmf + G_STRUCT_OFFSET (MonoLMF, iregs[mips_t0]));
+
 	/* t0 = current_lmf->previous_lmf */
-	mips_lw (code, mips_t0, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, previous_lmf));
+	MIPS_LW_P (code, mips_t0, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, previous_lmf));
 	/* t1 = lmf_addr */
-	mips_lw (code, mips_t1, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, lmf_addr));
+	MIPS_LW_P (code, mips_t1, mips_sp, lmf + G_STRUCT_OFFSET(MonoLMF, lmf_addr));
 	/* (*lmf_addr) = previous_lmf */
-	mips_sw (code, mips_t0, mips_t1, 0);
+	MIPS_SW_P (code, mips_t0, mips_t1, 0);
 
 	/* Restore the callee-saved & argument registers */
 	for (i = 0; i < MONO_MAX_IREGS; i++) {
@@ -341,13 +385,17 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 	 * return, we just jump to the compiled code.
 	 */
 	/* Restore ra & stack pointer, and jump to the code */
+	MIPS_LW_P (code, mips_ra, mips_sp, (guint16)(STACK + MIPS_RET_ADDR_OFFSET));
+	MIPS_ADDIU (code, mips_sp, mips_sp, STACK);
 
-	mips_lw (code, mips_ra, mips_sp, STACK + MIPS_RET_ADDR_OFFSET);
-	mips_addiu (code, mips_sp, mips_sp, STACK);
-	if (tramp_type == MONO_TRAMPOLINE_CLASS_INIT)
+	if (tramp_type == MONO_TRAMPOLINE_CLASS_INIT    || 
+	    tramp_type == MONO_TRAMPOLINE_MONITOR_ENTER ||
+	    tramp_type == MONO_TRAMPOLINE_MONITOR_EXIT) {
 		mips_jr (code, mips_ra);
-	else
+	} else {
 		mips_jr (code, mips_at);
+	}
+
 	mips_nop (code);
 
 	/* Flush instruction cache, since we've generated code */
@@ -366,22 +414,22 @@ mono_arch_create_specific_trampoline (gpointer arg1, MonoTrampolineType tramp_ty
 
 	tramp = mono_get_trampoline_code (tramp_type);
 
-	code = buf = mono_domain_code_reserve (domain, 32);
+	code = buf = mono_domain_code_reserve (domain, MONO_MIPS_32_64_CASE(32, 64));
 
 	/* Prepare the jump to the generic trampoline code
 	 * mono_arch_create_trampoline_code() knows we're putting this in t8
 	 */
-	mips_load (code, mips_t8, arg1);
+	mips_load_const (code, mips_t8, arg1);
 	
 	/* Now jump to the generic trampoline code */
-	mips_load (code, mips_at, tramp);
+	mips_load_const (code, mips_at, tramp);
 	mips_jr (code, mips_at);
 	mips_nop (code);
 
 	/* Flush instruction cache, since we've generated code */
 	mono_arch_flush_icache (buf, code - buf);
 
-	g_assert ((code - buf) <= 32);
+	g_assert ((code - buf) <= MONO_MIPS_32_64_CASE(32, 64));
 
 	if (code_len)
 		*code_len = code - buf;
@@ -403,4 +451,17 @@ mono_arch_create_generic_class_init_trampoline (void)
 	/* FIXME: implement! */
 	g_assert_not_reached ();
 	return NULL;
+}
+
+gpointer
+mono_arch_create_monitor_enter_trampoline (void)
+{
+	return mono_get_trampoline_code (MONO_TRAMPOLINE_MONITOR_ENTER);
+
+}
+
+gpointer
+mono_arch_create_monitor_exit_trampoline (void)
+{
+	return mono_get_trampoline_code (MONO_TRAMPOLINE_MONITOR_EXIT);
 }

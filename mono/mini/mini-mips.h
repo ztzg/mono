@@ -6,12 +6,13 @@
 
 #if _MIPS_SIM == _ABIO32
 /* o32 fully supported */
+#elif _MIPS_SIM == _ABI64
+/* abi64 fully supported */
 #elif _MIPS_SIM == _ABIN32
-/* n32 under development */
-#warning "MIPS using n32 - under development"
+/* abin32 under development */
+#warning "MIPS using ABI n32 - under development"
 #else
 /* o64 not supported */
-/* n64 not supported */
 #error "MIPS unsupported ABI"
 #endif
 
@@ -68,7 +69,7 @@ typedef gdouble		mips_freg;
 			 (1 << mips_t5) | \
 			 (1 << mips_t6) | \
 			 (1 << mips_t7))
-#elif _MIPS_SIM == _ABIN32
+#elif _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
 #define MIPS_T_REGS	((1 << mips_t0) | \
 			 (1 << mips_t1) | \
 			 (1 << mips_t2) | \
@@ -90,7 +91,7 @@ typedef gdouble		mips_freg;
 			 (1 << mips_a1) | \
 			 (1 << mips_a2) | \
 			 (1 << mips_a3))
-#elif _MIPS_SIM == _ABIN32
+#elif _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
 #define MIPS_A_REGS	((1 << mips_a0) | \
 			 (1 << mips_a1) | \
 			 (1 << mips_a2) | \
@@ -132,7 +133,7 @@ typedef gdouble		mips_freg;
 					 MIPS_FP_PAIR(mips_f26) |	\
 					 MIPS_FP_PAIR(mips_f28) |	\
 					 MIPS_FP_PAIR(mips_f30))
-#elif _MIPS_SIM == _ABIN32
+#elif _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
 #define MONO_ARCH_CALLEE_FREGS		(MIPS_FP_PAIR(mips_f0) |	\
 					 MIPS_FP_PAIR(mips_f1) |	\
 					 MIPS_FP_PAIR(mips_f2) |	\
@@ -168,7 +169,7 @@ typedef gdouble		mips_freg;
 					 MIPS_FP_PAIR(mips_f31))
 #endif
 
-#define mips_ftemp mips_f18
+#define mips_ftemp mips_f4
 
 #define MONO_ARCH_USE_FPSTACK FALSE
 #define MONO_ARCH_FPSTACK_SIZE 0
@@ -188,7 +189,7 @@ typedef gdouble		mips_freg;
 #endif
 
 #define MONO_ARCH_INST_SREG2_MASK(ins)		(0)
-#define MONO_ARCH_INST_IS_REGPAIR(desc)		((desc) == 'V' || (desc) == 'l')
+#define MONO_ARCH_INST_IS_REGPAIR(desc)		FALSE
 #define MONO_ARCH_INST_REGPAIR_REG2(desc,hreg1) (((desc) == 'l') ? ((hreg1) + 1) : (((desc) == 'V') ? RET_REG2 : -1))
 #define MONO_ARCH_INST_IS_FLOAT(desc)		((desc == 'f') || (desc == 'g'))
 
@@ -203,7 +204,7 @@ typedef gdouble		mips_freg;
  * reproduceable results for benchmarks */
 #define MONO_ARCH_CODE_ALIGNMENT 32
 
-void mips_patch (guint32 *code, guint32 target);
+void mips_patch (guint32 *code, gpointer target);
 
 #define MIPS_LMF_MAGIC1	0xa5a5a5a5
 #define MIPS_LMF_MAGIC2	0xc3c3c3c3
@@ -216,7 +217,6 @@ struct MonoLMF {
 	gpointer	eip;
 	mips_ireg	iregs [MONO_SAVED_GREGS];
 	mips_freg	fregs [MONO_SAVED_FREGS];
-	gulong		magic;
 };
 
 /* we define our own structure and we'll copy the data
@@ -251,12 +251,13 @@ typedef struct MonoCompileArch {
 
 #if SIZEOF_REGISTER == 8
 #define MONO_ARCH_NO_EMULATE_LONG_MUL_OPTS
+#define MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS
 #endif
 
 #define MIPS_RET_ADDR_OFFSET	(-sizeof(gpointer))
 #define MIPS_FP_ADDR_OFFSET	(-8)
 #define MIPS_STACK_ALIGNMENT	16
-#define MIPS_STACK_PARAM_OFFSET 16		/* from sp to first parameter */
+#define MIPS_STACK_PARAM_OFFSET 0		/* from sp to first parameter */
 #define MIPS_MINIMAL_STACK_SIZE (4*sizeof(mips_ireg) + 4*sizeof(mips_ireg))
 #define MIPS_EXTRA_STACK_SIZE	16		/* from last parameter to top of frame */
 
@@ -265,28 +266,30 @@ typedef struct MonoCompileArch {
 #define MIPS_LAST_ARG_REG	mips_a3
 #define MIPS_FIRST_FPARG_REG	mips_f12
 #define MIPS_LAST_FPARG_REG	mips_f14
-#elif _MIPS_SIM == _ABIN32
+#elif _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
 #define MIPS_FIRST_ARG_REG	mips_a0
-#define MIPS_LAST_ARG_REG	mips_t3
+#define MIPS_LAST_ARG_REG	mips_a7
 #define MIPS_FIRST_FPARG_REG	mips_f12
 #define MIPS_LAST_FPARG_REG	mips_f19
 #endif
 
-//#define MONO_ARCH_HAVE_IMT 1
-//#define MONO_ARCH_IMT_REG mips_v0		/* XXX */
+#define MONO_ARCH_HAVE_IMT 1
+#define MONO_ARCH_IMT_REG mips_v0
 #define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
 
 //#define MONO_ARCH_VTABLE_REG	mips_v0		/* XXX */
 #define MONO_ARCH_RGCTX_REG	mips_v0		/* XXX */
-
+#define MONO_ARCH_HAVE_ATOMIC_ADD 1
 #define MONO_ARCH_HAVE_DECOMPOSE_OPTS 1
 #define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 
 #define MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK 1
 
+#define MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE 1
+
 /* XXX - a mystery, but it works */
 #define MONO_GET_CONTEXT \
-	void *ctx = (void *)(((int)context)+24);
+	void *ctx = (void *)(((gulong)context) + 8 + 4 * SIZEOF_VOID_P);
 
 /* set the next to 0 once inssel-mips.brg is updated */
 #define MIPS_PASS_STRUCTS_BY_VALUE 1
@@ -300,9 +303,9 @@ typedef struct MonoCompileArch {
 #define MIPS_NUM_REG_FPARGS (MIPS_LAST_FPARG_REG-MIPS_FIRST_FPARG_REG+1)
 
 /* we have the stack pointer, not the base pointer in sigcontext */
-#define MONO_CONTEXT_SET_IP(ctx,ip) do { (ctx)->sc_pc = (int)(ip); } while (0); 
-#define MONO_CONTEXT_SET_BP(ctx,bp) do { (ctx)->sc_regs[mips_fp] = (int)(bp); } while (0); 
-#define MONO_CONTEXT_SET_SP(ctx,sp) do { (ctx)->sc_regs[mips_sp] = (int)(sp); } while (0); 
+#define MONO_CONTEXT_SET_IP(ctx,ip) do { (ctx)->sc_pc = ((gpointer)(ip)); } while (0); 
+#define MONO_CONTEXT_SET_BP(ctx,bp) do { (ctx)->sc_regs[mips_fp] = (bp); } while (0); 
+#define MONO_CONTEXT_SET_SP(ctx,sp) do { (ctx)->sc_regs[mips_sp] = (sp); } while (0); 
 
 #define MONO_CONTEXT_GET_IP(ctx) ((gpointer)((ctx)->sc_pc))
 #define MONO_CONTEXT_GET_BP(ctx) ((gpointer)((ctx)->sc_regs[mips_fp]))
@@ -343,19 +346,25 @@ typedef struct {
 	unsigned long ra; /* return address */
 } MonoMipsStackFrame;
 
+
+#if SIZEOF_VOID_P == 4
+#	define STR_MIPS_ADDU	"addu"
+#	define MONO_MIPS_32_64_CASE(c32, c64)	c32
+#else
+#	define STR_MIPS_ADDU	"daddu"
+#	define MONO_MIPS_32_64_CASE(c32, c64)	c64
+#endif
+
 #define MONO_INIT_CONTEXT_FROM_FUNC(ctx,func) do {	\
-		guint32 sp, ra;					\
+		gulong sp, ra;					\
 		guint32 *code = (guint32 *)(void *)func;	\
 		short imm;					\
 		memset ((ctx), 0, sizeof (*(ctx)));		\
-		__asm__ volatile("addu %0,$0,$29" : "=r" (sp));	\
-		/* Look for adjustment of sp */			\
-		while ((*code & 0xffff0000) != 0x27bd0000)	\
-			++code;					\
+		__asm__ volatile(STR_MIPS_ADDU " %0,$0,$29" : "=r" (sp));	\
 		imm = (short) (*code & 0xffff);			\
 		MONO_CONTEXT_SET_BP ((ctx), sp + (-imm));	\
-		ra = *(guint32 *)(sp + (-imm) + MIPS_RET_ADDR_OFFSET);	\
-		MONO_CONTEXT_SET_IP ((ctx),ra);	\
+		ra = *(gulong *)(sp + (-imm) + MIPS_RET_ADDR_OFFSET);	\
+		MONO_CONTEXT_SET_IP ((ctx), ra);	\
 		MONO_CONTEXT_SET_SP ((ctx), MONO_CONTEXT_GET_BP (ctx));	\
 	} while (0)
 
@@ -589,6 +598,6 @@ typedef struct {
 	int offset;
 } MonoMIPSArgInfo;
 
-extern guint8 *mips_emit_load_const(guint8 *code, int dreg, mgreg_t v);
+#define MONO_ARCH_MONITOR_OBJECT_REG mips_t8
 
 #endif /* __MONO_MINI_MIPS_H__ */  

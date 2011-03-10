@@ -1,3 +1,24 @@
+2009-04-24 Kostyantyn Gushtin, Yevgen Kiruha, Serhiy Naumenko, Serhiy
+Stetskovych and Ian Dichkovsky <mono@n-ix.com.ua>
+	
+	Changes to support 64-bit ABI on MIPS. 
+	* mini-ops.h: Changed signature for some MIPS opcodes.
+	* cpu-mips.md: Changed size of some instructions.
+	* exceptions-mips.c: Added mono_arch_find_jit_info() function for
+	particularly MIPS64. Changed the generic exception size.
+	Using mips_load_const() instead of mips_load() and new macroces
+	which handle with 32/64-bit ABI. Remove warnigns.
+	* tramp-mips.c: Using the new macroces. Added:
+	mono_arch_create_monitor_enter_trampoline(),
+	mono_arch_create_monitor_exit_trampoline(),
+	mono_arch_get_static_rgctx_trampoline().
+	* mini-mips.h: Added support of MIPS64. Changed mips_ftemp from f18 to
+	f4.
+	* mini-mips.c: Added support of MIPS64. Unified code for both 32 and
+	64 bit ABIs. Added and changes opcodes in mono_arch_decompose_opts(),
+	mono_arch_output_basic_block.
+	Added: add_data_arg(), mono_arch_get_delegate_invoke_impl() 
+
 2009-04-14  Zoltan Varga  <vargaz@gmail.com>
 
 	* mini-trampolines.c (mono_magic_trampoline): Fix the build.
