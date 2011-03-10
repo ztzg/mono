@@ -1812,11 +1812,12 @@ case "$host" in
 #		;;
 	mips*)
 		TARGET=MIPS;
+		AC_DEFINE(MONO_ARCH_REGPARMS,1,[Architecture uses registers for Parameters])
 		arch_target=mips;
 		ACCESS_UNALIGNED="no"
 		JIT_SUPPORTED=yes
 		jit_wanted=true
-
+		with_tls=pthread
 		AC_MSG_CHECKING(for mips n32)
 		AC_TRY_COMPILE([], [
 		void main () {
@@ -1830,6 +1831,20 @@ case "$host" in
 		],[
 		AC_MSG_RESULT(no)
 		])
+		AC_MSG_CHECKING(for GNU Assebmler run command)
+		AC_TRY_COMPILE([], [
+		void main () {
+		#if _MIPS_SIM != _ABI64
+		#error Not mips n64
+		#endif
+   		}
+		],[
+		AS="\"$AS -64 -call_shared\"; export AS"
+		AC_MSG_RESULT($AS)
+		],[
+		AC_MSG_RESULT($AS)
+		])
+
 		;;
 	i*86-*-*)
 		TARGET=X86;

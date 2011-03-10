@@ -1,3 +1,9 @@
+2009-04-24  Kostyantyn Gushtin, Yevgen Kiruha, Serhiy Naumenko, Serhiy
+Stetskovych and Ian Dichkovsky <mono@n-ix.com.ua>
+	
+	* configure.in: Changes to support 64-bit ABI on MIPS. Added pthread
+	as a default imlementation of TLS.
+
 2009-04-13  Zoltan Varga  <vargaz@gmail.com>
 
 	* configure.in: Quiet 'copying selected object files' messages from
