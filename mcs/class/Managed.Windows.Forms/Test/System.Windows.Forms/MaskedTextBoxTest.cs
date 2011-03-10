@@ -244,6 +244,18 @@ namespace MonoTests.System.Windows.Forms
 			mtb.Text = "1234";
 			Assert.AreEqual ("12-34", mtb.Text, "#T3");
 
+			// Should keep previous valid value in
+			// case of error
+			mtb.RejectInputOnFirstFailure = true;
+			mtb.Text = "12b";
+			Assert.AreEqual ("12-34", mtb.Text, "#T4");
+
+			// Finally pass invalid values
+			// but retrying after errors
+			mtb.RejectInputOnFirstFailure = false;
+			mtb.Text = "abcd";
+			Assert.AreEqual ("  -", mtb.Text, "#T5");
+
 			mtb.Dispose ();
 		}
 
