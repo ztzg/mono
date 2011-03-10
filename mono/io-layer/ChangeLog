@@ -1,3 +1,10 @@
+2009-04-24  Kostyantyn Gushtin, Yevgen Kiruha, Serhiy Naumenko, Serhiy
+Stetskovych and Ian Dichkovsky <mono@n-ix.com.ua>
+
+	* atomic.h: Changes to support 64-bit ABI on MIPS. Changed
+	InterlockedCompareExchangePointer() and InterlockedExchangePointer()
+	functions.
+
 2009-03-27  Zoltan Varga  <vargaz@gmail.com>
 
 	* threads.h: Add a comment to CreateThread.

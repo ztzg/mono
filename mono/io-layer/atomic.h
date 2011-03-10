@@ -1093,6 +1093,14 @@ static inline gint32 InterlockedExchangeAdd(volatile gint32 *val, gint32 add)
 #elif defined(__mips__)
 #define WAPI_ATOMIC_ASM
 
+#if SIZEOF_VOID_P == 4
+#define STR_MIPS_LL_P "ll"
+#define STR_MIPS_SC_P "sc"
+#else
+#define STR_MIPS_LL_P "lld"
+#define STR_MIPS_SC_P "scd"
+#endif
+
 static inline gint32 InterlockedIncrement(volatile gint32 *val)
 {
 	gint32 tmp, result = 0;
@@ -1123,7 +1131,22 @@ static inline gint32 InterlockedDecrement(volatile gint32 *val)
 	return result - 1;
 }
 
-#define InterlockedCompareExchangePointer(dest,exch,comp) InterlockedCompareExchange((volatile gint32 *)(dest), (gint32)(exch), (gint32)(comp))
+static inline gpointer InterlockedCompareExchangePointer (volatile gpointer *dest,
+						gpointer exch, gpointer comp)
+{
+	gpointer old, tmp;
+
+	__asm__ __volatile__ ("1:\n"
+			      STR_MIPS_LL_P " %0, %2\n"
+			      "    bne        %0, %5, 2f\n"
+			      "    move       %1, %4\n"
+			      STR_MIPS_SC_P " %1, %2\n"
+			      "    beqz       %1, 1b\n"
+			      "2:\n"
+			      : "=&r" (old), "=&r" (tmp), "=m" (*dest)
+			      : "m" (*dest), "r" (exch), "r" (comp));
+	return(old);
+}
 
 static inline gint32 InterlockedCompareExchange(volatile gint32 *dest,
 						gint32 exch, gint32 comp) {
@@ -1155,7 +1178,20 @@ static inline gint32 InterlockedExchange(volatile gint32 *dest, gint32 exch)
 			      : "m" (*dest), "r" (exch));
 	return(result);
 }
-#define InterlockedExchangePointer(dest,exch) InterlockedExchange((volatile gint32 *)(dest), (gint32)(exch))
+
+static inline gpointer InterlockedExchangePointer(volatile gpointer *val, gpointer new_val)
+{
+	gpointer result, tmp;
+
+	__asm__ __volatile__ ("1:\n"
+			      STR_MIPS_LL_P " %0, %2\n"
+			      "    move       %1, %4\n"
+			      STR_MIPS_SC_P " %1, %2\n"
+			      "    beqz       %1, 1b\n"
+			      : "=&r" (result), "=&r" (tmp), "=m" (*val)
+			      : "m" (*val), "r" (new_val));
+	return(result);
+}
 
 static inline gint32 InterlockedExchangeAdd(volatile gint32 *dest, gint32 add)
 {
