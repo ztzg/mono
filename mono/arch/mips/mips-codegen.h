@@ -1,9 +1,12 @@
 #ifndef __MIPS_CODEGEN_H__
 #define __MIPS_CODEGEN_H__
 /*
+ * Copyright (c) 2009 SiCortex, Inc.
  * Copyright (c) 2004 Novell, Inc
  * Author: Paolo Molaro (lupus@ximian.com)
  *
+ *    Port on MIPS 64-bit was done by N-iX (http://www.n-ix.com, mono@n-ix.com.ua)
+ *    for SiCortex, Inc. (http://www.sicortex.com)
  */
 
 /* registers */
@@ -25,7 +28,7 @@ enum {
 	mips_t5,
 	mips_t6,
 	mips_t7,
-#elif _MIPS_SIM == _ABIN32
+#elif _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
 	mips_a4, /* 4 more argument registers */
 	mips_a5,
 	mips_a6,
@@ -163,25 +166,74 @@ enum {
 
 #define MIPS_SW		mips_sw
 #define MIPS_LW		mips_lw
+#define MIPS_ADD	mips_add
 #define MIPS_ADDU	mips_addu
 #define MIPS_ADDIU	mips_addiu
+#define MIPS_SUB	mips_sub
+#define MIPS_SUBU	mips_subu
 #define MIPS_SWC1	mips_swc1
 #define MIPS_LWC1	mips_lwc1
+#define MIPS_SWC	mips_swc
+#define MIPS_LWC	mips_lwc
 #define MIPS_MOVE	mips_move
+#define MIPS_DIV 	mips_div
+#define MIPS_DIVU 	mips_divu
+#define MIPS_MULT 	mips_mult
+#define MIPS_MULTU 	mips_multu
+
+#define MIPS_SLL 	mips_sll
+#define MIPS_SLLV 	mips_sllv
+#define MIPS_SRA 	mips_sra
+#define MIPS_SRAV 	mips_srav
+#define MIPS_SRL 	mips_srl
+#define MIPS_SRLV 	mips_srlv
+
 
 #elif SIZEOF_REGISTER == 8
 
 #define MIPS_SW		mips_sd
 #define MIPS_LW		mips_ld
+#define MIPS_ADD	mips_dadd
 #define MIPS_ADDU	mips_daddu
 #define MIPS_ADDIU	mips_daddiu
+#define MIPS_SUB	mips_dsub
+#define MIPS_SUBU	mips_dsubu
 #define MIPS_SWC1	mips_sdc1
 #define MIPS_LWC1	mips_ldc1
+#define MIPS_SWC	mips_sdc
+#define MIPS_LWC	mips_ldc
 #define MIPS_MOVE	mips_dmove
+#define MIPS_DIV 	mips_ddiv
+#define MIPS_DIVU 	mips_ddivu
+#define MIPS_MULT 	mips_dmult
+#define MIPS_MULTU 	mips_dmultu
+
+#define MIPS_SLL	mips_dsll
+#define MIPS_SLLV 	mips_dsllv
+#define MIPS_SRA 	mips_dsra
+#define MIPS_SRAV 	mips_dsrav
+#define MIPS_SRL 	mips_dsrl
+#define MIPS_SRLV 	mips_dsrlv
 
 #else
 #error Unknown SIZEOF_REGISTER
 #endif
+
+
+/* Definition of operations for pointer manipulations (loading and storing) */
+#if SIZEOF_VOID_P == 4
+
+#define	MIPS_SW_P	mips_sw
+#define	MIPS_LW_P	mips_lw		
+
+#elif SIZEOF_VOID_P == 8
+
+#define	MIPS_SW_P	mips_sd
+#define	MIPS_LW_P	mips_ld
+
+#else
+#error Unknown SIZEOF_VOID_P
+#endif	
 
 #define mips_emit32(c,x) do {				\
 		*((guint32 *) (void *)(c)) = x;				\
@@ -193,38 +245,79 @@ enum {
 #define mips_format_r(code,op,rs,rt,rd,sa,func) mips_emit32 ((code), (((op)<<26)|((rs)<<21)|((rt)<<16)|((rd)<<11)|((sa)<<6)|(func)))
 #define mips_format_divmul(code,op,src1,src2,fun) mips_emit32 ((code), (((op)<<26)|((src1)<<21)|((src2)<<16)|(fun)))
 
-#define mips_is_imm16(val) ((gint)(val) >= (gint)-(1<<15) && (gint)(val) <= (gint)((1<<15)-1))
+#define mips_is_imm32(val) ((gint64)(val) >= ((gint64)(gint32)(1<<31)) && (gint64)(val) <= ((gint64)(((guint32)(1<<31))-1)))
+#define mips_is_imm16(val) ((gint64)(val) >= ((gint64)(gint16)(1<<15)) && (gint64)(val) <= ((gint64)(((guint16)(1<<15))-1)))
 
-/* Load always using lui/addiu pair (for later patching) */
-#define mips_load(c,D,v) do {	\
-		if (!mips_is_imm16 ((v)))	{	\
-			if (((guint32)(v)) & (1 << 15)) {		\
-				mips_lui ((c), (D), mips_zero, (((guint32)(v))>>16)+1); \
-			} \
-			else {			\
-				mips_lui ((c), (D), mips_zero, (((guint32)(v))>>16)); \
-			}						\
-			mips_addiu ((c), (D), (D), ((guint32)(v)) & 0xffff); \
-		}							\
-		else							\
+#define mips_is_addr16(val) (!(((guint64)(val)) >> 15))
+
+
+/* Load address stub (for later patching) */
+#if SIZEOF_VOID_P == 4
+
+#define MIPS_ADDRESS_STUB_LEN 3
+#define mips_load_address_stub(c, reg) do {		\
+		MIPS_ADDIU ((c), (reg), mips_zero, 0);	\
+		MIPS_SLL ((c), (reg), (reg), 16);		\
+		mips_ori ((c), (reg), (reg), 0);       	\
+} while (0)	
+
+#elif SIZEOF_VOID_P == 8
+	
+#define MIPS_ADDRESS_STUB_LEN 7
+#define mips_load_address_stub(c, reg) do {   	\
+		MIPS_ADDIU ((c), (reg), mips_zero, 0);	\
+		MIPS_SLL ((c), (reg), (reg), 16);		\
+		mips_ori ((c), (reg), (reg), 0);       	\
+		MIPS_SLL ((c), (reg), (reg), 16);      	\
+		mips_ori ((c), (reg), (reg), 0); 		\
+		MIPS_SLL ((c), (reg), (reg), 16);      	\
+		mips_ori ((c), (reg), (reg), 0); 		\
+} while (0)	
+
+#endif
+
+#if SIZEOF_REGISTER == 4
+
+#define mips_load_const(c,D,v) do {    \
+		if (mips_is_imm16 ((v)))       \
+		{\
 			mips_addiu ((c), (D), mips_zero, ((guint32)(v)) & 0xffff); \
-	} while (0)
-
-/* load constant - no patch-up */
-#define mips_load_const(c,D,v) do {	\
-		if (!mips_is_imm16 ((v)))	{	\
-			if (((guint32)(v)) & (1 << 15)) {		\
+		}\
+		else if (mips_is_imm32 ((v))){\
+			if (((guint32)(v)) & (1 << 15))                 \
 				mips_lui ((c), (D), mips_zero, (((guint32)(v))>>16)+1); \
-			} \
-			else {			\
+			else     \
 				mips_lui ((c), (D), mips_zero, (((guint32)(v))>>16)); \
-			}						\
 			if (((guint32)(v)) & 0xffff) \
 				mips_addiu ((c), (D), (D), ((guint32)(v)) & 0xffff); \
-		}							\
-		else							\
-			mips_addiu ((c), (D), mips_zero, ((guint32)(v)) & 0xffff); \
-	} while (0)
+		}  \
+        } while (0)
+
+#elif SIZEOF_REGISTER == 8
+
+#define mips_load_const(c,D,v) do {    \
+	if (mips_is_imm16 ((v))) {\
+		MIPS_ADDIU ((c), (D), mips_zero, ((guint64)(v)) & 0xffff); \
+	}\
+	else if (mips_is_imm32 ((v))) {\
+		MIPS_ADDIU ((c), (D), mips_zero, (((guint64)(v))>>16)); \
+		mips_dsll((c), (D), (D), 16);	\
+		if (((guint64)(v)) & 0xffff) \
+			mips_ori ((c), (D), (D), ((guint64)(v)) & 0xffff);    \
+	}                                                       \
+	else {\
+		MIPS_ADDIU ((c), (D), mips_zero, ((((guint64)(v)) >> 48) & 0xffff));   \
+		mips_dsll((c), (D), (D), 16);	\
+		mips_ori ((c), (D), (D), ((((guint64)(v)) >> 32) & 0xffff));            \
+		mips_dsll((c), (D), (D), 16);           \
+		mips_ori ((c), (D), (D), ((((guint64)(v)) >> 16) & 0xffff)); \
+		mips_dsll((c), (D), (D), 16);           \
+		if (((guint64)(v)) & 0xffff) \
+			mips_ori ((c), (D), (D), (((guint64)(v)) & 0xffff)); \
+	}  \
+} while (0)
+
+#endif
 
 /* arithmetric ops */
 #define mips_add(c,dest,src1,src2) mips_format_r(c,0,src1,src2,dest,0,32)
@@ -424,8 +517,12 @@ enum {
 #define mips_fmovd(c,dest,src) mips_format_r(c,17,MIPS_FMT_DOUBLE,0,src,dest,6)
 #define mips_mfc1(c,dest,src) mips_format_r(c,17,0,dest,src,0,0)
 #define mips_mtc1(c,dest,src) mips_format_r(c,17,4,src,dest,0,0)
-#define mips_dmfc1(c,dest,src) mips_format_r(c,17,1,0,dest,src,0)
+#define mips_dmfc1(c,dest,src) mips_format_r(c,17,1,dest,src,0,0)
+#if _MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32
+#define mips_dmtc1(c,dest,src) mips_format_r(c,17,5,src,dest,0,0)
+#else 
 #define mips_dmtc1(c,dest,src) mips_format_r(c,17,1,0,src,dest,0)
+#endif
 #define mips_ldc1(c,dest,base,offset) mips_ldc(c,1,dest,base,offset)
 #define mips_ldxc1(c,dest,base,idx) mips_format_r(c,19,base,idx,0,dest,1)
 #define mips_lwc1(c,dest,base,offset) mips_lwc(c,1,dest,base,offset)

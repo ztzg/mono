@@ -1,3 +1,10 @@
+2009-04-24  Kostyantyn Gushtin, Yevgen Kiruha, Serhiy Naumenko, Serhiy
+Stetskovych and Ian Dichkovsky <mono@n-ix.com.ua>
+
+	* mips/mips-codegen.h: Changes to support 64-bit ABI. Added some
+	opcodes. Added mips_is_imm32(), mips_load_address_stub().
+	Changed mips_load_const(), mips_is_imm16().
+
 2009-04-06  Zoltan Varga  <vargaz@gmail.com>
 
 	* arm/arm-vfp-codegen.h: Add ARM_FSITOS/ARM_FSITOD.
