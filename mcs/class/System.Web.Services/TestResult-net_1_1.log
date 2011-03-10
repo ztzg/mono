@@ -1,0 +1,6 @@
+Tests run: 51, Failures: 0, Not run: 2, Time: 3.696 seconds
+
+Tests not run:
+1) MonoTests.System.Web.Services.Protocols.SoapHttpClientProtocolTest.FaultTest : this kind of connection oriented tests got non-working after some Windows updates in .NET 2.0 (1.1 still works).
+2) MonoTests.System.Web.Services.Protocols.SoapHttpClientProtocolTest.OutParametersTest : this kind of connection oriented tests got non-working after some Windows updates in .NET 2.0 (1.1 still works).
+

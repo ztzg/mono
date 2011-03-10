@@ -1,0 +1,10 @@
+WARNING: Setting value more than once
+WARNING: Setting value more than once
+WARNING: Setting value more than once
+WARNING: Setting value more than once
+WARNING: Setting value more than once
+Tests run: 60, Failures: 0, Not run: 1, Time: 1.741 seconds
+
+Tests not run:
+1) MonoTests.System.Transactions.EnlistTest.Vol2_Dur1_Fail2 : Correct this test, it should throw TimeOutException or something
+

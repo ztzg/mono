@@ -1,0 +1,5 @@
+Tests run: 86, Failures: 0, Not run: 1, Time: 2.322 seconds
+
+Tests not run:
+1) MonoTests.Microsoft.Build.Utilities.TaskItemTest.TestCtor1 : NRE on .NET 2.0
+

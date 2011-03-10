@@ -1,0 +1,9 @@
+RR:MonoTests.System.Runtime.Remoting.RemotingServicesInternal.MarshalObject.Method1 ()
+RR:MonoTests.System.Runtime.Remoting.RemotingServicesInternal.MarshalObject.Method2 ()
+Tests run: 258, Failures: 0, Not run: 3, Time: 66.512 seconds
+
+Tests not run:
+1) MonoTests.Remoting.Http.Bug315570.Main : This test somehow keeps http channel registered and then blocks any further http tests working. This also happens under .NET, so this test itself is wrong with nunit 2.4.8.
+2) MonoTests.Remoting.Http.Bug324362.Test : This test somehow keeps http channel registered and then blocks any further http tests working. This also happens under .NET, so this test itself is wrong with nunit 2.4.8.
+3) MonoTests.Remoting.RemotingServicesTest.ConnectProxyCast : We cannot test RemotingConfiguration.Configure() because it keeps channels registered. If we really need to test it, do it as a standalone case
+

@@ -1,0 +1,14 @@
+AppDomain's Applicationname is:  bf3602ad
+LoaderOptimization is:  NotSpecified
+ShadowCopyDirs:  bin
+ApsInstal 
+TTTTTTTTTTT: System.Collections.Hashtable
+Tests run: 1683, Failures: 0, Not run: 5, Time: 99.130 seconds
+
+Tests not run:
+1) MonoTests.System.Web.HttpRuntimeTest.UnloadAppDomain : Pending fix for bug 351878
+2) MonoTests.System.Web.HttpRuntimeTest.UnloadAppDomain100Times : Pending fix for bug 351878
+3) MonoTests.System.Web.Test_HttpFakeRequest.Test_EmptyUnknownRow : tests undocumented behavior that depends on implementation
+4) MonoTests.System.Web.UI.HtmlControls.HtmlInputRadioButtonTest.RenderAttributes : throws NullReferenceException
+5) MonoTests.System.Web.UI.WebControls.EditCommandColumnTest.InitializeReadOnlyEditCell : Unfinished
+

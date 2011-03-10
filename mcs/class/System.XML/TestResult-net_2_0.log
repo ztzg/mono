@@ -1,0 +1,41 @@
+None
+Whitespace
+1
+1
+0
+X
+at foo::
+Tests run: 1702, Failures: 2, Not run: 13, Time: 72.580 seconds
+
+Test Case Failures:
+1) MonoTests.System.Xml.XmlConvertTests.XmlDateTimeSerializationModeUnspecified :   #2
+  Expected: False
+  But was:  True
+
+at MonoTests.System.Xml.XmlConvertTests.XmlDateTimeSerializationModeUnspecified () [0x00042] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.XML/Test/System.Xml/XmlConvertTests.cs:637
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+2) MonoTests.System.Xml.XmlConvertTests.XmlDateTimeSerializationModeUtc :   #2
+  Expected: False
+  But was:  True
+
+at MonoTests.System.Xml.XmlConvertTests.XmlDateTimeSerializationModeUtc () [0x00042] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.XML/Test/System.Xml/XmlConvertTests.cs:649
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.System.Xml.XmlElementTests.RemoveDoesNotRemoveDefaultAttributes : This test is very implementation dependent and thus .NET 2.0 does not pass. That's why I said http://primates.ximian.com/~atsushi/blog/archives/000416.html and http://svn.myrealbox.com/viewcvs/trunk/mono/web/xml-classes?rev=23598
+2) MonoTests.System.Xml.XmlNodeReaderTests.ResolveEntity2 : .NET 2.0 XmlNodeReader does not allow undeclared entities at all.
+3) MonoTests.System.Xml.XmlNodeReaderTests.ResolveEntityWithoutDTD : .NET 2.0 XmlNodeReader does not allow undeclared entities at all.
+4) MonoTests.System.Xml.XmlNodeTests.SelectNodes2 : MS.NET has a bug; it does not return nodes in document order.
+5) MonoTests.System.Xml.XmlReaderTests.MoveToXmlDeclAttributes : Too inconsistent reference implementations to determine which is correct behavior.
+6) MonoTests.System.Xml.XmlSchemaDatatypeTests.TestAnyType : The behavior has been inconsistent between versions, so it is not worthy of testing.
+7) MonoTests.System.Xml.XmlTextReaderTests.UndeclaredEntityInIntSubsetOnlyXml : MS.NET 1.0 does not pass this test. The related spec is XML rec. 4.1
+8) MonoTests.System.Xml.XmlTextReaderTests.UndeclaredEntityInStandaloneXml : MS.NET 1.0 does not pass this test. The related spec is XML rec. 4.1
+9) MonoTests.System.Xml.XmlTextWriterTests.AutoCreatePrefixes : Due to the (silly) dependency on bug #77088, this test will not be fixed. The test could be rewritten but it depends on the original test author.
+10) MonoTests.System.Xml.XmlTextWriterTests.AutoCreatePrefixes2 : Due to the (silly) dependency on bug #77088, this test will not be fixed. The test could be rewritten but it depends on the original test author.
+11) MonoTests.System.Xml.XsdValidatingReaderTests.TestNamespacesFalse : XML Schema validator should not be available for validating non namespace-aware XmlReader that handled colon as a name character
+12) MonoTests.System.Xml.Xsl.MsxslScriptTests.InvalidScript : Actually it should throw compile exception
+13) MonoTests.System.XmlSerialization.XmlSerializerTests.TestSerializeNullString : The generated XML is not exact but it is equivalent
+

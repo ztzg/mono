@@ -1,0 +1,10 @@
+RR:System.Runtime.Remoting.Messaging.ReturnMessage
+RR:System.Runtime.Remoting.Messaging.ReturnMessage
+Tests run: 332, Failures: 0, Not run: 4, Time: 91.829 seconds
+
+Tests not run:
+1) MonoTests.Remoting.GenericTest.TestTcpChannel : disabled as it got not working by NUnit upgrade to 2.4.8 (applies to .NET too)
+2) MonoTests.Remoting.Http.Bug315570.Main : This test somehow keeps http channel registered and then blocks any further http tests working. This also happens under .NET, so this test itself is wrong with nunit 2.4.8.
+3) MonoTests.Remoting.Http.Bug324362.Test : This test somehow keeps http channel registered and then blocks any further http tests working. This also happens under .NET, so this test itself is wrong with nunit 2.4.8.
+4) MonoTests.Remoting.RemotingServicesTest.ConnectProxyCast : We cannot test RemotingConfiguration.Configure() because it keeps channels registered. If we really need to test it, do it as a standalone case
+

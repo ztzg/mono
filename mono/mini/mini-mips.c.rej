@@ -1,0 +1,119 @@
+***************
+*** 2830,2877 ****
+  				temp->inst_offset = pos;
+  				/* Store returned structure into the stack by structure pointer */
+  				last_ins = temp;
+- 				store_reg = mips_v0;
+  				store_offset = 0;
+- 				while (size > 0)
+- 				{
+- 					switch (size % SIZEOF_REGISTER) {
+- 						case 0: 
+- 							INS_OFFSET (last_ins, OP_STOREI8_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							break;
+- 						case 1:
+- 							INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							break;
+- 						case 2: 
+- 							INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							break;
+- 						case 3:
+- 							INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 2 * 8);
+- 							INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+2);
+- 							break;
+- 						case 4: 
+- 							INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							break;
+- 						case 5:
+- 							INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 4 * 8);
+- 							INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+4);
+- 							break;
+- 						case 6:
+- 							INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 4 * 8);
+- 							INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+4);
+- 							break;
+- 						case 7:
+- 							INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
+- 							INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 4 * 8);
+- 							INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+4);
+- 							INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 2 * 8);
+- 							INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+6);
+- 							break;							
+  					}
+- 					store_offset += SIZEOF_REGISTER;
+- 		      			size -= SIZEOF_REGISTER;
+  				}
+  				ins = last_ins;
+  			}	
+--- 2831,2898 ----
+  				temp->inst_offset = pos;
+  				/* Store returned structure into the stack by structure pointer */
+  				last_ins = temp;
++ 				info = mono_marshal_load_type_info (klass);
++ 				
++ 				store_reg = mips_f0;
+  				store_offset = 0;
++ 				if (info->num_fields <= 2) {
++ 					for (i = 0; i < info->num_fields; ++i)
++ 						if ((info->fields[i].field->type->type != MONO_TYPE_R8) && (info->fields[i].field->type->type != MONO_TYPE_R4))
++ 							store_reg = mips_v0;
++ 				} else
++ 					store_reg = mips_v0;
++ 					
++ 				if (store_reg == mips_f0) {
++ 					for (i = 0; i < info->num_fields; ++i) {
++ 						if (info->fields[i].field->type->type == MONO_TYPE_R4)
++ 							INS_OFFSET (last_ins, OP_STORER4_MEMBASE_REG, mips_temp, store_reg, store_offset);
++ 						else
++ 							INS_OFFSET (last_ins, OP_STORER8_MEMBASE_REG, mips_temp, store_reg, store_offset);
++ 						store_reg += 2;
++ 						if (info->num_fields > 1)
++ 							store_offset += ((info->fields[0].field->type->type == MONO_TYPE_R4) && (info->fields[1].field->type->type == MONO_TYPE_R4)) ? 4 : SIZEOF_REGISTER;
++ 					}				
++ 				} else {
++ 					while (size > 0) {
++ 						switch (size % SIZEOF_REGISTER) {
++ 							case 0: 
++ 								INS_OFFSET (last_ins, OP_STOREI8_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								break;
++ 							case 1:
++ 								INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								break;
++ 							case 2: 
++ 								INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								break;
++ 							case 3:
++ 								INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 2 * 8);
++ 								INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+2);
++ 								break;
++ 							case 4: 
++ 								INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								break;
++ 							case 5:
++ 								INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 4 * 8);
++ 								INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+4);
++ 								break;
++ 							case 6:
++ 								INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 4 * 8);
++ 								INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+4);
++ 								break;
++ 							case 7:
++ 								INS_OFFSET (last_ins, OP_STOREI4_MEMBASE_REG, mips_temp, store_reg++, store_offset);
++ 								INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 4 * 8);
++ 								INS_OFFSET (last_ins, OP_STOREI2_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+4);
++ 								INS_IMM (last_ins, OP_LSHR_UN_IMM, last_ins->sreg1, last_ins->sreg1, 2 * 8);
++ 								INS_OFFSET (last_ins, OP_STOREI1_MEMBASE_REG, mips_temp, last_ins->sreg1, store_offset+6);
++ 								break;							
++ 						}
++ 						store_offset += SIZEOF_REGISTER;
++ 			      			size -= SIZEOF_REGISTER;
+  					}
+  				}
+  				ins = last_ins;
+  			}	

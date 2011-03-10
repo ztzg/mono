@@ -1,0 +1,1368 @@
+A1B1A2B2A3B3B4A4
+A1C1B1A2C2B2A3B3B4A4
+A1B1A2B2A3B3B4A4
+<SOAP-ENV:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:clr="http://schemas.microsoft.com/clr/" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <SOAP-ENV:Body>
+    <a1:List id="ref-1" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <name id="ref-2">my list</name>
+      <children href="#ref-3" />
+      <values href="#ref-4" />
+    </a1:List>
+    <SOAP-ENC:Array id="ref-3" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:ListItem[3]">
+      <item href="#ref-5" />
+      <item href="#ref-6" />
+      <item href="#ref-7" />
+    </SOAP-ENC:Array>
+    <a1:SomeValues id="ref-4" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <_type href="#ref-8" />
+      <_type2 href="#ref-9" />
+      <_dbnull href="#ref-10" />
+      <_assembly href="#ref-11" />
+      <_intEnum>bbb</_intEnum>
+      <_byteEnum>ccc</_byteEnum>
+      <_bool>true</_bool>
+      <_bool2>false</_bool2>
+      <_byte>254</_byte>
+      <_char>A</_char>
+      <_dateTime>1972-07-13T01:20:59.0000000+02:00</_dateTime>
+      <_decimal>101010.10101</_decimal>
+      <_double>123456.6789</_double>
+      <_short>-19191</_short>
+      <_int>-28282828</_int>
+      <_long>37373737373</_long>
+      <_sbyte>-123</_sbyte>
+      <_float>654321.313</_float>
+      <_ushort>61616</_ushort>
+      <_uint>464646464</_uint>
+      <_ulong>55555555</_ulong>
+      <_objects href="#ref-12" />
+      <_strings href="#ref-13" />
+      <_ints href="#ref-14" />
+      <_intsMulti href="#ref-15" />
+      <_intsJagged href="#ref-16" />
+      <_simples href="#ref-17" />
+      <_simplesMulti href="#ref-18" />
+      <_simplesJagged href="#ref-19" />
+      <_doubles href="#ref-20" />
+      <_almostEmpty href="#ref-21" />
+      <_emptyObjectArray href="#ref-22" />
+      <_emptyTypeArray href="#ref-23" />
+      <_emptySimpleArray href="#ref-24" />
+      <_emptyIntArray href="#ref-25" />
+      <_emptyStringArray href="#ref-26" />
+      <_sampleDelegate href="#ref-27" />
+      <_sampleDelegate2 href="#ref-28" />
+      <_sampleDelegate3 href="#ref-29" />
+      <_sampleDelegateStatic href="#ref-30" />
+      <_sampleDelegateCombined href="#ref-31" />
+      <_shared1 href="#ref-32" />
+      <_shared2 href="#ref-33" />
+      <_shared3 href="#ref-32" />
+    </a1:SomeValues>
+    <a1:ListItem id="ref-5" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <next href="#ref-6" />
+      <value xsi:type="a1:ListValue">
+        <color>111</color>
+        <point>
+          <xv>11</xv>
+          <yv>22</yv>
+        </point>
+      </value>
+      <label id="ref-34">value label 1</label>
+    </a1:ListItem>
+    <a1:ListItem id="ref-6" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <next href="#ref-7" />
+      <value xsi:type="a1:ListValue">
+        <color>222</color>
+        <point>
+          <xv>33</xv>
+          <yv>44</yv>
+        </point>
+      </value>
+      <label id="ref-35">value label 2</label>
+    </a1:ListItem>
+    <a1:ListItem id="ref-7" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <next xsi:null="1" />
+      <value xsi:type="a1:ListValue">
+        <color>333</color>
+        <point>
+          <xv>55</xv>
+          <yv>66</yv>
+        </point>
+      </value>
+      <label id="ref-36">value label 3</label>
+    </a1:ListItem>
+    <a2:UnitySerializationHolder id="ref-8" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Data id="ref-37">System.String</Data>
+      <UnityType>4</UnityType>
+      <AssemblyName id="ref-38">mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</AssemblyName>
+    </a2:UnitySerializationHolder>
+    <a2:UnitySerializationHolder id="ref-9" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Data id="ref-39">MonoTests.System.Runtime.Serialization.Formatters.Soap.SomeValues</Data>
+      <UnityType>4</UnityType>
+      <AssemblyName id="ref-40">System.Runtime.Serialization.Formatters.Soap_test_net_2_0, Version=1.0.3409.12137, Culture=neutral, PublicKeyToken=null</AssemblyName>
+    </a2:UnitySerializationHolder>
+    <a2:UnitySerializationHolder id="ref-10" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Data xsi:null="1" />
+      <UnityType>2</UnityType>
+      <AssemblyName href="#ref-38" />
+    </a2:UnitySerializationHolder>
+    <a2:UnitySerializationHolder id="ref-11" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Data href="#ref-40" />
+      <UnityType>6</UnityType>
+      <AssemblyName href="#ref-40" />
+    </a2:UnitySerializationHolder>
+    <SOAP-ENC:Array id="ref-12" SOAP-ENC:arrayType="xsd:anyType[5]">
+      <item id="ref-41" xsi:type="SOAP-ENC:string">string</item>
+      <item xsi:type="xsd:int">1234</item>
+      <item xsi:null="1" />
+      <item xsi:type="xsd:long">22</item>
+      <item xsi:type="xsd:long">22</item>
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-13" SOAP-ENC:arrayType="SOAP-ENC:string[10]">
+      <item id="ref-42">an</item>
+      <item id="ref-43">array</item>
+      <item id="ref-44">of</item>
+      <item id="ref-45">strings</item>
+      <item id="ref-46">I</item>
+      <item id="ref-47">repeat</item>
+      <item href="#ref-42" />
+      <item href="#ref-43" />
+      <item href="#ref-44" />
+      <item href="#ref-45" />
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-14" SOAP-ENC:arrayType="xsd:int[5]">
+      <item>4</item>
+      <item>5</item>
+      <item>6</item>
+      <item>7</item>
+      <item>8</item>
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-15" SOAP-ENC:arrayType="xsd:int[2,3,4]">
+      <item>1</item>
+      <item>2</item>
+      <item>3</item>
+      <item>4</item>
+      <item>5</item>
+      <item>6</item>
+      <item>7</item>
+      <item>8</item>
+      <item>9</item>
+      <item>10</item>
+      <item>11</item>
+      <item>12</item>
+      <item>13</item>
+      <item>14</item>
+      <item>15</item>
+      <item>16</item>
+      <item>17</item>
+      <item>18</item>
+      <item>19</item>
+      <item>20</item>
+      <item>21</item>
+      <item>22</item>
+      <item>23</item>
+      <item>24</item>
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-16" xmlns:a2="http://schemas.microsoft.com/clr/ns/System" SOAP-ENC:arrayType="a2:Int32[][2]">
+      <item href="#ref-48" />
+      <item href="#ref-49" />
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-17" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:SimpleClass[3]">
+      <item href="#ref-50" />
+      <item href="#ref-51" />
+      <item href="#ref-52" />
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-18" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:SimpleClass[2,3]">
+      <item href="#ref-53" />
+      <item href="#ref-54" />
+      <item href="#ref-55" />
+      <item href="#ref-56" />
+      <item href="#ref-57" />
+      <item href="#ref-58" />
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-19" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:SimpleClass[][2]">
+      <item href="#ref-59" />
+      <item href="#ref-60" />
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-20" SOAP-ENC:arrayType="xsd:double[9]">
+      <item>1010101.10101</item>
+      <item>292929.29291999998</item>
+      <item>3838383.3838300002</item>
+      <item>4747474.4740000004</item>
+      <item>56565.565656500003</item>
+      <item>0</item>
+      <item>NaN</item>
+      <item>-Infinity</item>
+      <item>Infinity</item>
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-21" SOAP-ENC:arrayType="xsd:anyType[2000]">
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:null="1" />
+      <item xsi:type="xsd:int">4</item>
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-22" SOAP-ENC:arrayType="xsd:anyType[0]">
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-23" xmlns:a2="http://schemas.microsoft.com/clr/ns/System" SOAP-ENC:arrayType="a2:Type[0]">
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-24" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:SimpleClass[0]">
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-25" SOAP-ENC:arrayType="xsd:int[0]">
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-26" SOAP-ENC:arrayType="SOAP-ENC:string[0]">
+    </SOAP-ENC:Array>
+    <a2:DelegateSerializationHolder id="ref-27" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Delegate href="#ref-61" />
+      <target0 href="#ref-4" />
+    </a2:DelegateSerializationHolder>
+    <a2:DelegateSerializationHolder id="ref-28" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Delegate href="#ref-62" />
+      <target0 href="#ref-50" />
+    </a2:DelegateSerializationHolder>
+    <a2:DelegateSerializationHolder id="ref-29" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Delegate href="#ref-63" />
+      <target0 href="#ref-64" />
+    </a2:DelegateSerializationHolder>
+    <a2:DelegateSerializationHolder id="ref-30" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Delegate href="#ref-65" />
+    </a2:DelegateSerializationHolder>
+    <a2:DelegateSerializationHolder id="ref-31" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <Delegate href="#ref-66" />
+      <target0 href="#ref-4" />
+      <target1 href="#ref-50" />
+      <target2 href="#ref-64" />
+    </a2:DelegateSerializationHolder>
+    <a1:SimpleClass id="ref-32" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>A</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-33" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>A</val>
+    </a1:SimpleClass>
+    <SOAP-ENC:Array id="ref-48" SOAP-ENC:arrayType="xsd:int[3]">
+      <item>1</item>
+      <item>2</item>
+      <item>3</item>
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-49" SOAP-ENC:arrayType="xsd:int[2]">
+      <item>4</item>
+      <item>5</item>
+    </SOAP-ENC:Array>
+    <a1:SimpleClass id="ref-50" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>a</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-51" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>b</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-52" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>c</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-53" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>d</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-54" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>e</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-55" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>f</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-56" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>g</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-57" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>j</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-58" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>h</val>
+    </a1:SimpleClass>
+    <SOAP-ENC:Array id="ref-59" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:SimpleClass[1]">
+      <item href="#ref-67" />
+    </SOAP-ENC:Array>
+    <SOAP-ENC:Array id="ref-60" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull" SOAP-ENC:arrayType="a1:SimpleClass[2]">
+      <item xsi:null="1" />
+      <item href="#ref-68" />
+    </SOAP-ENC:Array>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-61" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type id="ref-69">MonoTests.System.Runtime.Serialization.Formatters.Soap.SampleDelegate</type>
+      <assembly href="#ref-40" />
+      <target id="ref-70" xsi:type="SOAP-ENC:string">target0</target>
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-39" />
+      <methodName id="ref-71">SampleCall</methodName>
+      <delegateEntry xsi:null="1" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-62" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target id="ref-72" xsi:type="SOAP-ENC:string">target0</target>
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName id="ref-73">MonoTests.System.Runtime.Serialization.Formatters.Soap.SimpleClass</targetTypeName>
+      <methodName id="ref-74">SampleCall</methodName>
+      <delegateEntry xsi:null="1" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-63" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target id="ref-75" xsi:type="SOAP-ENC:string">target0</target>
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-73" />
+      <methodName href="#ref-74" />
+      <delegateEntry xsi:null="1" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a1:SimpleClass id="ref-64" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>x</val>
+    </a1:SimpleClass>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-65" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target xsi:null="1" />
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-39" />
+      <methodName id="ref-76">SampleStaticCall</methodName>
+      <delegateEntry xsi:null="1" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-66" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target id="ref-77" xsi:type="SOAP-ENC:string">target0</target>
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-39" />
+      <methodName href="#ref-71" />
+      <delegateEntry href="#ref-78" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a1:SimpleClass id="ref-67" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>i</val>
+    </a1:SimpleClass>
+    <a1:SimpleClass id="ref-68" xmlns:a1="http://schemas.microsoft.com/clr/nsassem/MonoTests.System.Runtime.Serialization.Formatters.Soap/System.Runtime.Serialization.Formatters.Soap_test_net_2_0%2C%20Version%3D1.0.3409.12137%2C%20Culture%3Dneutral%2C%20PublicKeyToken%3Dnull">
+      <val>k</val>
+    </a1:SimpleClass>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-78" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target id="ref-79" xsi:type="SOAP-ENC:string">target1</target>
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-73" />
+      <methodName href="#ref-74" />
+      <delegateEntry href="#ref-80" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-80" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target id="ref-81" xsi:type="SOAP-ENC:string">target2</target>
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-73" />
+      <methodName href="#ref-74" />
+      <delegateEntry href="#ref-82" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+    <a2:DelegateSerializationHolder_x002B_DelegateEntry id="ref-82" xmlns:a2="http://schemas.microsoft.com/clr/ns/System">
+      <type href="#ref-69" />
+      <assembly href="#ref-40" />
+      <target xsi:null="1" />
+      <targetTypeAssembly href="#ref-40" />
+      <targetTypeName href="#ref-39" />
+      <methodName href="#ref-76" />
+      <delegateEntry xsi:null="1" />
+    </a2:DelegateSerializationHolder_x002B_DelegateEntry>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
+PPP:System.MonoType
+Tests run: 14, Failures: 0, Not run: 0, Time: 3.124 seconds
+
+

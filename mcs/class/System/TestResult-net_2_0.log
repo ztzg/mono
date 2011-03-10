@@ -1,0 +1,52 @@
+'LocalFileSettingsProvider': ''
+'LocalFileSettingsProvider': ''
+
+started, waiting for handles
+ftp://127.0.0.1:39999/file.txt
+ftp://127.0.0.1:51658/somedir/
+992 trials
+Tests run: 5295, Failures: 1, Not run: 29, Time: 495.176 seconds
+
+Test Case Failures:
+1) MonoTests.System.Net.DnsTest.GetHostByName :   siteDot
+  String lengths are both 12. Strings differ at index 11.
+  Expected: "130.57.21.12"
+  But was:  "130.57.21.18"
+  ----------------------^
+
+at MonoTests.System.Net.DnsTest.SubTestGetHostByName (System.String siteName, System.String siteDot) [0x0001f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System/Test/System.Net/DnsTest.cs:208
+at MonoTests.System.Net.DnsTest.GetHostByName () [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System/Test/System.Net/DnsTest.cs:194
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.System.Configuration.ApplicationSettingsBaseTest.TestSettings3_Properties : On MS.NET it returns null ...
+2) MonoTests.System.Configuration.SettingsBaseTest.AddPropertyNoProviderButInProviders : .NET throws NRE, which means that it is not well designed.
+3) MonoTests.System.Diagnostics.ProcessTest.Start_UseShellExecuteWithEmptyUserName : On Unix and Mac OS X, we try to open any file (using xdg-open, ...) and we do not report an exception if this fails.
+4) MonoTests.System.Diagnostics.ProcessTest.Start1_FileName_NotFound : On Unix and Mac OS X, we try to open any file (using xdg-open, ...) and we do not report an exception if this fails.
+5) MonoTests.System.Diagnostics.ProcessTest.Start2_FileName_NotFound : On Unix and Mac OS X, we try to open any file (using xdg-open, ...) and we do not report an exception if this fails.
+6) MonoTests.System.Diagnostics.ProcessTest.Start3_FileName_NotFound : On Unix and Mac OS X, we try to open any file (using xdg-open, ...) and we do not report an exception if this fails.
+7) MonoTests.System.Diagnostics.ProcessTest.Start4_Arguments_Null : On Unix and Mac OS X, we try to open any file (using xdg-open, ...) and we do not report an exception if this fails.
+8) MonoTests.System.Diagnostics.ProcessTest.Start4_FileName_NotFound : On Unix and Mac OS X, we try to open any file (using xdg-open, ...) and we do not report an exception if this fails.
+9) MonoTests.System.Diagnostics.SwitchesTest.NewSwitch : this test depends on 1.x configuration type
+10) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.Fail1 : the test should be rewritten to not compare instance-specific items.
+11) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.TraceDataWithCache1 : the test should be rewritten to not compare instance-specific items.
+12) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.TraceDataWithCache2 : the test should be rewritten to not compare instance-specific items.
+13) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.TraceEvent1 : the test should be rewritten to not compare instance-specific items.
+14) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.TraceEvent2 : the test should be rewritten to not compare instance-specific items.
+15) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.TraceTransfer1 : the test should be rewritten to not compare instance-specific items.
+16) MonoTests.System.Diagnostics.XmlWriterTraceListenerTest.WriteLine1 : the test should be rewritten to not compare instance-specific items.
+17) MonoTests.System.Net.DnsTest.GetHostByAddressIPAddress2 : Fails on both Mono and MS
+18) MonoTests.System.Net.HttpWebRequestTest.GetRequestStream_Body_NotAllowed : This test asserts that our code violates RFC 2616
+19) MonoTests.System.Net.HttpWebRequestTest.MethodCase : This test asserts that our code violates RFC 2616
+20) MonoTests.System.Net.HttpWebRequestTest.ReadTimeout : This does not timeout any more. That's how MS works when reading small responses
+21) MonoTests.System.Net.IPAddressTest.GetAddressBytesV6 : IPv6 must be enabled in machine.config
+22) MonoTests.System.Net.IPAddressTest.IsLoopbackV6 : IPv6 must be enabled in machine.config
+23) MonoTests.System.Net.IPAddressTest.ParseOkV6 : IPv6 must be enabled in machine.config
+24) MonoTests.System.Net.IPAddressTest.ToStringV6 : IPv6 must be enabled in machine.config
+25) MonoTests.System.Net.Sockets.SocketTest.IncompatibleAddress : Bug #75158
+26) MonoTests.System.Security.Permissions.StorePermissionTest.PermissionState_None_Copy : 2.0 final bug reported as FDBK40928
+27) MonoTests.System.UriTest2.AbsoluteUriFromFile : Tests needs to be updated for 2.0
+28) MonoTests.System.UriTest2.AbsoluteUriFromFileManual : Tests needs to be updated for 2.0
+29) MonoTests.System.UriTest2.RelativeUriFromFile : Tests needs to be updated for 2.0
+

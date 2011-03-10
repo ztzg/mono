@@ -1,0 +1,459 @@
+Tests run: 76, Failures: 59, Not run: 0, Time: 20.182 seconds
+
+Test Case Failures:
+1) MonoTests.Mono.Messaging.RabbitMQ.AdminTest.DeleteQueue : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AdminTest.DeleteQueue () [0x0001b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AdminTest.cs:123
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+2) MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeek : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeek () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncPeekTest.cs:57
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+3) MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithException : System.Messaging.MessageQueueException was expected
+
+4) MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithStateAndTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithStateAndTimeout () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncPeekTest.cs:93
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+5) MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithStateAndTimeoutAndCallback : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithStateAndTimeoutAndCallback () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncPeekTest.cs:118
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+6) MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncPeekTest.BeginPeekWithTimeout () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncPeekTest.cs:76
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+7) MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceive : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceive () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncReceiveTest.cs:65
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+8) MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithException : System.Messaging.MessageQueueException was expected
+
+9) MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithStateAndTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithStateAndTimeout () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncReceiveTest.cs:97
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+10) MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithStateAndTimeoutAndCallback : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithStateAndTimeoutAndCallback () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncReceiveTest.cs:120
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+11) MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.AsyncReceiveTest.BeginReceiveWithTimeout () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/AsyncReceiveTest.cs:82
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+12) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendBinaryMessage : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendBinaryMessage () [0x00043] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:416
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+13) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendBinaryObject : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x000a6] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1032
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendBinaryObject () [0x0003c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:366
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+14) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendBinaryText : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x000a6] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1032
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendBinaryText () [0x0001e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:326
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+15) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendDefaultMessage : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendDefaultMessage () [0x00048] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:442
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+16) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendDefaultObject : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x000a6] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1032
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendDefaultObject () [0x00036] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:389
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+17) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendDefaultText : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x000a6] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1032
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendDefaultText () [0x00018] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:343
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+18) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendMessageWithLabel : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at System.Messaging.MessageQueue.Send (System.Object obj, System.String label) [0x00023] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1086
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,string)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendMessageWithLabel () [0x00065] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:87
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+19) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendReceiveBinaryMessage : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendReceiveBinaryMessage () [0x00072] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:56
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+20) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendReceiveBinaryMessageWithAllPropertiesSet : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendReceiveBinaryMessageWithAllPropertiesSet () [0x00128] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:211
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+21) MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendReceiveXmlMessage : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.BasicMessageTest.SendReceiveXmlMessage () [0x0004a] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/BasicMessagingTest.cs:306
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+22) MonoTests.Mono.Messaging.RabbitMQ.MessageEnumeratorTest.RemoveMessage : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.MessageEnumeratorTest.SendMessage (System.String s) [0x00032] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/MessageEnumeratorTest.cs:50
+at MonoTests.Mono.Messaging.RabbitMQ.MessageEnumeratorTest.RemoveMessage () [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/MessageEnumeratorTest.cs:56
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+23) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByCorrelationId : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByCorrelationId () [0x00057] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:140
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+24) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByCorrelationIdNotFound : An unexpected exception type was thrown
+Expected: System.InvalidOperationException
+ but was: System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByCorrelationIdNotFound () [0x0004b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:159
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+25) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByCorrelationIdWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByCorrelationIdWithTimeout () [0x00057] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:177
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+26) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekById : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekById () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:85
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+27) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByIdNotFound : An unexpected exception type was thrown
+Expected: System.InvalidOperationException
+ but was: System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByIdNotFound () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:120
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+28) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByIdWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekByIdWithTimeout () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:102
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+29) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekMessage : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekMessage () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:47
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+30) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekMessageWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekMessageWithTimeout () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:62
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+31) MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekNoMessageWithTimeout : An unexpected exception type was thrown
+Expected: System.Messaging.MessageQueueException
+ but was: RabbitMQ.Client.Exceptions.BrokerUnreachableException : None of the specified endpoints were reachable
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (Int32 maxRedirects, RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x0001f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:240
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:248
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (System.String address) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:299
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Run (Mono.Messaging.RabbitMQ.DoReceive r) [0x00006] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:496
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Peek (TimeSpan timeout) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:330
+at System.Messaging.MessageQueue.Peek (TimeSpan timeout) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:588
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Peek (System.TimeSpan)
+at MonoTests.Mono.Messaging.RabbitMQ.PeekTest.PeekNoMessageWithTimeout () [0x0000b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/PeekTest.cs:76
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+32) MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByCorrelationId : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByCorrelationId () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/SelectorTest.cs:83
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+33) MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByCorrelationIdNotFound : An unexpected exception type was thrown
+Expected: System.InvalidOperationException
+ but was: System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByCorrelationIdNotFound () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/SelectorTest.cs:99
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+34) MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByCorrelationIdWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByCorrelationIdWithTimeout () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/SelectorTest.cs:131
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+35) MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectById : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectById () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/SelectorTest.cs:48
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+36) MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByIdNotFound : An unexpected exception type was thrown
+Expected: System.InvalidOperationException
+ but was: System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByIdNotFound () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/SelectorTest.cs:64
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+37) MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByIdWithTimeout : System.Messaging.MessageQueueException : Unable to connect to Queue
+at System.Messaging.MessageQueue.Send (System.Object obj) [0x0006c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1026
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object)
+at MonoTests.Mono.Messaging.RabbitMQ.SelectorTest.SelectByIdWithTimeout () [0x00030] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/SelectorTest.cs:114
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+38) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransaction : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransaction () [0x0004a] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:272
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+39) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionAbort : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionAbort () [0x0005d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:295
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+40) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionAndTimeout : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionAndTimeout () [0x0005d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:439
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+41) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionType : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionType () [0x00055] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:320
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+42) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionTypeAndTimeout : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByCorrelationIdWithTransactionTypeAndTimeout () [0x0005d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:460
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+43) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransaction : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransaction () [0x0002e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:213
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+44) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionAbort : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionAbort () [0x00041] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:234
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+45) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionAndTimeout : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionAndTimeout () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:402
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+46) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionType : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionType () [0x0002e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:256
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+47) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionTypeAndTimeout : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveByIdWithTransactionTypeAndTimeout () [0x00041] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:423
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+48) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransaction : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransaction () [0x0002e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:131
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+49) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionAbort : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionAbort () [0x00041] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:151
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+50) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionAndTimeout : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionAndTimeout () [0x00039] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:335
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+51) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionAndTimeoutAndAbort : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionAndTimeoutAndAbort () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:356
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+52) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionType : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionType () [0x00041] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:172
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+53) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionTypeAndTimeout : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionTypeAndTimeout () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:378
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+54) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionTypeAndTimeoutFailure : An unexpected exception type was thrown
+Expected: System.Messaging.MessageQueueException
+ but was: RabbitMQ.Client.Exceptions.BrokerUnreachableException : None of the specified endpoints were reachable
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (Int32 maxRedirects, RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x0001f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:240
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:248
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (System.String address) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:299
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue+TxReceiver.ReceiveInContext (System.String& host, IConnection& cn, IModel& model, System.String txId) [0x00052] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:546
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueueTransaction.RunReceive (Mono.Messaging.RabbitMQ.Receive receiveDelegate) [0x0000d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueueTransaction.cs:116
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Run (IMessageQueueTransaction transaction, Mono.Messaging.RabbitMQ.DoReceive r) [0x0000f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:490
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Run (MessageQueueTransactionType transactionType, Mono.Messaging.RabbitMQ.DoReceive r) [0x00026] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:466
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Receive (TimeSpan timeout, MessageQueueTransactionType transactionType) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:372
+at System.Messaging.MessageQueue.Receive (TimeSpan timeout, MessageQueueTransactionType transactionType) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:771
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Receive (System.TimeSpan,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.ReceiveWithTransactionTypeAndTimeoutFailure () [0x0001c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:391
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+55) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.Send2WithLabelWithTransaction : RabbitMQ.Client.Exceptions.BrokerUnreachableException : None of the specified endpoints were reachable
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (Int32 maxRedirects, RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x0001f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:240
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:248
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (System.String address) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:299
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.SendInContext (System.String& host, IConnection& cn, IModel& model, IMessage msg, System.String txId) [0x00048] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:282
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueueTransaction.RunSend (Mono.Messaging.RabbitMQ.Send sendDelegate, IMessage msg) [0x0000d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueueTransaction.cs:109
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Send (IMessage msg, IMessageQueueTransaction transaction) [0x0003d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:245
+at System.Messaging.MessageQueue.Send (System.Object obj, System.String label, System.Messaging.MessageQueueTransaction transaction) [0x0005c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1105
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,string,System.Messaging.MessageQueueTransaction)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.Send2WithLabelWithTransaction () [0x00064] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:85
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+56) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.Send2WithTransaction : RabbitMQ.Client.Exceptions.BrokerUnreachableException : None of the specified endpoints were reachable
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (Int32 maxRedirects, RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x0001f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:240
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:248
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (System.String address) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:299
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.SendInContext (System.String& host, IConnection& cn, IModel& model, IMessage msg, System.String txId) [0x00048] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:282
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueueTransaction.RunSend (Mono.Messaging.RabbitMQ.Send sendDelegate, IMessage msg) [0x0000d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueueTransaction.cs:109
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Send (IMessage msg, IMessageQueueTransaction transaction) [0x0003d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:245
+at System.Messaging.MessageQueue.Send (System.Object obj, System.Messaging.MessageQueueTransaction transaction) [0x00055] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1046
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransaction)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.Send2WithTransaction () [0x00053] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:55
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+57) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.Send2WithTransactionAbort : An unexpected exception type was thrown
+Expected: System.Messaging.MessageQueueException
+ but was: RabbitMQ.Client.Exceptions.BrokerUnreachableException : None of the specified endpoints were reachable
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (Int32 maxRedirects, RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x0001f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:240
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (RabbitMQ.Client.AmqpTcpEndpoint[] endpoints) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:248
+at RabbitMQ.Client.ConnectionFactory.CreateConnection (System.String address) [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/RabbitMQ.Client/src/client/api/ConnectionFactory.cs:299
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.SendInContext (System.String& host, IConnection& cn, IModel& model, IMessage msg, System.String txId) [0x00048] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:282
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueueTransaction.RunSend (Mono.Messaging.RabbitMQ.Send sendDelegate, IMessage msg) [0x0000d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueueTransaction.cs:109
+at Mono.Messaging.RabbitMQ.RabbitMQMessageQueue.Send (IMessage msg, IMessageQueueTransaction transaction) [0x0003d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Mono.Messaging.RabbitMQ/RabbitMQMessageQueue.cs:245
+at System.Messaging.MessageQueue.Send (System.Object obj, System.Messaging.MessageQueueTransaction transaction) [0x00055] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1046
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransaction)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.Send2WithTransactionAbort () [0x00053] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:116
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+58) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.SendWithTransactionType : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.SendWithTransactionType () [0x00022] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:185
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+59) MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.SendWithTransactionTypeAndLabel : System.Messaging.MessageQueueException : None of the specified endpoints were reachable
+at System.Messaging.MessageQueue.Send (System.Object obj, MessageQueueTransactionType transactionType) [0x00084] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1072
+at System.Messaging.MessageQueue.Send (System.Object obj, System.String label, MessageQueueTransactionType transactionType) [0x00023] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Messaging/System.Messaging/MessageQueue.cs:1122
+at (wrapper remoting-invoke-with-check) System.Messaging.MessageQueue:Send (object,string,System.Messaging.MessageQueueTransactionType)
+at MonoTests.Mono.Messaging.RabbitMQ.TransactionMessageTest.SendWithTransactionTypeAndLabel () [0x00028] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Messaging.RabbitMQ/Test/Mono.Messaging.RabbitMQ/TransactionMessagingTest.cs:199
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+

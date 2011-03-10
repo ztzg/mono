@@ -1,0 +1,8 @@
+Tests run: 95, Failures: 0, Not run: 4, Time: 8.007 seconds
+
+Tests not run:
+1) MonoTests.System.Web.Services.Configuration.TypeElementTest.Ctors1 : causes NRE on .NET
+2) MonoTests.System.Web.Services.Description.ServiceDescriptionImporterTest.ImportHttpOnlyWsdl : This test requires HttpGet available by configuration.
+3) MonoTests.System.Web.Services.Protocols.SoapHttpClientProtocolTest.FaultTest : this kind of connection oriented tests got non-working after some Windows updates in .NET 2.0 (1.1 still works).
+4) MonoTests.System.Web.Services.Protocols.SoapHttpClientProtocolTest.OutParametersTest : this kind of connection oriented tests got non-working after some Windows updates in .NET 2.0 (1.1 still works).
+

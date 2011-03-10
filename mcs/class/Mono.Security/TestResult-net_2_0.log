@@ -1,0 +1,63 @@
+Tests run: 611, Failures: 3, Not run: 40, Time: 383.853 seconds
+
+Test Case Failures:
+1) MonoTests.Mono.Security.ASN1ConvertTest.ConvertDateTimeAfter2000 : Expected 05/02/2009 09:22:33 has more than one second (10800.547565) difference with actual data 05/02/2009 06:22:33
+at MonoTests.Mono.Security.ASN1ConvertTest.AssertDate (DateTime expected, DateTime actual, System.String message) [0x0002d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Security/Test/Mono.Security/ASN1ConvertTest.cs:30
+at MonoTests.Mono.Security.ASN1ConvertTest.ConvertDateTimeAfter2000 () [0x00042] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Security/Test/Mono.Security/ASN1ConvertTest.cs:58
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+2) MonoTests.Mono.Security.ASN1ConvertTest.ConvertDateTimeAfter2050 : Expected 05/02/2059 09:22:34 has more than one second (7200.161821) difference with actual data 05/02/2059 07:22:34
+at MonoTests.Mono.Security.ASN1ConvertTest.AssertDate (DateTime expected, DateTime actual, System.String message) [0x0002d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Security/Test/Mono.Security/ASN1ConvertTest.cs:30
+at MonoTests.Mono.Security.ASN1ConvertTest.ConvertDateTimeAfter2050 () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Security/Test/Mono.Security/ASN1ConvertTest.cs:71
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+3) MonoTests.Mono.Security.ASN1ConvertTest.ConvertDateTimeBefore2000 : Expected 05/02/1959 09:22:34 has more than one second (7200.174654) difference with actual data 05/02/1959 07:22:34
+at MonoTests.Mono.Security.ASN1ConvertTest.AssertDate (DateTime expected, DateTime actual, System.String message) [0x0002d] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Security/Test/Mono.Security/ASN1ConvertTest.cs:30
+at MonoTests.Mono.Security.ASN1ConvertTest.ConvertDateTimeBefore2000 () [0x0004c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Mono.Security/Test/Mono.Security/ASN1ConvertTest.cs:45
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.ABdivA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+2) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.ABdivB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+3) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.ABmodA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+4) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.ABmodB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+5) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AdivB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+6) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AeqA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+7) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AgtB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+8) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AltB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+9) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AminusB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+10) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AmodB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+11) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AneqB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+12) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.ANotLtB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+13) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AplusB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+14) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.Asquared : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+15) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.AtimesB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+16) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.BeqB : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+17) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.BmodA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+18) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.BneqA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+19) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.BNotGtA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+20) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.BplusA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+21) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.Bsquared : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+22) MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base.BtimesA : MonoTests.Mono.Math.Arithmetic.Big.ArithmeticBig_Base is an abstract class
+23) MonoTests.Mono.Math.Bitwise_Base.ShiftLeft : MonoTests.Mono.Math.Bitwise_Base is an abstract class
+24) MonoTests.Mono.Math.Bitwise_Base.ShiftRight : MonoTests.Mono.Math.Bitwise_Base is an abstract class
+25) MonoTests.Mono.Math.GcdBig_Base.GcdPP : MonoTests.Mono.Math.GcdBig_Base is an abstract class
+26) MonoTests.Mono.Math.ModInverseBig_Base.ModInvPP : MonoTests.Mono.Math.ModInverseBig_Base is an abstract class
+27) MonoTests.Mono.Math.ModRing_Base.ABmodN : MonoTests.Mono.Math.ModRing_Base is an abstract class
+28) MonoTests.Mono.Math.ModRing_Base.ApowBmodN : MonoTests.Mono.Math.ModRing_Base is an abstract class
+29) MonoTests.Mono.Math.PrimeGeneration_Base.GeneratePrime : MonoTests.Mono.Math.PrimeGeneration_Base is an abstract class
+30) MonoTests.Mono.Math.PrimeTesting_Base.p1p2composite : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+31) MonoTests.Mono.Math.PrimeTesting_Base.p1p2p3composite : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+32) MonoTests.Mono.Math.PrimeTesting_Base.p1p3composite : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+33) MonoTests.Mono.Math.PrimeTesting_Base.p1prime : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+34) MonoTests.Mono.Math.PrimeTesting_Base.p2p3composite : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+35) MonoTests.Mono.Math.PrimeTesting_Base.p2prime : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+36) MonoTests.Mono.Math.PrimeTesting_Base.p3prime : MonoTests.Mono.Math.PrimeTesting_Base is an abstract class
+37) MonoTests.Mono.Security.Cryptography.KeyPairPersistenceTest.CspFlagsDefaultMachine : Access denied to key containers files.
+38) MonoTests.Mono.Security.Cryptography.KeyPairPersistenceTest.CspFlagsMachine : Access denied to key containers files.
+39) MonoTests.Mono.Security.X509.X501NameTest.FromString_MultiValued : multi-valued support isn't implemented
+40) MonoTests.Mono.Security.X509.X501NameTest.FromString_UnrecognizedEncoding : # support isn't implemented
+

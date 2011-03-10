@@ -1,0 +1,27 @@
+libcups not found. To have printing support, you need cups installed
+Tests run: 1756, Failures: 1, Not run: 10, Time: 57.217 seconds
+
+Test Case Failures:
+1) MonoTests.System.Drawing.TestBitmap.Rotate1bit4bit : System.UnauthorizedAccessException : Access to the path "/tmp/md5s.txt" is denied.
+at System.IO.FileStream..ctor (System.String path, FileMode mode, FileAccess access, FileShare share, Int32 bufferSize, Boolean anonymous, FileOptions options) [0x0025e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.IO/FileStream.cs:305
+at System.IO.FileStream..ctor (System.String path, FileMode mode, FileAccess access, FileShare share) [0x00000]
+at (wrapper remoting-invoke-with-check) System.IO.FileStream:.ctor (string,System.IO.FileMode,System.IO.FileAccess,System.IO.FileShare)
+at System.IO.StreamWriter..ctor (System.String path, Boolean append, System.Text.Encoding encoding, Int32 bufferSize) [0x00039] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.IO/StreamWriter.cs:124
+at System.IO.StreamWriter..ctor (System.String path) [0x00000]
+at (wrapper remoting-invoke-with-check) System.IO.StreamWriter:.ctor (string)
+at MonoTests.System.Drawing.TestBitmap.Rotate1bit4bit () [0x000f2] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Drawing/Test/System.Drawing/TestBitmap.cs:776
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Warp_EmptyMatrix : results aren't always constant and differs from 1.x and 2.0
+2) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Warp_Flatness_Negative : results aren't always constant and differs from 1.x and 2.0
+3) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Warp_Flatness_OverOne : results aren't always constant and differs from 1.x and 2.0
+4) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Warp_Matrix_NonInvertible : results aren't always constant and differs from 1.x and 2.0
+5) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Warp_NullMatrix : results aren't always constant and differs from 1.x and 2.0
+6) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Warp_Perspective : results aren't always constant and differs from 1.x and 2.0
+7) MonoTests.System.Drawing.Drawing2D.GraphicsPathTest.Widen_Pen_Matrix_NonInvertible : results aren't always constant and differs from 1.x and 2.0
+8) MonoTests.System.Drawing.IconTest.Icon256ToBitmap : Depends on bug #323511
+9) MonoTests.System.Drawing.IconTest.Save_256 : Depends on bug #323511
+10) MonoTests.System.Drawing.RegionNonRectTest.Region_Ctor_RegionData : this does not work when using MS GDI+ - with or without Mono
+

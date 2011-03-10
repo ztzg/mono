@@ -1,0 +1,30 @@
+None
+Whitespace
+1
+1
+0
+at foo::
+Tests run: 1438, Failures: 1, Not run: 10, Time: 48.003 seconds
+
+Test Case Failures:
+1) MonoTests.System.XmlSerialization.XmlSerializerTests.TestSerializeSchema :   Expected string length 306 but was 412. Strings differ at index 106.
+  Expected: "....org/2001/XMLSchema-instance' xmlns:xsd='http://www.w3.org..."
+  But was:  "....org/2001/XMLSchema-instance' blockDefault='256' finalDefa..."
+  --------------------------------------------^
+
+at MonoTests.System.XmlSerialization.XmlSerializerTests.TestSerializeSchema () [0x000ad] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.XML/Test/System.Xml.Serialization/XmlSerializerTests.cs:1185
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.System.Xml.XmlNodeTests.SelectNodes2 : MS.NET has a bug; it does not return nodes in document order.
+2) MonoTests.System.Xml.XmlReaderTests.MoveToXmlDeclAttributes : Too inconsistent reference implementations to determine which is correct behavior.
+3) MonoTests.System.Xml.XmlSchemaDatatypeTests.TestAnyType : The behavior has been inconsistent between versions, so it is not worthy of testing.
+4) MonoTests.System.Xml.XmlTextReaderTests.UndeclaredEntityInIntSubsetOnlyXml : MS.NET 1.0 does not pass this test. The related spec is XML rec. 4.1
+5) MonoTests.System.Xml.XmlTextReaderTests.UndeclaredEntityInStandaloneXml : MS.NET 1.0 does not pass this test. The related spec is XML rec. 4.1
+6) MonoTests.System.Xml.XmlTextWriterTests.AutoCreatePrefixes : Due to the (silly) dependency on bug #77088, this test will not be fixed. The test could be rewritten but it depends on the original test author.
+7) MonoTests.System.Xml.XmlTextWriterTests.AutoCreatePrefixes2 : Due to the (silly) dependency on bug #77088, this test will not be fixed. The test could be rewritten but it depends on the original test author.
+8) MonoTests.System.Xml.XsdValidatingReaderTests.TestNamespacesFalse : XML Schema validator should not be available for validating non namespace-aware XmlReader that handled colon as a name character
+9) MonoTests.System.Xml.Xsl.MsxslScriptTests.InvalidScript : Actually it should throw compile exception
+10) MonoTests.System.XmlSerialization.XmlSerializerTests.TestSerializeNullString : The generated XML is not exact but it is equivalent
+

@@ -1,0 +1,79 @@
+Creating ../../build/deps/net_1_1_FirebirdSql.Data.Firebird.dll.makefrag ...
+Creating ../../build/deps/FirebirdSql.Data.Firebird_test_net_1_1.dll.response ...
+Creating ../../build/deps/FirebirdSql.Data.Firebird_test_net_1_1.dll.makefrag ...
+ok=:; make run-test-recursive || ok=false; make run-test-local || ok=false; $ok
+make[1]: Entering directory `/.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird'
+make[1]: Leaving directory `/.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird'
+make[1]: Entering directory `/.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird'
+MCS     [net_1_1] FirebirdSql.Data.Firebird.dll
+FirebirdSql.Data.Common/StatementBase.cs(311,29): warning CS0219: The variable `selectCount' is assigned but its value is never used
+FirebirdSql.Data.Gds/GdsStatement.cs(407,61): warning CS0219: The variable `op' is assigned but its value is never used
+FirebirdSql.Data.Gds/GdsEventManager.cs(131,33): warning CS0219: The variable `ast' is assigned but its value is never used
+FirebirdSql.Data.Gds/GdsEventManager.cs(128,41): warning CS0219: The variable `dbHandle' is assigned but its value is never used
+FirebirdSql.Data.Firebird/FbConnection.cs(446,44): warning CS0219: The variable `options' is assigned but its value is never used
+FirebirdSql.Data.Gds/GdsEventManager.cs(35,57): warning CS0169: The private field `FirebirdSql.Data.Gds.GdsEventManager.handle' is assigned but its value is never used
+FirebirdSql.Data.Firebird/Isql/CommandExecutedEventArgs.cs(42,41): warning CS0169: The private field `FirebirdSql.Data.Firebird.Isql.CommandExecutedEventArgs.rowsAffected' is assigned but its value is never used
+Compilation succeeded - 7 warning(s)
+Assembly ../../class/lib/net_1_1/FirebirdSql.Data.Firebird.dll signed.
+MCS     [net_1_1] FirebirdSql.Data.Firebird_test_net_1_1.dll
+Test/CharacterSetsTests.cs(85,83): warning CS0618: `FirebirdSql.Data.Firebird.FbDbSchemaType' is obsolete: `Use the FbConnection.GetSchema() methods.'
+Test/CharacterSetsTests.cs(85,51): warning CS0618: `FirebirdSql.Data.Firebird.FbConnection.GetDbSchemaTable(FirebirdSql.Data.Firebird.FbDbSchemaType, object[])' is obsolete: `Use GetSchema methods instead'
+Test/CharacterSetsTests.cs(116,29): warning CS0219: The variable `read_n' is assigned but its value is never used
+Test/CharacterSetsTests.cs(103,29): warning CS0219: The variable `n' is assigned but its value is never used
+Test/FbCommandTest.cs(426,35): warning CS0219: The variable `tables' is assigned but its value is never used
+Test/FbParameterTest.cs(43,37): warning CS0219: The variable `ctor06' is assigned but its value is never used
+Test/FbParameterTest.cs(42,37): warning CS0219: The variable `ctor05' is assigned but its value is never used
+Test/FbParameterTest.cs(41,37): warning CS0219: The variable `ctor04' is assigned but its value is never used
+Test/FbParameterTest.cs(40,37): warning CS0219: The variable `ctor03' is assigned but its value is never used
+Test/FbParameterTest.cs(39,37): warning CS0219: The variable `ctor02' is assigned but its value is never used
+Test/FbParameterTest.cs(38,37): warning CS0219: The variable `ctor01' is assigned but its value is never used
+Test/FbServicesTests.cs(213,41): warning CS0219: The variable `databasesInfo' is assigned but its value is never used
+Test/FbServicesTests.cs(212,40): warning CS0219: The variable `serverConfig' is assigned but its value is never used
+Compilation succeeded - 13 warning(s)
+ok=:; \
+	MONO_REGISTRY_PATH="/home/ykiruha/.mono/registry" MONO_PATH="./../../class/lib/net_1_1::$MONO_PATH" /home/ykiruha/optimized-mono/mono/runtime/mono-wrapper --debug  ./../../class/lib/net_1_1/nunit-console.exe  FirebirdSql.Data.Firebird_test_net_1_1.dll -noshadow   -exclude=NotWorking,ValueAdd,CAS,InetAccess -output=TestResult-net_1_1.log -xml=TestResult-net_1_1.xml  || ok=false; \
+	(echo ''; cat TestResult-net_1_1.log) | sed '1,/^Tests run: /d'; xsltproc ./../../build/nunit-summary.xsl TestResult-net_1_1.xml >> TestResult-net_1_1.log ; $ok
+NUnit version 2.4.8
+Copyright (C) 2002-2007 Charlie Poole.
+Copyright (C) 2002-2004 James W. Newkirk, Michael C. Two, Alexei A. Vorontsov.
+Copyright (C) 2000-2002 Philip Craig.
+All Rights Reserved.
+
+Runtime Environment - 
+   OS Version: Unix 2.6.18.8
+  CLR Version: 1.1.4322.2032 ( Mono 2.5 )
+
+Excluded categories: NotWorking,ValueAdd,CAS,InetAccess
+..................................................................N.........................................F........N.....................F...F..............
+Tests run: 151, Failures: 3, Not run: 2, Time: 947.337 seconds
+
+Test Case Failures:
+1) FirebirdSql.Data.Firebird.Tests.FbDataReaderTest.DisposeTest : FirebirdSql.Data.Firebird.FbException : invalid request BLR at offset 21
+No message for error code 335544868 found.
+at FirebirdSql.Data.Firebird.FbCommand.ExecuteReader (CommandBehavior behavior) [0x00022] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/FbCommand.cs:558
+at FirebirdSql.Data.Firebird.FbCommand.ExecuteReader () [0x00000] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/FbCommand.cs:535
+at (wrapper remoting-invoke-with-check) FirebirdSql.Data.Firebird.FbCommand:ExecuteReader ()
+at FirebirdSql.Data.Firebird.Tests.FbDataReaderTest.DisposeTest () [0x0001e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/Test/FbDataReaderTest.cs:397
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000b4] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+2) FirebirdSql.Data.Firebird.Tests.FbServicesTest.RestoreTest : FirebirdSql.Data.Common.IscException : Exception of type FirebirdSql.Data.Common.IscException was thrown.
+at FirebirdSql.Data.Gds.GdsConnection.ReadStatusVector () [0x00130] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Gds/GdsConnection.cs:387
+at FirebirdSql.Data.Gds.GdsConnection.ReadGenericResponse () [0x00039] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Gds/GdsConnection.cs:303
+at FirebirdSql.Data.Gds.GdsServiceManager.Query (FirebirdSql.Data.Common.ServiceParameterBuffer spb, Int32 requestLength, System.Byte[] requestBuffer, Int32 bufferLength, System.Byte[] buffer) [0x0008c] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Gds/GdsServiceManager.cs:179
+at FirebirdSql.Data.Firebird.Services.FbService.QueryService (System.Byte[] items) [0x00033] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/Services/FbService.cs:235
+at FirebirdSql.Data.Firebird.Services.FbService.GetNextLine () [0x00017] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/Services/FbService.cs:302
+at FirebirdSql.Data.Firebird.Services.FbService.ProcessServiceOutput () [0x00024] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/Services/FbService.cs:320
+at FirebirdSql.Data.Firebird.Services.FbRestore.Execute () [0x000de] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/Services/FbRestore.cs:131
+
+3) FirebirdSql.Data.Firebird.Tests.FbServicesTest.StatisticsTest : FirebirdSql.Data.Firebird.FbException : service Database Stats is not defined
+at FirebirdSql.Data.Firebird.Services.FbService.StartTask () [0x00028] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/Services/FbService.cs:214
+at FirebirdSql.Data.Firebird.Services.FbStatistical.Execute () [0x0003f] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird/FirebirdSql.Data.Firebird/Services/FbStatistical.cs:69
+
+Tests not run:
+1) FirebirdSql.Data.Firebird.Tests.FbDataAdapterTest.MultipleResultsetTest : Not supported
+2) FirebirdSql.Data.Firebird.Tests.FbDataReaderTest.NextResultTest : Not supported
+
+make[1]: *** [run-test-lib] Error 1
+make[1]: Leaving directory `/.root0/local/home/ykiruha/optimized-mono/mcs/class/FirebirdSql.Data.Firebird'
+make: *** [do-run-test] Error 1

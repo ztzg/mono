@@ -1,0 +1,39 @@
+AppDomain's Applicationname is:  bf3602ad
+LoaderOptimization is:  NotSpecified
+ShadowCopyDirs:  /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Web/bin
+ApsInstal 
+TTTTTTTTTTT: System.Collections.Hashtable
+
+ValidationGroup: VG
+CausesValidation: True
+state = not-null
+Tests run: 3433, Failures: 1, Not run: 17, Time: 898.566 seconds
+
+Test Case Failures:
+1) MonoTests.System.Web.Caching.AggregateCacheDependencyTest.AbsoluteExpiration :   #A1
+  Expected: not null
+  But was:  null
+
+at MonoTests.System.Web.Caching.AggregateCacheDependencyTest.AbsoluteExpiration () [0x0006b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/System.Web/Test/System.Web.Caching/AggregateCacheDependencyTest.cs:119
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.System.Web.AppBrowsersTest.Adapter : Pending fix for bug 351878
+2) MonoTests.System.Web.AppBrowsersTest.AppBrowsersCapabilities : Pending fix for bug 351878
+3) MonoTests.System.Web.AppBrowsersTest.CompatBrowserIE7 : Pending fix for bug 351878
+4) MonoTests.System.Web.AppBrowsersTest.CreateHtmlTextWriter : Pending fix for bug 351878
+5) MonoTests.System.Web.AppBrowsersTest.ResolveAdapter_1 : Pending fix for bug 351878
+6) MonoTests.System.Web.AppBrowsersTest.TagWriter : Pending fix for bug 351878
+7) MonoTests.System.Web.Caching.AggregateCacheDependencyTest.SingleDependency : The test is not written in reproducible way and hence keeps build looks as if it regressed incorrectly
+8) MonoTests.System.Web.HttpRuntimeTest.UnloadAppDomain : Pending fix for bug 351878
+9) MonoTests.System.Web.HttpRuntimeTest.UnloadAppDomain100Times : Pending fix for bug 351878
+10) MonoTests.System.Web.Test_HttpFakeRequest.Test_EmptyUnknownRow : tests undocumented behavior that depends on implementation
+11) MonoTests.System.Web.UI.HtmlControls.HtmlInputRadioButtonTest.RenderAttributes : throws NullReferenceException
+12) MonoTests.System.Web.UI.WebControls.BaseDataListTest.DataSource_WithDataSourceID : LAMESPEC -and/or- bad test
+13) MonoTests.System.Web.UI.WebControls.EditCommandColumnTest.InitializeReadOnlyEditCell : Unfinished
+14) MonoTests.System.Web.UI.WebControls.EditCommandColumnTest.Validation_ValidatingInvalid : Possibly incorrectly constructed test - conflicts with fix for bug #471305
+15) MonoTests.System.Web.UI.WebControls.EditCommandColumnTest.Validation_ValidationGroupIncluded : Possibly incorrectly constructed test - conflicts with fix for bug #471305
+16) MonoTests.System.Web.UI.WebControls.MenuTest.Menu_DefaultRender : NUNIT 2.4 issue - temporarily disabled
+17) MonoTests.System.Web.UI.XhtmlTextWriterTest.RemoveRecognizedAttribute : NUNIT 2.4 issue - temporarily disabled
+

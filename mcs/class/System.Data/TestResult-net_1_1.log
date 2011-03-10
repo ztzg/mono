@@ -1,0 +1,19 @@
+Tests run: 1591, Failures: 0, Not run: 15, Time: 48.363 seconds
+
+Tests not run:
+1) MonoTests.System.Data.Common.DataColumnMappingCollectionTest.Remove : This test is wrong. A mapping in a DataColumnMappingCollection must be identical.
+2) MonoTests.System.Data.Common.DataTableMappingCollectionTest.Remove : This test is invalid; a mapping in a mapcollection must be identical.
+3) MonoTests.System.Data.ConstraintCollectionTest.CanRemove : This never works on MS.NET (and it should not)
+4) MonoTests.System.Data.DataColumnTest.ExpressionColumns_CheckConversions : passes in ms.net but looks more like a bug in ms.net
+5) MonoTests.System.Data.DataRelationCollectionTest.AddException1 : It does not pass under MS.NET
+6) MonoTests.System.Data.DataSetTest.ReadWriteXmlSchema : MS behavior is far from consistent to be regarded as a reference implementation.
+7) MonoTests.System.Data.DataSetTest.ReadWriteXmlSchemaIgnoreSchema : MS behavior is far from consistent to be regarded as a reference implementation.
+8) MonoTests.System.Data.DataViewTest.GetEnumerator : Test code not implemented
+9) MonoTests.System.Data.SqlTypes.SqlDateTimeTest.ToStringTest : This test is locale dependent.
+10) MonoTests.System.Data.TypedDataSetGeneratorTest.RelationConnectsSameTable : We cannot depend on CodeCompiler since it expects mcs to exist.
+11) MonoTests_System.Data.MissingPrimaryKeyExceptionTest.Generate1 : Fixture class is not public
+12) MonoTests_System.Data.MissingPrimaryKeyExceptionTest.Generate2 : Fixture class is not public
+13) MonoTests_System.Data.VersionNotFoundExceptionTest.Generate1 : Fixture class is not public
+14) MonoTests_System.Data.VersionNotFoundExceptionTest.Generate2 : Fixture class is not public
+15) MonoTests_System.Data.VersionNotFoundExceptionTest.Generate3 : Fixture class is not public
+

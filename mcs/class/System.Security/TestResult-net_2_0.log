@@ -1,0 +1,25 @@
+Tests run: 462, Failures: 0, Not run: 21, Time: 82.767 seconds
+
+Tests not run:
+1) MonoTests.System.Security.Cryptography.Pkcs.ContentInfoTest.GetContentType_digestedData : need a working sample
+2) MonoTests.System.Security.Cryptography.Pkcs.ContentInfoTest.GetContentType_encryptedData : need a working sample
+3) MonoTests.System.Security.Cryptography.Pkcs.SignedCmsTest.ComputeSignatureCmsSignerIssuerAndSerialNumber : now broken everywhere
+4) MonoTests.System.Security.Cryptography.Pkcs.SignedCmsTest.ComputeSignatureCmsSignerSubjectKeyIdentifier : now broken everywhere
+5) MonoTests.System.Security.Cryptography.Pkcs.SignedCmsTest.ComputeSignatureCmsSignerUnknown : now broken everywhere
+6) MonoTests.System.Security.Cryptography.ProtectedMemoryTest.MemoryProtectionScope_All : Only supported under Windows 2000 SP3 and later
+7) MonoTests.System.Security.Cryptography.ProtectedMemoryTest.ProtectCrossProcess : Only supported under Windows 2000 SP3 and later
+8) MonoTests.System.Security.Cryptography.ProtectedMemoryTest.ProtectSameLogon : Only supported under Windows 2000 SP3 and later
+9) MonoTests.System.Security.Cryptography.ProtectedMemoryTest.ProtectSameProcess : Only supported under Windows 2000 SP3 and later
+10) MonoTests.System.Security.Cryptography.X509Certificates.X509Certificate2UITest.DisplayCertificate : UI would block tests
+11) MonoTests.System.Security.Cryptography.X509Certificates.X509Certificate2UITest.DisplayCertificate_IntPtr_Zero : UI would block tests
+12) MonoTests.System.Security.Cryptography.X509Certificates.X509Certificate2UITest.SelectFromCollection : UI would block tests
+13) MonoTests.System.Security.Cryptography.X509Certificates.X509Certificate2UITest.SelectFromCollection_IntPtr_Zero : UI would block tests
+14) MonoTests.System.Security.Cryptography.X509Certificates.X509Certificate2UITest.SelectFromCollection_Message_Null : UI would block tests
+15) MonoTests.System.Security.Cryptography.X509Certificates.X509Certificate2UITest.SelectFromCollection_Title_Null : UI would block tests
+16) MonoTests.System.Security.Cryptography.Xml.SignedXmlTest.Constructor_XmlDocument_Null : 2.0 throws a NullReferenceException - reported as FDBK25892
+17) MonoTests.System.Security.Cryptography.Xml.SignedXmlTest.SignedXML_LF_Valid : This is a bad test case which should basically just check the computed signature value instead of comparing XML document literal string, and thus caused inconsistency between .NET 1.1 and .NET 2.0. Not deleting this test case, to easily find the reason for potentially happening regression in the future (which should not waste time).
+18) MonoTests.System.Security.Cryptography.Xml.XmlDsigC14NTransformTest.PropagatedNamespaces : find out how PropagatedNamespaces returns non-null instance on .NET
+19) MonoTests.System.Security.Cryptography.Xml.XmlDsigC14NWithCommentsTransformTest.C14NSpecExample1_WithoutResolver : SecurityManager isn't enabled.
+20) MonoTests.System.Security.Cryptography.Xml.XmlDsigExcC14NTransformTest.LoadInputWithUnsupportedType : LAMESPEC: input MUST be one of InputType - but no exception is thrown (not documented)
+21) MonoTests.System.Security.Cryptography.Xml.XmlDsigXPathTransformTest.GetInnerXml : throws a NullReferenceException - but it's (kind of internal)
+

@@ -1,0 +1,128 @@
+Listing all groups
+	root:x:0:root
+	bin:x:1:root,bin,daemon
+	daemon:x:2:root,bin,daemon
+	sys:x:3:root,bin,adm
+	adm:x:4:root,adm,daemon
+	tty:x:5:
+	disk:x:6:root,adm
+	lp:x:7:lp
+	mem:x:8:
+	kmem:x:9:
+	wheel:x:10:root
+	floppy:x:11:root
+	mail:x:12:mail
+	news:x:13:news
+	uucp:x:14:uucp
+	man:x:15:man
+	cron:x:16:cron
+	console:x:17:
+	audio:x:18:
+	cdrom:x:19:
+	dialout:x:20:root
+	ftp:x:21:
+	sshd:x:22:
+	at:x:25:at
+	tape:x:26:root
+	video:x:27:root
+	squid:x:31:squid
+	gdm:x:32:gdm
+	xfs:x:33:xfs
+	games:x:35:
+	named:x:40:named
+	mysql:x:60:
+	postgres:x:70:
+	cdrw:x:80:
+	apache:x:81:
+	nut:x:84:
+	usb:x:85:
+	vpopmail:x:89:
+	users:x:100:games
+	nofiles:x:200:
+	qmail:x:201:
+	postfix:x:207:
+	postdrop:x:208:
+	smmsp:x:209:smmsp
+	locate:x:245:
+	tcpdump:x:441:
+	portage:x:250:portage
+	utmp:x:406:
+	nogroup:x:65533:
+	nobody:x:65534:
+	rpc:x:111:
+	haldaemon:x:408:
+	ntp:x:123:
+	ldap:x:439:
+	slurm:x:1015:
+	snaumenko:!:501:
+	monoqa:!:511:
+	sstetskovych:!:502:
+	idichkovsky:!:504:
+	ykiruha:!:503:
+	test:!:512:
+	mtyurin:!:505:
+	customer:!:509:
+	kgushtin:!:506:
+	develop:!:500:idichkovsky,ykiruha,sstetskovych,snaumenko,kgushtin,customer,monoqa
+Listing all users
+	root:x:0:0:root:/root:/bin/bash
+	bin:x:1:1:bin:/bin:/bin/false
+	daemon:x:2:2:daemon:/sbin:/bin/false
+	adm:x:3:4:adm:/var/adm:/bin/false
+	lp:x:4:7:lp:/var/spool/lpd:/bin/false
+	sync:x:5:0:sync:/sbin:/bin/sync
+	shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+	halt:x:7:0:halt:/sbin:/sbin/halt
+	mail:x:8:12:mail:/var/spool/mail:/bin/false
+	news:x:9:13:news:/usr/lib/news:/bin/false
+	uucp:x:10:14:uucp:/var/spool/uucppublic:/bin/false
+	operator:x:11:0:operator:/root:/bin/bash
+	man:x:13:15:man:/usr/man:/bin/false
+	postmaster:x:14:12:postmaster:/var/spool/mail:/bin/false
+	cron:x:16:16:cron:/var/spool/cron:/bin/false
+	ftp:x:21:21::/home/ftp:/bin/false
+	sshd:x:22:22:sshd:/dev/null:/bin/false
+	at:x:25:25:at:/var/spool/cron/atjobs:/bin/false
+	squid:x:31:31:Squid:/var/cache/squid:/bin/false
+	gdm:x:32:32:GDM:/var/lib/gdm:/bin/false
+	xfs:x:33:33:X Font Server:/etc/X11/fs:/bin/false
+	games:x:35:35:games:/usr/games:/bin/false
+	named:x:40:40:bind:/var/bind:/bin/false
+	mysql:x:60:60:mysql:/var/lib/mysql:/bin/false
+	postgres:x:70:70::/var/lib/postgresql:/bin/bash
+	apache:x:81:81:apache:/home/httpd:/bin/false
+	nut:x:84:84:nut:/var/state/nut:/bin/false
+	cyrus:x:85:12::/usr/cyrus:/bin/false
+	vpopmail:x:89:89::/var/vpopmail:/bin/false
+	alias:x:200:200::/var/qmail/alias:/bin/false
+	qmaild:x:201:200::/var/qmail:/bin/false
+	qmaill:x:202:200::/var/qmail:/bin/false
+	qmailp:x:203:200::/var/qmail:/bin/false
+	qmailq:x:204:201::/var/qmail:/bin/false
+	qmailr:x:205:201::/var/qmail:/bin/false
+	qmails:x:206:201::/var/qmail:/bin/false
+	postfix:x:207:207:postfix:/var/spool/postfix:/bin/false
+	smmsp:x:209:209:smmsp:/var/spool/mqueue:/bin/false
+	portage:x:250:250:portage:/var/tmp/portage:/bin/false
+	guest:x:405:100:guest:/dev/null:/dev/null
+	nobody:x:65534:65534:nobody:/:/bin/false
+	ldap:x:439:439:added by portage for openldap:/usr/lib/openldap:/bin/false
+	rpc:x:111:111:added by portage for portmap:/dev/null:/bin/false
+	ntp:x:123:123:added by portage for ntp:/dev/null:/bin/false
+	tcpdump:x:101:441:added by portage for tcpdump:/dev/null:/sbin/nologin
+	haldaemon:x:102:408:added by portage for hal:/dev/null:/bin/false
+	distcc:x:240:2:distccd:/dev/null:/bin/false
+	slurm:x:103:100:added by portage for slurm:/opt/sicortex/config:/bin/bash
+	frost:x:105:100::/opt/sicortex/frost_home:/bin/bash
+	snaumenko:$1$umaumHOm$ZN6D0PU62mEbTg6i6vg3g1:500:501::/home/snaumenko:/bin/bash
+	monoqa:$1$7Q6h19kW$N2SxSZVXXPLuSEnnY4Mtq1:510:511::/home/monoqa:/bin/bash
+	sstetskovych:$1$E2fXR9B5$d.I73oEtVubvuEHx4pKsz1:501:502::/home/sstetskovych:/bin/bash
+	idichkovsky:$1$lBR0zFBp$eNTh/ZTZiIOX/5Omw32g.1:503:504::/home/idichkovsky:/bin/bash
+	ykiruha:$1$bPQMo3Y.$lBFZ8IWcMmS..m/66Y3dz1:502:503::/home/ykiruha:/bin/bash
+	test::511:512::/home/test:
+	mtyurin:$1$ryFB83xS$ONRZGlIPnha/D.k1WsHc8.:504:505::/home/mtyurin:/bin/bash
+	customer:$1$aQw7768W$LFFGUeDbJMGFJAL6hl1KA1:508:509::/home/customer:/bin/bash
+	kgushtin:$1$YiqsylB6$ScQK6UazqZ.2j2/b2CDe51:505:506::/home/kgushtin:/bin/bash
+Tests run: 161, Failures: 0, Not run: 0, Time: 43.628 seconds
+
+

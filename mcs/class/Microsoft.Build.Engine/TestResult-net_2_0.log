@@ -1,0 +1,48 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"><PropertyGroup><Name>Value</Name><XmlProp><XmlStuff></XmlStuff></XmlProp></PropertyGroup></Project>
+Msg: Coll1: FooAbcBar;FooDefBar;FooXyzBar
+Target named 'target_that_doesnt_exist' not found in the project.
+Tests run: 352, Failures: 4, Not run: 4, Time: 37.862 seconds
+
+Test Case Failures:
+1) MonoTests.Microsoft.Build.BuildEngine.ProjectTest.TestAssignment1 : The exception message text was incorrect
+Expected: The default XML namespace of the project must be the MSBuild XML namespace. If the project is authored in the MSBuild 2003 format, please add xmlns="http://schemas.microsoft.com/developer/msbuild/2003" to the <Project> element. If the project has been authored in the old 1.0 or 1.2 format, please convert it to MSBuild 2003 format.  
+ but was: : The default XML namespace of the project must be the MSBuild XML namespace. If the project is authored in the MSBuild 2003 format, please add xmlns="http://schemas.microsoft.com/developer/msbuild/2003" to the <Project> element. If the project has been authored in the old 1.0 or 1.2 format, please convert it to MSBuild 2003 format.  
+at Microsoft.Build.BuildEngine.Project.DoLoad (System.IO.TextReader textReader) [0x000e3] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:692
+at Microsoft.Build.BuildEngine.Project.LoadXml (System.String projectXml) [0x0000b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:412
+at MonoTests.Microsoft.Build.BuildEngine.ProjectTest.TestAssignment1 () [0x0001e] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Test/Microsoft.Build.BuildEngine/ProjectTest.cs:107
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+2) MonoTests.Microsoft.Build.BuildEngine.UsingTaskTest.TestAssemblyNameOrAssemblyFile1 : The exception message text was incorrect
+Expected: A <UsingTask> element must contain either the "AssemblyName" attribute or the "AssemblyFile" attribute (but not both).  
+ but was: : A <UsingTask> element must contain either the "AssemblyName" attribute or the "AssemblyFile" attribute (but not both).  
+at Microsoft.Build.BuildEngine.Project.DoLoad (System.IO.TextReader textReader) [0x000e3] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:692
+at Microsoft.Build.BuildEngine.Project.LoadXml (System.String projectXml) [0x0000b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:412
+at MonoTests.Microsoft.Build.BuildEngine.UsingTaskTest.TestAssemblyNameOrAssemblyFile1 () [0x00027] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Test/Microsoft.Build.BuildEngine/UsingTaskTest.cs:162
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+3) MonoTests.Microsoft.Build.BuildEngine.UsingTaskTest.TestAssemblyNameOrAssemblyFile2 : The exception message text was incorrect
+Expected: A <UsingTask> element must contain either the "AssemblyName" attribute or the "AssemblyFile" attribute (but not both).  
+ but was: : A <UsingTask> element must contain either the "AssemblyName" attribute or the "AssemblyFile" attribute (but not both).  
+at Microsoft.Build.BuildEngine.Project.DoLoad (System.IO.TextReader textReader) [0x000e3] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:692
+at Microsoft.Build.BuildEngine.Project.LoadXml (System.String projectXml) [0x0000b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:412
+at MonoTests.Microsoft.Build.BuildEngine.UsingTaskTest.TestAssemblyNameOrAssemblyFile2 () [0x00027] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Test/Microsoft.Build.BuildEngine/UsingTaskTest.cs:204
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+4) MonoTests.Microsoft.Build.BuildEngine.UsingTaskTest.TestTaskName : The exception message text was incorrect
+Expected: The required attribute "TaskName" is missing from element <UsingTask>.  
+ but was: : The required attribute "TaskName" is missing from element <UsingTask>.  
+at Microsoft.Build.BuildEngine.Project.DoLoad (System.IO.TextReader textReader) [0x000e3] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:692
+at Microsoft.Build.BuildEngine.Project.LoadXml (System.String projectXml) [0x0000b] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Microsoft.Build.BuildEngine/Project.cs:412
+at MonoTests.Microsoft.Build.BuildEngine.UsingTaskTest.TestTaskName () [0x00027] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/Microsoft.Build.Engine/Test/Microsoft.Build.BuildEngine/UsingTaskTest.cs:144
+at (wrapper managed-to-native) System.Reflection.MonoMethod:InternalInvoke (object,object[],System.Exception&)
+at System.Reflection.MonoMethod.Invoke (System.Object obj, BindingFlags invokeAttr, System.Reflection.Binder binder, System.Object[] parameters, System.Globalization.CultureInfo culture) [0x000ca] in /.root0/local/home/ykiruha/optimized-mono/mcs/class/corlib/System.Reflection/MonoMethod.cs:169
+
+Tests not run:
+1) MonoTests.Microsoft.Build.BuildEngine.BuildItemTest.TestCondition2 : weird test need to check how project.Xml looks
+2) MonoTests.Microsoft.Build.BuildEngine.BuildItemTest.TestCondition3 : weird test need to check how project.Xml looks
+3) MonoTests.Microsoft.Build.BuildEngine.ProjectTest.TestAddNewItem1 : Too detailed probably (implementation specific)
+4) MonoTests.Microsoft.Build.BuildEngine.ProjectTest.TestGlobalProperties4 : needs rewriting
+

@@ -1,0 +1,46 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.7	//
+DetectOS	mkbundle.cs	/^	static void DetectOS ()$/;"	m	class:MakeBundle	file:
+EXTRA_DISTFILES	Makefile	/^EXTRA_DISTFILES = $(RESOURCE_FILES)$/;"	m
+Error	mkbundle.cs	/^	static void Error (string msg)$/;"	m	class:MakeBundle	file:
+Execute	mkbundle.cs	/^	static int Execute (string cmdLine)$/;"	m	class:MakeBundle	file:
+GenerateBundles	mkbundle.cs	/^	static void GenerateBundles (ArrayList files)$/;"	m	class:MakeBundle	file:
+GetEnv	mkbundle.cs	/^	static string GetEnv (string name, string defaultValue) $/;"	m	class:MakeBundle	file:
+Help	mkbundle.cs	/^	static void Help ()$/;"	m	class:MakeBundle	file:
+IsUnix	mkbundle.cs	/^	static bool IsUnix {$/;"	p	class:MakeBundle
+LOCAL_MCS_FLAGS	Makefile	/^LOCAL_MCS_FLAGS=-r:Mono.Posix.dll -r:ICSharpCode.SharpZipLib.dll \\$/;"	m
+LoadAssemblies	mkbundle.cs	/^	static ArrayList LoadAssemblies (ArrayList sources)$/;"	m	class:MakeBundle	file:
+LoadAssembly	mkbundle.cs	/^	static Assembly LoadAssembly (string assembly)$/;"	m	class:MakeBundle	file:
+Main	mkbundle.cs	/^	static int Main (string [] args)$/;"	m	class:MakeBundle	file:
+MakeBundle	mkbundle.cs	/^class MakeBundle {$/;"	c
+OTHER_RES	Makefile	/^OTHER_RES = template.c template_z.c template_main.c$/;"	m
+PROGRAM	Makefile	/^PROGRAM = $(topdir)\/class\/lib\/$(PROFILE)\/mkbundle.exe$/;"	m
+QueueAssembly	mkbundle.cs	/^	static void QueueAssembly (ArrayList files, string codebase)$/;"	m	class:MakeBundle	file:
+RESOURCE_FILES	Makefile	/^RESOURCE_FILES = $(OTHER_RES)$/;"	m
+SUBDIRS	Makefile	/^SUBDIRS = $/;"	m
+WriteSymbol	mkbundle.cs	/^	static void WriteSymbol (StreamWriter sw, string name, long size)$/;"	m	class:MakeBundle	file:
+autodeps	mkbundle.cs	/^	static bool autodeps = false;$/;"	f	class:MakeBundle	file:
+bundled	template_z.c	/^static MonoBundledAssembly **bundled;$/;"	v	file:
+compile_only	mkbundle.cs	/^	static bool compile_only = false;$/;"	f	class:MakeBundle	file:
+compress	mkbundle.cs	/^	static bool compress;$/;"	f	class:MakeBundle	file:
+config_dir	mkbundle.cs	/^	static string config_dir = null;$/;"	f	class:MakeBundle	file:
+config_file	mkbundle.cs	/^	static string config_file = null;$/;"	f	class:MakeBundle	file:
+keeptemp	mkbundle.cs	/^	static bool keeptemp = false;$/;"	f	class:MakeBundle	file:
+link_paths	mkbundle.cs	/^	static ArrayList link_paths = new ArrayList ();$/;"	f	class:MakeBundle	file:
+machine_config_file	mkbundle.cs	/^	static string machine_config_file = null;$/;"	f	class:MakeBundle	file:
+main	template_main.c	/^int main (int argc, char* argv[])$/;"	f
+mono_mkbundle_init	template.c	/^void mono_mkbundle_init ()$/;"	f
+mono_mkbundle_init	template_z.c	/^void mono_mkbundle_init ()$/;"	f
+my_inflate	template_z.c	/^my_inflate (const Byte *compr, uLong compr_len, Byte *uncompr, uLong uncompr_len)$/;"	f	file:
+nomain	mkbundle.cs	/^	static bool nomain;$/;"	f	class:MakeBundle	file:
+object_out	mkbundle.cs	/^	static string object_out = null;$/;"	f	class:MakeBundle	file:
+output	mkbundle.cs	/^	static string output = "a.out";$/;"	f	class:MakeBundle	file:
+static_link	mkbundle.cs	/^	static bool static_link = false;$/;"	f	class:MakeBundle	file:
+style	mkbundle.cs	/^	static string style = "linux";$/;"	f	class:MakeBundle	file:
+system	mkbundle.cs	/^	static extern int system (string s);$/;"	m	class:MakeBundle	file:
+thisdir	Makefile	/^thisdir = tools\/mkbundle$/;"	m
+uname	mkbundle.cs	/^	static extern int uname (IntPtr buf);$/;"	m	class:MakeBundle	file:
