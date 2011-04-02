@@ -18,6 +18,8 @@
 #include <unistd.h>
 #endif
 
+#include <pthread.h>
+
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/loader.h>
 #include <mono/metadata/tabledefs.h>
@@ -1361,6 +1363,26 @@ mono_main (int argc, char* argv[])
 #endif
 #ifdef HOST_WIN32
 	int mixed_mode = FALSE;
+#endif
+	int s;
+	cpu_set_t cpuset;
+	int j;
+
+	CPU_ZERO(&cpuset);
+	CPU_SET(0, &cpuset);
+	s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+	if (s != 0)
+		perror("pthread_setaffinity_np");
+
+#if 0
+	s = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+	if (s != 0)
+		perror("pthread_getaffinity_np");
+
+	printf("Affinity set to CPUs:\n");
+	for (j = 0; j < CPU_SETSIZE; j++)
+		if (CPU_ISSET(j, &cpuset))
+			printf("    CPU %d\n", j);
 #endif
 
 #ifdef MOONLIGHT
