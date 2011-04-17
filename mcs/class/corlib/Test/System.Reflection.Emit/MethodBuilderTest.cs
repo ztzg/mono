@@ -1029,6 +1029,7 @@ namespace MonoTests.System.Reflection.Emit
 	        Console.WriteLine ();
 	    }
 
+		[Category ("NotWorkingOnMIPS")]
 		[Test]//bug #626441
 		public void CanCallVarargMethods ()
 		{

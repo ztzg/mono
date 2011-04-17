@@ -921,6 +921,7 @@ namespace MonoTests.System
 			return c;
 		}
 
+		[Category ("NotWorkingOnMIPS")]
 		[Test]
 		public void NullFirstArgumentOnStaticMethod ()
 		{
@@ -934,6 +935,7 @@ namespace MonoTests.System
 			Assert.IsNull (call ());
 		}
 
+		[Category ("NotWorkingOnMIPS")]
 		[Test]
 		public void Virtual ()
 		{
@@ -1024,6 +1026,7 @@ namespace MonoTests.System
 			return 5;
 		}
 
+		[Category ("NotWorkingOnMIPS")]
 		[Test] // #617161
 		public void ClosedOverNullReferenceStaticMethod ()
 		{
@@ -1197,6 +1200,7 @@ namespace MonoTests.System
 			string retarg (string s);
 		}
 
+		[Category ("NotWorkingOnMIPS")]
 		[Test]
 		public void CreateDelegateWithLdFtnAndAbstractMethod ()
 		{

@@ -131,6 +131,7 @@ namespace MonoTests.System.Threading.Tasks
 			Assert.AreEqual (4, task.Result);
 		}
 
+		[Category ("NotWorkingOnMIPS")]
 		[Test]
 		public void FromAsyncWithBeginAndExceptionTest ()
 		{
