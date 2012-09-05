@@ -24,7 +24,27 @@ if HAVE_OPROFILE
 endif
 
 if SUPPORT_BOEHM
+if STATIC_MONO
+# This is needed for automake dependency generation
+if INCLUDED_LIBGC
+libgc_libs=$(top_builddir)/libgc/libmonogc.la
+libgc_static_libs=$(top_builddir)/libgc/libmonogc-static.la
+else
+libgc_libs=$(LIBGC_LIBS)
+libgc_static_libs=$(LIBGC_STATIC_LIBS)
+endif
+
+static_libs=	\
+	$(top_builddir)/mono/metadata/libmonoruntime-static.la	\
+	$(top_builddir)/mono/io-layer/libwapi.la	\
+	$(top_builddir)/mono/utils/libmonoutils.la \
+	$(GLIB_LIBS) $(LIBICONV) \
+	$(libgc_static_libs)
+
+LIBMONO=$(top_builddir)/mono/mini/libmini-static.la $(static_libs)
+else
 LIBMONO=$(top_builddir)/mono/mini/libmono-$(API_VER).la
+endif
 else
 LIBMONO=$(top_builddir)/mono/mini/libmonosgen-$(API_VER).la
 endif
