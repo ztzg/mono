@@ -13,6 +13,7 @@
 #include <pthread.h>
 
 #include <mono/utils/atomic.h>
+#include <mono/utils/mono-mutex.h>
 
 #ifdef WAPI_NO_ATOMIC_ASM
 
