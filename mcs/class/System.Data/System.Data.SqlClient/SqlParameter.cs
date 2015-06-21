@@ -1079,7 +1079,7 @@ namespace System.Data.SqlClient {
 		{
 			if (frameworkType == typeof (string)) {
 				if (value is DateTime)
-					return ((DateTime) value).ToString ("yyyy-MM-dd'T'HH':'mm':'ss.fffffff");
+					return ConvertDateTimeToFrameworkType ((DateTime) value);
 				if (value is DateTimeOffset)
 					return ((DateTimeOffset) value).ToString ("yyyy-MM-dd'T'HH':'mm':'ss.fffffffzzz");
 			}
@@ -1092,6 +1092,17 @@ namespace System.Data.SqlClient {
 				break;
 			}
 			return sqlvalue;
+		}
+
+		object ConvertDateTimeToFrameworkType (DateTime value)
+		{
+			var fmt = "yyyy-MM-dd'T'HH':'mm':'ss.fff";
+
+			if (sqlDbType == SqlDbType.DateTime2 ||
+			    sqlDbType == SqlDbType.DateTimeOffset)
+				fmt = "yyyy-MM-dd'T'HH':'mm':'ss.fffffff";
+
+			return value.ToString (fmt);
 		}
 
 		public override void ResetDbType ()
