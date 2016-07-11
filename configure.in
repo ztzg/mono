@@ -1,4 +1,5 @@
-AC_INIT(README)
+AC_INIT(mono,[2.4])
+AC_CONFIG_SRCDIR([README])
 AC_CANONICAL_SYSTEM
 
 # Gross hack to enable 'make dist' on automake 1.9+tar 1.14.
@@ -6,7 +7,7 @@ AC_CANONICAL_SYSTEM
 m4_ifdef([_A][M_PROG_TAR],[_A][M_SET_OPTION([tar-ustar])])
 
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(mono,2.4)
+AM_INIT_AUTOMAKE([subdir-objects])
 AM_MAINTAINER_MODE
 
 API_VER=1.0
