@@ -344,6 +344,12 @@ namespace System.Threading {
 
 		public CultureInfo CurrentCulture {
 			get {
+				if (s_asyncLocalCurrentCulture != null) {
+					CultureInfo ci = s_asyncLocalCurrentCulture.Value;
+					if (ci != null)
+						return ci;
+				}
+
 				CultureInfo culture = current_culture;
 				if (current_culture_set && culture != null)
 					return culture;
@@ -359,6 +365,9 @@ namespace System.Threading {
 			set {
 				if (value == null)
 					throw new ArgumentNullException ("value");
+				if (s_asyncLocalCurrentCulture == null)
+					Interlocked.CompareExchange(ref s_asyncLocalCurrentCulture, new AsyncLocal<CultureInfo>(/*AsyncLocalSetCurrentCulture*/), null);
+				s_asyncLocalCurrentCulture.Value = value;
 
 				value.CheckNeutral ();
 				current_culture = value;
@@ -368,6 +377,13 @@ namespace System.Threading {
 
 		public CultureInfo CurrentUICulture {
 			get {
+				if (s_asyncLocalCurrentUICulture != null) {
+					CultureInfo ci = s_asyncLocalCurrentUICulture.Value;
+
+					if (ci != null)
+						return ci;
+				}
+
 				CultureInfo culture = current_ui_culture;
 				if (current_ui_culture_set && culture != null)
 					return culture;
@@ -382,6 +398,10 @@ namespace System.Threading {
 			set {
 				if (value == null)
 					throw new ArgumentNullException ("value");
+				if (s_asyncLocalCurrentUICulture == null)
+					Interlocked.CompareExchange(ref s_asyncLocalCurrentUICulture, new AsyncLocal<CultureInfo>(/*AsyncLocalSetCurrentUICulture*/), null);
+				s_asyncLocalCurrentUICulture.Value = value;
+
 				current_ui_culture = value;
 				current_ui_culture_set = true;
 			}
