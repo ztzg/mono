@@ -2631,8 +2631,27 @@ mono_spill_call (MonoCompile *cfg, MonoBasicBlock *bblock, MonoCallInst *call, M
 			if (store->opcode == CEE_STIND_R4) {
 				/*FIXME implement proper support for to_end*/
 				g_assert (!to_end);
-				NEW_TEMPLOADA (cfg, store, temp->inst_c0);
-				handle_store_float (cfg, bblock, store, ins, ip);
+				if (sig->pinvoke) {
+					/* The called function really returns a float in an int reg */
+					switch (ins->opcode) {
+					case OP_FCALL:
+						ins->opcode = OP_CALL;
+						break;
+					case OP_FCALL_REG:
+						ins->opcode = OP_CALL_REG;
+						break;
+					case OP_FCALL_MEMBASE:
+						ins->opcode = OP_CALL_MEMBASE;
+						break;
+					default:
+						g_assert_not_reached ();
+					}
+					store->opcode = CEE_STIND_I4;
+					MONO_ADD_INS (bblock, store);
+				} else {
+					NEW_TEMPLOADA (cfg, store, temp->inst_c0);
+					handle_store_float (cfg, bblock, store, ins, ip);
+				}
 			} else
 #endif
 			if (to_end)
@@ -4427,14 +4446,19 @@ initialize_array_data (MonoMethod *method, gboolean aot, unsigned char *ip, Mono
 		    return NULL;
 		*out_size = size;
 		/*g_print ("optimized in %s: size: %d, numelems: %d\n", method->name, size, newarr->inst_newa_len->inst_c0);*/
-		field_index = read32 (ip + 2) & 0xffffff;
-		mono_metadata_field_info (method->klass->image, field_index - 1, NULL, &rva, NULL);
-		data_ptr = mono_image_rva_map (method->klass->image, rva);
-		/*g_print ("field: 0x%08x, rva: %d, rva_ptr: %p\n", read32 (ip + 2), rva, data_ptr);*/
-		/* for aot code we do the lookup on load */
-		if (aot && data_ptr)
-			return GUINT_TO_POINTER (rva);
-		return data_ptr;
+		if (!method->klass->image->dynamic) {
+			field_index = read32 (ip + 2) & 0xffffff;
+			mono_metadata_field_info (method->klass->image, field_index - 1, NULL, &rva, NULL);
+			data_ptr = mono_image_rva_map (method->klass->image, rva);
+			/*g_print ("field: 0x%08x, rva: %d, rva_ptr: %p\n", read32 (ip + 2), rva, data_ptr);*/
+			/* for aot code we do the lookup on load */
+			if (aot && data_ptr)
+				return GUINT_TO_POINTER (rva);
+		} else {
+			/*FIXME is it possible to AOT a SRE assembly not meant to be saved? */ 
+			g_assert (!aot);
+			data_ptr = field->data;
+		}		return data_ptr;
 	}
 	return NULL;
 }
@@ -6138,6 +6162,12 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 				no_spill = TRUE;
 			else
 				no_spill = FALSE;
+
+#ifdef MONO_ARCH_SOFT_FLOAT
+			if (fsig->pinvoke && fsig->ret->type == MONO_TYPE_R4)
+				/* The code to handle this is in spill_call () */
+				no_spill = FALSE;
+#endif
 
 			/* FIXME: only do this for generic methods if
 			   they are not shared! */
@@ -14070,7 +14100,6 @@ mini_init (const char *filename, const char *runtime_version)
 				ves_icall_System_Security_SecurityFrame_GetSecurityStack);
 	mono_add_internal_call ("Mono.Runtime::mono_runtime_install_handlers", 
 				mono_runtime_install_handlers);
-
 
 	create_helper_signature ();
 

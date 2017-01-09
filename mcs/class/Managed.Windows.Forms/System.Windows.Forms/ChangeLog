@@ -1,3 +1,59 @@
+2008-09-08  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* ErrorProvider.cs: Unbreak my previous commit.
+
+2008-09-08  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* ErrorProvider.cs: Icon should always be 16x16.
+	[Fixes bug #424380]
+
+2008-09-07  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* GridEntry.cs: Invalidate the child items cache when the property 
+	value changes.
+
+2008-09-07  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* GridEntry.cs, PropertyGridView.cs: 
+	   - Update the ReadOnly detection and rendering to finally hopefully 
+	   match the one of MSFT.
+	   - Niceify and move the debug CWLS.
+	[Fixes bug #409028]
+
+2008-09-04  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* GridEntry.cs, CategoryGridEntry.cs, RootGridEntry.cs, PropertyGrid.cs, 
+	PropertyGridView.sc: Implement lazy/delayed propertygrid population 
+	on item expansion. Improves performance and fixes bug #417955.
+	[Fixes bug #417955]
+
+2008-09-03  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* ButtonBase.cs CheckBox.cs, Control.cs, FlowLayoutPanel.cs, 
+	  FlowLayoutSettings.cs, GroupBox.cs, Label.cs, ListBox.cs, 
+	  PropertyGrid.cs, RadioButton.cs, TableLayoutPanel.cs, 
+	  TableLayoutSettings.cs, ToolStrip.cs, ToolStripDropDownButton.cs, 
+	  ToolStripDropDownMenu.cs, ToolStripItem.cs, ToolStripSplitButton.cs, 
+	  ToolStripStatusLabel.cs: Add missing PerformLayout calls to various 
+	  properties.
+	  [Fixes bug #418684]
+
+2008-09-02  Jonathan Pobst  <monkey@jpobst.com>
+
+	* XplatUIWin32.cs: Ensure we never send the WS_EX_MDICHILD flag
+	to Windows when creating a window, as we fake MDI stuffs.
+	[Fixes bug #421858]
+
+2008-09-01  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* TextBox.cs: Invalidate after UseSystemPasswordChar, so that the 
+	change takes effect.
+
+2008-08-24  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* XplatUIX11.cs: Provide MouseButtons/State information to the XPlatUI.
+	[Fixes bug #419001]
+
 2008-08-26  Jonathan Pobst  <monkey@jpobst.com>
 
 	* ErrorProvider.cs: Fix a regression NRE when setting properties

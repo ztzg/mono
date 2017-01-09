@@ -25,20 +25,24 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#if NET_2_0 && SECURITY_DEP
+#if NET_2_0 && SECURITY_DEP || EMBEDDED_IN_1_0
 
 using System.Collections;
 using System.Collections.Generic;
 namespace System.Net {
+#if EMBEDDED_IN_1_0
+	public class HttpListenerPrefixCollection : IEnumerable, ICollection {
+		ArrayList prefixes;
+		
+#else
 	public class HttpListenerPrefixCollection : ICollection<string>, IEnumerable<string>, IEnumerable {
+		List<string> prefixes = new List<string> ();
+#endif
 		HttpListener listener;
-		List<string> prefixes;
 
 		internal HttpListenerPrefixCollection (HttpListener listener)
 		{
 			this.listener = listener;
-			prefixes = new List<string> ();
 		}
 
 		public int Count {
@@ -68,9 +72,9 @@ namespace System.Net {
 		public void Clear ()
 		{
 			listener.CheckDisposed ();
-			prefixes.Clear ();
 			if (listener.IsListening)
 				EndPointManager.RemoveListener (listener);
+			prefixes.Clear ();
 		}
 
 		public bool Contains (string uriPrefix)
@@ -91,11 +95,16 @@ namespace System.Net {
 			((ICollection) prefixes).CopyTo (array, offset);
 		}
 
+#if !EMBEDDED_IN_1_0
 		public IEnumerator<string> GetEnumerator ()
 		{
 			return prefixes.GetEnumerator ();
 		}
+#else
+		object ICollection.SyncRoot { get { return this; } }
+#endif
 
+	
 		IEnumerator IEnumerable.GetEnumerator ()
 		{
 			return prefixes.GetEnumerator ();

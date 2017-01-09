@@ -48,6 +48,7 @@ namespace System.Windows.Forms.PropertyGridInternal
 		private PropertyDescriptor[] property_descriptors;
 		private int top;
 		private Rectangle plus_minus_bounds;
+		private GridItemCollection child_griditems_cache;
 		#endregion	// Local Variables
 
 		#region  Contructors
@@ -61,6 +62,7 @@ namespace System.Windows.Forms.PropertyGridInternal
 			grid_items = new GridItemCollection ();
 			expanded = false;
 			this.parent = parent;
+			child_griditems_cache = null;
 		}
 
 		// Cannot use one PropertyDescriptor for all owners, because the
@@ -78,7 +80,16 @@ namespace System.Windows.Forms.PropertyGridInternal
 
 
 		public override bool Expandable {
-			get { return grid_items.Count > 0; }
+			get {
+				TypeConverter converter = GetConverter ();
+				if (converter == null || !converter.GetPropertiesSupported ((ITypeDescriptorContext)this))
+					return false;
+
+				if (GetChildGridItemsCached ().Count > 0)
+					return true;
+
+				return false;
+			}
 		}
 
 		public override bool Expanded {
@@ -86,6 +97,7 @@ namespace System.Windows.Forms.PropertyGridInternal
 			set {
 				if (expanded != value) {
 					expanded = value;
+					PopulateChildGridItems ();
 					if (value)
 						property_grid.OnExpandItem (this);
 					else
@@ -95,7 +107,10 @@ namespace System.Windows.Forms.PropertyGridInternal
 		}
 
 		public override GridItemCollection GridItems {
-			get { return grid_items; }
+			get {
+				PopulateChildGridItems ();
+				return grid_items; 
+			}
 		}
 
 		public override GridItemType GridItemType {
@@ -463,6 +478,7 @@ namespace System.Windows.Forms.PropertyGridInternal
 				return false;
 
 			if (SetValueCore (value, out error)) {
+				InvalidateChildGridItemsCache ();
 				property_grid.OnPropertyValueChangedInternal (this, this.Value);
 				return true;
 			}
@@ -625,26 +641,18 @@ namespace System.Windows.Forms.PropertyGridInternal
 		//
 		public virtual bool IsReadOnly {
 			get {
-				TypeConverter converter = GetConverter ();
-				// if (PropertyDescriptor != null) {
-				// 	Console.WriteLine ("=== [" + PropertyDescriptor.Name + "]");
-				// 	Console.WriteLine ("PropertyDescriptor.IsReadOnly: " + PropertyDescriptor.IsReadOnly);
-				// 	UITypeEditor editor = GetEditor ();
-				// 	Console.WriteLine ("Editor: " + (editor == null ? "none" : GetEditor ().GetType ().Name));
-				// 	if (editor != null)
-				// 		Console.WriteLine ("Editor.EditorStyle: " + editor.GetEditStyle ((ITypeDescriptorContext)this));
-				// 	Console.WriteLine ("Converter: " + (converter == null ? "none" : converter.GetType ().Name));
-				// 	if (converter != null) {
-				// 		Console.WriteLine ("Converter.GetStandardValuesSupported: " + converter.GetStandardValuesSupported ((ITypeDescriptorContext)this).ToString ());
-				// 		Console.WriteLine ("Converter.GetStandardValuesExclusive: " + converter.GetStandardValuesExclusive ((ITypeDescriptorContext)this).ToString ());
-				// 		Console.WriteLine ("ShouldCreateParentInstance: " + this.ShouldCreateParentInstance);
-				// 		Console.WriteLine ("CanConvertFrom (string): " + converter.CanConvertFrom ((ITypeDescriptorContext)this, typeof (string)));
-				// 	}
-				// 	Console.WriteLine ("IsArray: " + PropertyDescriptor.PropertyType.IsArray.ToString ());
-				// }
-				if (PropertyDescriptor == null || PropertyOwner == null ||
-				    (PropertyDescriptor.IsReadOnly && !this.ShouldCreateParentInstance && 
-				     EditorStyle != UITypeEditorEditStyle.Modal))
+       				TypeConverter converter = GetConverter ();
+				if (PropertyDescriptor == null || PropertyOwner == null)
+					return true;
+				else if (PropertyDescriptor.IsReadOnly && 
+					 (EditorStyle != UITypeEditorEditStyle.Modal || PropertyDescriptor.PropertyType.IsValueType) && 
+					 !this.ShouldCreateParentInstance)
+					return true;
+				else if (PropertyDescriptor.IsReadOnly && 
+					 TypeDescriptor.GetAttributes (PropertyDescriptor.PropertyType)
+					  [typeof(ImmutableObjectAttribute)].Equals (ImmutableObjectAttribute.Yes))
+					return true;
+				else if (ShouldCreateParentInstance && ParentEntry.IsReadOnly)
 					return true;
 				else if (!HasCustomEditor && converter == null)
 					return true;
@@ -658,15 +666,6 @@ namespace System.Windows.Forms.PropertyGridInternal
 					return true;
 				else
 					return false;
-			}
-		}
-
-		public bool IsExpandable {
-			get {
-				TypeConverter converter = GetConverter ();
-				if (converter != null && converter.GetPropertiesSupported ((ITypeDescriptorContext)this))
-					return true;
-				return false;
 			}
 		}
 
@@ -723,5 +722,139 @@ namespace System.Windows.Forms.PropertyGridInternal
 			}
 		}
 
+#region Population
+		protected void PopulateChildGridItems ()
+		{
+			grid_items = GetChildGridItemsCached ();
+		}
+
+		private void InvalidateChildGridItemsCache ()
+		{
+			if (child_griditems_cache != null) {
+				child_griditems_cache = null;
+				PopulateChildGridItems ();
+			}
+		}
+
+		private GridItemCollection GetChildGridItemsCached ()
+		{
+			if (child_griditems_cache == null) {
+				child_griditems_cache = GetChildGridItems ();
+				// foreach (GridEntry item in child_griditems_cache)
+				// 	PrintDebugInfo (item);
+			}
+
+			return child_griditems_cache;
+		}
+
+		// private static void PrintDebugInfo (GridEntry item)
+		// {
+       		// 	if (item.PropertyDescriptor != null) {
+       		// 		Console.WriteLine ("=== [" + item.PropertyDescriptor.Name + "] ===");
+		// 		try {
+		// 			TypeConverter converter = item.GetConverter ();
+		// 			Console.WriteLine ("IsReadOnly: " + item.IsReadOnly);
+		// 			Console.WriteLine ("IsEditable: " + item.IsEditable);
+		// 			Console.WriteLine ("PropertyDescriptor.IsReadOnly: " + item.PropertyDescriptor.IsReadOnly);
+		// 			if (item.ParentEntry != null)
+		// 				Console.WriteLine ("ParentEntry.IsReadOnly: " + item.ParentEntry.IsReadOnly);
+		// 			Console.WriteLine ("ImmutableObjectAttribute.Yes: " + TypeDescriptor.GetAttributes (item.PropertyDescriptor.PropertyType)
+		// 					   [typeof(ImmutableObjectAttribute)].Equals (ImmutableObjectAttribute.Yes));
+		// 			UITypeEditor editor = item.GetEditor ();
+		// 			Console.WriteLine ("Editor: " + (editor == null ? "none" : editor.GetType ().Name));
+		// 			if (editor != null)
+		// 				Console.WriteLine ("Editor.EditorStyle: " + editor.GetEditStyle ((ITypeDescriptorContext)item));
+		// 			Console.WriteLine ("Converter: " + (converter == null ? "none" : converter.GetType ().Name));
+		// 			if (converter != null) {
+		// 				Console.WriteLine ("Converter.GetStandardValuesSupported: " + converter.GetStandardValuesSupported ((ITypeDescriptorContext)item).ToString ());
+		// 				Console.WriteLine ("Converter.GetStandardValuesExclusive: " + converter.GetStandardValuesExclusive ((ITypeDescriptorContext)item).ToString ());
+		// 				Console.WriteLine ("ShouldCreateParentInstance: " + item.ShouldCreateParentInstance);
+		// 				Console.WriteLine ("CanConvertFrom (string): " + converter.CanConvertFrom ((ITypeDescriptorContext)item, typeof (string)));
+		// 			}
+		// 			Console.WriteLine ("IsArray: " + item.PropertyDescriptor.PropertyType.IsArray.ToString ());
+		// 		} catch { /* Some converters and editor throw NotImplementedExceptions */ }
+		// 	}
+		// }
+
+		private GridItemCollection GetChildGridItems ()
+		{
+			object[] propertyOwners = this.Values;
+			string[] propertyNames = GetMergedPropertyNames (propertyOwners);
+			GridItemCollection items = new GridItemCollection ();
+
+			foreach (string propertyName in propertyNames) {
+				PropertyDescriptor[] properties = new PropertyDescriptor[propertyOwners.Length];
+				for (int i=0; i < propertyOwners.Length; i++)
+					properties[i] = GetPropertyDescriptor (propertyOwners[i], propertyName);
+				items.Add (new GridEntry (property_grid, properties, this));
+			}
+
+			return items;
+		}
+
+		private bool IsPropertyMergeable (PropertyDescriptor property)
+		{
+			if (property == null)
+				return false;
+				
+			MergablePropertyAttribute attrib = property.Attributes [typeof (MergablePropertyAttribute)] as MergablePropertyAttribute;
+			if (attrib != null && !attrib.AllowMerge)
+				return false;
+
+			return true;
+		}
+
+		private string[] GetMergedPropertyNames (object [] objects)
+		{
+			if (objects == null || objects.Length == 0)
+				return new string[0];
+
+			ArrayList intersection = new ArrayList ();
+			for (int i = 0; i < objects.Length; i ++) {
+				if (objects [i] == null)
+					continue;
+
+				PropertyDescriptorCollection properties = GetProperties (objects[i], property_grid.BrowsableAttributes);
+				ArrayList new_intersection = new ArrayList ();
+
+				foreach (PropertyDescriptor currentProperty in (i == 0 ? (ICollection)properties : (ICollection)intersection)) {
+					PropertyDescriptor matchingProperty = (i == 0 ? currentProperty : properties [currentProperty.Name]);
+					if (objects.Length > 1 && !IsPropertyMergeable (matchingProperty))
+						continue;
+					if (matchingProperty.PropertyType == currentProperty.PropertyType)
+						new_intersection.Add (matchingProperty);
+				}
+
+				intersection = new_intersection;
+			}
+
+			string[] propertyNames = new string [intersection.Count];
+			for (int i=0; i < intersection.Count; i++)
+				propertyNames[i] = ((PropertyDescriptor)intersection[i]).Name;
+				
+			return propertyNames;
+		}
+
+		private PropertyDescriptor GetPropertyDescriptor (object propertyOwner, string propertyName)
+		{
+			if (propertyOwner == null || propertyName == null)
+				return null;
+
+			PropertyDescriptorCollection properties = GetProperties (propertyOwner, property_grid.BrowsableAttributes);
+			if (properties != null)
+				return properties[propertyName];
+			return null;
+		}
+
+		private PropertyDescriptorCollection GetProperties (object propertyOwner, AttributeCollection attributes)
+		{
+			if (propertyOwner == null || property_grid.SelectedTab == null)
+				return new PropertyDescriptorCollection (null);
+
+			Attribute[] atts = new Attribute[attributes.Count];
+			attributes.CopyTo (atts, 0);
+			return property_grid.SelectedTab.GetProperties ((ITypeDescriptorContext)this, propertyOwner, atts);
+		}
+#endregion
 	}
 }

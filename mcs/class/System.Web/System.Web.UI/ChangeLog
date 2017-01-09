@@ -1,4 +1,18 @@
+2008-09-01  Marek Habersack  <mhabersack@novell.com>
+
+	* ControlBuilder.cs: CreatePropertyBuilder now correctly processes
+	property names with prefixes (e.g. 'prefix:PropertyName'). 
+	Original, parsed, tag name is stored to properly handle closing
+	tags.
+	CreateSubBuilder compares tagid to tagName case-insensitively now.
+
+	* TemplateControl.cs: changed the way in which ParseControl is
+	implemented for the 2.0+ profile. Still not quite there, but
+	better and closer to .NET
+
 2008-08-31  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: improved FillControlCache
 
 	* TemplateParser.cs: added support for the LinePragmas directive
 	attribute.
@@ -6,6 +20,8 @@
 	* ControlBuilder.cs: if this instance is a TemplateBuilder do not
 	call MyNamingContainer, so that our own ContainerType can be used
 	as the binding container (if present).
+	Added a cache for children of TemplateBuilder, used later in
+	TemplateControlCompiler.
 
 2008-08-26  Marek Habersack  <mhabersack@novell.com>
 

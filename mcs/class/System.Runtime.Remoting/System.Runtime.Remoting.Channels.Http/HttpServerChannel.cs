@@ -1,18 +1,11 @@
-//
-// System.Runtime.Remoting.Channels.Http.HttpServerChannel
-//
-// Summary:    Implements a client channel that transmits method calls over HTTP.
-//
-// Authors:
-//      Martin Willemoes Hansen (mwh@sysrq.dk)
-//      Ahmad Tantawy (popsito82@hotmail.com)
-//      Ahmad Kadry (kadrianoz@hotmail.com)
-//      Hussein Mehanna (hussein_mehanna@hotmail.com)
-//
-// (C) 2003 Martin Willemoes Hansen
-//
-
-//
+﻿//
+// HttpServerChannel.cs
+// 
+// Author:
+//   Michael Hutchinson <mhutchinson@novell.com>
+// 
+// Copyright (C) 2008 Novell, Inc (http://www.novell.com)
+// 
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
 // "Software"), to deal in the Software without restriction, including
@@ -33,447 +26,288 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-using System;
-using System.Collections;
-using System.IO;
 using System.Net;
-using System.Net.Sockets;
-using System.Reflection;
-using System.Runtime.Remoting;
-using System.Runtime.Remoting.Channels;
-using System.Runtime.Remoting.Messaging;
-using System.Runtime.Remoting.MetadataServices;
-using System.Text;
+using System.Collections;
+using System.Globalization;
 using System.Threading;
-
-using System.Runtime.InteropServices;
-
+using System.Runtime.Remoting.MetadataServices;
+using System.Runtime.Remoting.Messaging;
 
 namespace System.Runtime.Remoting.Channels.Http
 {
 
-	public class HttpServerChannel : BaseChannelWithProperties, IChannel,
-		IChannelReceiver, IChannelReceiverHook
+	public class HttpServerChannel : BaseChannelWithProperties,
+		IChannel, IChannelReceiver, IChannelReceiverHook
 	{
-		private int               _channelPriority = 1;  // priority of channel (default=1)
-		private String            _channelName = "http"; // channel name
-		private String            _machineName = null;   // machine name
-		private int               _port = -1;            // port to listen on
-		private ChannelDataStore  _channelData = null;   // channel data
+		string name = "http server";
+		int priority = 1;
 		
-		private bool _bUseIpAddress = true; // by default, we'll use the ip address.
-		private IPAddress _bindToAddr = IPAddress.Any; // address to bind to.
-		private bool _bSuppressChannelData = false; // should we hand out null for our channel data
-        
-		private IServerChannelSinkProvider _sinkProvider = null;
-		private HttpServerTransportSink    _transportSink = null;
-
-		private bool _wantsToListen = true;
-        
-        
-		private TcpListener _tcpListener;
-		private Thread      _listenerThread;
-		private bool        _bListening = false; // are we listening at the moment?
-
-		RemotingThreadPool threadPool;
-
-#if TARGET_JVM
-		private volatile bool stopped = false;
+		string machineName = null;
+		IPAddress bindAddress = IPAddress.Any;
+		int port = -1; // querying GetChannelUri () on .NET indicates this is the default value
+		bool suppressChannelData = false;
+		bool useIPAddress = true;
+#if !NET_2_0
+		bool exclusiveAddressUse = true;
 #endif
+		bool wantsToListen = true;
 
-		public HttpServerChannel() : base()
+		HttpServerTransportSink sink;
+		ChannelDataStore channelData;
+		RemotingHttpListener listener;
+
+		#region Constructors
+
+		public HttpServerChannel ()
 		{
-			SetupChannel(null,null);
+			//DONT START SERVER, EVEN THOUGH ALL OTHER CONSTRUCTORS DO
+			BuildSink (null);
 		}
 
-		public HttpServerChannel(int port) : base()
+		public HttpServerChannel (int port)
 		{
-			_port = port;
-			SetupChannel(null,null);
-		} 
+			this.port = port;
+			BuildSink (null);
+		}
 		
-		public HttpServerChannel(String name, int port) : base()
+		[MonoTODO ("Handle the listen property")]
+		public HttpServerChannel (IDictionary properties, IServerChannelSinkProvider sinkProvider)
 		{
-            _channelName = name;
-			_port = port;
-			_wantsToListen = false;
-			SetupChannel(null,null);
-		} 
 
-		public HttpServerChannel(String name, int port, IServerChannelSinkProvider sinkProvider) : base()
-		{
-			//enter the name later ya gameeel
-			
-			_port = port;
-			_wantsToListen = false;
-			SetupChannel(sinkProvider,null);
-		} 
-
-		public HttpServerChannel (IDictionary properties, IServerChannelSinkProvider sinkProvider) : base()
-		{
-			if (properties != null)
-			foreach(DictionaryEntry Dict in properties)
-			{
-				switch((string)Dict.Key)
-				{
+			if (properties != null) {
+				foreach (DictionaryEntry property in properties) {
+					switch ((string)property.Key) {
 					case "name":
-						_channelName = (string)Dict.Value;
+						//NOTE: matching MS behaviour: throws InvalidCastException, allows null
+						this.name = (string)property.Value;
 						break;
 					case "priority":
-						_channelPriority = Convert.ToInt32 (Dict.Value);
+						this.priority = Convert.ToInt32 (property.Value);
 						break;
-					case "bindTo": 
-						_bindToAddr = IPAddress.Parse ((string)Dict.Value); 
+					case "port":
+						this.port = Convert.ToInt32 (property.Value);
 						break;
-					case "listen": 
-						_wantsToListen = Convert.ToBoolean (Dict.Value);; 
-						break; 
-					case "machineName": 
-						_machineName = (string)Dict.Value; 
-						break; 
-					case "port": 
-						_wantsToListen = false;
-						_port = Convert.ToInt32 (Dict.Value);
+					case "suppressChannelData":
+						this.suppressChannelData = Convert.ToBoolean (property.Value);
 						break;
-					case "suppressChannelData": 
-						_bSuppressChannelData = Convert.ToBoolean (Dict.Value); 
+					case "bindTo":
+						bindAddress = IPAddress.Parse ((string)property.Value);
 						break;
-					case "useIpAddress": 
-						_bUseIpAddress = Convert.ToBoolean (Dict.Value); 
+					case "useIpAddress":
+						this.useIPAddress = Convert.ToBoolean (property.Value);
 						break;
+					case "machineName":
+						this.machineName = (string)property.Value;
+						break;
+					case "listen":
+						this.wantsToListen = Convert.ToBoolean (property.Value);
+						break;
+#if !NET_2_0
+					case "exclusiveAddressUse":
+						this.exclusiveAddressUse = Convert.ToBoolean (property.Value);
+						break;
+#endif
+					}
 				}
 			}
 
-			SetupChannel (sinkProvider, properties);
-		} 
+			BuildSink (sinkProvider);
+		}
 
-
-		void SetupChannel (IServerChannelSinkProvider sinkProvider, IDictionary properties)
+		public HttpServerChannel (string name, int port)
+			: this (name, port, null)
 		{
-			if (properties == null) properties = new Hashtable ();
-			
-			SetupMachineName();
-			
-			_sinkProvider = sinkProvider;
-			
-			// needed for CAOs
-			_channelData = new ChannelDataStore(null);
-			
-			if(_sinkProvider == null)
-			{
-				_sinkProvider = new SdlChannelSinkProvider();
-				_sinkProvider.Next = new SoapServerFormatterSinkProvider();
+		}
+
+		public HttpServerChannel (string name, int port, IServerChannelSinkProvider sinkProvider)
+		{
+			this.name = name;
+			this.port = port;
+			BuildSink (sinkProvider);
+		}
+
+		void BuildSink (IServerChannelSinkProvider sinkProvider)
+		{
+			//resolve names (modified from TcpChannel)
+			if (machineName == null) {
+				if (useIPAddress) {
+					if (!bindAddress.Equals (IPAddress.Any)) {
+						machineName = bindAddress.ToString ();
+					} else {
+						IPHostEntry hostEntry = Dns.Resolve (Dns.GetHostName ());
+						if (hostEntry.AddressList.Length == 0)
+							throw new RemotingException ("IP address could not be determined for this host");
+						// We DON'T want to take the resolved address from the hostEntry, since the socket
+						// should still bind to IPAddress.Any, so that we get the loopback too
+						machineName = hostEntry.AddressList[0].ToString ();
+					}
+				} else {
+					IPHostEntry hostEntry = Dns.GetHostByName (Dns.GetHostName ());
+					bindAddress = hostEntry.AddressList[0];
+					machineName = hostEntry.HostName;
+				}
 			}
 
-			// collect channel data from all providers
-			IServerChannelSinkProvider provider = _sinkProvider;
-			while (provider != null) 
-			{
-				provider.GetChannelData(_channelData);
-				provider = provider.Next;
-			}			
+			if (sinkProvider == null) {
+				//build a default chain that can handle wsdl, soap, binary
+				sinkProvider = new SdlChannelSinkProvider (); //for wsdl
+				sinkProvider.Next = new SoapServerFormatterSinkProvider ();
+				sinkProvider.Next.Next = new BinaryServerFormatterSinkProvider ();
+			}
 
-			// create the sink chain
-			IServerChannelSink snk = 
-				ChannelServices.CreateServerChannelSinkChain(_sinkProvider,this);
+			if (port > 0) {
+				channelData = new ChannelDataStore (new string [] { this.GetChannelUri () } );
+				IServerChannelSinkProvider provider = sinkProvider;
+				while (provider != null) {
+					provider.GetChannelData (channelData);
+					provider = provider.Next;
+				}
+				wantsToListen = false;
+			}
 
-			_transportSink = new HttpServerTransportSink (snk, properties);
-			SinksWithProperties = _transportSink;
-			
+			//create the sink chain and add an HTTP sink
+			IServerChannelSink nextSink = ChannelServices.CreateServerChannelSinkChain (sinkProvider, this);
+			sink = new HttpServerTransportSink (nextSink);
+
+			// BaseChannelWithProperties wants this to be set with the chain
+			base.SinksWithProperties = nextSink;
+
 			StartListening (null);
 		}
 
-		internal void Listen()
+		#endregion
+
+		#region IChannel
+
+		public string ChannelName
 		{
-			try {
-	#if !TARGET_JVM
-				while(true)
-	#else
-				while(!stopped)
-	#endif
-				{
-					Socket socket = _tcpListener.AcceptSocket();
-					RequestArguments request = new RequestArguments (socket, _transportSink);
-					threadPool.RunThread (new ThreadStart (request.Process));
-				}
-			} catch {}
+			get { return name; }
 		}
-		
-
-		public void StartListening (Object data)
-		{
-			if (_bListening || _port < 0) return;
-			
-#if TARGET_JVM
-			stopped = false;
-#endif 
-			threadPool = RemotingThreadPool.GetSharedPool ();
-			
-			_tcpListener = new TcpListener (_bindToAddr, _port);
-			_tcpListener.Start();
-
-			if (_port == 0)
-				_port = ((IPEndPoint)_tcpListener.LocalEndpoint).Port;				
-			
-			String[] uris = { this.GetChannelUri() };
-			_channelData.ChannelUris = uris;
-
-			if(_listenerThread == null)
-			{
-				ThreadStart t = new ThreadStart(this.Listen);
-				_listenerThread = new Thread(t);
-				_listenerThread.IsBackground = true;
-			}
-			
-			if(!_listenerThread.IsAlive)
-				_listenerThread.Start();
-			
-			_bListening = true;
-		} 
-
-		public void StopListening(Object data)
-		{
-#if TARGET_JVM
-			stopped = true;
-#endif 
-			if( _bListening)
-			{
-#if !TARGET_JVM
-				_listenerThread.Abort ();
-#else
-				_listenerThread.Interrupt ();
-#endif 
-				_tcpListener.Stop();
-				threadPool.Free ();
-				_listenerThread.Join ();
-				_listenerThread = null;
-			}
-
-			_bListening = false;
-		}
-
-		
-		void SetupMachineName()
-		{
-			if (_machineName == null)
-			{
-				if (_bUseIpAddress) {
-					IPHostEntry he = Dns.Resolve (Dns.GetHostName());
-					if (he.AddressList.Length == 0) throw new RemotingException ("IP address could not be determined for this host");
-					_machineName = he.AddressList [0].ToString ();
-				}
-				else
-					_machineName = Dns.GetHostByName(Dns.GetHostName()).HostName;
-			}
-			
-		} // SetupMachineName
-
 
 		public int ChannelPriority
 		{
-			get { return _channelPriority; }
+			get { return priority; }
 		}
 
-		public String ChannelName
+		public string Parse (string url, out string objectURI)
 		{
-			get { return _channelName; }
-		}
-	
-		public String GetChannelUri()
-		{
-			if (_channelData != null && _channelData.ChannelUris != null &&
-			    _channelData.ChannelUris.Length > 0) {
-				return _channelData.ChannelUris [0];
-			} else {
-				return "http://" + _machineName + ":" + _port;
-			}
-		} 
-	
-		public virtual String[] GetUrlsForUri(String objectUri)
-		{
-			String[] retVal = new String[1];
-
-			if (!objectUri.StartsWith("/"))
-				objectUri = "/" + objectUri;
-			retVal[0] = GetChannelUri() + objectUri;
-			return retVal;
-
+			return HttpChannel.ParseInternal (url, out objectURI);
 		}
 
-		public String Parse(String url,out String objectURI)
-		{   
-			return HttpHelper.Parse(url,out objectURI);
-		} 
-		
-		public Object ChannelData
+		#endregion
+
+		public string GetChannelUri ()
+		{
+			return "http://" + machineName + ":" + port;
+		}
+
+		#region IChannelReceiver (: IChannel)
+
+		public object ChannelData
 		{
 			get
 			{
-				if (_bSuppressChannelData) return null;
-				else return _channelData;
+				return suppressChannelData ? null
+					: channelData;
 			}
 		}
 
-		public String ChannelScheme 
+		//from TcpServerChannel
+		public virtual string[] GetUrlsForUri (string objectUri)
 		{
-			get { return "http"; } 
+			if (!objectUri.StartsWith ("/"))
+				objectUri = "/" + objectUri;
+
+			if (channelData == null || channelData.ChannelUris == null || channelData.ChannelUris.Length < 1) {
+				return new string[] { GetChannelUri () + objectUri };
+			}
+
+			string[] channelUris = channelData.ChannelUris;
+			string[] result = new string[channelUris.Length];
+
+			for (int i = 0; i < channelUris.Length; i++)
+				result[i] = channelUris[i] + objectUri;
+
+			return result;
 		}
 
-		public bool WantsToListen 
-		{ 
-			get { return _wantsToListen; } 
-			set { _wantsToListen = value; }
-		} 
-		
-		public IServerChannelSink ChannelSinkChain 
-		{ 
-			get { return _transportSink.NextChannelSink; } 
+		public void StartListening (object data)
+		{
+			if (listener != null)
+				return;
+
+			if (port < 0)
+				return;
+
+			try {
+				listener = new RemotingHttpListener (bindAddress, port, sink);
+			} catch (Exception) {
+				if (listener != null) {
+					listener.Dispose ();
+					listener = null;
+				}
+				throw;
+			}
+			
+			if (port == 0)
+				port = listener.AssignedPort;
 		}
-		
-		public void AddHookChannelUri (String channelUri)
+
+		public void StopListening (object data)
+		{
+			if (listener != null) {
+				listener.Dispose ();
+				listener = null;
+			}
+		}
+
+		#endregion
+
+		#region BaseChannelWithProperties overrides
+
+		public override object this[object key]
+		{
+			get { return base[key]; }
+			set { base[key] = value; }
+		}
+
+		public override ICollection Keys
+		{
+			get { return new object[0]; }
+		}
+
+		#endregion
+
+		#region IChannelReceiverHook
+
+		public void AddHookChannelUri (string channelUri)
 		{
 			string [] newUris = new string[1] { channelUri };
-			_channelData.ChannelUris = newUris;
-			_wantsToListen = false;
-		}
-		
-		public override object this [object key]
-		{
-			get { return Properties[key]; }
-			set { Properties[key] = value; }
-		}
-		
-		public override ICollection Keys 
-		{
-			get { return Properties.Keys; }
+			if (channelData == null)
+				channelData = new ChannelDataStore (newUris);
+			else
+				channelData.ChannelUris = newUris;
+			wantsToListen = false;
 		}
 
-	} // HttpServerChannel
-
-
-	internal class HttpServerTransportSink : IServerChannelSink, IChannelSinkBase
-	{
-		private static String s_serverHeader =
-			"mono .NET Remoting, mono .NET CLR " + System.Environment.Version.ToString();
-    
-		// sink state
-		private IServerChannelSink _nextSink;
-		private IDictionary _properties;
-        
-
-		public HttpServerTransportSink (IServerChannelSink nextSink, IDictionary properties)
+		public string ChannelScheme
 		{
-			_nextSink = nextSink;
-			_properties = properties;
+			get { return "http"; }
+		}
 
-		} // IServerChannelSink
+		public IServerChannelSink ChannelSinkChain
+		{
+			get { return (IServerChannelSink)base.SinksWithProperties; }
+		}
 
-		internal void ServiceRequest (RequestArguments reqArg, Stream requestStream, ITransportHeaders headers)
-		{          
-			ITransportHeaders responseHeaders;
-			Stream responseStream;
-
-			bool requestDispatched = false;
-			ServerProcessing processing;
-			try
-			{
-				processing = DispatchRequest (requestStream, headers, out responseStream, out responseHeaders);
-				requestDispatched = true;
-
-				switch (processing)
-				{                    
-					case ServerProcessing.Complete:
-						HttpServer.SendResponse (reqArg, 200, responseHeaders, responseStream);
-						break;
-
-					case ServerProcessing.OneWay:				
-						HttpServer.SendResponse (reqArg, 200, null, null);
-						break;
-
-					case ServerProcessing.Async:
-						break;
-				}
-			}
-			catch (Exception ex)
-			{
-#if DEBUG
-				Console.WriteLine("The exception was caught during HttpServerChannel.ServiceRequest: {0}, {1}", ex.GetType(), ex.Message);
-#endif
-				if (!requestDispatched)
-				{
-					try 
-					{
-						HttpServer.SendResponse (reqArg, 500, null, null);
-					}
-					catch (Exception e)
-					{
-#if DEBUG
-						Console.WriteLine("Fail to send response in HttpServerChannels.ServiceRequest: {0}, {1}", e.GetType(), e.Message);
-#endif
-					}
-				}
+		public bool WantsToListen
+		{
+			get { return wantsToListen; }
+			set {
+				throw new NotImplementedException ("Behaviour not yet determined");
 			}
 		}
 
-		internal ServerProcessing DispatchRequest (Stream requestStream, ITransportHeaders headers, out Stream responseStream, out ITransportHeaders responseHeaders)
-		{          
-			ServerChannelSinkStack sinkStack = new ServerChannelSinkStack();
-
-			IMessage responseMessage;
-
-			return _nextSink.ProcessMessage (sinkStack, null, headers, requestStream,
-						out responseMessage,
-						out responseHeaders, out responseStream);
-		}
-		
-		//
-		// IServerChannelSink implementation
-		//
-
-		public ServerProcessing ProcessMessage (IServerChannelSinkStack sinkStack,
-			IMessage requestMsg,
-			ITransportHeaders requestHeaders, Stream requestStream,
-			out IMessage responseMsg, out ITransportHeaders responseHeaders,
-			out Stream responseStream)
-		{
-		
-			throw new NotSupportedException();
-		
-		} // ProcessMessage
-           
-
-		public void AsyncProcessResponse (IServerResponseChannelSinkStack sinkStack, Object state,
-			IMessage msg, ITransportHeaders headers, Stream stream)                 
-		{
-			// Never called
-			throw new NotSupportedException ();
-		}
-
-
-		public Stream GetResponseStream(IServerResponseChannelSinkStack sinkStack, Object state,
-			IMessage msg, ITransportHeaders headers)
-		{
-			return null;
-		} // GetResponseStream
-
-
-		public IServerChannelSink NextChannelSink
-		{
-			get { return _nextSink; }
-		}
-
-
-		public IDictionary Properties
-		{
-			get { return _properties; }
-		} // Properties
-        
-
-		internal static String ServerHeader
-		{
-			get { return s_serverHeader; }
-		}
-	} // HttpServerTransportSink
-
-
-} // namespace System.Runtime.Remoting.Channels.Http
+		#endregion
+	}
+}

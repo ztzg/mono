@@ -1,3 +1,31 @@
+2008-09-25  Marek Safar  <marek.safar at gmail.com>
+  
+	* driver.cs, namespace.cs: Read types and namespaces after all
+	requested assemblies are loaded, fixes issues with System.Core
+	auto-reference, and #419888.
+
+2008-09-04  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #422853
+	* delegate.cs (DelegateCreation): Add special handling for
+	EmptyExpression.Null instance expression which is just another
+	hack for undecided member instance exression.
+
+2008-09-03  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #422507
+	* expression.cs (UnboxCast): Add missing child expression mutator.
+
+2008-09-03  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #422507
+	* expression.cs (StringConcat): Add missing type mutator.
+
+2008-09-01  Marek Safar  <marek.safar@gmail.com>
+
+	A fix for bug #421736
+	* iterators.cs: Don't crash on unreachable iterators.
+
 2008-08-28  Marek Safar  <marek.safar@gmail.com>
 
 	A fix for bug #420832

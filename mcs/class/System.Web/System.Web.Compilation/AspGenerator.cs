@@ -349,17 +349,23 @@ namespace System.Web.Compilation
 
 		internal static void AddTypeToCache (ArrayList dependencies, string inputFile, Type type)
 		{
-			string [] deps = (string []) dependencies.ToArray (typeof (string));
-			HttpContext ctx = HttpContext.Current;
-			HttpRequest req = ctx != null ? ctx.Request : null;
+			if (type == null || inputFile == null || inputFile.Length == 0)
+				return;
 
-			if (req == null)
-				throw new HttpException ("No current context, cannot compile.");
+			if (dependencies != null && dependencies.Count > 0) {
+				string [] deps = (string []) dependencies.ToArray (typeof (string));
+				HttpContext ctx = HttpContext.Current;
+				HttpRequest req = ctx != null ? ctx.Request : null;
+				
+				if (req == null)
+					throw new HttpException ("No current context, cannot compile.");
 
-			for (int i = 0; i < deps.Length; i++)
-				deps [i] = req.MapPath (deps [i]);			
+				for (int i = 0; i < deps.Length; i++)
+					deps [i] = req.MapPath (deps [i]);			
 
-			HttpRuntime.InternalCache.Insert ("@@Type" + inputFile, type, new CacheDependency (deps));
+				HttpRuntime.InternalCache.Insert ("@@Type" + inputFile, type, new CacheDependency (deps));
+			} else
+				HttpRuntime.InternalCache.Insert ("@@Type" + inputFile, type);
 		}
 		
 		public Type GetCompiledType ()
@@ -372,7 +378,7 @@ namespace System.Web.Compilation
 			Parse ();
 
 			BaseCompiler compiler = GetCompilerFromType ();
-
+			
 			type = compiler.GetCompiledType ();
 			AddTypeToCache (tparser.Dependencies, tparser.InputFile, type);
 			return type;
@@ -781,7 +787,7 @@ namespace System.Web.Compilation
 		bool CloseControl (string tagid)
 		{
 			ControlBuilder current = stack.Builder;
-			string btag = current.TagName;
+			string btag = current.OriginalTagName;
 			if (String.Compare (btag, "tbody", true, CultureInfo.InvariantCulture) != 0 &&
 			    String.Compare (tagid, "tbody", true, CultureInfo.InvariantCulture) == 0) {
 				if (!current.ChildrenAsProperties) {

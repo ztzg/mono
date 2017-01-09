@@ -1,20 +1,11 @@
-//
-// System.Runtime.Remoting.Channels.Http.HttpChannel
-//
-// Summary:     Implements a wrapper class for HTTP client and server channels.
-//
-// Classes:    public HttpChannel
-//
-// Authors:
-//      Martin Willemoes Hansen (mwh@sysrq.dk)
-//		Ahmad Tantawy (popsito82@hotmail.com)
-//		Ahmad Kadry (kadrianoz@hotmail.com)
-//		Hussein Mehanna (hussein_mehanna@hotmail.com)
-//
-// (C) 2003 Martin Willemoes Hansen
-//
-
-//
+﻿//
+// HttpChannel.cs
+// 
+// Author:
+//   Michael Hutchinson <mhutchinson@novell.com>
+// 
+// Copyright (C) 2008 Novell, Inc (http://www.novell.com)
+// 
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
 // "Software"), to deal in the Software without restriction, including
@@ -35,131 +26,213 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-using System;
 using System.Collections;
 using System.Runtime.Remoting.Messaging;
 
-namespace System.Runtime.Remoting.Channels.Http  
+namespace System.Runtime.Remoting.Channels.Http
 {
-	public class HttpChannel: BaseChannelWithProperties, IChannelReceiver, 
-		IChannelSender, IChannel, IChannelReceiverHook
-	{
-		private HttpServerChannel serverChannel;
-		private HttpClientChannel clientChannel;
-		private string channelName = "http";
-		private int channelPriority = 1;
-		private AggregateDictionary properties;
 
-		public HttpChannel()
+	public class HttpChannel : BaseChannelWithProperties,
+		IChannel, IChannelReceiver, IChannelReceiverHook, IChannelSender
+#if NET_2_0
+		, ISecurableChannel
+#endif
+	{
+		HttpClientChannel client;
+		HttpServerChannel server;
+		string name = "http";
+
+		#region Constructors
+
+		public HttpChannel ()
 		{
-			SetupChannel (new Hashtable(), null, null);
+			client = new HttpClientChannel ();
+			server = new HttpServerChannel ();
 		}
 
 		public HttpChannel (int port)
 		{
-			Hashtable prop = new Hashtable();
-			prop["port"] = port;
-			SetupChannel(prop,null,null);
+			client = new HttpClientChannel ();
+			server = new HttpServerChannel (port);
 		}
 
-		public HttpChannel (IDictionary properties,IClientChannelSinkProvider clientSinkProvider,IServerChannelSinkProvider serverSinkProvider)
+		public HttpChannel (IDictionary properties,
+			IClientChannelSinkProvider clientSinkProvider,
+			IServerChannelSinkProvider serverSinkProvider)
 		{
-			SetupChannel (properties,clientSinkProvider,serverSinkProvider);
+			if (properties != null && properties.Contains ("name")) {
+				this.name = (string)properties["name"];
+			}
+
+			client = new HttpClientChannel (properties, clientSinkProvider);
+			server = new HttpServerChannel (properties, serverSinkProvider);
 		}
 
-		private void SetupChannel (IDictionary properties, IClientChannelSinkProvider clientSinkProvider, IServerChannelSinkProvider serverSinkProvider)
+		#endregion
+
+		#region BaseChannelWithProperties overrides
+
+		public override object this[object key]
 		{
-			clientChannel = new HttpClientChannel (properties, clientSinkProvider);
-			serverChannel = new HttpServerChannel (properties, serverSinkProvider);
-			
-			object val = properties ["name"];
-			if (val != null) channelName = val as string;
-			
-			val = properties ["priority"];
-			if (val != null) channelPriority = Convert.ToInt32 (val);
-			
-			this.properties = new AggregateDictionary (new IDictionary[] {clientChannel, serverChannel});
+			get { return Properties[key]; }
+			set { Properties[key] = value; }
 		}
 
-
-		//IChannel Members
-		public String ChannelName
+		public override ICollection Keys
 		{
-			get { return channelName; }
+			get { return Properties.Keys; }
+		}
+
+		public override IDictionary Properties
+		{
+			get
+			{
+				return new AggregateDictionary (new IDictionary[] {
+					client.Properties,
+					server.Properties
+				});
+			}
+		}
+
+		#endregion
+
+		#region IChannel
+
+		public string ChannelName
+		{
+			get { return name; }
 		}
 
 		public int ChannelPriority
 		{
-			get { return channelPriority; }
+			get { return server.ChannelPriority; }
 		}
 
-		public String Parse(String url, out String objectURI)
+		public string Parse (string url, out string objectURI)
 		{
-			return HttpHelper.Parse(url, out objectURI);
+			return ParseInternal (url, out objectURI);
 		}
 
-		//IChannelSender Members
-		public IMessageSink CreateMessageSink(String url, Object remoteChannelData, out String objectURI)
+		internal static string ParseInternal (string url, out string objectURI)
 		{
-			return clientChannel.CreateMessageSink(url, remoteChannelData, out objectURI);
+			if (url == null)
+				throw new ArgumentNullException ("url");
+			
+			// format: "http://host:port/path/to/object"
+			objectURI = null;
+			
+			// url needs to be at least "http:" or "https:"
+			if (url.Length < 5 ||
+			    (url[0] != 'H' && url[0] != 'h') ||
+			    (url[1] != 'T' && url[1] != 't') ||
+			    (url[2] != 'T' && url[2] != 't') ||
+			    (url[3] != 'P' && url[3] != 'p'))
+				return null;
+			
+			int protolen;
+			if (url[4] == 'S' || url[4] == 's') {
+				if (url.Length < 6)
+					return null;
+				
+				protolen = 5;
+			} else {
+				protolen = 4;
+			}
+			
+			if (url[protolen] != ':')
+				return null;
+			
+			// "http:" and "https:" are acceptable inputs
+			if (url.Length == protolen + 1)
+				return url;
+			
+			// protocol must be followed by "//"
+			if (url.Length < protolen + 3 || url[protolen + 1] != '/' || url[protolen + 2] != '/')
+				return null;
+			
+			// "http://" and "https://" are acceptable inputs
+			if (url.Length == protolen + 3)
+				return url;
+			
+			int slash = url.IndexOf ('/', protolen + 3);
+			if (slash == -1)
+				return url;
+				
+			objectURI = url.Substring (slash);
+
+			return url.Substring (0, slash);
 		}
 
-		//IChannelReciever Members
-		public String[] GetUrlsForUri(String objectURI)
-		{
-			return serverChannel.GetUrlsForUri(objectURI);
-		} 
+		#endregion
 
-		public void StartListening(Object data)
+		#region IChannelReceiver (: IChannel)
+
+		public object ChannelData
 		{
-			serverChannel.StartListening(data);
+			get { return server.ChannelData; }
 		}
 
-		public void StopListening(Object data)
+		public string[] GetUrlsForUri (string objectURI)
 		{
-			serverChannel.StopListening(data);
-		} 
-		
-		public Object ChannelData
-		{
-			get { return serverChannel.ChannelData; }
-		}
-		
-		public String ChannelScheme 
-		{
-			get { return "http"; } 
+			return server.GetUrlsForUri (objectURI);
 		}
 
-		public bool WantsToListen 
-		{ 
-			get { return serverChannel.WantsToListen; } 
-			set { serverChannel.WantsToListen = value; }
-		} 
-		
-		public IServerChannelSink ChannelSinkChain 
+		public void StartListening (object data)
 		{
-			get { return serverChannel.ChannelSinkChain; }
+			server.StartListening (data);
 		}
 
-		public void AddHookChannelUri (String channelUri)
+		public void StopListening (object data)
 		{
-			serverChannel.AddHookChannelUri (channelUri);
-		} 
-		
-		public override object this [object key]
-		{
-			get { return properties[key]; }
-			set { properties[key] = value; }
+			server.StopListening (data);
 		}
-		
-		public override ICollection Keys 
+
+		#endregion
+
+		#region IChannelReceiverHook
+
+		public void AddHookChannelUri (string channelUri)
 		{
-			get { return properties.Keys; }
+			server.AddHookChannelUri (channelUri);
 		}
-		
-		public override IDictionary Properties 
+
+		public string ChannelScheme
 		{
-			get { return properties; }
+			get { return server.ChannelScheme; }
 		}
+
+		public IServerChannelSink ChannelSinkChain
+		{
+			get { return server.ChannelSinkChain; }
+		}
+
+		public bool WantsToListen
+		{
+			get { return server.WantsToListen; }
+			set { server.WantsToListen = value; }
+		}
+
+		#endregion
+
+		#region IChannelSender (: IChannel)
+
+		public IMessageSink CreateMessageSink (string url, object remoteChannelData, out string objectURI)
+		{
+			return client.CreateMessageSink (url, remoteChannelData, out objectURI);
+		}
+
+		#endregion
+
+#if NET_2_0
+		#region ISecurableChannel
+
+		public bool IsSecured
+		{
+			get { return client.IsSecured; }
+			set { client.IsSecured = value; }
+		}
+
+		#endregion
+#endif
 	}
 }

@@ -82,6 +82,12 @@ namespace System.Net.Sockets
 		private sealed class SocketAsyncResult: IAsyncResult
 		{
 			/* Same structure in the runtime */
+			/*
+			  Keep this in sync with MonoSocketAsyncResult in
+  			  metadata/socket-io.h and ProcessAsyncReader
+  			  in System.Diagnostics/Process.cs.
+			*/
+
 			public Socket Sock;
 			public IntPtr handle;
 			object state;
@@ -148,6 +154,8 @@ namespace System.Net.Sockets
 					cb = new WaitCallback (ares.CompleteDisposed);
 					ThreadPool.QueueUserWorkItem (cb, null);
 				}
+				if (pending.Length == 0)
+					Buffer = null;
 			}
 
 			void CompleteDisposed (object unused)
@@ -191,6 +199,7 @@ namespace System.Net.Sockets
 
 				if (callback != null)
 					callback (this);
+				Buffer = null;
 			}
 
 			SocketAsyncCall GetDelegate (Worker worker, SocketOperation op)

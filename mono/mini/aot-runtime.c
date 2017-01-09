@@ -77,6 +77,8 @@ typedef struct MonoAotModule {
 	GHashTable *wrappers;
 	/* Maps wrapper names to their method index */
 	GHashTable *wrappers_by_name;
+	/* Maps wrapper methods to their code */
+	GHashTable *wrappers_to_code;
 	MonoAssemblyName *image_names;
 	char **image_guids;
 	MonoAssembly *assembly;
@@ -1569,10 +1571,27 @@ mono_aot_get_method (MonoDomain *domain, MonoMethod *method)
 		if (!method->wrapper_type || !aot_module->wrapper_info)
 			return NULL;
 
-		/* Try to find the wrapper among the wrapper info */
-		full_name = mono_method_full_name (method, TRUE);
-
 		mono_aot_lock ();
+
+		/* Avoid doing a hash table lookup using strings if possible */
+		if (!aot_module->wrappers_to_code)
+			aot_module->wrappers_to_code = g_hash_table_new (mono_aligned_addr_hash, NULL);
+		code = g_hash_table_lookup (aot_module->wrappers_to_code, method);
+		if (code) {
+			mono_aot_unlock ();
+			return code;
+		}
+
+		/* Try to find the wrapper among the wrapper info */
+		/* FIXME: This is a hack to work around the fact that runtime invoke wrappers get assigned to some random class */
+		if (method->wrapper_type == MONO_WRAPPER_RUNTIME_INVOKE) {
+			char *tmpsig = mono_signature_get_desc (mono_method_signature (method), TRUE);
+			full_name = g_strdup_printf ("(wrapper runtime-invoke):%s (%s)", method->name, tmpsig);
+			g_free (tmpsig);
+		} else {
+			full_name = mono_method_full_name (method, TRUE);
+		}
+
 		/* Create a hash table to avoid repeated linear searches */
 		if (!aot_module->wrappers_by_name) {
 			aot_module->wrappers_by_name = g_hash_table_new (g_str_hash, g_str_equal);
@@ -1747,6 +1766,9 @@ mono_aot_load_method (MonoDomain *domain, MonoAotModule *aot_module, MonoMethod 
 	aot_module->methods_loaded [method_index / 32] |= 1 << (method_index % 32);
 
 	init_plt (aot_module);
+
+	if (method->wrapper_type)
+		g_hash_table_insert (aot_module->wrappers_to_code, method, code);
 
 	mono_aot_unlock ();
 

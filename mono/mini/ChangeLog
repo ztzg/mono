@@ -1,3 +1,45 @@
+2008-09-26  Zoltan Varga  <vargaz@gmail.com>
+
+	Backport of r114163.
+	
+	* mini-trampolines.c (mono_delegate_trampoline): Add wrappers even if
+	delegate->method_ptr is set. Fixes #428054.
+
+2008-09-08  Zoltan Varga  <vargaz@gmail.com>
+
+	* aot-compiler.c (emit_wrapper_info): Omit the klass name from
+	runtime-invoke wrappers to work around the problem of them getting
+	assigned to a random class.
+
+	* aot-runtime.c (mono_aot_get_method): Ditto.
+
+2008-09-06  Zoltan Varga  <vargaz@gmail.com>
+	
+	* mini.h (MONO_AOT_FILE_VERSION): Bump this because of the arm AOT
+	changes.
+
+	* mini.c (mono_spill_call): Handle pinvoke+soft float on arm.
+
+	* aot-runtime.c (mono_aot_get_method): Add another cache mapping wrapper
+	methods to their code to avoid computing the full name of wrappers and
+	doing a lookup in a string hash table.
+
+2008-09-05  Zoltan Varga  <vargaz@gmail.com>
+
+	* tramp-arm.c (mono_arch_nullify_class_init_trampoline): Implement this.
+	(mono_arch_patch_plt_entry): Fix the calculation of the jump_entry.
+	(mono_arch_get_nullified_class_init_trampoline): Return 'code' instead of
+	'buf'.
+
+	* aot-compiler.c (emit_plt): Fix the arm plt entries, previously they all 
+	jumped to the same entry in plt_jump_table.
+
+2008-09-02  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* method-to-ir.c (initialize_array_data): Handle field with RVA from
+	dynamic images.
+	(Ported from trunk)
+
 2008-08-29  Geoff Norton  <gnorton@novell.com>
 
 	* aot-compiler.c: The Mach/ARM compiler doesn't understand the bss

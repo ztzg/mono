@@ -2867,7 +2867,7 @@ emit_plt (MonoAotCompile *acfg)
 		fprintf (acfg->fp, "\tldr ip, [pc, #4]\n");
 		fprintf (acfg->fp, "\tadd ip, pc, ip\n");
 		fprintf (acfg->fp, "\tldr pc, [ip, #0]\n");
-		emit_symbol_diff (acfg, "plt_jump_table", ".", 0);
+		emit_symbol_diff (acfg, "plt_jump_table", ".", (i * sizeof (gpointer)));
 		/* Used by mono_aot_get_plt_info_offset */
     #if defined(__MACH__)
 		fprintf (acfg->fp, "\n\t.long %d\n", plt_info_offsets [i]);
@@ -3729,14 +3729,22 @@ emit_wrapper_info (MonoAotCompile *acfg)
 
 	for (i = 0; i < acfg->nmethods; ++i) {
 		MonoCompile *cfg = acfg->cfgs [i];
+		MonoMethod *method;
 
 		if (!cfg || !cfg->method->wrapper_type)
 			continue;
 
-		index = get_method_index (acfg, cfg->method);
+		method = cfg->method;
+		index = get_method_index (acfg, method);
 
 		// FIXME: Optimize disk usage and lookup speed
-		name = mono_method_full_name (cfg->method, TRUE);
+		if (method->wrapper_type == MONO_WRAPPER_RUNTIME_INVOKE) {
+			char *tmpsig = mono_signature_get_desc (mono_method_signature (method), TRUE);
+			name = g_strdup_printf ("(wrapper runtime-invoke):%s (%s)", method->name, tmpsig);
+			g_free (tmpsig);
+		} else {
+			name = mono_method_full_name (method, TRUE);
+		}
 		emit_string (acfg, name);
 		emit_alignment (acfg, 4);
 		emit_int32 (acfg, index);
