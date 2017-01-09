@@ -126,6 +126,8 @@ public class Node : IComparable {
 	protected ArrayList nodes;
 	protected internal int position;
 
+	static ArrayList empty = ArrayList.ReadOnly(new ArrayList(0));
+
 	/// <summary>
 	///    Creates a node, called by the Tree.
 	/// </summary>
@@ -173,7 +175,7 @@ public class Node : IComparable {
 		get {
 			if (position < 0)
 				LoadNode ();
-			return nodes;
+			return nodes != null ? nodes : empty;
 		}
 	}
 
@@ -481,7 +483,7 @@ public class HelpSource {
 	/// <summary>
 	///   Returns a stream from the packaged help source archive
 	/// </summary>
-	public Stream GetHelpStream (string id)
+	public virtual Stream GetHelpStream (string id)
 	{
 		if (zip_file == null)
 			zip_file = new ZipFile (zip_filename);
@@ -517,7 +519,7 @@ public class HelpSource {
 		return null;
 	}
 	
-	public XmlDocument GetHelpXmlWithChanges (string id)
+	public virtual XmlDocument GetHelpXmlWithChanges (string id)
 	{
 		if (zip_file == null)
 			zip_file = new ZipFile (zip_filename);
@@ -722,7 +724,9 @@ public class HelpSource {
 		System.Reflection.Assembly assembly = System.Reflection.Assembly.GetCallingAssembly ();
 		Stream str_js = assembly.GetManifestResourceStream ("helper.js");
 		StringBuilder sb = new StringBuilder ((new StreamReader (str_js)).ReadToEnd());
+		output.Write ("<script type=\"text/JavaScript\">\n");
 		output.Write (sb.ToString ());
+		output.Write ("</script>\n");
 		
 		if (js != null) {
 			output.Write ("<script type=\"text/JavaScript\">\n");
@@ -899,6 +903,7 @@ public class RootTree : Tree {
 		
 		foreach (string path in UncompiledHelpSources) {
 			EcmaUncompiledHelpSource hs = new EcmaUncompiledHelpSource(path);
+			hs.RootTree = root;
 			root.help_sources.Add (hs);
 			string epath = "extra-help-source-" + hs.Name;
 			Node hsn = root.CreateNode (hs.Name, "root:/" + epath);

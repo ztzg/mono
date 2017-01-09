@@ -11,6 +11,10 @@
 	when only Soap is supported.
 	Bug #342073 fixed.
 
+2009-01-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* web.config : added .svc handler.
+
 2009-01-07  Kornél Pál  <kornelpal@gmail.com>
 
 	* DefaultWsdlHelpGenerator.aspx: Move <script> at the end of <head> that

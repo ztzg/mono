@@ -103,7 +103,7 @@ namespace Mono.CSharp {
 					return false;
 
 				if (ClassConstraint != null) {
-					if (!ClassConstraint.IsValueType)
+					if (!TypeManager.IsValueType (ClassConstraint))
 						return false;
 
 					if (ClassConstraint != TypeManager.value_type)
@@ -122,6 +122,76 @@ namespace Mono.CSharp {
 				return false;
 			}
 		}
+	}
+
+	public class ReflectionConstraints : GenericConstraints
+	{
+		GenericParameterAttributes attrs;
+		Type base_type;
+		Type class_constraint;
+		Type[] iface_constraints;
+		string name;
+
+		public static GenericConstraints GetConstraints (Type t)
+		{
+			Type[] constraints = t.GetGenericParameterConstraints ();
+			GenericParameterAttributes attrs = t.GenericParameterAttributes;
+			if (constraints.Length == 0 && attrs == GenericParameterAttributes.None)
+				return null;
+			return new ReflectionConstraints (t.Name, constraints, attrs);
+		}
+
+		private ReflectionConstraints (string name, Type[] constraints, GenericParameterAttributes attrs)
+		{
+			this.name = name;
+			this.attrs = attrs;
+
+			if ((constraints.Length > 0) && !constraints[0].IsInterface) {
+				class_constraint = constraints[0];
+				iface_constraints = new Type[constraints.Length - 1];
+				Array.Copy (constraints, 1, iface_constraints, 0, constraints.Length - 1);
+			} else
+				iface_constraints = constraints;
+
+			if (HasValueTypeConstraint)
+				base_type = TypeManager.value_type;
+			else if (class_constraint != null)
+				base_type = class_constraint;
+			else
+				base_type = TypeManager.object_type;
+		}
+
+		public override string TypeParameter
+		{
+			get { return name; }
+		}
+
+		public override GenericParameterAttributes Attributes
+		{
+			get { return attrs; }
+		}
+
+		public override Type ClassConstraint
+		{
+			get { return class_constraint; }
+		}
+
+		public override Type EffectiveBaseClass
+		{
+			get { return base_type; }
+		}
+
+		public override Type[] InterfaceConstraints
+		{
+			get { return iface_constraints; }
+		}
+	}
+
+	public enum Variance
+	{
+		None,
+		Covariant,
+		Contravariant
 	}
 
 	public enum SpecialConstraint
@@ -577,13 +647,18 @@ namespace Mono.CSharp {
 		Constraints constraints;
 		GenericTypeParameterBuilder type;
 		MemberCache member_cache;
+		Variance variance;
 
 		public TypeParameter (DeclSpace parent, DeclSpace decl, string name,
-				      Constraints constraints, Attributes attrs, Location loc)
+				      Constraints constraints, Attributes attrs, Variance variance, Location loc)
 			: base (parent, new MemberName (name, loc), attrs)
 		{
 			this.decl = decl;
 			this.constraints = constraints;
+			this.variance = variance;
+			if (variance != Variance.None && !(decl is Interface) && !(decl is Delegate)) {
+				Report.Error (-36, loc, "Generic variance can only be used with interfaces and delegates");
+			}
 		}
 
 		public GenericConstraints GenericConstraints {
@@ -596,6 +671,10 @@ namespace Mono.CSharp {
 
 		public DeclSpace DeclSpace {
 			get { return decl; }
+		}
+
+		public Variance Variance {
+			get { return variance; }
 		}
 
 		public Type Type {
@@ -752,15 +831,22 @@ namespace Mono.CSharp {
 
 		public void SetConstraints (GenericTypeParameterBuilder type)
 		{
-			if (gc == null)
-				return;
+			GenericParameterAttributes attr = GenericParameterAttributes.None;
+			if (variance == Variance.Contravariant)
+				attr |= GenericParameterAttributes.Contravariant;
+			else if (variance == Variance.Covariant)
+				attr |= GenericParameterAttributes.Covariant;
 
-			if (gc.HasClassConstraint || gc.HasValueTypeConstraint)
-				type.SetBaseTypeConstraint (gc.EffectiveBaseClass);
+			if (gc != null) {
+				if (gc.HasClassConstraint || gc.HasValueTypeConstraint)
+					type.SetBaseTypeConstraint (gc.EffectiveBaseClass);
 
-			type.SetInterfaceConstraints (gc.InterfaceConstraints);
-			type.SetGenericParameterAttributes (gc.Attributes);
-			TypeManager.RegisterBuilder (type, gc.InterfaceConstraints);
+				attr |= gc.Attributes;
+				type.SetInterfaceConstraints (gc.InterfaceConstraints);
+				TypeManager.RegisterBuilder (type, gc.InterfaceConstraints);
+			}
+			
+			type.SetGenericParameterAttributes (attr);
 		}
 
 		/// <summary>
@@ -815,8 +901,7 @@ namespace Mono.CSharp {
 			return true;
 		}
 
-		public override void ApplyAttributeBuilder (Attribute a,
-							    CustomAttributeBuilder cb)
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
 			type.SetCustomAttribute (cb);
 		}
@@ -1171,16 +1256,29 @@ namespace Mono.CSharp {
 	public class TypeParameterName : SimpleName
 	{
 		Attributes attributes;
+		Variance variance;
 
 		public TypeParameterName (string name, Attributes attrs, Location loc)
+			: this (name, attrs, Variance.None, loc)
+		{
+		}
+
+		public TypeParameterName (string name, Attributes attrs, Variance variance, Location loc)
 			: base (name, loc)
 		{
 			attributes = attrs;
+			this.variance = variance;
 		}
 
 		public Attributes OptAttributes {
 			get {
 				return attributes;
+			}
+		}
+
+		public Variance Variance {
+			get {
+				return variance;
 			}
 		}
 	}
@@ -1267,19 +1365,45 @@ namespace Mono.CSharp {
 			return ConstraintChecker.CheckConstraints (ec, open_type, gen_params, args.Arguments, loc);
 		}
 
+		static bool IsVariant (Type type)
+		{
+			return (type.GenericParameterAttributes & GenericParameterAttributes.VarianceMask) != 0;
+		}
+	
+		static bool IsCovariant (Type type)
+		{
+			return (type.GenericParameterAttributes & GenericParameterAttributes.Covariant) != 0;
+		}
+	
+		static bool IsContravariant (Type type)
+		{
+			return (type.GenericParameterAttributes & GenericParameterAttributes.Contravariant) != 0;
+		}
+	
+		public bool VerifyVariantTypeParameters ()
+		{
+			for (int i = 0; i < args.Count; i++) {
+				Type argument = args.Arguments[i];
+				if (argument.IsGenericParameter && IsVariant (argument)) {
+					if (IsContravariant (argument) && !IsContravariant (gen_params[i])) {
+						Report.Error (-34, loc, "Contravariant type parameters can only be used " +
+				              "as type arguments in contravariant positions");
+						return false;
+					}
+					else if (IsCovariant (argument) && !IsCovariant (gen_params[i])) {
+						Report.Error (-35, loc, "Covariant type parameters can only be used " +
+				              "as type arguments in covariant positions");
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		
 		public override bool CheckAccessLevel (DeclSpace ds)
 		{
 			return ds.CheckAccessLevel (open_type);
-		}
-
-		public override bool AsAccessible (DeclSpace ds)
-		{
-			foreach (Type t in args.Arguments) {
-				if (!ds.IsAccessibleAs (t))
-					return false;
-			}
-
-			return ds.IsAccessibleAs (open_type);
 		}
 
 		public override bool IsClass {
@@ -1287,7 +1411,7 @@ namespace Mono.CSharp {
 		}
 
 		public override bool IsValueType {
-			get { return open_type.IsValueType; }
+			get { return TypeManager.IsStruct (open_type); }
 		}
 
 		public override bool IsInterface {
@@ -1374,7 +1498,7 @@ namespace Mono.CSharp {
 				if (!atype.IsGenericType)
 #endif
 				is_class = atype.IsClass || atype.IsInterface;
-				is_struct = atype.IsValueType && !TypeManager.IsNullableType (atype);
+				is_struct = TypeManager.IsValueType (atype) && !TypeManager.IsNullableType (atype);
 			}
 
 			//
@@ -1425,7 +1549,7 @@ namespace Mono.CSharp {
 			if (!gc.HasConstructorConstraint)
 				return true;
 
-			if (TypeManager.IsBuiltinType (atype) || atype.IsValueType)
+			if (TypeManager.IsBuiltinType (atype) || TypeManager.IsValueType (atype))
 				return true;
 
 			if (HasDefaultConstructor (atype))
@@ -1622,10 +1746,10 @@ namespace Mono.CSharp {
 	public class GenericMethod : DeclSpace
 	{
 		FullNamedExpression return_type;
-		Parameters parameters;
+		ParametersCompiled parameters;
 
 		public GenericMethod (NamespaceEntry ns, DeclSpace parent, MemberName name,
-				      FullNamedExpression return_type, Parameters parameters)
+				      FullNamedExpression return_type, ParametersCompiled parameters)
 			: base (ns, parent, name, null)
 		{
 			this.return_type = return_type;
@@ -1768,7 +1892,7 @@ namespace Mono.CSharp {
 				// become equal.
 				//
 				while (b.IsArray) {
-					b = b.GetElementType ();
+					b = GetElementType (b);
 					if (a.Equals (b))
 						return false;
 				}
@@ -1836,8 +1960,8 @@ namespace Mono.CSharp {
 				if (a.GetArrayRank () != b.GetArrayRank ())
 					return false;
 			
-				a = a.GetElementType ();
-				b = b.GetElementType ();
+				a = GetElementType (a);
+				b = GetElementType (b);
 
 				return MayBecomeEqualGenericTypes (a, b, class_inferred, method_inferred);
 			}
@@ -1936,9 +2060,6 @@ namespace Mono.CSharp {
 
 		public static ATypeInference CreateInstance (ArrayList arguments)
 		{
-			if (RootContext.Version == LanguageVersion.ISO_2)
-				return new TypeInferenceV2 (arguments);
-
 			return new TypeInferenceV3 (arguments);
 		}
 
@@ -1950,178 +2071,6 @@ namespace Mono.CSharp {
 
 		public abstract Type[] InferMethodArguments (EmitContext ec, MethodBase method);
 		public abstract Type[] InferDelegateArguments (MethodBase method);
-	}
-
-	//
-	// Implements C# 2.0 type inference
-	//
-	class TypeInferenceV2 : ATypeInference
-	{
-		public TypeInferenceV2 (ArrayList arguments)
-			: base (arguments)
-		{
-		}
-
-		public override Type[] InferDelegateArguments (MethodBase method)
-		{
-			AParametersCollection pd = TypeManager.GetParameterData (method);
-			if (arg_count != pd.Count)
-				return null;
-
-			Type[] method_args = method.GetGenericArguments ();
-			Type[] inferred_types = new Type[method_args.Length];
-
-			Type[] param_types = new Type[pd.Count];
-			Type[] arg_types = (Type[])arguments.ToArray (typeof (Type));
-
-			for (int i = 0; i < arg_count; i++) {
-				param_types[i] = pd.Types [i];
-			}
-
-			if (!InferTypeArguments (param_types, arg_types, inferred_types))
-				return null;
-
-			return inferred_types;
-		}
-
-		public override Type[] InferMethodArguments (EmitContext ec, MethodBase method)
-		{
-			AParametersCollection pd = TypeManager.GetParameterData (method);
-			Type[] method_generic_args = method.GetGenericArguments ();
-			Type [] inferred_types = new Type [method_generic_args.Length];
-			Type[] arg_types = new Type [pd.Count];
-
-			int a_count = arg_types.Length;
-			if (pd.HasParams)
-				--a_count;
-
-			for (int i = 0; i < a_count; i++) {
-				Argument a = (Argument) arguments[i];
-				if (a.Expr is NullLiteral || a.Expr is MethodGroupExpr || a.Expr is AnonymousMethodExpression)
-					continue;
-
-				if (!TypeInferenceV2.UnifyType (pd.Types [i], a.Type, inferred_types))
-					return null;
-			}
-
-			if (pd.HasParams) {
-				Type element_type = TypeManager.GetElementType (pd.Types [a_count]);
-				for (int i = a_count; i < arg_count; i++) {
-					Argument a = (Argument) arguments [i];
-					if (a.Expr is NullLiteral || a.Expr is MethodGroupExpr || a.Expr is AnonymousMethodExpression)
-						continue;
-
-					if (!TypeInferenceV2.UnifyType (element_type, a.Type, inferred_types))
-						return null;
-				}
-			}
-
-			for (int i = 0; i < inferred_types.Length; i++)
-				if (inferred_types [i] == null)
-					return null;
-
-			return inferred_types;
-		}
-
-		static bool InferTypeArguments (Type[] param_types, Type[] arg_types,
-				Type[] inferred_types)
-		{
-			for (int i = 0; i < arg_types.Length; i++) {
-				if (arg_types[i] == null)
-					continue;
-
-				if (!UnifyType (param_types[i], arg_types[i], inferred_types))
-					return false;
-			}
-
-			for (int i = 0; i < inferred_types.Length; ++i)
-				if (inferred_types[i] == null)
-					return false;
-
-			return true;
-		}
-
-		public static bool UnifyType (Type pt, Type at, Type[] inferred)
-		{
-			if (pt.IsGenericParameter) {
-				if (pt.DeclaringMethod == null)
-					return pt == at;
-
-				int pos = pt.GenericParameterPosition;
-
-				if (inferred [pos] == null)
-					inferred [pos] = at;
-
-				return inferred [pos] == at;
-			}
-
-			if (!pt.ContainsGenericParameters) {
-				if (at.ContainsGenericParameters)
-					return UnifyType (at, pt, inferred);
-				else
-					return true;
-			}
-
-			if (at.IsArray) {
-				if (pt.IsArray) {
-					if (at.GetArrayRank () != pt.GetArrayRank ())
-						return false;
-
-					return UnifyType (pt.GetElementType (), at.GetElementType (), inferred);
-				}
-
-				if (!pt.IsGenericType)
-					return false;
-
-				Type gt = pt.GetGenericTypeDefinition ();
-				if ((gt != TypeManager.generic_ilist_type) && (gt != TypeManager.generic_icollection_type) &&
-					(gt != TypeManager.generic_ienumerable_type))
-					return false;
-
-				Type[] args = TypeManager.GetTypeArguments (pt);
-				return UnifyType (args[0], at.GetElementType (), inferred);
-			}
-
-			if (pt.IsArray) {
-				if (!at.IsArray ||
-					(pt.GetArrayRank () != at.GetArrayRank ()))
-					return false;
-
-				return UnifyType (pt.GetElementType (), at.GetElementType (), inferred);
-			}
-
-			if (pt.IsByRef && at.IsByRef)
-				return UnifyType (pt.GetElementType (), at.GetElementType (), inferred);
-			ArrayList list = new ArrayList ();
-			if (at.IsGenericType)
-				list.Add (at);
-			for (Type bt = at.BaseType; bt != null; bt = bt.BaseType)
-				list.Add (bt);
-
-			list.AddRange (TypeManager.GetInterfaces (at));
-
-			foreach (Type type in list) {
-				if (!type.IsGenericType)
-					continue;
-
-				if (TypeManager.DropGenericTypeArguments (pt) != TypeManager.DropGenericTypeArguments (type))
-					continue;
-
-				if (!UnifyTypes (pt.GetGenericArguments (), type.GetGenericArguments (), inferred))
-					return false;
-			}
-
-			return true;
-		}
-
-		static bool UnifyTypes (Type[] pts, Type[] ats, Type[] inferred)
-		{
-			for (int i = 0; i < ats.Length; i++) {
-				if (!UnifyType (pts [i], ats [i], inferred))
-					return false;
-			}
-			return true;
-		}
 	}
 
 	//
@@ -2228,7 +2177,7 @@ namespace Mono.CSharp {
 					continue;
 				}
 
-				if (a.Expr is NullLiteral)
+				if (a.Expr.Type == TypeManager.null_type)
 					continue;
 
 				//

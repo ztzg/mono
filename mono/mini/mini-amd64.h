@@ -221,6 +221,10 @@ typedef struct {
 
 #endif
 
+#ifdef __OpenBSD__
+#undef MONO_ARCH_USE_SIGACTION
+#endif
+
 #endif /* PLATFORM_WIN32 */
 
 #if defined (__NetBSD__)
@@ -245,7 +249,7 @@ typedef struct {
 
 #define MONO_ARCH_NOMAP32BIT
 
-#elif defined (__FreeBSD__)
+#elif defined (__FreeBSD__) || defined (__OpenBSD__)
 
 #define REG_RAX 7
 #define REG_RCX 4
@@ -297,7 +301,7 @@ typedef struct {
 #define MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE 1
 #define MONO_ARCH_HAVE_ATOMIC_ADD 1
 #define MONO_ARCH_HAVE_ATOMIC_EXCHANGE 1
-#define MONO_ARCH_HAVE_ATOMIC_CAS_IMM 1
+#define MONO_ARCH_HAVE_ATOMIC_CAS 1
 #define MONO_ARCH_HAVE_FULL_AOT_TRAMPOLINES 1
 #define MONO_ARCH_HAVE_IMT 1
 #define MONO_ARCH_HAVE_TLS_GET 1
@@ -315,6 +319,9 @@ typedef struct {
 #define MONO_ARCH_HAVE_EXCEPTIONS_INIT 1
 #define MONO_ARCH_ENABLE_GLOBAL_RA 1
 #define MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK 1
+#define MONO_ARCH_HAVE_LIVERANGE_OPS 1
+#define MONO_ARCH_HAVE_XP_UNWIND 1
+#define MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX 1
 #if !defined(PLATFORM_WIN32) && !defined(HAVE_MOVING_COLLECTOR)
 #define MONO_ARCH_MONITOR_OBJECT_REG AMD64_RDI
 #endif
@@ -349,6 +356,9 @@ mono_amd64_throw_exception (guint64 dummy1, guint64 dummy2, guint64 dummy3, guin
 							guint64 r14, guint64 r15, guint64 rdi, guint64 rsi, 
 							guint64 rax, guint64 rcx, guint64 rdx,
 							guint64 rethrow);
+
+guint64
+mono_amd64_get_original_ip (void) MONO_INTERNAL;
 
 guint8*
 mono_amd64_emit_tls_get (guint8* code, int dreg, int tls_offset) MONO_INTERNAL;

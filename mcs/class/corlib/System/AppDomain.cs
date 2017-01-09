@@ -64,7 +64,11 @@ namespace System {
 	[ClassInterface(ClassInterfaceType.None)]
 	public sealed class AppDomain : MarshalByRefObject , _AppDomain , IEvidenceFactory
 	{
+        #pragma warning disable 169
+        #region Sync with object-internals.h
 		IntPtr _mono_app_domain;
+		#endregion
+        #pragma warning restore 169
 		static string _process_guid;
 
 		[ThreadStatic]
@@ -972,6 +976,7 @@ namespace System {
 				info.ShadowCopyFiles = null;
 #endif
 
+
 			return info;
 		}
 
@@ -1256,10 +1261,12 @@ namespace System {
 #if NET_2_0
 
 		public event ResolveEventHandler ReflectionOnlyAssemblyResolve;
-		
+
+        #pragma warning disable 649
 		private ActivationContext _activation;
 		private ApplicationIdentity _applicationIdentity;
 		private AppDomainManager _domain_manager;
+        #pragma warning restore 649
 
 		// properties
 

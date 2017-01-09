@@ -1,6 +1,20 @@
-2009-02-21  Jb Evain  <jbevain@novell.com>
+2009-02-28  Zoltan Varga  <vargaz@gmail.com>
 
-	* EventHandlerList.cs: fix the 1.1 profile.
+	* EventHandlerList.cs: Change this to use a linked list as stated by the
+	MSDN docs.
+
+2009-02-27  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* ReflectionPropertyDescriptor.cs: Don't cache getter and
+	setter properties. Cache instead the PropertyInfo objects
+	that defined them.
+
+	PropertyInfo::Get/SetValue is faster than calling the method
+	throught reflection.	
+
+2009-02-21  Kornél Pál  <kornelpal@gmail.com>
+
+	* EventHandlerList.cs: Fix profile 1.x build by not using HandlerEntry.
 
 2009-02-21 Gonzalo Paniagua Javier <gonzalo@novell.com>
 

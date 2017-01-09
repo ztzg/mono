@@ -1,6 +1,26 @@
-2009-01-21  Mark Probst  <mark.probst@gmail.com>
+2009-03-10  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r123959.
+	* TypeBuilderTest.cs: Add a test for #483852.
+
+2009-02-23  Zoltan Varga  <vargaz@gmail.com>
+
+	* TypeBuilderTest.cs: Add more tests for user types.
+
+2009-02-21  Jb Evain  <jbevain@novell.com>
+
+	* ModuleBuilderTest.cs: add a test accessing the property
+	Module.ModuleVersionId on a dynamic module.
+	Test for #471302.
+
+2009-02-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* TypeBuilderTest.cs: Add minimal tests for user types + Ref.Emit.
+
+2009-02-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* TypeBuilderTest.cs: Make this test quiet.
+
+2009-01-21  Mark Probst  <mark.probst@gmail.com>
 
 	* TypeBuilderTest.cs: Add test for fields in dynamic generic
 	classes.

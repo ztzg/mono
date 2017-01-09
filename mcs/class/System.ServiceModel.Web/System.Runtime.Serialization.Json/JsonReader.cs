@@ -144,6 +144,10 @@ namespace System.Runtime.Serialization.Json
 				case AttributeState.RuntimeTypeValue:
 					mod += 2;
 					break;
+				case AttributeState.None:
+					if (NodeType == XmlNodeType.Text)
+						mod++;
+					break;
 				}
 				return read_state != ReadState.Interactive ? 0 : elements.Count - 1 + mod;
 			}
@@ -161,7 +165,6 @@ namespace System.Runtime.Serialization.Json
 			}
 		}
 
-#if !NET_2_1
 		public override bool HasValue {
 			get {
 				switch (NodeType) {
@@ -173,7 +176,6 @@ namespace System.Runtime.Serialization.Json
 				}
 			}
 		}
-#endif
 
 		public override bool IsEmptyElement {
 			get { return false; }
@@ -341,7 +343,6 @@ namespace System.Runtime.Serialization.Json
 				return MoveToAttribute ("__type");
 		}
 
-#if !NET_2_1
 		public override bool ReadAttributeValue ()
 		{
 			switch (attr_state) {
@@ -354,7 +355,6 @@ namespace System.Runtime.Serialization.Json
 			}
 			return false;
 		}
-#endif
 
 		public override void ResolveEntity ()
 		{
@@ -516,7 +516,7 @@ namespace System.Runtime.Serialization.Json
 					ReadNumber (ch);
 					return true;
 				}
-				throw XmlError ("Unexpected token");
+				throw XmlError (String.Format ("Unexpected token: '{0}' ({1:X04})", ch, (int) ch));
 			}
 		}
 

@@ -4,7 +4,7 @@
 // Authors:
 //	Marek Habersack <mhabersack@novell.com>
 //
-// (C) 2007 Novell, Inc
+// Copyright (C) 2007-2009 Novell, Inc
 //
 
 //
@@ -38,7 +38,7 @@ using System.Reflection;
 using System.Web;
 
 namespace System.Web.Compilation {
-	[BuildProviderAppliesTo (BuildProviderAppliesTo.Web|BuildProviderAppliesTo.Code)]
+	[BuildProviderAppliesTo (BuildProviderAppliesTo.Code)]
 	sealed class XsdBuildProvider : BuildProvider {
 		public XsdBuildProvider()
 		{

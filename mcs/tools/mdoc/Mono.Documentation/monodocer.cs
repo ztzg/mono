@@ -5,6 +5,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -22,67 +23,40 @@ using StringToXmlNodeMap   = System.Collections.Generic.Dictionary<string, Syste
 
 namespace Mono.Documentation {
 
-class MDocUpdaterOptions 
-{
-	public string path = null;
-	public string updateto = null;
-	public List<string> assembly = null;
-	public List<string> type = null;
-	public string @namespace = null;
-	public bool delete = false;
-	public bool overrides = true;
-	public bool ignoremembers = false;
-	public bool ignore_extra_docs = false;
-	public bool no_assembly_versions = false;
-	public string name;
-	public string import;
-	public bool pretty = true;
-	public string since;
-	public bool show_exceptions;
-	public ExceptionLocations? exceptions;
-}
-
 class MDocUpdater : MDocCommand
 {
+	string srcPath;
+	List<AssemblyDefinition> assemblies;
 	
-	static string srcPath;
-	static List<AssemblyDefinition> assemblies;
+	bool delete;
+	bool show_exceptions;
+	bool no_assembly_versions;
+	ExceptionLocations? exceptions;
 	
-	static bool nooverrides = true, delete = false, ignoremembers = false;
-	static bool pretty = false;
-	static bool show_exceptions = false;
-	static bool no_assembly_versions;
-	static ExceptionLocations? exceptions;
-	
-	static int additions = 0, deletions = 0;
+	int additions = 0, deletions = 0;
 
-	static string name;
 	static XmlDocument slashdocs;
-	static XmlReader ecmadocs;
+	XmlReader ecmadocs;
 
-	static string since;
+	string since;
 
-	static MemberFormatter csharpFullFormatter  = new CSharpFullMemberFormatter ();
-	static MemberFormatter csharpFormatter      = new CSharpMemberFormatter ();
-	static MemberFormatter docTypeFormatter     = new DocTypeMemberFormatter ();
-	static MemberFormatter slashdocFormatter    = new SlashDocMemberFormatter ();
-	static MemberFormatter filenameFormatter    = new FileNameMemberFormatter ();
+	static readonly MemberFormatter csharpFullFormatter  = new CSharpFullMemberFormatter ();
+	static readonly MemberFormatter csharpFormatter      = new CSharpMemberFormatter ();
+	static readonly MemberFormatter docTypeFormatter     = new DocTypeMemberFormatter ();
+	static readonly MemberFormatter slashdocFormatter    = new SlashDocMemberFormatter ();
+	static readonly MemberFormatter filenameFormatter    = new FileNameMemberFormatter ();
 
-	static MyXmlNodeList extensionMethods = new MyXmlNodeList ();
+	MyXmlNodeList extensionMethods = new MyXmlNodeList ();
 
 	public override void Run (IEnumerable<string> args)
 	{
-		var opts = new MDocUpdaterOptions {
-			overrides        = true,
-			pretty           = true,
-			show_exceptions  = DebugOutput,
-		};
-
-		opts.type = new List<string> ();
+		show_exceptions = DebugOutput;
+		string import = null;
+		var types = new List<string> ();
 		var p = new OptionSet () {
 			{ "delete",
 				"Delete removed members from the XML files.",
-				v => opts.delete = v != null },
+				v => delete = v != null },
 			{ "exceptions:",
 			  "Document potential exceptions that members can generate.  {SOURCES} " +
 				"is a comma-separated list of:\n" +
@@ -91,13 +65,13 @@ class MDocUpdater : MDocCommand
 				"  all      Record all possible exceptions\n" +
 				"If nothing is specified, then only exceptions from the member will " +
 				"be listed.",
-				v => opts.exceptions = ParseExceptionLocations (v) },
+				v => exceptions = ParseExceptionLocations (v) },
 			{ "f=",
 				"Specify a {FLAG} to alter behavior.  See later -f* options for available flags.",
 				v => {
 					switch (v) {
 						case "no-assembly-versions":
-							opts.no_assembly_versions = true;
+							no_assembly_versions = true;
 							break;
 						default:
 							throw new Exception ("Unsupported flag `" + v + "'.");
@@ -105,30 +79,73 @@ class MDocUpdater : MDocCommand
 				} },
 			{ "fno-assembly-versions",
 				"Do not generate //AssemblyVersion elements.",
-				v => opts.no_assembly_versions = v != null },
+				v => no_assembly_versions = v != null },
 			{ "i|import=", 
 				"Import documentation from {FILE}.",
-				v => opts.import = v },
+				v => import = v },
 			{ "o|out=",
 				"Root {DIRECTORY} to generate/update documentation.",
-				v => opts.path = v },
+				v => srcPath = v },
 			{ "since=",
 				"Manually specify the assembly {VERSION} that new members were added in.",
-				v => opts.since = v },
+				v => since = v },
 			{ "type=",
 			  "Only update documentation for {TYPE}.",
-				v => opts.type.Add (v) },
+				v => types.Add (v) },
 		};
-		opts.assembly = Parse (p, args, "update", 
+		var assemblies = Parse (p, args, "update", 
 				"[OPTIONS]+ ASSEMBLIES",
 				"Create or update documentation from ASSEMBLIES.");
-		if (opts.assembly == null)
+		if (assemblies == null)
 			return;
-		if (opts.assembly.Count == 0)
-			base.Error ("No assemblies specified.");
+		if (assemblies.Count == 0)
+			Error ("No assemblies specified.");
 
-		Run (opts);
-		opts.name = ""; // remove warning about unused member
+		// PARSE BASIC OPTIONS AND LOAD THE ASSEMBLY TO DOCUMENT
+		
+		if (srcPath == null)
+			throw new InvalidOperationException("The --out option is required.");
+		
+		this.assemblies = assemblies.Select (a => LoadAssembly (a)).ToList ();
+
+		if (import != null && ecmadocs == null && slashdocs == null) {
+			try {
+				XmlReader r = new XmlTextReader (import);
+				if (r.Read ()) {
+					while (r.NodeType != XmlNodeType.Element) {
+						if (!r.Read ())
+							Error ("Unable to read XML file: {0}.", import);
+					}
+					if (r.LocalName == "doc") {
+						slashdocs = new XmlDocument();
+						slashdocs.Load (import);
+					}
+					else if (r.LocalName == "Libraries") {
+						ecmadocs = new XmlTextReader (import);
+					}
+					else
+						Error ("Unsupported XML format within {0}.", import);
+				}
+				r.Close ();
+			} catch (Exception e) {
+				Environment.ExitCode = 1;
+				Error ("Could not load XML file: {0}.", e.Message);
+			}
+		}
+		
+		// PERFORM THE UPDATES
+		
+		if (types.Count > 0)
+			DoUpdateTypes (srcPath, types, srcPath);
+#if false
+		else if (opts.@namespace != null)
+			DoUpdateNS (opts.@namespace, Path.Combine (opts.path, opts.@namespace),
+					Path.Combine (dest_dir, opts.@namespace));
+#endif
+		else
+			DoUpdateAssemblies (srcPath, srcPath);
+
+		Console.WriteLine("Members Added: {0}, Members Deleted: {1}", additions, deletions);
 	}
 
 	static ExceptionLocations ParseExceptionLocations (string s)
@@ -138,87 +155,19 @@ class MDocUpdater : MDocCommand
 			return loc;
 		foreach (var type in s.Split (',')) {
 			switch (type) {
+				case "added":   loc |= ExceptionLocations.AddedMembers; break;
+				case "all":     loc |= ExceptionLocations.Assembly | ExceptionLocations.DependentAssemblies; break;
 				case "asm":     loc |= ExceptionLocations.Assembly; break;
 				case "depasm":  loc |= ExceptionLocations.DependentAssemblies; break;
-				case "all":     loc = ExceptionLocations.All; break;
 				default:        throw new NotSupportedException ("Unsupported --exceptions value: " + type);
 			}
 		}
 		return loc;
 	}
 
-	static void Run (MDocUpdaterOptions opts)
+	private void Warning (string format, params object[] args)
 	{
-		nooverrides = !opts.overrides;
-		delete = opts.delete;
-		ignoremembers = opts.ignoremembers;
-		name = opts.name;
-		pretty = opts.pretty;
-		since = opts.since;
-		show_exceptions = opts.show_exceptions;
-		exceptions = opts.exceptions;
-		no_assembly_versions = opts.no_assembly_versions;
-
-		// PARSE BASIC OPTIONS AND LOAD THE ASSEMBLY TO DOCUMENT
-		
-		if (opts.path == null)
-			throw new InvalidOperationException("The --out option is required.");
-		
-		srcPath = opts.path;
-
-		if (opts.type != null && opts.type.Count > 0 && opts.@namespace != null)
-			throw new InvalidOperationException("You cannot specify both 'type' and 'namespace'.");
-		
-		if (opts.assembly == null)
-			throw new InvalidOperationException("The assembly option is required.");
-			
-		assemblies = opts.assembly.Select (a => LoadAssembly (a)).ToList ();
-
-		if (opts.import != null && ecmadocs == null && slashdocs == null) {
-			try {
-				XmlReader r = new XmlTextReader (opts.import);
-				if (r.Read ()) {
-					while (r.NodeType != XmlNodeType.Element) {
-						if (!r.Read ())
-							throw new Exception ("Unable to read XML file: " + 
-									opts.import);
-					}
-					if (r.LocalName == "doc") {
-						slashdocs = new XmlDocument();
-						slashdocs.Load (opts.import);
-					}
-					else if (r.LocalName == "Libraries") {
-						ecmadocs = new XmlTextReader (opts.import);
-					}
-					else
-						throw new Exception ("Unsupported XML format within " + opts.import);
-				}
-				r.Close ();
-			} catch (Exception e) {
-				Error ("Could not load XML file: {0}", e.Message);
-				Environment.ExitCode = 1;
-				return;
-			}
-		}
-		
-		// PERFORM THE UPDATES
-		
-		string dest_dir = opts.updateto != null ? opts.updateto : opts.path;
-		if (opts.type != null && opts.type.Count > 0)
-			DoUpdateTypes(opts.path, opts.type, dest_dir);
-		else if (opts.@namespace != null)
-			DoUpdateNS (opts.@namespace, Path.Combine (opts.path, opts.@namespace),
-					Path.Combine (dest_dir, opts.@namespace));
-		else
-			DoUpdateAssemblies(opts.path, dest_dir);
-
-		Console.WriteLine("Members Added: {0}, Members Deleted: {1}", additions, deletions);
-	}
-
-	private static new void Error (string format, params object[] args)
-	{
-		Console.Error.Write ("mdoc: ");
-		Console.Error.WriteLine (format, args);
+		Message (TraceLevel.Warning, "mdoc: " + format, args);
 	}
 	
 	private static AssemblyDefinition LoadAssembly (string name)
@@ -246,6 +195,56 @@ class MDocUpdater : MDocCommand
 		writer.IndentChar = ' ';
 		element.WriteTo(writer);
 		output.WriteLine();	
+	}
+
+	private static void WriteFile (string filename, FileMode mode, Action<TextWriter> action)
+	{
+		if (!File.Exists (filename)) {
+			using (var writer = OpenWrite (filename, mode))
+				action (writer);
+			return;
+		}
+
+		string tmpFile = filename + ".tmp";
+		bool move = true;
+
+		try {
+			using (var writer = OpenWrite (tmpFile, mode))
+				action (writer);
+
+			using (var a = File.OpenRead (filename))
+			using (var b = File.OpenRead (tmpFile)) {
+				if (a.Length == b.Length)
+					move = !FileContentsIdentical (a, b);
+			}
+
+			if (move) {
+				File.Delete (filename);
+				File.Move (tmpFile, filename);
+			}
+		}
+		finally {
+			if (!move && File.Exists (tmpFile))
+				File.Delete (tmpFile);
+		}
+	}
+
+	static bool FileContentsIdentical (Stream a, Stream b)
+	{
+		byte[] ba = new byte[4096];
+		byte[] bb = new byte[4096];
+		int ra, rb;
+
+		while ((ra = a.Read (ba, 0, ba.Length)) > 0 &&
+				(rb = b.Read (bb, 0, bb.Length)) > 0) {
+			if (ra != rb)
+				return false;
+			for (int i = 0; i < ra; ++i) {
+				if (ba [i] != bb [i])
+					return false;
+			}
+		}
+		return true;
 	}
 
 	private static void OrderTypeAttributes (XmlElement e)
@@ -289,7 +288,8 @@ class MDocUpdater : MDocCommand
 		}
 	}
 	
-	private static XmlDocument CreateIndexStub() {
+	private XmlDocument CreateIndexStub()
+	{
 		XmlDocument index = new XmlDocument();
 
 		XmlElement index_root = index.CreateElement("Overview");
@@ -334,12 +334,11 @@ class MDocUpdater : MDocCommand
 		index_remarks.InnerText = "To be added.";
 		index_docs.AppendChild(index_remarks);
 
-		using (TextWriter writer = OpenWrite (outdir + "/ns-" + ns + ".xml",  FileMode.CreateNew)) {
-			WriteXml(index.DocumentElement, writer);
-		}
+		WriteFile (outdir + "/ns-" + ns + ".xml", FileMode.CreateNew, 
+				writer => WriteXml (index.DocumentElement, writer));
 	}
 
-	public static void DoUpdateTypes (string basepath, List<string> typenames, string dest)
+	public void DoUpdateTypes (string basepath, List<string> typenames, string dest)
 	{
 		var found = new HashSet<string> ();
 		foreach (AssemblyDefinition assembly in assemblies) {
@@ -354,10 +353,10 @@ class MDocUpdater : MDocCommand
 			throw new InvalidOperationException("Type(s) not found: " + string.Join (", ", notFound.ToArray ()));
 	}
 
-	public static string DoUpdateType(TypeDefinition type, string basepath, string dest, XmlReader ecmaDocsType)
+	public string DoUpdateType (TypeDefinition type, string basepath, string dest, XmlReader ecmaDocsType)
 	{
 		if (type.Namespace == null)
-			Error ("warning: The type `{0}' is in the root namespace.  This may cause problems with display within monodoc.",
+			Warning ("warning: The type `{0}' is in the root namespace.  This may cause problems with display within monodoc.",
 					type.FullName);
 		if (!IsPublic (type))
 			return null;
@@ -381,7 +380,6 @@ class MDocUpdater : MDocCommand
 		if (file.Exists) {
 			// Update
 			XmlDocument basefile = new XmlDocument();
-			if (!pretty) basefile.PreserveWhitespace = true;
 			try {
 				basefile.Load(typefile);
 			} catch (Exception e) {
@@ -404,13 +402,13 @@ class MDocUpdater : MDocCommand
 		return reltypefile;
 	}
 
-	public static void DoUpdateNS(string ns, string nspath, string outpath) {
+	public void DoUpdateNS (string ns, string nspath, string outpath)
+	{
 		Dictionary<TypeDefinition, object> seenTypes = new Dictionary<TypeDefinition,object> ();
 		AssemblyDefinition                  assembly = assemblies [0];
 
 		foreach (System.IO.FileInfo file in new System.IO.DirectoryInfo(nspath).GetFiles("*.xml")) {
 			XmlDocument basefile = new XmlDocument();
-			if (!pretty) basefile.PreserveWhitespace = true;
 			string typefile = Path.Combine(nspath, file.Name);
 			try {
 				basefile.Load(typefile);
@@ -422,7 +420,7 @@ class MDocUpdater : MDocCommand
 				GetTypeFileName (basefile.SelectSingleNode("Type/@FullName").InnerText);
 			TypeDefinition type = assembly.GetType(typename);
 			if (type == null) {
-				Error ("Type no longer in assembly: " + typename);
+				Warning ("Type no longer in assembly: " + typename);
 				continue;
 			}			
 
@@ -480,7 +478,7 @@ class MDocUpdater : MDocCommand
 		return filename.ToString ();
 	}
 
-	private static void AddIndexAssembly (AssemblyDefinition assembly, XmlElement parent)
+	private void AddIndexAssembly (AssemblyDefinition assembly, XmlElement parent)
 	{
 		XmlElement index_assembly = parent.OwnerDocument.CreateElement("Assembly");
 		index_assembly.SetAttribute ("Name", assembly.Name.Name);
@@ -489,7 +487,7 @@ class MDocUpdater : MDocCommand
 		parent.AppendChild(index_assembly);
 	}
 
-	private static void DoUpdateAssemblies (string source, string dest) 
+	private void DoUpdateAssemblies (string source, string dest) 
 	{
 		string indexfile = dest + "/index.xml";
 		XmlDocument index;
@@ -504,14 +502,10 @@ class MDocUpdater : MDocCommand
 			index = CreateIndexStub();
 		}
 		
-		if (name == null) {
-			string defaultTitle = "Untitled";
-			if (assemblies.Count == 1)
-				defaultTitle = assemblies[0].Name.Name;
-			WriteElementInitialText(index.DocumentElement, "Title", defaultTitle);
-		} else {
-			WriteElementText(index.DocumentElement, "Title", name);
-		}
+		string defaultTitle = "Untitled";
+		if (assemblies.Count == 1)
+			defaultTitle = assemblies[0].Name.Name;
+		WriteElementInitialText(index.DocumentElement, "Title", defaultTitle);
 		
 		XmlElement index_types = WriteElement(index.DocumentElement, "Types");
 		XmlElement index_assemblies = WriteElement(index.DocumentElement, "Assemblies");
@@ -531,13 +525,13 @@ class MDocUpdater : MDocCommand
 		CleanupIndexTypes (index_types, goodfiles);
 		CleanupExtensions (index_types);
 
-		using (TextWriter writer = OpenWrite (indexfile, FileMode.Create))
-			WriteXml(index.DocumentElement, writer);
+		WriteFile (indexfile, FileMode.Create, 
+				writer => WriteXml(index.DocumentElement, writer));
 	}
 		
 	private static char[] InvalidFilenameChars = {'\\', '/', ':', '*', '?', '"', '<', '>', '|'};
 
-	private static void DoUpdateAssembly (AssemblyDefinition assembly, XmlElement index_types, string source, string dest, HashSet<string> goodfiles) 
+	private void DoUpdateAssembly (AssemblyDefinition assembly, XmlElement index_types, string source, string dest, HashSet<string> goodfiles) 
 	{
 		foreach (DocsTypeInfo docTypeInfo in GetTypes (assembly, null)) {
 			TypeDefinition type = docTypeInfo.Type;
@@ -597,7 +591,7 @@ class MDocUpdater : MDocCommand
 		}
 	}
 
-	static IEnumerable<Mono.Documentation.MDocUpdater.DocsTypeInfo> GetTypes (AssemblyDefinition assembly, List<string> forTypes)
+	IEnumerable<Mono.Documentation.MDocUpdater.DocsTypeInfo> GetTypes (AssemblyDefinition assembly, List<string> forTypes)
 	{
 		HashSet<string> seen = null;
 		if (forTypes != null)
@@ -743,7 +737,7 @@ class MDocUpdater : MDocCommand
 		return true;
 	}
 
-	private static void CleanupFiles (string dest, HashSet<string> goodfiles)
+	private void CleanupFiles (string dest, HashSet<string> goodfiles)
 	{
 		// Look for files that no longer correspond to types
 		foreach (System.IO.DirectoryInfo nsdir in new System.IO.DirectoryInfo(dest).GetDirectories("*")) {
@@ -776,7 +770,7 @@ class MDocUpdater : MDocCommand
 		);
 	}
 
-	private static string[] GetAssemblyVersions ()
+	private string[] GetAssemblyVersions ()
 	{
 		return (from a in assemblies select GetAssemblyVersion (a)).ToArray ();
 	}
@@ -795,7 +789,7 @@ class MDocUpdater : MDocCommand
 			n.ParentNode.RemoveChild (n);
 	}
 
-	private static void CleanupExtensions (XmlElement index_types)
+	private void CleanupExtensions (XmlElement index_types)
 	{
 		XmlNode e = index_types.SelectSingleNode ("/Overview/ExtensionMethods");
 		if (extensionMethods.Count == 0) {
@@ -836,7 +830,7 @@ class MDocUpdater : MDocCommand
 
 	static readonly XmlNodeComparer DefaultExtensionMethodComparer = new ExtensionMethodComparer ();
 		
-	public static void DoUpdateType2 (string message, XmlDocument basefile, TypeDefinition type, string output, bool insertSince, XmlReader ecmaDocsType)
+	public void DoUpdateType2 (string message, XmlDocument basefile, TypeDefinition type, string output, bool insertSince, XmlReader ecmaDocsType)
 	{
 		Console.WriteLine(message + ": " + type.FullName);
 		
@@ -855,7 +849,7 @@ class MDocUpdater : MDocCommand
 
 		// Update existing members.  Delete member nodes that no longer should be there,
 		// and remember what members are already documented so we don't add them again.
-		if (!ignoremembers) {
+		if (true) {
 			MyXmlNodeList todelete = new MyXmlNodeList ();
 			foreach (DocsNodeInfo info in GetDocumentationMembers (basefile, type, ecmaDocsType)) {
 				XmlElement oldmember  = info.Node;
@@ -864,7 +858,7 @@ class MDocUpdater : MDocCommand
 
 				// Interface implementations and overrides are deleted from the docs
 				// unless the overrides option is given.
-				if (oldmember2 != null && (!IsNew(oldmember2) || sig == null))
+				if (oldmember2 != null && sig == null)
 					oldmember2 = null;
 				
 				// Deleted (or signature changed)
@@ -883,7 +877,7 @@ class MDocUpdater : MDocCommand
 					else if (DefaultMemberComparer.Compare (oldmember, seenmembers [sig]) == 0)
 						DeleteMember ("Duplicate Member Found", output, oldmember, todelete);
 					else
-						Error ("TODO: found a duplicate member '{0}', but it's not identical to the prior member found!", sig);
+						Warning ("TODO: found a duplicate member '{0}', but it's not identical to the prior member found!", sig);
 					continue;
 				}
 				
@@ -896,7 +890,7 @@ class MDocUpdater : MDocCommand
 				oldmember.ParentNode.RemoveChild (oldmember);
 		}
 		
-		if (!DocUtils.IsDelegate (type) && !ignoremembers) {
+		if (!DocUtils.IsDelegate (type)) {
 			XmlNode members = WriteElement (basefile.DocumentElement, "Members");
 			foreach (IMemberReference m in type.GetMembers()) {
 				if (m is TypeDefinition) continue;
@@ -904,10 +898,6 @@ class MDocUpdater : MDocCommand
 				string sig = MakeMemberSignature(m);
 				if (sig == null) continue;
 				if (seenmembers.ContainsKey(sig)) continue;
-				
-				// To be nice on diffs, members/properties/events that are overrides or are interface implementations
-				// are not added in.
-				if (!IsNew(m)) continue;
 				
 				XmlElement mm = MakeMember(basefile, new DocsNodeInfo (null, m));
 				if (mm == null) continue;
@@ -944,23 +934,20 @@ class MDocUpdater : MDocCommand
 			SortTypeMembers (m);
 		} while (false);
 
-		System.IO.TextWriter writer;
 		if (output == null)
-			writer = Console.Out;
+			WriteXml(basefile.DocumentElement, Console.Out);
 		else {
 			FileInfo file = new FileInfo (output);
 			if (!file.Directory.Exists) {
 				Console.WriteLine("Namespace Directory Created: " + type.Namespace);
 				file.Directory.Create ();
 			}
-			writer = OpenWrite (output, FileMode.Create);
+			WriteFile (output, FileMode.Create,
+					writer => WriteXml(basefile.DocumentElement, writer));
 		}
-
-		using (writer)
-			WriteXml(basefile.DocumentElement, writer);
 	}
 
-	private static string GetCodeSource (string lang, string file)
+	private string GetCodeSource (string lang, string file)
 	{
 		int anchorStart;
 		if (lang == "C#" && (anchorStart = file.IndexOf (".cs#")) >= 0) {
@@ -988,7 +975,7 @@ class MDocUpdater : MDocCommand
 					return src.ToString ();
 				}
 			} catch (Exception e) {
-				Error ("Could not load <code/> file '{0}' region '{1}': {2}",
+				Warning ("Could not load <code/> file '{0}' region '{1}': {2}",
 						file, region, show_exceptions ? e.ToString () : e.Message);
 				return null;
 			}
@@ -997,12 +984,12 @@ class MDocUpdater : MDocCommand
 			using (StreamReader reader = new StreamReader (file))
 				return reader.ReadToEnd ();
 		} catch (Exception e) {
-			Error ("Could not load <code/> file '" + file + "': " + e.Message);
+			Warning ("Could not load <code/> file '" + file + "': " + e.Message);
 		}
 		return null;
 	}
 
-	private static IEnumerable<DocsNodeInfo> GetDocumentationMembers (XmlDocument basefile, TypeDefinition type, XmlReader ecmaDocsMembers)
+	private IEnumerable<DocsNodeInfo> GetDocumentationMembers (XmlDocument basefile, TypeDefinition type, XmlReader ecmaDocsMembers)
 	{
 		if (ecmaDocsMembers != null) {
 			int membersDepth = ecmaDocsMembers.Depth;
@@ -1019,7 +1006,7 @@ class MDocUpdater : MDocCommand
 						if (oldmember == null) {
 							m = GetMember (type, dm);
 							if (m == null) {
-								Error ("Could not import ECMA docs for `{0}'s `{1}': Member not found.",
+								Warning ("Could not import ECMA docs for `{0}'s `{1}': Member not found.",
 										type.FullName, dm.MemberSignatures ["C#"]);
 										// SelectSingleNode (ecmaDocsMember, "MemberSignature[@Language=\"C#\"]/@Value").Value);
 								continue;
@@ -1046,7 +1033,7 @@ class MDocUpdater : MDocCommand
 						else {
 							m = GetMember (type, new DocumentationMember (oldmember));
 							if (m == null) {
-								Error ("Could not import ECMA docs for `{0}'s `{1}': Member not found.",
+								Warning ("Could not import ECMA docs for `{0}'s `{1}': Member not found.",
 										type.FullName, dm.MemberSignatures ["C#"]);
 								continue;
 							}
@@ -1082,19 +1069,19 @@ class MDocUpdater : MDocCommand
 		}
 	}
 
-	static void DeleteMember (string reason, string output, XmlNode member, MyXmlNodeList todelete)
+	void DeleteMember (string reason, string output, XmlNode member, MyXmlNodeList todelete)
 	{
 		string format = output != null
 			? "{0}: File='{1}'; Signature='{4}'"
 			: "{0}: XPath='/Type[@FullName=\"{2}\"]/Members/Member[@MemberName=\"{3}\"]'; Signature='{4}'";
-		Error (format,
+		Warning (format,
 				reason, 
 				output,
 				member.OwnerDocument.DocumentElement.GetAttribute ("FullName"),
 				member.Attributes ["MemberName"].Value, 
 				member.SelectSingleNode ("MemberSignature[@Language='C#']/@Value").Value);
 		if (!delete && MemberDocsHaveUserContent (member)) {
-			Error ("Member deletions must be enabled with the --delete option.");
+			Warning ("Member deletions must be enabled with the --delete option.");
 		} else {
 			todelete.Add (member);
 			deletions++;
@@ -1189,25 +1176,6 @@ class MDocUpdater : MDocCommand
 		return false;
 	}
 	
-	private static bool IsNew (IMemberReference m)
-	{
-		if (!nooverrides) return true;
-		if (m is MethodDefinition && !IsNew ((MethodDefinition)m)) return false;
-		if (m is PropertyDefinition && !IsNew (((PropertyDefinition)m).GetMethod)) return false;
-		if (m is PropertyDefinition && !IsNew (((PropertyDefinition)m).SetMethod)) return false;
-		if (m is EventDefinition && !IsNew (((EventDefinition)m).AddMethod)) return false;
-		if (m is EventDefinition && !IsNew (((EventDefinition)m).InvokeMethod)) return false;
-		if (m is EventDefinition && !IsNew (((EventDefinition)m).RemoveMethod)) return false;
-		return true;
-	}
-	
-	private static bool IsNew (MethodDefinition m)
-	{
-		if (m == null)
-			return true;
-		return m.IsNewSlot;
-	}
-
 	// UPDATE HELPER FUNCTIONS
 
 	private static IMemberReference GetMember (TypeDefinition type, DocumentationMember member)
@@ -1390,7 +1358,7 @@ class MDocUpdater : MDocCommand
 	
 	// CREATE A STUB DOCUMENTATION FILE	
 
-	public static XmlElement StubType (TypeDefinition type, string output, XmlReader ecmaDocsType)
+	public XmlElement StubType (TypeDefinition type, string output, XmlReader ecmaDocsType)
 	{
 		string typesig = MakeTypeSignature(type);
 		if (typesig == null) return null; // not publicly visible
@@ -1404,7 +1372,7 @@ class MDocUpdater : MDocCommand
 		return root;
 	}
 
-	private static XmlElement CreateSinceNode (XmlDocument doc)
+	private XmlElement CreateSinceNode (XmlDocument doc)
 	{
 		XmlElement s = doc.CreateElement ("since");
 		s.SetAttribute ("version", since);
@@ -1413,7 +1381,7 @@ class MDocUpdater : MDocCommand
 	
 	// STUBBING/UPDATING FUNCTIONS
 	
-	public static void UpdateType (XmlElement root, TypeDefinition type, XmlReader ecmaDocsType)
+	public void UpdateType (XmlElement root, TypeDefinition type, XmlReader ecmaDocsType)
 	{
 		root.SetAttribute("Name", GetDocTypeName (type));
 		root.SetAttribute("FullName", GetDocTypeFullName (type));
@@ -1537,7 +1505,7 @@ class MDocUpdater : MDocCommand
 		return l;
 	}
 
-	private static void UpdateMember (DocsNodeInfo info)
+	private void UpdateMember (DocsNodeInfo info)
 	{
 		XmlElement me = (XmlElement) info.Node;
 		IMemberReference mi = info.Member;
@@ -1587,7 +1555,7 @@ class MDocUpdater : MDocCommand
 		"typeparam",
 	};
 
-	private static void UpdateExtensionMethods (XmlElement e, DocsNodeInfo info)
+	private void UpdateExtensionMethods (XmlElement e, DocsNodeInfo info)
 	{
 		MethodDefinition me = info.Member as MethodDefinition;
 		if (me == null)
@@ -1652,7 +1620,7 @@ class MDocUpdater : MDocCommand
 	private static bool GetFieldConstValue (FieldDefinition field, out string value)
 	{
 		value = null;
-		TypeDefinition type = DocUtils.GetTypeDefinition (field.DeclaringType);
+		TypeDefinition type = field.DeclaringType.Resolve ();
 		if (type != null && type.IsEnum) return false;
 		
 		if (type != null && type.IsGenericType ()) return false;
@@ -1743,7 +1711,7 @@ class MDocUpdater : MDocCommand
 	
 	// DOCUMENTATION HELPER FUNCTIONS
 	
-	private static void MakeDocNode (DocsNodeInfo info)
+	private void MakeDocNode (DocsNodeInfo info)
 	{
 		List<GenericParameter> genericParams      = info.GenericParameters;
 		ParameterDefinitionCollection parameters  = info.Parameters;
@@ -1791,7 +1759,8 @@ class MDocUpdater : MDocCommand
 		if (addremarks)
 			WriteElementInitialText(e, "remarks", "To be added.");
 
-		if (exceptions.HasValue && info.Member != null) {
+		if (exceptions.HasValue && info.Member != null &&
+				(exceptions.Value & ExceptionLocations.AddedMembers) == 0) {
 			UpdateExceptions (e, info.Member);
 		}
 
@@ -1811,8 +1780,11 @@ class MDocUpdater : MDocCommand
 				switch (r.Name) {
 					case "param":
 					case "typeparam": {
+						string name = r.GetAttribute ("name");
+						if (name == null)
+							break;
 						XmlNode doc = e.SelectSingleNode (
-								r.Name + "[@name='" + r.GetAttribute ("name") + "']");
+								r.Name + "[@name='" + name + "']");
 						string value = r.ReadInnerXml ();
 						if (doc != null)
 							doc.InnerXml = value.Replace ("\r", "");
@@ -1824,6 +1796,8 @@ class MDocUpdater : MDocCommand
 					case "seealso": {
 						string name = r.Name;
 						string cref = r.GetAttribute ("cref");
+						if (cref == null)
+							break;
 						XmlNode doc = e.SelectSingleNode (
 								r.Name + "[@cref='" + cref + "']");
 						string value = r.ReadInnerXml ().Replace ("\r", "");
@@ -1885,7 +1859,10 @@ class MDocUpdater : MDocCommand
 					switch (child.Name) {
 						case "param":
 						case "typeparam": {
-							XmlElement p2 = (XmlElement) e.SelectSingleNode (child.Name + "[@name='" + child.Attributes ["name"].Value + "']");
+							XmlAttribute name = child.Attributes ["name"];
+							if (name == null)
+								break;
+							XmlElement p2 = (XmlElement) e.SelectSingleNode (child.Name + "[@name='" + name.Value + "']");
 							if (p2 != null)
 								p2.InnerXml = child.InnerXml;
 							break;
@@ -1893,7 +1870,10 @@ class MDocUpdater : MDocCommand
 						case "altmember":
 						case "exception":
 						case "permission": {
-							XmlElement a = (XmlElement) e.SelectSingleNode (child.Name + "[@cref='" + child.Attributes ["cref"].Value + "']");
+							XmlAttribute cref = child.Attributes ["cref"] ?? child.Attributes ["name"];
+							if (cref == null)
+								break;
+							XmlElement a = (XmlElement) e.SelectSingleNode (child.Name + "[@cref='" + cref.Value + "']");
 							if (a == null) {
 								a = e.OwnerDocument.CreateElement (child.Name);
 								a.SetAttribute ("cref", child.Attributes ["cref"].Value);
@@ -1903,7 +1883,10 @@ class MDocUpdater : MDocCommand
 							break;
 						}
 						case "seealso": {
-							XmlElement a = (XmlElement) e.SelectSingleNode ("altmember[@cref='" + child.Attributes ["cref"].Value + "']");
+							XmlAttribute cref = child.Attributes ["cref"];
+							if (cref == null)
+								break;
+							XmlElement a = (XmlElement) e.SelectSingleNode ("altmember[@cref='" + cref.Value + "']");
 							if (a == null) {
 								a = e.OwnerDocument.CreateElement ("altmember");
 								a.SetAttribute ("cref", child.Attributes ["cref"].Value);
@@ -1949,7 +1932,7 @@ class MDocUpdater : MDocCommand
 	}
 	
 
-	private static void UpdateParameters (XmlElement e, string element, string[] values)
+	private void UpdateParameters (XmlElement e, string element, string[] values)
 	{	
 		if (values != null) {
 			XmlNode[] paramnodes = new XmlNode[values.Length];
@@ -1991,20 +1974,20 @@ class MDocUpdater : MDocCommand
 				string name = paramnode.GetAttribute("name");
 				if (!seenParams.ContainsKey(name)) {
 					if (!delete && !paramnode.InnerText.StartsWith("To be added")) {
-						Error ("The following param node can only be deleted if the --delete option is given: ");
+						Warning ("The following param node can only be deleted if the --delete option is given: ");
 						if (e.ParentNode == e.OwnerDocument.DocumentElement) {
 							// delegate type
-							Error ("\tXPath=/Type[@FullName=\"{0}\"]/Docs/param[@name=\"{1}\"]",
+							Warning ("\tXPath=/Type[@FullName=\"{0}\"]/Docs/param[@name=\"{1}\"]",
 									e.OwnerDocument.DocumentElement.GetAttribute ("FullName"),
 									name);
 						}
 						else {
-							Error ("\tXPath=/Type[@FullName=\"{0}\"]//Member[@MemberName=\"{1}\"]/Docs/param[@name=\"{2}\"]",
+							Warning ("\tXPath=/Type[@FullName=\"{0}\"]//Member[@MemberName=\"{1}\"]/Docs/param[@name=\"{2}\"]",
 									e.OwnerDocument.DocumentElement.GetAttribute ("FullName"),
 									e.ParentNode.Attributes ["MemberName"].Value, 
 									name);
 						}
-						Error ("\tValue={0}", paramnode.OuterXml);
+						Warning ("\tValue={0}", paramnode.OuterXml);
 					} else {
 						todelete.Add (paramnode);
 					}
@@ -2077,7 +2060,7 @@ class MDocUpdater : MDocCommand
 		}
 	}
 	
-	private static void UpdateExceptions (XmlNode docs, IMemberReference member)
+	private void UpdateExceptions (XmlNode docs, IMemberReference member)
 	{
 		foreach (var source in new ExceptionLookup (exceptions.Value)[member]) {
 			string cref = slashdocFormatter.GetDeclaration (source.Exception);
@@ -2175,7 +2158,7 @@ class MDocUpdater : MDocCommand
 		"System.Runtime.CompilerServices.ExtensionAttribute",
 	};
 
-	private static void MakeAttributes (XmlElement root, CustomAttributeCollection attributes, bool assemblyAttributes)
+	private void MakeAttributes (XmlElement root, CustomAttributeCollection attributes, bool assemblyAttributes)
 	{
 		if (attributes.Count == 0) {
 			ClearElement(root, "Attributes");
@@ -2193,7 +2176,7 @@ class MDocUpdater : MDocCommand
 				.OrderBy (ca => ca.Constructor.DeclaringType.FullName)) {
 			if (!attribute.Resolve ()) {
 				// skip?
-				Error ("warning: could not resolve type {0}.",
+				Warning ("warning: could not resolve type {0}.",
 						attribute.Constructor.DeclaringType.FullName);
 			}
 			TypeDefinition attrType = attribute.Constructor.DeclaringType as TypeDefinition;
@@ -2255,7 +2238,7 @@ class MDocUpdater : MDocCommand
 			return "\"" + v.ToString () + "\"";
 		if (v is Boolean)
 			return (bool)v ? "true" : "false";
-		TypeDefinition valueDef = DocUtils.GetTypeDefinition (valueType);
+		TypeDefinition valueDef = valueType.Resolve ();
 		if (valueDef == null || !valueDef.IsEnum)
 			return v.ToString ();
 		string typename = GetDocTypeFullName (valueType);
@@ -2283,7 +2266,7 @@ class MDocUpdater : MDocCommand
 			.ToDictionary (f => Convert.ToUInt64 (f.Constant), f => f.Name);
 	}
 	
-	private static void MakeParameters (XmlElement root, ParameterDefinitionCollection parameters)
+	private void MakeParameters (XmlElement root, ParameterDefinitionCollection parameters)
 	{
 		XmlElement e = WriteElement(root, "Parameters");
 		e.RemoveAll();
@@ -2300,7 +2283,7 @@ class MDocUpdater : MDocCommand
 		}
 	}
 	
-	private static void MakeTypeParameters (XmlElement root, GenericParameterCollection typeParams)
+	private void MakeTypeParameters (XmlElement root, GenericParameterCollection typeParams)
 	{
 		if (typeParams == null || typeParams.Count == 0) {
 			XmlElement f = (XmlElement) root.SelectSingleNode ("TypeParameters");
@@ -2340,7 +2323,7 @@ class MDocUpdater : MDocCommand
 			if ((attrs & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
 				AppendElementText (ce, "ParameterAttribute", "ReferenceTypeConstraint");
 			foreach (TypeReference c in constraints) {
-				TypeDefinition cd = DocUtils.GetTypeDefinition (c);
+				TypeDefinition cd = c.Resolve ();
 				AppendElementText (ce,
 						(cd != null && cd.IsInterface) ? "InterfaceName" : "BaseTypeName",
 						GetDocTypeFullName (c));
@@ -2348,7 +2331,7 @@ class MDocUpdater : MDocCommand
 		}
 	}
 
-	private static void MakeParameters (XmlElement root, IMemberReference mi)
+	private void MakeParameters (XmlElement root, IMemberReference mi)
 	{
 		if (mi is MethodDefinition && ((MethodDefinition) mi).IsConstructor)
 			MakeParameters (root, ((MethodDefinition)mi).Parameters);
@@ -2378,7 +2361,7 @@ class MDocUpdater : MDocCommand
 		return GetDocTypeFullName (type).Replace ("@", "&");
 	}
 
-	private static void MakeReturnValue(XmlElement root, TypeReference type, CustomAttributeCollection attributes) 
+	private void MakeReturnValue (XmlElement root, TypeReference type, CustomAttributeCollection attributes) 
 	{
 		XmlElement e = WriteElement(root, "ReturnValue");
 		e.RemoveAll();
@@ -2387,7 +2370,7 @@ class MDocUpdater : MDocCommand
 			MakeAttributes(e, attributes, false);
 	}
 	
-	private static void MakeReturnValue (XmlElement root, IMemberReference mi)
+	private void MakeReturnValue (XmlElement root, IMemberReference mi)
 	{
 		if (mi is MethodDefinition && ((MethodDefinition) mi).IsConstructor)
 			return;
@@ -2403,7 +2386,8 @@ class MDocUpdater : MDocCommand
 			throw new ArgumentException(mi + " is a " + mi.GetType().FullName);
 	}
 	
-	private static XmlElement MakeMember(XmlDocument doc, DocsNodeInfo info) {
+	private XmlElement MakeMember(XmlDocument doc, DocsNodeInfo info)
+	{
 		IMemberReference mi = info.Member;
 		if (mi is TypeDefinition) return null;
 
@@ -2422,6 +2406,9 @@ class MDocUpdater : MDocCommand
 		
 		info.Node = me;
 		UpdateMember(info);
+		if (exceptions.HasValue && 
+				(exceptions.Value & ExceptionLocations.AddedMembers) != 0)
+			UpdateExceptions (info.Node, info.Member);
 
 		if (since != null) {
 			XmlNode docs = me.SelectSingleNode("Docs");
@@ -2529,7 +2516,7 @@ class MDocUpdater : MDocCommand
 			SetMemberInfo (member);
 		}
 
-		public void SetType (TypeDefinition type)
+		void SetType (TypeDefinition type)
 		{
 			if (type == null)
 				throw new ArgumentNullException ("type");
@@ -2550,7 +2537,7 @@ class MDocUpdater : MDocCommand
 			SetSlashDocs (type);
 		}
 
-		public void SetMemberInfo (IMemberReference member)
+		void SetMemberInfo (IMemberReference member)
 		{
 			if (member == null)
 				throw new ArgumentNullException ("member");
@@ -2711,14 +2698,6 @@ static class CecilExtensions {
 		return source.FirstOrDefault ();
 	}
 
-	static T EnsureOne<T> (this IEnumerable<T> source)
-	{
-		if (source.Count () > 1)
-			throw new InvalidOperationException ("too many matches: " +
-					string.Join ("; ", source.Select (e => e.ToString ()).ToArray ()));
-		return source.First ();
-	}
-
 	public static MethodDefinition GetMethod (this TypeDefinition type, string method)
 	{
 		return type.Methods.Cast<MethodDefinition> ()
@@ -2765,124 +2744,24 @@ static class CecilExtensions {
 		return method.GenericParameters.Count > 0;
 	}
 
-	public static IMemberReference GetDefinition (this IMemberReference member)
+	public static IMemberReference Resolve (this IMemberReference member)
 	{
 		EventReference er = member as EventReference;
 		if (er != null)
-			return GetEventDefinition (er);
+			return er.Resolve ();
 		FieldReference fr = member as FieldReference;
 		if (fr != null)
-			return GetFieldDefinition (fr);
+			return fr.Resolve ();
 		MethodReference mr = member as MethodReference;
 		if (mr != null)
-			return GetMethodDefinition (mr);
+			return mr.Resolve ();
 		PropertyReference pr = member as PropertyReference;
 		if (pr != null)
-			return GetPropertyDefinition (pr);
+			return pr.Resolve ();
 		TypeReference tr = member as TypeReference;
 		if (tr != null)
-			return GetTypeDefinition (tr);
+			return tr.Resolve ();
 		throw new NotSupportedException ("Cannot find definition for " + member.ToString ());
-	}
-
-	public static EventDefinition GetEventDefinition (this EventReference ev)
-	{
-		EventDefinition evDef = ev as EventDefinition;
-		if (evDef != null)
-			return evDef;
-		return (EventDefinition) ev.DeclaringType.GetTypeDefinition ()
-			.GetMember (ev.Name);
-	}
-
-	public static FieldDefinition GetFieldDefinition (this FieldReference field)
-	{
-		FieldDefinition fieldDef = field as FieldDefinition;
-		if (fieldDef != null)
-			return fieldDef;
-		return (FieldDefinition) field.DeclaringType.GetTypeDefinition ()
-			.GetMember (field.Name);
-	}
-
-	public static MethodDefinition GetMethodDefinition (this MethodReference method)
-	{
-		MethodDefinition methodDef = method as MethodDefinition;
-		if (methodDef != null)
-			return methodDef;
-		method = method.GetOriginalMethod ();
-		return method.DeclaringType.GetTypeDefinition ()
-			.GetMembers (method.Name).OfType<MethodDefinition> ()
-			.Where (m => 
-					AreSame (method.ReturnType.ReturnType, m.ReturnType.ReturnType) &&
-					AreSame (method.Parameters, m.Parameters))
-			.EnsureOne ();
-	}
-
-	static bool AreSame (ParameterDefinitionCollection a, ParameterDefinitionCollection b)
-	{
-		if (a.Count != b.Count)
-			return false;
-
-		if (a.Count == 0)
-			return true;
-
-		for (int i = 0; i < a.Count; i++) {
-			if (!AreSame (a [i].ParameterType, b [i].ParameterType))
-				return false;
-		}
-
-		return true;
-	}
-
-	static bool AreSame (TypeReference a, TypeReference b)
-	{
-		while (a is TypeSpecification || b is TypeSpecification) {
-			if (a.GetType () != b.GetType ())
-				return false;
-
-			IGenericInstance ga = a as IGenericInstance;
-			IGenericInstance gb = b as IGenericInstance;
-
-			a = ((TypeSpecification) a).ElementType;
-			b = ((TypeSpecification) b).ElementType;
-
-			if (ga != null && gb != null) {
-				if (ga.GenericArguments.Count != gb.GenericArguments.Count) {
-					return false;
-				}
-				for (int i = 0; i < ga.GenericArguments.Count; ++i) {
-					if (!AreSame (ga.GenericArguments [i], gb.GenericArguments [i]))
-						return false;
-				}
-			}
-		}
-
-		GenericParameter pa = (a as GenericParameter);
-		GenericParameter pb = (b as GenericParameter);
-		if ((pa != null) || (pb != null)) {
-			if (a.GetType () != b.GetType ())
-				return false;
-
-			return pa.Position == pb.Position;
-		}
-
-		return a.FullName == b.FullName;
-	}
-
-	public static PropertyDefinition GetPropertyDefinition (this PropertyReference property)
-	{
-		PropertyDefinition propertyDef = property as PropertyDefinition;
-		if (propertyDef != null)
-			return propertyDef;
-		return (PropertyDefinition) property.DeclaringType.GetTypeDefinition ()
-			.GetMembers (property.Name).OfType<PropertyDefinition> ()
-			.Where (p => p.PropertyType.FullName == property.PropertyType.FullName &&
-					AreSame (property.Parameters, p.Parameters))
-			.EnsureOne ();
-	}
-
-	public static TypeDefinition GetTypeDefinition (this TypeReference type)
-	{
-		return DocUtils.GetTypeDefinition (type);
 	}
 }
 
@@ -3004,32 +2883,12 @@ static class DocUtils {
 				: type.GenericParameters.Count;
 	}
 
-	public static TypeDefinition GetTypeDefinition (TypeReference type)
-	{
-		// Remove generic instantiation info (so string comparison below works)
-		type = type.GetOriginalType ();
-		TypeDefinition typeDef = type as TypeDefinition;
-		if (typeDef != null)
-			return typeDef;
-
-		AssemblyNameReference reference = type.Scope as AssemblyNameReference;
-		if (reference != null) {
-			AssemblyDefinition ad = type.Module.Assembly.Resolver.Resolve (reference);
-			if (ad != null && (typeDef = ad.MainModule.Types [type.FullName]) != null)
-				return typeDef;
-		}
-		ModuleDefinition module = type.Scope as ModuleDefinition;
-		if (module != null && (typeDef = module.Types [type.FullName]) != null)
-			return typeDef;
-		return null;
-	}
-
 	public static IEnumerable<TypeReference> GetUserImplementedInterfaces (TypeDefinition type)
 	{
 		HashSet<string> inheritedInterfaces = GetInheritedInterfaces (type);
 		List<TypeReference> userInterfaces = new List<TypeReference> ();
 		foreach (TypeReference iface in type.Interfaces) {
-			TypeReference lookup = GetTypeDefinition (iface) ?? iface;
+			TypeReference lookup = iface.Resolve () ?? iface;
 			if (!inheritedInterfaces.Contains (GetQualifiedTypeName (lookup)))
 				userInterfaces.Add (iface);
 		}
@@ -3049,12 +2908,12 @@ static class DocUtils {
 			if (t == null) return;
 			foreach (TypeReference r in t.Interfaces) {
 				inheritedInterfaces.Add (GetQualifiedTypeName (r));
-				a (GetTypeDefinition (r));
+				a (r.Resolve ());
 			}
 		};
 		TypeReference baseRef = type.BaseType;
 		while (baseRef != null) {
-			TypeDefinition baseDef = GetTypeDefinition (baseRef);
+			TypeDefinition baseDef = baseRef.Resolve ();
 			if (baseDef != null) {
 				a (baseDef);
 				baseRef = baseDef.BaseType;
@@ -3063,7 +2922,7 @@ static class DocUtils {
 				baseRef = null;
 		}
 		foreach (TypeReference r in type.Interfaces)
-			a (GetTypeDefinition (r));
+			a (r.Resolve ());
 		return inheritedInterfaces;
 	}
 }
@@ -3132,6 +2991,12 @@ class DocumentationMember {
 	}
 }
 
+public enum MemberFormatterState {
+	None,
+	WithinArray,
+	WithinGenericTypeContainer,
+}
+
 public abstract class MemberFormatter {
 	public virtual string GetName (IMemberReference member)
 	{
@@ -3167,16 +3032,21 @@ public abstract class MemberFormatter {
 		get {return new char[]{'[', ']'};}
 	}
 
+	protected virtual MemberFormatterState MemberFormatterState { get; set; }
+
 	protected StringBuilder _AppendTypeName (StringBuilder buf, TypeReference type)
 	{
 		if (type is ArrayType) {
 			TypeSpecification spec = type as TypeSpecification;
 			_AppendTypeName (buf, spec != null ? spec.ElementType : type.GetOriginalType ())
 					.Append (ArrayDelimeters [0]);
+			var origState = MemberFormatterState;
+			MemberFormatterState = MemberFormatterState.WithinArray;
 			ArrayType array = (ArrayType) type;
 			int rank = array.Rank;
 			if (rank > 1)
 				buf.Append (new string (',', rank-1));
+			MemberFormatterState = origState;
 			return buf.Append (ArrayDelimeters [1]);
 		}
 		if (type is ReferenceType) {
@@ -3264,7 +3134,7 @@ public abstract class MemberFormatter {
 		int prev = 0;
 		bool insertNested = false;
 		foreach (var decl in decls) {
-			TypeReference declDef = DocUtils.GetTypeDefinition (decl) ?? decl;
+			TypeReference declDef = decl.Resolve () ?? decl;
 			if (insertNested) {
 				buf.Append (NestedTypeSeparator);
 			}
@@ -3275,9 +3145,12 @@ public abstract class MemberFormatter {
 			prev = ac;
 			if (c > 0) {
 				buf.Append (GenericTypeContainer [0]);
+				var origState = MemberFormatterState;
+				MemberFormatterState = MemberFormatterState.WithinGenericTypeContainer;
 				_AppendTypeName (buf, genArgs [argIdx++]);
 				for (int i = 1; i < c; ++i)
 					_AppendTypeName (buf.Append (","), genArgs [argIdx++]);
+				MemberFormatterState = origState;
 				buf.Append (GenericTypeContainer [1]);
 			}
 		}
@@ -3479,7 +3352,7 @@ class CSharpFullMemberFormatter : MemberFormatter {
 	protected override StringBuilder AppendTypeName (StringBuilder buf, TypeReference type)
 	{
 		if (type is GenericParameter)
-			return buf.Append (type.Name);
+			return AppendGenericParameterConstraints (buf, (GenericParameter) type).Append (type.Name);
 		string t = type.FullName;
 		if (!t.StartsWith ("System.")) {
 			return base.AppendTypeName (buf, type);
@@ -3490,6 +3363,20 @@ class CSharpFullMemberFormatter : MemberFormatter {
 			return buf.Append (s);
 		
 		return base.AppendTypeName (buf, type);
+	}
+
+	private StringBuilder AppendGenericParameterConstraints (StringBuilder buf, GenericParameter type)
+	{
+		if (MemberFormatterState != MemberFormatterState.WithinGenericTypeContainer)
+			return buf;
+		GenericParameterAttributes attrs = type.Attributes;
+		bool isout = (attrs & GenericParameterAttributes.Covariant) != 0;
+		bool isin  = (attrs & GenericParameterAttributes.Contravariant) != 0;
+		if (isin)
+			buf.Append ("in ");
+		else if (isout)
+			buf.Append ("out ");
+		return buf;
 	}
 
 	protected override string GetTypeDeclaration (TypeDefinition type)
@@ -3602,11 +3489,15 @@ class CSharpFullMemberFormatter : MemberFormatter {
 			ConstraintCollection constraints = genArg.Constraints;
 			if (attrs == GenericParameterAttributes.NonVariant && constraints.Count == 0)
 				continue;
-			buf.Append (" where ").Append (genArg.Name).Append (" : ");
+
 			bool isref = (attrs & GenericParameterAttributes.ReferenceTypeConstraint) != 0;
 			bool isvt  = (attrs & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0;
 			bool isnew = (attrs & GenericParameterAttributes.DefaultConstructorConstraint) != 0;
 			bool comma = false;
+
+			if (!isref && !isvt && !isnew && constraints.Count == 0)
+				continue;
+			buf.Append (" where ").Append (genArg.Name).Append (" : ");
 			if (isref) {
 				buf.Append ("class");
 				comma = true;

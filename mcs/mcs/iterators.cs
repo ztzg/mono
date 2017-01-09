@@ -183,11 +183,11 @@ namespace Mono.CSharp {
 
 			public IteratorMethod (IteratorStorey host, FullNamedExpression returnType, int mod, MemberName name)
 				: base (host, null, returnType, mod | Modifiers.DEBUGGER_HIDDEN | Modifiers.COMPILER_GENERATED,
-				  name, Parameters.EmptyReadOnlyParameters, null)
+				  name, ParametersCompiled.EmptyReadOnlyParameters, null)
 			{
 				this.host = host;
 
-				Block = new ToplevelBlock (host.Iterator.Container.Toplevel, Parameters.EmptyReadOnlyParameters, Location);
+				Block = new ToplevelBlock (host.Iterator.Container.Toplevel, ParametersCompiled.EmptyReadOnlyParameters, Location);
 			}
 
 			public override EmitContext CreateEmitContext (DeclSpace tc, ILGenerator ig)
@@ -346,7 +346,7 @@ namespace Mono.CSharp {
 			{
 				host.AddMethod (this);
 
-				Block = new ToplevelBlock (host.Iterator.Container, Parameters.EmptyReadOnlyParameters, Location);
+				Block = new ToplevelBlock (host.Iterator.Container, ParametersCompiled.EmptyReadOnlyParameters, Location);
 				Block.AddStatement (new DisposeMethodStatement (host.Iterator));
 			}
 		}
@@ -400,13 +400,9 @@ namespace Mono.CSharp {
 
 		TypeExpr enumerator_type;
 		TypeExpr enumerable_type;
-#if GMCS_SOURCE
 		TypeArguments generic_args;
 		TypeExpr generic_enumerator_type;
 		TypeExpr generic_enumerable_type;
-#else
-		const TypeArguments generic_args = null;
-#endif
 
 		ArrayList hoisted_params_copy;
 		int local_name_idx;
@@ -433,10 +429,7 @@ namespace Mono.CSharp {
 		protected override TypeExpr [] ResolveBaseTypes (out TypeExpr base_class)
 		{
 			iterator_type_expr = new TypeExpression (MutateType (Iterator.OriginalIteratorType), Location);
-
-#if GMCS_SOURCE
 			generic_args = new TypeArguments (iterator_type_expr);
-#endif
 
 			ArrayList list = new ArrayList ();
 			if (Iterator.IsEnumerable) {
@@ -444,12 +437,12 @@ namespace Mono.CSharp {
 					TypeManager.ienumerable_type, Location);
 				list.Add (enumerable_type);
 
-#if GMCS_SOURCE
-				generic_enumerable_type = new GenericTypeExpr (
-					TypeManager.generic_ienumerable_type,
-					generic_args, Location);
-				list.Add (generic_enumerable_type);
-#endif
+				if (TypeManager.generic_ienumerable_type != null) {
+					generic_enumerable_type = new GenericTypeExpr (
+						TypeManager.generic_ienumerable_type,
+						generic_args, Location);
+					list.Add (generic_enumerable_type);
+				}
 			}
 
 			enumerator_type = new TypeExpression (
@@ -458,12 +451,12 @@ namespace Mono.CSharp {
 
 			list.Add (new TypeExpression (TypeManager.idisposable_type, Location));
 
-#if GMCS_SOURCE
-			generic_enumerator_type = new GenericTypeExpr (
-				TypeManager.generic_ienumerator_type,
-				generic_args, Location);
-			list.Add (generic_enumerator_type);
-#endif
+			if (TypeManager.generic_ienumerator_type != null) {
+				generic_enumerator_type = new GenericTypeExpr (
+					TypeManager.generic_ienumerator_type,
+					generic_args, Location);
+				list.Add (generic_enumerator_type);
+			}
 
 			type_bases = list;
 
@@ -494,35 +487,38 @@ namespace Mono.CSharp {
 				}
 			}
 
-#if GMCS_SOURCE
-			Define_Current (true);
-#endif
+			if (generic_enumerator_type != null)
+				Define_Current (true);
+
 			Define_Current (false);
 			new DisposeMethod (this);
 			Define_Reset ();
 
 			if (Iterator.IsEnumerable) {
-				MemberName name = new MemberName (
-					new MemberName ("System.Collections.IEnumerable", Location), "GetEnumerator", Location);
+				MemberName name = new MemberName (QualifiedAliasMember.GlobalAlias, "System", null, Location);
+				name = new MemberName (name, "Collections", Location);
+				name = new MemberName (name, "IEnumerable", Location);
+				name = new MemberName (name, "GetEnumerator", Location);
 
-#if GMCS_SOURCE
-				Method get_enumerator = new IteratorMethod (this, enumerator_type, 0, name);
+				if (generic_enumerator_type != null) {
+					Method get_enumerator = new IteratorMethod (this, enumerator_type, 0, name);
 
-				name = new MemberName (
-					new MemberName ("System.Collections.Generic.IEnumerable", generic_args, Location), "GetEnumerator", Location);
-				Method gget_enumerator = new GetEnumeratorMethod (this, generic_enumerator_type, name);
+					name = new MemberName (name.Left.Left, "Generic", Location);
+					name = new MemberName (name, "IEnumerable", generic_args, Location);
+					name = new MemberName (name, "GetEnumerator", Location);
+					Method gget_enumerator = new GetEnumeratorMethod (this, generic_enumerator_type, name);
 
-				//
-				// Just call generic GetEnumerator implementation
-				//
-				get_enumerator.Block.AddStatement (
-					new Return (new Invocation (new DynamicMethodGroupExpr (gget_enumerator, Location), new ArrayList (0)), Location));
+					//
+					// Just call generic GetEnumerator implementation
+					//
+					get_enumerator.Block.AddStatement (
+						new Return (new Invocation (new DynamicMethodGroupExpr (gget_enumerator, Location), new ArrayList (0)), Location));
 
-				AddMethod (get_enumerator);
-				AddMethod (gget_enumerator);
-#else
-				AddMethod (new GetEnumeratorMethod (this, enumerator_type, name));
-#endif
+					AddMethod (get_enumerator);
+					AddMethod (gget_enumerator);
+				} else {
+					AddMethod (new GetEnumeratorMethod (this, enumerator_type, name));
+				}
 			}
 		}
 
@@ -534,20 +530,21 @@ namespace Mono.CSharp {
 
 		void Define_Current (bool is_generic)
 		{
-			MemberName left;
 			TypeExpr type;
 
+			MemberName name = new MemberName (QualifiedAliasMember.GlobalAlias, "System", null, Location);
+			name = new MemberName (name, "Collections", Location);
+
 			if (is_generic) {
-				left = new MemberName (
-					"System.Collections.Generic.IEnumerator",
-					generic_args, Location);
+				name = new MemberName (name, "Generic", Location);
+				name = new MemberName (name, "IEnumerator", generic_args, Location);
 				type = iterator_type_expr;
 			} else {
-				left = new MemberName ("System.Collections.IEnumerator", Location);
+				name = new MemberName (name, "IEnumerator");
 				type = TypeManager.system_object_expr;
 			}
 
-			MemberName name = new MemberName (left, "Current", Location);
+			name = new MemberName (name, "Current", Location);
 
 			ToplevelBlock get_block = new ToplevelBlock (Location);
 			get_block.AddStatement (new Return (new DynamicFieldExpr (CurrentField, Location), Location));
@@ -565,13 +562,16 @@ namespace Mono.CSharp {
 				this, null, TypeManager.system_void_expr,
 				Modifiers.PUBLIC | Modifiers.DEBUGGER_HIDDEN,
 				new MemberName ("Reset", Location),
-				Parameters.EmptyReadOnlyParameters, null);
+				ParametersCompiled.EmptyReadOnlyParameters, null);
 			AddMethod (reset);
 
 			reset.Block = new ToplevelBlock (Location);
 
-			TypeExpr ex_type = new TypeLookupExpression ("System.NotSupportedException");
-			reset.Block.AddStatement (new Throw (new New (ex_type, null, Location), Location));
+			Type ex_type = TypeManager.CoreLookupType ("System", "NotSupportedException", Kind.Class, true);
+			if (ex_type == null)
+				return;
+
+			reset.Block.AddStatement (new Throw (new New (new TypeExpression (ex_type, Location), null, Location), Location));
 		}
 	}
 
@@ -814,7 +814,7 @@ namespace Mono.CSharp {
 		//
 		private Iterator (IMethodData method, TypeContainer host, Type iterator_type, bool is_enumerable)
 			: base (
-				new ToplevelBlock (method.Block, Parameters.EmptyReadOnlyParameters, method.Block.StartLocation),
+				new ToplevelBlock (method.Block, ParametersCompiled.EmptyReadOnlyParameters, method.Block.StartLocation),
 				TypeManager.bool_type,
 				method.Location)
 		{
@@ -837,7 +837,7 @@ namespace Mono.CSharp {
 				this, Storey, null, TypeManager.system_boolean_expr,
 				Modifiers.PUBLIC, OriginalMethod.GetSignatureForError (),
 				new MemberName ("MoveNext", Location),
-				Parameters.EmptyReadOnlyParameters);
+				ParametersCompiled.EmptyReadOnlyParameters);
 
 			if (!Compatible (ec))
 				return null;
@@ -896,7 +896,7 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			Parameters parameters = method.ParameterInfo;
+			ParametersCompiled parameters = method.ParameterInfo;
 			for (int i = 0; i < parameters.Count; i++) {
 				Parameter p = parameters [i];
 				Parameter.Modifier mod = p.ModFlags;

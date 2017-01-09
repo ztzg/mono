@@ -1,3 +1,27 @@
+2009-03-05  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : added /r:System.Xml.Linq in 2.1 too.
+
+2009-03-04  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : add /r:System.Core in 2.1 build.
+
+2009-03-04  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources :
+	  added cross domain checker sources.
+
+2009-02-19  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources,
+	  net_2_1_raw_System.ServiceModel.dll.sources :
+	  added CodeTryBlock.cs.
+
+2009-01-22  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources :
+	  added SilverlightClientConfigLoader.cs.
+
 2009-01-14  Astushi Enomoto  <atsushi@ximian.com>
 
 	* System.ServiceModel.dll.sources,

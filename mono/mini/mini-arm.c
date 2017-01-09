@@ -23,6 +23,13 @@
 #include "mono/arch/arm/arm-vfp-codegen.h"
 #endif
 
+#if defined(__ARM_EABI__) && defined(__linux__) && !defined(PLATFORM_ANDROID)
+#define HAVE_AEABI_READ_TP 1
+#endif
+
+static gint lmf_tls_offset = -1;
+static gint lmf_addr_tls_offset = -1;
+
 /* This mutex protects architecture specific caches */
 #define mono_mini_arch_lock() EnterCriticalSection (&mini_arch_mutex)
 #define mono_mini_arch_unlock() LeaveCriticalSection (&mini_arch_mutex)
@@ -1750,7 +1757,10 @@ loop_start:
 				ins->sreg2 = temp->dreg;
 				ins->opcode = mono_op_imm_to_op (ins->opcode);
 			}
-			break;
+			if (ins->opcode == OP_SBB || ins->opcode == OP_ISBB || ins->opcode == OP_SUBCC)
+				goto loop_start;
+			else
+				break;
 		case OP_MUL_IMM:
 		case OP_IMUL_IMM:
 			if (ins->inst_imm == 1) {
@@ -1773,6 +1783,14 @@ loop_start:
 			temp->dreg = mono_alloc_ireg (cfg);
 			ins->sreg2 = temp->dreg;
 			ins->opcode = OP_IMUL;
+			break;
+		case OP_SBB:
+		case OP_ISBB:
+		case OP_SUBCC:
+		case OP_ISUBCC:
+			if (ins->next  && (ins->next->opcode == OP_COND_EXC_C || ins->next->opcode == OP_COND_EXC_IC))
+				/* ARM sets the C flag to 1 if there was _no_ overflow */
+				ins->next->opcode = OP_COND_EXC_NC;
 			break;
 		case OP_LOCALLOC_IMM:
 			NEW_INS (cfg, temp, OP_ICONST);
@@ -2027,12 +2045,12 @@ handle_thunk (int absolute, guchar *code, const guchar *target) {
 	pdata.found = 0;
 
 	mono_domain_lock (domain);
-	mono_code_manager_foreach (domain->code_mp, search_thunk_slot, &pdata);
+	mono_domain_code_foreach (domain, search_thunk_slot, &pdata);
 
 	if (!pdata.found) {
 		/* this uses the first available slot */
 		pdata.found = 2;
-		mono_code_manager_foreach (domain->code_mp, search_thunk_slot, &pdata);
+		mono_domain_code_foreach (domain, search_thunk_slot, &pdata);
 	}
 	mono_domain_unlock (domain);
 
@@ -2341,8 +2359,7 @@ emit_load_volatile_arguments (MonoCompile *cfg, guint8 *code)
 				// FIXME:
 				NOT_IMPLEMENTED;
 			} else if (ainfo->regtype == RegTypeBase) {
-				// FIXME:
-				NOT_IMPLEMENTED;
+				/* Nothing to do */
 			} else if (ainfo->regtype == RegTypeFP) {
 				g_assert_not_reached ();
 			} else if (ainfo->regtype == RegTypeStructByVal) {
@@ -2435,7 +2452,15 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_MEMORY_BARRIER:
 			break;
 		case OP_TLS_GET:
+#ifdef HAVE_AEABI_READ_TP
+			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD, 
+								 (gpointer)"__aeabi_read_tp");
+			code = emit_call_seq (cfg, code);
+
+			ARM_LDR_IMM (code, ins->dreg, ARMREG_R0, ins->inst_offset);
+#else
 			g_assert_not_reached ();
+#endif
 			break;
 		/*case OP_BIGMUL:
 			ppc_mullw (code, ppc_r4, ins->sreg1, ins->sreg2);
@@ -2764,10 +2789,12 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_IMUL_OVF:
 			/* FIXME: handle ovf/ sreg2 != dreg */
 			ARM_MUL_REG_REG (code, ins->dreg, ins->sreg1, ins->sreg2);
+			/* FIXME: MUL doesn't set the C/O flags on ARM */
 			break;
 		case OP_IMUL_OVF_UN:
 			/* FIXME: handle ovf/ sreg2 != dreg */
 			ARM_MUL_REG_REG (code, ins->dreg, ins->sreg1, ins->sreg2);
+			/* FIXME: MUL doesn't set the C/O flags on ARM */
 			break;
 		case OP_ICONST:
 			code = mono_arm_emit_load_imm (code, ins->dreg, ins->inst_c0);
@@ -2826,7 +2853,15 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			code = emit_big_add (code, ARMREG_SP, cfg->frame_reg, cfg->stack_usage);
 			ARM_POP_NWB (code, cfg->used_int_regs | ((1 << ARMREG_SP)) | ((1 << ARMREG_LR)));
 			mono_add_patch_info (cfg, (guint8*) code - cfg->native_code, MONO_PATCH_INFO_METHOD_JUMP, ins->inst_p0);
-			ARM_B (code, 0);
+			if (cfg->compile_aot) {
+				ARM_LDR_IMM (code, ARMREG_IP, ARMREG_PC, 0);
+				ARM_B (code, 0);
+				*(gpointer*)code = NULL;
+				code += 4;
+				ARM_LDR_REG_REG (code, ARMREG_PC, ARMREG_PC, ARMREG_IP);
+			} else {
+				ARM_B (code, 0);
+			}
 			break;
 		case OP_CHECK_THIS:
 			/* ensure ins->sreg1 is not NULL */
@@ -3082,14 +3117,20 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			EMIT_COND_SYSTEM_EXCEPTION (ins->opcode - OP_COND_EXC_IEQ, ins->inst_p1);
 			break;
 		case OP_COND_EXC_C:
-		case OP_COND_EXC_OV:
-		case OP_COND_EXC_NC:
-		case OP_COND_EXC_NO:
 		case OP_COND_EXC_IC:
+			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (ARMCOND_CS, ins->inst_p1);
+			break;
+		case OP_COND_EXC_OV:
 		case OP_COND_EXC_IOV:
+			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (ARMCOND_VS, ins->inst_p1);
+			break;
+		case OP_COND_EXC_NC:
 		case OP_COND_EXC_INC:
+			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (ARMCOND_CC, ins->inst_p1);
+			break;
+		case OP_COND_EXC_NO:
 		case OP_COND_EXC_INO:
-			/* FIXME: */
+			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (ARMCOND_VC, ins->inst_p1);
 			break;
 		case OP_IBEQ:
 		case OP_IBNE_UN:
@@ -3475,11 +3516,20 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 
 #endif /* DISABLE_JIT */
 
+#ifdef HAVE_AEABI_READ_TP
+void __aeabi_read_tp (void);
+#endif
+
 void
 mono_arch_register_lowlevel_calls (void)
 {
 	/* The signature doesn't matter */
 	mono_register_jit_icall (mono_arm_throw_exception, "mono_arm_throw_exception", mono_create_icall_signature ("void"), TRUE);
+	mono_register_jit_icall (mono_arm_throw_exception_by_token, "mono_arm_throw_exception_by_token", mono_create_icall_signature ("void"), TRUE);
+
+#ifdef HAVE_AEABI_READ_TP
+	mono_register_jit_icall (__aeabi_read_tp, "__aeabi_read_tp", mono_create_icall_signature ("void"), TRUE);
+#endif
 }
 
 #define patch_lis_ori(ip,val) do {\
@@ -3593,7 +3643,7 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 	CallInfo *cinfo;
 	int tracing = 0;
 	int lmf_offset = 0;
-	int prev_sp_offset;
+	int prev_sp_offset, reg_offset;
 
 	if (mono_jit_trace_calls != NULL && mono_trace_eval (method))
 		tracing = 1;
@@ -3602,21 +3652,40 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 	cfg->code_size = 256 + sig->param_count * 20;
 	code = cfg->native_code = g_malloc (cfg->code_size);
 
+	mono_emit_unwind_op_def_cfa (cfg, code, ARMREG_SP, 0);
+
 	ARM_MOV_REG_REG (code, ARMREG_IP, ARMREG_SP);
 
 	alloc_size = cfg->stack_offset;
 	pos = 0;
 
 	if (!method->save_lmf) {
+		/* We save SP by storing it into IP and saving IP */
 		ARM_PUSH (code, (cfg->used_int_regs | (1 << ARMREG_IP) | (1 << ARMREG_LR)));
 		prev_sp_offset = 8; /* ip and lr */
 		for (i = 0; i < 16; ++i) {
 			if (cfg->used_int_regs & (1 << i))
 				prev_sp_offset += 4;
 		}
+		mono_emit_unwind_op_def_cfa_offset (cfg, code, prev_sp_offset);
+		reg_offset = 0;
+		for (i = 0; i < 16; ++i) {
+			if ((cfg->used_int_regs & (1 << i)) || (i == ARMREG_IP) || (i == ARMREG_LR)) {
+				mono_emit_unwind_op_offset (cfg, code, i, (- prev_sp_offset) + reg_offset);
+				reg_offset += 4;
+			}
+		}
 	} else {
 		ARM_PUSH (code, 0x5ff0);
 		prev_sp_offset = 4 * 10; /* all but r0-r3, sp and pc */
+		mono_emit_unwind_op_def_cfa_offset (cfg, code, prev_sp_offset);
+		reg_offset = 0;
+		for (i = 0; i < 16; ++i) {
+			if ((i > ARMREG_R3) && (i != ARMREG_SP) && (i != ARMREG_PC)) {
+				mono_emit_unwind_op_offset (cfg, code, i, (- prev_sp_offset) + reg_offset);
+				reg_offset += 4;
+			}
+		}
 		pos += sizeof (MonoLMF) - prev_sp_offset;
 		lmf_offset = pos;
 	}
@@ -3638,9 +3707,12 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 			code = mono_arm_emit_load_imm (code, ARMREG_IP, alloc_size);
 			ARM_SUB_REG_REG (code, ARMREG_SP, ARMREG_SP, ARMREG_IP);
 		}
+		mono_emit_unwind_op_def_cfa_offset (cfg, code, prev_sp_offset + alloc_size);
 	}
-	if (cfg->frame_reg != ARMREG_SP)
+	if (cfg->frame_reg != ARMREG_SP) {
 		ARM_MOV_REG_REG (code, cfg->frame_reg, ARMREG_SP);
+		mono_emit_unwind_op_def_cfa_reg (cfg, code, cfg->frame_reg);
+	}
 	//g_print ("prev_sp_offset: %d, alloc_size:%d\n", prev_sp_offset, alloc_size);
 	prev_sp_offset += alloc_size;
 
@@ -3844,10 +3916,27 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 	}
 
 	if (method->save_lmf) {
+		gboolean get_lmf_fast = FALSE;
 
-		mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD, 
-			     (gpointer)"mono_get_lmf_addr");
-		code = emit_call_seq (cfg, code);
+#ifdef HAVE_AEABI_READ_TP
+		gint32 lmf_addr_tls_offset = mono_get_lmf_addr_tls_offset ();
+
+		if (lmf_addr_tls_offset != -1) {
+			get_lmf_fast = TRUE;
+
+			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD, 
+								 (gpointer)"__aeabi_read_tp");
+			code = emit_call_seq (cfg, code);
+
+			ARM_LDR_IMM (code, ARMREG_R0, ARMREG_R0, lmf_addr_tls_offset);
+			get_lmf_fast = TRUE;
+		}
+#endif
+		if (!get_lmf_fast) {
+			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD, 
+								 (gpointer)"mono_get_lmf_addr");
+			code = emit_call_seq (cfg, code);
+		}
 		/* we build the MonoLMF structure on the stack - see mini-arm.h */
 		/* lmf_offset is the offset from the previous stack pointer,
 		 * alloc_size is the total stack space allocated, so the offset
@@ -4048,9 +4137,17 @@ mono_arch_emit_exceptions (MonoCompile *cfg)
 
 }
 
+static gboolean tls_offset_inited = FALSE;
+
 void
 mono_arch_setup_jit_tls_data (MonoJitTlsData *tls)
 {
+	if (!tls_offset_inited) {
+		tls_offset_inited = TRUE;
+
+  		lmf_tls_offset = mono_get_lmf_tls_offset ();
+		lmf_addr_tls_offset = mono_get_lmf_addr_tls_offset ();
+	}
 }
 
 void
@@ -4071,15 +4168,16 @@ mono_arch_print_tree (MonoInst *tree, int arity)
 	return 0;
 }
 
-MonoInst* mono_arch_get_domain_intrinsic (MonoCompile* cfg)
+MonoInst*
+mono_arch_get_domain_intrinsic (MonoCompile* cfg)
 {
-	return NULL;
+	return mono_get_domain_intrinsic (cfg);
 }
 
-MonoInst* 
+MonoInst*
 mono_arch_get_thread_intrinsic (MonoCompile* cfg)
 {
-	return NULL;
+	return mono_get_thread_intrinsic (cfg);
 }
 
 guint32
@@ -4097,9 +4195,6 @@ mono_arch_flush_register_windows (void)
 void
 mono_arch_fixup_jinfo (MonoCompile *cfg)
 {
-	/* max encoded stack usage is 64KB * 4 */
-	g_assert ((cfg->stack_usage & ~(0xffff << 2)) == 0);
-	cfg->jit_info->used_regs |= cfg->stack_usage << 14;
 }
 
 #ifdef MONO_ARCH_HAVE_IMT
@@ -4198,14 +4293,25 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 {
 	int size, i, extra_space = 0;
 	arminstr_t *code, *start, *vtable_target = NULL;
-	size = BASE_SIZE;
+	gboolean large_offsets = FALSE;
+	guint32 **constant_pool_starts;
 
-	g_assert (!fail_tramp);
+	size = BASE_SIZE;
+	constant_pool_starts = g_new0 (guint32*, count);
+
+	/* 
+	 * We might be called with a fail_tramp from the IMT builder code even if
+	 * MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK is not defined.
+	 */
+	//g_assert (!fail_tramp);
 
 	for (i = 0; i < count; ++i) {
 		MonoIMTCheckItem *item = imt_entries [i];
 		if (item->is_equals) {
-			g_assert (arm_is_imm12 (DISTANCE (vtable, &vtable->vtable[item->value.vtable_slot])));
+			if (!arm_is_imm12 (DISTANCE (vtable, &vtable->vtable[item->value.vtable_slot]))) {
+				item->chunk_size += 32;
+				large_offsets = TRUE;
+			}
 
 			if (item->check_target_idx) {
 				if (!item->compare_done)
@@ -4224,7 +4330,10 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 		size += item->chunk_size;
 	}
 
-	start = code = mono_code_manager_reserve (domain->code_mp, size);
+	if (large_offsets)
+		size += 4 * count; /* The ARM_ADD_REG_IMM to pop the stack */
+
+	start = code = mono_domain_code_reserve (domain, size);
 
 #if DEBUG_IMT
 	printf ("building IMT thunk for class %s %s entries %d code size %d code at %p end %p vtable %p\n", vtable->klass->name_space, vtable->klass->name, count, size, start, ((guint8*)start) + size, vtable);
@@ -4234,7 +4343,10 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 	}
 #endif
 
-	ARM_PUSH2 (code, ARMREG_R0, ARMREG_R1);
+	if (large_offsets)
+		ARM_PUSH4 (code, ARMREG_R0, ARMREG_R1, ARMREG_IP, ARMREG_PC);
+	else
+		ARM_PUSH2 (code, ARMREG_R0, ARMREG_R1);
 	ARM_LDR_IMM (code, ARMREG_R0, ARMREG_LR, -4);
 	vtable_target = code;
 	ARM_LDR_IMM (code, ARMREG_IP, ARMREG_PC, 0);
@@ -4245,7 +4357,9 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 
 	for (i = 0; i < count; ++i) {
 		MonoIMTCheckItem *item = imt_entries [i];
-		arminstr_t *imt_method = NULL;
+		arminstr_t *imt_method = NULL, *vtable_offset_ins = NULL;
+		gint32 vtable_offset;
+
 		item->code_target = (guint8*)code;
 
 		if (item->is_equals) {
@@ -4257,9 +4371,6 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 				}
 				item->jmp_code = (guint8*)code;
 				ARM_B_COND (code, ARMCOND_NE, 0);
-
-				ARM_POP2 (code, ARMREG_R0, ARMREG_R1);
-				ARM_LDR_IMM (code, ARMREG_PC, ARMREG_IP, DISTANCE (vtable, &vtable->vtable[item->value.vtable_slot]));
 			} else {
 				/*Enable the commented code to assert on wrong method*/
 #if ENABLE_WRONG_METHOD_CHECK
@@ -4267,13 +4378,34 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 				ARM_LDR_IMM (code, ARMREG_R1, ARMREG_PC, 0);
 				ARM_CMP_REG_REG (code, ARMREG_R0, ARMREG_R1);
 				ARM_B_COND (code, ARMCOND_NE, 1);
-#endif
-				ARM_POP2 (code, ARMREG_R0, ARMREG_R1);
-				ARM_LDR_IMM (code, ARMREG_PC, ARMREG_IP, DISTANCE (vtable, &vtable->vtable[item->value.vtable_slot]));
 
-#if ENABLE_WRONG_METHOD_CHECK
 				ARM_DBRK (code);
 #endif
+			}
+
+			vtable_offset = DISTANCE (vtable, &vtable->vtable[item->value.vtable_slot]);
+			if (!arm_is_imm12 (vtable_offset)) {
+				/* 
+				 * We need to branch to a computed address but we don't have
+				 * a free register to store it, since IP must contain the 
+				 * vtable address. So we push the two values to the stack, and
+				 * load them both using LDM.
+				 */
+				/* Compute target address */
+				vtable_offset_ins = code;
+				ARM_LDR_IMM (code, ARMREG_R1, ARMREG_PC, 0);
+				ARM_LDR_REG_REG (code, ARMREG_R1, ARMREG_IP, ARMREG_R1);
+				/* Save it to the fourth slot */
+				ARM_STR_IMM (code, ARMREG_R1, ARMREG_SP, 3 * sizeof (gpointer));
+				/* Restore registers and branch */
+				ARM_POP4 (code, ARMREG_R0, ARMREG_R1, ARMREG_IP, ARMREG_PC);
+				
+				code = arm_emit_value_and_patch_ldr (code, vtable_offset_ins, vtable_offset);
+			} else {
+				ARM_POP2 (code, ARMREG_R0, ARMREG_R1);
+				if (large_offsets)
+					ARM_ADD_REG_IMM8 (code, ARMREG_SP, ARMREG_SP, 2 * sizeof (gpointer));
+				ARM_LDR_IMM (code, ARMREG_PC, ARMREG_IP, vtable_offset);
 			}
 
 			if (imt_method)
@@ -4287,6 +4419,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 			}
 
 			/*We reserve the space for bsearch IMT values after the first entry with an absolute jump*/
+			constant_pool_starts [i] = code;
 			if (extra_space) {
 				code += extra_space;
 				extra_space = 0;
@@ -4309,7 +4442,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 		}
 		if (i > 0 && item->is_equals) {
 			int j;
-			arminstr_t *space_start = (arminstr_t*)(item->code_target + item->chunk_size);
+			arminstr_t *space_start = constant_pool_starts [i];
 			for (j = i - 1; j >= 0 && !imt_entries [j]->is_equals; --j) {
 				space_start = arm_emit_value_and_patch_ldr (space_start, (arminstr_t*)imt_entries [j]->code_target, (guint32)imt_entries [j]->key);
 			}
@@ -4324,6 +4457,8 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 	}
 #endif
 
+	g_free (constant_pool_starts);
+
 	mono_arch_flush_icache ((guint8*)start, size);
 	mono_stats.imt_thunks_size += code - start;
 
@@ -4336,5 +4471,14 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 gpointer
 mono_arch_context_get_int_reg (MonoContext *ctx, int reg)
 {
-	return ctx->regs [reg];
+	if (reg >= 4 && reg <= 11)
+		return (gpointer)ctx->regs [reg - 4];
+	else if (reg == ARMREG_IP)
+		return (gpointer)ctx->regs [8];
+	else if (reg == ARMREG_LR)
+		return (gpointer)ctx->regs [9];
+	else {
+		g_assert_not_reached ();
+		return NULL;
+	}
 }

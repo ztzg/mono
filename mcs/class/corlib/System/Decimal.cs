@@ -141,6 +141,7 @@ namespace System
 		public Decimal (uint value) 
 		{
 			lo = value;
+			flags = hi = mid = 0;
 		}
 
 		public Decimal (long value) 
@@ -1239,7 +1240,7 @@ namespace System
 
 		object IConvertible.ToType (Type type, IFormatProvider provider)
 		{
-			return Convert.ToType (this, type, provider);
+			return Convert.ToType (this, type, provider, false);
 		}
 
 		bool IConvertible.ToBoolean (IFormatProvider provider)

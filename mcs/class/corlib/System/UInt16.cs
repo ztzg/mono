@@ -73,12 +73,7 @@ namespace System
 #if NET_2_0
 		public int CompareTo (ushort value)
 		{
-			if (m_value == value)
-				return 0;
-			if (m_value > value)
-				return 1;
-			else
-				return -1;
+			return m_value - value;
 		}
 
 		public bool Equals (ushort obj)
@@ -223,7 +218,7 @@ namespace System
 
 		object IConvertible.ToType (Type type, IFormatProvider provider)
 		{
-			return System.Convert.ToType (m_value, type, provider);
+			return System.Convert.ToType (m_value, type, provider, false);
 		}
 
 #if ONLY_1_1

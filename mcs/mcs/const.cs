@@ -105,13 +105,10 @@ namespace Mono.CSharp {
 			if (TypeManager.IsBuiltinOrEnum (t))
 				return true;
 
-			if (t.IsPointer || t.IsValueType)
-				return false;
-			
-			if (TypeManager.IsGenericParameter (t))
+			if (TypeManager.IsGenericParameter (t) || t.IsPointer)
 				return false;
 
-			return true;
+			return TypeManager.IsReferenceType (t);
 		}
 
 		/// <summary>
@@ -136,27 +133,13 @@ namespace Mono.CSharp {
 
 		void EmitDecimalConstant ()
 		{
-			ConstructorInfo ctor = TypeManager.decimal_constant_attribute_ctor;
-			if (ctor == null) {
-				if (TypeManager.decimal_constant_attribute_type == null) {
-					TypeManager.decimal_constant_attribute_type = TypeManager.CoreLookupType (
-						"System.Runtime.CompilerServices", "DecimalConstantAttribute", Kind.Class, true);
+			PredefinedAttribute pa = PredefinedAttributes.Get.DecimalConstant;
+			if (pa.Constructor == null &&
+				!pa.ResolveConstructor (Location, TypeManager.byte_type, TypeManager.byte_type,
+					TypeManager.uint32_type, TypeManager.uint32_type, TypeManager.uint32_type))
+				return;
 
-					if (TypeManager.decimal_constant_attribute_type == null)
-						return;
-				}
-
-				ctor = TypeManager.GetPredefinedConstructor (TypeManager.decimal_constant_attribute_type, Location,
-					TypeManager.byte_type, TypeManager.byte_type,
-					TypeManager.uint32_type, TypeManager.uint32_type, TypeManager.uint32_type);
-
-				if (ctor == null)
-					return;
-
-				TypeManager.decimal_constant_attribute_ctor = ctor;
-			}
-
-			Decimal d = ((DecimalConstant) value).Value;
+			Decimal d = (Decimal) value.GetValue ();
 			int [] bits = Decimal.GetBits (d);
 			object [] args = new object [] { 
 				(byte) (bits [3] >> 16),
@@ -164,7 +147,7 @@ namespace Mono.CSharp {
 				(uint) bits [2], (uint) bits [1], (uint) bits [0]
 			};
 
-			CustomAttributeBuilder cab = new CustomAttributeBuilder (ctor, args);
+			CustomAttributeBuilder cab = new CustomAttributeBuilder (pa.Constructor, args);
 			FieldBuilder.SetCustomAttribute (cab);
 		}
 
@@ -187,7 +170,13 @@ namespace Mono.CSharp {
 
 		public static void Error_InvalidConstantType (Type t, Location loc)
 		{
-			Report.Error (283, loc, "The type `{0}' cannot be declared const", TypeManager.CSharpName (t));
+			if (TypeManager.IsGenericParameter (t)) {
+				Report.Error (1959, loc,
+					"Type parameter `{0}' cannot be declared const", TypeManager.CSharpName (t));
+			} else {
+				Report.Error (283, loc,
+					"The type `{0}' cannot be declared const", TypeManager.CSharpName (t));
+			}
 		}
 
 		#region IConstant Members
@@ -272,10 +261,11 @@ namespace Mono.CSharp {
 			if (fi is FieldBuilder)
 				return null;
 
-			if (TypeManager.decimal_constant_attribute_type == null)
+			PredefinedAttribute pa = PredefinedAttributes.Get.DecimalConstant;
+			if (!pa.IsDefined)
 				return null;
 
-			object[] attrs = fi.GetCustomAttributes (TypeManager.decimal_constant_attribute_type, false);
+			object[] attrs = fi.GetCustomAttributes (pa.Type, false);
 			if (attrs.Length != 1)
 				return null;
 

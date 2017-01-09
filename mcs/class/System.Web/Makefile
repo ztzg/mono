@@ -16,6 +16,10 @@ WEBSERVICES_DEP := System.Web.Services.dll
 WEBSERVICES_DEP_FILE := $(wildcard ../lib/$(PROFILE)/$(WEBSERVICES_DEP))
 MONOWEB_DEP := Mono.Web.dll
 MONOWEB_DEP_FILE := $(wildcard ../lib/$(PROFILE)/$(MONOWEB_DEP))
+ifndef NO_SYSTEMCORE_DEP
+SYSTEMCORE_DEP := System.Core.dll
+SYSTEMCORE_DEP_FILE := $(wildcard ../lib/$(PROFILE)/$(SYSTEMCORE_DEP))
+endif
 CYCLIC_DEPS := $(WEBSERVICES_DEP) $(MONOWEB_DEP)
 CYCLIC_DEP_FILES := $(WEBSERVICES_DEP_FILE) $(MONOWEB_DEP_FILE)
 endif
@@ -159,6 +163,8 @@ TEST_RESOURCE_FILES = \
 	Test/mainsoft/NunitWebResources/ContentPlaceHolderInTemplate.master \
 	Test/mainsoft/NunitWebResources/MissingMasterFile.aspx \
 	Test/mainsoft/NunitWebResources/CustomSectionEmptyCollection.aspx \
+	Test/mainsoft/NunitWebResources/NoDoubleOnInitOnRemoveAdd.aspx \
+	Test/mainsoft/NunitWebResources/NoDoubleOnInitOnRemoveAdd.aspx.cs \
 	Test/mainsoft/NunitWebResources/LoginDisplayRememberMe.aspx
 
 RESX_DIST =  resources/TranslationResources.resx
@@ -218,6 +224,11 @@ LIB_MCS_FLAGS += -define:MONOWEB_DEP -r:$(MONOWEB_DEP)
 $(the_lib): $(MONOWEB_DEP_FILE)
 endif
 
+ifdef SYSTEMCORE_DEP_FILE
+LIB_MCS_FLAGS += -define:SYSTEMCORE_DEP -r:$(SYSTEMCORE_DEP)
+$(the_lib): $(SYSTEMCORE_DEP_FILE)
+endif
+
 ifdef DEBUG
 LIB_MCS_FLAGS += -define:DEBUG
 endif
@@ -228,6 +239,10 @@ endif
 
 ifdef MONO_TRACE
 LIB_MCS_FLAGS += -define:TRACE -define:MONO_TRACE
+endif
+
+ifdef DEVEL
+LIB_MCS_FLAGS += -define:DEVEL
 endif
 
 $(the_lib): $(RESX_RES) $(RESOURCE_FILES2) $(RESOURCE_FILES_1)

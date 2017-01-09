@@ -96,7 +96,7 @@ int_not: dest:i src1:i len:2 clob:1
 int_conv_to_i1: dest:i src1:y len:3
 int_conv_to_i2: dest:i src1:i len:3
 int_conv_to_i4: dest:i src1:i len:2
-int_conv_to_r4: dest:f src1:i len:7
+int_conv_to_r4: dest:f src1:i len:13
 int_conv_to_r8: dest:f src1:i len:7
 int_conv_to_u4: dest:i src1:i
 int_conv_to_u2: dest:i src1:i len:3
@@ -128,9 +128,9 @@ checkthis: src1:b len:3
 voidcall: len:17 clob:c
 voidcall_reg: src1:i len:11 clob:c
 voidcall_membase: src1:b len:16 clob:c
-fcall: dest:f len:48 clob:c
-fcall_reg: dest:f src1:i len:48 clob:c
-fcall_membase: dest:f src1:b len:48 clob:c
+fcall: dest:f len:17 clob:c
+fcall_reg: dest:f src1:i len:11 clob:c
+fcall_membase: dest:f src1:b len:16 clob:c
 lcall: dest:l len:17 clob:c
 lcall_reg: dest:l src1:i len:11 clob:c
 lcall_membase: dest:l src1:b len:16 clob:c
@@ -204,7 +204,7 @@ long_shr: dest:L src1:L src2:s clob:1 len:22
 long_shr_un: dest:L src1:L src2:s clob:1 len:22
 long_conv_to_ovf_i: dest:i src1:i src2:i len:30
 long_mul_ovf: 
-long_conv_to_r_un: dest:f src1:i src2:i len:37 
+long_conv_to_r_un: dest:f src1:i src2:i len:20 
 long_shr_imm: dest:L src1:L clob:1 len:10
 long_shr_un_imm: dest:L src1:L clob:1 len:10
 long_shl_imm: dest:L src1:L clob:1 len:10
@@ -304,7 +304,7 @@ tls_get: dest:i len:20
 atomic_add_i4: src1:b src2:i dest:i len:16
 atomic_add_new_i4: src1:b src2:i dest:i len:16
 atomic_exchange_i4: src1:b src2:i dest:a len:24
-atomic_cas_imm_i4: src1:b src2:i dest:a len:24
+atomic_cas_i4: src1:b src2:i src3:a dest:i len:24
 memory_barrier: len:16
 
 relaxed_nop: len:2
@@ -376,12 +376,12 @@ cmov_ile_un: dest:i src1:i src2:i len:16 clob:1
 cmov_ilt_un: dest:i src1:i src2:i len:16 clob:1
 
 long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:30
-long_conv_to_r8_2: dest:f src1:i src2:i len:37 
-long_conv_to_r4_2: dest:f src1:i src2:i len:64
-long_conv_to_r_un_2: dest:f src1:i src2:i len:37 
+long_conv_to_r8_2: dest:f src1:i src2:i len:14 
+long_conv_to_r4_2: dest:f src1:i src2:i len:14
+long_conv_to_r_un_2: dest:f src1:i src2:i len:20 
 
 fmove: dest:f src1:f
-float_conv_to_r4: dest:f src1:f
+float_conv_to_r4: dest:f src1:f  len:12
 
 load_mem: dest:i len:9
 loadi4_mem: dest:i len:9
@@ -602,3 +602,5 @@ expand_i4: dest:x src1:i len:9
 expand_r4: dest:x src1:f len:13
 expand_r8: dest:x src1:f len:13
 
+liverange_start: len:0
+liverange_end: len:0

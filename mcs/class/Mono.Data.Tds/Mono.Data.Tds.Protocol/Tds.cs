@@ -5,11 +5,12 @@
 //   Tim Coleman (tim@timcoleman.com)
 //   Sebastien Pouliot (spouliot@motus.com)
 //   Daniel Morgan (danielmorgan@verizon.net)
+// 	 Veerapuram Varadhan  (vvaradhan@novell.com)
 //
 // Copyright (C) 2002 Tim Coleman
 // Portions (C) 2003 Motus Technologies Inc. (http://www.motus.com)
 // Portions (C) 2003,2005 Daniel Morgan
-//
+// Portions (C) 2008,2009 Novell Inc. 
 
 //
 // Permission is hereby granted, free of charge, to any person obtaining
@@ -102,6 +103,7 @@ namespace Mono.Data.Tds.Protocol
 		bool isRowRead;
 		bool isResultRead;
 		bool LoadInProgress;
+		byte [] collation;
 
 		internal int poolStatus = 0;
 
@@ -196,6 +198,10 @@ namespace Mono.Data.Tds.Protocol
 			set { sequentialAccess = value; }
 		}
 
+		public byte[] Collation {
+			get {return collation; }
+		}
+		
 		private void SkipRow ()
 		{
 			SkipToColumnIndex (Columns.Count);
@@ -684,7 +690,15 @@ namespace Mono.Data.Tds.Protocol
 			return new TdsInternalErrorMessageEventArgs (new TdsInternalError (theClass, lineNumber, message, number, procedure, server, source, state));
 		}
 
-		private object GetColumnValue (
+		private Encoding GetEncodingFromColumnCollation (int lcid, int sortId)
+		{
+			if (sortId != 0) 
+				return TdsCharset.GetEncodingFromSortOrder (sortId);
+			else
+				return TdsCharset.GetEncodingFromLCID (lcid);
+		}
+		
+		protected object GetColumnValue (
 #if NET_2_0
 			TdsColumnType? colType,
 #else
@@ -705,11 +719,23 @@ namespace Mono.Data.Tds.Protocol
 		{
 			int len;
 			object element = null;
+			Encoding enc = null;
+			int lcid = 0, sortId = 0;
 
 #if NET_2_0
 			if (colType == null)
 				throw new ArgumentNullException ("colType");
 #endif
+			if (ordinal > -1 && tdsVersion > TdsVersion.tds70) {
+#if NET_2_0
+				lcid = (int) columns[ordinal].LCID;
+				sortId = (int) columns[ordinal].SortOrder; 
+#else
+				lcid = (int) columns[ordinal]["LCID"];
+				sortId = (int) columns[ordinal]["SortOrder"];
+#endif 			
+			}
+			
 			switch (colType) {
 			case TdsColumnType.IntN :
 				if (outParam)
@@ -719,6 +745,7 @@ namespace Mono.Data.Tds.Protocol
 			case TdsColumnType.Int1 :
 			case TdsColumnType.Int2 :
 			case TdsColumnType.Int4 :
+			case TdsColumnType.BigInt :
 				element = GetIntValue (colType);
 				break;
 			case TdsColumnType.Image :
@@ -727,20 +754,23 @@ namespace Mono.Data.Tds.Protocol
 				element = GetImageValue ();
 				break;
 			case TdsColumnType.Text :
+				enc = GetEncodingFromColumnCollation (lcid, sortId);			
 				if (outParam) 
 					comm.Skip (1);
-				element = GetTextValue (false);
+				element = GetTextValue (false, enc);
 				break;
 			case TdsColumnType.NText :
+				enc = GetEncodingFromColumnCollation (lcid, sortId);
 				if (outParam) 
 					comm.Skip (1);
-				element = GetTextValue (true);
+				element = GetTextValue (true, enc);
 				break;
 			case TdsColumnType.Char :
 			case TdsColumnType.VarChar :
+				enc = GetEncodingFromColumnCollation (lcid, sortId);			
 				if (outParam)
 					comm.Skip (1);
-				element = GetStringValue (false, false);
+				element = GetStringValue (colType, false, outParam, enc);
 				break;
 			case TdsColumnType.BigVarBinary :
 				if (outParam)
@@ -763,20 +793,23 @@ namespace Mono.Data.Tds.Protocol
 				break;
 			case TdsColumnType.BigChar :
 			case TdsColumnType.BigVarChar :
+				enc = GetEncodingFromColumnCollation (lcid, sortId);				
 				if (outParam)
 					comm.Skip (2);
-				element = GetStringValue (false, false);
+				element = GetStringValue (colType, false, outParam, enc);
 				break;
 			case TdsColumnType.NChar :
 			case TdsColumnType.BigNVarChar :
+				enc = GetEncodingFromColumnCollation (lcid, sortId);				
 				if (outParam)
 					comm.Skip(2);
-				element = GetStringValue (true, false);
+				element = GetStringValue (colType, true, outParam, enc);
 				break;
 			case TdsColumnType.NVarChar :
+				enc = GetEncodingFromColumnCollation (lcid, sortId);				
 				if (outParam) 
 					comm.Skip (1);
-				element = GetStringValue (true, false);
+				element = GetStringValue (colType, true, outParam, enc);
 				break;
 			case TdsColumnType.Real :
 			case TdsColumnType.Float8 :
@@ -820,7 +853,7 @@ namespace Mono.Data.Tds.Protocol
 				// workaround for fact that TDS 7.0 returns
 				// bigint as decimal (19,0), and client code
 				// expects it to be returned as a long
-				if (scale == 0 && precision <= 19) {
+				if (scale == 0 && precision <= 19 && tdsVersion == TdsVersion.tds70) {
 					if (!(element is System.DBNull))
 						element = Convert.ToInt64 (element);
 				}
@@ -890,7 +923,7 @@ namespace Mono.Data.Tds.Protocol
 			int len;
 			object result = DBNull.Value;
 
-			if (tdsVersion == TdsVersion.tds70) {
+			if (tdsVersion >= TdsVersion.tds70) {
 				len = comm.GetTdsShort ();
 				if (len != 0xffff && len >= 0)
 					result = comm.GetBytes (len, true);
@@ -1095,6 +1128,9 @@ namespace Mono.Data.Tds.Protocol
 				throw new ArgumentNullException ("type");
 #endif
 			switch (type) {
+			case TdsColumnType.BigInt :
+				len = 8;
+				break;
 			case TdsColumnType.IntN :
 				len = comm.GetByte ();
 				break;
@@ -1112,6 +1148,8 @@ namespace Mono.Data.Tds.Protocol
 			}
 
 			switch (len) {
+			case 8:
+				return (comm.GetTdsInt64 ());
 			case 4 :
 				return (comm.GetTdsInt ());
 			case 2 :
@@ -1175,19 +1213,45 @@ namespace Mono.Data.Tds.Protocol
 			}
 		}
 
-		private object GetStringValue (bool wideChars, bool outputParam)
+		protected object GetStringValue (
+#if NET_2_0
+			TdsColumnType? colType,
+#else
+			TdsColumnType colType,
+#endif
+		    bool wideChars, bool outputParam, Encoding encoder)
 		{
-			bool shortLen = (tdsVersion == TdsVersion.tds70) && (wideChars || !outputParam);
+			bool shortLen = false;
+			Encoding enc = encoder;
+		
+			if (tdsVersion > TdsVersion.tds70 && outputParam && 
+			    (colType == TdsColumnType.BigChar || colType == TdsColumnType.BigNVarChar || 
+			     colType == TdsColumnType.BigVarChar || colType == TdsColumnType.NChar ||
+				 colType == TdsColumnType.NVarChar)) {
+				// Read collation for SqlServer 2000 and beyond
+				byte[] collation;
+				collation = Comm.GetBytes (5, true);
+				enc = TdsCharset.GetEncoding (collation);
+				shortLen = true;
+			} else {
+				shortLen = (tdsVersion >= TdsVersion.tds70) && (wideChars || !outputParam);
+			}
+			
 			int len = shortLen ? comm.GetTdsShort () : (comm.GetByte () & 0xff);
+			return GetStringValue (wideChars, len, enc);
+		}
 
+		protected object GetStringValue (bool wideChars, int len, Encoding enc)
+		{
 			if (tdsVersion < TdsVersion.tds70 && len == 0)
 				return DBNull.Value;
+			
 			else if (len >= 0) {
 				object result;
 				if (wideChars)
-					result = comm.GetString (len / 2);
+					result = comm.GetString (len / 2, enc);
 				else
-					result = comm.GetString (len, false);
+					result = comm.GetString (len, false, enc);
 				if (tdsVersion < TdsVersion.tds70 && ((string) result).Equals (" "))
 					result = string.Empty;
 				return result;
@@ -1201,7 +1265,7 @@ namespace Mono.Data.Tds.Protocol
 			return comm.GetTdsShort ();
 		}
 
-		private object GetTextValue (bool wideChars)
+		private object GetTextValue (bool wideChars, Encoding encoder)
 		{
 			string result = null;
 			byte hasValue = comm.GetByte ();
@@ -1221,17 +1285,17 @@ namespace Mono.Data.Tds.Protocol
 				return string.Empty;
 
 			if (wideChars)
-				result = comm.GetString (len / 2);
+				result = comm.GetString (len / 2, encoder);
 			else
-				result = comm.GetString (len, false);
+				result = comm.GetString (len, false, encoder);
 				len /= 2;
 
 			if ((byte) tdsVersion < (byte) TdsVersion.tds70 && result == " ")
 				result = string.Empty;
 
-			return result;
+			return result;			
 		}
-
+		
 		internal bool IsBlobType (TdsColumnType columnType)
 		{
 			return (columnType == TdsColumnType.Text || columnType == TdsColumnType.Image || columnType == TdsColumnType.NText);
@@ -1260,6 +1324,7 @@ namespace Mono.Data.Tds.Protocol
 				case TdsColumnType.Int1 :
 				case TdsColumnType.Int2 :
 				case TdsColumnType.Int4 :
+				case TdsColumnType.BigInt :
 				case TdsColumnType.Float8 :
 				case TdsColumnType.DateTime :
 				case TdsColumnType.Bit :
@@ -1324,6 +1389,7 @@ namespace Mono.Data.Tds.Protocol
 				case TdsColumnType.Float8 :
 				case TdsColumnType.DateTime :
 				case TdsColumnType.Money :
+				case TdsColumnType.BigInt :
 					return 8;
 				default :
 					return 0;
@@ -1374,7 +1440,7 @@ namespace Mono.Data.Tds.Protocol
 
 				bool isAlias = ((values[2] & (byte) TdsColumnStatus.Rename) != 0);
 				if (isAlias) {
-					if (tdsVersion == TdsVersion.tds70) {
+					if (tdsVersion >= TdsVersion.tds70) {
 						columnNameLength = comm.GetByte ();
 						position += 2 * columnNameLength + 1;
 					}
@@ -1465,6 +1531,8 @@ namespace Mono.Data.Tds.Protocol
 
 		protected void ProcessEnvironmentChange ()
 		{
+			// VARADHAN: TDS 8 Debugging
+			//Console.WriteLine ("In ProcessEnvironmentChange... entry");
 			int len = GetSubPacketLength ();
 			TdsEnvPacketSubType type = (TdsEnvPacketSubType) comm.GetByte ();
 			int cLen;
@@ -1475,7 +1543,7 @@ namespace Mono.Data.Tds.Protocol
 				cLen = comm.GetByte ();
 				blockSize = comm.GetString (cLen);
 
-				if (tdsVersion == TdsVersion.tds70) 
+				if (tdsVersion >= TdsVersion.tds70) 
 					comm.Skip (len - 2 - cLen * 2);
 				else 
 					comm.Skip (len - 2 - cLen);
@@ -1498,7 +1566,7 @@ namespace Mono.Data.Tds.Protocol
 			case TdsEnvPacketSubType.Locale :
 				cLen = comm.GetByte ();
 				int lcid = 0;
-				if (tdsVersion == TdsVersion.tds70) {
+				if (tdsVersion >= TdsVersion.tds70) {
 					lcid = (int) Convert.ChangeType (comm.GetString (cLen), typeof (int));
 					comm.Skip (len - 2 - cLen * 2);
 				}
@@ -1517,26 +1585,56 @@ namespace Mono.Data.Tds.Protocol
 					originalDatabase = newDB;
 				database = newDB;
 				break;
+			case TdsEnvPacketSubType.CollationInfo:
+				cLen = comm.GetByte ();
+				collation = comm.GetBytes (cLen, true);
+				lcid = TdsCollation.LCID (collation);
+				locale = new CultureInfo (lcid);
+				SetCharset (TdsCharset.GetEncoding (collation));
+				break;
+				
 			default:
 				comm.Skip (len - 1);
 				break;
 			}
+			// VARADHAN: TDS 8 Debugging
+			//Console.WriteLine ("In ProcessEnvironmentChange... exit");
 		}
 
 		protected void ProcessLoginAck ()
 		{
+			uint srvVersion = 0;
 			GetSubPacketLength ();
+			
+			// Valid only for a Login7 request
+			if (tdsVersion >= TdsVersion.tds70) {
+				comm.Skip (1);
+				srvVersion = (uint)comm.GetTdsInt ();
 
-			if (tdsVersion == TdsVersion.tds70) {
-				comm.Skip (5);
+				switch (srvVersion) {
+				case 0x07000000: 
+					tdsVersion = TdsVersion.tds70;
+					break;
+				case 0x07010000:
+					tdsVersion = TdsVersion.tds80;
+					break;
+				case 0x71000001:
+					tdsVersion = TdsVersion.tds81;
+					break;
+				case 0x72090002:
+					tdsVersion = TdsVersion.tds90;
+					break;
+				}
+			}
+			
+			if (tdsVersion >= TdsVersion.tds70) {
 				int nameLength = comm.GetByte ();
 				databaseProductName = comm.GetString (nameLength);
 				databaseMajorVersion = comm.GetByte ();
 				databaseProductVersion = String.Format ("{0}.{1}.{2}", databaseMajorVersion.ToString("00"),
 								comm.GetByte ().ToString("00"), 
 								(256 * comm.GetByte () + comm.GetByte ()).ToString("0000"));
-			}
-			else {
+			} else {
 				comm.Skip (5);
 				short nameLength = comm.GetByte ();
 				databaseProductName = comm.GetString (nameLength);
@@ -1602,7 +1700,7 @@ namespace Mono.Data.Tds.Protocol
 				messages.Add (new TdsInternalError (theClass, lineNumber, message, number, procedure, server, source, state));
 		}
 
-		protected void ProcessOutputParam ()
+		protected virtual void ProcessOutputParam ()
 		{
 			GetSubPacketLength ();
 			/*string paramName = */comm.GetString (comm.GetByte () & 0xff);
@@ -1623,8 +1721,13 @@ namespace Mono.Data.Tds.Protocol
 
 		protected virtual TdsPacketSubType ProcessSubPacket ()
 		{
+			// VARADHAN: TDS 8 Debugging
+			// Console.WriteLine ("In ProcessSubPacket... entry");
+			
 			TdsPacketSubType subType = (TdsPacketSubType) comm.GetByte ();
 
+			// VARADHAN: TDS 8 Debugging
+			//Console.WriteLine ("Subpacket type: {0}", subType);
 			switch (subType) {
 			case TdsPacketSubType.Dynamic2:
 				comm.Skip (comm.GetTdsInt ());
@@ -1692,6 +1795,8 @@ namespace Mono.Data.Tds.Protocol
 				break;
 			}
 
+			// VARADHAN: TDS 8 Debugging
+			//Console.WriteLine ("In ProcessSubPacket... exit");
 			return subType;
 		}
 
@@ -1703,7 +1808,7 @@ namespace Mono.Data.Tds.Protocol
 			int len;
 
 			while (position < totalLength) {
-				if (tdsVersion == TdsVersion.tds70) {
+				if (tdsVersion >= TdsVersion.tds70) {
 					len = comm.GetTdsShort ();
 					position += 2 * (len + 1);
 				}
@@ -1715,6 +1820,11 @@ namespace Mono.Data.Tds.Protocol
 			}
 		}
 
+		protected void SetCharset (Encoding encoder)
+		{
+			comm.Encoder = encoder;
+		}
+		
 		protected void SetCharset (string charset)
 		{
 			if (charset == null || charset.Length > 30)
@@ -1731,7 +1841,7 @@ namespace Mono.Data.Tds.Protocol
 				encoder = Encoding.GetEncoding ("iso-8859-1");
 				this.charset = "iso_1";
 			}
-			comm.Encoder = encoder;
+			SetCharset (encoder);
 		}
 
 		protected void SetLanguage (string language)

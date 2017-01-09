@@ -359,10 +359,14 @@ Debugging. Turns on verbose yacc parsing.
 Shows the compiler version.
 .TP
 .I \-warnaserror, \-warnaserror+
-Treat warnings as errors.
+All compilers warnings will be reported as errors.
 .TP
-.I \-warnaserror:W1,[Wn]
+.I \-warnaserror:W1,[Wn], -warnaserror+:W1,[Wn]
 Treats one or more compiler warnings as errors.
+.TP
+.I \-warnaserror-:W1,[Wn]
+Sets one or more compiler warnings to be always threated as warnings.
+Becomes useful when used together with -warnaserror.
 .TP
 .I \-warn:LEVEL
 Sets the warning level.  0 is the lowest warning level, and 4 is the
@@ -380,7 +384,14 @@ assembly.
 Use this to stop option parsing, and allow option-looking parameters
 to be passed on the command line.
 .PP
-.SH PACKAGES
+.SH PACKAGES AND LIBRARIES
+When referencing an assembly, if the name of the assembly is a path,
+the compiler will try to load the assembly specified in the path.   If
+it does not, then the compiler will try loading the assembly from the
+current directory, the compiler base directory and if the assembly is
+not found in any of those places in the directories specified as
+arguments to the -lib: command argument.
+.PP
 Depending on the invocation for the C# compiler (mcs, gmcs, or smcs)
 you will get a default set of libraries and versions of those
 libraries that are referenced.

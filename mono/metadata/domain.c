@@ -5,7 +5,8 @@
  *	Dietmar Maurer (dietmar@ximian.com)
  *	Patrik Torstensson
  *
- * (C) 2001 Ximian, Inc.
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include <config.h>
@@ -43,16 +44,33 @@
  * but we can't depend on this).
  */
 static guint32 appdomain_thread_id = -1;
+
+/* 
+ * Avoid calling TlsSetValue () if possible, since in the io-layer, it acquires
+ * a global lock (!) so it is a contention point.
+ */
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(PLATFORM_WIN32)
+#define NO_TLS_SET_VALUE
+#endif
  
 #ifdef HAVE_KW_THREAD
+
 static __thread MonoDomain * tls_appdomain MONO_TLS_FAST;
+
 #define GET_APPDOMAIN() tls_appdomain
+
+#ifdef NO_TLS_SET_VALUE
+#define SET_APPDOMAIN(x) do { \
+	tls_appdomain = x; \
+} while (FALSE)
+#else
 #define SET_APPDOMAIN(x) do { \
 	tls_appdomain = x; \
 	TlsSetValue (appdomain_thread_id, x); \
 } while (FALSE)
+#endif
 
-#else
+#else /* !HAVE_KW_THREAD */
 
 #define GET_APPDOMAIN() ((MonoDomain *)TlsGetValue (appdomain_thread_id))
 #define SET_APPDOMAIN(x) TlsSetValue (appdomain_thread_id, x);
@@ -140,7 +158,12 @@ mono_jit_info_find_aot_module (guint8* addr);
 guint32
 mono_domain_get_tls_key (void)
 {
+#ifdef NO_TLS_SET_VALUE
+	g_assert_not_reached ();
+	return 0;
+#else
 	return appdomain_thread_id;
+#endif
 }
 
 gint32
@@ -1159,6 +1182,8 @@ mono_domain_create (void)
 	domain->friendly_name = NULL;
 	domain->search_path = NULL;
 
+	mono_gc_register_root ((char*)&(domain->MONO_DOMAIN_FIRST_GC_TRACKED), G_STRUCT_OFFSET (MonoDomain, MONO_DOMAIN_LAST_GC_TRACKED) - G_STRUCT_OFFSET (MonoDomain, MONO_DOMAIN_FIRST_GC_TRACKED), NULL);
+
 	mono_profiler_appdomain_event (domain, MONO_PROFILE_START_LOAD);
 
 	domain->mp = mono_mempool_new ();
@@ -1966,19 +1991,106 @@ mono_domain_get_id (MonoDomain *domain)
 	return domain->domain_id;
 }
 
+/*
+ * mono_domain_alloc:
+ *
+ * LOCKING: Acquires the domain lock.
+ */
 gpointer
 mono_domain_alloc (MonoDomain *domain, guint size)
 {
+	gpointer res;
+
+	mono_domain_lock (domain);
 	mono_perfcounters->loader_bytes += size;
-	return mono_mempool_alloc (domain->mp, size);
+	res = mono_mempool_alloc (domain->mp, size);
+	mono_domain_unlock (domain);
+
+	return res;
 }
 
+/*
+ * mono_domain_alloc0:
+ *
+ * LOCKING: Acquires the domain lock.
+ */
 gpointer
 mono_domain_alloc0 (MonoDomain *domain, guint size)
 {
+	gpointer res;
+
+	mono_domain_lock (domain);
 	mono_perfcounters->loader_bytes += size;
-	return mono_mempool_alloc0 (domain->mp, size);
+	res = mono_mempool_alloc0 (domain->mp, size);
+	mono_domain_unlock (domain);
+
+	return res;
 }
+
+/*
+ * mono_domain_code_reserve:
+ *
+ * LOCKING: Acquires the domain lock.
+ */
+void*
+mono_domain_code_reserve (MonoDomain *domain, int size)
+{
+	gpointer res;
+
+	mono_domain_lock (domain);
+	res = mono_code_manager_reserve (domain->code_mp, size);
+	mono_domain_unlock (domain);
+
+	return res;
+}
+
+/*
+ * mono_domain_code_reserve_align:
+ *
+ * LOCKING: Acquires the domain lock.
+ */
+void*
+mono_domain_code_reserve_align (MonoDomain *domain, int size, int alignment)
+{
+	gpointer res;
+
+	mono_domain_lock (domain);
+	res = mono_code_manager_reserve_align (domain->code_mp, size, alignment);
+	mono_domain_unlock (domain);
+
+	return res;
+}
+
+/*
+ * mono_domain_code_commit:
+ *
+ * LOCKING: Acquires the domain lock.
+ */
+void
+mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize)
+{
+	mono_domain_lock (domain);
+	mono_code_manager_commit (domain->code_mp, data, size, newsize);
+	mono_domain_unlock (domain);
+}
+
+/*
+ * mono_domain_code_foreach:
+ * Iterate over the code thunks of the code manager of @domain.
+ * 
+ * The @func callback MUST not take any locks. If it really needs to, it must respect
+ * the locking rules of the runtime: http://www.mono-project.com/Mono:Runtime:Documentation:ThreadSafety 
+ * LOCKING: Acquires the domain lock.
+ */
+
+void
+mono_domain_code_foreach (MonoDomain *domain, MonoCodeManagerFunc func, void *user_data)
+{
+	mono_domain_lock (domain);
+	mono_code_manager_foreach (domain->code_mp, func, user_data);
+	mono_domain_unlock (domain);
+}
+
 
 void 
 mono_context_set (MonoAppContext * new_context)
@@ -2227,7 +2339,6 @@ app_config_parse (const char *exe_filename)
 	GMarkupParseContext *context;
 	char *text;
 	gsize len;
-	struct stat buf;
 	const char *bundled_config;
 	char *config_filename;
 
@@ -2239,11 +2350,6 @@ app_config_parse (const char *exe_filename)
 	} else {
 		config_filename = g_strconcat (exe_filename, ".config", NULL);
 
-		if (stat (config_filename, &buf) != 0) {
-			g_free (config_filename);
-			return NULL;
-		}
-	
 		if (!g_file_get_contents (config_filename, &text, &len, NULL)) {
 			g_free (config_filename);
 			return NULL;

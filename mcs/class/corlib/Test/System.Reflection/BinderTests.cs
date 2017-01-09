@@ -9,6 +9,7 @@
 
 using NUnit.Framework;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 
@@ -293,6 +294,18 @@ namespace MonoTests.System.Reflection
 			Assert.AreEqual (3, bug42457_2, "#6");
 		}
 
+#if NET_2_0
+		[Test]
+		public void NullableArg () {
+			MethodInfo method = (typeof (BinderTest)).GetMethod("SetA", new [] {typeof (Int32)});
+			Assert.AreEqual (5, method.Invoke (new BinderTest (), new object [] { 5 }));
+		}
+
+		public int SetA(Int32? a) {
+			return (int)a;
+		}
+#endif
+
 		static void MethodWithLongParam(long param)
 		{
 		}
@@ -474,6 +487,162 @@ namespace MonoTests.System.Reflection
             MethodInfo mi = type.GetMethod ("Bug380361", BindingFlags.NonPublic | BindingFlags.Instance, binder, new Type [] { typeof (MyEnum) }, null);
             mi.Invoke (this, new object [] { (long)MyEnum.Zero });
         }
-    }
-}
 
+		class AssertingBinder : Binder {
+
+			public static readonly AssertingBinder Instance = new AssertingBinder ();
+
+			public override FieldInfo BindToField (BindingFlags bindingAttr, FieldInfo [] match, object value, CultureInfo culture)
+			{
+				Assert.IsNotNull (match);
+
+				return Type.DefaultBinder.BindToField (bindingAttr, match, value, culture);
+			}
+
+			public override MethodBase BindToMethod (BindingFlags bindingAttr, MethodBase [] match, ref object [] args, ParameterModifier [] modifiers, CultureInfo culture, string [] names, out object state)
+			{
+				Assert.IsNotNull (match);
+				Assert.IsNotNull (args);
+
+				return Type.DefaultBinder.BindToMethod (bindingAttr, match, ref args, modifiers, culture, names, out state);
+			}
+
+			public override object ChangeType (object value, Type type, CultureInfo culture)
+			{
+				Assert.IsNotNull (value);
+				Assert.IsNotNull (type);
+
+				return Type.DefaultBinder.ChangeType (value, type, culture);
+			}
+
+			public override void ReorderArgumentArray (ref object [] args, object state)
+			{
+				Assert.IsNotNull (args);
+
+				Type.DefaultBinder.ReorderArgumentArray (ref args, state);
+			}
+
+			public override MethodBase SelectMethod (BindingFlags bindingAttr, MethodBase [] match, Type [] types, ParameterModifier [] modifiers)
+			{
+				Assert.IsNotNull (match);
+				Assert.IsNotNull (types);
+
+				return Type.DefaultBinder.SelectMethod (bindingAttr, match, types, modifiers);
+			}
+
+			public override PropertyInfo SelectProperty (BindingFlags bindingAttr, PropertyInfo [] match, Type returnType, Type [] indexes, ParameterModifier [] modifiers)
+			{
+				Assert.IsNotNull (match);
+
+				return Type.DefaultBinder.SelectProperty (bindingAttr, match, returnType, indexes, modifiers);
+			}
+		}
+
+		class BaseFoo {
+			public void Bar ()
+			{
+			}
+
+			public int Add(int x, int y)
+			{
+				return x + y;	
+			}
+		}
+
+		class Foo : BaseFoo {
+
+			public bool Barred;
+
+			public new void Bar ()
+			{
+				Barred = true;
+			}
+		}
+
+		[Test] // bug  #471257
+		public void TestCustomBinderNonNullArgs ()
+		{
+			var foo = new Foo ();
+
+			typeof (Foo).InvokeMember (
+				"Bar",
+				BindingFlags.InvokeMethod,
+				AssertingBinder.Instance,
+				foo,
+				null);
+
+			Assert.IsTrue (foo.Barred);
+		}
+
+		class Int32Binder : AssertingBinder
+		{
+			public override object ChangeType(Object value, Type type, CultureInfo ci)
+			{
+				if (value.GetType() == type) {
+					return value;
+				} else if (type.IsPrimitive) {
+					if (type == typeof(Int32))
+						return Convert.ToInt32(value);
+
+					throw new ArgumentException("missing support for primitive: " + type);
+				}
+
+				throw new ArgumentException("Could not ChangeType to " + type.FullName);
+			}
+		}
+
+		[Test]
+		[ExpectedException(typeof (TargetParameterCountException))]
+		public void TestTargetParameterCountExceptionA ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke((new Foo ()), 0, null, null, null);
+		}
+
+		[Test]
+		[ExpectedException(typeof (TargetParameterCountException))]
+		public void TestTargetParameterCountExceptionB ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke(new Foo (), 0, null, new object [] {1}, null);
+		}
+
+		[Test]
+		public void TestBindingFlagsA ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke((new Foo ()), 0, null, new object [] {1, 2}, null);
+		}
+
+		[Test]
+		[ExpectedException(typeof (ArgumentException))]
+		public void TestBindingFlagsB ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke((new Foo ()), 0, null, new object [] {1, "2"}, null);
+		}
+
+		[Test]
+		public void TestBindingFlagsExactBindingA ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke((new Foo ()), BindingFlags.ExactBinding, null, new object [] {1, 2}, null);
+		}
+
+		[Test]
+		[ExpectedException(typeof (ArgumentException))]
+		public void TestBindingFlagsExactBindingB ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke((new Foo ()), BindingFlags.ExactBinding, new Int32Binder (), new object [] {1, "2"}, null);
+		}
+
+		[Test]
+		public void TestBindingFlagsExactBindingC ()
+		{
+			MethodInfo method = typeof (Foo).GetMethod ("Add");
+			method.Invoke((new Foo ()), 0, new Int32Binder (), new object [] {1, "2"}, null);
+		}
+
+	}
+}

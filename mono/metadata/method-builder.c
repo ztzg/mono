@@ -4,8 +4,8 @@
  * Author:
  *   Paolo Molaro (lupus@ximian.com)
  *
- * (C) 2002 Ximian, Inc.  http://www.ximian.com
- *
+ * Copyright 2002-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include "config.h"
@@ -139,7 +139,7 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 
 	image = mb->method->klass->image;
 
-	mono_loader_lock ();
+	mono_loader_lock (); /*FIXME I think this lock can go.*/
 	if (mb->dynamic) {
 		method = mb->method;
 
@@ -189,6 +189,8 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 
 	header->num_clauses = mb->num_clauses;
 	header->clauses = mb->clauses;
+
+	method->skip_visibility = mb->skip_visibility;
 
 	mw = (MonoMethodWrapper*) mb->method;
 	i = g_list_length (mw->method_data);

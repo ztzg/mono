@@ -6,7 +6,8 @@
  *	Patrik Torstensson
  *	Gonzalo Paniagua Javier (gonzalo@ximian.com)
  *
- * (c) 2001-2003 Ximian, Inc. (http://www.ximian.com)
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 #undef ASSEMBLY_LOAD_DEBUG
 #include <config.h>
@@ -18,6 +19,9 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
 #ifdef HAVE_UTIME_H
 #include <utime.h>
 #else
@@ -41,9 +45,12 @@
 #include <mono/metadata/monitor.h>
 #include <mono/metadata/threadpool.h>
 #include <mono/metadata/mono-debug.h>
+#include <mono/metadata/mono-debug-debugger.h>
 #include <mono/metadata/attach.h>
 #include <mono/metadata/file-io.h>
+#include <mono/metadata/lock-tracer.h>
 #include <mono/metadata/console-io.h>
+#include <mono/metadata/threads-types.h>
 #include <mono/utils/mono-uri.h>
 #include <mono/utils/mono-logger.h>
 #include <mono/utils/mono-path.h>
@@ -64,7 +71,7 @@
  * Changes which are already detected at runtime, like the addition
  * of icalls, do not require an increment.
  */
-#define MONO_CORLIB_VERSION 69
+#define MONO_CORLIB_VERSION 74
 
 typedef struct
 {
@@ -110,6 +117,9 @@ add_assemblies_to_domain (MonoDomain *domain, MonoAssembly *ass, GHashTable *has
 
 static MonoAppDomain *
 mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *setup);
+
+static char *
+get_shadow_assembly_location_base (MonoDomain *domain);
 
 static MonoLoadFunc load_function = NULL;
 
@@ -227,10 +237,14 @@ mono_runtime_init (MonoDomain *domain, MonoThreadStartCB start_cb,
 	/* GC init has to happen after thread init */
 	mono_gc_init ();
 
+#ifndef DISABLE_SOCKETS
 	mono_network_init ();
-
+#endif
+	
 	mono_console_init ();
 	mono_attach_init ();
+
+	mono_locks_tracer_init ();
 
 	/* mscorlib is loaded before we install the load hook */
 	mono_domain_fire_assembly_load (mono_defaults.corlib->assembly, NULL);
@@ -300,8 +314,9 @@ mono_runtime_cleanup (MonoDomain *domain)
 
 	mono_thread_cleanup ();
 
+#ifndef DISABLE_SOCKETS
 	mono_network_cleanup ();
-
+#endif
 	mono_marshal_cleanup ();
 
 	mono_type_initialization_cleanup ();
@@ -413,6 +428,8 @@ mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *
 	mono_set_private_bin_path_from_config (data);
 	
 	add_assemblies_to_domain (data, mono_defaults.corlib->assembly, NULL);
+
+	mono_debugger_event_create_appdomain (data, get_shadow_assembly_location_base (data));
 
 	return ad;
 }
@@ -706,7 +723,6 @@ mono_set_private_bin_path_from_config (MonoDomain *domain)
 {
 	gchar *config_file, *text;
 	gsize len;
-	struct stat sbuf;
 	GMarkupParseContext *context;
 	RuntimeConfig runtime_config;
 	
@@ -714,10 +730,6 @@ mono_set_private_bin_path_from_config (MonoDomain *domain)
 		return;
 
 	config_file = mono_string_to_utf8 (domain->setup->configuration_file);
-	if (stat (config_file, &sbuf) != 0) {
-		g_free (config_file);
-		return;
-	}
 
 	if (!g_file_get_contents (config_file, &text, &len, NULL)) {
 		g_free (config_file);
@@ -1091,6 +1103,19 @@ set_domain_search_path (MonoDomain *domain)
 	mono_domain_assemblies_unlock (domain);
 }
 
+#ifdef DISABLE_SHADOW_COPY
+gboolean
+mono_is_shadow_copy_enabled (MonoDomain *domain, const gchar *dir_name)
+{
+	return FALSE;
+}
+
+char *
+mono_make_shadow_copy (const char *filename)
+{
+	return (char *) filename;
+}
+#else
 static gboolean
 shadow_copy_sibling (gchar *src, gint srclen, const char *extension, gchar *target, gint targetlen, gint tail_len)
 {
@@ -1473,7 +1498,7 @@ mono_make_shadow_copy (const char *filename)
 	
 	return shadow;
 }
-
+#endif /* DISABLE_SHADOW_COPY */
 
 MonoDomain *
 mono_domain_from_appdomain (MonoAppDomain *appdomain)
@@ -1966,11 +1991,12 @@ unload_thread_main (void *arg)
 	 * We also hold the loader lock because we're going to change
 	 * class->runtime_info.
 	 */
-	mono_domain_lock (domain);
+
 	mono_loader_lock ();
+	mono_domain_lock (domain);
 	g_hash_table_foreach (domain->class_vtable_hash, clear_cached_vtable, domain);
-	mono_loader_unlock ();
 	mono_domain_unlock (domain);
+	mono_loader_unlock ();
 
 	mono_threads_clear_cached_culture (domain);
 
@@ -2032,6 +2058,8 @@ mono_domain_unload (MonoDomain *domain)
 		}
 	}
 
+	mono_debugger_event_unload_appdomain (domain);
+
 	mono_domain_set (domain, FALSE);
 	/* Notify OnDomainUnload listeners */
 	method = mono_class_get_method_from_name (domain->domain->mbr.obj.vtable->klass, "DoDomainUnload", -1);	
@@ -2061,9 +2089,9 @@ mono_domain_unload (MonoDomain *domain)
 	 * http://bugzilla.ximian.com/show_bug.cgi?id=27663
 	 */ 
 #if 0
-	thread_handle = CreateThread (NULL, 0, unload_thread_main, &thread_data, 0, &tid);
+	thread_handle = mono_create_thread (NULL, 0, unload_thread_main, &thread_data, 0, &tid);
 #else
-	thread_handle = CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)unload_thread_main, &thread_data, CREATE_SUSPENDED, &tid);
+	thread_handle = mono_create_thread (NULL, 0, (LPTHREAD_START_ROUTINE)unload_thread_main, &thread_data, CREATE_SUSPENDED, &tid);
 	if (thread_handle == NULL) {
 		return;
 	}

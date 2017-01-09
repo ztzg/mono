@@ -12,12 +12,10 @@
 #
 if USE_BATCH_FILES
 SCRIPT_IN=script.bat.in
-SMCS_IN=smcs.bat.in
 FILTER=sed -e 's,\.bat\.exe,\.exe,g' -e 's,/,\\,g'
 SCRIPT_SUFFIX=.bat
 else
 SCRIPT_IN=script.in
-SMCS_IN=smcs.in
 FILTER=cat
 SCRIPT_SUFFIX=
 endif
@@ -31,7 +29,6 @@ bin_SCRIPTS = \
 	$(scripts_1_0_compat)	\
 	$(scripts_defaults)	\
 	$(scripts_2_0)		\
-	$(scripts_2_1)		\
 	$(scripts_service)	\
 	$(scripts_nunit)	\
 	$(scripts_rpmhelpers)	\
@@ -67,7 +64,6 @@ scripts_1_0 = \
 	mjs$(SCRIPT_SUFFIX)			\
 	monolinker$(SCRIPT_SUFFIX)		\
 	mono-cil-strip$(SCRIPT_SUFFIX)		\
-	mono-xmltool$(SCRIPT_SUFFIX)		\
 	mozroots$(SCRIPT_SUFFIX)		\
 	permview$(SCRIPT_SUFFIX)		\
 	prj2make$(SCRIPT_SUFFIX)		\
@@ -97,8 +93,11 @@ scripts_2_0 = \
 	resgen2$(SCRIPT_SUFFIX)			\
 	wsdl2$(SCRIPT_SUFFIX)			\
 	xsd2$(SCRIPT_SUFFIX)			\
+	mono-xmltool$(SCRIPT_SUFFIX)		\
 	sgen$(SCRIPT_SUFFIX)			\
+	sqlmetal$(SCRIPT_SUFFIX)		\
 	sqlsharp$(SCRIPT_SUFFIX)		\
+	svcutil$(SCRIPT_SUFFIX)			\
 	xbuild$(SCRIPT_SUFFIX)
 
 MDOC_SUBCOMMANDS = \
@@ -131,12 +130,11 @@ scripts_defaults = 		\
 	resgen$(SCRIPT_SUFFIX)			\
 	wsdl$(SCRIPT_SUFFIX)
 
-scripts_2_1 = smcs$(SCRIPT_SUFFIX)
 scripts_service = mono-service mono-service2
 scripts_nunit = nunit-console$(SCRIPT_SUFFIX) nunit-console2$(SCRIPT_SUFFIX)
 scripts_rpmhelpers = mono-find-provides mono-find-requires
 
-CLEANFILES = $(scripts_1_0) $(scripts_1_0_umask) $(scripts_2_0) $(scripts_2_1) $(scripts_defaults) $(scripts_1_0_compat) mono-service mono-service2 nunit-console nunit-console2 mono-find-provides mono-find-requires mod $(MDOC_SUBCOMMANDS)
+CLEANFILES = $(scripts_1_0) $(scripts_1_0_umask) $(scripts_2_0) $(scripts_defaults) $(scripts_1_0_compat) mono-service mono-service2 nunit-console nunit-console2 mono-find-provides mono-find-requires mod $(MDOC_SUBCOMMANDS)
 DISTCLEANFILES = $(pkgconfig_DATA) $(scripts_rpmhelpers)
 
 EXTRA_DIST =			\
@@ -144,8 +142,6 @@ EXTRA_DIST =			\
 	script.bat.in		\
 	script_umask.in		\
 	script_umask.bat.in	\
-	smcs.in			\
-	smcs.bat.in		\
 	mod.in			\
 	mono-service.in		\
 	mono-find-provides.in	\
@@ -204,10 +200,6 @@ nunit-console$(SCRIPT_SUFFIX): $(SCRIPT_IN) Makefile
 
 nunit-console2$(SCRIPT_SUFFIX): $(SCRIPT_IN) Makefile
 	$(REWRITE2_DEBUG) -e 's,@''exe_name@,nunit-console,g' $(srcdir)/$(SCRIPT_IN) | $(FILTER) > $@.tmp
-	mv $@.tmp $@
-
-smcs$(SCRIPT_SUFFIX): $(SMCS_IN) Makefile
-	$(REWRITE2_1) -e "s,@""exe_name@,smcs,g" $(srcdir)/$(SMCS_IN) | $(FILTER) > $@.tmp
 	mv $@.tmp $@
 
 mod$(SCRIPT_SUFFIX): mod.in Makefile

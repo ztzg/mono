@@ -1,5 +1,5 @@
 //
-// System.Web.UI.FileLevelControlBuilderAttribute.cs
+// System.Web.UI.DataSourceCacheDurationConverter.cs
 //
 // Authors:
 //     Arina Itkes (arinai@mainsoft.com)

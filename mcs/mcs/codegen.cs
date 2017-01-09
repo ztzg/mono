@@ -40,7 +40,6 @@ namespace Mono.CSharp {
 		static AppDomain current_domain;
 
 		public static AssemblyClass Assembly;
-		public static ModuleClass Module;
 
 		static CodeGen ()
 		{
@@ -50,7 +49,6 @@ namespace Mono.CSharp {
 		public static void Reset ()
 		{
 			Assembly = new AssemblyClass ();
-			Module = new ModuleClass (RootContext.Unsafe);
 		}
 
 		public static string Basename (string name)
@@ -99,10 +97,9 @@ namespace Mono.CSharp {
 			AssemblyName an = Assembly.GetAssemblyName (name, name);
 			
 			Assembly.Builder = current_domain.DefineDynamicAssembly (an, AssemblyBuilderAccess.Run | COMPILER_ACCESS);
-			Module.Builder = Assembly.Builder.DefineDynamicModule (Basename (name), false);
-#if GMCS_SOURCE
+			RootContext.ToplevelTypes = new ModuleContainer (true);
+			RootContext.ToplevelTypes.Builder = Assembly.Builder.DefineDynamicModule (Basename (name), false);
 			Assembly.Name = Assembly.Builder.GetName ();
-#endif
 		}
 		
 		//
@@ -118,7 +115,7 @@ namespace Mono.CSharp {
 			if (an.KeyPair != null) {
 				// If we are going to strong name our assembly make
 				// sure all its refs are strong named
-				foreach (Assembly a in RootNamespace.Global.Assemblies) {
+				foreach (Assembly a in GlobalRootNamespace.Instance.Assemblies) {
 					AssemblyName ref_name = a.GetName ();
 					byte [] b = ref_name.GetPublicKeyToken ();
 					if (b == null || b.Length == 0) {
@@ -154,11 +151,9 @@ namespace Mono.CSharp {
 				return false;
 			}
 
-#if GMCS_SOURCE
 			// Get the complete AssemblyName from the builder
 			// (We need to get the public key and token)
 			Assembly.Name = Assembly.Builder.GetName ();
-#endif
 
 			//
 			// Pass a path-less name to DefineDynamicModule.  Wonder how
@@ -169,12 +164,12 @@ namespace Mono.CSharp {
 			// load the default symbol writer.
 			//
 			try {
-				Module.Builder = Assembly.Builder.DefineDynamicModule (
+				RootContext.ToplevelTypes.Builder = Assembly.Builder.DefineDynamicModule (
 					Basename (name), Basename (output), want_debugging_support);
 
 #if !MS_COMPATIBLE
 				// TODO: We should use SymbolWriter from DefineDynamicModule
-				if (want_debugging_support && !SymbolWriter.Initialize (Module.Builder, output)) {
+				if (want_debugging_support && !SymbolWriter.Initialize (RootContext.ToplevelTypes.Builder, output)) {
 					Report.Error (40, "Unexpected debug information initialization error `{0}'",
 						"Could not find the symbol writer assembly (Mono.CompilerServices.SymbolWriter.dll)");
 					return false;
@@ -446,10 +441,6 @@ namespace Mono.CSharp {
 
 			if (return_type == null)
 				throw new ArgumentNullException ("return_type");
-#if GMCS_SOURCE
-			if ((return_type is TypeBuilder) && return_type.IsGenericTypeDefinition)
-				throw new InternalErrorException ();
-#endif
 
 			IsStatic = (code_flags & Modifiers.STATIC) != 0;
 			ReturnType = return_type;
@@ -769,7 +760,7 @@ namespace Mono.CSharp {
 		bool unreachable;
 
 		public bool ResolveTopBlock (EmitContext anonymous_method_host, ToplevelBlock block,
-					     Parameters ip, IMethodData md, out bool unreachable)
+					     ParametersCompiled ip, IMethodData md, out bool unreachable)
 		{
 			if (resolved) {
 				unreachable = this.unreachable;
@@ -1052,7 +1043,7 @@ namespace Mono.CSharp {
 			OptAttributes.Emit ();
 		}
 
-		protected Attribute ResolveAttribute (Type a_type)
+		protected Attribute ResolveAttribute (PredefinedAttribute a_type)
 		{
 			Attribute a = OptAttributes.Search (a_type);
 			if (a != null) {
@@ -1091,33 +1082,26 @@ namespace Mono.CSharp {
 		public AssemblyBuilder Builder;
 		bool is_cls_compliant;
 		bool wrap_non_exception_throws;
-		Type runtime_compatibility_attr_type;
 
 		public Attribute ClsCompliantAttribute;
 
 		ListDictionary declarative_security;
-#if GMCS_SOURCE
 		bool has_extension_method;		
 		public AssemblyName Name;
 		MethodInfo add_type_forwarder;
 		ListDictionary emitted_forwarders;
-#endif
 
 		// Module is here just because of error messages
 		static string[] attribute_targets = new string [] { "assembly", "module" };
 
 		public AssemblyClass (): base ()
 		{
-#if GMCS_SOURCE
 			wrap_non_exception_throws = true;
-#endif
 		}
 
 		public bool HasExtensionMethods {
 			set {
-#if GMCS_SOURCE				
 				has_extension_method = value;
-#endif
 			}
 		}
 
@@ -1146,9 +1130,6 @@ namespace Mono.CSharp {
 
 		public void Resolve ()
 		{
-			runtime_compatibility_attr_type = TypeManager.CoreLookupType (
-				"System.Runtime.CompilerServices", "RuntimeCompatibilityAttribute", Kind.Class, false);
-
 			if (RootContext.Unsafe) {
 				//
 				// Emits [assembly: SecurityPermissionAttribute (SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -1183,20 +1164,17 @@ namespace Mono.CSharp {
 			if (!OptAttributes.CheckTargets())
 				return;
 
-			if (TypeManager.cls_compliant_attribute_type != null)
-				ClsCompliantAttribute = ResolveAttribute (TypeManager.cls_compliant_attribute_type);
+			ClsCompliantAttribute = ResolveAttribute (PredefinedAttributes.Get.CLSCompliant);
 
 			if (ClsCompliantAttribute != null) {
 				is_cls_compliant = ClsCompliantAttribute.GetClsCompliantAttributeValue ();
 			}
 
-			if (runtime_compatibility_attr_type != null) {
-				Attribute a = ResolveAttribute (runtime_compatibility_attr_type);
-				if (a != null) {
-					object val = a.GetPropertyValue ("WrapNonExceptionThrows");
-					if (val != null)
-						wrap_non_exception_throws = (bool) val;
-				}
+			Attribute a = ResolveAttribute (PredefinedAttributes.Get.RuntimeCompatibility);
+			if (a != null) {
+				object val = a.GetPropertyValue ("WrapNonExceptionThrows");
+				if (val != null)
+					wrap_non_exception_throws = (bool) val;
 			}
 		}
 
@@ -1348,7 +1326,6 @@ namespace Mono.CSharp {
 			Report.Error (1548, "Error during assembly signing. " + text);
 		}
 
-#if GMCS_SOURCE
 		bool CheckInternalsVisibleAttribute (Attribute a)
 		{
 			string assembly_name = a.GetString ();
@@ -1357,7 +1334,11 @@ namespace Mono.CSharp {
 				
 			AssemblyName aname = null;
 			try {
+#if GMCS_SOURCE
 				aname = new AssemblyName (assembly_name);
+#else
+				throw new NotSupportedException ();
+#endif
 			} catch (FileLoadException) {
 			} catch (ArgumentException) {
 			}
@@ -1377,7 +1358,6 @@ namespace Mono.CSharp {
 
 			return true;
 		}
-#endif
 
 		static bool IsValidAssemblyVersion (string version)
 		{
@@ -1401,7 +1381,7 @@ namespace Mono.CSharp {
 			return true;
 		}
 
-		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder customBuilder)
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
 			if (a.IsValidSecurityAttribute ()) {
 				if (declarative_security == null)
@@ -1411,7 +1391,7 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			if (a.Type == TypeManager.assembly_culture_attribute_type) {
+			if (a.Type == pa.AssemblyCulture) {
 				string value = a.GetString ();
 				if (value == null || value.Length == 0)
 					return;
@@ -1422,7 +1402,7 @@ namespace Mono.CSharp {
 				}
 			}
 
-			if (a.Type == TypeManager.assembly_version_attribute_type) {
+			if (a.Type == pa.AssemblyVersion) {
 				string value = a.GetString ();
 				if (value == null || value.Length == 0)
 					return;
@@ -1435,11 +1415,10 @@ namespace Mono.CSharp {
 				}
 			}
 
-#if GMCS_SOURCE
-			if (a.Type == TypeManager.internals_visible_attr_type && !CheckInternalsVisibleAttribute (a))
+			if (a.Type == pa.InternalsVisibleTo && !CheckInternalsVisibleAttribute (a))
 				return;
 
-			if (a.Type == TypeManager.type_forwarder_attr_type) {
+			if (a.Type == pa.TypeForwarder) {
 				Type t = a.GetArgumentType ();
 				if (t == null || TypeManager.HasElementType (t)) {
 					Report.Error (735, a.Location, "Invalid type specified as an argument for TypeForwardedTo attribute");
@@ -1464,13 +1443,13 @@ namespace Mono.CSharp {
 					return;
 				}
 
-				if (t.IsNested) {
+				if (t.DeclaringType != null) {
 					Report.Error (730, a.Location, "Cannot forward type `{0}' because it is a nested type",
 						TypeManager.CSharpName (t));
 					return;
 				}
 
-				if (t.IsGenericType) {
+				if (TypeManager.IsGenericType (t)) {
 					Report.Error (733, a.Location, "Cannot forward generic type `{0}'", TypeManager.CSharpName (t));
 					return;
 				}
@@ -1489,35 +1468,32 @@ namespace Mono.CSharp {
 				return;
 			}
 			
-			if (a.Type == TypeManager.extension_attribute_type) {
+			if (a.Type == pa.Extension) {
 				a.Error_MisusedExtensionAttribute ();
 				return;
 			}
-#endif
-			Builder.SetCustomAttribute (customBuilder);
+
+			Builder.SetCustomAttribute (cb);
 		}
 
 		public override void Emit (TypeContainer tc)
 		{
 			base.Emit (tc);
 
-#if GMCS_SOURCE
 			if (has_extension_method)
-				Builder.SetCustomAttribute (TypeManager.extension_attribute_attr);
-#endif
+				PredefinedAttributes.Get.Extension.EmitAttribute (Builder);
 
-			if (runtime_compatibility_attr_type != null) {
-				// FIXME: Does this belong inside SRE.AssemblyBuilder instead?
-				if (OptAttributes == null || !OptAttributes.Contains (runtime_compatibility_attr_type)) {
-					ConstructorInfo ci = TypeManager.GetPredefinedConstructor (
-						runtime_compatibility_attr_type, Location.Null, Type.EmptyTypes);
-					PropertyInfo [] pis = new PropertyInfo [1];
-					pis [0] = TypeManager.GetPredefinedProperty (runtime_compatibility_attr_type,
-						"WrapNonExceptionThrows", Location.Null, TypeManager.bool_type);
-					object [] pargs = new object [1];
-					pargs [0] = true;
-					Builder.SetCustomAttribute (new CustomAttributeBuilder (ci, new object [0], pis, pargs));
-				}
+			// FIXME: Does this belong inside SRE.AssemblyBuilder instead?
+			PredefinedAttribute pa = PredefinedAttributes.Get.RuntimeCompatibility;
+			if (pa.IsDefined && (OptAttributes == null || !OptAttributes.Contains (pa))) {
+				ConstructorInfo ci = TypeManager.GetPredefinedConstructor (
+					pa.Type, Location.Null, Type.EmptyTypes);
+				PropertyInfo [] pis = new PropertyInfo [1];
+				pis [0] = TypeManager.GetPredefinedProperty (pa.Type,
+					"WrapNonExceptionThrows", Location.Null, TypeManager.bool_type);
+				object [] pargs = new object [1];
+				pargs [0] = true;
+				Builder.SetCustomAttribute (new CustomAttributeBuilder (ci, new object [0], pis, pargs));
 			}
 
 			if (declarative_security != null) {
@@ -1575,118 +1551,5 @@ namespace Mono.CSharp {
 				throw ex.InnerException;
 			}
 		}		
-	}
-
-	public class ModuleClass : CommonAssemblyModulClass {
-		// TODO: make it private and move all builder based methods here
-		public ModuleBuilder Builder;
-		bool m_module_is_unsafe;
-#if GMCS_SOURCE		
-		bool has_default_charset;
-#endif		
-
-		public CharSet DefaultCharSet = CharSet.Ansi;
-		public TypeAttributes DefaultCharSetType = TypeAttributes.AnsiClass;
-
-		static string[] attribute_targets = new string [] { "module" };
-
-		public ModuleClass (bool is_unsafe)
-		{
-			m_module_is_unsafe = is_unsafe;
-		}
-
- 		public override AttributeTargets AttributeTargets {
- 			get {
- 				return AttributeTargets.Module;
- 			}
-		}
-
-		public override bool IsClsComplianceRequired ()
-		{
-			return CodeGen.Assembly.IsClsCompliant;
-		}
-
-		public override void Emit (TypeContainer tc) 
-		{
-			base.Emit (tc);
-
-			if (m_module_is_unsafe) {
-				Type t = TypeManager.CoreLookupType ("System.Security", "UnverifiableCodeAttribute", Kind.Class, true);
-				if (t != null) {
-					ConstructorInfo unverifiable_code_ctor = TypeManager.GetPredefinedConstructor (t, Location.Null, Type.EmptyTypes);
-					if (unverifiable_code_ctor != null)
-						Builder.SetCustomAttribute (new CustomAttributeBuilder (unverifiable_code_ctor, new object [0]));
-				}
-			}
-		}
-                
-		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder customBuilder)
-		{
-			if (a.Type == TypeManager.cls_compliant_attribute_type) {
-				if (CodeGen.Assembly.ClsCompliantAttribute == null) {
-					Report.Warning (3012, 1, a.Location, "You must specify the CLSCompliant attribute on the assembly, not the module, to enable CLS compliance checking");
-				}
-				else if (CodeGen.Assembly.IsClsCompliant != a.GetBoolean ()) {
-					Report.SymbolRelatedToPreviousError (CodeGen.Assembly.ClsCompliantAttribute.Location, CodeGen.Assembly.ClsCompliantAttribute.GetSignatureForError ());
-					Report.Warning (3017, 1, a.Location, "You cannot specify the CLSCompliant attribute on a module that differs from the CLSCompliant attribute on the assembly");
-					return;
-				}
-			}
-
-			Builder.SetCustomAttribute (customBuilder);
-		}
-
-		public bool HasDefaultCharSet {
-			get {
-#if GMCS_SOURCE		
-				return has_default_charset;
-#else
-				return false;
-#endif								
-			}
-		}
-
-		/// <summary>
-		/// It is called very early therefore can resolve only predefined attributes
-		/// </summary>
-		public void Resolve ()
-		{
-#if GMCS_SOURCE
-			if (OptAttributes == null)
-				return;
-
-			if (!OptAttributes.CheckTargets())
-				return;
-
-			if (TypeManager.default_charset_type == null)
-				return;
-
-			Attribute a = ResolveAttribute (TypeManager.default_charset_type);
-			if (a != null) {
-				has_default_charset = true;
-				DefaultCharSet = a.GetCharSetValue ();
-				switch (DefaultCharSet) {
-				case CharSet.Ansi:
-				case CharSet.None:
-					break;
-				case CharSet.Auto:
-					DefaultCharSetType = TypeAttributes.AutoClass;
-					break;
-				case CharSet.Unicode:
-					DefaultCharSetType = TypeAttributes.UnicodeClass;
-					break;
-				default:
-					Report.Error (1724, a.Location, "Value specified for the argument to 'System.Runtime.InteropServices.DefaultCharSetAttribute' is not valid");
-					break;
-				}
-			}
-#endif
-		}
-
-		public override string[] ValidAttributeTargets {
-			get {
-				return attribute_targets;
-			}
-		}
 	}
 }

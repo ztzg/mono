@@ -38,6 +38,28 @@ namespace MonoTests.System.Xml
 	[TestFixture]
 	public class XmlBinaryDictionaryReaderTest
 	{
+		void Read (byte [] buf)
+		{
+			XmlDictionaryReader reader = XmlDictionaryReader.CreateBinaryReader (new MemoryStream (buf), new XmlDictionaryReaderQuotas ());
+
+			while (!reader.EOF)
+				reader.Read ();
+			// FIXME: use this instead; right now some tests are broken.
+			//XmlDocument doc = new XmlDocument ();
+			//doc.AppendChild (doc.CreateElement ("root"));
+			//while (!reader.EOF)
+			//	doc.DocumentElement.AppendChild (doc.ReadNode (reader));
+		}
+
+		void AssertNode (XmlNodeType nodeType, string localName, string ns, string value, int depth, XmlReader reader, string label)
+		{
+			Assert.AreEqual (nodeType, reader.NodeType, label + ".Node");
+			Assert.AreEqual (localName, reader.LocalName, label + ".LocalName");
+			Assert.AreEqual (ns, reader.NamespaceURI, label + ".NS");
+			Assert.AreEqual (value, reader.Value, label + ".Value");
+			Assert.AreEqual (depth, reader.Depth, label + ".Depth");
+		}
+
 		[Test]
 		[ExpectedException (typeof (ArgumentNullException))]
 		public void NullQuotas ()
@@ -172,7 +194,6 @@ namespace MonoTests.System.Xml
 		}
 
 		[Test]
-		[Category ("NotWorking")]
 		public void ContainsInvalidIndex ()
 		{
 			byte [] bytes = new byte [] {
@@ -192,19 +213,18 @@ namespace MonoTests.System.Xml
 		}
 
 		[Test]
-		[Category ("NotWorking")]
 		public void Beyond128DictionaryEntries ()
 		{
 			XmlDictionaryString ds;
 			MemoryStream ms = new MemoryStream ();
 			XmlDictionary dic = new XmlDictionary ();
 			for (int i = 0; i < 260; i++)
-				Assert.AreEqual (i, dic.Add ("n" + i).Key, "d");
+				Assert.AreEqual (i, dic.Add ("n" + i).Key, "dic");
 			XmlDictionary dic2 = new XmlDictionary ();
 			XmlBinaryReaderSession session = new XmlBinaryReaderSession ();
 			int idx;
 			for (int i = 0; i < 260; i++)
-				session.Add (i, "n" + i);
+				Assert.AreEqual (i, session.Add (i, "s" + i).Key, "session");
 
 			byte [] bytes = new byte [] {
 				// so, when it went beyond 128, the index
@@ -218,8 +238,19 @@ namespace MonoTests.System.Xml
 				1, 1, 1, 1};
 
 			XmlDictionaryReader reader = XmlDictionaryReader.CreateBinaryReader (new MemoryStream (bytes), dic, new XmlDictionaryReaderQuotas (), session);
-			while (!reader.EOF)
-				reader.Read ();
+			Assert.IsTrue (reader.Read (), "#r1");
+			Assert.AreEqual ("n128", reader.LocalName, "#l1");
+			Assert.IsTrue (reader.Read (), "#r2");
+			Assert.AreEqual ("s130", reader.LocalName, "#l1");
+			Assert.IsTrue (reader.Read (), "#r3");
+			Assert.AreEqual ("n132", reader.LocalName, "#l1");
+			Assert.IsTrue (reader.Read (), "#r4");
+			Assert.AreEqual ("n256", reader.LocalName, "#l1");
+			for (int i = 0; i < 4; i++) {
+				Assert.IsTrue (reader.Read (), "#re" + i);
+				Assert.AreEqual (XmlNodeType.EndElement, reader.NodeType, "#ne" + i);
+			}
+			Assert.IsFalse (reader.Read ()); // EOF
 		}
 
 		[Test]
@@ -285,17 +316,24 @@ namespace MonoTests.System.Xml
 				0x08, 7, 0x75, 0x72, 0x6E, 0x3A, 0x62, 0x61, 0x72, 1
 				};
 
-			XmlDictionaryReader reader = XmlDictionaryReader.CreateBinaryReader (new MemoryStream (bytes), dic, new XmlDictionaryReaderQuotas ());
-			while (!reader.EOF)
-				reader.Read ();
+			Read (bytes);
+
+			XmlDictionaryReader reader = XmlDictionaryReader.CreateBinaryReader (new MemoryStream (bytes), new XmlDictionaryReaderQuotas ());
+			Assert.IsTrue (reader.Read (), "#1-1");
+			AssertNode (XmlNodeType.Element, "root", "urn:bar", "", 0, reader, "#1");
+			reader.MoveToAttribute (0);
+			if (reader.LocalName != "a")
+				reader.MoveToAttribute (1);
+			AssertNode (XmlNodeType.Attribute, "a", "", "", 1, reader, "#2");
+			Assert.IsTrue (reader.ReadAttributeValue (), "#3");
+			AssertNode (XmlNodeType.Text, "a", "", "", 2, reader, "#4");
+			Assert.IsFalse (reader.ReadAttributeValue (), "#5");
 		}
 
 		[Test]
 		public void ReadTypedValues ()
 		{
-			XmlDictionaryReader reader = XmlDictionaryReader.CreateBinaryReader (new MemoryStream (typed_values), new XmlDictionaryReaderQuotas ());
-			while (!reader.EOF)
-				reader.Read ();
+			Read (typed_values);
 		}
 
 		byte [] typed_values = new byte [] {
@@ -309,6 +347,59 @@ namespace MonoTests.System.Xml
 			0x92, 0x4C, 0x15, 0x31, 0x91, 0x77, 0xE3, 0x01, 0x40, // 43
 			0x94, 0, 0, 6, 0, 0, 0, 0, 0, 0xD8, 0xEF, 0x2F, 0, 0, 0, 0, 0,
 			0x97, 0x80, 0x40, 0xA3, 0x29, 0xE5, 0x22, 0xC1, 8
+			};
+
+		[Test]
+		public void ReadShortPrefixedElement ()
+		{
+			Read (short_prefixed_elem_value);
+		}
+
+		static readonly byte [] short_prefixed_elem_value = {
+			0x6D, 4, 0x72, 0x6F, 0x6F, 0x74,
+			0x09, 1, 0x70, 7, 0x75, 0x72, 0x6E, 0x3A, 0x66, 0x6F, 0x6F,
+			0x99, 4, 0x74, 0x65, 0x73, 0x74,
+			};
+
+		[Test]
+		public void ReadInt16Array ()
+		{
+			Read (array_int32);
+
+			XmlDictionaryReader reader = XmlDictionaryReader.CreateBinaryReader (new MemoryStream (array_int16), new XmlDictionaryReaderQuotas ());
+			Assert.IsTrue (reader.Read (), "#1-1");
+			AssertNode (XmlNodeType.Element, "el", "", "", 0, reader, "#1-2");
+			Assert.IsTrue (reader.Read (), "#2-1");
+			AssertNode (XmlNodeType.Text, "", "", "4", 1, reader, "#2-2");
+			Assert.IsTrue (reader.Read (), "#3-1");
+			AssertNode (XmlNodeType.EndElement, "el", "", "", 0, reader, "#3-2");
+			Assert.IsTrue (reader.Read (), "#4-1");
+			AssertNode (XmlNodeType.Element, "el", "", "", 0, reader, "#4-2");
+			Assert.IsTrue (reader.Read (), "#5-1");
+			AssertNode (XmlNodeType.Text, "", "", "6", 1, reader, "#5-2");
+			Assert.IsTrue (reader.Read (), "#6-1");
+			AssertNode (XmlNodeType.EndElement, "el", "", "", 0, reader, "#6-2");
+			for (int i = 0; i < 3; i++) // 6, 8, 10
+				for (int j = 0; j < 3; j++) // el / text / endel
+					Assert.IsTrue (reader.Read (), "#x-" + i + j);
+			Assert.IsFalse (reader.Read (), "End");
+		}
+
+		static readonly byte [] array_int16 = {
+			0x03, 0x40, 2, 0x65, 0x6C, 0x01,
+			0x8B, 5, 4, 0, 6, 0, 8, 0, 10, 0, 12, 0,
+			};
+
+		[Test]
+		public void ReadInt32Array ()
+		{
+			Read (array_int32);
+		}
+
+		// make sure that 0 is not written in shortened format.
+		static readonly byte [] array_int32 = {
+			0x03, 0x40, 2, 0x65, 0x6C, 0x01,
+			0x8D, 3, 0, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0,
 			};
 	}
 }

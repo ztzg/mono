@@ -1,3 +1,102 @@
+2009-03-25  Geoff Norton  <gnorton@novell.com>
+
+	* XmlTextReader.cs: Create the uri as relativeorabsolute.
+
+2009-03-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReader.cs : handle DateTimeOffset in typed reader methods.
+
+2009-03-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriter2.cs : some weird TextWriter has null Encoding.
+	  Fixed bug #372525.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlParserContext.cs : .NET has weird nametable initialization.
+	  Fixed bug #484519.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReader.cs : (ReadToFollowing) check LocalName, not Name.
+	  Fixed bug #478506.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DTDRreader.cs : read up all DTD stream so that we don't have to
+	  see bugs like #469317 many times.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderBinarySupport.cs : ReadContentsAsBase64() could skip
+	  EndElement at the next XmlReader.Read(). Fixed bug #480066.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriter2.cs : only bogus v1 XmlTextWriter ignores null
+	  namespace for conflict check. Fixed bug #479725.
+
+2009-03-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : added ToUri() (extraneous in 2.0; used only from
+	  2.1 S.X.Serialization.dll in MS SDK).
+
+2009-03-02  Chris Toshok  <toshok@ximian.com>
+
+	* XmlReader.cs, XmlTextReader.cs, XmlTextReader2.cs,
+	EntityResolvingXmlReader.cs: 2.1 has HasValue.
+
+
+2009-02-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReader.cs : do not try to read at non-readable state in
+	  MoveToContent().
+
+2009-02-23  Alan McGovern  <amcgovern@novell.com>
+
+	* XmlTextReader.cs: Under the SL2 profile, the default resolver
+	is a XmlXapResolver.
+
+2009-02-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReader.cs : ReadContentAsXxx() should not advance XmlReader
+	  when it is on attribute *value* text.
+
+2009-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriter2.cs : similar fix in WriteStartElement() to
+	  previous change. Fixed bug #474091.
+
+2009-02-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlElementTest.cs: SetAttribute(name,value) should identify value
+	  change for existing node, from new node insertion.
+	  Fixed bug #464394.
+
+2009-02-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriter2.cs : in WriteStartAttribute(), fill namespace in
+	  case it is null and the prefix has matching ns. Fixed bug #472634.
+
+2009-01-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DTDValidatingReader2.cs, EntityResolvingXmlReader.cs : simplify
+	  parsercontext provision.
+	* XmlValidatingReader.cs : expand parser context provision to
+	  non-dtdvalidating readers.
+
+2009-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlXapResolver.cs : fix assembly qualified names,
+	  and give detailed errors.
+	* XmlResolver.cs : in 2.1 do not resolve relative Uri
+	  to absolute.
+
+2009-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlXapResolver.cs : new in 2.1.
+	* XmlReaderSettings.cs : use above.
+
 2009-01-20  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlDocumentNavigator.cs : in some corner cases an attribute

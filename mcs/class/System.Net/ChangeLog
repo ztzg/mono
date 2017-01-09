@@ -1,3 +1,18 @@
+2009-03-04  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* System.Net.dll.sources: Added WriteStreamClosedEventArgs_2_1.cs
+	  and WriteStreamClosedEventHandler_2_1.cs
+
+2009-02-24  Alan McGovern  <amcgovern@novell.com>
+
+	* System.Net/WebClient_2_1.cs: If we're getting text, ensure we
+	strip out the byte order mark if it exists.
+
+2009-01-21  Jb Evain  <jbevain@novell.com>
+
+	* System.Net/WebClient_2_1.cs: use the length of the stream
+	instead of the ContentLength that is different for gzipped stream.
+
 2008-09-16  Sebastien Pouliot  <sebastien@ximian.com>
 
 	* System.Net.dll.sources: Add new security-socket related files.

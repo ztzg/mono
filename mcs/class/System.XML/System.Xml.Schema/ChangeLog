@@ -1,3 +1,34 @@
+2009-03-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaValidator.cs : check identity constraints on default or
+	  fixed attributes too.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaValidator.cs : check identities for untyped attributes.
+	  Attribute keyfield test must adjust depth, or it never matches.
+	  Missing braces for IgnoreIdentity test.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaUtil.cs, XmlSchemaValidator.cs : predefined non-primitive
+	  xml schema types now validate fixed values as expected.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BuiltInDatatype.cs, XmlSchemaDatatype.cs : some equality comparison
+	  failed because it anyType is not used as singleton.
+
+2009-01-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaValidator.cs : when xsi:nil is true, do not validate
+	  text string. Fixed bug #469713.
+
+2009-01-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaElement.cs : to reference elementFormDefault, use its
+	  ancestor, not the schema island root.
+
 2008-12-15  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlSchema.cs, XmlSchemaSet.cs : move substitutionGroup processing

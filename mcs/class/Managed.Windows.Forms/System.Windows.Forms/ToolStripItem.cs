@@ -956,6 +956,9 @@ namespace System.Windows.Forms
 				StopAnimation ();
 				image = null;
 			}
+
+			if (owner != null)
+				owner.Items.Remove (this);
 			
 			base.Dispose (disposing);
 		}
@@ -1582,10 +1585,6 @@ namespace System.Windows.Forms
 				preferred_size.Height += 4;
 				preferred_size.Width += 4;
 			}
-			
-			// Account for ToolStripDropDownButton's drop down arrow
-			if (this is ToolStripDropDownButton && (this as ToolStripDropDownButton).ShowDropDownArrow)
-				preferred_size.Width += 9;
 
 			return preferred_size;
 		}
@@ -1856,7 +1855,7 @@ namespace System.Windows.Forms
 					return true;
 
 				if (!(this.Owner is ToolStripDropDownMenu))
-					return true;
+					return false;
 
 				ToolStripDropDownMenu tsddm = (ToolStripDropDownMenu)this.Owner;
 
@@ -1870,7 +1869,7 @@ namespace System.Windows.Forms
 					return true;
 
 				if (!(this.Owner is ToolStripDropDownMenu))
-					return true;
+					return false;
 
 				ToolStripDropDownMenu tsddm = (ToolStripDropDownMenu)this.Owner;
 

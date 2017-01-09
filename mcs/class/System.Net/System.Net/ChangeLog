@@ -1,3 +1,39 @@
+2009-03-11  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* WebClient_2_1.cs: OnOpenReadCompleted and OnDownloadStringCompleted:
+	make sure we don't pass any exceptions back to native code.
+
+2009-03-04  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* WebClient_2_1.cs: Stub out missing methods.
+	* WriteStreamClosedEventArgs_2_1.cs: 
+	* WriteStreamClosedEventHandler_2_1.cs: Added.
+
+2009-02-05  Geoff Norton  <gnorton@novell.com>
+
+	* WebClient_2_1.cs: Use g_timeout_add instead of g_idle_add here until
+	SyncContext is ready, as its less prone to starvation.
+
+2009-02-05  Geoff Norton  <gnorton@novell.com>
+
+	* WebClient_2_1.cs: CancelAsync calls Thread.Interrupt so needs to be
+	SecuritySafeCritical for now.
+
+2009-01-26  Rolf Bjarne Kvinge  <rkvinge@novell.com>
+
+	* WebClient_2_1.cs: Ensure we don't let exceptions go to native code.
+	* HttpWebRequest_2_1.cs: Add AllowReadStreamBuffering.
+
+2009-01-21  Geoff Norton  <gnorton@novell.com>
+
+	* WebClient_2_1.cs: Make the ManualResetEvent local to the callback
+	because a WebClient can be reused causing a wait-handle race here
+	allowing a delegate to get collected causing a crash.
+
+2009-01-21  Chris Toshok  <toshok@ximian.com>
+
+	* WebClient_2_1.cs: add 1 method back in, CancelAsync.
+
 2009-01-12  Geoff Norton  <gnorton@novell.com>
 
 	* WebClient_2.1.cs: SL2 webclient supports BaseAddress.

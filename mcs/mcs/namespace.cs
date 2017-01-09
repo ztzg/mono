@@ -15,7 +15,7 @@ using System.Reflection;
 
 namespace Mono.CSharp {
 
-	public class RootNamespace : Namespace {
+	class RootNamespace : Namespace {
 		//
 		// Points to Mono's GetNamespaces method, an
 		// optimization when running on Mono to fetch all the
@@ -23,29 +23,17 @@ namespace Mono.CSharp {
 		//
 		static MethodInfo get_namespaces_method;
 
-		string alias_name;
+		protected readonly string alias_name;
 		protected Assembly [] referenced_assemblies;
 
 		Hashtable all_namespaces;
 
-		static ListDictionary root_namespaces;
-		public static GlobalRootNamespace Global;
-		
 		static RootNamespace ()
 		{
 			get_namespaces_method = typeof (Assembly).GetMethod ("GetNamespaces", BindingFlags.Instance | BindingFlags.NonPublic);
-
-			Reset ();
 		}
 
-		public static void Reset ()
-		{
-			root_namespaces = new ListDictionary ();
-			Global = new GlobalRootNamespace ();
-			root_namespaces ["global"] = Global;
-		}
-
-		protected RootNamespace (string alias_name)
+		public RootNamespace (string alias_name)
 			: base (null, String.Empty)
 		{
 			this.alias_name = alias_name;
@@ -69,45 +57,16 @@ namespace Mono.CSharp {
 			referenced_assemblies = n;
 		}
 
-		public static void DefineRootNamespace (string alias, Assembly assembly)
+		public void ComputeNamespace (Type extensionType)
 		{
-			if (alias == "global") {
-				NamespaceEntry.Error_GlobalNamespaceRedefined (Location.Null);
-				return;
-			}
-
-			RootNamespace retval = GetRootNamespace (alias);
-			if (retval == null) {
-				retval = new RootNamespace (alias);
-				root_namespaces.Add (alias, retval);
-			}
-
-			retval.AddAssemblyReference (assembly);
-		}
-
-		public static RootNamespace GetRootNamespace (string name)
-		{
-			return (RootNamespace) root_namespaces [name];
-		}
-
-		public static void ComputeNamespaces ()
-		{
-			//
-			// Do very early lookup because type is required when we cache
-			// imported extension types in ComputeNamespaces
-			//
-			TypeManager.extension_attribute_type = TypeManager.CoreLookupType ("System.Runtime.CompilerServices", "ExtensionAttribute", Kind.Class, false);
-			
-			foreach (RootNamespace rn in root_namespaces.Values) {
-				foreach (Assembly a in rn.referenced_assemblies) {
-					try {
-						rn.ComputeNamespaces (a);
-					} catch (TypeLoadException e) {
-						Report.Error (11, Location.Null, e.Message);
-					} catch (System.IO.FileNotFoundException) {
-						Report.Error (12, Location.Null, "An assembly `{0}' is used without being referenced",
-							a.FullName);
-					}
+			foreach (Assembly a in referenced_assemblies) {
+				try {
+					ComputeNamespaces (a, extensionType);
+				} catch (TypeLoadException e) {
+					Report.Error (11, Location.Null, e.Message);
+				} catch (System.IO.FileNotFoundException) {
+					Report.Error (12, Location.Null, "An assembly `{0}' is used without being referenced",
+						a.FullName);
 				}
 			}
 		}
@@ -167,17 +126,16 @@ namespace Mono.CSharp {
 		void RegisterExtensionMethodClass (Type t)
  		{
 			string n = t.Namespace;
- 			Namespace ns = n == null ? Global : (Namespace)all_namespaces [n];
+			Namespace ns = n == null ? GlobalRootNamespace.Instance : (Namespace) all_namespaces[n];
  			if (ns == null)
  				ns = GetNamespace (n, true);
  
  			ns.RegisterExternalExtensionMethodClass (t);
  		}
 
-  		protected void ComputeNamespaces (Assembly assembly)
+  		void ComputeNamespaces (Assembly assembly, Type extensionType)
   		{
- 			bool contains_extension_methods = TypeManager.extension_attribute_type != null &&
- 					assembly.IsDefined(TypeManager.extension_attribute_type, false);
+			bool contains_extension_methods = extensionType != null && assembly.IsDefined (extensionType, false);
  
  			if (get_namespaces_method != null) {
   				string [] namespaces = (string []) get_namespaces_method.Invoke (assembly, null);
@@ -190,7 +148,7 @@ namespace Mono.CSharp {
 
  			foreach (Type t in assembly.GetTypes ()) {
  				if ((t.Attributes & Class.StaticClassAttribute) == Class.StaticClassAttribute &&
- 					contains_extension_methods && t.IsDefined (TypeManager.extension_attribute_type, false))
+ 					contains_extension_methods && t.IsDefined (extensionType, false))
  					RegisterExtensionMethodClass (t);
 
 				if (get_namespaces_method == null)
@@ -231,12 +189,22 @@ namespace Mono.CSharp {
 		}
 	}
 
-	public class GlobalRootNamespace : RootNamespace {
+	class GlobalRootNamespace : RootNamespace {
 		Module [] modules;
+		ListDictionary root_namespaces;
 
-		public GlobalRootNamespace ()
+		public static GlobalRootNamespace Instance = new GlobalRootNamespace ();
+
+		GlobalRootNamespace ()
 			: base ("global")
 		{
+			root_namespaces = new ListDictionary ();
+			root_namespaces.Add (alias_name, this);
+		}
+
+		public static void Reset ()
+		{
+			Instance = new GlobalRootNamespace ();
 		}
 
 		public Assembly [] Assemblies {
@@ -256,17 +224,51 @@ namespace Mono.CSharp {
 			n [top] = m;
 			modules = n;
 
-			if (m == CodeGen.Module.Builder)
+			if (m == RootContext.ToplevelTypes.Builder)
 				return;
 
 			foreach (Type t in m.GetTypes ())
 				RegisterNamespace (t.Namespace);
 		}
 
+		public void ComputeNamespaces ()
+		{
+			//
+			// Do very early lookup because type is required when we cache
+			// imported extension types in ComputeNamespaces
+			//
+			Type extension_attribute_type = TypeManager.CoreLookupType ("System.Runtime.CompilerServices", "ExtensionAttribute", Kind.Class, false);
+
+			foreach (RootNamespace rn in root_namespaces.Values) {
+				rn.ComputeNamespace (extension_attribute_type);
+			}
+		}
+
+		public void DefineRootNamespace (string alias, Assembly assembly)
+		{
+			if (alias == alias_name) {
+				NamespaceEntry.Error_GlobalNamespaceRedefined (Location.Null);
+				return;
+			}
+
+			RootNamespace retval = GetRootNamespace (alias);
+			if (retval == null) {
+				retval = new RootNamespace (alias);
+				root_namespaces.Add (alias, retval);
+			}
+
+			retval.AddAssemblyReference (assembly);
+		}
+
 		public override void Error_NamespaceDoesNotExist(DeclSpace ds, Location loc, string name)
 		{
 			Report.Error (400, loc, "The type or namespace name `{0}' could not be found in the global namespace (are you missing an assembly reference?)",
 				name);
+		}
+
+		public RootNamespace GetRootNamespace (string name)
+		{
+			return (RootNamespace) root_namespaces[name];
 		}
 
 		public override Type LookupTypeReflection (string name, Location loc)
@@ -554,7 +556,7 @@ namespace Mono.CSharp {
 					if (c == null)
 						continue;
 
-					if (!c.IsStaticClass)
+					if ((c.ModFlags & Modifiers.METHOD_EXTENSION) == 0)
 						continue;
 
 					ArrayList res = c.MemberCache.FindExtensionMethods (extensionType, name, c != currentClass);
@@ -682,7 +684,7 @@ namespace Mono.CSharp {
 
 			public virtual FullNamedExpression Resolve (IResolveContext rc)
 			{
-				FullNamedExpression fne = RootNamespace.GetRootNamespace (Alias);
+				FullNamedExpression fne = GlobalRootNamespace.Instance.GetRootNamespace (Alias);
 				if (fne == null) {
 					Report.Error (430, Location,
 						"The extern alias `{0}' was not specified in -reference option",
@@ -769,9 +771,9 @@ namespace Mono.CSharp {
 			if (parent != null)
 				ns = parent.NS.GetNamespace (name, true);
 			else if (name != null)
-				ns = RootNamespace.Global.GetNamespace (name, true);
+				ns = GlobalRootNamespace.Instance.GetNamespace (name, true);
 			else
-				ns = RootNamespace.Global;
+				ns = GlobalRootNamespace.Instance;
 			SlaveDeclSpace = new RootDeclSpace (this);
 		}
 

@@ -62,6 +62,8 @@ public class Tests {
 		public SimpleDelegate del;
 		[MarshalAs(UnmanagedType.FunctionPtr)] 
 		public SimpleDelegate del2;
+		[MarshalAs(UnmanagedType.FunctionPtr)] 
+		public SimpleDelegate del3;
 	}
 
 	/* sparcv9 has complex conventions when passing structs with doubles in them 
@@ -568,6 +570,7 @@ public class Tests {
 		s.a = 2;
 		s.del = new SimpleDelegate (delegate_test);
 		s.del2 = new SimpleDelegate (delegate_test);
+		s.del3 = null;
 
 		DelegateStruct res = mono_test_marshal_delegate_struct (s);
 
@@ -577,6 +580,8 @@ public class Tests {
 			return 2;
 		if (res.del2 (2) != 0)
 			return 3;
+		if (res.del3 != null)
+			return 4;
 
 		return 0;
 	}
@@ -1403,6 +1408,31 @@ public class Tests {
 		}
 
 		return 0;
+	}
+
+	/*
+	 * Alignment of structs containing longs
+	 */
+
+	struct LongStruct2 {
+		public long l;
+	}
+
+	struct LongStruct {
+		public int i;
+		public LongStruct2 l;
+	}
+
+	[DllImport("libtest")]
+	extern static int mono_test_marshal_long_struct (ref LongStruct s);
+
+	public static int test_47_pass_long_struct () {
+		LongStruct s = new LongStruct ();
+		s.i = 5;
+		s.l = new LongStruct2 ();
+		s.l.l = 42;
+
+		return mono_test_marshal_long_struct (ref s);
 	}
 
 	/*

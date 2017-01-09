@@ -44,6 +44,15 @@ typedef void (*MonoThreadNotifyPendingExcFunc) (void);
 #define SPECIAL_STATIC_THREAD 1
 #define SPECIAL_STATIC_CONTEXT 2
 
+#ifdef PLATFORM_WIN32
+typedef SECURITY_ATTRIBUTES WapiSecurityAttributes;
+typedef LPTHREAD_START_ROUTINE WapiThreadStart;
+#endif
+
+gpointer mono_create_thread (WapiSecurityAttributes *security,
+							 guint32 stacksize, WapiThreadStart start,
+							 gpointer param, guint32 create, gsize *tid) MONO_INTERNAL;
+
 void mono_thread_create_internal (MonoDomain *domain, gpointer func, gpointer arg, gboolean threadpool_thread) MONO_INTERNAL;
 
 HANDLE ves_icall_System_Threading_Thread_Thread_internal(MonoThread *this_obj, MonoObject *start) MONO_INTERNAL;
@@ -77,6 +86,7 @@ HANDLE ves_icall_System_Threading_Events_OpenEvent_internal (MonoString *name, g
 gboolean ves_icall_System_Threading_WaitHandle_WaitAll_internal(MonoArray *mono_handles, gint32 ms, gboolean exitContext) MONO_INTERNAL;
 gint32 ves_icall_System_Threading_WaitHandle_WaitAny_internal(MonoArray *mono_handles, gint32 ms, gboolean exitContext) MONO_INTERNAL;
 gboolean ves_icall_System_Threading_WaitHandle_WaitOne_internal(MonoObject *this_obj, HANDLE handle, gint32 ms, gboolean exitContext) MONO_INTERNAL;
+gboolean ves_icall_System_Threading_WaitHandle_SignalAndWait_Internal (HANDLE toSignal, HANDLE toWait, gint32 ms, gboolean exitContext) MONO_INTERNAL;
 
 gint32 ves_icall_System_Threading_Interlocked_Increment_Int(gint32 *location) MONO_INTERNAL;
 gint64 ves_icall_System_Threading_Interlocked_Increment_Long(gint64 *location) MONO_INTERNAL;

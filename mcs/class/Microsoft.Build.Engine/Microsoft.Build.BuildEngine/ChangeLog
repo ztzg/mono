@@ -1,3 +1,108 @@
+2009-03-27  Jonathan Chambers  <joncham@gmail.com>
+
+	* BuildWhen.cs: Add basic implementation.
+	* BuildChoose.cs: Add basic implementation.
+	* BuildItem.cs (AddEvaluatedItem): Add BuiltItem to 
+	EvaluatedItemsIgnoringCondition.
+	* GroupingCollection.cs: Add evaluation of BuildChoose items.
+
+2009-03-26  Jonathan Chambers  <joncham@gmail.com>
+
+	* TaskDatabase.cs (RegisterTask): Search for class by name
+	if task was not found using GetType (which uses namespace). 
+
+2009-02-26  Ankit Jain  <jankit@novell.com>
+
+	* Target.cs: Handle target with no tasks. Log errors.
+
+2009-02-24  Ankit Jain  <jankit@novell.com>
+
+	Lazily load UsingTask tasks.
+	* UsingTask.cs (Evaluate): Register 'this' with task database,
+	but don't load it yet. Register only if condition evaluates to true.
+	Move the load logic to ..
+	(Load): .. here. Register with the specified task database.
+	* TaskDatabase.cs (RegisterUsingTask): Store the UsingTask instance
+	in a table keyed by task name, but don't load it yet.
+	(GetTypeFromClassName): Try to load UsingTask if task is not already
+	loaded. Move loading logic to ..
+	(GetTypeFromClassNameInternal): .. here.
+	(CopyTasks): Copy the usingTasks table also.
+
+2009-02-23  Ankit Jain  <jankit@novell.com>
+
+	* BuildItem.cs (AddMetadata): Allow overwriting older values.
+
+2009-02-22  Ankit Jain  <jankit@novell.com>
+
+	* BuildItem.cs: Iterate over XmlElements childnodes with XmlNode
+	instead of XmlElement. Eg. XmlComment
+
+2009-02-21  Ankit Jain  <jankit@novell.com>
+
+	* Utilities.cs (FromMSBuildPath): Copy from monodevelop.
+	* Project.cs (Load): Use FromMSBuildPath on the path.
+	(InitializeProperties): Set "MSBuildToolsPath" also.
+
+2009-02-20  Ankit Jain  <jankit@novell.com>
+
+	Fix #449683.
+	* ConditionTokenizer.cs: Handle unquoted item references (with or w/o
+	transforms) in conditions.
+	* ConditionParser.cs: Parse unquoted item, property references.
+	eg. Condition = " @(Foo->'%(Extension)') == '.exe' "
+	* Token.cs (Token.ToString): Override.
+	(TokenType.Transform): Uncomment.
+
+2009-02-12  Jonathan Chambers  <joncham@gmail.com>
+
+	* BuildProperty.cs: Value corresponds to XmlElement.InnerXml
+	no XmlElement.InnerText. This allows properties to be additional 
+	xml elements.
+
+2009-02-01  Ankit Jain  <jankit@novell.com>
+
+	* BuildEngine.cs (BuildProjectFile): Use
+	BuildSettings.DoNotResetPreviouslyBuiltTargets for building projects.
+	* Engine.cs (BuiltTargetsOutputByName): New. Table of targets already
+	built. Move logging of project start/finish to ..
+	* Project.cs: .. here. Build a target only if hasn't been built already.
+	Keep track of target outputs, and return those even if an already built
+	target has been invoked again.
+	Honor BuildSettings.None and DoNotResetPreviouslyBuiltTargets .
+
+2009-01-31  Ankit Jain  <jankit@novell.com>
+
+	* BatchingImpl.cs: Split into ..
+	* BatchingImplBase.cs: .. this,
+	* TaskBatchingImpl.cs: .. this ..
+	* TargetBatchingImpl.cs: .. and this. Implement target batching here.
+
+	* Target.cs (DoBuild): Use TargetBatchingImpl for building.
+	(Log*): Move to TargetBatchingImpl .
+	(BuildTasks): New.
+	(Engine): New.
+
+2009-01-30  Ankit Jain  <jankit@novell.com>
+
+	* TaskEngine.cs (GetObjectFromString): Empty value is allowed only for
+	arrays.
+
+2009-01-29  Ankit Jain  <jankit@novell.com>
+
+	* BuildItem.cs (child_items): Change type from BuildItemGroup to
+	List<BuildItem>.
+	(HasParent): Rename to ..
+	(HasParentItem): .. this.
+	(ParentItemGroup): Add setter.
+
+	* BuildItemGroup.cs (.ctor): Add overload with @project param.
+	(AddNewItem):
+	(AddItem): Correctly set the ParentItemGroup for new build items.
+	(ParentProject): Add setter.
+	* Project.cs: Set the project for new BuildItemGroup instances.
+	* TaskEngine.cs (PublishItemGroup): Likewise.
+
 2009-01-06  Ankit Jain  <jankit@novell.com>
 
 	* Project.cs (Build): Honor InitialTargets list.

@@ -1,3 +1,75 @@
+2009-03-26  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* ToolStripTest.cs:
+	* ToolStripItemTest.cs: Update our Dispose tests.
+
+2009-03-19  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add tests to verify that the current cell changes 
+	if IsHandleCreated and the first row is added in a non-databound scenario.
+
+2009-03-19  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs, DataGridViewColumnTest.cs: Add tests for 
+	Row/CellTemplates being always null.
+
+2009-03-17  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add tests for the relevance of IsHandleCreated and 
+	the BindingContext for the databound state of the DataGridView.
+
+2009-03-17  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add a test for Browsable(false) columns.
+
+2009-03-08  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add tests for CurrentCell.
+
+2009-03-08  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add tests for ColumnCount.
+
+2009-03-07  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add more tests for the RowCount property.
+
+2009-03-06  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: 
+
+2009-03-05 Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add tests for scroll to selection to verify that 
+	the effect is applied synchronously.
+	  Based on a patch by Tom Hindle <tom_hindle@sil.org>
+
+2009-03-04  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewTest.cs: Add tests for RowCount/ColumnCount decreasing. 
+
+2009-03-04  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* DataGridViewCellTest.cs: Add tests for OnDataGridViewChanged behavior.
+
+2009-02-26  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* MaskedTextBoxTest.cs: Yet a new Text test case.
+
+2009-02-04  Mario Carrion <mcarrion@novell.com>
+
+	* ColumnHeaderTest.cs: Testing ListView.ColumnWidthChanged when 
+	changing Width (for bug #467086).
+
+2009-02-02  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* FormEventTest.cs: New test for VisibleChanged event (and children
+	controls as well).
+
+2009-01-30  Ivan N. Zlatev  <contact@i-nz.net>
+
+	* NumericUpDownTest.cs: Add a test to check Height == PreferredHeight.
+
 2009-01-19  Carlos Alberto Cortez <calberto.cortez@gmail.com>
 
 	* ListBoxTest.cs: New test for RemoveAt and selection.

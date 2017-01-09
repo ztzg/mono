@@ -55,9 +55,7 @@ namespace System {
 
 	[Serializable]
 #if NET_2_0
-#if !NET_2_1
 	[TypeConverter (typeof (UriTypeConverter))]
-#endif
 	public class Uri : ISerializable {
 #else
 	public class Uri : MarshalByRefObject, ISerializable {
@@ -145,7 +143,7 @@ namespace System {
 				break;
 			default:
 				string msg = Locale.GetText ("Invalid UriKind value '{0}'.", uriKind);
-				throw new ArgumentException ("uriKind", msg);
+				throw new ArgumentException (msg);
 			}
 		}
 
@@ -153,11 +151,18 @@ namespace System {
 		// An exception-less constructor, returns success
 		// condition on the out parameter `success'.
 		//
-		internal Uri (string uriString, UriKind uriKind, out bool success)
+		Uri (string uriString, UriKind uriKind, out bool success)
 		{
-			if (uriString == null){
+			if (uriString == null) {
 				success = false;
 				return;
+			}
+
+			if (uriKind != UriKind.RelativeOrAbsolute &&
+				uriKind != UriKind.Absolute &&
+				uriKind != UriKind.Relative) {
+				string msg = Locale.GetText ("Invalid UriKind value '{0}'.", uriKind);
+				throw new ArgumentException (msg);
 			}
 
 			source = uriString;
@@ -679,16 +684,20 @@ namespace System {
 		public bool IsAbsoluteUri {
 			get { return isAbsoluteUri; }
 		}
-
+#endif
 		// LAMESPEC: source field is supplied in such case that this
 		// property makes sense. For such case that source field is
 		// not supplied (i.e. .ctor(Uri, string), this property
 		// makes no sense. To avoid silly regression it just returns
 		// ToString() value now. See bug #78374.
-		public string OriginalString {
+#if NET_2_0
+		public
+#else
+		internal
+#endif
+		string OriginalString {
 			get { return source != null ? source : ToString (); }
 		}
-#endif
 
 		// Methods		
 
@@ -1415,6 +1424,7 @@ namespace System {
 			
 			bool startsWithSlashSlash = endpos-startpos >= 2 && uriString [startpos] == '/' && uriString [startpos+1] == '/';
 			bool unixAbsPath = scheme == UriSchemeFile && startsWithSlashSlash && (endpos-startpos == 2 || uriString [startpos+2] == '/');
+			bool windowsFilePath = false;
 			if (startsWithSlashSlash) {
 				if (kind == UriKind.Relative)
 					return "Absolute URI when we expected a relative one";
@@ -1439,8 +1449,10 @@ namespace System {
 					}
 				}
 				
-				if (endpos - startpos > 1 && uriString [startpos + 1] == ':')
+				if (endpos - startpos > 1 && uriString [startpos + 1] == ':') {
 					unixAbsPath = false;
+					windowsFilePath = true;
+				}
 
 			} else if (!IsPredefinedScheme (scheme)) {
 				path = uriString.Substring(startpos, endpos-startpos);
@@ -1450,6 +1462,8 @@ namespace System {
 
 			// 5 path
 			pos = uriString.IndexOf ('/', startpos, endpos-startpos);
+			if (pos == -1 && windowsFilePath)
+				pos = uriString.IndexOf ('\\', startpos, endpos-startpos);
 			if (unixAbsPath)
 				pos = -1;
 			if (pos == -1) {
@@ -1993,13 +2007,6 @@ namespace System {
 			if (uriString == null)
 				return false;
 
-			if (uriKind != UriKind.RelativeOrAbsolute &&
-				uriKind != UriKind.Absolute &&
-				uriKind != UriKind.Relative) {
-				string msg = Locale.GetText ("Invalid UriKind value '{0}'.", uriKind);
-                                throw new ArgumentException ("uriKind", msg);
-			}
-
 			Uri uri;
 			if (Uri.TryCreate (uriString, uriKind, out uri))
 				return uri.IsWellFormedOriginalString ();
@@ -2009,8 +2016,9 @@ namespace System {
 		public static bool TryCreate (string uriString, UriKind uriKind, out Uri result)
 		{
 			bool success;
+
 			Uri r = new Uri (uriString, uriKind, out success);
-			if (success){
+			if (success) {
 				result = r;
 				return true;
 			}
@@ -2025,8 +2033,7 @@ namespace System {
 				// FIXME: this should call UriParser.Resolve
 				result = new Uri (baseUri, relativeUri);
 				return true;
-			}
-			catch (UriFormatException) {
+			} catch (UriFormatException) {
 				result = null;
 				return false;
 			}
@@ -2039,8 +2046,7 @@ namespace System {
 				// FIXME: this should call UriParser.Resolve
 				result = new Uri (baseUri, relativeUri);
 				return true;
-			}
-			catch (UriFormatException) {
+			} catch (UriFormatException) {
 				result = null;
 				return false;
 			}

@@ -1008,11 +1008,6 @@ mono_arch_compute_omit_fp (MonoCompile *cfg)
 
 		locals_size += mono_type_size (ins->inst_vtype, &ialign);
 	}
-
-	if ((cfg->num_varinfo > 5000) || (locals_size >= (1 << 15)) || (header->code_size > 110000)) {
-		/* Avoid hitting the stack_alloc_size < (1 << 16) assertion in emit_epilog () */
-		cfg->arch.omit_fp = FALSE;
-	}
 }
 
 GList *
@@ -3501,30 +3496,12 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 				ins->sreg1 = AMD64_RAX;
 			}
 
-			if (call->method && ins->inst_offset < 0) {
-				gssize val;
-
-				/* 
-				 * This is a possible IMT call so save the IMT method in the proper
-				 * register. We don't use the generic code in method-to-ir.c, because
-				 * we need to disassemble this in get_vcall_slot_addr (), so we have to
-				 * maintain control over the layout of the code.
-				 * Also put the base reg in %rax to simplify find_imt_method ().
-				 */
-				if (ins->sreg1 != AMD64_RAX) {
-					amd64_mov_reg_reg (code, AMD64_RAX, ins->sreg1, 8);
-					ins->sreg1 = AMD64_RAX;
-				}
-				val = (gssize)(gpointer)call->method;
-
-				// FIXME: Generics sharing
-#if 0
-				if ((((guint64)val) >> 32) == 0)
-					amd64_mov_reg_imm_size (code, MONO_ARCH_IMT_REG, val, 4);
-				else
-					amd64_mov_reg_imm_size (code, MONO_ARCH_IMT_REG, val, 8);
-#endif
-			}
+			/* 
+			 * Emit a few nops to simplify get_vcall_slot ().
+			 */
+			amd64_nop (code);
+			amd64_nop (code);
+			amd64_nop (code);
 
 			amd64_call_membase (code, ins->sreg1, ins->inst_offset);
 			if (call->stack_usage && !CALLCONV_IS_STDCALL (call->signature->call_convention))
@@ -4186,8 +4163,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			break;
 		}
 		case OP_ATOMIC_EXCHANGE_I4:
-		case OP_ATOMIC_EXCHANGE_I8:
-		case OP_ATOMIC_CAS_IMM_I4: {
+		case OP_ATOMIC_EXCHANGE_I8: {
 			guchar *br[2];
 			int sreg2 = ins->sreg2;
 			int breg = ins->inst_basereg;
@@ -4234,26 +4210,52 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 				}
 			}
 
-			if (ins->opcode == OP_ATOMIC_CAS_IMM_I4) {
-				if (ins->backend.data == NULL)
-					amd64_alu_reg_reg (code, X86_XOR, AMD64_RAX, AMD64_RAX);
-				else
-					amd64_mov_reg_imm (code, AMD64_RAX, ins->backend.data);
+			amd64_mov_reg_membase (code, AMD64_RAX, breg, ins->inst_offset, size);
 
-				amd64_prefix (code, X86_LOCK_PREFIX);
-				amd64_cmpxchg_membase_reg_size (code, breg, ins->inst_offset, sreg2, size);
-			} else {
-				amd64_mov_reg_membase (code, AMD64_RAX, breg, ins->inst_offset, size);
-
-				br [0] = code; amd64_prefix (code, X86_LOCK_PREFIX);
-				amd64_cmpxchg_membase_reg_size (code, breg, ins->inst_offset, sreg2, size);
-				br [1] = code; amd64_branch8 (code, X86_CC_NE, -1, FALSE);
-				amd64_patch (br [1], br [0]);
-			}
+			br [0] = code; amd64_prefix (code, X86_LOCK_PREFIX);
+			amd64_cmpxchg_membase_reg_size (code, breg, ins->inst_offset, sreg2, size);
+			br [1] = code; amd64_branch8 (code, X86_CC_NE, -1, FALSE);
+			amd64_patch (br [1], br [0]);
 
 			if (rdx_pushed)
 				amd64_pop_reg (code, AMD64_RDX);
 
+			break;
+		}
+		case OP_ATOMIC_CAS_I4:
+		case OP_ATOMIC_CAS_I8: {
+			guint32 size;
+
+			if (ins->opcode == OP_ATOMIC_CAS_I8)
+				size = 8;
+			else
+				size = 4;
+
+			/* 
+			 * See http://msdn.microsoft.com/en-us/magazine/cc302329.aspx for
+			 * an explanation of how this works.
+			 */
+			g_assert (ins->sreg3 == AMD64_RAX);
+			g_assert (ins->sreg1 != AMD64_RAX);
+			g_assert (ins->sreg1 != ins->sreg2);
+
+			amd64_prefix (code, X86_LOCK_PREFIX);
+			amd64_cmpxchg_membase_reg_size (code, ins->sreg1, ins->inst_offset, ins->sreg2, size);
+
+			if (ins->dreg != AMD64_RAX)
+				amd64_mov_reg_reg (code, ins->dreg, AMD64_RAX, size);
+			break;
+		}
+		case OP_LIVERANGE_START: {
+			if (cfg->verbose_level > 1)
+				printf ("R%d START=0x%x\n", MONO_VARINFO (cfg, ins->inst_c0)->vreg, (int)(code - cfg->native_code));
+			MONO_VARINFO (cfg, ins->inst_c0)->live_range_start = code - cfg->native_code;
+			break;
+		}
+		case OP_LIVERANGE_END: {
+			if (cfg->verbose_level > 1)
+				printf ("R%d END=0x%x\n", MONO_VARINFO (cfg, ins->inst_c0)->vreg, (int)(code - cfg->native_code));
+			MONO_VARINFO (cfg, ins->inst_c0)->live_range_end = code - cfg->native_code;
 			break;
 		}
 		default:
@@ -4540,16 +4542,31 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 		/* sp is saved right before calls */
 		/* Skip method (only needed for trampoline LMF frames) */
 		/* Save callee saved regs */
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, rbx), AMD64_RBX, 8);
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, rbp), AMD64_RBP, 8);
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, r12), AMD64_R12, 8);
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, r13), AMD64_R13, 8);
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, r14), AMD64_R14, 8);
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, r15), AMD64_R15, 8);
+		for (i = 0; i < MONO_MAX_IREGS; ++i) {
+			int offset;
+
+			switch (i) {
+			case AMD64_RBX: offset = G_STRUCT_OFFSET (MonoLMF, rbx); break;
+			case AMD64_RBP: offset = G_STRUCT_OFFSET (MonoLMF, rbp); break;
+			case AMD64_R12: offset = G_STRUCT_OFFSET (MonoLMF, r12); break;
+			case AMD64_R13: offset = G_STRUCT_OFFSET (MonoLMF, r13); break;
+			case AMD64_R14: offset = G_STRUCT_OFFSET (MonoLMF, r14); break;
+			case AMD64_R15: offset = G_STRUCT_OFFSET (MonoLMF, r15); break;
 #ifdef PLATFORM_WIN32
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, rdi), AMD64_RDI, 8);
-		amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + G_STRUCT_OFFSET (MonoLMF, rsi), AMD64_RSI, 8);
+			case AMD64_RDI: offset = G_STRUCT_OFFSET (MonoLMF, rdi); break;
+			case AMD64_RSI: offset = G_STRUCT_OFFSET (MonoLMF, rsi); break;
 #endif
+			default:
+				offset = -1;
+				break;
+			}
+
+			if (offset != -1) {
+				amd64_mov_membase_reg (code, cfg->frame_reg, lmf_offset + offset, i, 8);
+				if (cfg->arch.omit_fp || (i != AMD64_RBP))
+					mono_emit_unwind_op_offset (cfg, code, i, - (cfa_offset - (lmf_offset + offset)));
+			}
+		}
 	}
 
 	/* Save callee saved registers */
@@ -5072,15 +5089,6 @@ mono_arch_emit_epilog (MonoCompile *cfg)
 	cfg->code_len = code - cfg->native_code;
 
 	g_assert (cfg->code_len < cfg->code_size);
-
-	if (cfg->arch.omit_fp) {
-		/* 
-		 * Encode the stack size into used_int_regs so the exception handler
-		 * can access it.
-		 */
-		g_assert (cfg->arch.stack_alloc_size < (1 << 16));
-		cfg->used_int_regs |= (1 << 31) | (cfg->arch.stack_alloc_size << 16);
-	}
 }
 
 void
@@ -5531,70 +5539,19 @@ mono_arch_get_vcall_slot (guint8 *code, gpointer *regs, int *displacement)
 
 	*displacement = 0;
 
-	/* go to the start of the call instruction
-	 *
-	 * address_byte = (m << 6) | (o << 3) | reg
-	 * call opcode: 0xff address_byte displacement
-	 * 0xff m=1,o=2 imm8
-	 * 0xff m=2,o=2 imm32
-	 */
 	code -= 7;
 
 	/* 
 	 * A given byte sequence can match more than case here, so we have to be
 	 * really careful about the ordering of the cases. Longer sequences
 	 * come first.
-	 * Some of the rules are only needed because the imm in the mov could 
-	 * match the
-	 * code [2] == 0xe8 case below.
+	 * There are two types of calls:
+	 * - direct calls: 0xff address_byte 8/32 bits displacement
+	 * - indirect calls: nop nop nop <call>
+	 * The nops make sure we don't confuse the instruction preceeding an indirect
+	 * call with a direct call.
 	 */
-#ifdef MONO_ARCH_HAVE_IMT
-	if ((code [-2] == 0x41) && (code [-1] == 0xbb) && (code [4] == 0xff) && (x86_modrm_mod (code [5]) == 1) && (x86_modrm_reg (code [5]) == 2) && ((signed char)code [6] < 0)) {
-		/* IMT-based interface calls: with MONO_ARCH_IMT_REG == r11
-		 * 41 bb 14 f8 28 08       mov    $0x828f814,%r11d
-		 * ff 50 fc                call   *0xfffffffc(%rax)
-		 */
-		reg = amd64_modrm_rm (code [5]);
-		disp = (signed char)code [6];
-		/* R10 is clobbered by the IMT thunk code */
-		g_assert (reg != AMD64_R10);
-	}
-#else
-	if (0) {
-	}
-#endif
-	else if ((code [-2] == 0x41) && (code [-1] == 0xbb) && (code [4] == 0xff) && (amd64_modrm_reg (code [5]) == 0x2) && (amd64_modrm_mod (code [5]) == 0x1)) {
-		/* 
-		 * 41 bb e8 e8 e8 e8     mov    $0xe8e8e8e8,%r11d
-		 * ff 50 60              callq  *0x60(%rax)
-		 */
-		if (IS_REX (code [3]))
-			rex = code [3];
-		reg = amd64_modrm_rm (code [5]);
-		disp = *(gint8*)(code + 6);
-		//printf ("B: [%%r%d+0x%x]\n", reg, disp);
-	} else if ((code [-1] == 0x8b) && (amd64_modrm_mod (code [0]) == 0x2) && (code [5] == 0xff) && (amd64_modrm_reg (code [6]) == 0x2) && (amd64_modrm_mod (code [6]) == 0x0)) {
-		/*
-		 * This is a interface call
-		 * 48 8b 80 f0 e8 ff ff   mov    0xffffffffffffe8f0(%rax),%rax
-		 * ff 10                  callq  *(%rax)
-		 */
-		if (IS_REX (code [4]))
-			rex = code [4];
-		reg = amd64_modrm_rm (code [6]);
-		disp = 0;
-		/* R10 is clobbered by the IMT thunk code */
-		g_assert (reg != AMD64_R10);
-	} else if ((code [-1] >= 0xb8) && (code [-1] < 0xb8 + 8) && (code [4] == 0xff) && (amd64_modrm_reg (code [5]) == 0x2) && (amd64_modrm_mod (code [5]) == 0x1)) {
-		/* 
-		 * ba e8 e8 e8 e8     mov    $0xe8e8e8e8,%edx
-		 * ff 50 60              callq  *0x60(%rax)
-		 */
-		if (IS_REX (code [3]))
-			rex = code [3];
-		reg = amd64_modrm_rm (code [5]);
-		disp = *(gint8*)(code + 6);
-	} else if ((code [0] == 0x41) && (code [1] == 0xff) && (code [2] == 0x15)) {
+	if ((code [0] == 0x41) && (code [1] == 0xff) && (code [2] == 0x15)) {
 		/* call OFFSET(%rip) */
 		disp = *(guint32*)(code + 3);
 		return (gpointer*)(code + disp + 7);
@@ -5633,11 +5590,7 @@ mono_arch_get_vcall_slot (guint8 *code, gpointer *regs, int *displacement)
 		//printf ("B: [%%r%d+0x%x]\n", reg, disp);
 	}
 	else if ((code [5] == 0xff) && (amd64_modrm_reg (code [6]) == 0x2) && (amd64_modrm_mod (code [6]) == 0x0)) {
-			/*
-			 * This is a interface call: should check the above code can't catch it earlier 
-			 * 8b 40 30   mov    0x30(%eax),%eax
-			 * ff 10      call   *(%eax)
-			 */
+		/* call *%reg */
 		if (IS_REX (code [4]))
 			rex = code [4];
 		reg = amd64_modrm_rm (code [6]);
@@ -5859,7 +5812,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 					else
 						item->chunk_size += MOV_REG_IMM_SIZE + CMP_REG_REG_SIZE;
 				}
-				if (fail_tramp) {
+				if (item->has_target_code) {
 					item->chunk_size += MOV_REG_IMM_SIZE;
 				} else {
 					if (vtable_is_32bit)
@@ -5896,14 +5849,16 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 	if (fail_tramp)
 		code = mono_method_alloc_generic_virtual_thunk (domain, size);
 	else
-		code = mono_code_manager_reserve (domain->code_mp, size);
+		code = mono_domain_code_reserve (domain, size);
 	start = code;
 	for (i = 0; i < count; ++i) {
 		MonoIMTCheckItem *item = imt_entries [i];
 		item->code_target = code;
 		if (item->is_equals) {
-			if (item->check_target_idx) {
-				if (!item->compare_done) {
+			gboolean fail_case = !item->check_target_idx && fail_tramp;
+
+			if (item->check_target_idx || fail_case) {
+				if (!item->compare_done || fail_case) {
 					if (amd64_is_imm32 (item->key))
 						amd64_alu_reg_imm (code, X86_CMP, MONO_ARCH_IMT_REG, (guint32)(gssize)item->key);
 					else {
@@ -5914,57 +5869,46 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 				item->jmp_code = code;
 				amd64_branch8 (code, X86_CC_NE, 0, FALSE);
 				/* See the comment below about R10 */
-				if (fail_tramp) {
+				if (item->has_target_code) {
 					amd64_mov_reg_imm (code, AMD64_R10, item->value.target_code);
 					amd64_jump_reg (code, AMD64_R10);
 				} else {
 					amd64_mov_reg_imm (code, AMD64_R10, & (vtable->vtable [item->value.vtable_slot]));
 					amd64_jump_membase (code, AMD64_R10, 0);
 				}
-			} else {
-				if (fail_tramp) {
-					if (amd64_is_imm32 (item->key))
-						amd64_alu_reg_imm (code, X86_CMP, MONO_ARCH_IMT_REG, (guint32)(gssize)item->key);
-					else {
-						amd64_mov_reg_imm (code, AMD64_R10, item->key);
-						amd64_alu_reg_reg (code, X86_CMP, MONO_ARCH_IMT_REG, AMD64_R10);
-					}
-					item->jmp_code = code;
-					amd64_branch8 (code, X86_CC_NE, 0, FALSE);
-					amd64_mov_reg_imm (code, AMD64_R10, item->value.target_code);
-					amd64_jump_reg (code, AMD64_R10);
+
+				if (fail_case) {
 					amd64_patch (item->jmp_code, code);
 					amd64_mov_reg_imm (code, AMD64_R10, fail_tramp);
 					amd64_jump_reg (code, AMD64_R10);
 					item->jmp_code = NULL;
-						
-				} else {
-					/* enable the commented code to assert on wrong method */
-#if 0
-					if (amd64_is_imm32 (item->key))
-						amd64_alu_reg_imm (code, X86_CMP, MONO_ARCH_IMT_REG, (guint32)(gssize)item->key);
-					else {
-						amd64_mov_reg_imm (code, AMD64_R10, item->key);
-						amd64_alu_reg_reg (code, X86_CMP, MONO_ARCH_IMT_REG, AMD64_R10);
-					}
-					item->jmp_code = code;
-					amd64_branch8 (code, X86_CC_NE, 0, FALSE);
-					/* See the comment below about R10 */
-					amd64_mov_reg_imm (code, AMD64_R10, & (vtable->vtable [item->value.vtable_slot]));
-					amd64_jump_membase (code, AMD64_R10, 0);
-					amd64_patch (item->jmp_code, code);
-					amd64_breakpoint (code);
-					item->jmp_code = NULL;
-#else
-					/* We're using R10 here because R11
-					   needs to be preserved.  R10 needs
-					   to be preserved for calls which
-					   require a runtime generic context,
-					   but interface calls don't. */
-					amd64_mov_reg_imm (code, AMD64_R10, & (vtable->vtable [item->value.vtable_slot]));
-					amd64_jump_membase (code, AMD64_R10, 0);
-#endif
 				}
+			} else {
+				/* enable the commented code to assert on wrong method */
+#if 0
+				if (amd64_is_imm32 (item->key))
+					amd64_alu_reg_imm (code, X86_CMP, MONO_ARCH_IMT_REG, (guint32)(gssize)item->key);
+				else {
+					amd64_mov_reg_imm (code, AMD64_R10, item->key);
+					amd64_alu_reg_reg (code, X86_CMP, MONO_ARCH_IMT_REG, AMD64_R10);
+				}
+				item->jmp_code = code;
+				amd64_branch8 (code, X86_CC_NE, 0, FALSE);
+				/* See the comment below about R10 */
+				amd64_mov_reg_imm (code, AMD64_R10, & (vtable->vtable [item->value.vtable_slot]));
+				amd64_jump_membase (code, AMD64_R10, 0);
+				amd64_patch (item->jmp_code, code);
+				amd64_breakpoint (code);
+				item->jmp_code = NULL;
+#else
+				/* We're using R10 here because R11
+				   needs to be preserved.  R10 needs
+				   to be preserved for calls which
+				   require a runtime generic context,
+				   but interface calls don't. */
+				amd64_mov_reg_imm (code, AMD64_R10, & (vtable->vtable [item->value.vtable_slot]));
+				amd64_jump_membase (code, AMD64_R10, 0);
+#endif
 			}
 		} else {
 			if (amd64_is_imm32 (item->key))
@@ -6008,12 +5952,6 @@ MonoObject*
 mono_arch_find_this_argument (gpointer *regs, MonoMethod *method, MonoGenericSharingContext *gsctx)
 {
 	return mono_arch_get_this_arg_from_call (gsctx, mono_method_signature (method), (gssize*)regs, NULL);
-}
-
-void
-mono_arch_emit_imt_argument (MonoCompile *cfg, MonoCallInst *call, MonoInst *imt_arg)
-{
-	/* Done by the implementation of the CALL_MEMBASE opcodes */
 }
 #endif
 

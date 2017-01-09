@@ -68,13 +68,34 @@ mono_convert_imt_slot_to_vtable_slot (gpointer* slot, gpointer *regs, guint8 *co
 		}
 		mono_vtable_build_imt_slot (vt, mono_method_get_imt_slot (imt_method));
 
-		if (impl_method)
-			*impl_method = mono_class_get_vtable_entry (vt->klass, interface_offset + imt_method->slot);
+		if (impl_method) {
+			MonoMethod *impl;
+
+			if (imt_method->is_inflated && ((MonoMethodInflated*)imt_method)->context.method_inst) {
+				MonoGenericContext context = { NULL, NULL };
+
+				/* 
+				 * Generic virtual method, imt_method contains the inflated interface 
+				 * method, need to get the inflated impl method.
+				 */
+				/* imt_method->slot might not be set */
+				impl = mono_class_get_vtable_entry (vt->klass, interface_offset + mono_method_get_declaring_generic_method (imt_method)->slot);
+
+				if (impl->klass->generic_class)
+					context.class_inst = impl->klass->generic_class->context.class_inst;
+				context.method_inst = ((MonoMethodInflated*)imt_method)->context.method_inst;
+				impl = mono_class_inflate_generic_method (impl, &context);
+			} else {
+				impl = mono_class_get_vtable_entry (vt->klass, interface_offset + imt_method->slot);
+			}
+
+			*impl_method = impl;
 #if DEBUG_IMT
 		printf ("mono_convert_imt_slot_to_vtable_slot: method = %s.%s.%s, imt_method = %s.%s.%s\n",
 				method->klass->name_space, method->klass->name, method->name, 
 				imt_method->klass->name_space, imt_method->klass->name, imt_method->name);
 #endif
+		}
 		g_assert (imt_slot < MONO_IMT_SIZE);
 		if (vt->imt_collisions_bitmap & (1 << imt_slot)) {
 			int vtable_offset = interface_offset + mono_method_get_vtable_index (imt_method);
@@ -105,8 +126,9 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 	gpointer *vtable_slot;
 	gboolean generic_shared = FALSE;
 	MonoMethod *declaring = NULL;
-	MonoGenericInst *generic_virtual_method_inst = NULL;
+	MonoMethod *generic_virtual = NULL;
 	int context_used;
+	gboolean proxy = FALSE;
 
 #if MONO_ARCH_COMMON_VTABLE_TRAMPOLINE
 	if (m == MONO_FAKE_VTABLE_METHOD) {
@@ -114,7 +136,11 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 		MonoVTable *vt = mono_arch_get_vcall_slot (code, (gpointer*)regs, &displacement);
 		if (!vt) {
 			int i;
+			MonoJitInfo *ji;
 
+			ji = mono_jit_info_table_find (mono_domain_get (), (char*)code);
+			if (ji)
+				printf ("Caller: %s\n", mono_method_full_name (ji->method, TRUE));
 			/* Print some debug info */
 			for (i = 0; i < 32; ++i)
 				printf ("0x%x ", code [-32 + i]);
@@ -137,8 +163,7 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 				return addr;
 			}
 
-			mono_class_setup_vtable (vt->klass);
-			m = vt->klass->vtable [displacement];
+			m = mono_class_get_vtable_entry (vt->klass, displacement);
 			/*g_print ("%s with disp %d: %s at %p\n", vt->klass->name, displacement, m->name, code);*/
 		} else {
 			/* We got here from an interface method: redirect to IMT handling */
@@ -151,18 +176,38 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 #ifdef MONO_ARCH_HAVE_IMT
 	if (m == MONO_FAKE_IMT_METHOD) {
 		MonoMethod *impl_method;
+		MonoGenericSharingContext *gsctx;
+		MonoObject *this_arg;
+
 		/* we get the interface method because mono_convert_imt_slot_to_vtable_slot ()
 		 * needs the signature to be able to find the this argument
 		 */
 		m = mono_arch_find_imt_method ((gpointer*)regs, code);
 		vtable_slot = mono_arch_get_vcall_slot_addr (code, (gpointer*)regs);
 		g_assert (vtable_slot);
-		vtable_slot = mono_convert_imt_slot_to_vtable_slot (vtable_slot, (gpointer*)regs, code, m, &impl_method);
-		/* mono_convert_imt_slot_to_vtable_slot () also gives us the method that is supposed
-		 * to be called, so we compile it and go ahead as usual.
-		 */
-		/*g_print ("imt found method %p (%s) at %p\n", impl_method, impl_method->name, code);*/
-		m = impl_method;
+
+		gsctx = mono_get_generic_context_from_code (code);
+		this_arg = mono_arch_find_this_argument ((gpointer*)regs, m, gsctx);
+
+		if (this_arg->vtable->klass == mono_defaults.transparent_proxy_class) {
+			/* Use the slow path for now */
+			proxy = TRUE;
+		    m = mono_object_get_virtual_method (this_arg, m);
+		} else {
+			vtable_slot = mono_convert_imt_slot_to_vtable_slot (vtable_slot, (gpointer*)regs, code, m, &impl_method);
+			/* mono_convert_imt_slot_to_vtable_slot () also gives us the method that is supposed
+			 * to be called, so we compile it and go ahead as usual.
+			 */
+			/*g_print ("imt found method %p (%s) at %p\n", impl_method, impl_method->name, code);*/
+			if (m->is_inflated && ((MonoMethodInflated*)m)->context.method_inst) {
+				/* Generic virtual method */
+				generic_virtual = m;
+				m = impl_method;
+				m = mono_marshal_get_static_rgctx_invoke (m);
+			} else {
+				m = impl_method;
+			}
+		}
 	}
 #endif
 
@@ -181,9 +226,12 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 			g_assert (!m->klass->generic_container);
 
 #ifdef MONO_ARCH_HAVE_IMT
-		generic_virtual_method_inst = (MonoGenericInst*)mono_arch_find_imt_method ((gpointer*)regs, code);
+		generic_virtual = mono_arch_find_imt_method ((gpointer*)regs, code);
 #endif
-		context.method_inst = generic_virtual_method_inst;
+		if (generic_virtual) {
+			g_assert (generic_virtual->is_inflated);
+			context.method_inst = ((MonoMethodInflated*)generic_virtual)->context.method_inst;
+		}
 
 		m = mono_class_inflate_generic_method (declaring, &context);
 		/* FIXME: only do this if the method is sharable */
@@ -294,12 +342,19 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 
 	mono_debugger_trampoline_compiled (m, addr);
 
-	if (generic_virtual_method_inst) {
+	if (generic_virtual) {
+		int displacement;
+ 		MonoVTable *vt = mono_arch_get_vcall_slot (code, (gpointer*)regs, &displacement);
+
 		vtable_slot = mono_arch_get_vcall_slot_addr (code, (gpointer*)regs);
 		g_assert (vtable_slot);
 
-		mono_method_add_generic_virtual_invocation (mono_domain_get (), vtable_slot,
-			generic_virtual_method_inst, addr);
+		if (vt->klass->valuetype)
+			addr = get_unbox_trampoline (mono_get_generic_context_from_code (code), m, addr);			
+
+		mono_method_add_generic_virtual_invocation (mono_domain_get (), 
+													vt, vtable_slot,
+													generic_virtual, addr);
 
 		return addr;
 	}
@@ -340,7 +395,7 @@ mono_magic_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8* tramp)
 
 		g_assert (*vtable_slot);
 
-		if (mono_aot_is_got_entry (code, (guint8*)vtable_slot) || mono_domain_owns_vtable_slot (mono_domain_get (), vtable_slot)) {
+		if (!proxy && (mono_aot_is_got_entry (code, (guint8*)vtable_slot) || mono_domain_owns_vtable_slot (mono_domain_get (), vtable_slot))) {
 #ifdef MONO_ARCH_HAVE_IMT
 			vtable_slot = mono_convert_imt_slot_to_vtable_slot (vtable_slot, (gpointer*)regs, code, m, NULL);
 #endif
@@ -382,7 +437,7 @@ gpointer
 mono_generic_virtual_remoting_trampoline (gssize *regs, guint8 *code, MonoMethod *m, guint8 *tramp)
 {
 	MonoGenericContext context = { NULL, NULL };
-	MonoMethod *declaring;
+	MonoMethod *imt_method, *declaring;
 	gpointer addr;
 
 	g_assert (m->is_generic);
@@ -398,7 +453,9 @@ mono_generic_virtual_remoting_trampoline (gssize *regs, guint8 *code, MonoMethod
 		g_assert (!m->klass->generic_container);
 
 #ifdef MONO_ARCH_HAVE_IMT
-	context.method_inst = (MonoGenericInst*)mono_arch_find_imt_method ((gpointer*)regs, code);
+	imt_method = mono_arch_find_imt_method ((gpointer*)regs, code);
+	if (imt_method->is_inflated)
+		context.method_inst = ((MonoMethodInflated*)imt_method)->context.method_inst;
 #endif
 	m = mono_class_inflate_generic_method (declaring, &context);
 	m = mono_marshal_get_remoting_invoke_with_check (m);
@@ -631,10 +688,14 @@ mono_delegate_trampoline (gssize *regs, guint8 *code, gpointer *tramp_data, guin
 
 	multicast = ((MonoMulticastDelegate*)delegate)->prev != NULL;
 	if (!multicast && !callvirt) {
-		code = delegate->target ? impl_this : impl_nothis;
+		if (method && (method->flags & METHOD_ATTRIBUTE_STATIC) && mono_method_signature (method)->param_count == mono_method_signature (invoke)->param_count + 1)
+			/* Closed static delegate */
+			code = impl_this;
+		else
+			code = delegate->target ? impl_this : impl_nothis;
 
 		if (code) {
-			delegate->invoke_impl = code;
+			delegate->invoke_impl = mono_get_addr_from_ftnptr (code);
 			return code;
 		}
 	}
@@ -645,12 +706,7 @@ mono_delegate_trampoline (gssize *regs, guint8 *code, gpointer *tramp_data, guin
 	delegate->invoke_impl = mono_get_addr_from_ftnptr (code);
 	mono_debugger_trampoline_compiled (m, delegate->invoke_impl);
 
-#ifdef __mono_ppc64__
-	// FIXME:
-	return mono_get_addr_from_ftnptr (code);
-#else
 	return code;
-#endif
 }
 
 #endif
@@ -796,8 +852,12 @@ mono_create_generic_class_init_trampoline (void)
 
 	mono_trampolines_lock ();
 
-	if (!code)
-		code = mono_arch_create_generic_class_init_trampoline ();
+	if (!code) {
+		if (mono_aot_only)
+			code = mono_aot_get_named_code ("generic_class_init_trampoline");
+		else
+			code = mono_arch_create_generic_class_init_trampoline ();
+	}
 
 	mono_trampolines_unlock ();
 
@@ -832,9 +892,7 @@ mono_create_jump_trampoline (MonoDomain *domain, MonoMethod *method, gboolean ad
 	code = mono_create_specific_trampoline (method, MONO_TRAMPOLINE_JUMP, mono_domain_get (), &code_size);
 	g_assert (code_size);
 
-	mono_domain_lock (domain);
 	ji = mono_domain_alloc0 (domain, sizeof (MonoJitInfo));
-	mono_domain_unlock (domain);
 	ji->code_start = code;
 	ji->code_size = code_size;
 	ji->method = method;
@@ -898,9 +956,7 @@ mono_create_jit_trampoline_from_token (MonoImage *image, guint32 token)
 	MonoDomain *domain = mono_domain_get ();
 	guint8 *buf, *start;
 
-	mono_domain_lock (domain);
-	buf = start = mono_code_manager_reserve (domain->code_mp, 2 * sizeof (gpointer));
-	mono_domain_unlock (domain);
+	buf = start = mono_domain_code_reserve (domain, 2 * sizeof (gpointer));
 
 	*(gpointer*)(gpointer)buf = image;
 	buf += sizeof (gpointer);
@@ -934,9 +990,7 @@ mono_create_delegate_trampoline (MonoClass *klass)
 	invoke = mono_get_delegate_invoke (klass);
 	g_assert (invoke);
 
-	mono_domain_lock (domain );
 	tramp_data = mono_domain_alloc (domain, sizeof (gpointer) * 3);
-	mono_domain_unlock (domain);
 	tramp_data [0] = invoke;
 	if (mono_aot_only) {
 		tramp_data [1] = NULL;

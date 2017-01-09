@@ -3,8 +3,9 @@
 //
 // Authors:
 //	Gonzalo Paniagua Javier (gonzalo@ximian.com)
+//      Marek Habersack (mhabersack@novell.com)
 //
-// (C) 2006 Novell, Inc (http://www.novell.com)
+// (C) 2006-2009 Novell, Inc (http://www.novell.com)
 //
 
 //
@@ -55,8 +56,8 @@ namespace System.Web.Compilation {
 				return virtualPath.Substring (BuildManager.FAKE_VIRTUAL_PATH_PREFIX.Length);
 
 			return base.MapPath (virtualPath);
-		}
-		
+		}               
+
 		protected override TextReader SpecialOpenReader (VirtualPath virtualPath, out string physicalPath)
 		{
 			// We need this hack to support out-of-application wsdl helpers

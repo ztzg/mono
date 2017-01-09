@@ -6,7 +6,8 @@
  *	Paolo Molaro (lupus@ximian.com)
  *	Patrik Torstensson (patrik.torstensson@labs2.com)
  *
- * (C) 2001 Ximian, Inc.
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include <config.h>
@@ -233,7 +234,7 @@ static gboolean handle_store(MonoThread *thread)
 
 	if(threads==NULL) {
 		MONO_GC_REGISTER_ROOT (threads);
-		threads=mono_g_hash_table_new(NULL, NULL);
+		threads=mono_g_hash_table_new_type (NULL, NULL, MONO_HASH_VALUE_GC);
 	}
 
 	/* We don't need to duplicate thread->handle, because it is
@@ -675,6 +676,31 @@ guint32 mono_threads_get_default_stacksize (void)
 	return default_stacksize;
 }
 
+/*
+ * mono_create_thread:
+ *
+ *   This is a wrapper around CreateThread which handles differences in the type of
+ * the the 'tid' argument.
+ */
+gpointer mono_create_thread (WapiSecurityAttributes *security,
+							 guint32 stacksize, WapiThreadStart start,
+							 gpointer param, guint32 create, gsize *tid)
+{
+	gpointer res;
+
+#ifdef PLATFORM_WIN32
+	DWORD real_tid;
+
+	res = CreateThread (security, stacksize, start, param, create, &real_tid);
+	if (tid)
+		*tid = real_tid;
+#else
+	res = CreateThread (security, stacksize, start, param, create, tid);
+#endif
+
+	return res;
+}
+
 void mono_thread_create_internal (MonoDomain *domain, gpointer func, gpointer arg, gboolean threadpool_thread)
 {
 	MonoThread *thread;
@@ -712,7 +738,7 @@ void mono_thread_create_internal (MonoDomain *domain, gpointer func, gpointer ar
 	/* Create suspended, so we can do some housekeeping before the thread
 	 * starts
 	 */
-	thread_handle = CreateThread(NULL, default_stacksize_for_thread (thread), (LPTHREAD_START_ROUTINE)start_wrapper, start_info,
+	thread_handle = mono_create_thread (NULL, default_stacksize_for_thread (thread), (LPTHREAD_START_ROUTINE)start_wrapper, start_info,
 				     CREATE_SUSPENDED, &tid);
 	THREAD_DEBUG (g_message ("%s: Started thread ID %"G_GSIZE_FORMAT" (handle %p)", __func__, tid, thread_handle));
 	if (thread_handle == NULL) {
@@ -956,7 +982,7 @@ HANDLE ves_icall_System_Threading_Thread_Thread_internal(MonoThread *this,
 		mono_g_hash_table_insert (threads_starting_up, this, this);
 		mono_threads_unlock ();	
 
-		thread=CreateThread(NULL, default_stacksize_for_thread (this), (LPTHREAD_START_ROUTINE)start_wrapper, start_info,
+		thread=mono_create_thread(NULL, default_stacksize_for_thread (this), (LPTHREAD_START_ROUTINE)start_wrapper, start_info,
 				    CREATE_SUSPENDED, &tid);
 		if(thread==NULL) {
 			LeaveCriticalSection (this->synch_cs);
@@ -1172,7 +1198,7 @@ cache_culture (MonoThread *this, MonoObject *culture, int start_idx)
 	EnterCriticalSection (this->synch_cs);
 	
 	if (!this->cached_culture_info)
-		MONO_OBJECT_SETREF (this, cached_culture_info, mono_array_new (mono_object_domain (this), mono_defaults.object_class, NUM_CACHED_CULTURES * 2));
+		MONO_OBJECT_SETREF (this, cached_culture_info, mono_array_new_cached (mono_object_domain (this), mono_defaults.object_class, NUM_CACHED_CULTURES * 2));
 
 	for (i = start_idx; i < start_idx + NUM_CACHED_CULTURES; ++i) {
 		obj = mono_array_get (this->cached_culture_info, MonoObject*, i);
@@ -1461,6 +1487,28 @@ gboolean ves_icall_System_Threading_WaitHandle_WaitOne_internal(MonoObject *this
 	}
 	
 	return(TRUE);
+}
+
+gboolean
+ves_icall_System_Threading_WaitHandle_SignalAndWait_Internal (HANDLE toSignal, HANDLE toWait, gint32 ms, gboolean exitContext)
+{
+	guint32 ret;
+	MonoThread *thread = mono_thread_current ();
+
+	MONO_ARCH_SAVE_REGS;
+
+	if (ms == -1)
+		ms = INFINITE;
+
+	mono_thread_current_check_pending_interrupt ();
+
+	mono_thread_set_state (thread, ThreadState_WaitSleepJoin);
+	
+	ret = SignalObjectAndWait (toSignal, toWait, ms, TRUE);
+	
+	mono_thread_clr_state (thread, ThreadState_WaitSleepJoin);
+
+	return  (!(ret == WAIT_TIMEOUT || ret == WAIT_IO_COMPLETION || ret == WAIT_FAILED));
 }
 
 HANDLE ves_icall_System_Threading_Mutex_CreateMutex_internal (MonoBoolean owned, MonoString *name, MonoBoolean *created)
@@ -1980,7 +2028,11 @@ mono_thread_get_abort_signal (void)
 	return -1;
 #else
 #ifndef	SIGRTMIN
+#ifdef SIGUSR1
 	return SIGUSR1;
+#else
+	return -1;
+#endif
 #else
 	static int abort_signum = -1;
 	int i;
@@ -2824,6 +2876,7 @@ void mono_thread_suspend_all_other_threads (void)
 		/* Get the suspended events that we'll be waiting for */
 		for (i = 0; i < wait->num; ++i) {
 			MonoThread *thread = wait->threads [i];
+			gboolean signal_suspend = FALSE;
 
 			if ((thread->tid == self) || mono_gc_is_finalizer_thread (thread)) {
 				//CloseHandle (wait->handles [i]);
@@ -2835,22 +2888,6 @@ void mono_thread_suspend_all_other_threads (void)
 		
 			EnterCriticalSection (thread->synch_cs);
 
-			if ((thread->state & ThreadState_Suspended) != 0 || 
-				(thread->state & ThreadState_SuspendRequested) != 0 ||
-				(thread->state & ThreadState_StopRequested) != 0 ||
-				(thread->state & ThreadState_Stopped) != 0) {
-				LeaveCriticalSection (thread->synch_cs);
-				CloseHandle (wait->handles [i]);
-				wait->threads [i] = NULL; /* ignore this thread in next loop */
-				continue;
-			}
-
-			/* Convert abort requests into suspend requests */
-			if ((thread->state & ThreadState_AbortRequested) != 0)
-				thread->state &= ~ThreadState_AbortRequested;
-			
-			thread->state |= ThreadState_SuspendRequested;
-
 			if (thread->suspended_event == NULL) {
 				thread->suspended_event = CreateEvent (NULL, TRUE, FALSE, NULL);
 				if (thread->suspended_event == NULL) {
@@ -2860,11 +2897,31 @@ void mono_thread_suspend_all_other_threads (void)
 				}
 			}
 
+			if ((thread->state & ThreadState_Suspended) != 0 || 
+				(thread->state & ThreadState_StopRequested) != 0 ||
+				(thread->state & ThreadState_Stopped) != 0) {
+				LeaveCriticalSection (thread->synch_cs);
+				CloseHandle (wait->handles [i]);
+				wait->threads [i] = NULL; /* ignore this thread in next loop */
+				continue;
+			}
+
+			if ((thread->state & ThreadState_SuspendRequested) == 0)
+				signal_suspend = TRUE;
+
 			events [eventidx++] = thread->suspended_event;
+
+			/* Convert abort requests into suspend requests */
+			if ((thread->state & ThreadState_AbortRequested) != 0)
+				thread->state &= ~ThreadState_AbortRequested;
+			
+			thread->state |= ThreadState_SuspendRequested;
+
 			LeaveCriticalSection (thread->synch_cs);
 
 			/* Signal the thread to suspend */
-			signal_thread_state_change (thread);
+			if (signal_suspend)
+				signal_thread_state_change (thread);
 		}
 
 		if (eventidx > 0) {

@@ -1,3 +1,107 @@
+2009-03-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Parse the source assembly using the runtime
+	metadata routines.
+
+	* gen-md-tests.c: Add table-row function.
+
+	* Makefile: like gen-md-tests with the runtime.
+
+	* cli-tables-tests.md: Add initial tests for the module table.
+
+2009-03-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	assembly-with-resource.cs: Add missing file.
+
+2009-03-27 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* cli-tables-tests.md: Tests for total table sizes.
+
+2009-03-27 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* cli-tables-tests.md: Tests for heap sizes and minumum #~ size
+	to decode row counts.
+
+2009-03-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add tables-header and set-bit helpers.
+
+	* cli-tables-tests.md: New tests for the cli tables.
+
+	* Makefile: Add new tests.
+
+2009-03-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add stream-header and cli-metadata
+	helpers.
+
+	* cli-metadata-tests.md: New tests for the cli metadata header
+	and streams.
+
+	* Makefile: Add new tests.
+
+2009-03-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* cli-header-tests.md: More tests for the cli header.
+
+2009-03-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add cli-header variable to make tests
+	more readable.
+
+2009-03-18 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* cli-header-tests.md: New file with cli header tests.
+
+	* Makefile: Add new tests.
+	
+2009-03-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* resources-tests.md: New file with pecoff tests.
+
+	* Makefile: Add new tests.
+
+	* header-tests.md: Update some tests.
+
+2009-03-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* data-directory-tests.md: New tests for IAT directory entry.
+
+2009-03-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* data-directory-tests.md: New tests for import table name, ilt and iat.
+
+2009-03-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* data-directory-tests.md: New tests for import table.
+
+	* gen-md-tests.c: Added translate.rva and translate.rva.ind functions.
+
+2009-03-12 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c (parse_test_entry): Fix multi effect rules.
+
+	* Makefile: Add rules for data-directory-tests.md.
+	
+	* data-directory-tests.md: New tests for data directories.
+
+2009-03-12 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* section-table-tests.md: Test for flags.
+
+2009-02-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* section-table-tests.md: New test suite for
+	section headers.
+
+	* Makefile: Add new test suite.
+
+2009-02-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* gen-md-tests.c: Add section-table var.
+	Add support for function calls. Added read.uint.
+	Added support for complex arithmetic expressions.
+
 2009-01-15 Rodrigo Kumpera  <rkumpera@novell.com>
 
 	* header-tests.md: Add more tests for pe optional header.

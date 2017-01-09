@@ -128,20 +128,42 @@ namespace System.ServiceModel.Channels
 #if !NET_2_1
 				web_request.ContentLength = (int) buffer.Length;
 #endif
+
+#if NET_2_1
+				// We can verify cross domain access policy 
+				// with full set of headers and target URL.
+				if (!CrossDomainAccessManager.Current.IsAllowed (destination, web_request.Headers.AllKeys))
+					throw new InvalidOperationException (String.Format ("Cross domain web service access to {0} is not allowed", destination));
+#endif
+
 				Stream requestStream = web_request.EndGetRequestStream (web_request.BeginGetRequestStream (null, null));
 				requestStream.Write (buffer.GetBuffer (), 0, (int) buffer.Length);
 				requestStream.Close ();
 			}
 
 			WebResponse res;
+			Stream resstr;
 			try {
 				res = web_request.EndGetResponse (web_request.BeginGetResponse (null, null));
-			}
-			catch (WebException we) {
+				resstr = res.GetResponseStream ();
+			} catch (WebException we) {
 				res = we.Response;
+#if NET_2_1 // debug
+				Console.WriteLine (we);
+#endif
+				try {
+					// The response might contain SOAP fault. It might not.
+					resstr = res.GetResponseStream ();
+				} catch (WebException we2) {
+#if NET_2_1 // debug
+					Console.WriteLine (we2);
+#endif
+					throw we;
+				}
 			}
+			
 			try {
-				using (Stream responseStream = res.GetResponseStream ()) {
+				using (var responseStream = resstr) {
 					MemoryStream ms = new MemoryStream ();
 					byte [] b = new byte [65536];
 					int n = 0;

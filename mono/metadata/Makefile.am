@@ -62,6 +62,8 @@ libmonoruntime_la_SOURCES = \
 	method-builder.c \
 	marshal.c	\
 	marshal.h	\
+	cominterop.c	\
+	cominterop.h	\
 	mono-mlist.c	\
 	mono-mlist.h	\
 	monitor.c	\
@@ -141,7 +143,9 @@ libmonoruntime_la_SOURCES = \
 	debug-helpers.c	\
 	generic-sharing.c	\
 	mempool-internals.h	\
-	metadata-verify.c
+	metadata-verify.c	\
+	lock-tracer.c	\
+	lock-tracer.h
 
 libmonoruntime_static_la_SOURCES = $(libmonoruntime_la_SOURCES)
 

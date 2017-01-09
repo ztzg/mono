@@ -70,11 +70,12 @@ namespace System.Runtime.Serialization
 				throw new ArgumentNullException ("type");
 			this.type = type;
 			known_types = new KnownTypeCollection ();
+			PopulateTypes (knownTypes);
+			known_types.TryRegister (type);
 			QName qname = known_types.GetQName (type);
 
 			FillDictionaryString (qname.Name, qname.Namespace);
 			
-			PopulateTypes (knownTypes);
 		}
 
 		public DataContractSerializer (Type type, string rootName,
@@ -340,8 +341,6 @@ namespace System.Runtime.Serialization
 			if (graph == null) {
 				writer.WriteStartElement (root_name.Value, root_ns.Value);
 				writer.WriteAttributeString ("i", "nil", XmlSchema.InstanceNamespace, "true");
-				writer.WriteAttributeString ("xmlns", xmlns, root_ns.Value);
-
 				return;
 			}
 

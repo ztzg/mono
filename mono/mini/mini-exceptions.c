@@ -3,8 +3,10 @@
  *
  * Authors:
  *   Dietmar Maurer (dietmar@ximian.com)
+ *   Mono Team (mono-list@lists.ximian.com)
  *
- * (C) 2001 Ximian, Inc.
+ * Copyright 2001-2003 Ximian, Inc.
+ * Copyright 2003-2008 Ximian, Inc.
  */
 
 #include <config.h>
@@ -16,10 +18,12 @@
 #include <execinfo.h>
 #endif
 
-#ifndef PLATFORM_WIN32
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+
+#ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
-#include <unistd.h>
 #endif
 
 #ifdef HAVE_UNISTD_H
@@ -193,7 +197,7 @@ mono_get_throw_corlib_exception (void)
  * start of the function or -1 if that info is not available.
  */
 MonoJitInfo *
-mono_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *res, MonoJitInfo *prev_ji, MonoContext *ctx, 
+mono_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *res, MonoJitInfo *prev_ji, MonoContext *ctx,
 		    MonoContext *new_ctx, char **trace, MonoLMF **lmf, int *native_offset,
 		    gboolean *managed)
 {
@@ -578,7 +582,7 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 
 	do {
 		ji_ctx = ctx;
-		ji = mono_find_jit_info (domain, jit_tls, &rji, NULL, &ctx, &new_ctx, NULL, &lmf, native_offset, NULL);
+		ji = mono_find_jit_info (domain, jit_tls, &rji, NULL, &ctx, &new_ctx, NULL, &lmf, (int*) native_offset, NULL);
 		ctx = new_ctx;
 
 		if (ji && ji != (gpointer)-1 &&
@@ -1394,13 +1398,19 @@ static gboolean handling_sigsegv = FALSE;
 void
 mono_handle_native_sigsegv (int signal, void *ctx)
 {
-#ifndef PLATFORM_WIN32
+#ifdef MONO_ARCH_USE_SIGACTION
 	struct sigaction sa;
 #endif
 	MonoJitTlsData *jit_tls = TlsGetValue (mono_jit_tls_id);
 
 	if (handling_sigsegv)
 		return;
+
+	if (mini_get_debug_options ()->suspend_on_sigsegv) {
+		fprintf (stderr, "Received SIGSEGV, suspending...");
+		while (1)
+			;
+	}
 
 	/* To prevent infinite loops when the stack walk causes a crash */
 	handling_sigsegv = TRUE;
@@ -1513,7 +1523,7 @@ mono_handle_native_sigsegv (int signal, void *ctx)
  }
 #endif
 
-#ifndef PLATFORM_WIN32
+#ifdef MONO_ARCH_USE_SIGACTION
 
 	/* Remove our SIGABRT handler */
 	sa.sa_handler = SIG_DFL;
@@ -1561,8 +1571,7 @@ mono_print_thread_dump (void *sigctx)
 	free (wapi_desc);
 #endif
 
-	/* FIXME: */
-#if defined(__i386__) || defined(__x86_64__)
+#ifdef MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX
 	if (!sigctx)
 		MONO_INIT_CONTEXT_FROM_FUNC (&ctx, mono_print_thread_dump);
 	else

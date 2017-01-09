@@ -98,7 +98,8 @@ namespace System.ServiceModel
 			Endpoint.Address = remoteAddress;
 		}
 
-		[MonoTODO]
+		internal object OwnerClientBase { get; set; }
+
 		public TChannel CreateChannel ()
 		{
 			return CreateChannel (Endpoint.Address);
@@ -119,13 +120,19 @@ namespace System.ServiceModel
 			return new ChannelFactory<TChannel> (binding).CreateChannel (address, via);
 		}
 
-		[MonoTODO]
 		public virtual TChannel CreateChannel (EndpointAddress address, Uri via)
 		{
 			EnsureOpened ();
 			Type type = ClientProxyGenerator.CreateProxyType (Endpoint.Contract);
-			object proxy = Activator.CreateInstance (type,
-				new object [] {CreateRuntime (Endpoint), this});
+			// in .NET and SL2, it seems that the proxy is RealProxy.
+			// But since there is no remoting in SL2 (and we have
+			// no special magic), we have to use different approach
+			// that should work either.
+
+			// it's complicated, but since TChannel must be class while it isn't here, we need ugly reflection hack.
+
+			object arg = OwnerClientBase ?? Activator.CreateInstance (typeof (DummyClientBase<>).MakeGenericType (typeof (TChannel)), new object [] {this});
+			object proxy = Activator.CreateInstance (type, new object [] {arg});
 			return (TChannel) proxy;
 		}
 
@@ -143,54 +150,13 @@ namespace System.ServiceModel
 #endif
 			return ep;
 		}
+	}
 
-		static ClientRuntime CreateRuntime (ServiceEndpoint se)
+	class DummyClientBase<T> : ClientBase<T> where T : class
+	{
+		public DummyClientBase (ChannelFactory<T> factory)
+			: base (factory)
 		{
-			ClientRuntime proxy = new ClientRuntime (se);
-			proxy.ContractClientType = typeof (TChannel);
-
-			foreach (OperationDescription od in se.Contract.Operations)
-				if (!proxy.Operations.Contains (od.Name))
-					PopulateClientOperation (proxy, od);
-
-#if !NET_2_1
-			foreach (IEndpointBehavior b in se.Behaviors)
-				b.ApplyClientBehavior (se, proxy);
-
-			foreach (IContractBehavior b in se.Contract.Behaviors)
-				b.ApplyClientBehavior (se.Contract, se, proxy);
-			foreach (OperationDescription od in se.Contract.Operations)
-				foreach (IOperationBehavior ob in od.Behaviors)
-					ob.ApplyClientBehavior (od, proxy.Operations [od.Name]);
-#endif
-
-			return proxy;
-		}
-
-		static void PopulateClientOperation (ClientRuntime proxy, OperationDescription od)
-		{
-			string reqA = null, resA = null;
-			foreach (MessageDescription m in od.Messages) {
-				if (m.Direction == MessageDirection.Input)
-					reqA = m.Action;
-				else
-					resA = m.Action;
-			}
-			ClientOperation o =
-				od.IsOneWay ?
-				new ClientOperation (proxy, od.Name, reqA) :
-				new ClientOperation (proxy, od.Name, reqA, resA);
-			foreach (MessageDescription md in od.Messages) {
-				if (md.Direction == MessageDirection.Input &&
-				    md.Body.Parts.Count == 1 &&
-				    md.Body.Parts [0].Type == typeof (Message))
-					o.SerializeRequest = false;
-				if (md.Direction == MessageDirection.Output &&
-				    md.Body.ReturnValue != null &&
-				    md.Body.ReturnValue.Type == typeof (Message))
-					o.DeserializeReply = false;
-			}
-			proxy.Operations.Add (o);
 		}
 	}
 }

@@ -194,20 +194,20 @@ s390x_sources = \
 	tramp-s390x.c
 
 ia64_sources = \
-	mini-ia64.c			\
-	mini-ia64.h			\
+	mini-ia64.c		\
+	mini-ia64.h		\
 	exceptions-ia64.c	\
 	tramp-ia64.c
 
 alpha_sources = \
-	mini-alpha.c	\
-	mini-alpha.h	\
+	mini-alpha.c		\
+	mini-alpha.h		\
 	exceptions-alpha.c	\
 	tramp-alpha.c
 
 hppa_sources = \
-	mini-hppa.c	\
-	mini-hppa.h	\
+	mini-hppa.c		\
+	mini-hppa.h		\
 	exceptions-hppa.c	\
 	tramp-hppa.c
 
@@ -218,69 +218,82 @@ sh4_sources = \
 	tramp-sh4.c	\
 	cstpool-sh4.c
 
+darwin_sources = \
+	mini-darwin.c
+
+windows_sources = \
+	mini-windows.c
+
+posix_sources = \
+	mini-posix.c
+
 common_sources = \
-	mini.c		\
-	ir-emit.h	\
-	method-to-ir.c	\
-	decompose.c	\
-	mini.h		\
-	version.h	\
+	mini.c			\
+	ir-emit.h		\
+	method-to-ir.c		\
+	decompose.c		\
+	mini.h			\
+	version.h		\
 	optflags-def.h		\
-	jit-icalls.h \
-	jit-icalls.c \
-	trace.c		\
-	trace.h		\
-	patch-info.h	\
-	mini-ops.h	\
-	mini-arch.h	\
-	dominators.c	\
-	cfold.c		\
-	regalloc.c	\
-	regalloc.h	\
-	helpers.c	\
-	liveness.c	\
-	ssa.c		\
-	abcremoval.c	\
-	abcremoval.h	\
-	ssapre.c	\
-	ssapre.h	\
+	jit-icalls.h 		\
+	jit-icalls.c 		\
+	trace.c			\
+	trace.h			\
+	patch-info.h		\
+	mini-ops.h		\
+	mini-arch.h		\
+	dominators.c		\
+	cfold.c			\
+	regalloc.c		\
+	regalloc.h		\
+	helpers.c		\
+	liveness.c		\
+	ssa.c			\
+	abcremoval.c		\
+	abcremoval.h		\
+	ssapre.c		\
+	ssapre.h		\
 	local-propagation.c	\
-	driver.c	\
-	debug-mini.c	\
-	debug-mini.h	\
-	linear-scan.c	\
+	driver.c		\
+	debug-mini.c		\
+	debug-mini.h		\
+	linear-scan.c		\
 	aot-compiler.c		\
 	aot-runtime.c		\
-	graph.c		\
-	mini-exceptions.c	\
+	graph.c			\
 	mini-codegen.c		\
-	mini-trampolines.c  \
-	declsec.c	\
-	declsec.h	\
-	wapihandles.c	\
-	branch-opts.c	\
-	generic-sharing.c	\
-	regalloc2.c	\
-	simd-methods.h	\
+	mini-exceptions.c	\
+	mini-trampolines.c  	\
+	declsec.c		\
+	declsec.h		\
+	wapihandles.c		\
+	branch-opts.c		\
+	mini-generic-sharing.c	\
+	regalloc2.c		\
+	simd-methods.h		\
 	simd-intrinsics.c	\
-	unwind.h	\
-	unwind.c
+	unwind.h		\
+	unwind.c		\
+	image-writer.h	\
+	image-writer.c	\
+	dwarfwriter.h	\
+	dwarfwriter.c
 
-test_sources = 		\
-	basic-calls.cs 	\
-	basic-long.cs 	\
+test_sources = 			\
+	basic-calls.cs 		\
+	basic-long.cs 		\
 	bench.cs 		\
 	objects.cs 		\
 	arrays.cs		\
-	basic-float.cs	\
-	basic-math.cs	\
+	basic-float.cs		\
+	basic-math.cs		\
 	basic.cs		\
-	exceptions.cs	\
+	exceptions.cs		\
 	devirtualization.cs	\
 	iltests.il.in		\
 	test.cs			\
-	generics.cs	\
-	generics-variant-types.il	\
+	generics.cs		\
+	generics-variant-types.il\
 	basic-simd.cs
 
 if MONO_DEBUGGER_SUPPORTED
@@ -387,7 +400,19 @@ arch_built = cpu-sh4.h
 arch_define=__sh4__
 endif
 
-libmono_la_SOURCES = $(common_sources) $(arch_sources)
+if PLATFORM_WIN32
+os_sources = $(windows_sources)
+endif
+
+if PLATFORM_SIGPOSIX
+os_sources = $(posix_sources)
+endif
+
+if PLATFORM_DARWIN
+os_sources = $(darwin_sources) $(posix_sources)
+endif
+
+libmono_la_SOURCES = $(common_sources) $(arch_sources) $(os_sources)
 
 libmono_static_la_SOURCES = $(libmono_la_SOURCES)
 nodist_libmono_static_la_SOURCES = $(nodist_libmono_la_SOURCES)
@@ -493,6 +518,15 @@ aotcheck: mono $(regtests)
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
 
+# This is not expected to run successfully
+fullaotcheck: mono $(regtests)
+	rm -rf fullaot-tmp
+	mkdir fullaot-tmp
+	cp $(CLASS)/mscorlib.dll $(CLASS)/Mono.Simd.dll $(regtests) generics-variant-types.dll TestDriver.dll fullaot-tmp/
+	cp $(regtests) fullaot-tmp/
+	MONO_PATH=fullaot-tmp $(top_builddir)/runtime/mono-wrapper --aot=full fullaot-tmp/* || exit 1
+	for i in $(regtests); do echo $$i; if [ $$i != generics.exe ]; then MONO_PATH=fullaot-tmp $(top_builddir)/runtime/mono-wrapper --full-aot fullaot-tmp/$$i || exit 1; fi; done
+
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe
 
@@ -541,8 +575,11 @@ EXTRA_DIST = $(common_BURGSRC) cprop.c TestDriver.cs ldscript ldscript.mono \
 	$(s390x_sources) cpu-s390x.md \
 	$(ia64_sources) cpu-ia64.md \
 	$(alpha_sources) cpu-alpha.md \
-	$(hppa_sources) cpu-hppa.md \
-	$(sh4_sources) inssel-sh4.brg cpu-sh4.md
+	$(hppa_sources) cpu-hppa.md 	\
+	$(sh4_sources) inssel-sh4.brg cpu-sh4.md \
+	$(windows_sources)		\
+	$(darwin_sources)		\
+	$(posix_sources)
 
 version.h: Makefile
 	if test -d $(top_srcdir)/.git/svn; then svn_info='git svn info'; fi; \

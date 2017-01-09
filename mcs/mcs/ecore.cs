@@ -294,11 +294,12 @@ namespace Mono.CSharp {
 
 				// TODO: silent flag is ignored
 				ct.CheckConstraints (ec);
+				ct.VerifyVariantTypeParameters ();
 			}
 
 			return te;
 		}
-
+	
 		public TypeExpr ResolveAsBaseTerminal (IResolveContext ec, bool silent)
 		{
 			int errors = Report.Errors;
@@ -363,6 +364,11 @@ namespace Mono.CSharp {
 		}
 
 		public virtual void Error_ValueCannotBeConverted (EmitContext ec, Location loc, Type target, bool expl)
+		{
+			Error_ValueCannotBeConvertedCore (ec, loc, target, expl);
+		}
+
+		protected void Error_ValueCannotBeConvertedCore (EmitContext ec, Location loc, Type target, bool expl)
 		{
 			// The error was already reported as CS1660
 			if (type == TypeManager.anonymous_method_type)
@@ -1100,7 +1106,7 @@ namespace Mono.CSharp {
 					ig.Emit (OpCodes.Ldind_Ref);
 				else
 					LoadFromPtr (ig, TypeManager.GetEnumUnderlyingType (t));
-			} else if (t.IsValueType || TypeManager.IsGenericParameter (t))
+			} else if (TypeManager.IsStruct (t) || TypeManager.IsGenericParameter (t))
 				ig.Emit (OpCodes.Ldobj, t);
 			else if (t.IsPointer)
 				ig.Emit (OpCodes.Ldind_I);
@@ -1131,7 +1137,7 @@ namespace Mono.CSharp {
 				ig.Emit (OpCodes.Stind_I1);
 			else if (type == TypeManager.intptr_type)
 				ig.Emit (OpCodes.Stind_I);
-			else if (type.IsValueType || TypeManager.IsGenericParameter (type))
+			else if (TypeManager.IsStruct (type) || TypeManager.IsGenericParameter (type))
 				ig.Emit (OpCodes.Stobj, type);
 			else
 				ig.Emit (OpCodes.Stind_Ref);
@@ -1612,12 +1618,18 @@ namespace Mono.CSharp {
 		
 		public override void Emit (EmitContext ec)
 		{
-			child.Emit (ec);
+			child.Emit (ec);			
 		}
 
 		public override void EmitBranchable (EmitContext ec, Label label, bool on_true)
 		{
 			child.EmitBranchable (ec, label, on_true);
+
+#if GMCS_SOURCE
+			// Only to make verifier happy
+			if (TypeManager.IsGenericParameter (type) && child.IsNull)
+				ec.ig.Emit (OpCodes.Unbox_Any, type);
+#endif
 		}
 
 		public override void EmitSideEffect (EmitContext ec)
@@ -1708,7 +1720,7 @@ namespace Mono.CSharp {
 			//
 			// This works only sometimes
 			//
-			if (type.Module == CodeGen.Module.Builder)
+			if (type.Module == RootContext.ToplevelTypes.Builder)
 				return Child.GetValue ();
 #endif
 
@@ -1807,7 +1819,7 @@ namespace Mono.CSharp {
 		{
 			// boxing is side-effectful, since it involves runtime checks, except when boxing to Object or ValueType
 			// so, we need to emit the box+pop instructions in most cases
-			if (child.Type.IsValueType &&
+			if (TypeManager.IsStruct (child.Type) &&
 			    (type == TypeManager.object_type || type == TypeManager.value_type))
 				child.EmitSideEffect (ec);
 			else
@@ -1838,19 +1850,16 @@ namespace Mono.CSharp {
 
 		public override void Emit (EmitContext ec)
 		{
-			ILGenerator ig = ec.ig;
-			
 			base.Emit (ec);
-#if GMCS_SOURCE
-			if (type.IsGenericParameter || type.IsGenericType && type.IsValueType)
-				ig.Emit (OpCodes.Unbox_Any, type);
-			else
-#endif
-			{
-				ig.Emit (OpCodes.Unbox, type);
 
-				LoadFromPtr (ig, type);
-			}
+			ILGenerator ig = ec.ig;
+
+#if GMCS_SOURCE
+			ig.Emit (OpCodes.Unbox_Any, type);
+#else			
+			ig.Emit (OpCodes.Unbox, type);
+			LoadFromPtr (ig, type);
+#endif			
 		}
 
 		public override void MutateHoistedGenericType (AnonymousMethodStorey storey)
@@ -2521,7 +2530,7 @@ namespace Mono.CSharp {
 
 			string ns = ec.DeclContainer.NamespaceEntry.NS.Name;
 			string fullname = (ns.Length > 0) ? ns + "." + Name : Name;
-			foreach (Assembly a in RootNamespace.Global.Assemblies) {
+			foreach (Assembly a in GlobalRootNamespace.Instance.Assemblies) {
 				Type type = a.GetType (fullname);
 				if (type != null) {
 					Report.SymbolRelatedToPreviousError (type);
@@ -2749,7 +2758,7 @@ namespace Mono.CSharp {
 					me.SetTypeArguments (targs);
 				}
 
-				if (!me.IsStatic && (me.InstanceExpression != null) &&
+				if (!me.IsStatic && (me.InstanceExpression != null && me.InstanceExpression != EmptyExpression.Null) &&
 				    TypeManager.IsNestedFamilyAccessible (me.InstanceExpression.Type, me.DeclaringType) &&
 				    me.InstanceExpression.Type != me.DeclaringType &&
 				    !TypeManager.IsFamilyAccessible (me.InstanceExpression.Type, me.DeclaringType) &&
@@ -2826,17 +2835,12 @@ namespace Mono.CSharp {
 			return ds.CheckAccessLevel (Type);
 		}
 
-		public virtual bool AsAccessible (DeclSpace ds)
-		{
-			return ds.IsAccessibleAs (Type);
-		}
-
 		public virtual bool IsClass {
 			get { return Type.IsClass; }
 		}
 
 		public virtual bool IsValueType {
-			get { return Type.IsValueType; }
+			get { return TypeManager.IsStruct (Type); }
 		}
 
 		public virtual bool IsInterface {
@@ -2903,141 +2907,51 @@ namespace Mono.CSharp {
 		}
 	}
 
-	/// <summary>
-	///   Used to create types from a fully qualified name.  These are just used
-	///   by the parser to setup the core types.  A TypeLookupExpression is always
-	///   classified as a type.
-	/// </summary>
+	//
+	// Used to create types from a fully qualified name.  These are just used
+	// by the parser to setup the core types.
+	//
 	public sealed class TypeLookupExpression : TypeExpr {
+		readonly string ns_name;
 		readonly string name;
 		
-		public TypeLookupExpression (string name)
+		public TypeLookupExpression (string ns, string name)
 		{
 			this.name = name;
+			this.ns_name = ns;
 			eclass = ExprClass.Type;
 		}
 
 		public override TypeExpr ResolveAsTypeTerminal (IResolveContext ec, bool silent)
 		{
-			// It's null for corlib compilation only
-			if (type == null)
-				return DoResolveAsTypeStep (ec);
+			//
+			// It's null only during mscorlib bootstrap when DefineType
+			// nees to resolve base type of same type
+			//
+			// For instance struct Char : IComparable<char>
+			//
+			// TODO: it could be removed when Resolve starts to use 
+			// DeclSpace instead of Type
+			//
+			if (type == null) {
+				Namespace ns = GlobalRootNamespace.Instance.GetNamespace (ns_name, false);
+				FullNamedExpression fne = ns.Lookup (null, name, loc);
+				if (fne != null)
+					type = fne.Type;
+			}
 
 			return this;
 		}
 
-		private class UnexpectedType
-		{
-		}
-
-		// This performes recursive type lookup, providing support for generic types.
-		// For example, given the type:
-		//
-		// System.Collections.Generic.KeyValuePair`2[[System.Int32],[System.String]]
-		//
-		// The types will be checked in the following order:
-		//                                                                             _
-		// System                                                                       |
-		// System.Collections                                                           |
-		// System.Collections.Generic                                                   |
-		//                        _                                                     |
-		//     System              | recursive call 1                                   |
-		//     System.Int32       _|                                                    | main method call
-		//                        _                                                     |
-		//     System              | recursive call 2                                   |
-		//     System.String      _|                                                    |
-		//                                                                              |
-		// System.Collections.Generic.KeyValuePair`2[[System.Int32],[System.String]]   _|
-		//
-		private Type TypeLookup (IResolveContext ec, string name)
-		{
-			int index = 0;
-			int dot = 0;
-			bool done = false;
-			FullNamedExpression resolved = null;
-			Type type = null;
-			Type recursive_type = null;
-			while (index < name.Length) {
-				if (name[index] == '[') {
-					int open = index;
-					int braces = 1;
-					do {
-						index++;
-						if (name[index] == '[')
-							braces++;
-						else if (name[index] == ']')
-							braces--;
-					} while (braces > 0);
-					recursive_type = TypeLookup (ec, name.Substring (open + 1, index - open - 1));
-					if (recursive_type == null || (recursive_type == typeof(UnexpectedType)))
-						return recursive_type;
-				}
-				else {
-					if (name[index] == ',')
-						done = true;
-					else if ((name[index] == '.' && !done) || (index == name.Length && name[0] != '[')) {
-						string substring = name.Substring(dot, index - dot);
-
-						if (resolved == null)
-							resolved = RootNamespace.Global.Lookup (ec.DeclContainer, substring, Location.Null);
-						else if (resolved is Namespace)
-						    resolved = (resolved as Namespace).Lookup (ec.DeclContainer, substring, Location.Null);
-						else if (type != null)
-							type = TypeManager.GetNestedType (type, substring);
-						else
-							return null;
-
-						if (resolved == null)
-							return null;
-						else if (type == null && resolved is TypeExpr)
-							type = resolved.Type;
-
-						dot = index + 1;
-					}
-				}
-				index++;
-			}
-			if (name[0] != '[') {
-				string substring = name.Substring(dot, index - dot);
-
-				if (type != null)
-					return TypeManager.GetNestedType (type, substring);
-				
-				if (resolved != null) {
-					resolved = (resolved as Namespace).Lookup (ec.DeclContainer, substring, Location.Null);
-					if (resolved is TypeExpr)
-						return resolved.Type;
-					
-					if (resolved == null)
-						return null;
-					
-					resolved.Error_UnexpectedKind (ec.DeclContainer, "type", loc);
-					return typeof (UnexpectedType);
-				}
-				else
-					return null;
-			}
-			else
-				return recursive_type;
-			}
-
 		protected override TypeExpr DoResolveAsTypeStep (IResolveContext ec)
 		{
-			Type t = TypeLookup (ec, name);
-			if (t == null) {
-				NamespaceEntry.Error_NamespaceNotFound (loc, name);
-				return null;
-			}
-			if (t == typeof(UnexpectedType))
-				return null;
-			type = t;
 			return this;
 		}
 
 		public override string GetSignatureForError ()
 		{
 			if (type == null)
-				return TypeManager.CSharpName (name, null);
+				return TypeManager.CSharpName (ns_name + "." + name, null);
 
 			return base.GetSignatureForError ();
 		}
@@ -3172,7 +3086,7 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			if (InstanceExpression.Type.IsValueType) {
+			if (TypeManager.IsValueType (InstanceExpression.Type)) {
 				if (InstanceExpression is IMemoryLocation) {
 					((IMemoryLocation) InstanceExpression).AddressOf (ec, AddressOp.LoadStore);
 				} else {
@@ -3298,6 +3212,7 @@ namespace Mono.CSharp {
  		bool identical_type_name;
 		bool has_inaccessible_candidates_only;
 		Type delegate_type;
+		Type queried_type;
 		
 		public MethodGroupExpr (MemberInfo [] mi, Type type, Location l)
 			: this (type, l)
@@ -3334,16 +3249,13 @@ namespace Mono.CSharp {
 		{
 			this.loc = loc;
 			eclass = ExprClass.MethodGroup;
-			this.type = type;
+			this.type = typeof (MethodGroupExpr);
+			queried_type = type;
 		}
 
 		public override Type DeclaringType {
 			get {
-				//
-				// We assume that the top-level type is in the end
-				//
-				return Methods [Methods.Length - 1].DeclaringType;
-				//return Methods [0].DeclaringType;
+				return queried_type;
 			}
 		}
 
@@ -3890,7 +3802,7 @@ namespace Mono.CSharp {
 
 				if (score != 0 && (p_mod & Parameter.Modifier.PARAMS) != 0 && delegate_type == null) {
 					// It can be applicable in expanded form
-					score = IsArgumentCompatible (ec, a_mod, a, 0, pt.GetElementType ());
+					score = IsArgumentCompatible (ec, a_mod, a, 0, TypeManager.GetElementType (pt));
 					if (score == 0)
 						params_expanded_form = true;
 				}
@@ -3915,11 +3827,11 @@ namespace Mono.CSharp {
 			//
 			if (arg_mod != 0 || param_mod != 0) {
 				if (TypeManager.HasElementType (parameter))
-					parameter = parameter.GetElementType ();
+					parameter = TypeManager.GetElementType (parameter);
 
 				Type a_type = argument.Type;
 				if (TypeManager.HasElementType (a_type))
-					a_type = a_type.GetElementType ();
+					a_type = TypeManager.GetElementType (a_type);
 
 				if (a_type != parameter)
 					return 2;
@@ -4232,7 +4144,7 @@ namespace Mono.CSharp {
 								// base class (CS1540).  If the qualifier_type is a base of the
 								// ec.ContainerType and the lookup succeeds with the latter one,
 								// then we are in this situation.
-								Error_CannotAccessProtected (loc, best_candidate, type, ec.ContainerType);
+								Error_CannotAccessProtected (loc, best_candidate, queried_type, ec.ContainerType);
 							} else {
 								Report.SymbolRelatedToPreviousError (best_candidate);
 								ErrorIsInaccesible (loc, GetSignatureForError ());
@@ -4253,10 +4165,10 @@ namespace Mono.CSharp {
 				// We failed to find any method with correct argument count
 				//
 				if (Name == ConstructorInfo.ConstructorName) {
-					Report.SymbolRelatedToPreviousError (type);
+					Report.SymbolRelatedToPreviousError (queried_type);
 					Report.Error (1729, loc,
 						"The type `{0}' does not contain a constructor that takes `{1}' arguments",
-						TypeManager.CSharpName (type), arg_count);
+						TypeManager.CSharpName (queried_type), arg_count);
 				} else {
 					Error_ArgumentCountWrong (arg_count);
 				}
@@ -4418,11 +4330,9 @@ namespace Mono.CSharp {
 				return null;
 
 			MethodBase the_method = TypeManager.DropGenericMethodArguments (best_candidate);
-#if GMCS_SOURCE
-			if (the_method.IsGenericMethodDefinition &&
+			if (TypeManager.IsGenericMethodDefinition (the_method) &&
 			    !ConstraintChecker.CheckConstraints (ec, the_method, best_candidate, loc))
 				return null;
-#endif
 
 			//
 			// Check ObsoleteAttribute on the best method
@@ -4769,11 +4679,15 @@ namespace Mono.CSharp {
 					using (ec.With (EmitContext.Flags.DoFlowAnalysis, false)) {
 						Expression right_side =
 							out_access ? EmptyExpression.LValueMemberOutAccess : EmptyExpression.LValueMemberAccess;
-						InstanceExpression = InstanceExpression.ResolveLValue (ec, right_side, loc);
+
+						if (InstanceExpression != EmptyExpression.Null)
+							InstanceExpression = InstanceExpression.ResolveLValue (ec, right_side, loc);
 					}
 				} else {
 					ResolveFlags rf = ResolveFlags.VariableOrValue | ResolveFlags.DisableFlowAnalysis;
-					InstanceExpression = InstanceExpression.Resolve (ec, rf);
+
+					if (InstanceExpression != EmptyExpression.Null)
+						InstanceExpression = InstanceExpression.Resolve (ec, rf);
 				}
 
 				if (InstanceExpression == null)
@@ -4877,7 +4791,7 @@ namespace Mono.CSharp {
 			if (var != null && var.VariableInfo != null)
 				var.VariableInfo.SetFieldAssigned (ec, FieldInfo.Name);
 
-			bool lvalue_instance = !FieldInfo.IsStatic && FieldInfo.DeclaringType.IsValueType;
+			bool lvalue_instance = !FieldInfo.IsStatic && TypeManager.IsValueType (FieldInfo.DeclaringType);
 			bool out_access = right_side == EmptyExpression.OutAccess || right_side == EmptyExpression.LValueMemberOutAccess;
 
 			Expression e = DoResolve (ec, lvalue_instance, out_access);
@@ -4925,7 +4839,7 @@ namespace Mono.CSharp {
 
 		bool is_marshal_by_ref ()
 		{
-			return !IsStatic && Type.IsValueType && TypeManager.mbr_type != null && TypeManager.IsSubclassOf (DeclaringType, TypeManager.mbr_type);
+			return !IsStatic && TypeManager.IsStruct (Type) && TypeManager.mbr_type != null && TypeManager.IsSubclassOf (DeclaringType, TypeManager.mbr_type);
 		}
 
 		public override void CheckMarshalByRefAccess (EmitContext ec)
@@ -4949,7 +4863,7 @@ namespace Mono.CSharp {
 				//
 				IVariableReference variable = InstanceExpression as IVariableReference;
 				if (variable != null)
-					return InstanceExpression.Type.IsValueType && variable.IsFixed;
+					return TypeManager.IsStruct (InstanceExpression.Type) && variable.IsFixed;
 
 				IFixedExpression fe = InstanceExpression as IFixedExpression;
 				return fe != null && fe.IsFixed;
@@ -5000,15 +4914,21 @@ namespace Mono.CSharp {
 				if (!prepared)
 					EmitInstance (ec, false);
 
-				IFixedBuffer ff = AttributeTester.GetFixedBuffer (FieldInfo);
-				if (ff != null) {
-					ig.Emit (OpCodes.Ldflda, GetConstructedFieldInfo ());
-					ig.Emit (OpCodes.Ldflda, ff.Element);
+				// Optimization for build-in types
+				// TODO: Iterators don't set current container
+				if (TypeManager.IsStruct (type) && type == ec.DeclContainer.TypeBuilder && ec.CurrentIterator == null) {
+					LoadFromPtr (ig, type);
 				} else {
-					if (is_volatile)
-						ig.Emit (OpCodes.Volatile);
+					IFixedBuffer ff = AttributeTester.GetFixedBuffer (FieldInfo);
+					if (ff != null) {
+						ig.Emit (OpCodes.Ldflda, GetConstructedFieldInfo ());
+						ig.Emit (OpCodes.Ldflda, ff.Element);
+					} else {
+						if (is_volatile)
+							ig.Emit (OpCodes.Volatile);
 
-					ig.Emit (OpCodes.Ldfld, GetConstructedFieldInfo ());
+						ig.Emit (OpCodes.Ldfld, GetConstructedFieldInfo ());
+					}
 				}
 			}
 
@@ -5522,7 +5442,7 @@ namespace Mono.CSharp {
 				return null;
 			}
 			
-			if (!InstanceResolve (ec, PropertyInfo.DeclaringType.IsValueType, must_do_cs1540_check))
+			if (!InstanceResolve (ec, TypeManager.IsStruct (PropertyInfo.DeclaringType), must_do_cs1540_check))
 				return null;
 			
 			//
@@ -5692,7 +5612,7 @@ namespace Mono.CSharp {
 					if ((mi.ModFlags & (Modifiers.ABSTRACT | Modifiers.EXTERN)) != 0 && !ec.IsInCompoundAssignment)
 						Error_AssignmentEventOnly ();
 					
-					FieldExpr ml = new FieldExpr (mi.FieldBuilder, loc);
+					FieldExpr ml = new FieldExpr (mi.BackingField.FieldBuilder, loc);
 
 					InstanceExpression = null;
 				

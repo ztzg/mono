@@ -26,7 +26,7 @@ namespace Mono.CSharp {
 	public class Delegate : DeclSpace, IMemberContainer
 	{
  		FullNamedExpression ReturnType;
-		public Parameters      Parameters;
+		public ParametersCompiled      Parameters;
 
 		public ConstructorBuilder ConstructorBuilder;
 		public MethodBuilder      InvokeBuilder;
@@ -55,7 +55,7 @@ namespace Mono.CSharp {
 			Modifiers.PRIVATE;
 
  		public Delegate (NamespaceEntry ns, DeclSpace parent, FullNamedExpression type,
-				 int mod_flags, MemberName name, Parameters param_list,
+				 int mod_flags, MemberName name, ParametersCompiled param_list,
 				 Attributes attrs)
 			: base (ns, parent, name, attrs)
 
@@ -67,17 +67,17 @@ namespace Mono.CSharp {
 			Parameters      = param_list;
 		}
 
-		public override void ApplyAttributeBuilder(Attribute a, CustomAttributeBuilder cb)
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
 			if (a.Target == AttributeTargets.ReturnValue) {
 				if (return_attributes == null)
 					return_attributes = new ReturnParameter (InvokeBuilder, Location);
 
-				return_attributes.ApplyAttributeBuilder (a, cb);
+				return_attributes.ApplyAttributeBuilder (a, cb, pa);
 				return;
 			}
 
-			base.ApplyAttributeBuilder (a, cb);
+			base.ApplyAttributeBuilder (a, cb, pa);
 		}
 
 		public override TypeBuilder DefineType ()
@@ -89,7 +89,7 @@ namespace Mono.CSharp {
 				if (TypeManager.NamespaceClash (Name, Location))
 					return null;
 				
-				ModuleBuilder builder = CodeGen.Module.Builder;
+				ModuleBuilder builder = Module.Builder;
 
 				TypeBuilder = builder.DefineType (
 					Name, TypeAttr, TypeManager.multicast_delegate_type);
@@ -136,7 +136,6 @@ namespace Mono.CSharp {
 
  		public override bool Define ()
 		{
-#if GMCS_SOURCE
 			if (IsGeneric) {
 				foreach (TypeParameter type_param in TypeParameters) {
 					if (!type_param.Resolve (this))
@@ -148,7 +147,7 @@ namespace Mono.CSharp {
 						return false;
 				}
 			}
-#endif
+
 			member_cache = new MemberCache (TypeManager.multicast_delegate_type, this);
 
 			// FIXME: POSSIBLY make this static, as it is always constant
@@ -174,7 +173,7 @@ namespace Mono.CSharp {
 				new ParameterData ("method", Parameter.Modifier.NONE)
 			};
 
-			AParametersCollection const_parameters = new ParametersCollection (
+			AParametersCollection const_parameters = new ParametersImported (
 				fixed_pars,
 				new Type[] { TypeManager.object_type, TypeManager.intptr_type });
 			
@@ -230,6 +229,13 @@ namespace Mono.CSharp {
 				return false;
 			}
 
+#if GMCS_SOURCE
+			if (ret_type.IsGenericParameter && (ret_type.GenericParameterAttributes & GenericParameterAttributes.Contravariant) != 0) {
+				Report.Error (-33, Location, "Contravariant type parameters can only be used in input positions");
+				return false;
+			}
+#endif
+
 			//
 			// We don't have to check any others because they are all
 			// guaranteed to be accessible - they are standard types.
@@ -260,7 +266,7 @@ namespace Mono.CSharp {
 			//
 			// BeginInvoke
 			//
-			Parameters async_parameters = Parameters.MergeGenerated (Parameters, false,
+			ParametersCompiled async_parameters = ParametersCompiled.MergeGenerated (Parameters, false,
 				new Parameter [] {
 					new Parameter (null, "callback", Parameter.Modifier.NONE, null, Location),
 					new Parameter (null, "object", Parameter.Modifier.NONE, null, Location)
@@ -286,7 +292,7 @@ namespace Mono.CSharp {
 			//
 			// Define parameters, and count out/ref parameters
 			//
-			Parameters end_parameters;
+			ParametersCompiled end_parameters;
 			int out_params = 0;
 
 			foreach (Parameter p in Parameters.FixedParameters) {
@@ -308,12 +314,12 @@ namespace Mono.CSharp {
 					end_params [param] = p;
 					++param;
 				}
-				end_parameters = Parameters.CreateFullyResolved (end_params, end_param_types);
+				end_parameters = ParametersCompiled.CreateFullyResolved (end_params, end_param_types);
 			} else {
-				end_parameters = Parameters.EmptyReadOnlyParameters;
+				end_parameters = ParametersCompiled.EmptyReadOnlyParameters;
 			}
 
-			end_parameters = Parameters.MergeGenerated (end_parameters, false,
+			end_parameters = ParametersCompiled.MergeGenerated (end_parameters, false,
 				new Parameter (null, "result", Parameter.Modifier.NONE, null, Location), TypeManager.iasyncresult_type);
 
 			//
@@ -332,7 +338,7 @@ namespace Mono.CSharp {
 			Parameters.ApplyAttributes (InvokeBuilder);
 
 			if (BeginInvokeBuilder != null) {
-				Parameters p = (Parameters) TypeManager.GetParameterData (BeginInvokeBuilder);
+				ParametersCompiled p = (ParametersCompiled) TypeManager.GetParameterData (BeginInvokeBuilder);
 				p.ApplyAttributes (BeginInvokeBuilder);
 			}
 
@@ -377,13 +383,11 @@ namespace Mono.CSharp {
 		public static ConstructorInfo GetConstructor (Type container_type, Type delegate_type)
 		{
 			Type dt = delegate_type;
-#if GMCS_SOURCE
 			Type[] g_args = null;
-			if (delegate_type.IsGenericType) {
-				g_args = delegate_type.GetGenericArguments ();
-				delegate_type = delegate_type.GetGenericTypeDefinition ();
+			if (TypeManager.IsGenericType (delegate_type)) {
+				g_args = TypeManager.GetTypeArguments (delegate_type);
+				delegate_type = TypeManager.DropGenericTypeArguments (delegate_type);
 			}
-#endif
 
 			Delegate d = TypeManager.LookupDelegate (delegate_type);
 			if (d != null) {
@@ -415,13 +419,13 @@ namespace Mono.CSharp {
 		public static MethodInfo GetInvokeMethod (Type container_type, Type delegate_type)
 		{
 			Type dt = delegate_type;
-#if GMCS_SOURCE
+
 			Type[] g_args = null;
-			if (delegate_type.IsGenericType) {
-				g_args = delegate_type.GetGenericArguments ();
-				delegate_type = delegate_type.GetGenericTypeDefinition ();
+			if (TypeManager.IsGenericType (delegate_type)) {
+				g_args = TypeManager.GetTypeArguments (delegate_type);
+				delegate_type = TypeManager.DropGenericTypeArguments (delegate_type);
 			}
-#endif
+
 			Delegate d = TypeManager.LookupDelegate (delegate_type);
 			MethodInfo invoke;
 			if (d != null) {
@@ -429,7 +433,7 @@ namespace Mono.CSharp {
 				if (g_args != null) {
 					invoke = TypeBuilder.GetMethod (dt, d.InvokeBuilder);
 #if MS_COMPATIBLE
-					Parameters p = (Parameters) d.Parameters.InflateTypes (g_args, g_args);
+					ParametersCompiled p = (ParametersCompiled) d.Parameters.InflateTypes (g_args, g_args);
 					TypeManager.RegisterMethod (invoke, p);
 #endif
 					return invoke;
@@ -559,16 +563,9 @@ namespace Mono.CSharp {
 			else
 				arg_count = args.Count;
 
-			Expression ml = Expression.MemberLookup (
-				ec.ContainerType, delegate_type, "Invoke", loc);
-
-			MethodGroupExpr me = ml as MethodGroupExpr;
-			if (me == null) {
-				Report.Error (-100, loc, "Internal error: could not find Invoke method!" + delegate_type);
-				return false;
-			}
-			
 			MethodBase mb = GetInvokeMethod (ec.ContainerType, delegate_type);
+			MethodGroupExpr me = new MethodGroupExpr (new MemberInfo [] { mb }, delegate_type, loc);
+			
 			AParametersCollection pd = TypeManager.GetParameterData (mb);
 
 			int pd_count = pd.Count;

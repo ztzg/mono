@@ -1,4 +1,4 @@
-AC_INIT(mono,[2.4])
+AC_INIT(mono,[2.5])
 AC_CONFIG_SRCDIR([README])
 AC_CANONICAL_SYSTEM
 
@@ -65,10 +65,13 @@ need_link_unlink=no
 AC_MSG_CHECKING([host platform characteristics])
 libgc_threads=no
 has_dtrace=no
+parallel_mark=yes
 case "$host" in
 	*-*-mingw*|*-*-cygwin*)
 		platform_win32=yes
 		AC_DEFINE(PLATFORM_WIN32,1,[Platform is Win32])
+		AC_DEFINE(DISABLE_PORTABILITY,1,[Disable the io-portability layer])
+		AC_DEFINE(PLATFORM_NO_SYMLINKS,1,[This platform does not support symlinks])
 		if test "x$cross_compiling" = "xno"; then
 			CC="gcc -mno-cygwin -g"
 			# So libgc configure gets -mno-cygwin
@@ -98,6 +101,7 @@ case "$host" in
 		libdl="-ldl"
 		libgc_threads=pthreads
 		with_sigaltstack=no
+		use_sigposix=yes
 		;;
 	*-*-*freebsd*)
 		platform_win32=no
@@ -126,10 +130,11 @@ case "$host" in
 # but NOT library support)
 #
 		with_tls=pthread
+		use_sigposix=yes
 		;;
 	*-*-*openbsd*)
 		platform_win32=no
-		CPPFLAGS="$CPPFLAGS -D_THREAD_SAFE -DGC_FREEBSD_THREADS"
+		CPPFLAGS="$CPPFLAGS -D_THREAD_SAFE -DGC_FREEBSD_THREADS -DPLATFORM_BSD"
 		libmono_cflags="-D_THREAD_SAFE"
 		LDFLAGS="$LDFLAGS -pthread"
 		libmono_ldflags="-pthread"
@@ -137,6 +142,7 @@ case "$host" in
 		AC_DEFINE(PTHREAD_POINTER_ID)
 		libdl=
 		libgc_threads=pthreads
+		use_sigposix=yes
 		;;
 	*-*-linux*)
 		platform_win32=no
@@ -146,9 +152,10 @@ case "$host" in
 		libdl="-ldl"
 		libgc_threads=pthreads
 		AOT_SUPPORTED="yes"
+		use_sigposix=yes
 		;;
 	*-*-hpux*)
-        platform_win32=no
+	        platform_win32=no
 		CPPFLAGS="$CPPFLAGS -DGC_HPUX_THREADS -D_HPUX_SOURCE -D_XOPEN_SOURCE_EXTENDED -D_REENTRANT"
 		# +ESdbgasm only valid on bundled cc on RISC
 		# silently ignored for ia64
@@ -164,6 +171,7 @@ case "$host" in
 		libmono_ldflags="-lpthread"
 		libgc_threads=pthreads
 		need_link_unlink=yes
+		use_sigposix=yes
 		;;
 	*-*-solaris*)
 		platform_win32=no
@@ -174,8 +182,10 @@ case "$host" in
 		# This doesn't seem to work on solaris/x86, but the configure test runs
 		with_tls=pthread
 		has_dtrace=yes
+		use_sigposix=yes
 		;;
 	*-*-darwin*)
+		parallel_mark="Disabled_Currently_Hangs_On_MacOSX"
 		platform_win32=no
 		platform_darwin=yes
 		CPPFLAGS="$CPPFLAGS -no-cpp-precomp -D_THREAD_SAFE -DGC_MACOSX_THREADS -DPLATFORM_MACOSX -DUSE_MMAP -DUSE_MUNMAP"
@@ -208,6 +218,8 @@ fi
 
 AM_CONDITIONAL(PLATFORM_WIN32, test x$platform_win32 = xyes)
 AM_CONDITIONAL(PLATFORM_LINUX, echo x$target_os | grep -q linux)
+AM_CONDITIONAL(PLATFORM_DARWIN, test x$platform_darwin = xyes)
+AM_CONDITIONAL(PLATFORM_SIGPOSIX, test x$use_sigposix = xyes)
 
 AC_CHECK_TOOL(CC, gcc, gcc)
 AC_PROG_CC
@@ -324,7 +336,7 @@ AC_CHECK_SIZEOF(void *, 4)
 
 WARN=''
 if test x"$GCC" = xyes; then
-        WARN='-Wall -Wunused -Wmissing-prototypes -Wmissing-declarations -Wstrict-prototypes  -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wno-cast-qual -Wcast-align -Wwrite-strings'
+        WARN='-Wall -Wunused -Wmissing-prototypes -Wmissing-declarations -Wstrict-prototypes  -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wno-cast-qual -Wwrite-strings'
 		# The runtime code does not respect ANSI C strict aliasing rules
 		CFLAGS="$CFLAGS -fno-strict-aliasing"
 
@@ -642,7 +654,7 @@ AC_TRY_COMPILE([], [
    AC_MSG_RESULT(no)
 ])
 
-AC_ARG_ENABLE(parallel-mark, [  --enable-parallel-mark     Enables GC Parallel Marking])
+AC_ARG_ENABLE(parallel-mark, [  --enable-parallel-mark     Enables GC Parallel Marking], enable_parallel_mark=$enableval, enable_parallel_mark=$parallel_mark)
 if test x$enable_parallel_mark = xyes; then
 	libgc_configure_args="$libgc_configure_args --enable-parallel-mark"
 fi
@@ -2183,6 +2195,14 @@ AC_ARG_WITH(malloc_mempools,[ --with-malloc-mempools=yes,no  Use malloc for each
 	fi
 ])
 
+
+DISABLE_MCS_DOCS=no
+AC_ARG_WITH(mcs_docs,[ --with-mcs-docs=yes,no  If you want to build the documentation under mcs (defaults to YES)],[
+	if test x$with_mcs_docs != xyes; then
+		DISABLE_MCS_DOCS=yes
+	fi
+])
+
 AM_CONDITIONAL(HAVE_OPROFILE, test x$OPROFILE = xyes)
 AC_SUBST(OPROFILE_CFLAGS)
 AC_SUBST(OPROFILE_LIBS)
@@ -2338,7 +2358,6 @@ mono/metadata/Makefile
 mono/dis/Makefile
 mono/cil/Makefile
 mono/arch/Makefile
-mono/os/Makefile
 mono/arch/x86/Makefile
 mono/arch/amd64/Makefile
 mono/arch/hppa/Makefile
@@ -2386,7 +2405,6 @@ data/dotnet.pc
 data/dotnet35.pc
 data/wcf.pc
 data/cecil.pc
-data/smcs.pc
 data/system.web.extensions_1.0.pc
 data/system.web.extensions.design_1.0.pc
 samples/Makefile
@@ -2476,6 +2494,10 @@ fi
       fi
     fi
   fi
+
+  if test x$DISABLE_MCS_DOCS = xyes; then
+	echo "DISABLE_MCS_DOCS = yes" >> $srcdir/$mcsdir/build/config.make
+  fi
 )
 
 libgdiplus_msg=${libgdiplus_loc:-assumed to be installed}
@@ -2484,18 +2506,19 @@ echo "
         mcs source:    $mcs_topdir
         olive source:  $olive_topdir
 
-	GC:	     $gc
-	TLS:         $with_tls
-	SIGALTSTACK: $with_sigaltstack
-	Engine:      $jit_status
-	2.0 Beta:    $PREVIEW
-	2.1 Alpha:   $MOONLIGHT
-	JNI support: $jdk_headers_found
-	libgdiplus:  $libgdiplus_msg
-	zlib:        $zlib_msg
-	oprofile:    $OPROFILE
-	BigArrays:   $enable_big_arrays
-	DTrace:      $enable_dtrace
+	GC:	       $gc
+	TLS:           $with_tls
+	SIGALTSTACK:   $with_sigaltstack
+	Engine:        $jit_status
+	2.0 Beta:      $PREVIEW
+	2.1 Alpha:     $MOONLIGHT
+	JNI support:   $jdk_headers_found
+	libgdiplus:    $libgdiplus_msg
+	zlib:          $zlib_msg
+	oprofile:      $OPROFILE
+	BigArrays:     $enable_big_arrays
+	DTrace:        $enable_dtrace
+	Parallel Mark: $enable_parallel_mark
 	$disabled
 
 "

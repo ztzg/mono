@@ -42,6 +42,7 @@ namespace Mono.CSharp {
 		/// </summary>
 		static public bool WarningsAreErrors;
 		static ArrayList warnings_as_error;
+		static ArrayList warnings_only;
 
 		/// <summary>  
 		///   Whether to dump a stack trace on errors. 
@@ -124,6 +125,7 @@ namespace Mono.CSharp {
 			reporting_disabled = false;
 			error_stack = warning_stack = null;
 			warnings_as_error = null;
+			warnings_only = null;
 		}
 
 		public static void DisableReporting ()
@@ -362,10 +364,8 @@ namespace Mono.CSharp {
 				if (Stacktrace)
 					Console.WriteLine (FriendlyStackTrace (new StackTrace (true)));
 
-				if (Fatal) {
-					if (!IsWarning || WarningsAreErrors)
-						throw new Exception (message);
-				}
+				if (Fatal && !IsWarning)
+					throw new Exception (message);
 
 				Check (code);
 			}
@@ -413,13 +413,17 @@ namespace Mono.CSharp {
 
 			bool IsErrorWarning {
 				get {
-					if (WarningsAreErrors)
-						return true;
+					bool is_error = WarningsAreErrors;
 
-					if (warnings_as_error == null)
-						return false;
+					// Check specific list
+					if (warnings_as_error != null)
+						is_error |= warnings_as_error.Contains (code);
 
-					return warnings_as_error.Contains (code);
+					// Ignore excluded warnings
+					if (warnings_only != null && warnings_only.Contains (code))
+						is_error = false;
+
+					return is_error;
 				}
 			}
 
@@ -715,7 +719,7 @@ namespace Mono.CSharp {
 				DeclSpace temp_ds = TypeManager.LookupDeclSpace (type);
 				SymbolRelatedToPreviousError (temp_ds.Location, TypeManager.CSharpName (type));
 			} else if (TypeManager.HasElementType (type)) {
-				SymbolRelatedToPreviousError (type.GetElementType ());
+				SymbolRelatedToPreviousError (TypeManager.GetElementType (type));
 			} else {
 				SymbolRelatedToPreviousError (type.Assembly.Location, TypeManager.CSharpName (type));
 			}
@@ -746,6 +750,24 @@ namespace Mono.CSharp {
 				warnings_as_error = new ArrayList ();
 			
 			warnings_as_error.Add (id);
+		}
+
+		public static void RemoveWarningAsError (string warningId)
+		{
+			int id;
+			try {
+				id = int.Parse (warningId);
+			} catch {
+				id = -1;
+			}
+
+			if (!CheckWarningCode (id, warningId, Location.Null))
+				return;
+
+			if (warnings_only == null)
+				warnings_only = new ArrayList ();
+
+			warnings_only.Add (id);
 		}
 
 		public static bool CheckWarningCode (int code, Location loc)

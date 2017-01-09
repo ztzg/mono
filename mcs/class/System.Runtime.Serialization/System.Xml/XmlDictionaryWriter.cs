@@ -152,8 +152,6 @@ namespace System.Xml
 			throw new NotSupportedException ();
 		}
 
-		// FIXME: add Write*Array() overloads.
-
 		public void WriteAttributeString (
 			XmlDictionaryString localName,
 			XmlDictionaryString namespaceUri,
@@ -194,13 +192,72 @@ namespace System.Xml
 		public virtual void WriteNode (XmlDictionaryReader reader,
 			bool defattr)
 		{
-			WriteNode ((XmlReader) reader, defattr);
+			if (reader == null)
+				throw new ArgumentNullException ("reader");
+
+			switch (reader.NodeType) {
+			case XmlNodeType.Element:
+				// gratuitously copied from System.XML/System.Xml/XmlWriter.cs:WriteNode(XmlReader,bool)
+				// as there doesn't seem to be a way to hook into attribute writing w/o handling Element.
+				WriteStartElement (reader.Prefix, reader.LocalName, reader.NamespaceURI);
+				// Well, I found that MS.NET took this way, since
+				// there was a error-prone SgmlReader that fails
+				// MoveToNextAttribute().
+				if (reader.HasAttributes) {
+					for (int i = 0; i < reader.AttributeCount; i++) {
+						reader.MoveToAttribute (i);
+						WriteAttribute (reader, defattr);
+					}
+					reader.MoveToElement ();
+				}
+				reader.Read ();
+				WriteNode (reader, defattr);
+				break;
+			case XmlNodeType.Attribute:
+			case XmlNodeType.Text:
+				WriteTextNode (reader, defattr);
+				break;
+			default:
+				base.WriteNode (reader, defattr);
+				break;
+			}
+		}
+
+		private void WriteAttribute (XmlDictionaryReader reader, bool defattr)
+		{
+			if (!defattr && reader.IsDefault)
+				return;
+
+			WriteStartAttribute (reader.Prefix, reader.LocalName, reader.NamespaceURI);
+#if NET_2_1
+			// no ReadAttributeValue() in 2.1 profile.
+			WriteTextNode (reader, true);
+#else
+			while (reader.ReadAttributeValue ()) {
+				switch (reader.NodeType) {
+				case XmlNodeType.Text:
+					WriteTextNode (reader, true);
+					break;
+				case XmlNodeType.EntityReference:
+					WriteEntityRef (reader.Name);
+					break;
+				}
+			}
+#endif
+			WriteEndAttribute ();
 		}
 
 		[MonoTODO ("make use of dictionary reader optimization")]
 		public override void WriteNode (XmlReader reader, bool defattr)
 		{
-			base.WriteNode (reader, defattr);
+			if (reader == null)
+				throw new ArgumentNullException ("reader");
+
+			XmlDictionaryReader dr = reader as XmlDictionaryReader;
+			if (dr != null)
+				WriteNode (dr, defattr);
+			else
+				base.WriteNode (reader, defattr);
 		}
 
 		public virtual void WriteQualifiedName (
@@ -235,7 +292,10 @@ namespace System.Xml
 			XmlDictionaryString localName,
 			XmlDictionaryString namespaceUri)
 		{
-			WriteStartElement (prefix, localName.Value, namespaceUri.Value);
+			if (localName == null)
+				throw new ArgumentException ("localName must not be null.", "localName");
+			WriteStartElement (prefix, localName.Value,
+					namespaceUri != null ? namespaceUri.Value : null);
 		}
 
 		public virtual void WriteString (XmlDictionaryString value)
@@ -243,19 +303,42 @@ namespace System.Xml
 			WriteString (value.Value);
 		}
 
+		protected virtual void WriteTextNode (XmlDictionaryReader reader, bool isAttribute)
+		{
+			WriteString (reader.Value);
+			if (!isAttribute)
+				reader.Read ();
+		}
+
 		public virtual void WriteValue (Guid guid)
 		{
-			throw new NotSupportedException ();
+			WriteString (guid.ToString ());
+		}
+
+		public virtual void WriteValue (IStreamProvider value)
+		{
+			if (value == null)
+				throw new ArgumentNullException ("value");
+
+			Stream stream = value.GetStream ();
+			byte[] buf = new byte [Math.Min (2048, stream.CanSeek ? stream.Length : 2048)];
+			int read;
+			while ((read = stream.Read (buf, 0, buf.Length)) > 0) {
+				WriteBase64 (buf, 0, read);
+			}
+			value.ReleaseStream (stream);
 		}
 
 		public virtual void WriteValue (TimeSpan duration)
 		{
-			throw new NotSupportedException ();
+			WriteString (XmlConvert.ToString (duration));
 		}
 
 		public virtual void WriteValue (UniqueId id)
 		{
-			throw new NotSupportedException ();
+			if (id == null)
+				throw new ArgumentNullException ("id");
+			WriteString (id.ToString ());
 		}
 
 		public virtual void WriteValue (XmlDictionaryString value)

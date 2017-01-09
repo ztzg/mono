@@ -1,6 +1,34 @@
+2009-03-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* ParameterInfoTest.cs: Add a test for #488383.
+
+2009-03-03  Matthew Metnetsky  <matthew@cowarthill.com>
+
+	* BinderTests.cs: added tests for TargetParameterCountException
+	* BinderTests.cs: added tests for BindingFlags.ExactBinding
+
+2009-03-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* BinderTests.cs: Add a test for #484294.
+
+2009-02-21  Jb Evain  <jbevain@novell.com>
+
+	* BinderTests.cs: add test for bug #471257, where Type.InvokeMember
+	calls Binder.BindToMethod will a null args.
+
+2009-02-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* MethodBaseTest.cs: Make a test quiet.
+
+2008-02-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* MethodInfoTest.cs: Fix the 1.1 build.
+
 2008-02-02  Rodrigo Kumpera  <rkumpera@novell.com>
 
-	Backport of r125410.
+	* MethodInfoTest.cs: Test for non primitive structs.
+
+2008-02-02  Rodrigo Kumpera  <rkumpera@novell.com>
 
 	* MethodInfoTest.cs: Test for #409583.
 

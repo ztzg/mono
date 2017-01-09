@@ -3,7 +3,8 @@
  *
  * Author: Paolo Molaro <lupus@ximian.com>
  *
- * (C) 2002 Ximian, Inc.
+ * Copyright 2002-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include <config.h>
@@ -93,8 +94,8 @@ static gboolean suspend_finalizers = FALSE;
  * actually, we might want to queue the finalize requests in a separate thread,
  * but we need to be careful about the execution domain of the thread...
  */
-static void
-run_finalize (void *obj, void *data)
+void
+mono_gc_run_finalize (void *obj, void *data)
 {
 	MonoObject *exc = NULL;
 	MonoObject *o;
@@ -103,6 +104,7 @@ run_finalize (void *obj, void *data)
 #endif
 	MonoMethod* finalizer = NULL;
 	MonoDomain *domain;
+	RuntimeInvokeFunction runtime_invoke;
 	GSList *l, *refs = NULL;
 
 	o = (MonoObject*)((char*)obj + GPOINTER_TO_UINT (data));
@@ -110,7 +112,7 @@ run_finalize (void *obj, void *data)
 	if (suspend_finalizers)
 		return;
 
-	domain = mono_object_domain (o);
+	domain = o->vtable->domain;
 
 #ifndef HAVE_SGEN_GC
 	domain_finalizers_lock (domain);
@@ -193,6 +195,7 @@ run_finalize (void *obj, void *data)
 
 	finalizer = mono_class_get_finalizer (o->vtable->klass);
 
+#ifndef DISABLE_COM
 	/* If object has a CCW but has no finalizer, it was only
 	 * registered for finalization in order to free the CCW.
 	 * Else it needs the regular finalizer run.
@@ -201,8 +204,24 @@ run_finalize (void *obj, void *data)
 	 */
 	if (mono_marshal_free_ccw (o) && !finalizer)
 		return;
+#endif
 
-	mono_runtime_invoke (finalizer, o, NULL, &exc);
+	/* 
+	 * To avoid the locking plus the other overhead of mono_runtime_invoke (),
+	 * create and precompile a wrapper which calls the finalize method using
+	 * a CALLVIRT.
+	 */
+	if (!domain->finalize_runtime_invoke) {
+		MonoMethod *invoke = mono_marshal_get_runtime_invoke (mono_class_get_method_from_name_flags (mono_defaults.object_class, "Finalize", 0, 0), TRUE);
+
+		domain->finalize_runtime_invoke = mono_compile_method (invoke);
+	}
+
+	runtime_invoke = domain->finalize_runtime_invoke;
+
+	mono_runtime_class_init (o->vtable);
+
+	runtime_invoke (o, NULL, &exc, NULL);
 
 	if (exc) {
 		/* fixme: do something useful */
@@ -219,7 +238,7 @@ mono_gc_finalize_threadpool_threads (void)
 		thread->threadpool_thread = FALSE;
 		mono_object_register_finalizer ((MonoObject*)thread);
 
-		run_finalize (thread, NULL);
+		mono_gc_run_finalize (thread, NULL);
 
 		threads_to_finalize = mono_mlist_next (threads_to_finalize);
 	}
@@ -292,7 +311,7 @@ void
 mono_object_register_finalizer (MonoObject *obj)
 {
 	/* g_print ("Registered finalizer on %p %s.%s\n", obj, mono_object_class (obj)->name_space, mono_object_class (obj)->name); */
-	object_register_finalizer (obj, run_finalize);
+	object_register_finalizer (obj, mono_gc_run_finalize);
 }
 
 /**
@@ -405,7 +424,7 @@ ves_icall_System_GC_ReRegisterForFinalize (MonoObject *obj)
 {
 	MONO_ARCH_SAVE_REGS;
 
-	object_register_finalizer (obj, run_finalize);
+	object_register_finalizer (obj, mono_gc_run_finalize);
 }
 
 void
@@ -1016,7 +1035,7 @@ finalize_domain_objects (DomainFinalizationReq *req)
 		for (i = 0; i < objs->len; ++i) {
 			MonoObject *o = (MonoObject*)g_ptr_array_index (objs, i);
 			/* FIXME: Avoid finalizing threads, etc */
-			run_finalize (o, 0);
+			mono_gc_run_finalize (o, 0);
 		}
 
 		g_ptr_array_free (objs, TRUE);
@@ -1028,7 +1047,7 @@ finalize_domain_objects (DomainFinalizationReq *req)
 	while ((count = mono_gc_finalizers_for_domain (domain, to_finalize, NUM_FOBJECTS))) {
 		int i;
 		for (i = 0; i < count; ++i) {
-			run_finalize (to_finalize [i], 0);
+			mono_gc_run_finalize (to_finalize [i], 0);
 		}
 	}
 #endif

@@ -23,6 +23,7 @@ class MDocToHtmlConverterOptions {
 	public string onlytype;
 	public string template;
 	public bool   dumptemplate;
+	public bool   forceUpdate;
 }
 
 class MDocToHtmlConverter : MDocCommand {
@@ -38,6 +39,11 @@ class MDocToHtmlConverter : MDocCommand {
 				"The file {EXTENSION} to use for created files.  "+
 					"This defaults to \"html\".",
 				v => opts.ext = v },
+			{ "force-update",
+				"Always generate new files.  If not specified, will only generate a " + 
+					"new file if the source .xml file is newer than the current output " +
+					"file.",
+				v => opts.forceUpdate = v != null },
 			{ "o|out=",
 				"The {DIRECTORY} to place the generated files and directories.",
 				v => opts.dest = v },
@@ -94,16 +100,21 @@ class MDocToHtmlConverter : MDocCommand {
 		}
 		
 		XmlDocument overview = new XmlDocument();
-		overview.Load(opts.source + "/index.xml");
+		string overviewSource = opts.source + "/index.xml";
+		string overviewDest   = opts.dest + "/index." + opts.ext;
+		overview.Load (overviewSource);
 
 		ArrayList extensions = GetExtensionMethods (overview);
 		
 		// Create the master page
 		XsltArgumentList overviewargs = new XsltArgumentList();
-		overviewargs.AddParam("ext", "", opts.ext);
-		overviewargs.AddParam("basepath", "", "./");
-		Generate(overview, overviewxsl, overviewargs, opts.dest + "/index." + opts.ext, template);
-		overviewargs.RemoveParam("basepath", "");
+
+		if (!DestinationIsNewer (overviewSource, overviewDest)) {
+			overviewargs.AddParam("ext", "", opts.ext);
+			overviewargs.AddParam("basepath", "", "./");
+			Generate(overview, overviewxsl, overviewargs, opts.dest + "/index." + opts.ext, template);
+			overviewargs.RemoveParam("basepath", "");
+		}
 		overviewargs.AddParam("basepath", "", "../");
 		
 		// Create the namespace & type pages
@@ -122,9 +133,13 @@ class MDocToHtmlConverter : MDocCommand {
 			if (!d.Exists) d.Create();
 			
 			// Create the NS page
-			overviewargs.AddParam("namespace", "", nsname);
-			Generate(overview, overviewxsl, overviewargs, opts.dest + "/" + nsname + "/index." + opts.ext, template);
-			overviewargs.RemoveParam("namespace", "");
+			string nsDest = opts.dest + "/" + nsname + "/index." + opts.ext;
+			if (!DestinationIsNewer (overviewSource, nsDest) &&
+					!DestinationIsNewer (opts.source + "/ns-" + nsname + ".xml", nsDest)) {
+				overviewargs.AddParam("namespace", "", nsname);
+				Generate(overview, overviewxsl, overviewargs, nsDest, template);
+				overviewargs.RemoveParam("namespace", "");
+			}
 			
 			foreach (XmlElement ty in ns.SelectNodes("Type")) {
 				string typefilebase = ty.GetAttribute("Name");
@@ -138,6 +153,12 @@ class MDocToHtmlConverter : MDocCommand {
 				string typefile = opts.source + "/" + nsname + "/" + typefilebase + ".xml";
 				if (!File.Exists(typefile)) continue;
 
+				string destfile = opts.dest + "/" + nsname + "/" + typefilebase + "." + opts.ext;
+
+				if (DestinationIsNewer (typefile, destfile))
+					// target already exists, and is newer.  why regenerate?
+					continue;
+
 				XmlDocument typexml = new XmlDocument();
 				typexml.Load(typefile);
 				if (extensions != null) {
@@ -147,7 +168,7 @@ class MDocToHtmlConverter : MDocCommand {
 				
 				Console.WriteLine(nsname + "." + typename);
 				
-				Generate(typexml, stylesheet, typeargs, opts.dest + "/" + nsname + "/" + typefilebase + "." + opts.ext, template);
+				Generate(typexml, stylesheet, typeargs, destfile, template);
 			}
 		}
 	}
@@ -244,6 +265,12 @@ class MDocToHtmlConverter : MDocCommand {
 			return d;
 		};
 		return loader;
+	}
+
+	private static bool DestinationIsNewer (string source, string dest)
+	{
+		return !opts.forceUpdate && File.Exists (dest) &&
+			File.GetLastWriteTime (source) < File.GetLastWriteTime (dest);
 	}
 }
 

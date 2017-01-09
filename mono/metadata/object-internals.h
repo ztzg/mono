@@ -5,6 +5,7 @@
 #include <mono/metadata/threads.h>
 #include <mono/metadata/reflection.h>
 #include <mono/metadata/mempool.h>
+#include <mono/metadata/class-internals.h>
 #include <mono/io-layer/io-layer.h>
 #include "mono/utils/mono-compiler.h"
 
@@ -98,9 +99,52 @@
 		mono_raise_exception (ex);				  \
        };				}G_STMT_END
 
-
 /* 16 == default capacity */
 #define mono_stringbuilder_capacity(sb) ((sb)->str ? ((sb)->str->length) : 16)
+
+/* 
+ * Macros which cache the results of lookups locally.
+ * These should be used instead of the original versions, if the __GNUC__
+ * restriction is acceptable.
+ */
+
+#ifdef __GNUC__
+
+/* namespace and name should be a constant */
+#define mono_class_from_name_cached(image,namespace,name) ({ \
+			static MonoClass *tmp_klass; \
+			if (!tmp_klass) { \
+				tmp_klass = mono_class_from_name ((image), (namespace), (name)); \
+				g_assert (tmp_klass); \
+			}; \
+			tmp_klass; })
+/* name should be a compile-time constant */
+#define mono_class_get_field_from_name_cached(klass,name) ({ \
+			static MonoClassField *tmp_field; \
+			if (!tmp_field) { \
+				tmp_field = mono_class_get_field_from_name ((klass), (name)); \
+				g_assert (tmp_field); \
+			}; \
+			tmp_field; })
+/* eclass should be a run-time constant */
+#define mono_array_class_get_cached(eclass,rank) ({	\
+			static MonoClass *tmp_klass; \
+			if (!tmp_klass) { \
+				tmp_klass = mono_array_class_get ((eclass), (rank));	\
+				g_assert (tmp_klass); \
+			}; \
+			tmp_klass; })
+/* eclass should be a run-time constant */
+#define mono_array_new_cached(domain, eclass, size) mono_array_new_specific (mono_class_vtable ((domain), mono_array_class_get_cached ((eclass), 1)), (size))
+
+#else
+
+#define mono_class_from_name_cached(image,namespace,name) mono_class_from_name ((image), (namespace), (name))
+#define mono_class_get_field_from_name_cached(klass,name) mono_class_get_field_from_name ((klass), (name))
+#define mono_array_class_get_cached(eclass,rank) mono_array_class_get ((eclass), (rank))
+#define mono_array_new_cached(domain, eclass, size) mono_array_new_specific (mono_class_vtable ((domain), mono_array_class_get_cached ((eclass), 1)), (size))
+
+#endif
 
 typedef struct {
 	MonoObject obj;
@@ -199,10 +243,16 @@ typedef enum {
 	CallType_OneWay = 3
 } MonoCallType;
 
+/* This corresponds to System.Type */
 struct _MonoReflectionType {
 	MonoObject object;
 	MonoType  *type;
 };
+
+typedef struct {
+	MonoReflectionType type;
+	MonoObject *type_info;
+} MonoReflectionMonoType;
 
 typedef struct {
 	MonoObject  object;
@@ -535,7 +585,42 @@ mono_domain_get_tls_offset (void) MONO_INTERNAL;
 
 /* Reflection and Reflection.Emit support */
 
+/*
+ * Handling System.Type objects:
+ *
+ *   Fields defined as System.Type in managed code should be defined as MonoObject* 
+ * in unmanaged structures, and the monotype_cast () function should be used for 
+ * casting them to MonoReflectionType* to avoid crashes/security issues when 
+ * encountering instances of user defined subclasses of System.Type.
+ */
+
 #define IS_MONOTYPE(obj) (!(obj) || (((MonoObject*)(obj))->vtable->klass->image == mono_defaults.corlib && ((MonoReflectionType*)(obj))->type != NULL))
+
+/* 
+ * Make sure the argument, which should be a System.Type is a System.MonoType object 
+ * or equivalent, and not an instance of 
+ * a user defined subclass of System.Type. This should be used in places were throwing
+ * an exception is safe.
+ */
+#define CHECK_MONOTYPE(obj) do { \
+	if (!IS_MONOTYPE (obj)) \
+		mono_raise_exception (mono_get_exception_not_supported ("User defined subclasses of System.Type are not yet supported")); \
+	} while (0)
+
+/* This should be used for accessing members of Type[] arrays */
+#define mono_type_array_get(arr,index) monotype_cast (mono_array_get ((arr), gpointer, (index)))
+
+/*
+ * Cast an object to MonoReflectionType, making sure it is a System.MonoType or
+ * a subclass of it.
+ */
+static inline MonoReflectionType*
+monotype_cast (MonoObject *obj)
+{
+	g_assert (IS_MONOTYPE (obj));
+
+	return (MonoReflectionType*)obj;
+}
 
 /*
  * The following structure must match the C# implementation in our corlib.
@@ -593,11 +678,17 @@ struct _MonoReflectionProperty {
 	MonoProperty *property;
 };
 
+/*This is System.EventInfo*/
 struct _MonoReflectionEvent {
 	MonoObject object;
+	MonoObject *cached_add_event;
+};
+
+typedef struct {
+	MonoReflectionEvent object;
 	MonoClass *klass;
 	MonoEvent *event;
-};
+} MonoReflectionMonoEvent;
 
 typedef struct {
 	MonoObject object;
@@ -704,7 +795,7 @@ typedef struct {
 } MonoILExceptionInfo;
 
 typedef struct {
-	MonoReflectionType *extype;
+	MonoObject *extype;
 	gint32 type;
 	gint32 start;
 	gint32 len;
@@ -713,7 +804,7 @@ typedef struct {
 
 typedef struct {
 	MonoObject object;
-	MonoReflectionType *catch_type;
+	MonoObject *catch_type;
 	gint32 filter_offset;
 	gint32 flags;
 	gint32 try_offset;
@@ -735,7 +826,7 @@ typedef struct {
 	 * LocalBuilder inherits from it under net 2.0.
 	 */
 	MonoObject object;
-	MonoReflectionType *type;
+	MonoObject *type;
 	MonoBoolean is_pinned;
 	guint16 local_index;
 	MonoString *name;
@@ -749,7 +840,7 @@ typedef struct {
 	MonoString *guid;
 	MonoString *mcookie;
 	MonoString *marshaltype;
-	MonoReflectionType *marshaltyperef;
+	MonoObject *marshaltyperef;
 	gint32 param_num;
 	MonoBoolean has_size;
 } MonoReflectionMarshal;
@@ -787,7 +878,7 @@ typedef struct {
 typedef struct {
 	MonoObject object;
 	MonoMethod *mhandle;
-	MonoReflectionType *rtype;
+	MonoObject *rtype;
 	MonoArray *parameters;
 	guint32 attrs;
 	guint32 iattrs;
@@ -879,7 +970,7 @@ typedef struct {
 typedef struct {
 	MonoObject object;
 	guint32 attrs;
-	MonoReflectionType *type;
+	MonoObject *type;
 	MonoString *name;
 	MonoObject *def_value;
 	gint32 offset;
@@ -897,7 +988,7 @@ typedef struct {
 	MonoObject object;
 	guint32 attrs;
 	MonoString *name;
-	MonoReflectionType *type;
+	MonoObject *type;
 	MonoArray *parameters;
 	MonoArray *cattrs;
 	MonoObject *def_value;
@@ -936,7 +1027,7 @@ typedef struct {
 	MonoReflectionType type;
 	MonoString *name;
 	MonoString *nspace;
-	MonoReflectionType *parent;
+	MonoObject *parent;
 	MonoReflectionType *nesting_type;
 	MonoArray *interfaces;
 	gint32     num_methods;
@@ -974,6 +1065,8 @@ typedef struct {
 typedef struct _MonoReflectionGenericClass MonoReflectionGenericClass;
 struct _MonoReflectionGenericClass {
 	MonoReflectionType type;
+	/* From System.MonoType */
+	MonoObject *type_info;
 	MonoReflectionTypeBuilder *generic_type;
 	guint32 initialized;
 };
@@ -1148,6 +1241,8 @@ void mono_reflection_destroy_dynamic_method (MonoReflectionDynamicMethod *mb) MO
 
 void        mono_reflection_initialize_generic_parameter (MonoReflectionGenericParam *gparam) MONO_INTERNAL;
 
+MonoArray* mono_param_get_objects_internal  (MonoDomain *domain, MonoMethod *method, MonoClass *refclass) MONO_INTERNAL;
+
 MonoClass*
 mono_class_bind_generic_parameters (MonoClass *klass, int type_argc, MonoType **types, gboolean is_dynamic) MONO_INTERNAL;
 MonoType*
@@ -1186,6 +1281,10 @@ mono_release_type_locks (MonoThread *thread) MONO_INTERNAL;
 char *
 mono_string_to_utf8_mp	(MonoMemPool *mp, MonoString *s) MONO_INTERNAL;
 
+char *
+mono_string_to_utf8_image (MonoImage *image, MonoString *s) MONO_INTERNAL;
+
+
 MonoArray*
 mono_array_clone_in_domain (MonoDomain *domain, MonoArray *array) MONO_INTERNAL;
 
@@ -1222,6 +1321,7 @@ typedef struct _MonoImtBuilderEntry {
 	struct _MonoImtBuilderEntry *next;
 	MonoImtItemValue value;
 	int children;
+	guint8 has_target_code : 1;
 } MonoImtBuilderEntry;
 
 typedef struct _MonoIMTCheckItem MonoIMTCheckItem;
@@ -1236,6 +1336,7 @@ struct _MonoIMTCheckItem {
 	guint8            compare_done;
 	guint8            chunk_size;
 	guint8            short_branch;
+	guint8            has_target_code;
 };
 
 typedef gpointer (*MonoImtThunkBuilder) (MonoVTable *vtable, MonoDomain *domain,
@@ -1257,8 +1358,9 @@ guint32
 mono_method_get_imt_slot (MonoMethod *method) MONO_INTERNAL;
 
 void
-mono_method_add_generic_virtual_invocation (MonoDomain *domain, gpointer *vtable_slot,
-	MonoGenericInst *method_inst, gpointer code) MONO_INTERNAL;
+mono_method_add_generic_virtual_invocation (MonoDomain *domain, MonoVTable *vtable,
+											gpointer *vtable_slot,
+											MonoMethod *method, gpointer code) MONO_INTERNAL;
 
 gpointer
 mono_method_alloc_generic_virtual_thunk (MonoDomain *domain, int size) MONO_INTERNAL;
@@ -1283,6 +1385,5 @@ void
 mono_method_clear_object (MonoDomain *domain, MonoMethod *method) MONO_INTERNAL;
 
 #endif /* __MONO_OBJECT_INTERNALS_H__ */
-
 
 

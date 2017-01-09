@@ -1,3 +1,12 @@
+/*
+ * verify.c: 
+ *
+ * Author:
+ *	Mono Project (http://www.mono-project.com)
+ *
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ */
 
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/verify.h>
@@ -10,6 +19,8 @@
 #include <mono/metadata/metadata.h>
 #include <mono/metadata/metadata-internals.h>
 #include <mono/metadata/class-internals.h>
+#include <mono/metadata/security-manager.h>
+#include <mono/metadata/security-core-clr.h>
 #include <mono/metadata/tokentype.h>
 #include <string.h>
 #include <signal.h>
@@ -334,9 +345,9 @@ static MonoType*
 mono_type_get_underlying_type_any (MonoType *type)
 {
 	if (type->type == MONO_TYPE_VALUETYPE && type->data.klass->enumtype)
-		return type->data.klass->enum_basetype;
+		return mono_class_enum_basetype (type->data.klass);
 	if (type->type == MONO_TYPE_GENERICINST && type->data.generic_class->container_class->enumtype)
-		return type->data.generic_class->container_class->enum_basetype;
+		return mono_class_enum_basetype (type->data.generic_class->container_class);
 	return type;
 }
 
@@ -382,6 +393,7 @@ mono_class_interface_implements_interface (MonoClass *candidate, MonoClass *ifac
 	do {
 		if (candidate == iface)
 			return TRUE;
+		mono_class_setup_interfaces (candidate);
 		for (i = 0; i < candidate->interface_count; ++i) {
 			if (candidate->interfaces [i] == iface || mono_class_interface_implements_interface (candidate->interfaces [i], iface))
 				return TRUE;
@@ -2380,6 +2392,8 @@ init_stack_with_value_at_exception_boundary (VerifyContext *ctx, ILCodeDesc *cod
 	ctx->exception_types = g_slist_prepend (ctx->exception_types, type);
 	code->size = 1;
 	code->flags |= IL_CODE_FLAG_WAS_TARGET;
+	if (mono_type_is_generic_argument (type))
+		code->stack->stype |= BOXED_MASK;
 }
 
 /*Verify if type 'candidate' can be stored in type 'target'.
@@ -2393,7 +2407,7 @@ verify_type_compatibility_full (VerifyContext *ctx, MonoType *target, MonoType *
 #define IS_ONE_OF2(T, A, B) (T == A || T == B)
 
 	MonoType *original_candidate = candidate;
-	VERIFIER_DEBUG ( printf ("checking type compatibility %p %p[%x][%x] %p[%x][%x]\n", ctx, target, target->type, target->byref, candidate, candidate->type, candidate->byref); );
+	VERIFIER_DEBUG ( printf ("checking type compatibility %s x %s strict %d\n", mono_type_full_name (target), mono_type_full_name (candidate), strict); );
 
  	/*only one is byref */
 	if (candidate->byref ^ target->byref) {
@@ -2508,9 +2522,9 @@ handle_enum:
 		if (candidate->type != MONO_TYPE_SZARRAY)
 			return FALSE;
 
-		left = target->data.array->eklass;
-		right = candidate->data.array->eklass;
-		return mono_class_is_assignable_from(left, right);
+		left = mono_class_from_mono_type (target)->element_class;
+		right = mono_class_from_mono_type (candidate)->element_class;
+		return mono_class_is_assignable_from (left, right);
 	}
 
 	case MONO_TYPE_ARRAY:
@@ -2698,7 +2712,7 @@ mono_delegate_type_equal (MonoType *target, MonoType *candidate)
 	case MONO_TYPE_SZARRAY:
 		if (candidate->type != MONO_TYPE_SZARRAY)
 			return FALSE;
-		return mono_class_is_assignable_from (target->data.array->eklass, candidate->data.array->eklass);
+		return mono_class_is_assignable_from (mono_class_from_mono_type (target)->element_class, mono_class_from_mono_type (candidate)->element_class);
 
 	case MONO_TYPE_ARRAY:
 		if (candidate->type != MONO_TYPE_ARRAY)
@@ -4573,6 +4587,7 @@ merge_stacks (VerifyContext *ctx, ILCodeDesc *from, ILCodeDesc *to, gboolean sta
 				}
 			}
 
+			mono_class_setup_interfaces (old_class);
 			for (j = 0; j < old_class->interface_count; ++j) {
 				for (k = 0; k < new_class->interface_count; ++k) {
 					if (mono_metadata_type_equal (&old_class->interfaces [j]->byval_arg, &new_class->interfaces [k]->byval_arg)) {
@@ -5661,6 +5676,7 @@ mono_method_verify (MonoMethod *method, int level)
 				if (!is_correct_rethrow (ctx.header, ip_offset))
 					ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("rethrow must be used inside a catch handler at 0x%04x", ctx.ip_offset));
 				ctx.eval.size = 0;
+				start = 1;
 				++ip;
 				break;
 			case CEE_UNUSED:
@@ -5826,18 +5842,19 @@ mono_verifier_is_method_full_trust (MonoMethod *method)
  * 
  * TODO This code doesn't take CAS into account.
  * 
- * This value is only pertinent to assembly verification and has
- * nothing to do with CoreClr security. 
- * 
  * Under verify_all all user code must be verifiable if no security option was set 
  * 
  */
 gboolean
 mono_verifier_is_class_full_trust (MonoClass *klass)
 {
+	/* under CoreCLR code is trusted if it is part of the "platform" otherwise all code inside the GAC is trusted */
+	gboolean trusted_location = (mono_security_get_mode () != MONO_SECURITY_MODE_CORE_CLR) ? 
+		klass->image->assembly->in_gac : mono_security_core_clr_is_platform_image (klass->image);
+
 	if (verify_all && verifier_mode == MONO_VERIFIER_MODE_OFF)
-		return klass->image->assembly->in_gac || klass->image == mono_defaults.corlib;
-	return verifier_mode < MONO_VERIFIER_MODE_VERIFIABLE || klass->image->assembly->in_gac || klass->image == mono_defaults.corlib;
+		return trusted_location || klass->image == mono_defaults.corlib;
+	return verifier_mode < MONO_VERIFIER_MODE_VERIFIABLE || trusted_location || klass->image == mono_defaults.corlib;
 }
 
 GSList*

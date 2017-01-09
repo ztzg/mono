@@ -735,6 +735,9 @@ namespace System {
 		
 		public override int GetHashCode()
 		{
+			Type t = UnderlyingSystemType;
+			if (t != null && t != this)
+				return t.GetHashCode ();
 			return (int)_impl.Value;
 		}
 
@@ -1181,15 +1184,11 @@ namespace System {
 		}
 
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		extern Type GetGenericTypeDefinition_impl ();
+		internal extern Type GetGenericTypeDefinition_impl ();
 
 		public virtual Type GetGenericTypeDefinition ()
 		{
-			Type res = GetGenericTypeDefinition_impl ();
-			if (res == null)
-				throw new InvalidOperationException ();
-
-			return res;
+			throw new NotSupportedException ("Derived classes must provide an implementation.");
 		}
 
 		public virtual extern bool IsGenericType {
@@ -1390,6 +1389,20 @@ namespace System {
 		}			
 
 #endif
+
+		/* 
+		 * Return whenever this object is an instance of a user defined subclass
+		 * of System.Type or an instance of TypeDelegator.
+		 */
+		internal bool IsUserType {
+			get {
+				/* 
+				 * subclasses cannot modify _impl so if it is zero, it means the
+				 * type is not created by the runtime.
+				 */
+				return _impl.Value == IntPtr.Zero;
+			}
+		}
 
 		void _Type.GetIDsOfNames ([In] ref Guid riid, IntPtr rgszNames, uint cNames, uint lcid, IntPtr rgDispId)
 		{

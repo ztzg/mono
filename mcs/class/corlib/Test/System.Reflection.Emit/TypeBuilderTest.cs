@@ -9926,7 +9926,7 @@ namespace MonoTests.System.Reflection.Emit
 
 			Type t = tb2.CreateType ();
 			int[] res = (int[])t.GetMethod ("Test").Invoke (null, new object[0]);
-			Console.WriteLine (res[0]);
+			//Console.WriteLine (res[0]);
 		}
 #endif
 
@@ -10581,5 +10581,248 @@ namespace MonoTests.System.Reflection.Emit
 			mb.GetILGenerator ().Emit (OpCodes.Ret);
 			eb.SetAddOnMethod (mb);
 		}
+
+#if NET_2_0
+		static TypeBuilder Resolve1_Tb;
+		static bool Resolve1_Called;
+
+		public class Lookup<T>
+		{
+			public static Type t = typeof(T);
+		}
+
+		Assembly Resolve1 (object sender, ResolveEventArgs args) {
+			Resolve1_Called = true;
+			Resolve1_Tb.CreateType ();
+			return Resolve1_Tb.Assembly;
+		}
+
+		[Test]
+		public void TypeResolveGenericInstances () {
+			// Test that TypeResolve is called for generic instances (#483852)
+			TypeBuilder tb1 = null;
+
+			AppDomain.CurrentDomain.TypeResolve += Resolve1;
+
+			tb1 = module.DefineType("Foo");
+			Resolve1_Tb = tb1;
+			FieldInfo field = TypeBuilder.GetField(typeof(Lookup<>).MakeGenericType(tb1), typeof(Lookup<>).GetField("t"));
+			TypeBuilder tb2 = module.DefineType("Bar");
+			ConstructorBuilder cb = tb2.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+			ILGenerator ilgen = cb.GetILGenerator();
+			ilgen.Emit(OpCodes.Ldsfld, field);
+			ilgen.Emit(OpCodes.Pop);
+			ilgen.Emit(OpCodes.Ret);
+			Activator.CreateInstance(tb2.CreateType());
+
+			Assert.IsTrue (Resolve1_Called);
+		}
+#endif
+
+#if NET_2_0
+#if !WINDOWS
+		/* 
+		 * Tests for passing user types to Ref.Emit. Currently these only test
+		 * whenever the runtime code can handle them without crashing, since we
+		 * don't support user types yet.
+		 * These tests are disabled for windows since the MS runtime trips on them.
+		 */
+		[Test]
+		public void UserTypes () {
+			TypeDelegator t = new TypeDelegator (typeof (int));
+
+			try {
+				/* Parent */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, t);
+			} catch {
+			}
+
+			try {
+				/* Interfaces */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object), new Type [] { t });
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Fields */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				tb.DefineField ("Foo", t, FieldAttributes.Public);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Custom modifiers on fields */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				tb.DefineField ("Foo", typeof (int), new Type [] { t }, new Type [] { t }, FieldAttributes.Public);
+				tb.CreateType ();
+			} catch {
+			}
+
+#if !WINDOWS
+			try {
+				/* This is mono only */
+				UnmanagedMarshal m = UnmanagedMarshal.DefineCustom (t, "foo", "bar", Guid.Empty);
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				FieldBuilder fb = tb.DefineField ("Foo", typeof (int), FieldAttributes.Public);
+				fb.SetMarshal (m);
+				tb.CreateType ();
+			} catch {
+			}
+#endif
+
+			try {
+				/* Properties */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				tb.DefineProperty ("Foo", PropertyAttributes.None, t, null);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Custom modifiers on properties */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				// FIXME: These seems to be ignored
+				tb.DefineProperty ("Foo", PropertyAttributes.None, typeof (int), new Type [] { t }, new Type [] { t }, null, null, null);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Method return types */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, t, null);
+				mb.GetILGenerator ().Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Custom modifiers on method return types */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, CallingConventions.Standard, typeof (int), new Type [] { t }, new Type [] { t }, null, null, null);
+				mb.GetILGenerator ().Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Method parameters */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, typeof (int), new Type [] { t });
+				mb.GetILGenerator ().Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Custom modifiers on method parameters */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, CallingConventions.Standard, typeof (int), null, null, new Type [] { typeof (int) }, new Type [][] { new Type [] { t }}, new Type[][] { new Type [] { t }});
+				mb.GetILGenerator ().Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* Ctor parameters */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				ConstructorBuilder mb = tb.DefineConstructor (MethodAttributes.Public, CallingConventions.Standard, new Type [] { t });
+				mb.GetILGenerator ().Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+			
+			try {
+				/* Custom modifiers on ctor parameters */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				ConstructorBuilder mb = tb.DefineConstructor (MethodAttributes.Public, CallingConventions.Standard, new Type [] { typeof (int) }, new Type [][] { new Type [] { t }}, new Type[][] { new Type [] { t }});
+				mb.GetILGenerator ().Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* SignatureHelper arguments */
+				SignatureHelper sighelper = SignatureHelper.GetFieldSigHelper (module);
+				sighelper.AddArgument (t, false);
+				byte[] arr = sighelper.GetSignature ();
+			} catch {
+			}
+
+			try {
+				SignatureHelper sighelper = SignatureHelper.GetLocalVarSigHelper (module);
+				sighelper.AddArgument (t, false);
+				byte[] arr = sighelper.GetSignature ();
+			} catch {
+			}
+
+			try {
+				/* Custom modifiers on SignatureHelper arguments */
+				SignatureHelper sighelper = SignatureHelper.GetFieldSigHelper (module);
+				sighelper.AddArgument (typeof (int), new Type [] { t }, new Type [] { t });
+				byte[] arr = sighelper.GetSignature ();
+			} catch {
+			}
+
+			try {
+				/* Custom modifiers on SignatureHelper arguments */
+				SignatureHelper sighelper = SignatureHelper.GetLocalVarSigHelper (module);
+				sighelper.AddArgument (typeof (int), new Type [] { t }, new Type [] { t });
+				byte[] arr = sighelper.GetSignature ();
+			} catch {
+			}
+
+			/* Arguments to ILGenerator methods */
+			try {
+				/* Emit () */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, CallingConventions.Standard, typeof (int), new Type [] { });
+				ILGenerator ig = mb.GetILGenerator ();
+				ig.Emit (OpCodes.Ldnull);
+				ig.Emit (OpCodes.Castclass, t);
+				ig.Emit (OpCodes.Pop);
+				ig.Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* DeclareLocal () */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, CallingConventions.Standard, typeof (int), new Type [] { });
+				ILGenerator ig = mb.GetILGenerator ();
+				ig.DeclareLocal (t);
+				ig.Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* BeginExceptionCatchBlock () */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, CallingConventions.Standard, typeof (int), new Type [] { });
+				ILGenerator ig = mb.GetILGenerator ();
+				ig.BeginExceptionBlock ();
+				ig.BeginCatchBlock (t);
+				ig.Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+
+			try {
+				/* EmitCalli () */
+				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
+				MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public, CallingConventions.Standard, typeof (int), new Type [] { });
+				ILGenerator ig = mb.GetILGenerator ();
+				ig.EmitCalli (OpCodes.Call, CallingConventions.Standard, typeof (void), new Type [] { t }, null);
+				ig.Emit (OpCodes.Ret);
+				tb.CreateType ();
+			} catch {
+			}
+		}
+#endif
+#endif
 	}
 }

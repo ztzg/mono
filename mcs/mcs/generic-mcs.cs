@@ -13,19 +13,53 @@ using System.Collections;
 
 namespace Mono.CSharp
 {
+	public enum Variance
+	{
+		None,
+		Covariant,
+		Contravariant
+	}
+
 	public enum SpecialConstraint
 	{
 		Constructor,
 		ReferenceType,
 		ValueType
 	}
+
+	public abstract class GenericTypeParameterBuilder : Type
+	{
+	}
+
+	public class InternalsVisibleToAttribute
+	{
+		public string AssemblyName;
+	}
+
+	class ConstraintChecker
+	{
+		public static bool CheckConstraints (EmitContext ec, MethodBase a, MethodBase b, Location loc)
+		{
+			throw new NotSupportedException ();
+		}
+	}
 	
 	public abstract class GenericConstraints
 	{
+		public bool HasConstructorConstraint {
+			get { throw new NotImplementedException (); }
+		}
+
 		public bool HasValueTypeConstraint {
-			get {
-				throw new NotImplementedException ();
-			}
+			get { throw new NotImplementedException (); }
+		}
+
+		public bool HasClassConstraint {
+			get { throw new NotImplementedException (); }
+		}
+
+		public bool HasReferenceTypeConstraint {
+			get { throw new NotImplementedException (); }
 		}
 			
 		public abstract string TypeParameter {
@@ -33,6 +67,22 @@ namespace Mono.CSharp
 		}
 
 		public bool IsReferenceType { 
+			get { throw new NotSupportedException (); }
+		}
+		
+		public bool IsValueType { 
+			get { throw new NotSupportedException (); }
+		}
+
+		public Type[] InterfaceConstraints {
+			get { throw new NotSupportedException (); }
+		}
+
+		public Type ClassConstraint {
+			get { throw new NotSupportedException (); }
+		}
+
+		public Type EffectiveBaseClass {
 			get { throw new NotSupportedException (); }
 		}
 	}
@@ -64,7 +114,7 @@ namespace Mono.CSharp
 	public class TypeParameter : MemberCore, IMemberContainer
 	{
 		public TypeParameter (DeclSpace parent, DeclSpace decl, string name,
-				      Constraints constraints, Attributes attrs, Location loc)
+				      Constraints constraints, Attributes attrs, Variance variance, Location loc)
 			: base (parent, new MemberName (name, loc), attrs)
 		{
 			throw new NotImplementedException ();
@@ -84,8 +134,11 @@ namespace Mono.CSharp
 			return true;
 		}
 
-		public override void ApplyAttributeBuilder (Attribute a,
-							    CustomAttributeBuilder cb)
+		public void Define (Type t)
+		{
+		}
+
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
 			throw new NotImplementedException ();
 		}
@@ -148,6 +201,10 @@ namespace Mono.CSharp
 			get { throw new NotImplementedException (); }
 		}
 
+		public Variance Variance {
+			get { throw new NotImplementedException (); }
+		}
+
 		MemberCache IMemberContainer.BaseCache {
 			get { throw new NotImplementedException (); }
 		}
@@ -168,6 +225,11 @@ namespace Mono.CSharp
 
 		public MemberList FindMembers (MemberTypes mt, BindingFlags bf,
 					       MemberFilter filter, object criteria)
+		{
+			throw new NotImplementedException ();
+		}
+
+		public void SetConstraints (GenericTypeParameterBuilder type)
 		{
 			throw new NotImplementedException ();
 		}
@@ -195,16 +257,29 @@ namespace Mono.CSharp
 	public class TypeParameterName : SimpleName
 	{
 		Attributes attributes;
+		Variance variance;
 
 		public TypeParameterName (string name, Attributes attrs, Location loc)
+			: this (name, attrs, Variance.None, loc)
+		{
+		}
+
+		public TypeParameterName (string name, Attributes attrs, Variance variance, Location loc)
 			: base (name, loc)
 		{
 			attributes = attrs;
+			this.variance = variance;
 		}
 
 		public Attributes OptAttributes {
 			get {
 				return attributes;
+			}
+		}
+
+		public Variance Variance {
+			get {
+				return variance;
 			}
 		}
 	}
@@ -230,12 +305,21 @@ namespace Mono.CSharp
 		{
 			throw new NotImplementedException ();
 		}
+
+		public TypeArguments TypeArguments {
+			get { throw new NotImplementedException (); }
+		}
+
+		public bool VerifyVariantTypeParameters ()
+		{
+			throw new NotImplementedException ();
+		}
 	}
 
 	public class GenericMethod : DeclSpace
 	{
 		public GenericMethod (NamespaceEntry ns, DeclSpace parent, MemberName name,
-				      Expression return_type, Parameters parameters)
+				      Expression return_type, ParametersCompiled parameters)
 			: base (ns, parent, name, null)
 		{
 			throw new NotImplementedException ();

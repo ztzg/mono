@@ -60,6 +60,7 @@
 //    exceptions in threads terminate the application).
 //
 using System;
+using System.Security;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
@@ -161,15 +162,17 @@ namespace System.Net
 //			set { credentials = value; }
 //		}
 //
-//		public WebHeaderCollection Headers {
-//			get {
+		public WebHeaderCollection Headers {
+			get {
+				throw new NotImplementedException ();
 //				if (headers == null)
 //					headers = new WebHeaderCollection ();
 //
 //				return headers;
-//			}
+			}
+			set { throw new NotImplementedException (); }
 //			set { headers = value; }
-//		}
+		}
 //		
 //		public NameValueCollection QueryString {
 //			get {
@@ -186,14 +189,16 @@ namespace System.Net
 //		}
 //
 //#if NET_2_0
-//		public Encoding Encoding {
+		public Encoding Encoding {
+			get { throw new NotImplementedException (); }
 //			get { return encoding; }
-//			set {
+			set {
+				throw new NotImplementedException ();
 //				if (value == null)
 //					throw new ArgumentNullException ("value");
 //				encoding = value;
-//			}
-//		}
+			}
+		}
 //
 //		public IWebProxy Proxy {
 //			get { return proxy; }
@@ -203,6 +208,11 @@ namespace System.Net
 //
 		public bool IsBusy {
 			get { return is_busy; }
+		}
+
+		public bool AllowReadStreamBuffering {
+			get { throw new NotImplementedException (); }
+			set { throw new NotImplementedException (); }
 		}
 
 		// Methods
@@ -252,7 +262,7 @@ namespace System.Net
 //			}
 //		}
 //
-		byte [] DownloadDataCore (Uri address, object userToken)
+		Stream DownloadDataCore (Uri address, object userToken)
 		{
 			WebRequest request = null;
 
@@ -263,7 +273,7 @@ namespace System.Net
 				asyncresult.AsyncWaitHandle.WaitOne ();
 				WebResponse response = request.EndGetResponse (asyncresult);
 				Stream st = ProcessResponse (response);
-				return ReadAll (st, (int) response.ContentLength, userToken);
+				return ReadAll (st, (int) st.Length, userToken);
 			} catch (ThreadInterruptedException){
 				if (request != null)
 					request.Abort ();
@@ -800,12 +810,13 @@ namespace System.Net
 		public event DownloadProgressChangedEventHandler DownloadProgressChanged;
 		public event DownloadStringCompletedEventHandler DownloadStringCompleted;
 		public event OpenReadCompletedEventHandler OpenReadCompleted;
-//		public event OpenWriteCompletedEventHandler OpenWriteCompleted;
+		public event OpenWriteCompletedEventHandler OpenWriteCompleted;
 //		public event UploadDataCompletedEventHandler UploadDataCompleted;
 //		public event UploadFileCompletedEventHandler UploadFileCompleted;
-//		public event UploadProgressChangedEventHandler UploadProgressChanged;
-//		public event UploadStringCompletedEventHandler UploadStringCompleted;
+		public event UploadProgressChangedEventHandler UploadProgressChanged;
+		public event UploadStringCompletedEventHandler UploadStringCompleted;
 //		public event UploadValuesCompletedEventHandler UploadValuesCompleted;
+		public event WriteStreamClosedEventHandler WriteStreamClosed;
 //#endif
 //
 //		Uri CreateUri (string address)
@@ -926,36 +937,28 @@ namespace System.Net
 			return response.GetResponseStream ();
 		}
 
-		byte [] ReadAll (Stream stream, int length, object userToken)
+		Stream ReadAll (Stream stream, int length, object userToken)
 		{
 			MemoryStream ms = null;
 
 			bool nolength = (length == -1);
 			int size = ((nolength) ? 8192 : length);
-			if (nolength)
-				ms = new MemoryStream ();
+			ms = new MemoryStream (size);
 
-//			long total = 0;
-			int nread = 0;
-			int offset = 0;
+			int nread;
 			byte [] buffer = new byte [size];
-			while ((nread = stream.Read (buffer, offset, size)) != 0) {
-				if (nolength) {
-					ms.Write (buffer, 0, nread);
-				} else {
-					offset += nread;
-					size -= nread;
-				}
+			while ((nread = stream.Read (buffer, 0, buffer.Length)) != 0) {
+				ms.Write (buffer, 0, nread);
 				if (async){
-//					total += nread;
 					OnDownloadProgressChanged (new DownloadProgressChangedEventArgs (nread, length, userToken));
+				}
+				if (!nolength && ms.Length == length) {
+					break;
 				}
 			}
 
-			if (nolength)
-				return ms.ToArray ();
-
-			return buffer;
+			ms.Position = 0;
+			return ms;
 		}
 
 //		string UrlEncode (string str)
@@ -1013,24 +1016,25 @@ namespace System.Net
 //		}
 //
 //#if NET_2_0
-//		public void CancelAsync ()
-//		{
-//			lock (this){
-//				if (async_thread == null)
-//					return;
-//
-//				//
-//				// We first flag things as done, in case the Interrupt hangs
-//				// or the thread decides to hang in some other way inside the
-//				// event handlers, or if we are stuck somewhere else.  This
-//				// ensures that the WebClient object is reusable immediately
-//				//
-//				Thread t = async_thread;
-//				CompleteAsync ();
-//				t.Interrupt ();
-//			}
-//		}
-//
+		[SecuritySafeCritical]
+		public void CancelAsync ()
+		{
+			lock (this){
+				if (async_thread == null)
+					return;
+
+				//
+				// We first flag things as done, in case the Interrupt hangs
+				// or the thread decides to hang in some other way inside the
+				// event handlers, or if we are stuck somewhere else.  This
+				// ensures that the WebClient object is reusable immediately
+				//
+				Thread t = async_thread;
+				CompleteAsync ();
+				t.Interrupt ();
+			}
+		}
+
 		void CompleteAsync ()
 		{
 			lock (this){
@@ -1130,8 +1134,11 @@ namespace System.Net
 				async_thread = new Thread (delegate (object state) {
 					object [] args = (object []) state;
 					try {
-						byte [] bdata = DownloadDataCore ((Uri) args [0], args [1]);
-						string data = encoding.GetString (bdata, 0, bdata.Length);
+						Stream bdata = DownloadDataCore ((Uri) args [0], args [1]);
+						string data;
+						using (StreamReader stream = new StreamReader (bdata, encoding, true))
+							data = stream.ReadToEnd ();
+
 						OnDownloadStringCompleted (
 							new DownloadStringCompletedEventArgs (data, null, false, args [1]));
 					} catch (ThreadInterruptedException){
@@ -1189,18 +1196,19 @@ namespace System.Net
 
 //		//    OpenWriteAsync
 //
-//		public void OpenWriteAsync (Uri address)
-//		{
-//			OpenWriteAsync (address, null);
-//		}
-//
-//		public void OpenWriteAsync (Uri address, string method)
-//		{
-//			OpenWriteAsync (address, method, null);
-//		}
-//
-//		public void OpenWriteAsync (Uri address, string method, object userToken)
-//		{
+		public void OpenWriteAsync (Uri address)
+		{
+			OpenWriteAsync (address, null);
+		}
+
+		public void OpenWriteAsync (Uri address, string method)
+		{
+			OpenWriteAsync (address, method, null);
+		}
+
+		public void OpenWriteAsync (Uri address, string method, object userToken)
+		{
+			throw new NotImplementedException ();
 //			if (address == null)
 //				throw new ArgumentNullException ("address");
 //
@@ -1228,7 +1236,7 @@ namespace System.Net
 //				object [] cb_args = new object [] {address, method, userToken};
 //				async_thread.Start (cb_args);
 //			}
-//		}
+		}
 //
 //		//    UploadDataAsync
 //
@@ -1319,18 +1327,19 @@ namespace System.Net
 //
 //		//    UploadStringAsync
 //
-//		public void UploadStringAsync (Uri address, string data)
-//		{
-//			UploadStringAsync (address, null, data);
-//		}
-//
-//		public void UploadStringAsync (Uri address, string method, string data)
-//		{
-//			UploadStringAsync (address, method, data, null);
-//		}
-//
-//		public void UploadStringAsync (Uri address, string method, string data, object userToken)
-//		{
+		public void UploadStringAsync (Uri address, string data)
+		{
+			UploadStringAsync (address, null, data);
+		}
+
+		public void UploadStringAsync (Uri address, string method, string data)
+		{
+			UploadStringAsync (address, method, data, null);
+		}
+
+		public void UploadStringAsync (Uri address, string method, string data, object userToken)
+		{
+			throw new NotImplementedException ();
 //			if (address == null)
 //				throw new ArgumentNullException ("address");
 //			if (data == null)
@@ -1357,7 +1366,7 @@ namespace System.Net
 //				object [] cb_args = new object [] {address, method, data, userToken};
 //				async_thread.Start (cb_args);
 //			}
-//		}
+		}
 //
 //		//    UploadValuesAsync
 //
@@ -1421,17 +1430,36 @@ namespace System.Net
 			}
 		}
 		
-		private ManualResetEvent wait_event = new ManualResetEvent (false);
 		private object callback_args;
 
 		protected virtual void OnOpenReadCompleted (OpenReadCompletedEventArgs args)
 		{
 			CompleteAsync ();
 			if (OpenReadCompleted != null) {
-				GSourceFunc callback = (GSourceFunc) delegate (IntPtr ctx) { OpenReadCompleted (this, (OpenReadCompletedEventArgs) callback_args); wait_event.Set (); return false; };
+				ManualResetEvent wait_event = new ManualResetEvent (false);
+				GSourceFunc callback = (GSourceFunc) delegate (IntPtr ctx)
+				{
+					try {
+						OpenReadCompleted (this, (OpenReadCompletedEventArgs) callback_args);
+					} catch (Exception ex) {
+						try {
+							Console.WriteLine ("Unhandled exception: {0}", ex);
+						} catch {
+						}
+					}
+					try {
+						wait_event.Set ();
+					} catch (Exception ex) {
+						try {
+							Console.WriteLine ("Unhandled exception: {0}", ex);
+						} catch {
+						}
+					}
+					return false;
+				};
 				callback_args = args;
 
-				g_idle_add (callback, IntPtr.Zero);
+				g_timeout_add (0, callback, IntPtr.Zero);
 
 				wait_event.WaitOne ();
 				GC.KeepAlive (callback);
@@ -1441,16 +1469,36 @@ namespace System.Net
 		public delegate bool GSourceFunc (IntPtr data);
 
 		[DllImport ("moon")]
-		static extern uint g_idle_add (GSourceFunc callback, IntPtr data);
+		static extern uint g_timeout_add (uint delay, GSourceFunc callback, IntPtr data);
 
 		protected virtual void OnDownloadStringCompleted (DownloadStringCompletedEventArgs args)
 		{
 			CompleteAsync ();
 			if (DownloadStringCompleted != null) {
-				GSourceFunc callback = (GSourceFunc) delegate (IntPtr ctx) { DownloadStringCompleted (this, (DownloadStringCompletedEventArgs) callback_args); wait_event.Set (); return false; };
+				ManualResetEvent wait_event = new ManualResetEvent (false);
+				GSourceFunc callback = (GSourceFunc) delegate (IntPtr ctx) 
+				{
+					try {
+						DownloadStringCompleted (this, (DownloadStringCompletedEventArgs) callback_args);
+					} catch (Exception ex) {
+						try {
+							Console.WriteLine ("Unhandled exception: {0}", ex);
+						} catch {
+						}
+					}
+					try {
+						wait_event.Set ();
+					} catch (Exception ex) {
+						try {
+							Console.WriteLine ("Unhandled exception: {0}", ex);
+						} catch {
+						}
+					}
+					return false;
+				};
 				callback_args = args;
 
-				g_idle_add (callback, IntPtr.Zero);
+				g_timeout_add (0, callback, IntPtr.Zero);
 
 				wait_event.WaitOne ();
 				GC.KeepAlive (callback);
@@ -1458,12 +1506,12 @@ namespace System.Net
 		}
 
 
-//		protected virtual void OnOpenWriteCompleted (OpenWriteCompletedEventArgs args)
-//		{
-//			CompleteAsync ();
-//			if (OpenWriteCompleted != null)
-//				OpenWriteCompleted (this, args);
-//		}
+		protected virtual void OnOpenWriteCompleted (OpenWriteCompletedEventArgs args)
+		{
+			CompleteAsync ();
+			if (OpenWriteCompleted != null)
+				OpenWriteCompleted (this, args);
+		}
 //
 //		protected virtual void OnUploadDataCompleted (UploadDataCompletedEventArgs args)
 //		{
@@ -1479,18 +1527,18 @@ namespace System.Net
 //				UploadFileCompleted (this, args);
 //		}
 //
-//		protected virtual void OnUploadProgressChanged (UploadProgressChangedEventArgs e)
-//		{
-//			if (UploadProgressChanged != null)
-//				UploadProgressChanged (this, e);
-//		}
-//
-//		protected virtual void OnUploadStringCompleted (UploadStringCompletedEventArgs args)
-//		{
-//			CompleteAsync ();
-//			if (UploadStringCompleted != null)
-//				UploadStringCompleted (this, args);
-//		}
+		protected virtual void OnUploadProgressChanged (UploadProgressChangedEventArgs e)
+		{
+			if (UploadProgressChanged != null)
+				UploadProgressChanged (this, e);
+		}
+
+		protected virtual void OnUploadStringCompleted (UploadStringCompletedEventArgs args)
+		{
+			CompleteAsync ();
+			if (UploadStringCompleted != null)
+				UploadStringCompleted (this, args);
+		}
 //
 //		protected virtual void OnUploadValuesCompleted (UploadValuesCompletedEventArgs args)
 //		{
@@ -1499,21 +1547,26 @@ namespace System.Net
 //				UploadValuesCompleted (this, args);
 //		}
 //
-//		[MonoNotSupported("")]
-//		protected virtual WebRequest GetWebRequest (Uri address)
-//		{
-//			throw new NotImplementedException ();
-//		}
+		protected virtual void OnWriteStreamClosed (WriteStreamClosedEventArgs e)
+		{
+			throw new NotImplementedException ();
+		}
+
+		[MonoNotSupported("")]
+		protected virtual WebRequest GetWebRequest (Uri address)
+		{
+			throw new NotImplementedException ();
+		}
 //
 //		protected virtual WebResponse GetWebResponse (WebRequest request)
 //		{
 //			return request.GetResponse ();
 //		}
 //
-//		protected virtual WebResponse GetWebResponse (WebRequest request, IAsyncResult result)
-//		{
-//			return request.EndGetResponse (result);
-//		}
+		protected virtual WebResponse GetWebResponse (WebRequest request, IAsyncResult result)
+		{
+			return request.EndGetResponse (result);
+		}
 //#endif
 #endif
 	}

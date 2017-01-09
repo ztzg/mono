@@ -724,7 +724,7 @@ namespace Mono.CSharp {
 				xref.SetAttribute ("cref", "N:" + ns.GetSignatureForError ());
 				return; // a namespace
 			}
-			if (RootNamespace.Global.IsNamespace (name)) {
+			if (GlobalRootNamespace.Instance.IsNamespace (name)) {
 				xref.SetAttribute ("cref", "N:" + name);
 				return; // a namespace
 			}
@@ -820,7 +820,7 @@ namespace Mono.CSharp {
 		// Returns a string that represents the signature for this 
 		// member which should be used in XML documentation.
 		//
-		public static string GetMethodDocCommentName (MemberCore mc, Parameters parameters, DeclSpace ds)
+		public static string GetMethodDocCommentName (MemberCore mc, ParametersCompiled parameters, DeclSpace ds)
 		{
 			IParameterData [] plist = parameters.FixedParameters;
 			string paramSpec = String.Empty;
@@ -840,10 +840,9 @@ namespace Mono.CSharp {
 				paramSpec += ")";
 
 			string name = mc is Constructor ? "#ctor" : mc.Name;
-#if GMCS_SOURCE						    
 			if (mc.MemberName.IsGeneric)
 				name += "``" + mc.MemberName.CountTypeArguments;
-#endif
+
 			string suffix = String.Empty;
 			Operator op = mc as Operator;
 			if (op != null) {

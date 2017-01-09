@@ -1,11 +1,10 @@
-
 /*
  * console-io.c: ConsoleDriver internal calls
  *
  * Author:
  *	Gonzalo Paniagua Javier (gonzalo@ximian.com)
  *
- * Copyright (C) 2005 Novell, Inc. (http://www.novell.com)
+ * Copyright (C) 2005-2009 Novell, Inc. (http://www.novell.com)
  */
 
 #include <config.h>
@@ -42,8 +41,8 @@
 #ifdef HAVE_SYS_FILIO_H
 #include <sys/filio.h>
 #endif
-#ifndef PLATFORM_WIN32
 #ifndef TIOCGWINSZ
+#ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
 #endif
 #endif
@@ -85,7 +84,7 @@ mono_console_init (void)
 }
 #endif
 
-#ifdef PLATFORM_WIN32
+#if defined (PLATFORM_WIN32) || defined (MONO_NULL_TTYDRIVER)
 MonoBoolean
 ves_icall_System_ConsoleDriver_Isatty (HANDLE handle)
 {
@@ -113,7 +112,7 @@ ves_icall_System_ConsoleDriver_InternalKeyAvailable (gint32 timeout)
 }
 
 MonoBoolean
-ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardown, char *verase, char *vsusp, char*intr, int **size)
+ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardown, MonoArray **control_chars, int **size)
 {
 	return FALSE;
 }
@@ -370,8 +369,65 @@ console_restore_signal_handlers ()
 	sigaction (SIGWINCH, &save_sigwinch, NULL);
 }
 
+static void
+set_control_chars (MonoArray *control_chars, const guchar *cc)
+{
+	/* The index into the array comes from corlib/System/ControlCharacters.cs */
+#ifdef VINTR
+	mono_array_set (control_chars, gchar, 0, cc [VINTR]);
+#endif
+#ifdef VQUIT
+	mono_array_set (control_chars, gchar, 1, cc [VQUIT]);
+#endif
+#ifdef VERASE
+	mono_array_set (control_chars, gchar, 2, cc [VERASE]);
+#endif
+#ifdef VKILL
+	mono_array_set (control_chars, gchar, 3, cc [VKILL]);
+#endif
+#ifdef VEOF
+	mono_array_set (control_chars, gchar, 4, cc [VEOF]);
+#endif
+#ifdef VTIME
+	mono_array_set (control_chars, gchar, 5, cc [VTIME]);
+#endif
+#ifdef VMIN
+	mono_array_set (control_chars, gchar, 6, cc [VMIN]);
+#endif
+#ifdef VSWTC
+	mono_array_set (control_chars, gchar, 7, cc [VSWTC]);
+#endif
+#ifdef VSTART
+	mono_array_set (control_chars, gchar, 8, cc [VSTART]);
+#endif
+#ifdef VSTOP
+	mono_array_set (control_chars, gchar, 9, cc [VSTOP]);
+#endif
+#ifdef VSUSP
+	mono_array_set (control_chars, gchar, 10, cc [VSUSP]);
+#endif
+#ifdef VEOL
+	mono_array_set (control_chars, gchar, 11, cc [VEOL]);
+#endif
+#ifdef VREPRINT
+	mono_array_set (control_chars, gchar, 12, cc [VREPRINT]);
+#endif
+#ifdef VDISCARD
+	mono_array_set (control_chars, gchar, 13, cc [VDISCARD]);
+#endif
+#ifdef VWERASE
+	mono_array_set (control_chars, gchar, 14, cc [VWERASE]);
+#endif
+#ifdef VLNEXT
+	mono_array_set (control_chars, gchar, 15, cc [VLNEXT]);
+#endif
+#ifdef VEOL2
+	mono_array_set (control_chars, gchar, 16, cc [VEOL2]);
+#endif
+}
+
 MonoBoolean
-ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardown, char *verase, char *vsusp, char*intr, int **size)
+ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardown, MonoArray **control_chars, int **size)
 {
 	int dims;
 
@@ -397,10 +453,10 @@ ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardow
 	}
 	
 	*size = &cols_and_lines;
-	
-	*verase = '\0';
-	*vsusp = '\0';
-	*intr = '\0';
+
+	/* 17 is the number of entries set in set_control_chars() above.
+	 * NCCS is the total size, but, by now, we only care about those 17 values*/
+	*control_chars = mono_array_new (mono_domain_get (), mono_defaults.byte_class, 17);
 	if (tcgetattr (STDIN_FILENO, &initial_attr) == -1)
 		return FALSE;
 
@@ -412,9 +468,7 @@ ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardow
 	if (tcsetattr (STDIN_FILENO, TCSANOW, &mono_attr) == -1)
 		return FALSE;
 
-	*verase = initial_attr.c_cc [VERASE];
-	*vsusp = initial_attr.c_cc [VSUSP];
-	*intr = initial_attr.c_cc [VINTR];
+	set_control_chars (*control_chars, mono_attr.c_cc);
 	/* If initialized from another appdomain... */
 	if (setup_finished)
 		return TRUE;

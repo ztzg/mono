@@ -216,13 +216,15 @@ public class Tests : LoadMissing {
 	public static int test_0_missing_assembly_in_newobj () {
 		return check_type_load (new TestDel (missing_assembly_in_newobj));
 	}
+
+	public static int test_0_missing_delegate_ctor_argument () {
+		return check_type_load (new TestDel (missing_delegate_ctor_argument));
+	}
 	
 	//
 	// Missing classes referenced from metadata
 	//
 
-	// FIXME: These do not work yet
-#if FALSE
 	public static int test_0_missing_local () {
 		try {
 			missing_local ();
@@ -234,6 +236,8 @@ public class Tests : LoadMissing {
 		return 0;
 	}
 
+	// FIXME: These do not work yet
+#if FALSE
 	public static void missing_parent () {
 		new Miss1 ();
 	}

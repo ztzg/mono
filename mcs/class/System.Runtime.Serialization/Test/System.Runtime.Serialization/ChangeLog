@@ -1,3 +1,46 @@
+2009-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : added test for dictionary with
+	  CollectionDataContractAttribute.
+
+2009-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : added tests for IDictionary
+	  serialization (both generic and non-generic).
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : test for generic IList of
+	  DictionaryEntry. (no Hashtable serialization yet.)
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : test for generic IList of KeyValuePair
+	  (it is still different from full IDictionary support...!).
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : test for generic IList serialization.
+
+2009-03-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : test for generic type serialization.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : fixed non-contract serialization
+	  tests and remove some NotWorking.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : fixed collection contract test and
+	  added some notes.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : added couple of test fixes in
+	  collection serialization tests.
+
 2008-11-23  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlObjectSerializerTest.cs : added test for IsReference = true.

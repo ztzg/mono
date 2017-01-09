@@ -7,11 +7,27 @@
 
 2009-02-18  Bill Holmes  <billholmes54@gmail.com>
 
-	backport of r127338
-
 	* mono.def : Adding mono_jit_set_trace_options
 
 	Code is contributed under MIT/X11 license.
+
+2009-02-16  Bill Holmes  <billholmes54@gmail.com>
+
+	* libmono.vcproj : Adding metadata/cominterop and 
+	  mini/dwarfwriter to the project.
+
+	Code is contributed under MIT/X11 license.
+
+2009-02-11  Bill Holmes  <billholmes54@gmail.com>
+
+	* libmono.vcproj : Adding utils\mono-filemap.c to the project.
+
+	Code is contributed under MIT/X11 license.
+
+2009-02-03  Jonathan Pobst  <monkey@jpobst.com>
+
+	* libmono.vcproj : Track mini/generic-sharing.cs being renamed
+	to mini/mini-generic-sharing.cs.
 
 2008-12-09  Bill Holmes  <billholmes54@gmail.com>
 

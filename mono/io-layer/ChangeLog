@@ -1,3 +1,23 @@
+2009-03-27  Zoltan Varga  <vargaz@gmail.com>
+
+	* threads.h: Add a comment to CreateThread.
+
+2009-03-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* threads.c handles.c wait.c: Change location of gc_wrapper.h.
+
+2009-02-22  Robert Jordan  <robertj@gmx.net>
+
+	* sockets.c: implement WSASend/WSARecv using sendmsg/recvmsg.
+	Fixes #470021.
+
+	Code is contributed under MIT/X11 license.
+
+2009-02-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* events.c: fix event_signal and namedevent_signal to actually signal
+	the handle.
+
 2009-02-12 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* io.c: EXDEV when moving directories fails now without creating a
@@ -6,14 +26,44 @@
 
 2009-02-09  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of r126290.
-
 	* wait.c (WaitForMultipleObjectsEx): Initialize poll variable.
 
 2009-02-05  Miguel De Icaza  <miguel@novell.com>
 
 	* sockets.c (_wapi_setsockopt): SO_REUSEPORT is needed also on
 	MacOS X.  Fixes bug #471292
+
+2009-01-29  Zoltan Varga  <vargaz@gmail.com>
+
+	* shared.c: Fall back to file based shared storage if shm_open () fails
+	because /dev/shm is not mounted.
+	
+	* shared.c: Add an alternative implementation using shared memory instead of
+	files. This fixes problems where the mono process would spin up the disk
+	every x secs on laptops. Fixes #434566, #415373 and #321949.
+
+2009-01-16  Miguel de Icaza  <miguel@novell.com>
+
+	* sockets.c (WSASend): Fix memory leak, and optimize for the case
+	with 1 segment. 
+
+	This should really use writev or sendmsg to use the kernel
+	scatter/gather facility instead of emulating it by copying buffers.
+
+2009-01-26  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* critical-sections.h (Enter/LeaveCriticalSection): Show
+	helpfull warning messages before crashing.
+
+2009-01-26  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* handles-private.h (_wapi_handle_set_signal_state): Show
+	helpfull warning messages before crashing.
+
+2009-01-26  Jeffrey Stedfast  <fejj@novell.com>
+
+	* mono-mutex.[c,h]: Removed GPLv2 copyright notice which should
+	not have been there.
 
 2009-01-20  Rodrigo Kumpera  <rkumpera@novell.com>
 

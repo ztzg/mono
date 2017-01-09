@@ -52,7 +52,7 @@ namespace System.Reflection {
 		internal static extern void get_method_info (IntPtr handle, out MonoMethodInfo info);
 		
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		internal static extern ParameterInfo[] get_parameter_info (IntPtr handle);
+			internal static extern ParameterInfo[] get_parameter_info (IntPtr handle, MemberInfo member);
 
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		internal static extern UnmanagedMarshal get_retval_marshal (IntPtr handle);
@@ -117,7 +117,7 @@ namespace System.Reflection {
 		}
 
 		public override ParameterInfo[] GetParameters() {
-			return MonoMethodInfo.get_parameter_info (mhandle);
+			return MonoMethodInfo.get_parameter_info (mhandle, this);
 		}
 
 		/*
@@ -126,14 +126,24 @@ namespace System.Reflection {
 		 */
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		internal extern Object InternalInvoke (Object obj, Object[] parameters, out Exception exc);
-		
+
 		public override Object Invoke (Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture) 
 		{
 			if (binder == null)
 				binder = Binder.DefaultBinder;
 			ParameterInfo[] pinfo = GetParameters ();
-			if (!Binder.ConvertArgs (binder, parameters, pinfo, culture))
-				throw new ArgumentException ("parameters");
+
+			if ((parameters == null && pinfo.Length != 0) || (parameters != null && parameters.Length != pinfo.Length))
+				throw new TargetParameterCountException ("parameters do not match signature");
+			
+			if ((invokeAttr & BindingFlags.ExactBinding) == 0) {
+				if (!Binder.ConvertArgs (binder, parameters, pinfo, culture))
+					throw new ArgumentException ("failed to convert parameters");
+			} else {
+				for (int i = 0; i < pinfo.Length; i++)
+					if (parameters[i].GetType() != pinfo[i].ParameterType)
+						throw new ArgumentException ("parameters do not match signature");
+			}
 
 #if !NET_2_1
 			if (SecurityManager.SecurityEnabled) {
@@ -403,7 +413,7 @@ namespace System.Reflection {
 		}
 
 		public override ParameterInfo[] GetParameters() {
-			return MonoMethodInfo.get_parameter_info (mhandle);
+			return MonoMethodInfo.get_parameter_info (mhandle, this);
 		}
 
 		/*
@@ -417,9 +427,20 @@ namespace System.Reflection {
 		{
 			if (binder == null)
 				binder = Binder.DefaultBinder;
+
 			ParameterInfo[] pinfo = GetParameters ();
-			if (!Binder.ConvertArgs (binder, parameters, pinfo, culture))
-				throw new ArgumentException ("parameters");
+
+			if ((parameters == null && pinfo.Length != 0) || (parameters != null && parameters.Length != pinfo.Length))
+				throw new TargetParameterCountException ("parameters do not match signature");
+			
+			if ((invokeAttr & BindingFlags.ExactBinding) == 0) {
+				if (!Binder.ConvertArgs (binder, parameters, pinfo, culture))
+					throw new ArgumentException ("failed to convert parameters");
+			} else {
+				for (int i = 0; i < pinfo.Length; i++)
+					if (parameters[i].GetType() != pinfo[i].ParameterType)
+						throw new ArgumentException ("parameters do not match signature");
+			}
 
 			if (SecurityManager.SecurityEnabled) {
 				// sadly Attributes doesn't tell us which kind of security action this is so

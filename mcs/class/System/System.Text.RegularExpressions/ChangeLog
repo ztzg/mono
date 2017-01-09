@@ -1,3 +1,13 @@
+2009-03-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* RxInterpreter.cs (ResetGroups): Avoid allocating larger than needed
+	arrays.
+
+2009-02-27  Jonathan Pryor <jpryor@novell.com>
+
+	* Regex.cs (Replace): Check that input & evaluator are not null, as
+	  documented in MSDN (and the variance found while testing DbLinq).
+
 2009-02-27  Zoltan Varga  <vargaz@gmail.com>
 
 	* BaseMachine.cs (LTRReplace): Initialize the StringBuilder with an
@@ -8,10 +18,17 @@
 	* CILCompiler.cs: Partially inline calls to Char.ToLower () to speed
 	up ignorecase matching.
 
+2009-02-16  Jb Evain  <jbevain@novell.com>
+
+	* Regex.cs: on the NET_2_1 profile, always use the old engine for now.
+
+2009-02-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* Regex.cs: Add a MONO_NEW_RX variable to enable the new regex
+	engine.
+
 2009-02-04  Zoltan Varga  <vargaz@gmail.com>
 
-	Backport of 125637.
-	
 	* Regex.cs: Disable the new regex engine for now.
 
 2009-01-14  Zoltan Varga  <vargaz@gmail.com>

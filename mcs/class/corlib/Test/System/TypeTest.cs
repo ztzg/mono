@@ -3062,6 +3062,57 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual(1, tArgs[1].GetCustomAttributes (typeof (DocAttribute), true).Length, "#1");
 			Assert.AreEqual(1, mArgs[0].GetCustomAttributes (typeof (DocAttribute), true).Length, "#1");
 		}
+
+		[Test] //bug #471255
+		public void GetTypeCalledUsingReflection ()
+		{
+			Type expectedType = Type.GetType ("NoNamespaceClass");
+			Assert.IsNotNull (expectedType, "#1");
+			MethodInfo m = typeof (Type).GetMethod ("GetType",  BindingFlags.Public | BindingFlags.Static, null, new Type [] { typeof (string) },  null);
+			object r = m.Invoke (null, BindingFlags.Default, null, new object [] { "NoNamespaceClass" }, CultureInfo.InvariantCulture);
+			Assert.AreSame (expectedType, r, "#2");
+		}
+
+	[Test]
+	public void EqualsUserType () {
+		UserType2 t1 = new UserType2(null);
+		UserType2 t2 = new UserType2(t1);
+		Assert.IsTrue (t1.Equals(t2));
+	}
+
+	[Test]
+	public void GetHashCodeUserType () {
+		UserType2 t1 = new UserType2(null);
+		UserType2 t2 = new UserType2(t1);
+		Assert.AreEqual (42, t2.GetHashCode());
+	}
+	
+	[Test]
+	public void IsGenericTypeDefinitionUserType () {
+		Assert.IsFalse (new UserType(null).IsGenericTypeDefinition);
+	}
+	
+	[Test]
+	public void IsGenericTypeUserType () {
+		Assert.IsFalse (new UserType(null).IsGenericType);
+	}
+
+	[Test]
+	[ExpectedException (typeof (NotSupportedException))]
+	public void GetGenericTypeDefinitionUserType () {
+		new UserType(null).GetGenericTypeDefinition ();
+	}
+
+	[ExpectedException (typeof (NotSupportedException))]
+	public void GetGenericArgumentsUserType () {
+		new UserType(null).GetGenericArguments ();
+	}
+	
+	[Test]
+	[ExpectedException (typeof (InvalidOperationException))]
+	public void GenericParameterPositionUserType () {
+		Assert.IsTrue (new UserType(null).GenericParameterPosition == 0);
+	}
 #endif
 
 		[Test]
@@ -3416,7 +3467,7 @@ PublicKeyToken=b77a5c561934e089"));
 #if NET_2_0
 	class UserType : Type
 	{
-		private Type type;
+		protected Type type;
 	
 		public UserType(Type type) {
 			this.type = type;
@@ -3589,6 +3640,20 @@ PublicKeyToken=b77a5c561934e089"));
 							 string[] namedParameters)
 		{
 			throw new NotSupportedException();
+		}
+	}
+
+    class UserType2 : UserType {
+		public UserType2 (Type type) : base (type) {
+		}
+
+		public override Type UnderlyingSystemType { get { return this.type ?? this; } }
+
+		public override int GetHashCode()
+		{
+			if (type == null)
+				return 42;
+			return type.GetHashCode();
 		}
 	}
 #endif

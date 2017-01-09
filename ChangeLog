@@ -1,3 +1,30 @@
+2009-03-31  Jb Evain  <jbevain@novell.com>
+
+	* scripts: Remove smcs, which is handled by moon now.
+	* data: ditto.
+
+2009-03-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono/os: Remove this now empty directory.
+	
+	* mono/Makefile.am (SUBDIRS): Remove 'os'.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* scripts/Makefile.am : mono-xmltool uses 2.0.
+
+2009-03-12  Jonathan Pryor  <jpryor@novell.com>
+
+	* scripts/Makefile.am: Add sqlmetal.
+
+2009-03-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* README: Remove the comment about --with-moonlight being pre-alpha.
+
+2009-03-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* scripts/Makefile.am : added svcutil.
+
 2009-02-26  Marek Habersack  <mhabersack@novell.com>
 
 	* data/mono.web.pc.in: added. Fixes bug #479760
@@ -8,6 +35,47 @@
 
 	* configure.in: include stdio so that NULL is defined when checking
 	for ifreq.
+
+2009-02-06  Miguel De Icaza  <miguel@novell.com>
+
+	* Disable parallel marking on OSX as it hangs during collections
+	in the bootstrap stage of Mono.
+
+	As we find more platforms that hang, we should disable it there as
+	well. 
+
+2009-02-03  Miguel de Icaza  <miguel@novell.com>
+
+	* configure.in (PLATFORM_NO_SYMLINKS): New define that replaces
+	PLATFORM_WIN32.
+
+2009-02-02  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* configure.in: Add --with-mcs-docs to make it possible to disable building of documentation under mcs.
+
+2009-01-29  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Remove -Wcast-align from the warning list, it leads to a lot of
+	useless warnings which can only be fixed by casting a pointer to (void*).
+
+2009-01-29  Miguel de Icaza  <miguel@novell.com>
+
+	* configure.in: Add a couple of new AM conditionals for POSIX and
+	DARWIN, these are used to conditionally include some files in
+	mono/mini. 
+
+2009-01-27  Jb Evain  <jbevain@novell.com>
+
+	* configure.in: bump Mono's version to 2.5 now that 2.4
+	has been branched.
+
+2009-01-25  Zoltan Varga  <vargaz@gmail.com>
+
+	* acinclude.m4 (dolt_supported): Handle ARM as well.
+
+2009-01-23  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.in: Make --enable-parallel-mark=yes the default.
 
 2009-01-17  Zoltan Varga  <vargaz@gmail.com>
 
@@ -34,6 +102,11 @@
 
 	* scripts/Makefile.am: don't generate a script for the now
 	dead mono-api-diff.
+
+2008-12-05  Jonathan Pryor  <jpryor@novell.com>
+
+	* scripts/mdassembler, scripts/monodocer, scripts/monodocs2html:
+	  Properly quote parameters as they may contain spaces.
 
 2008-12-05  Jonathan Pryor  <jpryor@novell.com>
 

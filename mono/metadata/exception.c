@@ -7,7 +7,8 @@
  *	Dick Porter     (dick@ximian.com)
  *      Miguel de Icaza (miguel@ximian.com)
  *
- * (C) 2001, 2002 Ximian, Inc.
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include <mono/metadata/exception.h>
@@ -664,6 +665,28 @@ MonoException *
 mono_get_exception_out_of_memory (void)
 {
 	return mono_exception_from_name (mono_get_corlib (), "System", "OutOfMemoryException");
+}
+
+/**
+ * mono_get_exception_field_access:
+ *
+ * Returns: a new instance of the System.FieldAccessException
+ */
+MonoException *
+mono_get_exception_field_access (void)
+{
+	return mono_exception_from_name (mono_get_corlib (), "System", "FieldAccessException");
+}
+
+/**
+ * mono_get_exception_method_access:
+ *
+ * Returns: a new instance of the System.MethodAccessException
+ */
+MonoException *
+mono_get_exception_method_access (void)
+{
+	return mono_exception_from_name (mono_get_corlib (), "System", "MethodAccessException");
 }
 
 /**

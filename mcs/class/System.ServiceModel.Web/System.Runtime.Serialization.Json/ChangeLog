@@ -1,3 +1,47 @@
+2009-03-13  Andreia Gaita  <avidigal@novell.com>
+
+	* JsonReader.cs: fix depth calculation
+
+2009-03-12  Geoff Norton  <gnorton@novell.com>
+
+	* TypeMap.cs: Avoid checking the getter/setter information until after
+	checking if we have the required attribute decorated.
+
+2009-03-12  Andreia Gaita  <avidigal@novell.com>
+
+	* JsonReaderWriterFactory.cs: try to auto-detect encoding for streams
+	without BOM
+
+2009-03-02  Chris Toshok  <toshok@ximian.com>
+
+	* JsonReader.cs: 2.1 has HasValue.
+
+2009-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : show invalid input character in the error
+	  message.
+
+2009-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TypeMap.cs : in 2.1 do not use non-2.1 CreateInstance().
+
+2009-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TypeMap.cs : allow get-only collections. Note that they are not
+	  always deserializable (in .NET either).
+
+2009-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TypeMap.cs : DataContractJsonSerializer in RTM does not seem to
+	  reject contract-less types. So populate map for public members.
+	* DataContractJsonSerializer.cs : close XmlWriter to flush stream
+	  (and it closes the stream by default).
+
+2009-02-02  Andreia Gaita  <avidigal@novell.com>
+
+	* JsonSerializationReader.cs : Use 2.1 "approved" calls for Enum.Parse
+    and Convert.ChangeType
+
 2008-02-18  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* DataContractJsonSerializer.cs : IsStartObject() could raise

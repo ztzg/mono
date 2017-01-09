@@ -39,19 +39,23 @@
 ICALL_TYPE(UNORM, "Mono.Globalization.Unicode.Normalization", UNORM_1)
 ICALL(UNORM_1, "load_normalization_resource", load_normalization_resource)
 
+#ifndef DISABLE_COM
 ICALL_TYPE(COMPROX, "Mono.Interop.ComInteropProxy", COMPROX_1)
 ICALL(COMPROX_1, "AddProxy", ves_icall_Mono_Interop_ComInteropProxy_AddProxy)
 ICALL(COMPROX_2, "FindProxy", ves_icall_Mono_Interop_ComInteropProxy_FindProxy)
+#endif
 
 ICALL_TYPE(RUNTIME, "Mono.Runtime", RUNTIME_1)
 ICALL(RUNTIME_1, "GetDisplayName", ves_icall_Mono_Runtime_GetDisplayName)
 
+#ifndef PLATFORM_RO_FS
 ICALL_TYPE(KPAIR, "Mono.Security.Cryptography.KeyPairPersistence", KPAIR_1)
 ICALL(KPAIR_1, "_CanSecure", ves_icall_Mono_Security_Cryptography_KeyPairPersistence_CanSecure)
 ICALL(KPAIR_2, "_IsMachineProtected", ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsMachineProtected)
 ICALL(KPAIR_3, "_IsUserProtected", ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsUserProtected)
 ICALL(KPAIR_4, "_ProtectMachine", ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectMachine)
 ICALL(KPAIR_5, "_ProtectUser", ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectUser)
+#endif /* !PLATFORM_RO_FS */
 
 ICALL_TYPE(ACTIV, "System.Activator", ACTIV_1)
 ICALL(ACTIV_1, "CreateInstanceInternal", ves_icall_System_Activator_CreateInstanceInternal)
@@ -169,6 +173,7 @@ ICALL(DEBUGR_1, "IsAttached_internal", ves_icall_System_Diagnostics_Debugger_IsA
 ICALL_TYPE(TRACEL, "System.Diagnostics.DefaultTraceListener", TRACEL_1)
 ICALL(TRACEL_1, "WriteWindowsDebugString", ves_icall_System_Diagnostics_DefaultTraceListener_WriteWindowsDebugString)
 
+#ifndef DISABLE_PROCESS_HANDLING
 ICALL_TYPE(FILEV, "System.Diagnostics.FileVersionInfo", FILEV_1)
 ICALL(FILEV_1, "GetVersionInfo_internal(string)", ves_icall_System_Diagnostics_FileVersionInfo_GetVersionInfo_internal)
 
@@ -213,6 +218,7 @@ ICALL(PROCESS_16, "WaitForInputIdle_internal(intptr,int)", ves_icall_System_Diag
 ICALL_TYPE (PROCESSHANDLE, "System.Diagnostics.Process/ProcessWaitHandle", PROCESSHANDLE_1)
 ICALL (PROCESSHANDLE_1, "ProcessHandle_close(intptr)", ves_icall_System_Diagnostics_Process_ProcessHandle_close)
 ICALL (PROCESSHANDLE_2, "ProcessHandle_duplicate(intptr)", ves_icall_System_Diagnostics_Process_ProcessHandle_duplicate)
+#endif /* !DISABLE_PROCESS_HANDLING */
 
 ICALL_TYPE(STOPWATCH, "System.Diagnostics.Stopwatch", STOPWATCH_1)
 ICALL(STOPWATCH_1, "GetTimestamp", mono_100ns_ticks)
@@ -222,6 +228,7 @@ ICALL(DOUBLE_1, "ParseImpl",    mono_double_ParseImpl)
 
 ICALL_TYPE(ENUM, "System.Enum", ENUM_1)
 ICALL(ENUM_1, "ToObject", ves_icall_System_Enum_ToObject)
+ICALL(ENUM_5, "compare_value_to", ves_icall_System_Enum_compare_value_to)
 ICALL(ENUM_4, "get_hashcode", ves_icall_System_Enum_get_hashcode)
 ICALL(ENUM_3, "get_underlying_type", ves_icall_System_Enum_get_underlying_type)
 ICALL(ENUM_2, "get_value", ves_icall_System_Enum_get_value)
@@ -283,9 +290,11 @@ ICALL_TYPE(REGINF, "System.Globalization.RegionInfo", REGINF_1)
 ICALL(REGINF_1, "construct_internal_region_from_lcid", ves_icall_System_Globalization_RegionInfo_construct_internal_region_from_lcid)
 ICALL(REGINF_2, "construct_internal_region_from_name", ves_icall_System_Globalization_RegionInfo_construct_internal_region_from_name)
 
+#ifndef PLATFORM_NO_DRIVEINFO
 ICALL_TYPE(IODRIVEINFO, "System.IO.DriveInfo", IODRIVEINFO_1)
 ICALL(IODRIVEINFO_1, "GetDiskFreeSpaceInternal", ves_icall_System_IO_DriveInfo_GetDiskFreeSpace)
 ICALL(IODRIVEINFO_2, "GetDriveTypeInternal", ves_icall_System_IO_DriveInfo_GetDriveType)
+#endif
 
 ICALL_TYPE(FAMW, "System.IO.FAMWatcher", FAMW_1)
 ICALL(FAMW_1, "InternalFAMNextEvent", ves_icall_System_IO_FAMW_InternalFAMNextEvent)
@@ -300,10 +309,12 @@ ICALL(INOW_3, "RemoveWatch", ves_icall_System_IO_InotifyWatcher_RemoveWatch)
 
 ICALL_TYPE(MONOIO, "System.IO.MonoIO", MONOIO_1)
 ICALL(MONOIO_1, "Close(intptr,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Close)
+#ifndef PLATFORM_RO_FS
 ICALL(MONOIO_2, "CopyFile(string,string,bool,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_CopyFile)
 ICALL(MONOIO_3, "CreateDirectory(string,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_CreateDirectory)
 ICALL(MONOIO_4, "CreatePipe(intptr&,intptr&)", ves_icall_System_IO_MonoIO_CreatePipe)
 ICALL(MONOIO_5, "DeleteFile(string,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_DeleteFile)
+#endif /* !PLATFORM_RO_FS */
 ICALL(MONOIO_34, "DuplicateHandle", ves_icall_System_IO_MonoIO_DuplicateHandle)
 ICALL(MONOIO_6, "Flush(intptr,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Flush)
 ICALL(MONOIO_7, "GetCurrentDirectory(System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_GetCurrentDirectory)
@@ -312,19 +323,25 @@ ICALL(MONOIO_9, "GetFileStat(string,System.IO.MonoIOStat&,System.IO.MonoIOError&
 ICALL(MONOIO_10, "GetFileSystemEntries", ves_icall_System_IO_MonoIO_GetFileSystemEntries)
 ICALL(MONOIO_11, "GetFileType(intptr,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_GetFileType)
 ICALL(MONOIO_12, "GetLength(intptr,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_GetLength)
+#ifndef PLATFORM_RO_FS
 ICALL(MONOIO_13, "GetTempPath(string&)", ves_icall_System_IO_MonoIO_GetTempPath)
 ICALL(MONOIO_14, "Lock(intptr,long,long,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Lock)
 ICALL(MONOIO_15, "MoveFile(string,string,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_MoveFile)
+#endif /* !PLATFORM_RO_FS */
 ICALL(MONOIO_16, "Open(string,System.IO.FileMode,System.IO.FileAccess,System.IO.FileShare,System.IO.FileOptions,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Open)
 ICALL(MONOIO_17, "Read(intptr,byte[],int,int,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Read)
+#ifndef PLATFORM_RO_FS
 ICALL(MONOIO_18, "RemoveDirectory(string,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_RemoveDirectory)
 ICALL(MONOIO_18M, "ReplaceFile(string,string,string,bool,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_ReplaceFile)
+#endif /* !PLATFORM_RO_FS */
 ICALL(MONOIO_19, "Seek(intptr,long,System.IO.SeekOrigin,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Seek)
 ICALL(MONOIO_20, "SetCurrentDirectory(string,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_SetCurrentDirectory)
 ICALL(MONOIO_21, "SetFileAttributes(string,System.IO.FileAttributes,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_SetFileAttributes)
 ICALL(MONOIO_22, "SetFileTime(intptr,long,long,long,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_SetFileTime)
 ICALL(MONOIO_23, "SetLength(intptr,long,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_SetLength)
+#ifndef PLATFORM_RO_FS
 ICALL(MONOIO_24, "Unlock(intptr,long,long,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Unlock)
+#endif
 ICALL(MONOIO_25, "Write(intptr,byte[],int,int,System.IO.MonoIOError&)", ves_icall_System_IO_MonoIO_Write)
 ICALL(MONOIO_26, "get_AltDirectorySeparatorChar", ves_icall_System_IO_MonoIO_get_AltDirectorySeparatorChar)
 ICALL(MONOIO_27, "get_ConsoleError", ves_icall_System_IO_MonoIO_get_ConsoleError)
@@ -400,6 +417,7 @@ ICALL(MTYPE_30, "get_UnderlyingSystemType", ves_icall_MonoType_get_UnderlyingSys
 ICALL(MTYPE_31, "get_attributes", ves_icall_get_attributes)
 ICALL(MTYPE_32, "type_from_obj", mono_type_type_from_obj)
 
+#ifndef DISABLE_SOCKETS
 ICALL_TYPE(NDNS, "System.Net.Dns", NDNS_1)
 ICALL(NDNS_1, "GetHostByAddr_internal(string,string&,string[]&,string[]&)", ves_icall_System_Net_Dns_GetHostByAddr_internal)
 ICALL(NDNS_2, "GetHostByName_internal(string,string&,string[]&,string[]&)", ves_icall_System_Net_Dns_GetHostByName_internal)
@@ -433,6 +451,7 @@ ICALL(SOCK_21, "WSAIoctl(intptr,int,byte[],byte[],int&)", ves_icall_System_Net_S
 
 ICALL_TYPE(SOCKEX, "System.Net.Sockets.SocketException", SOCKEX_1)
 ICALL(SOCKEX_1, "WSAGetLastError_internal", ves_icall_System_Net_Sockets_SocketException_WSAGetLastError_internal)
+#endif /* !DISABLE_SOCKETS */
 
 ICALL_TYPE(NUMBER_FORMATTER, "System.NumberFormatter", NUMBER_FORMATTER_1)
 ICALL(NUMBER_FORMATTER_1, "GetFormatterTables", ves_icall_System_NumberFormatter_GetFormatterTables)
@@ -628,34 +647,50 @@ ICALL(GCH_3, "GetAddrOfPinnedObject", ves_icall_System_GCHandle_GetAddrOfPinnedO
 ICALL(GCH_4, "GetTarget", ves_icall_System_GCHandle_GetTarget)
 ICALL(GCH_5, "GetTargetHandle", ves_icall_System_GCHandle_GetTargetHandle)
 
+#ifndef DISABLE_COM
 ICALL_TYPE(MARSHAL, "System.Runtime.InteropServices.Marshal", MARSHAL_1)
 ICALL(MARSHAL_1, "AddRefInternal", ves_icall_System_Runtime_InteropServices_Marshal_AddRefInternal)
+#else
+ICALL_TYPE(MARSHAL, "System.Runtime.InteropServices.Marshal", MARSHAL_2)
+#endif
 ICALL(MARSHAL_2, "AllocCoTaskMem", ves_icall_System_Runtime_InteropServices_Marshal_AllocCoTaskMem)
 ICALL(MARSHAL_3, "AllocHGlobal", ves_icall_System_Runtime_InteropServices_Marshal_AllocHGlobal)
 ICALL(MARSHAL_4, "DestroyStructure", ves_icall_System_Runtime_InteropServices_Marshal_DestroyStructure)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_5, "FreeBSTR", ves_icall_System_Runtime_InteropServices_Marshal_FreeBSTR)
+#endif
 ICALL(MARSHAL_6, "FreeCoTaskMem", ves_icall_System_Runtime_InteropServices_Marshal_FreeCoTaskMem)
 ICALL(MARSHAL_7, "FreeHGlobal", ves_icall_System_Runtime_InteropServices_Marshal_FreeHGlobal)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_44, "GetCCW", ves_icall_System_Runtime_InteropServices_Marshal_GetCCW)
 ICALL(MARSHAL_8, "GetComSlotForMethodInfoInternal", ves_icall_System_Runtime_InteropServices_Marshal_GetComSlotForMethodInfoInternal)
+#endif
 ICALL(MARSHAL_9, "GetDelegateForFunctionPointerInternal", ves_icall_System_Runtime_InteropServices_Marshal_GetDelegateForFunctionPointerInternal)
 ICALL(MARSHAL_10, "GetFunctionPointerForDelegateInternal", mono_delegate_to_ftnptr)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_45, "GetIDispatchForObjectInternal", ves_icall_System_Runtime_InteropServices_Marshal_GetIDispatchForObjectInternal)
 ICALL(MARSHAL_46, "GetIUnknownForObjectInternal", ves_icall_System_Runtime_InteropServices_Marshal_GetIUnknownForObjectInternal)
+#endif
 ICALL(MARSHAL_11, "GetLastWin32Error", ves_icall_System_Runtime_InteropServices_Marshal_GetLastWin32Error)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_47, "GetObjectForCCW", ves_icall_System_Runtime_InteropServices_Marshal_GetObjectForCCW)
 ICALL(MARSHAL_48, "IsComObject", ves_icall_System_Runtime_InteropServices_Marshal_IsComObject)
+#endif
 ICALL(MARSHAL_12, "OffsetOf", ves_icall_System_Runtime_InteropServices_Marshal_OffsetOf)
 ICALL(MARSHAL_13, "Prelink", ves_icall_System_Runtime_InteropServices_Marshal_Prelink)
 ICALL(MARSHAL_14, "PrelinkAll", ves_icall_System_Runtime_InteropServices_Marshal_PrelinkAll)
 ICALL(MARSHAL_15, "PtrToStringAnsi(intptr)", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStringAnsi)
 ICALL(MARSHAL_16, "PtrToStringAnsi(intptr,int)", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStringAnsi_len)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_17, "PtrToStringBSTR", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStringBSTR)
+#endif
 ICALL(MARSHAL_18, "PtrToStringUni(intptr)", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStringUni)
 ICALL(MARSHAL_19, "PtrToStringUni(intptr,int)", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStringUni_len)
 ICALL(MARSHAL_20, "PtrToStructure(intptr,System.Type)", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStructure_type)
 ICALL(MARSHAL_21, "PtrToStructure(intptr,object)", ves_icall_System_Runtime_InteropServices_Marshal_PtrToStructure)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_22, "QueryInterfaceInternal", ves_icall_System_Runtime_InteropServices_Marshal_QueryInterfaceInternal)
+#endif
 ICALL(MARSHAL_43, "ReAllocCoTaskMem", ves_icall_System_Runtime_InteropServices_Marshal_ReAllocCoTaskMem)
 ICALL(MARSHAL_23, "ReAllocHGlobal", ves_icall_System_Runtime_InteropServices_Marshal_ReAllocHGlobal)
 ICALL(MARSHAL_24, "ReadByte", ves_icall_System_Runtime_InteropServices_Marshal_ReadByte)
@@ -663,10 +698,14 @@ ICALL(MARSHAL_25, "ReadInt16", ves_icall_System_Runtime_InteropServices_Marshal_
 ICALL(MARSHAL_26, "ReadInt32", ves_icall_System_Runtime_InteropServices_Marshal_ReadInt32)
 ICALL(MARSHAL_27, "ReadInt64", ves_icall_System_Runtime_InteropServices_Marshal_ReadInt64)
 ICALL(MARSHAL_28, "ReadIntPtr", ves_icall_System_Runtime_InteropServices_Marshal_ReadIntPtr)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_49, "ReleaseComObjectInternal", ves_icall_System_Runtime_InteropServices_Marshal_ReleaseComObjectInternal)
 ICALL(MARSHAL_29, "ReleaseInternal", ves_icall_System_Runtime_InteropServices_Marshal_ReleaseInternal)
+#endif
 ICALL(MARSHAL_30, "SizeOf", ves_icall_System_Runtime_InteropServices_Marshal_SizeOf)
+#ifndef DISABLE_COM
 ICALL(MARSHAL_31, "StringToBSTR", ves_icall_System_Runtime_InteropServices_Marshal_StringToBSTR)
+#endif
 ICALL(MARSHAL_32, "StringToHGlobalAnsi", ves_icall_System_Runtime_InteropServices_Marshal_StringToHGlobalAnsi)
 ICALL(MARSHAL_33, "StringToHGlobalUni", ves_icall_System_Runtime_InteropServices_Marshal_StringToHGlobalUni)
 ICALL(MARSHAL_34, "StructureToPtr", ves_icall_System_Runtime_InteropServices_Marshal_StructureToPtr)
@@ -704,6 +743,7 @@ ICALL(RNG_2, "RngGetBytes", ves_icall_System_Security_Cryptography_RNGCryptoServ
 ICALL(RNG_3, "RngInitialize", ves_icall_System_Security_Cryptography_RNGCryptoServiceProvider_RngInitialize)
 ICALL(RNG_4, "RngOpen", ves_icall_System_Security_Cryptography_RNGCryptoServiceProvider_RngOpen)
 
+#ifndef DISABLE_POLICY_EVIDENCE
 ICALL_TYPE(EVID, "System.Security.Policy.Evidence", EVID_1)
 ICALL(EVID_1, "IsAuthenticodePresent", ves_icall_System_Security_Policy_Evidence_IsAuthenticodePresent)
 
@@ -726,6 +766,7 @@ ICALL(WINPRIN_2, "IsMemberOfGroupName", ves_icall_System_Security_Principal_Wind
 ICALL_TYPE(SECSTRING, "System.Security.SecureString", SECSTRING_1)
 ICALL(SECSTRING_1, "DecryptInternal", ves_icall_System_Security_SecureString_DecryptInternal)
 ICALL(SECSTRING_2, "EncryptInternal", ves_icall_System_Security_SecureString_EncryptInternal)
+#endif /* !DISABLE_POLICY_EVIDENCE */
 
 ICALL_TYPE(SECMAN, "System.Security.SecurityManager", SECMAN_1)
 ICALL(SECMAN_1, "GetLinkDemandSecurity", ves_icall_System_Security_SecurityManager_GetLinkDemandSecurity)
@@ -877,9 +918,10 @@ ICALL(THREADP_35, "SetMaxThreads", ves_icall_System_Threading_ThreadPool_SetMaxT
 ICALL(THREADP_4, "SetMinThreads", ves_icall_System_Threading_ThreadPool_SetMinThreads)
 
 ICALL_TYPE(WAITH, "System.Threading.WaitHandle", WAITH_1)
-ICALL(WAITH_1, "WaitAll_internal", ves_icall_System_Threading_WaitHandle_WaitAll_internal)
-ICALL(WAITH_2, "WaitAny_internal", ves_icall_System_Threading_WaitHandle_WaitAny_internal)
-ICALL(WAITH_3, "WaitOne_internal", ves_icall_System_Threading_WaitHandle_WaitOne_internal)
+ICALL(WAITH_1, "SignalAndWait_Internal", ves_icall_System_Threading_WaitHandle_SignalAndWait_Internal)
+ICALL(WAITH_2, "WaitAll_internal", ves_icall_System_Threading_WaitHandle_WaitAll_internal)
+ICALL(WAITH_3, "WaitAny_internal", ves_icall_System_Threading_WaitHandle_WaitAny_internal)
+ICALL(WAITH_4, "WaitOne_internal", ves_icall_System_Threading_WaitHandle_WaitOne_internal)
 
 ICALL_TYPE(TYPE, "System.Type", TYPE_1)
 ICALL(TYPE_1, "EqualsInternal", ves_icall_System_Type_EqualsInternal)
@@ -918,8 +960,9 @@ ICALL(WEBIC_1, "GetMachineConfigPath", ves_icall_System_Configuration_DefaultCon
 ICALL(WEBIC_2, "GetMachineInstallDirectory", ves_icall_System_Web_Util_ICalls_get_machine_install_dir)
 ICALL(WEBIC_3, "GetUnmanagedResourcesPtr", ves_icall_get_resources_ptr)
 
+#ifndef DISABLE_COM
 ICALL_TYPE(COMOBJ, "System.__ComObject", COMOBJ_1)
 ICALL(COMOBJ_1, "CreateRCW", ves_icall_System_ComObject_CreateRCW)
 ICALL(COMOBJ_2, "GetInterfaceInternal", ves_icall_System_ComObject_GetInterfaceInternal)
 ICALL(COMOBJ_3, "ReleaseInterfaces", ves_icall_System_ComObject_ReleaseInterfaces)
-
+#endif

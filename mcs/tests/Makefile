@@ -64,13 +64,13 @@ endif
 ifeq (net_2_0, $(PROFILE))
 COMPILER_NAME = gmcs
 TEST_PATTERN = '*test-*.cs'
-LOCAL_RUNTIME_FLAGS = --security=validil --verify-all
+LOCAL_RUNTIME_FLAGS = --verify-all
 TOPTIONS += '-il:ver-il-gmcs.xml'
 endif
 ifeq (net_1_1, $(PROFILE))
 COMPILER_NAME = mcs
 TEST_PATTERN = 'test-*.cs'
-LOCAL_RUNTIME_FLAGS = --security=validil --verify-all
+LOCAL_RUNTIME_FLAGS = --verify-all
 endif
 
 COMPILER = $(topdir)/class/lib/$(PROFILE)/$(COMPILER_NAME).exe
@@ -90,6 +90,11 @@ check: run-test
 
 run-test-local: $(TEST_ILS:.il=.dll) eval-test
 	$(TESTER) -mode:pos -files:$(TEST_PATTERN) -compiler:$(COMPILER) -issues:known-issues-$(COMPILER_NAME) -log:$(COMPILER_NAME).log $(TOPTIONS)
+
+# Temporary testing target
+cecil:
+	rm -f *.mdb
+	$(TESTER) -mode:pos -files:'test-*.cs' -compiler:gmcs.exe -issues:known-issues-$(COMPILER_NAME) -log:$(COMPILER_NAME).log -verbose
 
 test-everything:
 	$(MAKE) PROFILE=net_1_1 run-test

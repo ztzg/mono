@@ -28,7 +28,6 @@ net_1_1_dirs := \
 	monodoc		\
 	mod		\
 	compiler-tester	\
-	mono-xmltool	\
 	installvst		\
 	installutil
 
@@ -38,6 +37,7 @@ net_2_0_dirs := \
 	csharp		\
 	mono-xsd	\
 	wsdl		\
+	mono-xmltool	\
 	compiler-tester	\
 	monop		\
 	xbuild		\
@@ -52,7 +52,9 @@ net_2_0_dirs := \
 	installutil	\
 	nunitreport	\
 	sqlsharp	\
+	sqlmetal	\
 	gacutil		\
+	svcutil		\
 	csharplib
 
 net_2_1_dirs := \

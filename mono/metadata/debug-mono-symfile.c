@@ -1,3 +1,12 @@
+/*
+ * debug-mono-symfile.c: 
+ *
+ * Author:
+ *	Mono Project (http://www.mono-project.com)
+ *
+ * Copyright (C) 2005-2008 Novell, Inc. (http://www.novell.com)
+ */
+
 #include <config.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -105,7 +114,6 @@ mono_debug_open_mono_symbols (MonoDebugHandle *handle, const guint8 *raw_content
 			      int size, gboolean in_the_debugger)
 {
 	MonoSymbolFile *symfile;
-	FILE* f;
 
 	mono_debugger_lock ();
 	symfile = g_new0 (MonoSymbolFile, 1);
@@ -117,21 +125,20 @@ mono_debug_open_mono_symbols (MonoDebugHandle *handle, const guint8 *raw_content
 		memcpy (p, raw_contents, size);
 		symfile->filename = g_strdup_printf ("LoadedFromMemory");
 	} else {
+		MonoFileMap *f;
 		symfile->filename = g_strdup_printf ("%s.mdb", mono_image_get_filename (handle->image));
 
-		if ((f = fopen (symfile->filename, "rb"))) {
-			struct stat stat_buf;
-			
-			if (fstat (fileno (f), &stat_buf) < 0) {
+		if ((f = mono_file_map_open (symfile->filename))) {
+			symfile->raw_contents_size = mono_file_map_size (f);
+			if (symfile->raw_contents_size == 0) {
 				if (!in_the_debugger)
 					g_warning ("stat of %s failed: %s",
 						   symfile->filename,  g_strerror (errno));
 			} else {
-				symfile->raw_contents_size = stat_buf.st_size;
-				symfile->raw_contents = mono_file_map (stat_buf.st_size, MONO_MMAP_READ|MONO_MMAP_PRIVATE, fileno (f), 0, &symfile->raw_contents_handle);
+				symfile->raw_contents = mono_file_map (symfile->raw_contents_size, MONO_MMAP_READ|MONO_MMAP_PRIVATE, mono_file_map_fd (f), 0, &symfile->raw_contents_handle);
 			}
 
-			fclose (f);
+			mono_file_map_close (f);
 		}
 	}
 	
@@ -224,6 +231,15 @@ check_line (StatementMachine *stm, int offset, MonoDebugSourceLocation **locatio
 		source_file = read_string (stm->symfile->raw_contents + read32(&(se->_data_offset)));
 	}
 
+	if (stm->last_line == 0) {
+		/* 
+		 * The IL offset is less than the first IL offset which has a corresponding
+		 * source line.
+		 */
+		*location = NULL;
+		return TRUE;
+	}
+
 	*location = g_new0 (MonoDebugSourceLocation, 1);
 	(*location)->source_file = source_file;
 	(*location)->row = stm->last_line;
@@ -272,8 +288,10 @@ mono_debug_symfile_lookup_location (MonoDebugMethodInfo *minfo, guint32 offset)
 
 	stm.symfile = symfile;
 	stm.offset = stm.last_offset = 0;
-	stm.file = stm.last_file = 1;
-	stm.line = stm.last_line = 1;
+	stm.last_file = 0;
+	stm.last_line = 0;
+	stm.file = 1;
+	stm.line = 1;
 
 	while (TRUE) {
 		guint8 opcode = *ptr++;
@@ -381,6 +399,13 @@ mono_debug_symfile_lookup_method (MonoDebugHandle *handle, MonoMethod *method)
 		return NULL;
 
 	mono_debugger_lock ();
+
+	minfo = g_hash_table_lookup (symfile->method_hash, method);
+	if (minfo) {
+		mono_debugger_unlock ();
+		return minfo;
+	}
+
 	first_ie = (MonoSymbolFileMethodEntry *)
 		(symfile->raw_contents + read32(&(symfile->offset_table->_method_table_offset)));
 
@@ -406,3 +431,51 @@ mono_debug_symfile_lookup_method (MonoDebugHandle *handle, MonoMethod *method)
 	mono_debugger_unlock ();
 	return minfo;
 }
+
+/*
+ * mono_debug_symfile_lookup_locals:
+ *
+ *   Return information about the local variables of MINFO from the symbol file.
+ * NAMES and INDEXES are set to g_malloc-ed arrays containing the local names and
+ * their IL indexes.
+ * Returns: the number of elements placed into the arrays, or -1 if there is no
+ * local variable info.
+ */
+int
+mono_debug_symfile_lookup_locals (MonoDebugMethodInfo *minfo, char ***names, int **indexes)
+{
+	MonoSymbolFile *symfile = minfo->handle->symfile;
+	const guint8 *p;
+	int i, len, compile_unit_index, locals_offset, num_locals, index, block_index;
+
+	*names = NULL;
+	*indexes = NULL;
+
+	if (!symfile)
+		return -1;
+
+	p = symfile->raw_contents + minfo->data_offset;
+
+	compile_unit_index = read_leb128 (p, &p);
+	locals_offset = read_leb128 (p, &p);
+
+	p = symfile->raw_contents + locals_offset;
+	num_locals = read_leb128 (p, &p);
+
+	*names = g_new0 (char*, num_locals);
+	*indexes = g_new0 (int, num_locals);
+
+	for (i = 0; i < num_locals; ++i) {
+		index = read_leb128 (p, &p);
+		(*indexes) [i] = index;
+		len = read_leb128 (p, &p);
+		(*names) [i] = g_malloc (len + 1);
+		memcpy ((*names) [i], p, len);
+		(*names) [i][len] = '\0';
+		p += len;
+		block_index = read_leb128 (p, &p);
+	}
+
+	return num_locals;
+}
+

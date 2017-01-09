@@ -108,6 +108,9 @@ struct _MonoImage {
 	guint8 idx_string_wide : 1;
 	guint8 idx_guid_wide : 1;
 	guint8 idx_blob_wide : 1;
+
+	/* Whenever this image is considered as platform code for the CoreCLR security model */
+	guint8 core_clr_platform_code : 1;
 			    
 	char *name;
 	const char *assembly_name;
@@ -116,7 +119,7 @@ struct _MonoImage {
 	gint16 md_version_major, md_version_minor;
 	char *guid;
 	void *image_info;
-	MonoMemPool         *mempool;
+	MonoMemPool         *mempool; /*protected by the image lock*/
 
 	char                *raw_metadata;
 			    
@@ -155,11 +158,11 @@ struct _MonoImage {
 	/*
 	 * Indexed by method tokens and typedef tokens.
 	 */
-	MonoValueHashTable *method_cache;
+	MonoValueHashTable *method_cache; /*protected by the image lock*/
 	MonoInternalHashTable class_cache;
 
 	/* Indexed by memberref + methodspec tokens */
-	GHashTable *methodref_cache;
+	GHashTable *methodref_cache; /*protected by the image lock*/
 
 	/*
 	 * Indexed by fielddef and memberref tokens
@@ -186,6 +189,10 @@ struct _MonoImage {
 	GHashTable *array_cache;
 	GHashTable *ptr_cache;
 
+	GHashTable *szarray_cache;
+	/* This has a separate lock to improve scalability */
+	CRITICAL_SECTION szarray_cache_lock;
+
 	/*
 	 * indexed by MonoMethodSignature 
 	 */
@@ -203,8 +210,10 @@ struct _MonoImage {
 	 * indexed by MonoMethod pointers 
 	 */
 	GHashTable *runtime_invoke_direct_cache;
+	GHashTable *runtime_invoke_vcall_cache;
 	GHashTable *managed_wrapper_cache;
 	GHashTable *native_wrapper_cache;
+	GHashTable *native_wrapper_aot_cache;
 	GHashTable *remoting_invoke_cache;
 	GHashTable *synchronized_cache;
 	GHashTable *unbox_wrapper_cache;
@@ -245,6 +254,12 @@ struct _MonoImage {
 
 	/* interfaces IDs from this image */
 	MonoBitSet *interface_bitset;
+
+	/*
+	 * No other runtime locks must be taken while holding this lock.
+	 * It's meant to be used only to mutate and query structures part of this image.
+	 */
+	CRITICAL_SECTION    lock;
 };
 
 enum {
@@ -373,6 +388,28 @@ mono_image_alloc0 (MonoImage *image, guint size) MONO_INTERNAL;
 char*
 mono_image_strdup (MonoImage *image, const char *s) MONO_INTERNAL;
 
+GList*
+g_list_prepend_image (MonoImage *image, GList *list, gpointer data) MONO_INTERNAL;
+
+GSList*
+g_slist_append_image (MonoImage *image, GSList *list, gpointer data) MONO_INTERNAL;
+
+void
+mono_image_lock (MonoImage *image) MONO_INTERNAL;
+
+void
+mono_image_unlock (MonoImage *image) MONO_INTERNAL;
+
+gpointer
+mono_image_property_lookup (MonoImage *image, gpointer subject, guint32 property) MONO_INTERNAL;
+
+void
+mono_image_property_insert (MonoImage *image, gpointer subject, guint32 property, gpointer value) MONO_INTERNAL;
+
+void
+mono_image_property_remove (MonoImage *image, gpointer subject) MONO_INTERNAL;
+
+
 MonoType*
 mono_metadata_get_shared_type (MonoType *type) MONO_INTERNAL;
 
@@ -473,8 +510,9 @@ guint32 mono_metadata_get_generic_param_row (MonoImage *image, guint32 token, gu
 void mono_unload_interface_ids (MonoBitSet *bitset) MONO_INTERNAL;
 
 
-MonoType *mono_metadata_type_dup (MonoMemPool *mp, const MonoType *original) MONO_INTERNAL;
-MonoMethodSignature  *mono_metadata_signature_dup_full (MonoMemPool *mp,MonoMethodSignature *sig) MONO_INTERNAL;
+MonoType *mono_metadata_type_dup (MonoImage *image, const MonoType *original) MONO_INTERNAL;
+MonoMethodSignature  *mono_metadata_signature_dup_full (MonoImage *image,MonoMethodSignature *sig) MONO_INTERNAL;
+MonoMethodSignature  *mono_metadata_signature_dup_mempool (MonoMemPool *mp, MonoMethodSignature *sig) MONO_INTERNAL;
 
 MonoGenericInst *
 mono_get_shared_generic_inst (MonoGenericContainer *container) MONO_INTERNAL;
@@ -486,13 +524,13 @@ gboolean
 mono_metadata_type_equal_full (MonoType *t1, MonoType *t2, gboolean signature_only) MONO_INTERNAL;
 
 MonoMarshalSpec *
-mono_metadata_parse_marshal_spec_with_mempool (MonoMemPool *mp, const char *ptr) MONO_INTERNAL;;
+mono_metadata_parse_marshal_spec_full (MonoImage *image, const char *ptr) MONO_INTERNAL;
 
 guint	       mono_metadata_generic_inst_hash (gconstpointer data) MONO_INTERNAL;
 gboolean       mono_metadata_generic_inst_equal (gconstpointer ka, gconstpointer kb) MONO_INTERNAL;
 
 void
-mono_metadata_field_info_with_mempool (MonoMemPool *mp, 
+mono_metadata_field_info_with_mempool (
 					  MonoImage *meta, 
 				      guint32       table_index,
 				      guint32      *offset,
@@ -507,6 +545,9 @@ mono_metadata_get_corresponding_event_from_generic_type_definition (MonoEvent *e
 
 MonoProperty*
 mono_metadata_get_corresponding_property_from_generic_type_definition (MonoProperty *property) MONO_INTERNAL;
+
+guint32
+mono_metadata_signature_size (MonoMethodSignature *sig) MONO_INTERNAL;
 
 #endif /* __MONO_METADATA_INTERNALS_H__ */
 

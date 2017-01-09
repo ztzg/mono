@@ -4,6 +4,13 @@
 #include <string.h>
 #include <glib.h>
 
+#include <mono/metadata/image.h>
+#include <mono/metadata/metadata.h>
+#include <mono/metadata/assembly.h>
+#include <mono/metadata/marshal.h>
+#include <mono/metadata/class-internals.h>
+#include <mono/metadata/metadata-internals.h>
+
 #if 1
 #define DEBUG_PARSER(stmt) do { stmt; } while (0)
 #else
@@ -52,19 +59,37 @@ selector:
 	'offset' expression
 
 effect:
-	('set-byte' | 'set-ushort' | 'set-uint') expression
+	('set-byte' | 'set-ushort' | 'set-uint' | 'set-bit' ) expression
 
 expression:
 	atom ([+-] atom)*
 
 atom:
-	number | variable:
+	number | variable | function_call
+
+function_call:
+	fun_name '(' arg_list ')'
+
+fun_name:
+	read.uint |
+	translate.rva |
+	translate.rva.ind |
+	stream-header |
+	table-row
+
+arg_list:
+	expression |
+	expression ',' arg_list
 
 variable:
 	file-size |
 	pe-header |
 	pe-optional-header |
-	pe-signature
+	pe-signature |
+	section-table |
+	cli-header |
+	cli-metadata |
+	tables-header
 
 TODO For the sake of a simple implementation, tokens are space delimited.
 */
@@ -88,7 +113,11 @@ enum {
 	INVALID_SELECTOR,
 	INVALID_EFFECT,
 	INVALID_EXPRESSION,
-	INVALID_VARIABLE_NAME
+	INVALID_VARIABLE_NAME,
+	INVALID_FUNCTION_NAME,
+	INVALID_ARG_COUNT,
+	INVALID_RVA,
+	INVALID_BAD_FILE
 };
 
 enum {
@@ -104,14 +133,16 @@ enum {
 	EFFECT_SET_BYTE,
 	EFFECT_SET_USHORT,
 	EFFECT_SET_UINT,
-	EFFECT_SET_TRUNC
+	EFFECT_SET_TRUNC,
+	EFFECT_SET_BIT
 };
 
 enum {
 	EXPRESSION_CONSTANT,
 	EXPRESSION_VARIABLE,
 	EXPRESSION_ADD,
-	EXPRESSION_SUB
+	EXPRESSION_SUB,
+	EXPRESSION_FUNC
 };
 
 typedef struct _expression expression_t;
@@ -138,6 +169,10 @@ struct _expression {
 			expression_t *left;
 			expression_t *right;
 		} bin;
+		struct {
+			char *name;
+			GSList *args;
+		} func;
 	} data;
 };
 
@@ -159,23 +194,29 @@ typedef struct {
 } test_patch_t;
 
 typedef struct {
-	int validity;
-	GSList *patches; /*of test_patch_t*/
-	char *data;
-	int data_size;
-} test_entry_t;
-
-typedef struct {
 	char *name;
 	char *assembly;
 	int count;
 
 	char *assembly_data;
 	int assembly_size;
+	MonoImage *image;
 	int init;
 } test_set_t;
 
+typedef struct {
+	int validity;
+	GSList *patches; /*of test_patch_t*/
+	char *data;
+	int data_size;
+	test_set_t *test_set;
+} test_entry_t;
+
+
+
 /*******************************************************************************************************/
+static guint32 expression_eval (expression_t *exp, test_entry_t *entry);
+static expression_t* parse_expression (scanner_t *scanner);
 
 static const char*
 test_validity_name (int validity)
@@ -218,10 +259,16 @@ read_whole_file_and_close (const char *name, int *file_size)
 static void
 init_test_set (test_set_t *test_set)
 {
+	MonoImageOpenStatus status;
 	if (test_set->init)
 		return;
 	test_set->assembly_data = read_whole_file_and_close (test_set->assembly, &test_set->assembly_size);
-
+	test_set->image = mono_image_open_from_data (test_set->assembly_data, test_set->assembly_size, TRUE, &status);
+	if (!test_set->image || status != MONO_IMAGE_OK) {
+		printf ("Could not parse image %s\n", test_set->assembly);
+		exit (INVALID_BAD_FILE);
+	}
+	
 	test_set->init = 1;
 }
 
@@ -232,7 +279,83 @@ make_test_name (test_entry_t *entry, test_set_t *test_set)
 }
 
 #define READ_VAR(KIND, PTR) GUINT32_FROM_LE((guint32)*((KIND*)(PTR)))
-#define SET_VAR(KIND, PTR, VAL) do { *((KIND*)(PTR)) = (KIND)VAL; }  while (0)
+#define SET_VAR(KIND, PTR, VAL) do { *((KIND*)(PTR)) = GUINT32_TO_LE ((KIND)VAL); }  while (0)
+
+#define READ_BIT(PTR,OFF) ((((guint8*)(PTR))[(OFF / 8)] & (1 << ((OFF) % 8))) != 0)
+#define SET_BIT(PTR,OFF) do { ((guint8*)(PTR))[(OFF / 8)] |= (1 << ((OFF) % 8)); } while (0)
+
+static guint32 
+get_pe_header (test_entry_t *entry)
+{
+	return READ_VAR (guint32, entry->data + 0x3c) + 4;
+}
+
+static guint32
+translate_rva (test_entry_t *entry, guint32 rva)
+{
+	guint32 pe_header = get_pe_header (entry);
+	guint32 sectionCount = READ_VAR (guint16, entry->data + pe_header + 2);
+	guint32 idx = pe_header + 244;
+
+	while (sectionCount-- > 0) {
+		guint32 size = READ_VAR (guint32, entry->data + idx + 8);
+		guint32 base = READ_VAR (guint32, entry->data + idx + 12);
+		guint32 offset = READ_VAR (guint32, entry->data + idx + 20);
+
+		if (rva >= base && rva <= base + size)
+			return (rva - base) + offset;
+		idx += 40;
+	}
+	printf ("Could not translate RVA %x\n", rva);
+	exit (INVALID_RVA);
+}
+
+static guint32
+get_cli_header (test_entry_t *entry)
+{
+	guint32 offset = get_pe_header (entry) + 20; /*pe-optional-header*/
+	offset += 208; /*cli header entry offset in the pe-optional-header*/
+	return translate_rva (entry, READ_VAR (guint32, entry->data + offset));
+}
+
+static guint32
+get_cli_metadata_root (test_entry_t *entry)
+{
+	guint32 offset = get_cli_header (entry);
+	offset += 8; /*metadata rva offset*/
+	return translate_rva (entry, READ_VAR (guint32, entry->data + offset));
+}
+
+static guint32
+pad4 (guint32 offset)
+{
+	if (offset % 4)
+		offset += 4 - (offset % 4);
+	return offset;
+}
+
+static guint32
+get_metadata_stream_header (test_entry_t *entry, guint32 idx)
+{
+	guint32 offset;
+
+	offset = get_cli_metadata_root (entry);
+	offset = pad4 (offset + 16 + READ_VAR (guint32, entry->data + offset + 12));
+
+	offset += 4;
+
+	while (idx--) {
+		int i;
+
+		offset += 8;
+		for (i = 0; i < 32; ++i) {
+			if (!READ_VAR (guint8, entry->data + offset))
+				break;
+		}
+		offset = pad4 (offset);
+	}
+	return offset;	
+}
 
 static guint32
 lookup_var (test_entry_t *entry, const char *name)
@@ -240,14 +363,86 @@ lookup_var (test_entry_t *entry, const char *name)
 	if (!strcmp ("file-size", name))
 		return entry->data_size;
 	if (!strcmp ("pe-signature", name))
-		return READ_VAR (guint32, entry->data + 0x3c); 
+		return get_pe_header (entry) - 4;
 	if (!strcmp ("pe-header", name))
-		return READ_VAR (guint32, entry->data + 0x3c) + 4; 
+		return get_pe_header (entry); 
 	if (!strcmp ("pe-optional-header", name))
-		return READ_VAR (guint32, entry->data + 0x3c) + 24; 
+		return get_pe_header (entry) + 20; 
+	if (!strcmp ("section-table", name))
+		return get_pe_header (entry) + 244; 
+	if (!strcmp ("cli-header", name))
+		return get_cli_header (entry);
+	if (!strcmp ("cli-metadata", name)) 
+		return get_cli_metadata_root (entry);
+	if (!strcmp ("tables-header", name)) {
+		guint32 metadata_root = get_cli_metadata_root (entry);
+		guint32 tilde_stream = get_metadata_stream_header (entry, 0);
+		guint32 offset = READ_VAR (guint32, entry->data + tilde_stream);
+		return metadata_root + offset;
+	}
 
 	printf ("Unknown variable in expression %s\n", name);
 	exit (INVALID_VARIABLE_NAME);
+}
+
+static guint32
+call_func (test_entry_t *entry, const char *name, GSList *args)
+{
+	if (!strcmp ("read.uint", name)) {
+		guint32 offset;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to read.uint %d\b", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		offset = expression_eval (args->data, entry);
+		return READ_VAR (guint32, entry->data + offset);
+	}
+	if (!strcmp ("translate.rva", name)) {
+		guint32 rva;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to translate.rva %d\b", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		rva = expression_eval (args->data, entry);
+		return translate_rva (entry, rva);
+	}
+	if (!strcmp ("translate.rva.ind", name)) {
+		guint32 rva;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to translate.rva.ind %d\b", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		rva = expression_eval (args->data, entry);
+		rva = READ_VAR (guint32, entry->data + rva);
+		return translate_rva (entry, rva);
+	}
+	if (!strcmp ("stream-header", name)) {
+		guint32 idx;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to stream-header %d\b", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		idx = expression_eval (args->data, entry);
+		return get_metadata_stream_header (entry, idx);
+	}
+	if (!strcmp ("table-row", name)) {
+		const char *data;
+		guint32 table, row;
+		const MonoTableInfo *info;
+		if (g_slist_length (args) != 2) {
+			printf ("Invalid number of args to table-row %d\b", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		table = expression_eval (args->data, entry);
+		row = expression_eval (args->next->data, entry);
+		info = mono_image_get_table_info (entry->test_set->image, table);
+		data = info->base + row * info->row_size;
+		return data - entry->test_set->assembly_data;
+	}
+
+	printf ("Unknown function %s\n", name);
+	exit (INVALID_FUNCTION_NAME);
+
 }
 
 static guint32
@@ -262,6 +457,8 @@ expression_eval (expression_t *exp, test_entry_t *entry)
 		return expression_eval (exp->data.bin.left, entry) + expression_eval (exp->data.bin.right, entry);
 	case EXPRESSION_SUB:
 		return expression_eval (exp->data.bin.left, entry) - expression_eval (exp->data.bin.right, entry);
+	case EXPRESSION_FUNC:
+		return call_func (entry, exp->data.func.name, exp->data.func.args);
 	default:
 		printf ("Invalid expression type %d\n", exp->type);
 		exit (INVALID_EXPRESSION);
@@ -309,6 +506,10 @@ apply_effect (patch_effect_t *effect, test_entry_t *entry, guint32 offset)
 		DEBUG_PARSER (printf("\ttrunc effect [%d]\n", offset));
 		entry->data_size = offset;
 		break;
+	case EFFECT_SET_BIT:
+		DEBUG_PARSER (printf("\tset-bit effect bit %d old value [%x]\n", value, READ_BIT (ptr, value)));
+		SET_BIT (ptr, value);
+		break;
 	default:
 		printf ("Invalid effect type %d\n", effect->type);
 		exit (INVALID_EFFECT);
@@ -332,6 +533,7 @@ process_test_entry (test_set_t *test_set, test_entry_t *entry)
 	init_test_set (test_set);
 	entry->data = g_memdup (test_set->assembly_data, test_set->assembly_size);
 	entry->data_size = test_set->assembly_size;
+	entry->test_set = test_set;
 
 	DEBUG_PARSER (printf("(%d)%s\n", test_set->count, entry->validity == TEST_TYPE_VALID? "valid" : "invalid"));
 	for (tmp = entry->patches; tmp; tmp = tmp->next)
@@ -618,6 +820,7 @@ match_current_type_and_text (scanner_t *scanner, int type, const char *text)
 #define LA_PUNCT(TEXT) (scanner_get_type (scanner) == TOKEN_PUNC && match_current_text (scanner, TEXT))
 
 /*******************************************************************************************************/
+
 static expression_t*
 parse_atom (scanner_t *scanner)
 {
@@ -626,8 +829,21 @@ parse_atom (scanner_t *scanner)
 		atom->type = EXPRESSION_CONSTANT;
 		CONSUME_NUMBER (atom->data.constant);
 	} else {
-		atom->type = EXPRESSION_VARIABLE;
-		CONSUME_IDENTIFIER (atom->data.name);
+		char *name;
+		CONSUME_IDENTIFIER (name);
+		if (LA_ID ("(")) {
+			atom->data.func.name = name;
+			atom->type = EXPRESSION_FUNC;
+			CONSUME_SPECIFIC_IDENTIFIER ("(");
+
+			while (!LA_ID (")") && !match_current_type (scanner, TOKEN_EOF))
+				atom->data.func.args = g_slist_append (atom->data.func.args, parse_expression (scanner));
+
+			CONSUME_SPECIFIC_IDENTIFIER (")");
+		} else {
+			atom->data.name = name;
+			atom->type = EXPRESSION_VARIABLE;
+		}
 	}
 	return atom;
 }
@@ -638,7 +854,7 @@ parse_expression (scanner_t *scanner)
 {
 	expression_t *exp = parse_atom (scanner);
 
-	if (LA_ID ("-") || LA_ID ("+")) {
+	while (LA_ID ("-") || LA_ID ("+")) {
 		char *text;
 		CONSUME_IDENTIFIER (text);
 		expression_t *left = exp;
@@ -679,6 +895,8 @@ parse_effect (scanner_t *scanner)
 		type = EFFECT_SET_USHORT; 
 	else if (!strcmp ("set-uint", name))
 		type = EFFECT_SET_UINT; 
+	else if (!strcmp ("set-bit", name))
+		type = EFFECT_SET_BIT; 
 	else if (!strcmp ("truncate", name))
 		type = EFFECT_SET_TRUNC;
 	else 
@@ -730,6 +948,8 @@ parse_test_entry (scanner_t *scanner, test_set_t *test_set)
 	entry.validity = parse_validity (scanner);
 
 	do {
+		if (entry.patches)
+			CONSUME_SPECIFIC_PUNCT (",");
 		entry.patches = g_slist_append (entry.patches, parse_patch (scanner));
 	} while (match_current_type_and_text (scanner, TOKEN_PUNC, ","));
 
@@ -782,6 +1002,14 @@ main (int argc, char **argv)
 		printf ("usage: gen-md.test file_to_process\n");
 		return 1;
 	}
+
+	mono_perfcounters_init ();
+	mono_metadata_init ();
+	mono_images_init ();
+	mono_assemblies_init ();
+	mono_loader_init ();
+	mono_init_from_assembly ("simple-assembly.exe", "simple-assembly.exe");
+	mono_marshal_init ();
 
 	digest_file (argv [1]);
 	return 0;

@@ -77,7 +77,7 @@ namespace Mono.CSharp {
 				
 				driver.ProcessDefaultConfig ();
 				CompilerCallableEntryPoint.Reset ();
-				Driver.LoadReferences ();
+				driver.LoadReferences ();
 				RootContext.EvalMode = true;
 				inited = true;
 			}
@@ -621,7 +621,7 @@ namespace Mono.CSharp {
 				// If a previous value was set, nullify it, so that we do
 				// not leak memory
 				if (old != null){
-					if (old.FieldType.IsValueType){
+					if (TypeManager.IsStruct (old.FieldType)){
 						//
 						// TODO: Clear fields for structs
 						//
@@ -739,7 +739,7 @@ namespace Mono.CSharp {
 		{
 			lock (evaluator_lock){
 				Driver.LoadAssembly (file, false);
-				RootNamespace.ComputeNamespaces ();
+				GlobalRootNamespace.Instance.ComputeNamespaces ();
 			}
 		}
 
@@ -749,8 +749,8 @@ namespace Mono.CSharp {
 		static public void ReferenceAssembly (Assembly a)
 		{
 			lock (evaluator_lock){
-				RootNamespace.Global.AddAssemblyReference (a);
-				RootNamespace.ComputeNamespaces ();
+				GlobalRootNamespace.Instance.AddAssemblyReference (a);
+				GlobalRootNamespace.Instance.ComputeNamespaces ();
 			}
 		}
 		

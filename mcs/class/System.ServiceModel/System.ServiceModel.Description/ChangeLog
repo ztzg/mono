@@ -1,3 +1,48 @@
+2009-03-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageBodyDescription.cs, MessagePartDescription.cs,
+	  OperationDescription.cs, MessageDescriptionCollection.cs:
+	  clean up extra todos.
+
+2009-03-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ContractDescriptionGenerator.cs : fill service known types.
+
+2009-02-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceContractGenerator.cs : ClientBase<> argument type must be
+	  class (the class itself is to be fixed soon as well).
+
+2009-02-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceEndpoint.cs : moved CreateRuntime() from ChannelFactory<T>.
+
+2009-02-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ContractDescriptionGenerator.cs : do not write body wrapper element
+	  when IsWrapped = false.
+
+2009-02-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceContractGenerator.cs : add async operation support (might
+	  be hacky under some condition).
+
+2009-01-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ContractDescriptionGenerator.cs : async begin method with
+	  [MessageContract] has 3 parameters, not 1.
+
+2009-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataContractSerializerMessageContractImporter.cs :
+	  for such an element that does not contain schema type but has a
+	  type reference, use ImportSchemaType().
+
+2009-01-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataContractSerializerMessageContractImporter.cs :
+	  some refactoring. Process all schemas, including those in WSDLs.
+
 2009-01-07  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* ContractDescription.cs : fix by corcompare.

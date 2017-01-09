@@ -54,13 +54,16 @@ namespace System
 	{
 #pragma warning disable 169, 649
 		#region Sync with object-internals.h
+		/* Stores the IPs and the generic sharing infos
+		   (vtable/MRGCTX) of the frames. */
 		IntPtr [] trace_ips;
 		Exception inner_exception;
 		internal string message;
 		string help_link;
 		string class_name;
 		string stack_trace;
-		string remote_stack_trace;
+		// formerly known as remote_stack_trace (see #425512):
+		string _remoteStackTraceString;
 		int remote_stack_index;
 		internal int hresult = -2146233088;
 		string source;
@@ -86,7 +89,7 @@ namespace System
 			message             = info.GetString ("Message");
 			help_link           = info.GetString ("HelpURL");
 			stack_trace         = info.GetString ("StackTraceString");
-			remote_stack_trace  = info.GetString ("RemoteStackTraceString");
+			_remoteStackTraceString  = info.GetString ("RemoteStackTraceString");
 			remote_stack_index  = info.GetInt32  ("RemoteStackIndex");
 			hresult             = info.GetInt32  ("HResult");
 			source              = info.GetString ("Source");
@@ -282,7 +285,7 @@ namespace System
 			info.AddValue ("InnerException", inner_exception);
 			info.AddValue ("HelpURL", help_link);
 			info.AddValue ("StackTraceString", StackTrace);
-			info.AddValue ("RemoteStackTraceString", remote_stack_trace);
+			info.AddValue ("RemoteStackTraceString", _remoteStackTraceString);
 			info.AddValue ("RemoteStackIndex", remote_stack_index);
 			info.AddValue ("HResult", hresult);
 			info.AddValue ("Source", Source);
@@ -300,8 +303,8 @@ namespace System
 			System.Text.StringBuilder result = new System.Text.StringBuilder (ClassName);
 			result.Append (": ").Append (Message);
 
-			if (null != remote_stack_trace)
-				result.Append (remote_stack_trace);
+			if (null != _remoteStackTraceString)
+				result.Append (_remoteStackTraceString);
 				
 			if (inner_exception != null) 
 			{
@@ -322,7 +325,7 @@ namespace System
 				Locale.GetText ("{1}{0}{0}Exception rethrown at [{2}]: {0}");
 			string tmp = String.Format (message, Environment.NewLine, StackTrace, remote_stack_index);
 
-			remote_stack_trace = tmp;
+			_remoteStackTraceString = tmp;
 			remote_stack_index++;
 
 			stack_trace = null;

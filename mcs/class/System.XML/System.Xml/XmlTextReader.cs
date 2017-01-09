@@ -129,9 +129,13 @@ namespace System.Xml
 		// argument is uri, not an xml fragment.
 		internal XmlTextReader (bool dummy, XmlResolver resolver, string url, XmlNodeType fragType, XmlParserContext context)
 		{
-			if (resolver == null)
+			if (resolver == null) {
+#if NET_2_1
+				resolver = new XmlXapResolver ();
+#else
 				resolver = new XmlUrlResolver ();
-
+#endif
+			}
 			this.XmlResolver = resolver;
 			string uriString;
 			Stream stream = GetStreamFromUrl (url, out uriString);
@@ -253,11 +257,9 @@ namespace System.Xml
 			get { return readState == ReadState.EndOfFile; }
 		}
 
-#if !NET_2_1
 		public override bool HasValue {
 			get { return cursorToken.Value != null; }
 		}
-#endif
 
 		public override bool IsDefault {
 			// XmlTextReader does not expand default attributes.
@@ -617,7 +619,6 @@ namespace System.Xml
 			return more;
 		}
 
-#if !NET_2_1
 		public override bool ReadAttributeValue ()
 		{
 			if (readState == ReadState.Initial && startNodeType == XmlNodeType.Attribute) {
@@ -638,7 +639,6 @@ namespace System.Xml
 			else
 				return false;
 		}
-#endif
 
 		public int ReadBase64 (byte [] buffer, int offset, int length)
 		{
@@ -952,7 +952,11 @@ namespace System.Xml
 		// These values are never re-initialized.
 		private bool namespaces = true;
 		private WhitespaceHandling whitespaceHandling = WhitespaceHandling.All;
+#if NET_2_1
+		private XmlResolver resolver = new XmlXapResolver ();
+#else
 		private XmlResolver resolver = new XmlUrlResolver ();
+#endif
 		private bool normalization = false;
 
 		private bool checkCharacters;
@@ -1052,7 +1056,11 @@ namespace System.Xml
 			if (url != null && url.Length > 0) {
 				Uri uri = null;
 				try {
+#if NET_2_0
+					uri = new Uri (url, UriKind.RelativeOrAbsolute);
+#else
 					uri = new Uri (url);
+#endif
 				} catch (Exception) {
 					string path = Path.GetFullPath ("./a");
 					uri = new Uri (new Uri (path), url);

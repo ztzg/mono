@@ -32,6 +32,7 @@ using System.ServiceModel.Description;
 using System.ServiceModel.Dispatcher;
 using System.Configuration;
 using System.ServiceModel.Configuration;
+using System.Xml;
 
 namespace System.ServiceModel
 {
@@ -67,9 +68,33 @@ namespace System.ServiceModel
 
 		protected virtual void ApplyConfiguration (string endpointConfig)
 		{
-#if !NET_2_1
 			if (endpointConfig == null)
 				return;
+
+#if NET_2_1
+			try {
+				// It should automatically use XmlXapResolver
+				var cfg = new SilverlightClientConfigLoader ().Load (XmlReader.Create ("ServiceReferences.ClientConfig"));
+
+				SilverlightClientConfigLoader.ServiceEndpointConfiguration se = null;
+				if (endpointConfig == "*")
+					se = cfg.GetServiceEndpointConfiguration (Endpoint.Contract.Name);
+				if (se == null)
+					se = cfg.GetServiceEndpointConfiguration (endpointConfig);
+
+				if (se.Binding != null && Endpoint.Binding == null)
+					Endpoint.Binding = se.Binding;
+				else // ignore it
+					Console.WriteLine ("WARNING: Configured binding not found in configuration {0}", endpointConfig);
+				if (se.Address != null && Endpoint.Address == null)
+					Endpoint.Address = se.Address;
+				else // ignore it
+					Console.WriteLine ("WARNING: Configured endpoint address not found in configuration {0}", endpointConfig);
+			} catch (Exception) {
+				// ignore it.
+				Console.WriteLine ("WARNING: failed to load endpoint configuration for {0}", endpointConfig);
+			}
+#else
 
 			string contractName = Endpoint.Contract.ConfigurationName;
 			ClientSection client = (ClientSection) ConfigurationManager.GetSection ("system.serviceModel/client");
@@ -112,6 +137,10 @@ namespace System.ServiceModel
 		[MonoTODO]
 		protected virtual IChannelFactory CreateFactory ()
 		{
+			// FIXME: 
+			// This should be implemented to return IChannelFactory<IRequestChannel> etc.
+			// ClientRuntimeChannel should not implement channel
+			// creation by itself but should delegate it to this.
 			throw new NotImplementedException ();
 		}
 

@@ -1,3 +1,11 @@
+/*
+ * console-io.c: ConsoleDriver internal calls
+ *
+ * Author:
+ *	Mono Project (http://www.mono-project.com)
+ *
+ * Copyright (C) 2005-2008 Novell, Inc. (http://www.novell.com)
+ */
 
 #include <string.h>
 #include "mono/metadata/tokentype.h"
@@ -249,6 +257,8 @@ mono_context_get_desc (MonoGenericContext *context)
  *
  * in all the loaded assemblies.
  *
+ * Both classname and methodname can be '*' which matches anything.
+ *
  * Returns: a parsed representation of the method description.
  */
 MonoMethodDesc*
@@ -343,7 +353,7 @@ gboolean
 mono_method_desc_match (MonoMethodDesc *desc, MonoMethod *method)
 {
 	char *sig;
-	if (strcmp (desc->name, method->name))
+	if (strcmp (desc->name, method->name) && (strcmp (desc->name, "*") != 0))
 		return FALSE;
 	if (!desc->args)
 		return TRUE;
@@ -379,6 +389,8 @@ match_class (MonoMethodDesc *desc, int pos, MonoClass *klass)
 {
 	const char *p;
 
+	if (!strcmp (desc->klass, "*"))
+		return TRUE;
 	p = my_strrchr (desc->klass, '/', &pos);
 	if (!p) {
 		if (strncmp (desc->klass, klass->name, pos))

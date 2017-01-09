@@ -207,10 +207,8 @@ namespace System.ServiceModel.Channels
 			MessageHeader item = (MessageHeader) l [index];
 
 			XmlReader reader =
-#if !NET_2_1 // FIXME: implement RawMessageHeader
 				item is MessageHeader.RawMessageHeader ?
 				((MessageHeader.RawMessageHeader) item).CreateReader () :
-#endif
 				XmlReader.Create (
 					new StringReader (item.ToString ()),
 					reader_settings);
@@ -237,9 +235,17 @@ namespace System.ServiceModel.Channels
 
 		public void RemoveAll (string name, string ns)
 		{
-			l.RemoveAll (delegate (MessageHeaderInfo info) {
-						return info.Name == name && info.Namespace == ns;
-					});
+			// Shuffle all the ones we want to keep to the start of the list
+			int j = 0;
+			for (int i = 0; i < l.Count; i++) {
+				if (l[i].Name != name || l[i].Namespace != ns) {
+					l [j++] = l[i];
+				}
+			}
+			// Trim the extra elements off the end of the list.
+			int count = l.Count - j;
+			for (int i = 0; i < count; i++)
+				l.RemoveAt (l.Count - 1);
 		}
 
 		public void RemoveAt (int index)

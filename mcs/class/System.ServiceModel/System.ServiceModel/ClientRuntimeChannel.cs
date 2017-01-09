@@ -48,9 +48,20 @@ namespace System.ServiceModel
 		ChannelFactory factory;
 		IRequestChannel request_channel;
 		IOutputChannel output_channel;
+
+		#region delegates
 		readonly ProcessDelegate _processDelegate;
 
 		delegate object ProcessDelegate (MethodBase method, string operationName, object [] parameters);
+
+		readonly RequestDelegate requestDelegate;
+
+		delegate Message RequestDelegate (Message msg, TimeSpan timeout);
+
+		readonly SendDelegate sendDelegate;
+
+		delegate void SendDelegate (Message msg, TimeSpan timeout);
+		#endregion
 
 		public ClientRuntimeChannel (ClientRuntime runtime,
 			ChannelFactory factory)
@@ -58,6 +69,8 @@ namespace System.ServiceModel
 			this.runtime = runtime;
 			this.factory = factory;
 			_processDelegate = new ProcessDelegate (Process);
+			requestDelegate = new RequestDelegate (Request);
+			sendDelegate = new SendDelegate (Send);
 
 			// default values
 			AllowInitializationUI = true;
@@ -230,7 +243,11 @@ namespace System.ServiceModel
 
 		[MonoTODO]
 		public IInputSession InputSession {
-			get { throw new NotImplementedException (); }
+			get {
+				ISessionChannel<IInputSession> ch = request_channel as ISessionChannel<IInputSession>;
+				ch = ch ?? output_channel as ISessionChannel<IInputSession>;
+				return ch != null ? ch.Session : null;
+			}
 		}
 
 		[MonoTODO]
@@ -246,7 +263,11 @@ namespace System.ServiceModel
 
 		[MonoTODO]
 		public IOutputSession OutputSession {
-			get { throw new NotImplementedException (); }
+			get {
+				ISessionChannel<IOutputSession> ch = request_channel as ISessionChannel<IOutputSession>;
+				ch = ch ?? output_channel as ISessionChannel<IOutputSession>;
+				return ch != null ? ch.Session : null;
+			}
 		}
 
 		[MonoTODO]
@@ -321,18 +342,34 @@ namespace System.ServiceModel
 
 		#region Request/Output processing
 
-		public IAsyncResult BeginProcess (MethodBase method, string operationName, object [] parameters) {
-			object [] param = new object [parameters.Length - 2];
-			for (int i = 0; i < param.Length; i++)
-				param [i] = parameters [i];
-			return _processDelegate.BeginInvoke (method, operationName, param, (AsyncCallback) parameters [parameters.Length - 2], parameters [parameters.Length - 1]);
+		public IAsyncResult BeginProcess (MethodBase method, string operationName, object [] parameters, AsyncCallback callback, object asyncState)
+		{
+			return _processDelegate.BeginInvoke (method, operationName, parameters, callback, asyncState);
 		}
 
-		public object EndProcess (MethodBase method, string operationName, object [] parameters) {
-			return _processDelegate.EndInvoke ((IAsyncResult) parameters [0]);
+		public object EndProcess (MethodBase method, string operationName, object [] parameters, IAsyncResult result)
+		{
+			if (result == null)
+				throw new ArgumentNullException ("result");
+			if (parameters == null)
+				throw new ArgumentNullException ("parameters");
+			// FIXME: the method arguments should be verified to be 
+			// identical to the arguments in the corresponding begin method.
+			return _processDelegate.EndInvoke (result);
 		}
 
 		public object Process (MethodBase method, string operationName, object [] parameters)
+		{
+			try {
+				return DoProcess (method, operationName, parameters);
+			} catch (Exception ex) {
+				Console.Write ("Exception in async operation: ");
+				Console.WriteLine (ex);
+				throw;
+			}
+		}
+
+		object DoProcess (MethodBase method, string operationName, object [] parameters)
 		{
 			if (AllowInitializationUI)
 				DisplayInitializationUI ();
@@ -452,7 +489,8 @@ namespace System.ServiceModel
 			SetupOutputChannel ();
 
 			ClientOperation op = runtime.Operations [od.Name];
-			Output (CreateRequest (op, parameters));
+			// FIXME: pass configured default timeout
+			Send (CreateRequest (op, parameters), factory.Endpoint.Binding.SendTimeout);
 		}
 
 		object Request (OperationDescription od, object [] parameters)
@@ -466,7 +504,8 @@ namespace System.ServiceModel
 			for (int i = 0; i < inspections.Length; i++)
 				inspections [i] = runtime.MessageInspectors [i].BeforeSendRequest (ref req, this);
 
-			Message res = Request (req);
+			// FIXME: pass configured default timeout
+			Message res = Request (req, factory.Endpoint.Binding.SendTimeout);
 			if (res.IsFault) {
 				MessageFault fault = MessageFault.CreateFault (res, runtime.MaxFaultSize);
 				if (fault.HasDetail && fault is MessageFault.SimpleMessageFault) {
@@ -493,15 +532,38 @@ namespace System.ServiceModel
 				return res;
 		}
 
-		Message Request (Message msg)
+		#region Message-based Request() and Send()
+		// They are internal for ClientBase<T>.ChannelBase use.
+		internal Message Request (Message msg, TimeSpan timeout)
 		{
-			return request_channel.Request (msg, factory.Endpoint.Binding.SendTimeout);
+			return request_channel.Request (msg, timeout);
 		}
 
-		void Output (Message msg)
+		internal IAsyncResult BeginRequest (Message msg, TimeSpan timeout, AsyncCallback callback, object state)
 		{
-			output_channel.Send (msg, factory.Endpoint.Binding.SendTimeout);
+			return requestDelegate.BeginInvoke (msg, timeout, callback, state);
 		}
+
+		internal Message EndRequest (IAsyncResult result)
+		{
+			return requestDelegate.EndInvoke (result);
+		}
+
+		internal void Send (Message msg, TimeSpan timeout)
+		{
+			output_channel.Send (msg, timeout);
+		}
+
+		internal IAsyncResult BeginSend (Message msg, TimeSpan timeout, AsyncCallback callback, object state)
+		{
+			return sendDelegate.BeginInvoke (msg, timeout, callback, state);
+		}
+
+		internal void EndSend (IAsyncResult result)
+		{
+			sendDelegate.EndInvoke (result);
+		}
+		#endregion
 
 		Message CreateRequest (ClientOperation op, object [] parameters)
 		{

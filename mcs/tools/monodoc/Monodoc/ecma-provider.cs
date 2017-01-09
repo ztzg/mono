@@ -565,7 +565,7 @@ public class EcmaHelpSource : HelpSource {
 				return js;
 			if (use_css) {
 				System.Reflection.Assembly assembly = typeof(EcmaHelpSource).Assembly;
-				Stream str_js = assembly.GetManifestResourceStream ("mono-ecma-css.js");
+				Stream str_js = assembly.GetManifestResourceStream ("helper.js");
 				js = (new StreamReader (str_js)).ReadToEnd();
 			} else {
 				js = String.Empty;
@@ -990,8 +990,9 @@ public class EcmaHelpSource : HelpSource {
 		return base.GetNodeXPath (n);
 	}
 
-	protected virtual XmlReader GetNamespaceDocument (string ns) {
-		return GetHelpXml ("xml.summary." + ns);
+	protected virtual XmlDocument GetNamespaceDocument (string ns)
+	{
+		return GetHelpXmlWithChanges ("xml.summary." + ns);
 	}
 
 	public override string RenderNamespaceLookup (string nsurl, out Node match_node)
@@ -1003,7 +1004,7 @@ public class EcmaHelpSource : HelpSource {
 			match_node = ns_node;
 			string ns_name = nsurl.Substring (2);
 			
-			XmlDocument doc = GetHelpXmlWithChanges("xml.summary." + ns_name);
+			XmlDocument doc = GetNamespaceDocument (ns_name);
 			if (doc == null)
 				return null;
 
@@ -1117,7 +1118,8 @@ public class EcmaHelpSource : HelpSource {
 			}
 		}
 		XmlDocUtils.AddExtensionMethods (doc, extensions, delegate (string s) {
-				return RootTree.GetHelpXml ("T:" + s);
+				s = s.StartsWith ("T:") ? s : "T:" + s;
+				return RootTree.GetHelpXml (s);
 		});
 
 		XsltArgumentList args = new XsltArgumentList();
@@ -1201,18 +1203,24 @@ public class EcmaHelpSource : HelpSource {
 
 	static XslTransform ecma_transform;
 
-	public static string Htmlize (IXPathNavigable ecma_xml)
+	public string Htmlize (IXPathNavigable ecma_xml)
 	{
 		return Htmlize(ecma_xml, null);
 	}
-	
-	public static string Htmlize (IXPathNavigable ecma_xml, XsltArgumentList args)
+
+	public string Htmlize (IXPathNavigable ecma_xml, XsltArgumentList args)
 	{
 		EnsureTransform ();
 		
 		StringWriter output = new StringWriter ();
-		ecma_transform.Transform (ecma_xml, args, output, null);
+		ecma_transform.Transform (ecma_xml, args, output, CreateDocumentResolver ());
 		return output.ToString ();
+	}
+
+	protected virtual XmlResolver CreateDocumentResolver ()
+	{
+		// results in using XmlUrlResolver
+		return null;
 	}
 	
 	static void Htmlize (IXPathNavigable ecma_xml, XsltArgumentList args, XmlWriter w)
@@ -2094,18 +2102,20 @@ public class EcmaUncompiledHelpSource : EcmaHelpSource {
 			XsltArgumentList args = new XsltArgumentList();
 			args.AddExtensionObject("monodoc:///extensions", ExtObject);
 			args.AddParam("show", "", "masteroverview");
-			string s = EcmaHelpSource.Htmlize(new XPathDocument (reader), args);
+			string s = Htmlize(new XPathDocument (reader), args);
 			return BuildHtml (css_ecma_code, js_code, s); 
 		}
 		return base.GetText(url, out match_node);
 	}
 	
-	protected override XmlReader GetNamespaceDocument (string ns) {
+	protected override XmlDocument GetNamespaceDocument (string ns)
+	{
 		XmlDocument nsdoc = new XmlDocument();
 		nsdoc.Load (EcmaDoc.GetNamespaceFile (basedir.FullName, ns));
 		
 		XmlDocument elements = new XmlDocument();
 		XmlElement docnode = elements.CreateElement("elements");
+		elements.AppendChild (docnode);
 		
 		foreach (XmlElement doc in nsdoc.SelectNodes("Namespace/Docs/*")) {
 			docnode.AppendChild(elements.ImportNode(doc, true));
@@ -2133,9 +2143,44 @@ public class EcmaUncompiledHelpSource : EcmaHelpSource {
 			docnode.AppendChild(typenode);
 		}
 
-		return new XmlNodeReader(docnode);
+		return elements;
 	}
 	
+	public override Stream GetHelpStream (string id)
+	{
+		if (id == "ExtensionMethods.xml") {
+			// TODO: generate ExtensionMethods.xml based on index.xml contents.
+		}
+		return null;
+	}
+
+	public override XmlDocument GetHelpXmlWithChanges (string id)
+	{
+		XmlDocument doc = new XmlDocument ();
+		doc.Load (id);
+		return doc;
+	}
+	
+	class UncompiledResolver : XmlResolver {
+		public override Uri ResolveUri (Uri baseUri, string relativeUri)
+		{
+			return null;
+		}
+
+		public override object GetEntity (Uri absoluteUri, string role, Type ofObjectToReturn)
+		{
+			return null;
+		}
+
+		public override System.Net.ICredentials Credentials {
+			set {/* ignore */}
+		}
+	}
+
+	protected override XmlResolver CreateDocumentResolver ()
+	{
+		return new UncompiledResolver ();
+	}
 }
 
 }

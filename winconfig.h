@@ -12,6 +12,14 @@
 #error Unknown architecture
 #endif
 
+/*
+ * Features that are not required in the Windows port
+ */
+#define DISABLE_PORTABILITY 1
+
+/* Windows does not have symlinks */
+#define PLATFORM_NO_SYMLINKS 1
+
 /* String of disabled features */
 #define DISABLED_FEATURES "none"
 

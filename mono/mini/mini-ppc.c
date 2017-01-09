@@ -397,14 +397,15 @@ mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_targe
 
 	if (has_target) {
 		static guint8* cached = NULL;
-		int size = MONO_PPC_32_64_CASE (16, 20);
+		int size = MONO_PPC_32_64_CASE (16, 20) + PPC_FTNPTR_SIZE;
 		mono_mini_arch_lock ();
 		if (cached) {
 			mono_mini_arch_unlock ();
 			return cached;
 		}
-		
+
 		start = code = mono_global_codeman_reserve (size);
+		code = mono_ppc_create_pre_code_ftnptr (code);
 
 		/* Replace the this argument with the target */
 		ppc_load_reg (code, ppc_r0, G_STRUCT_OFFSET (MonoDelegate, method_ptr), ppc_r3);
@@ -439,8 +440,9 @@ mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_targe
 			return code;
 		}
 
-		size = MONO_PPC_32_64_CASE (12, 16) + sig->param_count * 4;
+		size = MONO_PPC_32_64_CASE (12, 16) + sig->param_count * 4 + PPC_FTNPTR_SIZE;
 		start = code = mono_global_codeman_reserve (size);
+		code = mono_ppc_create_pre_code_ftnptr (code);
 
 		ppc_load_reg (code, ppc_r0, G_STRUCT_OFFSET (MonoDelegate, method_ptr), ppc_r3);
 #ifdef PPC_USES_FUNCTION_DESCRIPTOR
@@ -2601,12 +2603,12 @@ handle_thunk (int absolute, guchar *code, const guchar *target) {
 	pdata.found = 0;
 
 	mono_domain_lock (domain);
-	mono_code_manager_foreach (domain->code_mp, search_thunk_slot, &pdata);
+	mono_domain_code_foreach (domain, search_thunk_slot, &pdata);
 
 	if (!pdata.found) {
 		/* this uses the first available slot */
 		pdata.found = 2;
-		mono_code_manager_foreach (domain->code_mp, search_thunk_slot, &pdata);
+		mono_domain_code_foreach (domain, search_thunk_slot, &pdata);
 	}
 	mono_domain_unlock (domain);
 
@@ -4216,6 +4218,39 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			break;
 		}
 #endif
+		case OP_ATOMIC_CAS_I4:
+		CASE_PPC64 (OP_ATOMIC_CAS_I8) {
+			int location = ins->sreg1;
+			int value = ins->sreg2;
+			int comparand = ins->sreg3;
+			guint8 *start, *not_equal, *lost_reservation;
+
+			start = code;
+			if (ins->opcode == OP_ATOMIC_CAS_I4)
+				ppc_lwarx (code, ppc_r0, 0, location);
+#ifdef __mono_ppc64__
+			else
+				ppc_ldarx (code, ppc_r0, 0, location);
+#endif
+			ppc_cmp (code, 0, ins->opcode == OP_ATOMIC_CAS_I4 ? 0 : 1, ppc_r0, comparand);
+
+			not_equal = code;
+			ppc_bc (code, PPC_BR_FALSE, PPC_BR_EQ, 0);
+			if (ins->opcode == OP_ATOMIC_CAS_I4)
+				ppc_stwcxd (code, value, 0, location);
+#ifdef __mono_ppc64__
+			else
+				ppc_stdcxd (code, value, 0, location);
+#endif
+
+			lost_reservation = code;
+			ppc_bc (code, PPC_BR_FALSE, PPC_BR_EQ, 0);
+			ppc_patch (lost_reservation, start);
+
+			ppc_patch (not_equal, code);
+			ppc_mr (code, ins->dreg, ppc_r0);
+			break;
+		}
 
 		default:
 			g_warning ("unknown opcode %s in %s()\n", mono_inst_name (ins->opcode), __FUNCTION__);
@@ -5030,6 +5065,7 @@ mono_arch_emit_exceptions (MonoCompile *cfg)
 
 }
 
+#if DEAD_CODE
 static int
 try_offset_access (void *value, guint32 idx)
 {
@@ -5043,6 +5079,7 @@ try_offset_access (void *value, guint32 idx)
 		return 0;
 	return 1;
 }
+#endif
 
 static void
 setup_tls_access (void)
@@ -5234,13 +5271,15 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 			if (item->check_target_idx) {
 				if (!item->compare_done)
 					item->chunk_size += CMP_SIZE;
-				if (fail_tramp)
+				if (item->has_target_code)
 					item->chunk_size += BR_SIZE + JUMP_IMM32_SIZE;
 				else
 					item->chunk_size += LOADSTORE_SIZE + BR_SIZE + JUMP_IMM_SIZE;
 			} else {
 				if (fail_tramp) {
 					item->chunk_size += CMP_SIZE + BR_SIZE + JUMP_IMM32_SIZE * 2;
+					if (!item->has_target_code)
+						item->chunk_size += LOADSTORE_SIZE;
 				} else {
 					item->chunk_size += LOADSTORE_SIZE + JUMP_IMM_SIZE;
 #if ENABLE_WRONG_METHOD_CHECK
@@ -5259,7 +5298,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 	} else {
 		/* the initial load of the vtable address */
 		size += PPC_LOAD_SEQUENCE_LENGTH + LOADSTORE_SIZE;
-		code = mono_code_manager_reserve (domain->code_mp, size);
+		code = mono_domain_code_reserve (domain, size);
 	}
 	start = code;
 	if (!fail_tramp) {
@@ -5285,7 +5324,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 				}
 				item->jmp_code = code;
 				ppc_bc (code, PPC_BR_FALSE, PPC_BR_EQ, 0);
-				if (fail_tramp) {
+				if (item->has_target_code) {
 					ppc_load (code, ppc_r0, item->value.target_code);
 				} else {
 					ppc_load_reg (code, ppc_r0, (sizeof (gpointer) * item->value.vtable_slot), ppc_r11);
@@ -5299,7 +5338,13 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 					ppc_compare_log (code, 0, MONO_ARCH_IMT_REG, ppc_r0);
 					item->jmp_code = code;
 					ppc_bc (code, PPC_BR_FALSE, PPC_BR_EQ, 0);
-					ppc_load (code, ppc_r0, item->value.target_code);
+					if (item->has_target_code) {
+						ppc_load (code, ppc_r0, item->value.target_code);
+					} else {
+						g_assert (vtable);
+						ppc_load (code, ppc_r0, & (vtable->vtable [item->value.vtable_slot]));
+						ppc_load_reg_indexed (code, ppc_r0, 0, ppc_r0);
+					}
 					ppc_mtctr (code, ppc_r0);
 					ppc_bcctr (code, PPC_BR_ALWAYS, 0);
 					ppc_patch (item->jmp_code, code);

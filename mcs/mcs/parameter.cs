@@ -30,10 +30,10 @@ namespace Mono.CSharp {
 		{
 		}
 
-		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb)
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
 #if !NET_2_0
-			if (a.Type == TypeManager.marshal_as_attr_type) {
+			if (a.Type == pa.MarshalAs) {
 				UnmanagedMarshal marshal = a.GetMarshal (this);
 				if (marshal != null) {
 					builder.SetMarshal (marshal);
@@ -70,9 +70,9 @@ namespace Mono.CSharp {
 			}
 		}
 
-		public override void ApplyAttributeBuilder(Attribute a, CustomAttributeBuilder cb)
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
-			if (a.Type == TypeManager.cls_compliant_attribute_type) {
+			if (a.Type == pa.CLSCompliant) {
 				Report.Warning (3023, 1, a.Location, "CLSCompliant attribute has no meaning when applied to return types. Try putting it on the method instead");
 			}
 
@@ -80,7 +80,7 @@ namespace Mono.CSharp {
 			if (builder == null)
 				return;
 
-			base.ApplyAttributeBuilder (a, cb);
+			base.ApplyAttributeBuilder (a, cb, pa);
 		}
 
 		public override AttributeTargets AttributeTargets {
@@ -183,21 +183,7 @@ namespace Mono.CSharp {
 		public override void ApplyAttributes (MethodBuilder mb, ConstructorBuilder cb, int index)
 		{
 			base.ApplyAttributes (mb, cb, index);
-
-			CustomAttributeBuilder ca = TypeManager.param_array_attr;
-			if (ca == null) {
-				ConstructorInfo ci = TypeManager.GetPredefinedConstructor (TypeManager.param_array_type, Location, Type.EmptyTypes);
-				if (ci == null)
-					return;
-
-				ca = new CustomAttributeBuilder (ci, new object [0]);
-				if (ca == null)
-					return;
-
-				TypeManager.param_array_attr = ca;
-			}
-				
-			builder.SetCustomAttribute (ca);
+			PredefinedAttributes.Get.ParamArray.EmitAttribute (builder, Location);
 		}
 	}
 
@@ -282,31 +268,31 @@ namespace Mono.CSharp {
 			TypeName = type;
 		}
 
-		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb)
+		public override void ApplyAttributeBuilder (Attribute a, CustomAttributeBuilder cb, PredefinedAttributes pa)
 		{
-			if (a.Type == TypeManager.in_attribute_type && ModFlags == Modifier.OUT) {
+			if (a.Type == pa.In && ModFlags == Modifier.OUT) {
 				Report.Error (36, a.Location, "An out parameter cannot have the `In' attribute");
 				return;
 			}
 
-			if (a.Type == TypeManager.param_array_type) {
+			if (a.Type == pa.ParamArray) {
 				Report.Error (674, a.Location, "Do not use `System.ParamArrayAttribute'. Use the `params' keyword instead");
 				return;
 			}
 
-			if (a.Type == TypeManager.out_attribute_type && (ModFlags & Modifier.REF) == Modifier.REF &&
-			    TypeManager.in_attribute_type != null && !OptAttributes.Contains (TypeManager.in_attribute_type)) {
+			if (a.Type == PredefinedAttributes.Get.Out && (ModFlags & Modifier.REF) == Modifier.REF &&
+			    !OptAttributes.Contains (pa.In)) {
 				Report.Error (662, a.Location,
 					"Cannot specify only `Out' attribute on a ref parameter. Use both `In' and `Out' attributes or neither");
 				return;
 			}
 
-			if (a.Type == TypeManager.cls_compliant_attribute_type) {
+			if (a.Type == pa.CLSCompliant) {
 				Report.Warning (3022, 1, a.Location, "CLSCompliant attribute has no meaning when applied to parameters. Try putting it on the method instead");
 			}
 
 			// TypeManager.default_parameter_value_attribute_type is null if !NET_2_0, or if System.dll is not referenced
-			if (a.Type == TypeManager.default_parameter_value_attribute_type) {
+			if (a.Type == pa.DefaultParameterValue) {
 				object val = a.GetParameterDefaultValue ();
 				if (val != null) {
 					Type t = val.GetType ();
@@ -326,7 +312,7 @@ namespace Mono.CSharp {
 				}
 
 				if (parameter_type == TypeManager.object_type ||
-				    (val == null && !TypeManager.IsValueType (parameter_type)) ||
+				    (val == null && !TypeManager.IsGenericParameter (parameter_type) && TypeManager.IsReferenceType (parameter_type)) ||
 				    (val != null && TypeManager.TypeToCoreType (val.GetType ()) == parameter_type))
 					builder.SetConstant (val);
 				else
@@ -334,7 +320,7 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			base.ApplyAttributeBuilder (a, cb);
+			base.ApplyAttributeBuilder (a, cb, pa);
 		}
 		
 		public virtual bool CheckAccessibility (InterfaceMemberBase member)
@@ -376,8 +362,18 @@ namespace Mono.CSharp {
 			}
 
 #if GMCS_SOURCE
-			TypeParameterExpr tparam = texpr as TypeParameterExpr;
-			if (tparam != null) {
+			if (parameter_type.IsGenericParameter) {
+				AbstractPropertyEventMethod accessor = ec as AbstractPropertyEventMethod;
+				if (accessor == null || !accessor.IsDummy) {
+					if ((parameter_type.GenericParameterAttributes & GenericParameterAttributes.Covariant) != 0) {
+						Report.Error (-38, Location, "Covariant type parameters cannot be used as method parameters");
+						return null;
+					} else if ((ModFlags & Modifier.ISBYREF) != 0 &&
+					           (parameter_type.GenericParameterAttributes & GenericParameterAttributes.Contravariant) != 0) {
+						Report.Error (-37, Location, "Contravariant type parameters cannot be used in output positions");
+						return null;
+					}
+				}
 				return parameter_type;
 			}
 #endif
@@ -415,7 +411,7 @@ namespace Mono.CSharp {
 		}
 
 		ParameterAttributes Attributes {
-			get { return Parameters.GetParameterAttribute (modFlags); }
+			get { return ParametersCompiled.GetParameterAttribute (modFlags); }
 		}
 
 		public override AttributeTargets AttributeTargets {
@@ -546,10 +542,7 @@ namespace Mono.CSharp {
 
 			bool is_ref = (ModFlags & Modifier.ISBYREF) != 0;
 			if (is_ref) {
-				if (arg_idx <= 255)
-					ec.ig.Emit (OpCodes.Ldarg_S, (byte) arg_idx);
-				else
-					ec.ig.Emit (OpCodes.Ldarg, arg_idx);
+				ParameterReference.EmitLdArg (ec.ig, arg_idx);
 			} else {
 				if (arg_idx <= 255)
 					ec.ig.Emit (OpCodes.Ldarga_S, (byte) arg_idx);
@@ -767,9 +760,9 @@ namespace Mono.CSharp {
 	//
 	// A collection of imported or resolved parameters
 	//
-	public class ParametersCollection : AParametersCollection
+	public class ParametersImported : AParametersCollection
 	{
-		ParametersCollection (AParametersCollection param, Type[] types)
+		ParametersImported (AParametersCollection param, Type[] types)
 		{
 			this.parameters = param.FixedParameters;
 			this.types = types;
@@ -777,7 +770,7 @@ namespace Mono.CSharp {
 			has_params = param.HasParams;
 		}
 
-		ParametersCollection (IParameterData [] parameters, Type [] types, MethodBase method, bool hasParams)
+		ParametersImported (IParameterData [] parameters, Type [] types, MethodBase method, bool hasParams)
 		{
 			this.parameters = parameters;
 			this.types = types;
@@ -793,7 +786,7 @@ namespace Mono.CSharp {
 			has_params = hasParams;
 		}
 
-		public ParametersCollection (IParameterData [] param, Type[] types)
+		public ParametersImported (IParameterData [] param, Type[] types)
 		{
 			this.parameters = param;
 			this.types = types;
@@ -822,7 +815,7 @@ namespace Mono.CSharp {
 				types [i] = TypeManager.TypeToCoreType (t);
 			}
 
-			return new ParametersCollection (param, types);
+			return new ParametersImported (param, types);
 		}
 
 		//
@@ -832,14 +825,16 @@ namespace Mono.CSharp {
 		{
 			if (pi.Length == 0) {
 				if (method != null && (method.CallingConvention & CallingConventions.VarArgs) != 0)
-					return new ParametersCollection (new IParameterData [0], Type.EmptyTypes, method, false);
+					return new ParametersImported (new IParameterData [0], Type.EmptyTypes, method, false);
 
-				return Parameters.EmptyReadOnlyParameters;
+				return ParametersCompiled.EmptyReadOnlyParameters;
 			}
 
 			Type [] types = new Type [pi.Length];
 			IParameterData [] par = new IParameterData [pi.Length];
 			bool is_params = false;
+			PredefinedAttribute extension_attr = PredefinedAttributes.Get.Extension;
+			PredefinedAttribute param_attr = PredefinedAttributes.Get.ParamArray;
 			for (int i = 0; i < types.Length; i++) {
 				types [i] = TypeManager.TypeToCoreType (pi [i].ParameterType);
 
@@ -855,12 +850,12 @@ namespace Mono.CSharp {
 					// Strip reference wrapping
 					//
 					types [i] = TypeManager.GetElementType (types [i]);
-				} else if (i == 0 && TypeManager.extension_attribute_type != null && method != null && method.IsStatic &&
+				} else if (i == 0 && extension_attr.IsDefined && method != null && method.IsStatic &&
 			        (method.DeclaringType.Attributes & Class.StaticClassAttribute) == Class.StaticClassAttribute &&
-			        method.IsDefined (TypeManager.extension_attribute_type, false)) {
+					method.IsDefined (extension_attr.Type, false)) {
 					mod = Parameter.Modifier.This;
 				} else if (i >= pi.Length - 2 && types [i].IsArray) {
-					if (p.IsDefined (TypeManager.param_array_type, false)) {
+					if (p.IsDefined (param_attr.Type, false)) {
 						mod = Parameter.Modifier.PARAMS;
 						is_params = true;
 					}
@@ -870,33 +865,34 @@ namespace Mono.CSharp {
 			}
 
 			return method != null ?
-				new ParametersCollection (par, types, method, is_params) :
-				new ParametersCollection (par, types);
+				new ParametersImported (par, types, method, is_params) :
+				new ParametersImported (par, types);
 		}
 	}
 
 	/// <summary>
 	///   Represents the methods parameters
 	/// </summary>
-	public class Parameters : AParametersCollection {
-		public static readonly Parameters EmptyReadOnlyParameters = new Parameters ();
+	public class ParametersCompiled : AParametersCollection
+	{
+		public static readonly ParametersCompiled EmptyReadOnlyParameters = new ParametersCompiled ();
 		
 		// Used by C# 2.0 delegates
-		public static readonly Parameters Undefined = new Parameters ();
+		public static readonly ParametersCompiled Undefined = new ParametersCompiled ();
 
-		private Parameters ()
+		private ParametersCompiled ()
 		{
 			parameters = new Parameter [0];
 			types = Type.EmptyTypes;
 		}
 
-		private Parameters (Parameter [] parameters, Type [] types)
+		private ParametersCompiled (Parameter [] parameters, Type [] types)
 		{
 			this.parameters = parameters;
 		    this.types = types;
 		}
 		
-		public Parameters (params Parameter[] parameters)
+		public ParametersCompiled (params Parameter[] parameters)
 		{
 			if (parameters == null)
 				throw new ArgumentException ("Use EmptyReadOnlyParameters");
@@ -926,23 +922,23 @@ namespace Mono.CSharp {
 			}
 		}
 
-		public Parameters (Parameter [] parameters, bool has_arglist) :
+		public ParametersCompiled (Parameter [] parameters, bool has_arglist) :
 			this (parameters)
 		{
 			this.has_arglist = has_arglist;
 		}
 		
-		public static Parameters CreateFullyResolved (Parameter p, Type type)
+		public static ParametersCompiled CreateFullyResolved (Parameter p, Type type)
 		{
-			return new Parameters (new Parameter [] { p }, new Type [] { type });
+			return new ParametersCompiled (new Parameter [] { p }, new Type [] { type });
 		}
 		
-		public static Parameters CreateFullyResolved (Parameter[] parameters, Type[] types)
+		public static ParametersCompiled CreateFullyResolved (Parameter[] parameters, Type[] types)
 		{
-			return new Parameters (parameters, types);
+			return new ParametersCompiled (parameters, types);
 		}
 
-		public static Parameters MergeGenerated (Parameters userParams, bool checkConflicts, Parameter compilerParams, Type compilerTypes)
+		public static ParametersCompiled MergeGenerated (ParametersCompiled userParams, bool checkConflicts, Parameter compilerParams, Type compilerTypes)
 		{
 			return MergeGenerated (userParams, checkConflicts,
 				new Parameter [] { compilerParams },
@@ -952,7 +948,7 @@ namespace Mono.CSharp {
 		//
 		// Use this method when you merge compiler generated parameters with user parameters
 		//
-		public static Parameters MergeGenerated (Parameters userParams, bool checkConflicts, Parameter[] compilerParams, Type[] compilerTypes)
+		public static ParametersCompiled MergeGenerated (ParametersCompiled userParams, bool checkConflicts, Parameter[] compilerParams, Type[] compilerTypes)
 		{
 			Parameter[] all_params = new Parameter [userParams.Count + compilerParams.Length];
 			userParams.FixedParameters.CopyTo(all_params, 0);
@@ -983,7 +979,7 @@ namespace Mono.CSharp {
 				++last_filled;
 			}
 			
-			Parameters parameters = new Parameters (all_params, all_types);
+			ParametersCompiled parameters = new ParametersCompiled (all_params, all_types);
 			parameters.has_params = userParams.has_params;
 			return parameters;
 		}
@@ -1010,7 +1006,7 @@ namespace Mono.CSharp {
 		{
 			if (types != null)
 				return true;
-
+			
 			types = new Type [Count];
 			
 			bool ok = true;
@@ -1091,9 +1087,9 @@ namespace Mono.CSharp {
 				"[]", initializers, loc);
 		}
 
-		public Parameters Clone ()
+		public ParametersCompiled Clone ()
 		{
-			Parameters p = (Parameters) MemberwiseClone ();
+			ParametersCompiled p = (ParametersCompiled) MemberwiseClone ();
 
 			p.parameters = new IParameterData [parameters.Length];
 			for (int i = 0; i < Count; ++i)

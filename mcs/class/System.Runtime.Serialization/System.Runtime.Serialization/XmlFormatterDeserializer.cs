@@ -29,6 +29,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
@@ -120,7 +121,6 @@ namespace System.Runtime.Serialization
 
 			string label = reader.GetAttribute ("Ref", KnownTypeCollection.MSSimpleNamespace);
 			if (label != null) {
-Console.WriteLine ("Found reference: " + label);
 				object o = references [label];
 				if (o == null)
 					throw new SerializationException (String.Format ("Deserialized object with reference Id '{0}' was not found", label));
@@ -140,19 +140,20 @@ Console.WriteLine ("Found reference: " + label);
 					throw new SerializationException (String.Format ("Value type {0} cannot be null.", type));
 			}
 
+			bool isEmpty = reader.IsEmptyElement;
 			reader.ReadStartElement ();
 
-			object res = DeserializeContent (graph_qname, type, reader);
+			object res = DeserializeContent (graph_qname, type, reader, isEmpty);
 
 			reader.MoveToContent ();
 			if (reader.NodeType == XmlNodeType.EndElement)
 				reader.ReadEndElement ();
-			else if (reader.NodeType != XmlNodeType.None)
+			else if (!isEmpty && reader.NodeType != XmlNodeType.None)
 				throw new SerializationException (String.Format ("Deserializing type '{3}'. Expecting state 'EndElement'. Encountered state '{0}' with name '{1}' with namespace '{2}'.", reader.NodeType, reader.Name, reader.NamespaceURI, type.FullName));
 			return res;
 		}
 
-		object DeserializeContent (QName name, Type type, XmlReader reader)
+		object DeserializeContent (QName name, Type type, XmlReader reader, bool isEmpty)
 		{
 			if (KnownTypeCollection.IsPrimitiveType (name)) {
 				string value;
@@ -168,10 +169,37 @@ Console.WriteLine ("Found reference: " + label);
 			}
 
 			SerializationMap map = types.FindUserMap (name);
+			if (map == null && name.Namespace.StartsWith (KnownTypeCollection.DefaultClrNamespaceBase, StringComparison.Ordinal)) {
+				var it = GetTypeFromNamePair (name.Name, name.Namespace);
+				if (types.TryRegister (it))
+					map = types.FindUserMap (name);
+			}
 			if (map == null)
-				throw new SerializationException (String.Format ("Unknown type {0} is used for DataContract. Any derived types of a data contract or a data member should be added to KnownTypes.", type));
+				throw new SerializationException (String.Format ("Unknown type {0} is used for DataContract with reference of name {1}. Any derived types of a data contract or a data member should be added to KnownTypes.", type, name));
 
-			return map.DeserializeContent (reader, this);
+			if (isEmpty)
+				return map.DeserializeEmptyContent (reader, this);
+			else
+				return map.DeserializeContent (reader, this);
+		}
+
+		Type GetTypeFromNamePair (string name, string ns)
+		{
+			int xlen = KnownTypeCollection.DefaultClrNamespaceBase.Length;
+			string clrns = ns.Length > xlen ?  ns.Substring (xlen) : null;
+			foreach (var ass in AppDomain.CurrentDomain.GetAssemblies ()) {
+				bool sysass = ass != typeof (Type).Assembly && ass.FullName.StartsWith ("System"); // FIXME: hacky optimization
+				foreach (var t in ass.GetTypes ()) {
+					if (!sysass) {
+						var dca = t.GetCustomAttribute<DataContractAttribute> (true);
+						if (dca != null && dca.Name == name && dca.Namespace == ns)
+							return t;
+						if (clrns != null && t.Name == name && t.Namespace == clrns)
+							return t;
+					}
+				}
+			}
+			throw new XmlException (String.Format ("Type not found; name: {0}, namespace: {1}", name, ns));
 		}
 	}
 }

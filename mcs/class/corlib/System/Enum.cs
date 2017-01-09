@@ -86,8 +86,9 @@ namespace System
 			/* Threads could die, so keep a global cache too */
 			lock (global_cache_monitor) {
 				if (global_cache.ContainsKey (enumType)) {
-					info = (MonoEnumInfo) global_cache [enumType];
-					cache [enumType] = info;
+					object boxedInfo = global_cache [enumType];
+					cache [enumType] = boxedInfo;
+					info = (MonoEnumInfo)boxedInfo;
 					return;
 				}
 			}
@@ -186,7 +187,7 @@ namespace System
 
 		object IConvertible.ToType (Type type, IFormatProvider provider)
 		{
-			return Convert.ToType (get_value (), type, provider);
+			return Convert.ToType (get_value (), type, provider, false);
 		}
 
 #if ONLY_1_1
@@ -278,7 +279,16 @@ namespace System
 			MonoEnumInfo info;
 			value = ToObject (enumType, value);
 			MonoEnumInfo.GetInfo (enumType, out info);
-			int i = Array.BinarySearch (info.values, value);
+
+			int i;
+#if NET_2_0
+			int[] int_array = info.values as int[];
+			if (int_array != null)
+				i = Array.BinarySearch (int_array, (int)value);
+			else
+#endif
+				i = Array.BinarySearch (info.values, value);
+
 			return (i >= 0) ? info.names [i] : null;
 		}
 
@@ -304,6 +314,12 @@ namespace System
 			} else if ((vType == info.utype) || (vType == enumType)) {
 				value = ToObject (enumType, value);
 				MonoEnumInfo.GetInfo (enumType, out info);
+#if NET_2_0
+			int[] int_array = info.values as int[];
+			if (int_array != null)
+				return Array.BinarySearch (int_array, (int)value) >= 0;
+			else
+#endif
 				return (Array.BinarySearch (info.values, value) >= 0);
 			} else {
 				throw new ArgumentException("The value parameter is not the correct type."
@@ -436,6 +452,9 @@ namespace System
 			}
 		}
 
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern int compare_value_to (object other);
+
 		/// <summary>
 		///   Compares the enum value with another enum value of the same type.
 		/// </summary>
@@ -455,12 +474,7 @@ namespace System
 					target.GetType(), thisType));
 			}
 
-			object value1, value2;
-
-			value1 = this.get_value ();
-			value2 = ((Enum)target).get_value ();
-
-			return ((IComparable)value1).CompareTo (value2);
+			return compare_value_to (target);
 		}
 
 		public override string ToString ()

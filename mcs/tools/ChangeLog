@@ -1,12 +1,14 @@
-2008-12-05  Jb Evain  <jbevain@novell.com>
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
 
-	* tuner/Mono.Tuner/RemoveSerialization.cs
-	* tuner/Mono.Tuner/PrintStatus.cs
-	* tuner/Mono.Tuner/AdjustVisibility.cs
-	* tuner/Mono.Tuner/InjectAttributes.cs
-	* tuner/Mono.Tuner/CheckVisibility.cs:
-		do not tune the assemblies that the linker doesn't
-		consider for actual linking.
+	* Makefile: switch this too.
+
+2009-03-12  Jonathan Pryor  <jpryor@novell.com>
+
+	* Makefile: Add sqlmetal to the build.
+
+2009-03-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: add svcutil to the build.
 
 2008-12-01  Jb Evain  <jbevain@novell.com>
 

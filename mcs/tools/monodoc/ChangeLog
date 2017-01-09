@@ -1,3 +1,65 @@
+2009-03-01  Jonathan Pryor  <jpryor@novell.com>
+
+	* Monodoc/ecma-provider.cs: Viewing type members (plural, e.g. the
+	  Fields sub-node) would result in a stack overflow within
+	  Resources/mdoc-html-utils.xsl:GetInheritedMembers(), because the
+	  document() XSLT function was being used to obtain the base type's
+	  documentation.  It stack overflowed because the XmlUrlResolver was
+	  being used, which when given e.g. file:///DocAttribute.xml, would
+	  return file:///DocAttribute.xml (which makes sense), but it was
+	  non-terminating.  (I find this troubling as it should have been
+	  trying to resolve e.g. System.Attribute, not DocAttribute; it must
+	  be some XmlTransform-fu that was substituting documents.)
+	  The fix is for EcmaUncompiledHelpSource to provide an alternate
+	  document XmlResolver, one which always returns null from
+	  XmlResolver.ResolveUri(), thus preventing endless recursion.
+
+2009-03-01  Jonathan Pryor  <jpryor@novell.com>
+
+	* Mono.Documentation/XmlDocUtils.cs: It's possible for the `loader'
+	  delegate to return `null' if no further base types are found, so
+	  stop processing if we find a null base type.
+	* Monodoc/provider.cs: 
+	  - Make GetHelpStream() virtual so that EcmaUncompiledHelpSource can
+	    override it, as the default zip-based behavior is inappropriate.
+	  - Make GetHelpXmlWithChanges() virtual so that
+	    EcmaUncompiledHelpSource can override it, as the default zip-based
+	    behavior is inappropriate.
+	  - When initializing UncompiledHelpSources, set the
+	    HelpSource.RootTree property (avoids an NRE from
+	    EcmaHelpSource.GetTextFromUrl() when it reads RootTree.HelpSources).
+	* Monodoc/ecma-provider.cs: 
+	  - Within the XmlDocUtils.AddExtensionMethods() call, don't always 
+	    prefix the type with "T:", as sometimes the type will already start 
+	    with "T:", which is the case with EcmaUncompiledHelpSource ids.  
+	  - Add EcmaUncompiledHelpSource.GetHelpStream() and
+	    EcmaUncompiledHelpSource.GetHelpXmlWithChanges(), which Do The
+	    Right Thing for the file-based backend.
+
+2009-03-01  Jonathan Pryor  <jpryor@novell.com>
+
+	* Monodoc/ecma-provider.cs: For some reason,
+	  EcmaHelpSource.GetNamespaceDocument() wasn't being used anymore,
+	  which is what EcmaUncompiledHelpSource overrides to permit loading
+	  of local files.  Result: an exception when trying to view namespaces
+	  of local (non-assembled) directories.  Oops.  "Fixes" 443508.
+
+2009-02-26  Jonathan Pryor  <jonpryor@vt.edu>
+
+	* Monodoc/provider.cs: Revert; Don't check for Tree.Nodes == null, as it
+	  happens in numerous places.  Instead, take a page out of the "I
+	  never should have invented `null'" book, and ensure that Tree.Nodes
+	  can never be null.  This fixes the "HelpSource has 0 items" issue
+	  and several other related ones.
+
+2009-02-26  Jonathan Pryor  <jonpryor@vt.edu>
+
+	* Monodoc/provider.cs: It's possible for a HelpSource to have 0
+	  elements (which can be done by e.g. running `mdoc assemble' on an 
+	  empty directory), in which case HelpSource.Tree.Nodes will be null.
+	  Make sure that we don't get a NullReferenceException.
+	  Patch thanks to Theerud Lawtrakul.  Fixes #443699.
+
 2009-02-25  Jonathan Pryor  <jonpryor@vt.edu>
 
 	* Makefile: 
@@ -8,6 +70,16 @@
 	  - Fix the filenames within $(MAN_TEST_FILES) so `make dist-local'
 	    works without error.
 	  - Fixes #479753.
+
+2009-02-09  Jonathan Pryor  <jonpryor@vt.edu>
+
+	* Makefile: Don't include mono-ecma-css.js as a resource.
+	* Monodoc/ecma-provider.cs: Insert helper.js, not mono-ecma-css.js.
+	* Monodoc/provider.cs: Surround the contents of `helper.js' with a
+	  <script/> block so that valid HTMl is generated.
+	* Resources/helper.js: Remove <script/> block, so that `helper.js' is an
+	  actual JavaScript file, not an SGML file w/ JavaScript content.
+	* Resources/mono-ecma-css.js: Remove; use Resources/helper.js instead.
 
 2009-01-05  Jonathan Pryor  <jonpryor@vt.edu>
 

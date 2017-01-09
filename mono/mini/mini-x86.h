@@ -136,7 +136,10 @@ struct MonoLMF {
 	guint32     eip;
 };
 
-typedef void* MonoCompileArch;
+typedef struct {
+	gboolean need_stack_frame_inited;
+	gboolean need_stack_frame;
+} MonoCompileArch;
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
 #include <ucontext.h>
@@ -275,7 +278,7 @@ typedef struct {
 #define MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE 1
 #define MONO_ARCH_HAVE_ATOMIC_ADD 1
 #define MONO_ARCH_HAVE_ATOMIC_EXCHANGE 1
-#define MONO_ARCH_HAVE_ATOMIC_CAS_IMM 1
+#define MONO_ARCH_HAVE_ATOMIC_CAS 1
 #define MONO_ARCH_HAVE_IMT 1
 #define MONO_ARCH_HAVE_TLS_GET 1
 #define MONO_ARCH_IMT_REG X86_EDX
@@ -283,6 +286,9 @@ typedef struct {
 #define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
 #define MONO_ARCH_RGCTX_REG X86_EDX
 #define MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK 1
+#define MONO_ARCH_HAVE_LIVERANGE_OPS 1
+#define MONO_ARCH_HAVE_XP_UNWIND 1
+#define MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX 1
 #if defined(__linux__) && !defined(HAVE_MOVING_COLLECTOR)
 #define MONO_ARCH_MONITOR_OBJECT_REG X86_EAX
 #endif

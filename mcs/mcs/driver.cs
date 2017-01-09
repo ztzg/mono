@@ -35,24 +35,24 @@ namespace Mono.CSharp
 		//
 		// Assemblies references to be linked.   Initialized with
 		// mscorlib.dll here.
-		static ArrayList references;
+		ArrayList references;
 
 		//
 		// If any of these fail, we ignore the problem.  This is so
 		// that we can list all the assemblies in Windows and not fail
 		// if they are missing on Linux.
 		//
-		static ArrayList soft_references;
+		ArrayList soft_references;
 
 		// 
 		// External aliases for assemblies.
 		//
-		static Hashtable external_aliases;
+		Hashtable external_aliases;
 
 		//
 		// Modules to be linked
 		//
-		static ArrayList modules;
+		ArrayList modules;
 
 		// Lookup paths
 		static ArrayList link_paths;
@@ -74,9 +74,9 @@ namespace Mono.CSharp
 		//
 		// A list of resource files
 		//
-		static Resources embedded_resources;
-		static string win32ResourceFile;
-		static string win32IconFile;
+		Resources embedded_resources;
+		string win32ResourceFile;
+		string win32IconFile;
 
 		//
 		// Output file
@@ -97,8 +97,6 @@ namespace Mono.CSharp
 
 		static public void Reset ()
 		{
-			embedded_resources = null;
-			win32ResourceFile = win32IconFile = null;
 			output_file = null;
 		}
 
@@ -239,7 +237,7 @@ namespace Mono.CSharp
 				"   -help                Lists all compiler options (short: -?)\n" + 
 				"   -keycontainer:NAME   The key pair container used to sign the output assembly\n" +
 				"   -keyfile:FILE        The key file used to strongname the ouput assembly\n" +
-				"   -langversion:TEXT    Specifies language version modes: ISO-1, ISO-2, or Default\n" + 
+				"   -langversion:TEXT    Specifies language version: ISO-1, ISO-2, Default, or Future\n" + 
 				"   -lib:PATH1[,PATHn]   Specifies the location of referenced assemblies\n" +
 				"   -main:CLASS          Specifies the class with the Main method (short: -m)\n" +
 				"   -noconfig            Disables implicitly referenced assemblies\n" +
@@ -257,7 +255,7 @@ namespace Mono.CSharp
 				"                        KIND can be one of: exe, winexe, library, module\n" +
 				"   -unsafe[+|-]         Allows to compile code which uses unsafe keyword\n" +
 				"   -warnaserror[+|-]    Treats all warnings as errors\n" +
-				"   -warnaserror:W1[,Wn] Treats one or more compiler warnings as errors\n" +
+				"   -warnaserror[+|-]:W1[,Wn] Treats one or more compiler warnings as errors\n" +
 				"   -warn:0-4            Sets warning level, the default is 4 (short -w:)\n" +
 				"   -help2               Shows internal compiler options\n" + 
 				"\n" +
@@ -299,16 +297,19 @@ namespace Mono.CSharp
 			if (d == null)
 				return 1;
 
-			else if (d.Compile () && Report.Errors == 0) {
+			if (d.Compile () && Report.Errors == 0) {
 				if (Report.Warnings > 0) {
 					Console.WriteLine ("Compilation succeeded - {0} warning(s)", Report.Warnings);
 				}
+				Environment.Exit (0);
 				return 0;
-			} else {
-				Console.WriteLine("Compilation failed: {0} error(s), {1} warnings",
-					Report.Errors, Report.Warnings);
-				return 1;
 			}
+			
+			
+			Console.WriteLine("Compilation failed: {0} error(s), {1} warnings",
+				Report.Errors, Report.Warnings);
+			Environment.Exit (1);
+			return 1;
 		}
 
 		static public void LoadAssembly (string assembly, bool soft)
@@ -404,9 +405,9 @@ namespace Mono.CSharp
 
 				// Extern aliased refs require special handling
 				if (alias == null)
-					RootNamespace.Global.AddAssemblyReference (a);
+					GlobalRootNamespace.Instance.AddAssemblyReference (a);
 				else
-					RootNamespace.DefineRootNamespace (alias, a);
+					GlobalRootNamespace.Instance.DefineRootNamespace (alias, a);
 
 			} catch (BadImageFormatException f) {
 				// .NET 2.0 throws this if we try to load a module without an assembly manifest ...
@@ -446,7 +447,7 @@ namespace Mono.CSharp
 					}
 				}
 
-				RootNamespace.Global.AddModuleReference (m);
+				GlobalRootNamespace.Instance.AddModuleReference (m);
 
 			} catch (BadImageFormatException f) {
 				Error9 ("module", f.FileName, f.FusionLog);
@@ -458,7 +459,7 @@ namespace Mono.CSharp
 		/// <summary>
 		///   Loads all assemblies referenced on the command line
 		/// </summary>
-		static public void LoadReferences ()
+		public void LoadReferences ()
 		{
 			link_paths.Add (GetSystemDir ());
 			link_paths.Add (Directory.GetCurrentDirectory ());
@@ -478,7 +479,7 @@ namespace Mono.CSharp
 			foreach (DictionaryEntry entry in external_aliases)
 				LoadAssembly ((string) entry.Value, (string) entry.Key, false);
 				
-			RootNamespace.ComputeNamespaces ();
+			GlobalRootNamespace.Instance.ComputeNamespaces ();
 		}
 
 		static string [] LoadArgs (string file)
@@ -984,11 +985,6 @@ namespace Mono.CSharp
 				Report.Fatal = true;
 				return true;
 				
-			case "--werror":
-				Report.Warning (-29, 1, "Compatibility: Use -warnaserror: option instead of --werror");
-				Report.WarningsAreErrors = true;
-				return true;
-
 			case "--nowarn":
 				Report.Warning (-29, 1, "Compatibility: Use -nowarn instead of --nowarn");
 				if ((i + 1) >= args.Length){
@@ -1378,6 +1374,7 @@ namespace Mono.CSharp
 				return true;
 
 			case "/warnaserror":
+			case "/warnaserror+":
 				if (value.Length == 0) {
 					Report.WarningsAreErrors = true;
 				} else {
@@ -1386,12 +1383,13 @@ namespace Mono.CSharp
 				}
 				return true;
 
-			case "/warnaserror+":
-				Report.WarningsAreErrors = true;
-				return true;
-
 			case "/warnaserror-":
-				Report.WarningsAreErrors = false;
+				if (value.Length == 0) {
+					Report.WarningsAreErrors = false;
+				} else {
+					foreach (string wid in value.Split (argument_value_separator))
+						Report.RemoveWarningAsError (wid);
+				}
 				return true;
 
 			case "/warn":
@@ -1497,6 +1495,9 @@ namespace Mono.CSharp
 				case "iso-2":
 					RootContext.Version = LanguageVersion.ISO_2;
 					return true;
+				case "future":
+					RootContext.Version = LanguageVersion.Future;
+					return true;
 #endif
 				}
 				Report.Error (1617, "Invalid option `{0}' for /langversion. It must be either `ISO-1', `ISO-2' or `Default'", value);
@@ -1554,7 +1555,7 @@ namespace Mono.CSharp
 			return new_args;
 		}
 
-		static void AddExternAlias (string identifier, string assembly)
+		void AddExternAlias (string identifier, string assembly)
 		{
 			if (assembly.Length == 0) {
 				Report.Error (1680, "Invalid reference alias '" + identifier + "='. Missing filename");
@@ -1597,6 +1598,9 @@ namespace Mono.CSharp
 		//
 		public bool Compile ()
 		{
+			// TODO: Should be passed to parser as an argument
+			RootContext.ToplevelTypes = new ModuleContainer (RootContext.Unsafe);
+
 			Parse ();
 			if (Report.Errors > 0)
 				return false;
@@ -1640,7 +1644,7 @@ namespace Mono.CSharp
 				set_method.Invoke (CodeGen.Assembly.Builder, BindingFlags.Default, null, new object[]{true}, null);
 			}
 
-			RootNamespace.Global.AddModuleReference (CodeGen.Module.Builder);
+			GlobalRootNamespace.Instance.AddModuleReference (RootContext.ToplevelTypes.Builder);
 
 			//
 			// Load assemblies required
@@ -1665,8 +1669,6 @@ namespace Mono.CSharp
 
 			if (timestamps)
 				ShowTime ("   Core Types done");
-
-			CodeGen.Module.Resolve ();
 
 			//
 			// The second pass of the compiler
@@ -1741,7 +1743,7 @@ namespace Mono.CSharp
 			}
 
 			if (RootContext.NeedsEntryPoint) {
-				MethodInfo ep = RootContext.EntryPoint;
+				Method ep = RootContext.EntryPoint;
 
 				if (ep == null) {
 					if (RootContext.MainClass != null) {
@@ -1766,7 +1768,7 @@ namespace Mono.CSharp
 					return false;
 				}
 
-				CodeGen.Assembly.Builder.SetEntryPoint (ep, k);
+				CodeGen.Assembly.Builder.SetEntryPoint (ep.MethodBuilder, k);
 			} else if (RootContext.MainClass != null) {
 				Report.Error (2017, "Cannot specify -main if building a module or library");
 			}
@@ -1986,14 +1988,14 @@ namespace Mono.CSharp
 		{
 			Driver.Reset ();
 			RootContext.Reset (full_flag);
-			Tokenizer.Reset ();
 			Location.Reset ();
 			Report.Reset ();
 			TypeManager.Reset ();
+			PredefinedAttributes.Reset ();
 			TypeHandle.Reset ();
 
 			if (full_flag)
-				RootNamespace.Reset ();
+				GlobalRootNamespace.Reset ();
 			
 			NamespaceEntry.Reset ();
 			CodeGen.Reset ();
@@ -2005,6 +2007,8 @@ namespace Mono.CSharp
 			SymbolWriter.Reset ();
 			Switch.Reset ();
 			Linq.QueryBlock.TransparentParameter.Reset ();
+			Convert.Reset ();
+			TypeInfo.Reset ();
 		}
 
 	}

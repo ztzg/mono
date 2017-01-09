@@ -508,7 +508,7 @@ namespace Mono.CSharp {
 				Type t = MutateGenericType (method.DeclaringType);
 				if (t != method.DeclaringType) {
 					method = (MethodInfo) TypeManager.DropGenericMethodArguments (method);
-					if (method.Module == CodeGen.Module.Builder)
+					if (method.Module == Module.Builder)
 						method = TypeBuilder.GetMethod (t, method);
 					else
 						method = (MethodInfo) MethodInfo.GetMethodFromHandle (method.MethodHandle, t.TypeHandle);
@@ -534,7 +534,7 @@ namespace Mono.CSharp {
 				Type t = MutateGenericType (ctor.DeclaringType);
 				if (t != ctor.DeclaringType) {
 					ctor = (ConstructorInfo) TypeManager.DropGenericMethodArguments (ctor);
-					if (ctor.Module == CodeGen.Module.Builder)
+					if (ctor.Module == Module.Builder)
 						return TypeBuilder.GetConstructor (t, ctor);
 						
 					return (ConstructorInfo) ConstructorInfo.GetMethodFromHandle (ctor.MethodHandle, t.TypeHandle);
@@ -585,7 +585,7 @@ namespace Mono.CSharp {
 			for (int i = 0; i < t_args.Length; ++i)
 				t_args [i] = MutateType (t_args [i]);
 
-			return type.GetGenericTypeDefinition ().MakeGenericType (t_args);
+			return TypeManager.DropGenericTypeArguments (type).MakeGenericType (t_args);
 		}
 #endif
 
@@ -850,11 +850,11 @@ namespace Mono.CSharp {
 
 		public virtual bool HasExplicitParameters {
 			get {
-				return Parameters != Parameters.Undefined;
+				return Parameters != ParametersCompiled.Undefined;
 			}
 		}
 		
-		public Parameters Parameters {
+		public ParametersCompiled Parameters {
 			get { return Block.Parameters; }
 		}
 
@@ -864,8 +864,10 @@ namespace Mono.CSharp {
 		//
 		public bool ImplicitStandardConversionExists (EmitContext ec, Type delegate_type)
 		{
-			using (ec.Set (EmitContext.Flags.ProbingMode)) {
-				return Compatible (ec, delegate_type) != null;
+			using (ec.With (EmitContext.Flags.InferReturnType, false)) {
+				using (ec.Set (EmitContext.Flags.ProbingMode)) {
+					return Compatible (ec, delegate_type) != null;
+				}
 			}
 		}
 
@@ -874,7 +876,6 @@ namespace Mono.CSharp {
 			if (TypeManager.IsDelegateType (delegate_type))
 				return delegate_type;
 
-#if GMCS_SOURCE
 			if (TypeManager.DropGenericTypeArguments (delegate_type) == TypeManager.expression_type) {
 				delegate_type = TypeManager.GetTypeArguments (delegate_type) [0];
 				if (TypeManager.IsDelegateType (delegate_type))
@@ -884,7 +885,6 @@ namespace Mono.CSharp {
 					GetSignatureForError (), TypeManager.CSharpName (delegate_type));
 				return null;
 			}
-#endif
 
 			Report.Error (1660, loc, "Cannot convert `{0}' to non-delegate type `{1}'",
 				      GetSignatureForError (), TypeManager.CSharpName (delegate_type));
@@ -969,16 +969,12 @@ namespace Mono.CSharp {
 				return false;
 
 			if (!TypeManager.IsDelegateType (delegate_type)) {
-#if GMCS_SOURCE
 				if (TypeManager.DropGenericTypeArguments (delegate_type) != TypeManager.expression_type)
 					return false;
 
-				delegate_type = delegate_type.GetGenericArguments () [0];
+				delegate_type = TypeManager.GetTypeArguments (delegate_type) [0];
 				if (!TypeManager.IsDelegateType (delegate_type))
 					return false;
-#else
-				return false;
-#endif
 			}
 			
 			AParametersCollection d_params = TypeManager.GetDelegateParameters (delegate_type);
@@ -991,7 +987,7 @@ namespace Mono.CSharp {
 					if (!TypeManager.HasElementType (itype))
 						continue;
 					
-					if (!TypeManager.IsGenericParameter (itype.GetElementType ()))
+					if (!TypeManager.IsGenericParameter (TypeManager.GetElementType (itype)))
 					    continue;
 				}
 				type_inference.ExactInference (Parameters.Types [i], itype);
@@ -1009,6 +1005,7 @@ namespace Mono.CSharp {
 			if (am == null)
 				return null;
 
+			// Stop referencing gmcs NullLiteral type
 			if (am.ReturnType == TypeManager.null_type)
 				am.ReturnType = null;
 
@@ -1077,11 +1074,11 @@ namespace Mono.CSharp {
 			return null;
 		}
 
-		protected virtual Parameters ResolveParameters (EmitContext ec, TypeInferenceContext tic, Type delegate_type)
+		protected virtual ParametersCompiled ResolveParameters (EmitContext ec, TypeInferenceContext tic, Type delegate_type)
 		{
 			AParametersCollection delegate_parameters = TypeManager.GetDelegateParameters (delegate_type);
 
-			if (Parameters == Parameters.Undefined) {
+			if (Parameters == ParametersCompiled.Undefined) {
 				//
 				// We provide a set of inaccessible parameters
 				//
@@ -1102,7 +1099,7 @@ namespace Mono.CSharp {
 						delegate_parameters.FixedParameters [i].ModFlags, null, loc);
 				}
 
-				return Parameters.CreateFullyResolved (fixedpars, delegate_parameters.Types);
+				return ParametersCompiled.CreateFullyResolved (fixedpars, delegate_parameters.Types);
 			}
 
 			if (!VerifyExplicitParameters (delegate_type, delegate_parameters, ec.IsInProbingMode)) {
@@ -1163,7 +1160,7 @@ namespace Mono.CSharp {
 
 		protected AnonymousMethodBody CompatibleMethod (EmitContext ec, TypeInferenceContext tic, Type return_type, Type delegate_type)
 		{
-			Parameters p = ResolveParameters (ec, tic, delegate_type);
+			ParametersCompiled p = ResolveParameters (ec, tic, delegate_type);
 			if (p == null)
 				return null;
 
@@ -1176,7 +1173,7 @@ namespace Mono.CSharp {
 			return anonymous;
 		}
 
-		protected virtual AnonymousMethodBody CompatibleMethodFactory (Type return_type, Type delegate_type, Parameters p, ToplevelBlock b)
+		protected virtual AnonymousMethodBody CompatibleMethodFactory (Type return_type, Type delegate_type, ParametersCompiled p, ToplevelBlock b)
 		{
 			return new AnonymousMethodBody (p, b, return_type, delegate_type, loc);
 		}
@@ -1203,7 +1200,7 @@ namespace Mono.CSharp {
 			public AnonymousMethodMethod (DeclSpace parent, AnonymousExpression am, AnonymousMethodStorey storey,
 							  GenericMethod generic, TypeExpr return_type,
 							  int mod, string real_name, MemberName name,
-							  Parameters parameters)
+							  ParametersCompiled parameters)
 				: base (parent, generic, return_type, mod | Modifiers.COMPILER_GENERATED,
 						name, parameters, null)
 			{
@@ -1349,7 +1346,7 @@ namespace Mono.CSharp {
 
 	public class AnonymousMethodBody : AnonymousExpression
 	{
-		protected readonly Parameters parameters;
+		protected readonly ParametersCompiled parameters;
 		AnonymousMethodStorey storey;
 
 		AnonymousMethodMethod method;
@@ -1357,7 +1354,7 @@ namespace Mono.CSharp {
 
 		static int unique_id;
 
-		public AnonymousMethodBody (Parameters parameters,
+		public AnonymousMethodBody (ParametersCompiled parameters,
 					ToplevelBlock block, Type return_type, Type delegate_type,
 					Location loc)
 			: base (block, return_type, loc)
@@ -1534,7 +1531,6 @@ namespace Mono.CSharp {
 			}
 
 			MethodInfo delegate_method = method.MethodBuilder;
-#if GMCS_SOURCE
 			if (storey != null && storey.MemberName.IsGeneric) {
 				Type t = storey.Instance.Type;
 				
@@ -1548,9 +1544,13 @@ namespace Mono.CSharp {
 					t = storey.GetGenericStorey ().MutateType (t);
 				}
 
+#if GMCS_SOURCE
 				delegate_method = TypeBuilder.GetMethod (t, delegate_method);
-			}
+#else
+				throw new NotSupportedException ();
 #endif
+			}
+
 			ig.Emit (OpCodes.Ldftn, delegate_method);
 
 			ConstructorInfo constructor_method = Delegate.GetConstructor (ec.ContainerType, type);
@@ -1605,7 +1605,7 @@ namespace Mono.CSharp {
 	//
 	public class AnonymousTypeClass : CompilerGeneratedClass
 	{
-		sealed class AnonymousParameters : Parameters
+		sealed class AnonymousParameters : ParametersCompiled
 		{
 			public AnonymousParameters (params Parameter[] parameters)
 				: base (parameters)
@@ -1722,11 +1722,11 @@ namespace Mono.CSharp {
 
 			Method equals = new Method (this, null, TypeManager.system_boolean_expr,
 				Modifiers.PUBLIC | Modifiers.OVERRIDE | Modifiers.DEBUGGER_HIDDEN, new MemberName ("Equals", loc),
-				Mono.CSharp.Parameters.CreateFullyResolved (new Parameter (null, "obj", 0, null, loc), TypeManager.object_type), null);
+				Mono.CSharp.ParametersCompiled.CreateFullyResolved (new Parameter (null, "obj", 0, null, loc), TypeManager.object_type), null);
 
 			Method tostring = new Method (this, null, TypeManager.system_string_expr,
 				Modifiers.PUBLIC | Modifiers.OVERRIDE | Modifiers.DEBUGGER_HIDDEN, new MemberName ("ToString", loc),
-				Mono.CSharp.Parameters.EmptyReadOnlyParameters, null);
+				Mono.CSharp.ParametersCompiled.EmptyReadOnlyParameters, null);
 
 			ToplevelBlock equals_block = new ToplevelBlock (equals.Parameters, loc);
 			TypeExpr current_type;
@@ -1742,7 +1742,7 @@ namespace Mono.CSharp {
 				new QualifiedAliasMember ("global", "System", loc), "Collections", loc), "Generic", loc);
 
 			Expression rs_equals = null;
-			Expression string_concat = new StringConstant ("<empty type>", loc);
+			Expression string_concat = new StringConstant ("{", loc);
 			Expression rs_hashcode = new IntConstant (-2128831035, loc);
 			for (int i = 0; i < parameters.Count; ++i) {
 				AnonymousTypeParameter p = (AnonymousTypeParameter) parameters [i];
@@ -1774,13 +1774,15 @@ namespace Mono.CSharp {
 					new MemberAccess (new This (f.Location), f.Name), new NullLiteral (loc)),
 					new Invocation (new MemberAccess (
 						new MemberAccess (new This (f.Location), f.Name), "ToString"), null),
-					new StringConstant ("<null>", loc));
+					new StringConstant (string.Empty, loc));
 
 				if (rs_equals == null) {
 					rs_equals = field_equal;
 					string_concat = new Binary (Binary.Operator.Addition,
-						new StringConstant (p.Name + " = ", loc),
-						field_to_string);
+						string_concat,
+						new Binary (Binary.Operator.Addition,
+							new StringConstant (" " + p.Name + " = ", loc),
+							field_to_string));
 					continue;
 				}
 
@@ -1795,6 +1797,10 @@ namespace Mono.CSharp {
 
 				rs_equals = new Binary (Binary.Operator.LogicalAnd, rs_equals, field_equal);
 			}
+
+			string_concat = new Binary (Binary.Operator.Addition,
+				string_concat,
+				new StringConstant (" }", loc));
 
 			//
 			// Equals (object obj) override
@@ -1819,7 +1825,7 @@ namespace Mono.CSharp {
 			Method hashcode = new Method (this, null, TypeManager.system_int32_expr,
 				Modifiers.PUBLIC | Modifiers.OVERRIDE | Modifiers.DEBUGGER_HIDDEN,
 				new MemberName ("GetHashCode", loc),
-				Mono.CSharp.Parameters.EmptyReadOnlyParameters, null);
+				Mono.CSharp.ParametersCompiled.EmptyReadOnlyParameters, null);
 
 			//
 			// Modified FNV with good avalanche behavior and uniform

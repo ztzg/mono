@@ -58,10 +58,11 @@ TUNER_FLAGS = -d $(WORKING_DIR) -o $(OUTPUT_DIR)	\
 	-a smcs		\
 	-b true		\
 	-g true		\
+	-m secattrs SecurityAttributes	\
 	-m display_internalized false
 
 TUNER_STEPS = \
-	Mono.Tuner.InjectAttributes,Mono.Tuner:OutputStep	\
+	Mono.Tuner.InjectSecurityAttributes,Mono.Tuner:OutputStep	\
 	Mono.Tuner.AdjustVisibility,Mono.Tuner:OutputStep	\
 	Mono.Tuner.PrintStatus,Mono.Tuner:OutputStep	\
 	Mono.Tuner.RemoveSerialization,Mono.Tuner:OutputStep
@@ -84,18 +85,20 @@ GACUTIL = MONO_PATH="$(topdir)/class/lib/net_1_1_bootstrap$(PLATFORM_PATH_SEPARA
 
 TUNER_INSTALL_DIR = $(DESTDIR)$(mono_libdir)/mono/2.1
 
-end-install:	\
-	inst-mscorlib.dll	\
-	inst-smcs.exe	\
-	gac-System	\
-	gac-System.Net	\
-	gac-System.Xml	\
-	gac-System.Xml.Linq	\
-	gac-System.Core	\
-	gac-System.Runtime.Serialization	\
-	gac-System.ServiceModel	\
-	gac-System.ServiceModel.Web	\
-	gac-Mono.CompilerServices.SymbolWriter
+end-install:
+
+#end-install:	\
+#	inst-mscorlib.dll	\
+#	inst-smcs.exe	\
+#	gac-System	\
+#	gac-System.Net	\
+#	gac-System.Xml	\
+#	gac-System.Xml.Linq	\
+#	gac-System.Core	\
+#	gac-System.Runtime.Serialization	\
+#	gac-System.ServiceModel	\
+#	gac-System.ServiceModel.Web	\
+#	gac-Mono.CompilerServices.SymbolWriter
 
 inst-%: $(OUTPUT_DIR)/%
 	$(MKINSTALLDIRS) $(TUNER_INSTALL_DIR)

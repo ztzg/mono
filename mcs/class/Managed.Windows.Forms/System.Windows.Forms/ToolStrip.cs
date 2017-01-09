@@ -723,8 +723,10 @@ namespace System.Windows.Forms
 		protected override void Dispose (bool disposing)
 		{
 			if (!IsDisposed) {
-				foreach (ToolStripItem tsi in Items)
-					tsi.Dispose ();
+				// ToolStripItem.Dispose modifes the collection,
+				// so we iterate it in reverse order
+				for (int i = Items.Count - 1; i >= 0; i--)
+					Items [i].Dispose ();
 					
 				if (this.overflow_button != null && this.overflow_button.drop_down != null)
 					this.overflow_button.drop_down.Dispose ();
@@ -974,7 +976,9 @@ namespace System.Windows.Forms
 			this.OnPaintGrip (e);
 
 			// Make each item draw itself
-			foreach (ToolStripItem tsi in this.displayed_items) {
+			for (int i = 0; i < displayed_items.Count; i++) {
+				ToolStripItem tsi = displayed_items[i];
+				
 				if (tsi.Visible) {
 					e.Graphics.TranslateTransform (tsi.Bounds.Left, tsi.Bounds.Top);
 					tsi.FireEvent (e, ToolStripItemEventType.Paint);

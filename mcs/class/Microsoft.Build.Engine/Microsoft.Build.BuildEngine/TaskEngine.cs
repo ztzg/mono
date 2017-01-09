@@ -162,6 +162,7 @@ namespace Microsoft.Build.BuildEngine {
 					       string itemName)
 		{
 			BuildItemGroup newItems = ChangeType.ToBuildItemGroup (o, propertyInfo.PropertyType, itemName);
+			newItems.ParentProject = parentProject;
 			
 			if (parentProject.EvaluatedItemsByName.ContainsKey (itemName)) {
 				BuildItemGroup big = parentProject.EvaluatedItemsByName [itemName];
@@ -181,8 +182,11 @@ namespace Microsoft.Build.BuildEngine {
 			
 			e = new Expression ();
 			e.Parse (raw, true);
-			
-			if ((string) e.ConvertTo (parentProject, typeof (string)) == String.Empty)
+
+			// Empty contents allowed only for arrays
+			// See TestRequiredTask_*
+			if (!type.IsArray &&
+				(string) e.ConvertTo (parentProject, typeof (string)) == String.Empty)
 				return null;
 			
 			result = e.ConvertTo (parentProject, type);

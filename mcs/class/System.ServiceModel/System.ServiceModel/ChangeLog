@@ -1,3 +1,137 @@
+2009-03-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CrossDomainAccessManager.cs: temporarily disable
+	  access checker to just warn invalid access for now.
+
+2009-03-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceKnownTypeAttribute.cs : correct implementation to populate
+	  specified types.
+
+2009-03-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaderException.cs : added missing members.
+
+2009-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CrossDomainPolicy.cs : added validation method. Not sure if it is
+	  complete.
+	* CrossDomainAccessManager.cs : validate against crossdomain.xml too.
+
+2009-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CrossDomainAccessManager.cs : replace reflection-based
+	  Uri retrieval with actually working one.
+
+2009-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CrossDomainAccessManager.cs : 2.1 WebRequest misses some
+ 	  members used here.
+
+2009-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CrossDomainAccessManager.cs, ClientAccessPolicy.cs,
+	  CrossDomainPolicy.cs : new. support cross domain access check.
+
+2009-02-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : give successful WCF call completion info.
+
+2009-02-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : diagnose more precisely.
+
+2009-02-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientProxyGenerator.cs : fix wrong argument index.
+
+2009-02-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : use overridable CreateChannel().
+
+2009-02-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : make it work with SL2 UI threading model.
+
+2009-02-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientProxyGenerator.cs : simply use CodeMethod.GetArg().
+
+2009-02-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientRuntimeChannel.cs, ClientProxyGenerator.cs,
+	  ClientBase.cs, ChannelFactory_1.cs, DuplexClientBase.cs:
+	  now ClientBase<TChannel>.InnerChannel became ChannelBase<T> as
+	  SL2 does. This change required several internal changes in
+	  proxy code generation. Also, now TChannel must be class.
+
+2009-02-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactory_1.cs : it's not going to create ClientRuntime
+	  anymore here. Moving to ServiceEndpoint.cs as the first stage.
+	* ClientBase.cs : some comment.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactory.cs : for default constructor, first try to
+	  retrieve configuration from its contract name.
+	  Diagnose errorneous configuration.
+	* SilverlightClientConfigLoader.cs : basicHttpBinding/binding
+	  element could be defined two or more times.
+
+2009-02-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientProxyGenerator.cs : so, the proxy generator was buggy to
+	  generate end invoke.
+	* ClientBase.cs : make it simpler and just work.
+
+2009-02-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : oops, should have tried build with net_2_1_raw.
+
+2009-02-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientRuntimeChannel.cs, ClientBase.cs :
+	  implement remaining ChannelBase members and made some required
+	  changes in ClientRuntimeChannel.
+
+2009-02-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientRuntimeChannel.cs, ClientProxyGenerator.cs :
+	  change async methods signature and dynamic code generation.
+
+2009-01-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientBase.cs : added another missing type.
+
+2009-01-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactory.cs : fix wrong file reference.
+
+2009-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SilverlightClientConfigLoader.cs :
+	  removed extraneous code. Handle "*" (wildcard).
+
+2009-01-22  Alan McGovern  <amcgovern@novell.com>
+
+	* BasicHttpBinding.cs: In silverlight ReaderQuota is immutable and always
+	has a default value of ReaderQuota.Max. Therefore no need to call CopyTo.
+
+2009-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SilverlightClientConfigLoader.cs : in Silverlight, there is
+	  "ServiceReference.ClientConfig" which is used to resolve service
+	  endpoint configuration. It is to consume that file.
+	* ChannelFactory.cs : use above in SL.
+	* ClientBase.cs : rename some misleading param names.
+
+2009-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactory.cs : some code comment.
+	* ClientBase.cs : remove some todos.
+	* ClientRuntimeChannel.cs : hack some session properties.
+
 2009-01-19  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* ClientBase.cs : implement InvokeAsync(). Not sure if it works yet.

@@ -60,11 +60,18 @@
 	Files are copied chunk by chunk, not by reading the entire
 	contents.
 
+2009-03-23  Zoltan Varga  <vargaz@gmail.com>
+
+	* PageCompiler.cs: Fix the build.
+
 2009-03-23  Marek Habersack  <mhabersack@novell.com>
 
 	* TemplateBuildProvider.cs: add values of the CodeFile and Src
 	page/master/control directives to the list of file dependencies.
 	Extract language also for master/page, not only for controls.
+
+	* PageCompiler.cs: CreateConstructors now triggers master page
+	build, if the current page is using one. Fixes bug #487857
 
 2009-03-16  Marek Habersack  <mhabersack@novell.com>
 
@@ -82,15 +89,20 @@
 	is called to close the tag. At this point the verbatim text is
 	checked whether it contains server-side tags and/or expressions.
 
-2009-03-16  Marek Habersack  <mhabersack@novell.com>
+2009-03-12  Marek Habersack  <mhabersack@novell.com>
 
-	* AspGenerator.cs: when parsing nested tags (includes tags inside
-	client-side javascript script blocks) pass the closing tag up to
-	the containing parser.
+	* BuildManager.cs, BuildManagerDirectoryBuilder.cs,
+	BuildProvider.cs, TemplateBuildProvider.cs: dependencies are
+	returned as an IDictionary <string, bool>. Dependencies must be
+	compared case-insensitively.
+
+	* TemplateBuildProvider.cs: ExtractReferenceDependencies must also
+	extract the value of the Page attribute.
 
 2009-02-28 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* AppResourcesAssemblyBuilder.cs:
+	* BuildManagerDirectoryBuilder.cs:
 	* AspComponentFoundry.cs:
 	* AssemblyBuilder.cs:
 	* CachingCompiler.cs:
@@ -116,17 +128,22 @@
 	when looking for embedded tags in ProcessTagsInAttributes.
 
 2009-02-25  Marek Habersack  <mhabersack@novell.com>
- 
- 	* AspTokenizer.cs: put_back now uses a stack and allows more than
- 	one invocation when called inside a tag.
- 
- 	* AspGenerator.cs: when a nested parser is used, pay attention to
- 	server tags found inside client tags and add them to the control
- 	tree.
+
+	* AspTokenizer.cs: put_back now uses a stack and allows more than
+	one invocation when called inside a tag.
+
+	* AspGenerator.cs: when a nested parser is used, pay attention to
+	server tags found inside client tags and add them to the control
+	tree.
+
+2009-02-24  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: Path.Combine must not be passed null first
+	parameter.
 
 2009-02-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
-	* BuildManager.cs: updated comment.
+	* System.Web.Compilation/BuildManager.cs: updated comment.
 
 2009-02-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
@@ -169,6 +186,9 @@
 
 2009-01-26  Marek Habersack  <mhabersack@novell.com>
 
+	* BuildManagerDirectoryBuilder.cs: added support for fake virtual
+	paths.
+
 	* CompilationException.cs: added a Message override to make error
 	messages more useful.
 
@@ -179,10 +199,101 @@
 
 2009-01-23  Marek Habersack  <mhabersack@novell.com>
 
-	* BuildManager.cs: if dependencyCache already contains the virtual
-	path, replace its corresponding file set (in AddToCache). This can
-	happen only if the requested virtual path compilation resulted in
-	errors and the compilation has been retried. Fixes bug #462681
+	* BuildManager.cs: use -1 for infinite wait in calls to
+	Acquire{Reader,Writer}Lock ().
+
+2009-01-22  Marek Habersack  <mhabersack@novell.com>
+
+	* XsdBuildProvider.cs: added missing BuildProviderAppliesTo
+	attribute.
+
+	* BuildProvider.cs: added new internal virtual method,
+	ExtractDependencies() whose purpose is to extract virtual path
+	dependencies without compiling the code, if possible.
+	
+	* TemplateBuildProvider.cs: implemented the new
+	ExtractDependencies () method which uses regular expressions to
+	extract file dependencies from the source without having to
+	compile the file.
+
+	* CompilationException.cs: added a new public property, Results,
+	which returns the compilation results.
+
+	* BuildProviderGroup.cs: added. A simple class descending from
+	List <BuildProvider> which is used to hold a compilation batch -
+	that is a collection of BuildProvider instances.
+
+	* BuildManagerDirectoryBuilder.cs: new class which takes care of
+	generating compilation batches for the requested virtual path. A
+	set of batches is generated from files found in the same virtual
+	directory as the requested virtual path and all of the
+	dependencies of those files. All files are grouped in batches
+	within which no file depends upon its siblings. An attempt is made
+	to sort the batches from the "least dependent" to the "most
+	dependent" batches - i.e. the batches which do not depend on other
+	batches go to the top.
+	Code generating the batches now correctly detects dependency loops
+	and throws an exception when one is encountered.
+	Batches are represented as instances of a new class -
+	BuildProviderGroup.
+
+	* BuildManagerCacheItem.cs: added. Contains all the compilation
+	result information needed by BuildManager. See below.
+
+	* BuildManager.cs: complete batch building rewrite:
+	 - only one build lock is held instead of a set of compilation
+ 	   tickets. Only one thread can compile anything at one given
+	   time.
+	 - retrieving types from the build cache now uses a slim rw lock,
+	   so that readers aren't blocked while compilation is in
+	   progress. Writer lock is acquired only when adding a newly
+	   compiled type to the build cache and when removing it after its
+	   dependencies made it invalid.
+	 - assembly references for each compilation are now collected
+	   dynamically as the source is being compiled, this removed a lot
+	   of complexity in dealing with assembles containing conflicting
+	   types. As a consequence right now there may exist several
+	   loaded assemblies containing the same type, but only the latest
+	   of them will be used in new compiles.
+	 - the thread compiling code can recurse into the Build method
+	   which causes the recursively referenced code to be compiled
+	   into a separate, uniquely named, assembly. This deals with all
+	   recursion loops and dependency problems.
+	 - automatic app domain restart after a certain number of compiles
+	   is enabled now.
+	 - improved compilation error handling. If a compilation error
+	   occurs, the code attempts to recompile the assembly up to 3
+	   times, each time removing from the batch the files/virtual
+	   paths which failed parsing/compilation. If the attempts failed,
+	   another one is made to compile only the virtual path requested
+	   by the calling code. Only should that fail a compilation
+	   exception is thrown. All the compilation errors are written to
+	   stdout if the application is in the debug mode.
+	 - changed assembly naming. It now generates assembly names based
+	   on whether the compilation is recursive and whether the batch
+	   being compiled contains more than one code unit or
+	   not.
+	 - compilation results are now stored in the cache as instances of
+	   the new BuildManagerCacheItem class, which contains all the
+	   information required by BuildManager to return types,
+	   assemblies, dependencies etc.
+	 - GetReferencedAssemblies now correctly returns only the
+	   assemblies defined in the .config files.
+	 - GetVirtualPathDependencies does not need to compile code
+	   anymore in order to extract virtual path dependencies. New code
+	   in BuildProvider.ExtractDependencies () takes care of that.
+	 - a BuildManagerDirectoryBuilder class instance is used to
+	   generate compilation batches.
+	 - if SYSTEMCOR_DEP is undefined use ReaderWriterLock instead of
+	 ReaderWriterLockSlim
+
+	* AssemblyBuilder.cs: added support for keeping track of which
+	code unit was generated by which BuildProvider andr which
+	BuildProvider produced a given source file. Both changes serve the
+	purpose of dealing with compilation errors in BuildManager.
+
+	* ApplicationFileBuildProvider.cs: added missing
+	BuildProviderAppliesTo attribute
 
 2009-01-14  Marek Habersack  <mhabersack@novell.com>
 

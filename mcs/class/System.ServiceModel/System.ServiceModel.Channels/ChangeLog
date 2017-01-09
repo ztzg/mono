@@ -1,3 +1,42 @@
+2009-03-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs, MessageHeaders.cs, MessageImpl.cs :
+	  handle headers in SL2. Slightly changed 3.0 code too.
+
+2009-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : use cross domain access manager.
+
+2009-02-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs : (in CreateBufferedCopy) do not pass the entire
+	  message as BodyWriter.
+	  (in GetReaderAtBodyContents) just write body contents.
+	* MessageImpl.cs : do not try to read body at ctor (fixed tons
+	  of test failures).
+	  Add some state check in GetReaderAtBodyContents().
+	* XmlReaderBodyWriter.cs : avoid possible extra xmldecl onto output.
+
+2009-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs : do not forget to flush.
+	* HttpRequestChannel.cs : give more exact error info.
+
+2009-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs, MessageBufferImpl.cs, XmlReaderBodyWriter.cs :
+	  make buffered copy in ML2 really buffered.
+
+2009-02-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs : if there is no header item to write, do not write
+	  SOAP header element.
+
+2009-01-22  Alan McGovern  <amcgovern@novell.com>
+
+	* MessageHeaders.cs : List<T>.RemoveAll(Predicate<T>) doesn't exist in Silverlight.
+	Rewrite to avoid usage of it.
+
 2009-01-14  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* ChannelParameterCollection.cs : implement, rather than NIE.

@@ -100,12 +100,7 @@ namespace System.Windows.Forms {
 		[DesignerSerializationVisibility (DesignerSerializationVisibility.Hidden)]
 		public virtual DataGridViewCell CellTemplate {
 			get { return cellTemplate; }
-			set {
-				cellTemplate = value;
-				if (DataGridView != null) {
-					cellTemplate.SetDataGridView(DataGridView);
-				}
-			}
+			set { cellTemplate = value; }
 		}
 
 		[Browsable (false)]
@@ -373,8 +368,13 @@ Example */
 		public DataGridViewColumnSortMode SortMode {
 			get { return sortMode; }
 			set {
-				if (value == DataGridViewColumnSortMode.Automatic && DataGridView != null && DataGridView.SelectionMode == DataGridViewSelectionMode.FullColumnSelect)
-					throw new InvalidOperationException ("Column's SortMode cannot be set to Automatic while the DataGridView control's SelectionMode is set to FullColumnSelect.");
+				if (DataGridView != null && value == DataGridViewColumnSortMode.Automatic) {
+					if (DataGridView.SelectionMode == DataGridViewSelectionMode.FullColumnSelect ||
+					    DataGridView.SelectionMode == DataGridViewSelectionMode.ColumnHeaderSelect)
+						throw new InvalidOperationException ("Column's SortMode cannot be set to Automatic "+
+										     "while the DataGridView control's SelectionMode "+
+										     "is set to FullColumnSelect or ColumnHeaderSelect.");
+				}
 
 				if (sortMode != value) {
 					sortMode = value;
@@ -414,7 +414,11 @@ Example */
 		[Localizable (true)]
 		public override bool Visible {
 			get { return visible; }
-			set { visible = value; }
+			set {
+				visible = value;
+				if (DataGridView != null)
+					DataGridView.Invalidate ();
+			}
 		}
 
 		[Localizable (true)]
@@ -479,9 +483,6 @@ Example */
 			}
 			
 			base.SetDataGridView (dataGridView);
-			if (cellTemplate != null) {
-				cellTemplate.SetDataGridView(dataGridView);
-			}
 			headerCell.SetDataGridView(dataGridView);
 		}
 

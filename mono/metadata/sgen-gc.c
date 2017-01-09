@@ -4,7 +4,7 @@
  * Author:
  * 	Paolo Molaro (lupus@ximian.com)
  *
- * Copyright (C) 2005-2006 Novell, Inc
+ * Copyright 2005-2009 Novell, Inc (http://www.novell.com)
  *
  * Thread start/stop adapted from Boehm's GC:
  * Copyright (c) 1994 by Xerox Corporation.  All rights reserved.
@@ -528,11 +528,13 @@ typedef struct _FinalizeEntry FinalizeEntry;
 struct _FinalizeEntry {
 	FinalizeEntry *next;
 	void *object;
-	void *data; /* can be a disappearing link or the data for the finalizer */
-	/* Note we could use just one pointer if we don't support multiple callbacks
-	 * for finalizers and per-finalizer data and if we store the obj pointers
-	 * in the link like libgc does
-	 */
+};
+
+typedef struct _DisappearingLink DisappearingLink;
+struct _DisappearingLink {
+	DisappearingLink *next;
+	void *object;
+	void *data;
 };
 
 /*
@@ -542,8 +544,7 @@ struct _FinalizeEntry {
 static FinalizeEntry **finalizable_hash = NULL;
 /* objects that are ready to be finalized */
 static FinalizeEntry *fin_ready_list = NULL;
-/* disappearing links use the same structure but a different list */
-static FinalizeEntry **disappearing_link_hash = NULL;
+static DisappearingLink **disappearing_link_hash = NULL;
 static mword disappearing_link_hash_size = 0;
 static mword finalizable_hash_size = 0;
 
@@ -861,7 +862,7 @@ mono_gc_make_descr_for_object (gsize *bitmap, int numbits, size_t obj_size)
 	stored_size += ALLOC_ALIGN - 1;
 	stored_size &= ~(ALLOC_ALIGN - 1);
 	for (i = 0; i < numbits; ++i) {
-		if (bitmap [i / GC_BITS_PER_WORD] & (1 << (i % GC_BITS_PER_WORD))) {
+		if (bitmap [i / GC_BITS_PER_WORD] & ((gsize)1 << (i % GC_BITS_PER_WORD))) {
 			if (first_set < 0)
 				first_set = i;
 			last_set = i;
@@ -907,7 +908,7 @@ mono_gc_make_descr_for_array (int vector, gsize *elem_bitmap, int numbits, size_
 	int first_set = -1, num_set = 0, last_set = -1, i;
 	mword desc = vector? DESC_TYPE_VECTOR: DESC_TYPE_ARRAY;
 	for (i = 0; i < numbits; ++i) {
-		if (elem_bitmap [i / GC_BITS_PER_WORD] & (1 << (i % GC_BITS_PER_WORD))) {
+		if (elem_bitmap [i / GC_BITS_PER_WORD] & ((gsize)1 << (i % GC_BITS_PER_WORD))) {
 			if (first_set < 0)
 				first_set = i;
 			last_set = i;
@@ -1361,7 +1362,7 @@ add_to_global_remset (gpointer ptr, gboolean root)
 	global_remset = rs;
 	if (root) {
 		*(global_remset->store_next++) = (mword)ptr | REMSET_OTHER;
-		*(global_remset->store_next++) = (mword)REMSET_LOCATION;
+		*(global_remset->store_next++) = (mword)REMSET_ROOT_LOCATION;
 	} else {
 		*(global_remset->store_next++) = (mword)ptr;
 	}
@@ -3556,7 +3557,7 @@ finalize_in_range (char *start, char *end)
 static void
 null_link_in_range (char *start, char *end)
 {
-	FinalizeEntry *entry, *prev;
+	DisappearingLink *entry, *prev;
 	int i;
 	for (i = 0; i < disappearing_link_hash_size; ++i) {
 		prev = NULL;
@@ -3564,7 +3565,7 @@ null_link_in_range (char *start, char *end)
 			if ((char*)entry->object >= start && (char*)entry->object < end && ((char*)entry->object < to_space || (char*)entry->object >= to_space_end)) {
 				if (object_is_fin_ready (entry->object)) {
 					void **p = entry->data;
-					FinalizeEntry *old;
+					DisappearingLink *old;
 					*p = NULL;
 					/* remove from list */
 					if (prev)
@@ -3675,6 +3676,7 @@ mono_gc_register_for_finalization (MonoObject *obj, void *user_data)
 	unsigned int hash;
 	if (no_finalize)
 		return;
+	g_assert (user_data == NULL || user_data == mono_gc_run_finalize);
 	hash = mono_object_hash (obj);
 	LOCK_GC;
 	if (num_registered_finalizers >= finalizable_hash_size * 2)
@@ -3683,9 +3685,7 @@ mono_gc_register_for_finalization (MonoObject *obj, void *user_data)
 	prev = NULL;
 	for (entry = finalizable_hash [hash]; entry; entry = entry->next) {
 		if (entry->object == obj) {
-			if (user_data) {
-				entry->data = user_data;
-			} else {
+			if (!user_data) {
 				/* remove from the list */
 				if (prev)
 					prev->next = entry->next;
@@ -3707,7 +3707,6 @@ mono_gc_register_for_finalization (MonoObject *obj, void *user_data)
 	}
 	entry = get_internal_mem (sizeof (FinalizeEntry));
 	entry->object = obj;
-	entry->data = user_data;
 	entry->next = finalizable_hash [hash];
 	finalizable_hash [hash] = entry;
 	num_registered_finalizers++;
@@ -3720,11 +3719,11 @@ rehash_dislink (void)
 {
 	int i;
 	unsigned int hash;
-	FinalizeEntry **new_hash;
-	FinalizeEntry *entry, *next;
+	DisappearingLink **new_hash;
+	DisappearingLink *entry, *next;
 	int new_size = g_spaced_primes_closest (num_disappearing_links);
 
-	new_hash = get_internal_mem (new_size * sizeof (FinalizeEntry*));
+	new_hash = get_internal_mem (new_size * sizeof (DisappearingLink*));
 	for (i = 0; i < disappearing_link_hash_size; ++i) {
 		for (entry = disappearing_link_hash [i]; entry; entry = next) {
 			hash = mono_aligned_addr_hash (entry->data) % new_size;
@@ -3741,7 +3740,7 @@ rehash_dislink (void)
 static void
 mono_gc_register_disappearing_link (MonoObject *obj, void *link)
 {
-	FinalizeEntry *entry, *prev;
+	DisappearingLink *entry, *prev;
 	unsigned int hash;
 	LOCK_GC;
 
@@ -3771,7 +3770,7 @@ mono_gc_register_disappearing_link (MonoObject *obj, void *link)
 		}
 		prev = entry;
 	}
-	entry = get_internal_mem (sizeof (FinalizeEntry));
+	entry = get_internal_mem (sizeof (DisappearingLink));
 	entry->object = obj;
 	entry->data = link;
 	entry->next = disappearing_link_hash [hash];
@@ -3799,13 +3798,12 @@ mono_gc_invoke_finalizers (void)
 		}
 		UNLOCK_GC;
 		if (entry) {
-			void (*callback)(void *, void*) = entry->data;
 			entry->next = NULL;
 			obj = entry->object;
 			count++;
 			/* the object is on the stack so it is pinned */
 			/*g_print ("Calling finalizer for object: %p (%s)\n", entry->object, safe_name (entry->object));*/
-			callback (obj, NULL);
+			mono_gc_run_finalize (obj, NULL);
 			free_internal_mem (entry);
 		}
 	}

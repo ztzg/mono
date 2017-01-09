@@ -1,3 +1,54 @@
+2009-03-23  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* Tds.cs: Properly handle TdsColumnType.BigInt as we support TDS 8 now.
+	
+2009-03-15  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	** Fixes #463011
+	* Tds70.cs (Reset): Call base.Reset to update Database being used.
+	
+2009-03-14  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* Tds70.cs (WriteParameterInfo): Handle scenarios of Partlentype, 
+	a TDS 9 feature.
+	
+2009-03-04  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* TdsComm.cs (Append (*)): Do not create temporary byte arrays, 
+	instead manipulate directly. Saves quite a bit of allocations 
+	and improves performance.
+	(AppendInternal) : Do the math here.
+	(TdsByteOrder) : Property that indicates the byte-order-encoding which, 
+	is independent of host's byte-order-encoding.
+	(SendPhysicalPacket): Add packet-id to the header
+	
+2009-02-26  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* Tds.cs (ProcessLoginAck): Set TdsVersion to the version
+	supported by the server.
+	(GetColumnValue): lcid and sortId are available only from Tds 8.
+
+	* Tds80.cs (ProcessColumnInfo, ProcessOutputParam): Call base
+	methods if the server version is less than Tds 8.
+	
+2009-02-19  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* Tds.cs: Tds 8 collation support
+	  Tds80.cs: - ditto -
+	  TdsComm.cs: - ditto -
+	  TdsDataColumn.cs: - ditto -
+	  TdsCollation.cs: New file. Based on patch from Dmitry S. Kataev  
+	  <dmitryskey@hotmail.com>
+	  
+2009-02-02  Veerapuram Varadhan  <vvaradhan@novell.com>
+
+	* Tds.cs:	TDS 8 changes
+	  Tds70.cs: - ditto -
+	  Tds80.cs: - ditto -
+	  TdsVersion.cs: - ditto -
+	  TdsEnvPacketSubType.cs: - ditto -
+	  TdsComm.cs:	- ditto -
+	  
 2009-01-29 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* Tds70.cs: fix for output parameters and '@'.

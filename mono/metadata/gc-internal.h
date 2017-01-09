@@ -11,7 +11,7 @@
 
 #include <glib.h>
 #include <mono/metadata/object-internals.h>
-#include <mono/os/gc_wrapper.h>
+#include <mono/utils/gc_wrapper.h>
 
 #define MONO_GC_REGISTER_ROOT(x) mono_gc_register_root ((char*)&(x), sizeof(x), NULL)
 
@@ -76,7 +76,7 @@ typedef void (*MonoGCMarkFunc) (void *addr, MonoGCCopyFunc mark_func);
 void *mono_gc_make_root_descr_user (MonoGCMarkFunc marker);
 
 /* desc is the result from mono_gc_make_descr*. A NULL value means
- * all the words contain GC pointers.
+ * all the words might contain GC pointers.
  * The memory is non-moving and it will be explicitly deallocated.
  * size bytes will be available from the returned address (ie, descr
  * must not be stored in the returned memory)
@@ -91,7 +91,6 @@ void     mono_gchandle_free_domain  (MonoDomain *domain) MONO_INTERNAL;
 typedef void (*FinalizerThreadCallback) (gpointer user_data);
 
 /* if there are finalizers to run, run them. Returns the number of finalizers run */
-int      mono_gc_invoke_finalizers  (void) MONO_INTERNAL;
 gboolean mono_gc_pending_finalizers (void) MONO_INTERNAL;
 void     mono_gc_finalize_notify    (void) MONO_INTERNAL;
 
@@ -106,6 +105,7 @@ void  mono_gc_add_memory_pressure (gint64 value) MONO_INTERNAL;
 int   mono_gc_register_root (char *start, size_t size, void *descr) MONO_INTERNAL;
 void  mono_gc_deregister_root (char* addr) MONO_INTERNAL;
 int   mono_gc_finalizers_for_domain (MonoDomain *domain, MonoObject **out_array, int out_size) MONO_INTERNAL;
+void  mono_gc_run_finalize (void *obj, void *data) MONO_INTERNAL;
 
 /* 
  * Register a root which can only be written using a write barrier.

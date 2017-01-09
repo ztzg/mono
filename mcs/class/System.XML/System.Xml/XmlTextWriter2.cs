@@ -239,6 +239,8 @@ namespace Mono.Xml
 
 		char quote_char = '"';
 
+		bool v2;
+
 		// Constructors
 
 		public XmlTextWriter (string filename, Encoding encoding)
@@ -257,6 +259,9 @@ namespace Mono.Xml
 
 		public XmlTextWriter (TextWriter writer)
 		{
+			if (writer == null)
+				throw new ArgumentNullException ("writer");
+			ignore_encoding = (writer.Encoding == null);
 			Initialize (writer);
 			allow_doc_fragment = true;
 		}
@@ -265,6 +270,8 @@ namespace Mono.Xml
 		internal XmlTextWriter (
 			TextWriter writer, XmlWriterSettings settings, bool closeOutput)
 		{
+			v2 = true;
+
 			if (settings == null)
 				settings = new XmlWriterSettings ();
 
@@ -605,8 +612,14 @@ namespace Mono.Xml
 			if (!namespaces && prefix.Length > 0)
 				throw ArgumentError ("Namespace prefix is disabled in this XmlTextWriter.");
 
-			if (prefix.Length > 0 && namespaceUri == null)
-				throw ArgumentError ("Namespace URI must not be null when prefix is not an empty string.");
+			// If namespace URI is empty, then either prefix
+			// must be empty as well, or there is an
+			// existing namespace mapping for the prefix.
+			if (prefix.Length > 0 && namespaceUri == null) {
+				namespaceUri = nsmanager.LookupNamespace (prefix, false);
+				if (namespaceUri == null || namespaceUri.Length == 0)
+					throw ArgumentError ("Namespace URI must not be null when prefix is not an empty string.");
+			}
 			// Considering the fact that WriteStartAttribute()
 			// automatically changes argument namespaceURI, this
 			// is kind of silly implementation. See bug #77094.
@@ -841,10 +854,14 @@ namespace Mono.Xml
 				if (isNSDecl && namespaceUri != XmlnsNamespace)
 					throw ArgumentError (String.Format ("The 'xmlns' attribute is bound to the reserved namespace '{0}'", XmlnsNamespace));
 
-				// If namespace URI is empty, then prefix
-				// must be empty as well.
-				if (prefix.Length > 0 && namespaceUri.Length == 0)
-					throw ArgumentError ("Namespace URI must not be null when prefix is not an empty string.");
+				// If namespace URI is empty, then either prefix
+				// must be empty as well, or there is an
+				// existing namespace mapping for the prefix.
+				if (prefix.Length > 0 && namespaceUri.Length == 0) {
+					namespaceUri = nsmanager.LookupNamespace (prefix, false);
+					if (namespaceUri == null || namespaceUri.Length == 0)
+						throw ArgumentError ("Namespace URI must not be null when prefix is not an empty string.");
+				}
 
 				// Dive into extremely complex procedure.
 				if (!isNSDecl && namespaceUri.Length > 0)
@@ -953,12 +970,19 @@ namespace Mono.Xml
 						throw ArgumentError ("Non-empty prefix must be mapped to non-empty namespace URI.");
 					string existing = nsmanager.LookupNamespace (preserved_name, false);
 					explicit_nsdecls.Add (preserved_name);
-					if (open_count > 0 &&
-					    elements [open_count - 1].NS == String.Empty &&
-					    elements [open_count - 1].Prefix == preserved_name)
-						; // do nothing
-					else if (existing != value)
-						nsmanager.AddNamespace (preserved_name, value);
+					if (open_count > 0) {
+
+						if (v2 &&
+						    elements [open_count - 1].Prefix == preserved_name &&
+						    elements [open_count - 1].NS != value)
+							throw new XmlException (String.Format ("Cannot redefine the namespace for prefix '{0}' used at current element", preserved_name));
+
+						if (elements [open_count - 1].NS == String.Empty &&
+						    elements [open_count - 1].Prefix == preserved_name)
+						    	; // do nothing
+						else if (existing != value)
+							nsmanager.AddNamespace (preserved_name, value);
+					}
 				} else {
 					switch (preserved_name) {
 					case "lang":

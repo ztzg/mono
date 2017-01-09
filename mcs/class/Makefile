@@ -104,8 +104,10 @@ net_2_0_dirs := \
 	Microsoft.Build.Tasks		\
 	System.Core			\
 	System.Xml.Linq			\
+	System.Runtime.Serialization	\
 	System.Data.DataSetExtensions	\
 	System.Data.Linq		\
+	System.Web			\
 	System.Web.Abstractions		\
 	System.Web.Routing		\
 	System.Web.Extensions_1.0	\
@@ -114,7 +116,6 @@ net_2_0_dirs := \
 	System.Web.Extensions.Design	\
 	System.ComponentModel.DataAnnotations	\
 	System.Web.DynamicData		\
-	System.Runtime.Serialization	\
 	System.IdentityModel		\
 	System.IdentityModel.Selectors	\
 	System.ServiceModel		\

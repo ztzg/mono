@@ -196,6 +196,12 @@ namespace System.ServiceModel.Description
 				od.Messages.Add (GetMessage (od, mi, oca, true, null));
 				if (!od.IsOneWay)
 					od.Messages.Add (GetMessage (od, mi, oca, false, asyncReturnType));
+				foreach (ServiceKnownTypeAttribute a in cd.ContractType.GetCustomAttributes (typeof (ServiceKnownTypeAttribute), false))
+					foreach (Type t in a.GetTypes ())
+						od.KnownTypes.Add (t);
+				foreach (ServiceKnownTypeAttribute a in serviceMethod.GetCustomAttributes (typeof (ServiceKnownTypeAttribute), false))
+					foreach (Type t in a.GetTypes ())
+						od.KnownTypes.Add (t);
 				cd.Operations.Add (od);
 			}
 			else if (oca.AsyncPattern && od.BeginMethod != null ||
@@ -244,7 +250,8 @@ namespace System.ServiceModel.Description
 			// If the argument is only one and has [MessageContract]
 			// then infer it as a typed messsage
 			if (isRequest) {
-				mca = plist.Length != 1 ? null :
+				int len = mi.Name.StartsWith ("Begin", StringComparison.Ordinal) ? 3 : 1;
+				mca = plist.Length != len ? null :
 					GetMessageContractAttribute (plist [0].ParameterType);
 				if (mca != null)
 					messageType = plist [0].ParameterType;
@@ -276,8 +283,10 @@ namespace System.ServiceModel.Description
 				md.ProtectionLevel = mca.ProtectionLevel;
 
 			MessageBodyDescription mb = md.Body;
-			mb.WrapperName = mca.WrapperName ?? messageType.Name;
-			mb.WrapperNamespace = mca.WrapperNamespace ?? defaultNamespace;
+			if (mca.IsWrapped) {
+				mb.WrapperName = mca.WrapperName ?? messageType.Name;
+				mb.WrapperNamespace = mca.WrapperNamespace ?? defaultNamespace;
+			}
 
 			int index = 0;
 			foreach (MemberInfo bmi in messageType.GetMembers (BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)) {

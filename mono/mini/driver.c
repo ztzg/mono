@@ -47,7 +47,7 @@
 #include <mono/metadata/coree.h>
 #include <mono/metadata/attach.h>
 #include "mono/utils/mono-counters.h"
-#include <mono/os/gc_wrapper.h>
+#include <mono/utils/gc_wrapper.h>
 
 #include "mini.h"
 #include "jit.h"
@@ -1485,6 +1485,9 @@ mono_main (int argc, char* argv[])
 		return 1;
 	}
 
+	if (getenv ("MONO_XDEBUG"))
+		enable_debugging = TRUE;
+
 	if ((action == DO_EXEC) && mono_debug_using_mono_debugger ())
 		action = DO_DEBUGGER;
 
@@ -1492,11 +1495,8 @@ mono_main (int argc, char* argv[])
 		g_set_prgname (argv[i]);
 	}
 
-	if (enable_profile) {
-		/* Needed because of TLS accesses in mono_profiler_load () */
-		mono_gc_base_init ();
+	if (enable_profile)
 		mono_profiler_load (profile_options);
-	}
 
 	mono_attach_parse_options (attach_options);
 
@@ -1858,3 +1858,21 @@ mono_jit_set_trace_options (const char* options)
 	return TRUE;
 }
 
+/**
+ * mono_set_signal_chaining:
+ *
+ *   Enable/disable signal chaining. This should be called before mono_jit_init ().
+ * If signal chaining is enabled, the runtime saves the original signal handlers before
+ * installing its own handlers, and calls the original ones in the following cases:
+ * - a SIGSEGV/SIGABRT signal received while executing native (i.e. not JITted) code.
+ * - SIGPROF
+ * - SIGFPE
+ * - SIGQUIT
+ * - SIGUSR2
+ * Signal chaining only works on POSIX platforms.
+ */
+void
+mono_set_signal_chaining (gboolean chain_signals)
+{
+	mono_do_signal_chaining = chain_signals;
+}

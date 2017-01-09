@@ -1,3 +1,13 @@
+/*
+ * mono-debug-debugger.c: 
+ *
+ * Author:
+ *	Mono Project (http://www.mono-project.com)
+ *
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ */
+
 #include <config.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +21,7 @@
 #include <mono/metadata/gc-internal.h>
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/class-internals.h>
+#include <mono/metadata/domain-internals.h>
 #include <mono/metadata/exception.h>
 #include <mono/metadata/mono-debug.h>
 #include <mono/metadata/mono-debug-debugger.h>
@@ -38,6 +49,14 @@ typedef struct {
 	gchar *name_space;
 	gchar *name;
 } ClassInitCallback;
+
+typedef struct {
+	guint32 id;
+	guint32 shadow_path_len;
+	gchar *shadow_path;
+	MonoDomain *domain;
+	MonoAppDomainSetup *setup;
+} AppDomainSetupInfo;
 
 static GPtrArray *class_init_callbacks = NULL;
 
@@ -76,6 +95,28 @@ mono_debugger_event (MonoDebuggerEvent event, guint64 data, guint64 arg)
 {
 	if (mono_debugger_event_handler)
 		(* mono_debugger_event_handler) (event, data, arg);
+}
+
+void
+mono_debugger_event_create_appdomain (MonoDomain *domain, gchar *shadow_path)
+{
+	AppDomainSetupInfo info;
+
+	info.id = mono_domain_get_id (domain);
+	info.shadow_path_len = shadow_path ? strlen (shadow_path) : 0;
+	info.shadow_path = shadow_path;
+
+	info.domain = domain;
+	info.setup = domain->setup;
+
+	mono_debugger_event (MONO_DEBUGGER_EVENT_CREATE_APPDOMAIN, (guint64) (gsize) &info, 0);
+}
+
+void
+mono_debugger_event_unload_appdomain (MonoDomain *domain)
+{
+	mono_debugger_event (MONO_DEBUGGER_EVENT_UNLOAD_APPDOMAIN,
+			     (guint64) (gsize) domain, (guint64) mono_domain_get_id (domain));
 }
 
 void
@@ -205,10 +246,6 @@ mono_debugger_register_class_init_callback (MonoImage *image, const gchar *full_
 	mono_loader_lock ();
 
 	klass = mono_class_from_name (image, name_space ? name_space : "", name);
-	if (klass && klass->inited && klass->methods) {
-		mono_loader_unlock ();
-		return klass;
-	}
 
 	info = g_new0 (ClassInitCallback, 1);
 	info->image = image;
@@ -222,7 +259,7 @@ mono_debugger_register_class_init_callback (MonoImage *image, const gchar *full_
 
 	g_ptr_array_add (class_init_callbacks, info);
 	mono_loader_unlock ();
-	return NULL;
+	return klass;
 }
 
 void

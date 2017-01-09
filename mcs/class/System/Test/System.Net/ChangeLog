@@ -3,6 +3,16 @@
 	* DnsTest.cs: Use Assert syntax, and spaces to tabs. Added tests
 	for argument checks.
 
+2009-02-08  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* HttpWebRequestTest.cs: Added Not-Modified-Since test. Updated
+	bug numbers.
+
+2009-02-05  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* HttpListener2Test.cs: Make tests quiet.
+	* HttpWebRequestTest.cs: Added test for bug #471782.
+
 2009-01-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* IPAddressTest.cs: tests for bug #467472.

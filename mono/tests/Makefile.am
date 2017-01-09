@@ -294,6 +294,7 @@ BASE_TEST_CS_SRC=		\
 	generic-virtual-invoke.2.cs	\
 	bug-461198.2.cs	\
 	generic-sealed-virtual.2.cs	\
+	generic-system-arrays.2.cs	\
 	generic-stack-traces.2.cs	\
 	generic-stack-traces2.2.cs	\
 	bug-472600.2.cs	\
@@ -345,7 +346,10 @@ BASE_TEST_CS_SRC=		\
 	generic-unloading-sub.2.cs	\
 	bug-467456.cs	\
 	appdomain-unload-callback.cs	\
-	bug-472692.2.cs
+	bug-472692.2.cs		\
+	gchandles.cs	\
+	interlocked-3.cs	\
+	interlocked-4.2.cs
 
 if AMD64
 TEST_CS_SRC = $(BASE_TEST_CS_SRC) async-exc-compilation.cs
@@ -747,9 +751,10 @@ test-generic-sharing : generics-sharing.2.exe shared-generic-methods.2.exe	\
 		generic-constrained.2.exe bug-431413.2.exe			\
 		generic-virtual-invoke.2.exe generic-typedef.2.exe		\
 		generic-marshalbyref.2.exe bug-459285.2.exe bug-461198.2.exe	\
-		generic-sealed-virtual.2.exe generic-stack-traces.2.exe		\
-		generic-stack-traces2.2.exe bug-472600.2.exe bug-473482.2.exe	\
-		bug-473999.2.exe bug-479763.2.exe
+		generic-sealed-virtual.2.exe generic-system-arrays.2.exe	\
+		generic-stack-traces.2.exe generic-stack-traces2.2.exe		\
+		bug-472600.2.exe bug-473482.2.exe bug-473999.2.exe		\
+		bug-479763.2.exe
 	@for fn in $+ ; do	\
 		echo "Testing $$fn ...";	\
 		MONO_GENERIC_SHARING=all $(RUNTIME) -O=gshared                $$fn > $$fn.stdout || exit 1;	\

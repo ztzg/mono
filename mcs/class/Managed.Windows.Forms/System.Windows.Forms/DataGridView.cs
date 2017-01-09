@@ -135,9 +135,6 @@ namespace System.Windows.Forms {
 		private DataGridViewSelectedColumnCollection selected_columns;
 		private DataGridViewRow editing_row;
 		
-		private int gridWidth;
-		private int gridHeight;
-
 		DataGridViewHeaderCell pressed_header_cell;
 		DataGridViewHeaderCell entered_header_cell;
 
@@ -275,8 +272,14 @@ namespace System.Windows.Forms {
 			set {
 				if (allowUserToAddRows != value) {
 					allowUserToAddRows = value;
+					if (!value) {
+						if (new_row_editing)
+							CancelEdit ();
+						RemoveEditingRow ();
+					} else {
+						PrepareEditingRow (false, false);
+					}
 					OnAllowUserToAddRowsChanged(EventArgs.Empty);
-					PrepareEditingRow (false, false);
 					Invalidate ();
 				}
 			}
@@ -579,12 +582,12 @@ namespace System.Windows.Forms {
 					throw new InvalidOperationException("Cant change column count if DataSource is set.");
 				}
 				if (value < columns.Count) {
-					for (int i = value; i < columns.Count; i++) {
+					for (int i = columns.Count -1; i >= value; i--) {
 						columns.RemoveAt(i);
 					}
 				}
 				else if (value > columns.Count) {
-					for (int i = 0; i < value; i++) {
+					for (int i = columns.Count; i < value; i++) {
 						DataGridViewTextBoxColumn col = new DataGridViewTextBoxColumn ();
 						columns.Add(col);
 					}
@@ -711,7 +714,7 @@ namespace System.Windows.Forms {
 			set {
 				if (dataMember != value) {
 					dataMember = value;
-					if (IsHandleCreated)
+					if (BindingContext != null)
 						ReBind ();
 					OnDataMemberChanged(EventArgs.Empty);
 				}
@@ -735,7 +738,7 @@ namespace System.Windows.Forms {
 					
 				ClearBinding ();
 				dataSource = value;
-				if (IsHandleCreated)
+				if (BindingContext != null)
 					ReBind ();
 				OnDataSourceChanged (EventArgs.Empty);
 			}
@@ -905,11 +908,12 @@ namespace System.Windows.Forms {
 		[Browsable (false)]
 		public bool IsCurrentRowDirty {
 			get {
-				if (!virtualMode) {
+				if (!virtualMode)
 					return IsCurrentCellDirty;
-				}
-				// Calcular
-				throw new NotImplementedException();
+
+				QuestionEventArgs args = new QuestionEventArgs ();
+				OnRowDirtyStateNeeded (args);
+				return args.Response;
 			}
 		}
 
@@ -1007,12 +1011,19 @@ namespace System.Windows.Forms {
 				if (dataSource != null) {
 					throw new InvalidOperationException("Cant change row count if DataSource is set.");
 				}
+
 				if (value < rows.Count) {
-					for (int i = value; i < rows.Count; i++) {
+					int removeRangeEndIndex = rows.Count - 1;
+					if (AllowUserToAddRows)
+						removeRangeEndIndex--; // do not remove editing row
+
+					int removeRangeStartIndex = value - 1;
+					if (AllowUserToAddRows)
+						removeRangeStartIndex--; // remove an extra row before/instead of the editing row
+
+					for (int i = removeRangeEndIndex; i > removeRangeStartIndex; i--)
 						rows.RemoveAt(i);
-					}
-				}
-				else if (value > rows.Count) {
+				} else if (value > rows.Count) {
 					// If we need to add rows and don't have any columns,
 					// we create one column
 					if (ColumnCount == 0)
@@ -1021,9 +1032,6 @@ namespace System.Windows.Forms {
 					for (int i = rows.Count; i < value; i++) {
 						DataGridViewRow row = (DataGridViewRow) RowTemplateFull;
 						rows.AddInternal (row, false);
-						
-						foreach (DataGridViewColumn col in columns)
-							row.Cells.Add (col.CellTemplate.Clone () as DataGridViewCell);
 					}
 				}
 			}
@@ -1127,7 +1135,6 @@ namespace System.Windows.Forms {
 			}
 			set {
 				rowTemplate = value;
-				rowTemplate.SetDataGridView(this);
 			}
 		}
 
@@ -1295,8 +1302,16 @@ namespace System.Windows.Forms {
 				return topLeftHeaderCell;
 			}
 			set {
+				if (topLeftHeaderCell == value)
+					return;
+
+				if (topLeftHeaderCell != null)
+					topLeftHeaderCell.SetDataGridView (null);
+
 				topLeftHeaderCell = value;
-				topLeftHeaderCell.SetDataGridView (this);
+
+				if (topLeftHeaderCell != null)
+					topLeftHeaderCell.SetDataGridView (this);
 			}
 		}
 
@@ -2394,9 +2409,15 @@ namespace System.Windows.Forms {
 			if (ColumnHeadersVisible)
 				rowTop += ColumnHeadersHeight;
 
+			Size visibleClientArea = ClientSize;
+			if (verticalScrollBar.Visible)
+				visibleClientArea.Width -= verticalScrollBar.Width;
+			if (horizontalScrollBar.Visible)
+				visibleClientArea.Height -= horizontalScrollBar.Height;
+
 			for (int index = first_row_index; index < Rows.Count; index++) {
 				DataGridViewRow row = GetRowInternal (index);
-				if (rowTop + row.Height <= ClientSize.Height) {
+				if (rowTop + row.Height <= visibleClientArea.Height) {
 					result++;
 					rowTop += row.Height;
 				} else {
@@ -2494,7 +2515,10 @@ namespace System.Windows.Forms {
 			}
 			
 			for (int i = first_row_index; i < Rows.Count; i++) {
-				if (i == rowIndex) {
+				if (!rows[i].Visible)
+					continue;
+					
+				if (rows[i].Index == rowIndex) {
 					h = rows [i].Height;
 					break;
 				}
@@ -2754,13 +2778,17 @@ namespace System.Windows.Forms {
 			if (ColumnHeadersVisible)
 				y += ColumnHeadersHeight;
 
+
 			for (int i = first_row_index; i < Rows.Count; i++) {
-				if (i == rowIndex) {
-					h = rows[i].Height;
+				if (!rows[i].Visible)
+					continue;
+					
+				if (rows[i].Index == rowIndex) {
+					h = rows [i].Height;
 					break;
 				}
-
-				y += rows[i].Height;
+				
+				y += rows [i].Height;
 			}
 
 			return new Rectangle (0, y, Width, h);
@@ -2796,6 +2824,8 @@ namespace System.Windows.Forms {
 			
 			for (int i = first_row_index; i < Rows.Count; i++) {
 				DataGridViewRow row = Rows[i];
+				if (!row.Visible)
+					continue;
 				
 				if (y > top && y <= (top + row.Height)) {
 					rowindex = i;
@@ -3033,8 +3063,53 @@ namespace System.Windows.Forms {
 				InvalidateRow (i);
 		}
 
-		public void UpdateRowHeightInfo (int rowIndex, bool updateToEnd) {
-			throw new NotImplementedException();
+		public void UpdateRowHeightInfo (int rowIndex, bool updateToEnd)
+		{
+			if (rowIndex < 0 && updateToEnd)
+				throw new ArgumentOutOfRangeException ("rowIndex");
+			if (rowIndex < -1 && !updateToEnd)
+				throw new ArgumentOutOfRangeException ("rowIndex");
+			if (rowIndex >= Rows.Count)
+				throw new ArgumentOutOfRangeException ("rowIndex");
+			
+			if (!VirtualMode && DataManager == null)
+				return;
+
+			if (rowIndex == -1) {
+				updateToEnd = true;
+				rowIndex = 0;
+			}
+
+			if (updateToEnd) {
+				for (int i = rowIndex; i < Rows.Count; i++) {
+					DataGridViewRow row = Rows[i];
+					if (!row.Visible)
+						continue;
+
+					DataGridViewRowHeightInfoNeededEventArgs rowInfo = 
+						new DataGridViewRowHeightInfoNeededEventArgs (row.Index, row.Height, row.MinimumHeight);
+					OnRowHeightInfoNeeded (rowInfo);
+
+					if (row.Height != rowInfo.Height || row.MinimumHeight != rowInfo.MinimumHeight) {
+						row.Height = rowInfo.Height;
+						row.MinimumHeight = rowInfo.MinimumHeight;
+						OnRowHeightInfoPushed (new DataGridViewRowHeightInfoPushedEventArgs (row.Index, rowInfo.Height, 
+														     rowInfo.MinimumHeight));
+					}
+				}
+			} else {
+				DataGridViewRow row = Rows[rowIndex];
+				DataGridViewRowHeightInfoNeededEventArgs rowInfo = 
+					new DataGridViewRowHeightInfoNeededEventArgs (row.Index, row.Height, row.MinimumHeight);
+				OnRowHeightInfoNeeded (rowInfo);
+
+				if (row.Height != rowInfo.Height || row.MinimumHeight != rowInfo.MinimumHeight) {
+					row.Height = rowInfo.Height;
+					row.MinimumHeight = rowInfo.MinimumHeight;
+					OnRowHeightInfoPushed (new DataGridViewRowHeightInfoPushedEventArgs (row.Index, rowInfo.Height, 
+													     rowInfo.MinimumHeight));
+				}
+			}
 		}
 
 		protected override bool CanEnableIme {
@@ -3149,6 +3224,8 @@ namespace System.Windows.Forms {
 			}
 			
 			foreach (DataGridViewRow row in Rows) {
+				if (!row.Visible)
+					continue;
 				if (!displayed_only || row.Displayed) {
 					int new_height = row.GetPreferredHeight (row.Index, mode, fixedWidth);
 
@@ -3456,6 +3533,9 @@ namespace System.Windows.Forms {
 
 		protected virtual void OnCellEnter (DataGridViewCellEventArgs e)
 		{
+			DataGridViewCell cell = GetCellInternal (e.ColumnIndex, e.RowIndex);
+			cell.OnEnterInternal (e.RowIndex, true);
+
 			DataGridViewCellEventHandler eh = (DataGridViewCellEventHandler)(Events [CellEnterEvent]);
 			if (eh != null)
 				eh (this, e);
@@ -3489,6 +3569,9 @@ namespace System.Windows.Forms {
 
 		protected virtual void OnCellLeave (DataGridViewCellEventArgs e)
 		{
+			DataGridViewCell cell = GetCellInternal (e.ColumnIndex, e.RowIndex);
+			cell.OnLeaveInternal (e.RowIndex, true);
+
 			DataGridViewCellEventHandler eh = (DataGridViewCellEventHandler)(Events [CellLeaveEvent]);
 			if (eh != null)
 				eh (this, e);
@@ -3807,7 +3890,22 @@ namespace System.Windows.Forms {
 				eh (this, e);
 		}
 
-		internal void OnColumnRemovedInternal (DataGridViewColumnEventArgs e)
+		internal void OnColumnPreRemovedInternal (DataGridViewColumnEventArgs e)
+		{
+			if (Columns.Count - 1 == 0) {
+				MoveCurrentCell (-1, -1, true, false, false, true);
+				rows.ClearInternal ();
+			} else if (currentCell != null && CurrentCell.ColumnIndex == e.Column.Index) {
+				int nextColumnIndex = e.Column.Index;
+				if (nextColumnIndex >= Columns.Count - 1)
+					nextColumnIndex = Columns.Count - 1 - 1;
+				MoveCurrentCell (nextColumnIndex, currentCell.RowIndex, true, false, false, true);
+				if (hover_cell != null && hover_cell.ColumnIndex >= e.Column.Index)
+					hover_cell = null;
+			}
+		}
+
+		private void OnColumnPostRemovedInternal (DataGridViewColumnEventArgs e)
 		{
 			if (e.Column.CellTemplate != null) {
 				int index = e.Column.Index;
@@ -3817,8 +3915,9 @@ namespace System.Windows.Forms {
 			}
 
 			AutoResizeColumnsInternal ();
-			OnColumnRemoved (e);
 			PrepareEditingRow (false, true);
+
+			OnColumnRemoved (e);
 		}
 
 		protected virtual void OnColumnRemoved (DataGridViewColumnEventArgs e)
@@ -3973,7 +4072,7 @@ namespace System.Windows.Forms {
 			base.OnHandleCreated(e);
 			ReBind ();
 			
-			if (CurrentCell == null && Rows.Count > 0 && Columns.Count > 0)
+			if (DataManager == null && CurrentCell == null && Rows.Count > 0 && Columns.Count > 0)
 				MoveCurrentCell (ColumnDisplayIndexToIndex (0), 0, true, false, false, false);
 		}
 
@@ -4067,6 +4166,11 @@ namespace System.Windows.Forms {
 		protected override void OnMouseDoubleClick (MouseEventArgs e)
 		{
 			base.OnMouseDoubleClick(e);
+
+			HitTestInfo hitInfo = HitTest (e.X, e.Y);
+			if (hitInfo.Type == DataGridViewHitTestType.Cell)
+				OnCellMouseDoubleClick (new DataGridViewCellMouseEventArgs (hitInfo.ColumnIndex, hitInfo.RowIndex,
+											    hitInfo.ColumnX, hitInfo.RowY, e));
 		}
 
 		private void DoSelectionOnMouseDown (HitTestInfo hitTest)
@@ -4221,7 +4325,9 @@ namespace System.Windows.Forms {
 			DataGridViewRow row = null;
 			Rectangle cellBounds;
 
-			if (hitTest.Type == DataGridViewHitTestType.ColumnHeader && MouseOverColumnResize (hitTest.ColumnIndex, e.X)) {
+			if ((hitTest.Type == DataGridViewHitTestType.ColumnHeader ||
+			     (hitTest.Type == DataGridViewHitTestType.Cell && !ColumnHeadersVisible)) 
+			    && MouseOverColumnResize (hitTest.ColumnIndex, e.X)) {
 				if (e.Clicks == 2) {
 					AutoResizeColumn (hitTest.ColumnIndex);
 					return;
@@ -4325,7 +4431,12 @@ namespace System.Windows.Forms {
 			Cursor new_cursor = Cursors.Default;
 			HitTestInfo hit = this.HitTest (e.X, e.Y);
 			
-			if (hit.Type == DataGridViewHitTestType.Cell) {
+			if (hit.Type == DataGridViewHitTestType.ColumnHeader || 
+			    (!ColumnHeadersVisible && hit.Type == DataGridViewHitTestType.Cell && MouseOverColumnResize (hit.ColumnIndex, e.X))) {
+				EnteredHeaderCell = Columns [hit.ColumnIndex].HeaderCell;
+				if (MouseOverColumnResize (hit.ColumnIndex, e.X))
+					new_cursor = Cursors.VSplit;
+			} else if (hit.Type == DataGridViewHitTestType.Cell) {
 				EnteredHeaderCell = null;
 
 				DataGridViewCell new_cell = GetCellInternal (hit.ColumnIndex, hit.RowIndex);
@@ -4346,6 +4457,8 @@ namespace System.Windows.Forms {
 						MouseLeftErrorIcon (new_cell);
 				}
 				
+				Cursor = new_cursor;
+
 				// We have never been in a cell before
 				if (hover_cell == null) {
 					hover_cell = new_cell;
@@ -4421,13 +4534,7 @@ namespace System.Windows.Forms {
 				}
 			
 			} else {
-				if (hit.Type == DataGridViewHitTestType.ColumnHeader) {
-					EnteredHeaderCell = Columns [hit.ColumnIndex].HeaderCell;
-					
-					if (MouseOverColumnResize (hit.ColumnIndex, e.X))
-						new_cursor = Cursors.VSplit;
-				} else
-					EnteredHeaderCell = null;
+				EnteredHeaderCell = null;
 
 				// We have left the cell area
 				if (hover_cell != null) {
@@ -4483,6 +4590,14 @@ namespace System.Windows.Forms {
 		protected override void OnMouseWheel (MouseEventArgs e)
 		{
 			base.OnMouseWheel(e);
+
+			int delta = SystemInformation.MouseWheelScrollLines * verticalScrollBar.SmallChange;
+			if (e.Delta < 0)
+				verticalScrollBar.SafeValueSet (verticalScrollBar.Value + delta);
+			else
+				verticalScrollBar.SafeValueSet (verticalScrollBar.Value - delta);
+
+			OnVScrollBarScroll (this, new ScrollEventArgs (ScrollEventType.ThumbPosition, verticalScrollBar.Value));
 		}
 
 		protected virtual void OnMultiSelectChanged (EventArgs e)
@@ -4549,16 +4664,12 @@ namespace System.Windows.Forms {
 				bounds.Y += columnHeadersHeight;
 			}
 			
-			gridWidth = rowHeadersVisible ? rowHeadersWidth : 0;
-			gridHeight = 0;
-			
-			int first_row_height = Rows.Count > 0 ? Rows[Math.Min (Rows.Count - 1, first_row_index)].Height : 0;
-//			int room_left = this.Height;
-			
-			// Reset all columns to !Displayed
-			for (int i = 0; i < Columns.Count; i++)
+			// Reset not displayed columns to !Displayed
+			for (int i = 0; i < first_col_index; i++)
 				Columns[i].DisplayedInternal = false;
 			
+			int gridWidth = rowHeadersVisible ? rowHeadersWidth : 0;
+
 			// Set Displayed columns
 			for (int i = first_col_index; i < Columns.Count; i++) {
 				DataGridViewColumn col = Columns.ColumnDisplayIndexSortedArrayList[i];
@@ -4568,18 +4679,19 @@ namespace System.Windows.Forms {
 			
 				col.DisplayedInternal = true;
 				gridWidth += col.Width;
-				
 				if (gridWidth >= Width)
 					break;
 			}
 			
-			// Reset all rows to !Displayed
-			for (int i = 0; i < Rows.Count; i++)
+			// Reset all not displayed rows to !Displayed
+			for (int i = 0; i < first_row_index; i++)
 				GetRowInternal (i).DisplayedInternal = false;
 			
 			// Draw rows
 			for (int index = first_row_index; index < Rows.Count; index++) {
 				DataGridViewRow row = Rows[index];
+				if (!row.Visible)
+					continue;
 				GetRowInternal (index).DisplayedInternal = true;
 	
 				bounds.Height = row.Height;
@@ -4593,27 +4705,45 @@ namespace System.Windows.Forms {
 				
 				if (bounds.Y >= ClientSize.Height - (horizontalScrollBar.Visible ? horizontalScrollBar.Height : 0))
 					break;
-					
-				gridHeight += row.Height;
 			}
 
-			gridWidth = 0;
+			RefreshScrollBars ();
 			
-			foreach (DataGridViewColumn col in sortedColumns)
+			// Paint the bottom right square if both scrollbars are displayed
+			if (horizontalScrollBar.Visible && verticalScrollBar.Visible)
+				g.FillRectangle (SystemBrushes.Control, new Rectangle (horizontalScrollBar.Right, verticalScrollBar.Bottom, verticalScrollBar.Width, horizontalScrollBar.Height));
+
+			// Paint the border
+			bounds = ClientRectangle;
+			
+			switch (BorderStyle) {
+				case BorderStyle.FixedSingle:
+					g.DrawRectangle (Pens.Black, new Rectangle (bounds.Left, bounds.Top, bounds.Width - 1, bounds.Height - 1));
+					break;
+				case BorderStyle.Fixed3D:
+					ControlPaint.DrawBorder3D (g, bounds, Border3DStyle.Sunken);
+					break;
+			}
+		}
+
+		private void RefreshScrollBars ()
+		{
+			int gridWidth = 0;
+			int gridHeight = 0;
+
+			foreach (DataGridViewColumn col in columns.ColumnDisplayIndexSortedArrayList)
 				if (col.Visible)
 					gridWidth += col.Width;
-
-			gridHeight = 0;
 			
 			foreach (DataGridViewRow row in Rows)
-				gridHeight += row.Height;
+				if (row.Visible)
+					gridHeight += row.Height;
 
 			if (rowHeadersVisible)
 				gridWidth += rowHeadersWidth;
-
 			if (columnHeadersVisible)
 				gridHeight += columnHeadersHeight;
-			
+
 			bool horizontalVisible = false;
 			bool verticalVisible = false;
 			
@@ -4637,20 +4767,26 @@ namespace System.Windows.Forms {
 				if (scrollBars != ScrollBars.Horizontal && scrollBars != ScrollBars.Both)
 					horizontalVisible = false;
 
+				// MSNET compatibility here
+				if (RowCount <= 1)
+					verticalVisible = false;
+
 				if (horizontalVisible) {
 					horizontalScrollBar.Minimum = 0;
 					horizontalScrollBar.Maximum = gridWidth;
 					horizontalScrollBar.SmallChange = Columns[first_col_index].Width;
-					int largeChange = ClientSize.Width - rowHeadersWidth;
+					int largeChange = ClientSize.Width - rowHeadersWidth - horizontalScrollBar.Height;
 					if (largeChange <= 0)
 						largeChange = ClientSize.Width;
 					horizontalScrollBar.LargeChange = largeChange;
 				}
+
 				if (verticalVisible) {
 					verticalScrollBar.Minimum = 0;
 					verticalScrollBar.Maximum = gridHeight;
+					int first_row_height = Rows.Count > 0 ? Rows[Math.Min (Rows.Count - 1, first_row_index)].Height : 0;
 					verticalScrollBar.SmallChange = first_row_height + 1;
-					int largeChange = ClientSize.Height - columnHeadersHeight;
+					int largeChange = ClientSize.Height - columnHeadersHeight - verticalScrollBar.Width;
 					if (largeChange <= 0)
 						largeChange = ClientSize.Height;
 					verticalScrollBar.LargeChange = largeChange;
@@ -4659,22 +4795,6 @@ namespace System.Windows.Forms {
 
 			horizontalScrollBar.Visible = horizontalVisible;
 			verticalScrollBar.Visible = verticalVisible;
-			
-			// Paint the bottom right square if both scrollbars are displayed
-			if (horizontalScrollBar.Visible && verticalScrollBar.Visible)
-				g.FillRectangle (SystemBrushes.Control, new Rectangle (horizontalScrollBar.Right, verticalScrollBar.Bottom, verticalScrollBar.Width, horizontalScrollBar.Height));
-
-			// Paint the border
-			bounds = ClientRectangle;
-			
-			switch (BorderStyle) {
-				case BorderStyle.FixedSingle:
-					g.DrawRectangle (Pens.Black, new Rectangle (bounds.Left, bounds.Top, bounds.Width - 1, bounds.Height - 1));
-					break;
-				case BorderStyle.Fixed3D:
-					ControlPaint.DrawBorder3D (g, bounds, Border3DStyle.Sunken);
-					break;
-			}
 		}
 
 		protected virtual void OnReadOnlyChanged (EventArgs e) {
@@ -4794,6 +4914,7 @@ namespace System.Windows.Forms {
 
 		protected internal virtual void OnRowHeightChanged (DataGridViewRowEventArgs e)
 		{
+			UpdateRowHeightInfo (e.Row.Index, false);
 			DataGridViewRowEventHandler eh = (DataGridViewRowEventHandler)(Events [RowHeightChangedEvent]);
 			if (eh != null) eh (this, e);
 		}
@@ -4839,6 +4960,11 @@ namespace System.Windows.Forms {
 			if (hover_cell != null && hover_cell.RowIndex >= e.RowIndex)
 				hover_cell = null;
 
+			// Select the first row if we are not databound. 
+			// If we are databound selection is managed by the data manager.
+			if (IsHandleCreated && DataManager == null && Rows.Count == 1 && Columns.Count > 0)
+				MoveCurrentCell (ColumnDisplayIndexToIndex (0), 0, true, false, false, true);
+
 			AutoResizeColumnsInternal ();
 			Invalidate ();
 			OnRowsAdded (e);
@@ -4856,29 +4982,32 @@ namespace System.Windows.Forms {
 			if (eh != null) eh (this, e);
 		}
 
-		internal void OnRowsRemovedInternal (DataGridViewRowsRemovedEventArgs e)
+		internal void OnRowsPreRemovedInternal (DataGridViewRowsRemovedEventArgs e)
 		{
 			if (selected_rows != null)
 				selected_rows.InternalClear ();
 			if (selected_columns != null)
 				selected_columns.InternalClear ();
 
-			if (Rows.Count == 0) {
+			if (Rows.Count - e.RowCount <= 0) {
 				MoveCurrentCell (-1, -1, true, false, false, true);
 				hover_cell = null;
 			} else if (Columns.Count == 0) {
 				MoveCurrentCell (-1, -1, true, false, false, true);
 				hover_cell = null;
-			} else {
+			} else if (currentCell != null && currentCell.RowIndex == e.RowIndex) {
 				int nextRowIndex = e.RowIndex;
-				if (nextRowIndex >= Rows.Count)
-					nextRowIndex = Rows.Count - 1;
+				if (nextRowIndex >= Rows.Count - e.RowCount)
+					nextRowIndex = Rows.Count - 1 - e.RowCount;
 				MoveCurrentCell (currentCell != null ? currentCell.ColumnIndex : 0, nextRowIndex, 
 						 true, false, false, true);
 				if (hover_cell != null && hover_cell.RowIndex >= e.RowIndex)
 					hover_cell = null;
 			}
+		}
 
+		internal void OnRowsPostRemovedInternal (DataGridViewRowsRemovedEventArgs e)
+		{
 			Invalidate ();
 			OnRowsRemoved (e);
 		}
@@ -5437,6 +5566,10 @@ namespace System.Windows.Forms {
 							return false;
 						else if (currentCell.RowIndex == NewRowIndex && new_row_editing)
 							CancelEdit ();
+					} else {
+						// CancelEdit will replace the uncommited real editing row with a place holder row
+						if (new_row_editing && currentCell.RowIndex == NewRowIndex)
+							CancelEdit ();
 					}
 					OnCellLeave (new DataGridViewCellEventArgs(currentCell.ColumnIndex, currentCell.RowIndex));
 					OnRowLeave (new DataGridViewCellEventArgs (currentCell.ColumnIndex, currentCell.RowIndex));
@@ -5455,7 +5588,7 @@ namespace System.Windows.Forms {
 				OnCurrentCellChanged (EventArgs.Empty);
 
 				if (cell != null) {
-					// If the user begins an edit in the NewRow, add a new row
+					// If the user begins an edit in the NewRow, add a new real row
 					if (AllowUserToAddRows && cell.RowIndex == NewRowIndex && !is_binding && !new_row_editing) {
 						// OnUserAddedRow will add a real row and reset the current cell
 						OnUserAddedRow (new DataGridViewRowEventArgs (Rows[NewRowIndex]));
@@ -5589,10 +5722,16 @@ namespace System.Windows.Forms {
 				return;
 
 			int top = 0;
-			
+			int lastTopVisibleRowIndex = Rows.Count - DisplayedRowCount (false);
+
 			for (int index = 0; index < Rows.Count; index++) {
 				DataGridViewRow row = Rows[index];
-				if (e.NewValue < top + row.Height) {
+				if (!row.Visible)
+					continue;
+
+				if (row.Index >= lastTopVisibleRowIndex) {
+					first_row_index = lastTopVisibleRowIndex;
+				} else if (e.NewValue < top + row.Height) {
 					if (first_row_index != index) {
 						first_row_index = index;
 						Invalidate ();
@@ -5605,7 +5744,7 @@ namespace System.Windows.Forms {
 				top += row.Height;
 			}
 			
-			first_row_index = Rows.Count - DisplayedRowCount (false);
+			first_row_index = lastTopVisibleRowIndex;
 			Invalidate ();
 			OnScroll (e);
 		}
@@ -5620,7 +5759,7 @@ namespace System.Windows.Forms {
 					OnColumnAddedInternal(new DataGridViewColumnEventArgs(e.Element as DataGridViewColumn));
 					break;
 				case CollectionChangeAction.Remove:
-					OnColumnRemovedInternal(new DataGridViewColumnEventArgs(e.Element as DataGridViewColumn));
+					OnColumnPostRemovedInternal(new DataGridViewColumnEventArgs(e.Element as DataGridViewColumn));
 					break;
 				case CollectionChangeAction.Refresh:
 					break;
@@ -5655,6 +5794,9 @@ namespace System.Windows.Forms {
 			for (int i = 0; i < Columns.Count; i++) {
 				DataGridViewColumn col = Columns [i];
 
+				if (!col.Visible)
+					continue;
+
 				switch (col.InheritedAutoSizeMode) {
 				case DataGridViewAutoSizeColumnMode.Fill:
 					FillCount++;
@@ -5681,6 +5823,9 @@ namespace System.Windows.Forms {
 					
 					if (col.InheritedAutoSizeMode != DataGridViewAutoSizeColumnMode.Fill)
 						continue;
+				
+					if (!col.Visible)
+						continue;
 						
 					if (fixed_widths [i] != 0)
 						continue;
@@ -5705,7 +5850,10 @@ namespace System.Windows.Forms {
 			for (int i = 0; i < columns.Count; i++) {
 				if (Columns [i].InheritedAutoSizeMode != DataGridViewAutoSizeColumnMode.Fill)
 					continue;
-					
+
+				if (!Columns[i].Visible)
+					continue;
+
 				Columns [i].Width = new_widths [i];
 			}
 		}
@@ -5756,6 +5904,8 @@ namespace System.Windows.Forms {
 			only_visible = (mode == DataGridViewAutoSizeColumnMode.DisplayedCells || mode == DataGridViewAutoSizeColumnMode.DisplayedCellsExceptHeader);
 			
 			for (int i = first_row; i < Rows.Count; i++) {
+				if (!Rows[i].Visible)
+					continue;
 				if (only_visible) {
 					Rectangle row_rect = this.GetRowDisplayRectangle (i, false);
 					if (!ClientRectangle.IntersectsWith (row_rect))
@@ -5924,6 +6074,8 @@ namespace System.Windows.Forms {
 						// This keeps out things like arrays
 						if ((typeof(ICollection).IsAssignableFrom (property.PropertyType)))
 							continue;
+						if (!property.IsBrowsable)
+							continue;
 
 						if (IsColumnAlreadyBound (property.DisplayName))
 							continue;
@@ -5970,6 +6122,34 @@ namespace System.Windows.Forms {
 		{
 			if (x == -1 || y == -1)
 				x = y = -1;
+			else {
+				if (x < 0 || x > Columns.Count - 1)
+					throw new ArgumentOutOfRangeException ("x");
+				if (y < 0 || y > Rows.Count - 1)
+					throw new ArgumentOutOfRangeException ("y");
+
+				if (!Rows[y].Visible) {
+					for (int i = y; i < Rows.Count; i++) {
+						if (Rows[i].Visible) {
+							y = i;
+							break;
+						}
+					}
+				}
+
+				if (!Columns[x].Visible) {
+					for (int i = x; i < Columns.Count; i++) {
+						if (Columns[i].Visible) {
+							x = i;
+							break;
+						}
+					}
+				}
+
+				// in case either no visible columns or rows
+				if (!Rows[y].Visible || !Columns[x].Visible)
+					x = y = -1;
+			}
 
 			if (!SetCurrentCellAddressCore (x, y, true, false, false)) {
 				ClearSelection ();
@@ -6001,15 +6181,25 @@ namespace System.Windows.Forms {
 			// If the current cell isn't visible, scroll to it
 			if (scroll) {
 				int disp_x = ColumnIndexToDisplayIndex (x);
+				bool scrollbarsRefreshed = false;
 
 				if (disp_x < first_col_index) {
+					// The trick here is that in order to avoid unnecessary calculations each time a row/column 
+					// is added/removed we recalculate the whole grid size just before just before the scroll 
+					// to selection.
+					RefreshScrollBars ();
+					scrollbarsRefreshed = true;
 					int delta_x = 0;
 
 					if (disp_x == 0)
 						delta_x = horizontalScrollBar.Value;
-					else
+					else {
+						// in case the column got removed
+						if (first_col_index >= ColumnCount)
+							first_col_index = ColumnCount - 1;
 						for (int i = disp_x; i < first_col_index; i++)
 							delta_x += Columns[ColumnDisplayIndexToIndex (i)].Width;
+					}
 				
 					horizontalScrollBar.SafeValueSet (horizontalScrollBar.Value - delta_x);
 					OnHScrollBarScroll (this, new ScrollEventArgs (ScrollEventType.ThumbPosition, horizontalScrollBar.Value));
@@ -6020,15 +6210,25 @@ namespace System.Windows.Forms {
 				int delta_y = 0;
 
 				if (disp_y < first_row_index) {
+					if (!scrollbarsRefreshed)
+						RefreshScrollBars ();
+
 					if (disp_y == 0)
 						delta_y = verticalScrollBar.Value;
-					else
+					else {
+						// in case the row got removed
+						if (first_row_index >= RowCount)
+							first_row_index = RowCount - 1;
 						for (int i = disp_y; i < first_row_index; i++)
 							delta_y += GetRowInternal (i).Height;
+					}
 
 					verticalScrollBar.SafeValueSet (verticalScrollBar.Value - delta_y);
 					OnVScrollBarScroll (this, new ScrollEventArgs (ScrollEventType.ThumbPosition, verticalScrollBar.Value));
 				} else if (disp_y > first_row_index + displayedRowsCount - 1) {
+					if (!scrollbarsRefreshed)
+						RefreshScrollBars ();
+
 					if (disp_y == Rows.Count - 1)
 						delta_y = verticalScrollBar.Maximum - verticalScrollBar.Value;
 					else

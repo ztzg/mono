@@ -1,6 +1,6 @@
-2009-02-20  Veerapuram Varadhan <vvaradhan@novell.com>
+2009-02-20  Veerapuram Varadhan  <vvaradhan@novell.com>
 
-	* OdbcDataReaderTest.cs: Added test for Bug#419224.
+	* OdbcDataReaderTest.cs: Added test for 419224.
 	
 2008-12-31  Gert Driesen  <drieseng@users.sourceforge.net>
 

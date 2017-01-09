@@ -1,3 +1,113 @@
+2009-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, XmlFormatterDeserializer.cs:
+	  empty collection deserialization resulted in extra
+	  consumption of the next xml node.
+
+2009-03-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs, XmlFormatterDeserializer.cs :
+	  to infer type from xml qname, consider DataContractAttribute
+	  names.
+
+2009-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : make generic type parsing sloppy.
+	  because we don't know some cryptic hash algorithm:
+	  http://jeffbarnes.net/portal/blogs/jeff_barnes/archive/2007/05/10/wcf-serialization-and-generics.aspx
+
+2009-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs :
+	  support CollectionDataContract-based dictionary too.
+
+2009-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs :
+	  added support for dictionary serialization (not for
+	  CollectionDataContract-attributed dictionary yet).
+
+2009-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : cosmetic !NET_2_1 fix (no effect).
+	* KnownTypeCollection.cs : use ICollection<> and IList instead of
+	  IEnumerable. This causes confusion for dictionary.
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlFormatterSerializer.cs, XmlObjectSerializer.cs,
+	  XmlFormatterDeserializer.cs, KnownTypeCollection.cs :
+	  add more xsi:type to cover collection items.
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs : fix generic argument names in xml.
+	  They should use xmlized names instead of raw type name.
+	* XmlFormatterDeserializer.cs : remove extra Console.WriteLine.
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : eliminate whitespace misuses.
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : actually it could just be ICollection<T>.
+
+2009-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : implemented generic IList deserialization.
+
+2009-03-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs : fix for generic serialization.
+
+2009-02-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : look for unordered members first, in
+	  different iteration. Got SL OpenStreetMap working.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : remove use of non-2.1 CreateInstance().
+	* XmlFormatterDeserializer.cs : allow empty element.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, DataContractSerializer.cs,
+	  KnownTypeCollection.cs : now .NET 3.5/SP1 supports non-contract
+	  type serialization.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs : couple of refactoring
+	  to simplify code base and handle CollectionDataContract namespace.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : oops, remove debug lines.
+
+2009-02-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataContractSerializer.cs : remove extra writexmlns.
+	* SerializationMap.cs : allow DataMember of collection contract type
+	  as read-only.
+	* KnownTypeCollection.cs : it was not iterating interfaces to find
+	  IEnumerable<T> correctly.
+
+2009-02-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : a bit more detailed error message.
+
+2009-01-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs : similar fix to the previous one,
+	  on uint16.
+
+2009-01-22  Alan McGovern  <amcgovern@novell.com>
+
+	* KnownTypeCollection.cs : The byte overload doesn't exist in
+	Silverlight, so cast the byte to an int instead.
+
 2008-11-23  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* DataContractAttribute.cs : remove MonoTODO.

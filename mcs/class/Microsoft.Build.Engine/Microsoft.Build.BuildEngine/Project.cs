@@ -71,6 +71,7 @@ namespace Microsoft.Build.BuildEngine {
 		XmlDocument			xmlDocument;
 		bool				unloaded;
 		bool				initialTargetsBuilt;
+		List<string>			builtTargetKeys;
 
 		static XmlNamespaceManager	manager;
 		static string ns = "http://schemas.microsoft.com/developer/msbuild/2003";
@@ -252,9 +253,25 @@ namespace Microsoft.Build.BuildEngine {
 				   BuildSettings buildFlags)
 		
 		{
+			bool result = false;
+			LogProjectStarted (targetNames);
+			try {
+				result = BuildInternal (targetNames, targetOutputs, buildFlags);
+			} finally {
+				LogProjectFinished (result);
+			}
+
+			return result;
+		}
+
+		bool BuildInternal (string [] targetNames,
+				   IDictionary targetOutputs,
+				   BuildSettings buildFlags)
+		{
 			CheckUnloaded ();
 			ParentEngine.StartBuild ();
-			NeedToReevaluate ();
+			if (buildFlags == BuildSettings.None)
+				Reevaluate ();
 			
 			if (targetNames == null || targetNames.Length == 0) {
 				if (defaultTargets != null && defaultTargets.Length != 0)
@@ -291,9 +308,20 @@ namespace Microsoft.Build.BuildEngine {
 				return false;
 			}
 
+			string key = fullFileName + ":" + target;
+			ITaskItem[] outputs;
+			if (ParentEngine.BuiltTargetsOutputByName.TryGetValue (key, out outputs)) {
+				if (targetOutputs != null)
+					targetOutputs.Add (target, outputs);
+				LogTargetSkipped ();
+				return true;
+			}
+
 			if (!targets [target].Build ())
 				return false;
 
+			ParentEngine.BuiltTargetsOutputByName [key] = (ITaskItem[]) targets [target].Outputs.Clone ();
+			builtTargetKeys.Add (key);
 			if (targetOutputs != null)
 				targetOutputs.Add (target, targets [target].Outputs);
 
@@ -319,7 +347,7 @@ namespace Microsoft.Build.BuildEngine {
 			if (evaluatedItemsByName.ContainsKey (itemName))
 				return evaluatedItemsByName [itemName];
 			else
-				return new BuildItemGroup ();
+				return new BuildItemGroup (this);
 		}
 
 		public BuildItemGroup GetEvaluatedItemsByNameIgnoringCondition (string itemName)
@@ -332,7 +360,7 @@ namespace Microsoft.Build.BuildEngine {
 			if (evaluatedItemsByNameIgnoringCondition.ContainsKey (itemName))
 				return evaluatedItemsByNameIgnoringCondition [itemName];
 			else
-				return new BuildItemGroup ();
+				return new BuildItemGroup (this);
 		}
 
 		public string GetEvaluatedProperty (string propertyName)
@@ -367,8 +395,8 @@ namespace Microsoft.Build.BuildEngine {
 
 		public void Load (string projectFileName)
 		{
-			this.fullFileName = Path.GetFullPath (projectFileName);
-			DoLoad (new StreamReader (projectFileName));
+			this.fullFileName = Utilities.FromMSBuildPath (Path.GetFullPath (projectFileName));
+			DoLoad (new StreamReader (fullFileName));
 		}
 		
 		[MonoTODO ("Not tested")]
@@ -426,7 +454,7 @@ namespace Microsoft.Build.BuildEngine {
 			if (itemToRemove == null)
 				throw new ArgumentNullException ("itemToRemove");
 
-			if (!itemToRemove.FromXml && !itemToRemove.HasParent)
+			if (!itemToRemove.FromXml && !itemToRemove.HasParentItem)
 				throw new InvalidOperationException ("The object passed in is not part of the project.");
 
 			BuildItemGroup big = itemToRemove.ParentItemGroup;
@@ -494,7 +522,7 @@ namespace Microsoft.Build.BuildEngine {
 		[MonoTODO]
 		public void ResetBuildStatus ()
 		{
-			throw new NotImplementedException ();
+			Reevaluate ();
 		}
 
 		public void Save (string projectFileName)
@@ -762,6 +790,7 @@ namespace Microsoft.Build.BuildEngine {
 			evaluatedItemsByName = new Dictionary <string, BuildItemGroup> (StringComparer.InvariantCultureIgnoreCase);
 			evaluatedItemsByNameIgnoringCondition = new Dictionary <string, BuildItemGroup> (StringComparer.InvariantCultureIgnoreCase);
 			evaluatedProperties = new BuildPropertyGroup (null, null, null, true);
+			RemoveBuiltTargets ();
 
 			InitializeProperties ();
 
@@ -770,6 +799,16 @@ namespace Microsoft.Build.BuildEngine {
 			//FIXME: UsingTasks aren't really evaluated. (shouldn't use expressions or anything)
 			foreach (UsingTask usingTask in UsingTasks)
 				usingTask.Evaluate ();
+		}
+
+		// Removes entries of all earlier built targets for this project
+		void RemoveBuiltTargets ()
+		{
+			if (builtTargetKeys != null)
+				foreach (string key in builtTargetKeys)
+					ParentEngine.BuiltTargetsOutputByName.Remove (key);
+
+			builtTargetKeys = new List<string> ();
 		}
 
 		void InitializeProperties ()
@@ -787,6 +826,7 @@ namespace Microsoft.Build.BuildEngine {
 			}
 
 			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildBinPath", parentEngine.BinPath, PropertyType.Reserved));
+			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildToolsPath", parentEngine.BinPath, PropertyType.Reserved));
 
 			// FIXME: make some internal method that will work like GetDirectoryName but output String.Empty on null/String.Empty
 			string projectDir;
@@ -995,6 +1035,15 @@ namespace Microsoft.Build.BuildEngine {
 			return default (T);
 		}
 
+		void LogTargetSkipped ()
+		{
+			BuildMessageEventArgs bmea;
+			bmea = new BuildMessageEventArgs ("Target {0} skipped, as it has already been built.",
+					null, null, MessageImportance.Low);
+
+			ParentEngine.EventSource.FireMessageRaised (this, bmea);
+		}
+
 		public BuildPropertyGroup EvaluatedProperties {
 			get {
 				if (needToReevaluate) {
@@ -1107,6 +1156,29 @@ namespace Microsoft.Build.BuildEngine {
 		internal static string XmlNamespace {
 			get { return ns; }
 		}
+
+		void LogProjectStarted (string [] targetNames)
+		{
+			ProjectStartedEventArgs psea;
+			if (targetNames == null || targetNames.Length == 0) {
+				if (DefaultTargets != String.Empty)
+					psea = new ProjectStartedEventArgs ("Project started.", null, FullFileName,
+						DefaultTargets, null, null);
+				else
+					psea = new ProjectStartedEventArgs ("Project started.", null, FullFileName, "default", null, null);
+			} else
+			psea = new ProjectStartedEventArgs ("Project started.", null, FullFileName, String.Join (";",
+				targetNames), null, null);
+			ParentEngine.EventSource.FireProjectStarted (this, psea);
+		}
+
+		void LogProjectFinished (bool succeeded)
+		{
+			ProjectFinishedEventArgs pfea;
+			pfea = new ProjectFinishedEventArgs ("Project started.", null, FullFileName, succeeded);
+			ParentEngine.EventSource.FireProjectFinished (this, pfea);
+		}
+
 	}
 }
 

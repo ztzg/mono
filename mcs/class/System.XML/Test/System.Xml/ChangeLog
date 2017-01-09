@@ -1,3 +1,28 @@
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlParserContextTests.cs : added test for bug #484519.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderCommonTests.cs : added test for bug #480066.
+
+2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : only bogus XmlTextWriter ignores null namespace
+	  for namespae conflict check.
+
+2009-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriterTests.cs : added test for bug #474091.
+
+2009-02-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlElementTests.cs : added test for bug #464394.
+
+2009-02-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriterTests.cs : added test for bug #472634.
+
 2009-01-20  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlReaderCommonTests.cs : added test for bug #464229.

@@ -2,7 +2,7 @@ AC_INIT(README)
 AC_CANONICAL_SYSTEM
 
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(eglib,0.2)
+AM_INIT_AUTOMAKE(eglib,0.3)
 AM_MAINTAINER_MODE
 
 AC_PROG_CC
@@ -55,7 +55,7 @@ AM_CONDITIONAL(PLATFORM_WIN32, test x$OS = xWIN32)
 
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(void *)
-AC_CHECK_FUNCS(strndup strlcpy getpwent_r strtok_r)
+AC_CHECK_FUNCS(strndup strlcpy getpwent_r strtok_r rewinddir)
 AC_CHECK_LIB(iconv, libiconv_open, LIBS="$LIBS -liconv")
 old_ldflags="${LDFLAGS}"
 LDFLAGS="${LDFLAGS} -Wl,-export-dynamic"

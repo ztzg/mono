@@ -223,7 +223,7 @@ namespace System.Windows.Forms {
 		[EditorBrowsable (EditorBrowsableState.Advanced)]
 		public DataGridViewColumn OwningColumn {
 			get {
-				if (DataGridView == null || columnIndex == -1)
+				if (DataGridView == null || columnIndex < 0 || columnIndex >= DataGridView.Columns.Count)
 					return null;
 					
 				return DataGridView.Columns[columnIndex];
@@ -716,7 +716,7 @@ namespace System.Windows.Forms {
 		}
 
 		public override string ToString () {
-			return String.Format("{0} {RowIndex = {1}, ColumnIndex = {2}}", this.GetType().FullName, RowIndex, columnIndex);
+			return String.Format("{0} {{ ColumnIndex={1}, RowIndex={2} }}", this.GetType().Name, ColumnIndex, RowIndex);
 		}
 
 		protected virtual Rectangle BorderWidths (DataGridViewAdvancedBorderStyle advancedBorderStyle)
@@ -1160,11 +1160,11 @@ namespace System.Windows.Forms {
 					if (DataGridView.CellBorderStyle != DataGridViewCellBorderStyle.Single)
 						graphics.DrawLine (pen, bounds.X, bounds.Y, bounds.X, bounds.Y + bounds.Height - 1);
 					break;
+				case DataGridViewAdvancedCellBorderStyle.Outset:
 				case DataGridViewAdvancedCellBorderStyle.Inset:
 					graphics.DrawLine(pen, bounds.X, bounds.Y, bounds.X, bounds.Y + bounds.Height - 1);
 					break;
 				case DataGridViewAdvancedCellBorderStyle.InsetDouble:
-				case DataGridViewAdvancedCellBorderStyle.Outset:
 				case DataGridViewAdvancedCellBorderStyle.OutsetDouble:
 					graphics.DrawLine(pen, bounds.X, bounds.Y, bounds.X, bounds.Y + bounds.Height - 1);
 					graphics.DrawLine(pen, bounds.X + 2, bounds.Y, bounds.X + 2, bounds.Y + bounds.Height - 1);
@@ -1176,7 +1176,10 @@ namespace System.Windows.Forms {
 				case DataGridViewAdvancedCellBorderStyle.Single:
 					graphics.DrawLine(pen, bounds.X + bounds.Width - 1, bounds.Y, bounds.X + bounds.Width - 1, bounds.Y + bounds.Height - 1);
 					break;
+				case DataGridViewAdvancedCellBorderStyle.Outset:
 				case DataGridViewAdvancedCellBorderStyle.Inset:
+				case DataGridViewAdvancedCellBorderStyle.InsetDouble:
+				case DataGridViewAdvancedCellBorderStyle.OutsetDouble:
 					graphics.DrawLine(pen, bounds.X + bounds.Width, bounds.Y, bounds.X + bounds.Width, bounds.Y + bounds.Height - 1);
 					break;
 			}
@@ -1187,14 +1190,21 @@ namespace System.Windows.Forms {
 					if (DataGridView.CellBorderStyle != DataGridViewCellBorderStyle.Single)
 						graphics.DrawLine(pen, bounds.X, bounds.Y, bounds.X + bounds.Width - 1, bounds.Y);
 					break;
+				case DataGridViewAdvancedCellBorderStyle.Outset:
 				case DataGridViewAdvancedCellBorderStyle.Inset:
+				case DataGridViewAdvancedCellBorderStyle.InsetDouble:
+				case DataGridViewAdvancedCellBorderStyle.OutsetDouble:
 					graphics.DrawLine(pen, bounds.X, bounds.Y, bounds.X + bounds.Width - 1, bounds.Y);
 					break;
 			}
 			
 			// Paint the bottom border, if any
 			switch (advancedBorderStyle.Bottom) {
+				case DataGridViewAdvancedCellBorderStyle.Outset:
+				case DataGridViewAdvancedCellBorderStyle.Inset:
 				case DataGridViewAdvancedCellBorderStyle.Single:
+				case DataGridViewAdvancedCellBorderStyle.InsetDouble:
+				case DataGridViewAdvancedCellBorderStyle.OutsetDouble:
 					graphics.DrawLine(pen, bounds.X, bounds.Y + bounds.Height - 1, bounds.X + bounds.Width - 1, bounds.Y + bounds.Height - 1);
 					break;
 			}

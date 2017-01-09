@@ -6,7 +6,8 @@
  *   Miguel de Icaza (miguel@ximian.com)
  *   Paolo Molaro (lupus@ximian.com)
  *
- * (C) 2001-2003 Ximian, Inc.  http://www.ximian.com
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  *
  */
 #include <config.h>
@@ -33,6 +34,7 @@
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/object-internals.h>
+#include <mono/metadata/security-core-clr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #ifdef HAVE_UNISTD_H
@@ -332,9 +334,9 @@ load_metadata_ptrs (MonoImage *image, MonoCLIImageInfo *iinfo)
 
 		ptr += 4;
 		image->md_version_major = read16 (ptr);
-		ptr += 4;
+		ptr += 2;
 		image->md_version_minor = read16 (ptr);
-		ptr += 4;
+		ptr += 6;
 
 		version_string_len = read32 (ptr);
 		ptr += 4;
@@ -607,14 +609,14 @@ mono_image_init (MonoImage *image)
 				       class_next_value);
 	image->field_cache = g_hash_table_new (NULL, NULL);
 
-	image->native_wrapper_cache = g_hash_table_new (mono_aligned_addr_hash, NULL);
-
 	image->typespec_cache = g_hash_table_new (NULL, NULL);
 	image->memberref_signatures = g_hash_table_new (NULL, NULL);
 	image->helper_signatures = g_hash_table_new (g_str_hash, g_str_equal);
 	image->method_signatures = g_hash_table_new (NULL, NULL);
 
 	image->property_hash = mono_property_hash_new ();
+	InitializeCriticalSection (&image->lock);
+	InitializeCriticalSection (&image->szarray_cache_lock);
 }
 
 #if G_BYTE_ORDER != G_LITTLE_ENDIAN
@@ -876,14 +878,13 @@ do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
 {
 	MonoCLIImageInfo *iinfo;
 	MonoImage *image;
-	FILE *filed;
-	struct stat stat_buf;
+	MonoFileMap *filed;
 
-	if ((filed = fopen (fname, "rb")) == NULL){
+	if ((filed = mono_file_map_open (fname)) == NULL){
 		if (IS_PORTABILITY_SET) {
 			gchar *ffname = mono_portability_find_file (fname, TRUE);
 			if (ffname) {
-				filed = fopen (ffname, "rb");
+				filed = mono_file_map_open (ffname);
 				g_free (ffname);
 			}
 		}
@@ -895,18 +896,12 @@ do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
 		}
 	}
 
-	if (fstat (fileno (filed), &stat_buf)) {
-		fclose (filed);
-		if (status)
-			*status = MONO_IMAGE_ERROR_ERRNO;
-		return NULL;
-	}
 	image = g_new0 (MonoImage, 1);
 	image->raw_buffer_used = TRUE;
-	image->raw_data_len = stat_buf.st_size;
-	image->raw_data = mono_file_map (stat_buf.st_size, MONO_MMAP_READ|MONO_MMAP_PRIVATE, fileno (filed), 0, &image->raw_data_handle);
+	image->raw_data_len = mono_file_map_size (filed);
+	image->raw_data = mono_file_map (image->raw_data_len, MONO_MMAP_READ|MONO_MMAP_PRIVATE, mono_file_map_fd (filed), 0, &image->raw_data_handle);
 	if (!image->raw_data) {
-		fclose (filed);
+		mono_file_map_close (filed);
 		g_free (image);
 		if (status)
 			*status = MONO_IMAGE_IMAGE_INVALID;
@@ -917,9 +912,10 @@ do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
 	image->name = mono_path_resolve_symlinks (fname);
 	image->ref_only = refonly;
 	image->ref_count = 1;
+	/* if MONO_SECURITY_MODE_CORE_CLR is set then determine if this image is platform code */
+	image->core_clr_platform_code = mono_security_core_clr_determine_platform_image (image);
 
-	fclose (filed);
-
+	mono_file_map_close (filed);
 	return do_mono_image_load (image, status, care_about_cli);
 }
 
@@ -1440,6 +1436,8 @@ mono_image_close (MonoImage *image)
 		g_hash_table_foreach (image->array_cache, free_array_cache_entry, NULL);
 		g_hash_table_destroy (image->array_cache);
 	}
+	if (image->szarray_cache)
+		g_hash_table_destroy (image->szarray_cache);
 	if (image->ptr_cache)
 		g_hash_table_destroy (image->ptr_cache);
 	if (image->name_cache) {
@@ -1458,6 +1456,7 @@ mono_image_close (MonoImage *image)
 	free_hash (image->remoting_invoke_cache);
 	free_hash (image->runtime_invoke_cache);
 	free_hash (image->runtime_invoke_direct_cache);
+	free_hash (image->runtime_invoke_vcall_cache);
 	free_hash (image->synchronized_cache);
 	free_hash (image->unbox_wrapper_cache);
 	free_hash (image->cominterop_invoke_cache);
@@ -1513,6 +1512,10 @@ mono_image_close (MonoImage *image)
 	if (image->references)
 		g_free (image->references);
 	mono_perfcounters->loader_bytes -= mono_mempool_get_allocated (image->mempool);
+
+	DeleteCriticalSection (&image->szarray_cache_lock);
+	DeleteCriticalSection (&image->lock);
+
 	/*g_print ("destroy image %p (dynamic: %d)\n", image, image->dynamic);*/
 	if (!image->dynamic) {
 		if (debug_assembly_unload)
@@ -1994,21 +1997,130 @@ mono_image_has_authenticode_entry (MonoImage *image)
 gpointer
 mono_image_alloc (MonoImage *image, guint size)
 {
+	gpointer res;
+
 	mono_perfcounters->loader_bytes += size;
-	return mono_mempool_alloc (image->mempool, size);
+	mono_image_lock (image);
+	res = mono_mempool_alloc (image->mempool, size);
+	mono_image_unlock (image);
+
+	return res;
 }
 
 gpointer
 mono_image_alloc0 (MonoImage *image, guint size)
 {
+	gpointer res;
+
 	mono_perfcounters->loader_bytes += size;
-	return mono_mempool_alloc0 (image->mempool, size);
+	mono_image_lock (image);
+	res = mono_mempool_alloc0 (image->mempool, size);
+	mono_image_unlock (image);
+
+	return res;
 }
 
 char*
 mono_image_strdup (MonoImage *image, const char *s)
 {
+	char *res;
+
 	mono_perfcounters->loader_bytes += strlen (s);
-	return mono_mempool_strdup (image->mempool, s);
+	mono_image_lock (image);
+	res = mono_mempool_strdup (image->mempool, s);
+	mono_image_unlock (image);
+
+	return res;
 }
 
+GList*
+g_list_prepend_image (MonoImage *image, GList *list, gpointer data)
+{
+	GList *new_list;
+	
+	new_list = mono_image_alloc (image, sizeof (GList));
+	new_list->data = data;
+	new_list->prev = list ? list->prev : NULL;
+    new_list->next = list;
+
+    if (new_list->prev)
+            new_list->prev->next = new_list;
+    if (list)
+            list->prev = new_list;
+
+	return new_list;
+}
+
+GSList*
+g_slist_append_image (MonoImage *image, GSList *list, gpointer data)
+{
+	GSList *new_list;
+
+	new_list = mono_image_alloc (image, sizeof (GSList));
+	new_list->data = data;
+	new_list->next = NULL;
+
+	return g_slist_concat (list, new_list);
+}
+
+void
+mono_image_lock (MonoImage *image)
+{
+	mono_locks_acquire (&image->lock, ImageDataLock);
+}
+
+void
+mono_image_unlock (MonoImage *image)
+{
+	mono_locks_release (&image->lock, ImageDataLock);
+}
+
+
+/**
+ * mono_image_property_lookup:
+ *
+ * Lookup a property on @image. Used to store very rare fields of MonoClass and MonoMethod.
+ *
+ * LOCKING: Takes the image lock
+ */
+gpointer 
+mono_image_property_lookup (MonoImage *image, gpointer subject, guint32 property)
+{
+	gpointer res;
+
+	mono_image_lock (image);
+	res = mono_property_hash_lookup (image->property_hash, subject, property);
+ 	mono_image_unlock (image);
+
+	return res;
+}
+
+/**
+ * mono_image_property_insert:
+ *
+ * Insert a new property @property with value @value on @subject in @image. Used to store very rare fields of MonoClass and MonoMethod.
+ *
+ * LOCKING: Takes the image lock
+ */
+void
+mono_image_property_insert (MonoImage *image, gpointer subject, guint32 property, gpointer value)
+{
+	mono_image_lock (image);
+	mono_property_hash_insert (image->property_hash, subject, property, value);
+ 	mono_image_unlock (image);
+}
+
+/**
+ * mono_image_property_remove:
+ *
+ * Remove all properties associated with @subject in @image. Used to store very rare fields of MonoClass and MonoMethod.
+ *
+ * LOCKING: Takes the image lock
+ */
+void
+mono_image_property_remove (MonoImage *image, gpointer subject)
+{
+	mono_image_lock (image);
+	mono_property_hash_remove_object (image->property_hash, subject);
+ 	mono_image_unlock (image);
+}

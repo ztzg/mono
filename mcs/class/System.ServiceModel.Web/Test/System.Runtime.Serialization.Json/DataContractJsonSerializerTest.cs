@@ -377,8 +377,9 @@ namespace MonoTests.System.Runtime.Serialization.Json
 		}
 
 		[Test]
-		[ExpectedException (typeof (InvalidDataContractException))]
+		//[ExpectedException (typeof (InvalidDataContractException))]
 		// NonDC is not a DataContract type.
+		// UPDATE: non-DataContract types are became valid in RTM.
 		public void SerializeNonDC ()
 		{
 			DataContractJsonSerializer ser = new DataContractJsonSerializer (typeof (NonDC));
@@ -390,9 +391,10 @@ namespace MonoTests.System.Runtime.Serialization.Json
 		// DCHasNonDC
 
 		[Test]
-		[ExpectedException (typeof (InvalidDataContractException))]
+		//[ExpectedException (typeof (InvalidDataContractException))]
 		// DCHasNonDC itself is a DataContract type whose field is
 		// marked as DataMember but its type is not DataContract.
+		// UPDATE: non-DataContract types are became valid in RTM.
 		public void SerializeDCHasNonDC ()
 		{
 			DataContractJsonSerializer ser = new DataContractJsonSerializer (typeof (DCHasNonDC));
@@ -551,9 +553,8 @@ namespace MonoTests.System.Runtime.Serialization.Json
 			}
 		}
 
-		// CollectionContainer : Items must have a setter.
+		// CollectionContainer : Items must have a setter. (but became valid in RTM).
 		[Test]
-		[ExpectedException (typeof (InvalidDataContractException))]
 		public void SerializeReadOnlyCollectionMember ()
 		{
 			DataContractJsonSerializer ser =
@@ -564,9 +565,8 @@ namespace MonoTests.System.Runtime.Serialization.Json
 			}
 		}
 
-		// DataCollectionContainer : Items must have a setter.
+		// DataCollectionContainer : Items must have a setter. (but became valid in RTM).
 		[Test]
-		[ExpectedException (typeof (InvalidDataContractException))]
 		public void SerializeReadOnlyDataCollectionMember ()
 		{
 			DataContractJsonSerializer ser =
@@ -575,6 +575,24 @@ namespace MonoTests.System.Runtime.Serialization.Json
 			using (XmlWriter w = XmlWriter.Create (sw, settings)) {
 				ser.WriteObject (w, null);
 			}
+		}
+
+		[Test]
+		[Ignore ("https://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=409970")]
+		[ExpectedException (typeof (SerializationException))]
+		public void DeserializeReadOnlyDataCollection_NullCollection ()
+		{
+			DataContractJsonSerializer ser =
+				new DataContractJsonSerializer (typeof (CollectionContainer));
+			StringWriter sw = new StringWriter ();
+			var c = new CollectionContainer ();
+			c.Items.Add ("foo");
+			c.Items.Add ("bar");
+			using (XmlWriter w = XmlWriter.Create (sw, settings))
+				ser.WriteObject (w, c);
+			// CollectionContainer.Items is null, so it cannot deserialize non-null collection.
+			using (XmlReader r = XmlReader.Create (new StringReader (sw.ToString ())))
+				c = (CollectionContainer) ser.ReadObject (r);
 		}
 
 		[Test]
@@ -1181,8 +1199,42 @@ namespace MonoTests.System.Runtime.Serialization.Json
 			Assert.IsFalse (s.IsStartObject (XmlReader.Create (new StringReader ("<Foo></Foo>"))), "#3");
 			Assert.IsFalse (s.IsStartObject (XmlReader.Create (new StringReader ("<root xmlns='urn:foo'></root>"))), "#4");
 		}
- 	}
- 
+
+		[Test]
+		public void SerializeNonDC2 ()
+		{
+			var ser = new DataContractJsonSerializer (typeof (TestData));
+			StringWriter sw = new StringWriter ();
+			var obj = new TestData () { Foo = "foo", Bar = "bar", Baz = "baz" };
+
+			// XML
+			using (var xw = XmlWriter.Create (sw))
+				ser.WriteObject (xw, obj);
+			var s = sw.ToString ();
+			// since the order is not preserved, we compare only contents.
+			Assert.IsTrue (s.IndexOf ("<Foo>foo</Foo>") > 0, "#1-1");
+			Assert.IsTrue (s.IndexOf ("<Bar>bar</Bar>") > 0, "#1-2");
+			Assert.IsFalse (s.IndexOf ("<Baz>baz</Baz>") > 0, "#1-3");
+
+			// JSON
+			MemoryStream ms = new MemoryStream ();
+			using (var xw = JsonReaderWriterFactory.CreateJsonWriter (ms))
+				ser.WriteObject (ms, obj);
+			s = new StreamReader (new MemoryStream (ms.ToArray ())).ReadToEnd ().Replace ('"', '/');
+			// since the order is not preserved, we compare only contents.
+			Assert.IsTrue (s.IndexOf ("/Foo/:/foo/") > 0, "#2-1");
+			Assert.IsTrue (s.IndexOf ("/Bar/:/bar/") > 0, "#2-2");
+			Assert.IsFalse (s.IndexOf ("/Baz/:/baz/") > 0, "#2-3");
+		}
+	}
+
+	public class TestData
+	{
+		public string Foo { get; set; }
+		public string Bar { get; set; }
+		internal string Baz { get; set; }
+	}
+
 	public enum Colors {
 		Red, Green, Blue
 	}

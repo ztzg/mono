@@ -762,11 +762,10 @@ class Tester
 		Assert (null, e2.Compile ().Invoke ());
 	}
 
-	// FIXME: Redundant convert, need new expression	
 	void ConstantTest_3 ()
 	{
 		Expression<Func<Tester>> e3 = () => default (Tester);
-		//AssertNodeType (e3, ExpressionType.Constant);
+		AssertNodeType (e3, ExpressionType.Constant);
 		Assert (null, e3.Compile ().Invoke ());
 	}
 	
@@ -1373,6 +1372,13 @@ class Tester
 		Assert ("4", e2.Compile ().Invoke ((a) => (a+1).ToString (), 3));
 	}
 	
+	void LambdaTest ()
+	{
+		Expression<Func<string, Func<string>>> e = (string s) => () => s;
+		AssertNodeType (e, ExpressionType.Lambda);
+		Assert ("xx", e.Compile ().Invoke ("xx") ());
+	}
+	
 	void LeftShiftTest ()
 	{
 		Expression<Func<ulong, short, ulong>> e = (ulong a, short b) => a << b;
@@ -1634,8 +1640,7 @@ class Tester
 	{
 		string s = "localvar";
 		Expression<Func<string>> e9 = () => s;
-		// CSC emits this as MemberAccess
-		AssertNodeType (e9, ExpressionType.Constant);
+		AssertNodeType (e9, ExpressionType.MemberAccess);
 		Assert ("localvar", e9.Compile ().Invoke ());
 	}
 	
@@ -1971,9 +1976,16 @@ class Tester
 	
 	void NewArrayInitTest_5 ()
 	{
-		Expression<Func<int?[]>> e = () => new int?[] { null, 3, 4 };	
+		Expression<Func<int?[]>> e = () => new int?[] { null, 3, 4 };
 		AssertNodeType (e, ExpressionType.NewArrayInit);
 		Assert (3, e.Compile ().Invoke ().Length);
+	}
+
+	void NewArrayInitTest_6 ()
+	{
+		Expression<Func<string []>> e = () => new [] { null, "a" };
+		AssertNodeType (e, ExpressionType.NewArrayInit);
+		Assert (2, e.Compile ().Invoke ().Length);
 	}
 	
 	void NewArrayBoundsTest ()

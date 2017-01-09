@@ -4,11 +4,14 @@
  * Author:
  *   Mark Probst (mark.probst@gmail.com)
  *
- * (C) 2007-2008 Novell, Inc.
+ * Copyright 2007-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include <config.h>
 #include <string.h>
+#ifdef HAVE_ALLOCA_H
+#include <alloca.h>
+#endif
 
 #ifdef _MSC_VER
 #include <glib.h>
@@ -118,8 +121,8 @@ mono_class_check_context_used (MonoClass *class)
  * Guards the two global rgctx (template) hash tables and all rgctx
  * templates.
  *
- * Ordering: Domain locks and the loader lock must not be taken while
- * the templates lock is held.
+ * Ordering: The templates lock can be taken while the loader lock is
+ * held.
  */
 static CRITICAL_SECTION templates_mutex;
 
@@ -159,10 +162,10 @@ get_other_info_templates (MonoRuntimeGenericContextTemplate *template, int type_
 }
 
 /*
- * LOCKING: loader lock and templates lock
+ * LOCKING: templates lock
  */
 static void
-set_other_info_templates (MonoMemPool *mp, MonoRuntimeGenericContextTemplate *template, int type_argc,
+set_other_info_templates (MonoImage *image, MonoRuntimeGenericContextTemplate *template, int type_argc,
 	MonoRuntimeGenericContextOtherInfoTemplate *oti)
 {
 	g_assert (type_argc >= 0);
@@ -174,7 +177,7 @@ set_other_info_templates (MonoMemPool *mp, MonoRuntimeGenericContextTemplate *te
 
 		/* FIXME: quadratic! */
 		while (length < type_argc) {
-			template->method_templates = g_slist_append_mempool (mp, template->method_templates, NULL);
+			template->method_templates = g_slist_append_image (image, template->method_templates, NULL);
 			length++;
 		}
 
@@ -351,9 +354,6 @@ mono_class_unregister_image_generic_subclasses (MonoImage *image)
 	g_hash_table_destroy (old_hash);
 }
 
-/*
- * LOCKING: loader lock
- */
 static MonoRuntimeGenericContextTemplate*
 alloc_template (MonoClass *class)
 {
@@ -375,9 +375,6 @@ alloc_template (MonoClass *class)
 	return mono_image_alloc0 (class->image, size);
 }
 
-/*
- * LOCKING: loader lock
- */
 static MonoRuntimeGenericContextOtherInfoTemplate*
 alloc_oti (MonoImage *image)
 {
@@ -402,7 +399,7 @@ alloc_oti (MonoImage *image)
 #define MONO_RGCTX_SLOT_USED_MARKER	((gpointer)&mono_defaults.object_class->byval_arg)
 
 /*
- * LOCKING: loader lock and templates lock
+ * LOCKING: templates lock
  */
 static void
 rgctx_template_set_other_slot (MonoImage *image, MonoRuntimeGenericContextTemplate *template, int type_argc,
@@ -438,7 +435,7 @@ rgctx_template_set_other_slot (MonoImage *image, MonoRuntimeGenericContextTempla
 	(*oti)->data = data;
 	(*oti)->info_type = info_type;
 
-	set_other_info_templates (image->mempool, template, type_argc, list);
+	set_other_info_templates (image, template, type_argc, list);
 
 	if (data == MONO_RGCTX_SLOT_USED_MARKER)
 		++num_markers;
@@ -533,7 +530,7 @@ inflate_other_data (gpointer data, int info_type, MonoGenericContext *context, M
 	case MONO_RGCTX_INFO_VTABLE:
 	case MONO_RGCTX_INFO_TYPE:
 	case MONO_RGCTX_INFO_REFLECTION_TYPE:
-		return mono_class_inflate_generic_type_with_mempool (temporary ? NULL : class->image->mempool,
+		return mono_class_inflate_generic_type_with_mempool (temporary ? NULL : class->image,
 			data, context);
 
 	case MONO_RGCTX_INFO_METHOD:
@@ -558,7 +555,13 @@ inflate_other_data (gpointer data, int info_type, MonoGenericContext *context, M
 			method = mono_marshal_get_static_rgctx_invoke (method);
 		}
 
-		inflated_method = mono_class_inflate_generic_method (method, context);
+		if (inflated_class->byval_arg.type == MONO_TYPE_ARRAY ||
+				inflated_class->byval_arg.type == MONO_TYPE_SZARRAY) {
+			inflated_method = mono_method_search_in_array_class (inflated_class,
+				method->name, method->signature);
+		} else {
+			inflated_method = mono_class_inflate_generic_method (method, context);
+		}
 		mono_class_init (inflated_method->klass);
 		g_assert (inflated_method->klass == inflated_class);
 		return inflated_method;
@@ -641,8 +644,6 @@ mono_class_get_runtime_generic_context_template (MonoClass *class)
 	else
 		inst = NULL;
 
-	mono_loader_lock ();
-
 	template = alloc_template (class);
 
 	templates_lock ();
@@ -702,8 +703,6 @@ mono_class_get_runtime_generic_context_template (MonoClass *class)
 	}
 
 	templates_unlock ();
-
-	mono_loader_unlock ();
 
 	return template;
 }
@@ -841,7 +840,7 @@ instantiate_other_info (MonoDomain *domain, MonoRuntimeGenericContextOtherInfoTe
 }
 
 /*
- * LOCKING: loader lock and templates lock
+ * LOCKING: templates lock
  */
 static void
 fill_in_rgctx_template_slot (MonoClass *class, int type_argc, int index, gpointer data, int info_type)
@@ -876,7 +875,7 @@ fill_in_rgctx_template_slot (MonoClass *class, int type_argc, int index, gpointe
 }
 
 /*
- * LOCKING: loader lock and templates lock
+ * LOCKING: templates lock
  */
 static int
 register_other_info (MonoClass *class, int type_argc, gpointer data, int info_type)
@@ -1019,7 +1018,6 @@ lookup_or_register_other_info (MonoClass *class, int type_argc, gpointer data, i
 	/* We haven't found the info, so check if the list is still
 	   the same. */
 
-	mono_loader_lock ();
 	templates_lock ();
 
 	/* We need to fetch oti_list again here because the list could
@@ -1030,23 +1028,19 @@ lookup_or_register_other_info (MonoClass *class, int type_argc, gpointer data, i
 		g_assert (oti);
 
 		if (copy [i].info_type != oti->info_type || copy [i].data != oti->data) {
-			mono_loader_unlock ();
 			g_free (copy);
 			goto restart;
 		}
 	}
 	g_free (copy);
-	if (oti) {
-		mono_loader_unlock ();
+	if (oti)
 		goto restart;
-	}
 
 	/* The list is still the same - success. */
 
 	i = register_other_info (class, type_argc, data, info_type);
 
 	templates_unlock ();
-	mono_loader_unlock ();
 
 	if (!inited) {
 		mono_counters_register ("RGCTX max slot number", MONO_COUNTER_GENERICS | MONO_COUNTER_INT, &max_slot);
@@ -1214,6 +1208,7 @@ fill_runtime_generic_context (MonoVTable *class_vtable, MonoRuntimeGenericContex
 		g_print ("filling mrgctx slot %d table %d index %d\n", slot, i, rgctx_index);
 	*/
 
+	/*FIXME We should use CAS here, no need to take a lock.*/
 	mono_domain_lock (domain);
 
 	/* Check whether the slot hasn't been instantiated in the
@@ -1279,7 +1274,6 @@ mono_class_fill_runtime_generic_context (MonoVTable *class_vtable, guint32 slot)
 gpointer
 mono_method_fill_runtime_generic_context (MonoMethodRuntimeGenericContext *mrgctx, guint32 slot)
 {
-	MonoDomain *domain = mrgctx->class_vtable->domain;
 	gpointer info;
 
 	info = fill_runtime_generic_context (mrgctx->class_vtable, (MonoRuntimeGenericContext*)mrgctx, slot,
@@ -1313,6 +1307,8 @@ mrgctx_equal_func (gconstpointer a, gconstpointer b)
  *
  * Returns the MRGCTX for the generic method(s) with the given
  * method_inst of the given class_vtable.
+ *
+ * LOCKING: Take the domain lock.
  */
 MonoMethodRuntimeGenericContext*
 mono_method_lookup_rgctx (MonoVTable *class_vtable, MonoGenericInst *method_inst)
@@ -1428,8 +1424,10 @@ mono_method_is_generic_impl (MonoMethod *method)
 static gboolean
 has_constraints (MonoGenericContainer *container)
 {
-	int i;
+	//int i;
 
+	return FALSE;
+	/*
 	g_assert (container->type_argc > 0);
 	g_assert (container->type_params);
 
@@ -1437,6 +1435,7 @@ has_constraints (MonoGenericContainer *container)
 		if (container->type_params [i].constraints)
 			return TRUE;
 	return FALSE;
+	*/
 }
 
 /*
@@ -1529,7 +1528,6 @@ mono_method_construct_object_context (MonoMethod *method)
 {
 	MonoGenericContext object_context;
 
-	g_assert (method->wrapper_type == MONO_WRAPPER_NONE);
 	g_assert (!method->klass->generic_class);
 	if (method->klass->generic_container) {
 		int type_argc = method->klass->generic_container->type_argc;

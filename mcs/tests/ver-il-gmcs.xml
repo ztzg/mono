@@ -1611,7 +1611,7 @@
         <size>44</size>
       </method>
       <method name="Int32 Main()">
-        <size>87</size>
+        <size>82</size>
       </method>
     </type>
     <type name="X+&lt;Test&gt;c__Iterator0">
@@ -1702,7 +1702,7 @@
         <size>17</size>
       </method>
       <method name="Void Main(System.String[])">
-        <size>210</size>
+        <size>214</size>
       </method>
     </type>
     <type name="ComparablePair`2[T,U]">
@@ -1931,7 +1931,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>58</size>
+        <size>53</size>
       </method>
     </type>
     <type name="MyList`1+&lt;GetEnumerator&gt;c__Iterator0[T]">
@@ -2031,7 +2031,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>62</size>
+        <size>64</size>
       </method>
       <method name="IEnumerator GetEnumerator()">
         <size>8</size>
@@ -2045,10 +2045,10 @@
         <size>7</size>
       </method>
       <method name="Boolean MoveNext()">
-        <size>184</size>
+        <size>185</size>
       </method>
       <method name="Void Dispose()">
-        <size>60</size>
+        <size>62</size>
       </method>
       <method name="Void Reset()">
         <size>6</size>
@@ -2867,7 +2867,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>59</size>
+        <size>54</size>
       </method>
     </type>
     <type name="Test`1+&lt;GetEnumerator&gt;c__Iterator0[T]">
@@ -3075,7 +3075,7 @@
         <size>44</size>
       </method>
       <method name="IMyList`1 Map[U](Mapper`2[T,U])">
-        <size>72</size>
+        <size>67</size>
       </method>
       <method name="IEnumerator System.Collections.IEnumerable.GetEnumerator()">
         <size>7</size>
@@ -3105,7 +3105,7 @@
         <size>143</size>
       </method>
       <method name="Int32 GetHashCode()">
-        <size>71</size>
+        <size>66</size>
       </method>
       <method name="IEnumerator`1 GetEnumerator()">
         <size>7</size>
@@ -3114,7 +3114,7 @@
         <size>7</size>
       </method>
       <method name="LinkedList`1[T] op_Addition(LinkedList`1[T], LinkedList`1[T])">
-        <size>128</size>
+        <size>119</size>
       </method>
     </type>
     <type name="LinkedList`1+Node[T]">
@@ -3155,7 +3155,7 @@
         <size>7</size>
       </method>
       <method name="Void Print(System.IO.TextWriter)">
-        <size>92</size>
+        <size>87</size>
       </method>
     </type>
     <type name="MyString">
@@ -3177,7 +3177,7 @@
         <size>7</size>
       </method>
       <method name="Void Main(System.String[])">
-        <size>500</size>
+        <size>483</size>
       </method>
     </type>
     <type name="Mapper`2[A,R]">
@@ -3211,7 +3211,7 @@
         <size>7</size>
       </method>
       <method name="Void DoNothing[T]()">
-        <size>3</size>
+        <size>8</size>
       </method>
     </type>
     <type name="Slow.Program">
@@ -4147,7 +4147,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>92</size>
+        <size>96</size>
       </method>
     </type>
   </test>
@@ -4321,7 +4321,7 @@
         <size>30</size>
       </method>
       <method name="Int32 Main()">
-        <size>117</size>
+        <size>118</size>
       </method>
     </type>
     <type name="X+A">
@@ -4753,7 +4753,7 @@
         <size>1</size>
       </method>
       <method name="Int32 Main()">
-        <size>181</size>
+        <size>184</size>
       </method>
     </type>
     <type name="X+&lt;&gt;c__Iterator0">
@@ -4842,7 +4842,7 @@
         <size>7</size>
       </method>
       <method name="Void Main(System.String[])">
-        <size>74</size>
+        <size>69</size>
       </method>
     </type>
     <type name="test.Test`1+&lt;Lookup&gt;c__Iterator0[T]">
@@ -5535,7 +5535,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>117</size>
+        <size>112</size>
       </method>
     </type>
   </test>
@@ -5632,7 +5632,7 @@
         <size>7</size>
       </method>
       <method name="T QueryInterface[T](System.Object)">
-        <size>35</size>
+        <size>45</size>
       </method>
     </type>
     <type name="Driver">
@@ -5661,7 +5661,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>86</size>
+        <size>81</size>
       </method>
     </type>
     <type name="HashSet`1+&lt;GetEnumerator&gt;c__Iterator0[T]">
@@ -6008,7 +6008,7 @@
         <size>44</size>
       </method>
       <method name="Void Main(System.String[])">
-        <size>100</size>
+        <size>95</size>
       </method>
       <method name="IEnumerable`1 FromTo(Int32, Int32)">
         <size>44</size>
@@ -6754,7 +6754,7 @@
         <size>7</size>
       </method>
       <method name="Void AddAll[U](IEnumerable`1)">
-        <size>66</size>
+        <size>61</size>
       </method>
       <method name="Boolean searchoradd(T ByRef, Boolean, Boolean, Boolean)">
         <size>2</size>
@@ -7062,7 +7062,7 @@
         <size>11</size>
       </method>
       <method name="Void Run()">
-        <size>156</size>
+        <size>147</size>
       </method>
     </type>
     <type name="Test+&lt;GetEnumerator&gt;c__Iterator0">
@@ -7461,7 +7461,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>58</size>
+        <size>53</size>
       </method>
     </type>
     <type name="Qux`2+GetEnumerator&gt;c__Iterator0[X,V]">
@@ -7814,7 +7814,7 @@
         <size>106</size>
       </method>
       <method name="Int32 Test(System.Type, System.Type[])">
-        <size>394</size>
+        <size>398</size>
       </method>
       <method name="Int32 Test()">
         <size>532</size>
@@ -7947,7 +7947,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>63</size>
+        <size>74</size>
       </method>
     </type>
     <type name="D">
@@ -8202,7 +8202,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>69</size>
+        <size>64</size>
       </method>
     </type>
   </test>
@@ -8230,7 +8230,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>64</size>
+        <size>59</size>
       </method>
     </type>
     <type name="Test+GetEnumerator&gt;c__Iterator0">
@@ -8876,7 +8876,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>58</size>
+        <size>53</size>
       </method>
     </type>
   </test>
@@ -8963,7 +8963,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>64</size>
+        <size>59</size>
       </method>
     </type>
     <type name="BaseCollection`1[T]">
@@ -9360,6 +9360,31 @@
       </method>
     </type>
   </test>
+  <test name="gtest-344.cs">
+    <type name="ConfigurationElement">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="CustomConfigurationElement">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="CustomConfigurationElementCollection">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="BaseCollection`1[T]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
   <test name="gtest-345.cs">
     <type name="ShiftReduceParser`2[TokenValueType,TokenLocationType]">
       <method name="Void .ctor()">
@@ -9451,7 +9476,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>105</size>
+        <size>103</size>
       </method>
       <method name="Int32 f2(IList, IList)">
         <size>2</size>
@@ -9540,11 +9565,11 @@
       <method name="Void CopyTo(Bug.xxx*)">
         <size>99</size>
       </method>
-      <method name="Void Convert(Bug.xxx*, System.UInt64*)">
-        <size>93</size>
-      </method>
       <method name="Void Main()">
         <size>1</size>
+      </method>
+      <method name="Void Convert(Bug.xxx*, UInt64*)">
+        <size>93</size>
       </method>
     </type>
   </test>
@@ -10147,7 +10172,7 @@
         <size>7</size>
       </method>
       <method name="Void Main(System.String[])">
-        <size>72</size>
+        <size>67</size>
       </method>
       <method name="IEnumerable`1 setX()">
         <size>16</size>
@@ -10229,7 +10254,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>254</size>
+        <size>260</size>
       </method>
     </type>
     <type name="MyTypeA">
@@ -10754,7 +10779,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>102</size>
+        <size>99</size>
       </method>
     </type>
     <type name="MyColor">
@@ -10825,6 +10850,14 @@
     <type name="ConditionalParsing+Const">
       <method name="Void .ctor()">
         <size>7</size>
+      </method>
+    </type>
+    <type name="ConditionalParsing">
+      <method name="Void Test_8(DateTime)">
+        <size>38</size>
+      </method>
+      <method name="Void Test_9()">
+        <size>43</size>
       </method>
     </type>
   </test>
@@ -10997,7 +11030,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>57</size>
+        <size>56</size>
       </method>
       <method name="System.Object Test(System.String)">
         <size>42</size>
@@ -11229,7 +11262,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>183</size>
+        <size>173</size>
       </method>
     </type>
   </test>
@@ -11342,7 +11375,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>150</size>
+        <size>258</size>
       </method>
     </type>
   </test>
@@ -11353,6 +11386,127 @@
       </method>
       <method name="Int32 Main()">
         <size>2</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-438.cs">
+    <type name="Tests">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="ServiceType GetService[ServiceType](System.Object[])">
+        <size>17</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>19</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-439.cs">
+    <type name="MonoBug.Stuff">
+      <method name="MonoBug.GenericStuff`2[T1,T2] CreateThing[T1,T2](T1, T2)">
+        <size>8</size>
+      </method>
+    </type>
+    <type name="MonoBug.GenericStuff`2[T1,T2]">
+      <method name="Void .ctor(T1, T2)">
+        <size>21</size>
+      </method>
+    </type>
+    <type name="MonoBug.Program">
+      <method name="Void Main()">
+        <size>35</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-440.cs">
+    <type name="AnyObjectId">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 get_W1()">
+        <size>7</size>
+      </method>
+      <method name="Void set_W1(Int32)">
+        <size>8</size>
+      </method>
+    </type>
+    <type name="ObjectId">
+      <method name="Void .ctor()">
+        <size>14</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-441.cs">
+    <type name="Name.Test">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="Name.Subclass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="System.Collections.Generic.List`1[System.Int32] get_List()">
+        <size>7</size>
+      </method>
+      <method name="Void Main(System.String[])">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-442.cs">
+    <type name="NonGenericBase">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 get_Item(Int32)">
+        <size>0</size>
+      </method>
+    </type>
+    <type name="GenericBase`1[T]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="T get_Instance()">
+        <size>7</size>
+      </method>
+      <method name="Void Foo()">
+        <size>24</size>
+      </method>
+    </type>
+    <type name="EntryPoint">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-443.cs">
+    <type name="C">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void M[T]()">
+        <size>23</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-444.cs">
+    <type name="MyClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>114</size>
       </method>
     </type>
   </test>
@@ -11403,7 +11557,7 @@
         <size>44</size>
       </method>
       <method name="Int32 Main()">
-        <size>100</size>
+        <size>95</size>
       </method>
     </type>
     <type name="X+&lt;Test&gt;c__Iterator0`1[T]">
@@ -11851,7 +12005,7 @@
         <size>53</size>
       </method>
       <method name="T MakeSomething[T]()">
-        <size>2</size>
+        <size>7</size>
       </method>
       <method name="Int32 Main()">
         <size>10</size>
@@ -12042,7 +12196,7 @@
         <size>26</size>
       </method>
       <method name="Int32 Main()">
-        <size>300</size>
+        <size>431</size>
       </method>
     </type>
     <type name="Test+&lt;For&gt;c__AnonStorey0`1[T]">
@@ -12115,6 +12269,32 @@
       </method>
       <method name="System.Collections.Generic.List`1[T] &lt;&gt;m__8()">
         <size>56</size>
+      </method>
+    </type>
+    <type name="Test">
+      <method name="Void ArrayMutate[T](T[])">
+        <size>27</size>
+      </method>
+    </type>
+    <type name="Test+&lt;ArrayMutate&gt;c__AnonStorey9`1[T]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void &lt;&gt;m__9(Int32)">
+        <size>36</size>
+      </method>
+    </type>
+    <type name="Test">
+      <method name="System.Func`1[T[][]] ArrayMultiMutate[T](T[][])">
+        <size>26</size>
+      </method>
+    </type>
+    <type name="Test+&lt;ArrayMultiMutate&gt;c__AnonStoreyA`1[T]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="T[][] &lt;&gt;m__A()">
+        <size>48</size>
       </method>
     </type>
   </test>
@@ -12455,7 +12635,7 @@
         <size>33</size>
       </method>
       <method name="System.String Implode[TSource](IEnumerable`1, System.String, System.Action`2[System.Text.StringBuilder,TSource])">
-        <size>130</size>
+        <size>126</size>
       </method>
     </type>
     <type name="Test">
@@ -12715,7 +12895,7 @@
     </type>
     <type name="Test">
       <method name="T Test_3[T](System.Object)">
-        <size>46</size>
+        <size>51</size>
       </method>
     </type>
     <type name="Test+&lt;Test_3&gt;c__AnonStorey2`1[T]">
@@ -12733,7 +12913,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>62</size>
+        <size>57</size>
       </method>
       <method name="Int32 GetItem()">
         <size>50</size>
@@ -13102,7 +13282,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>83</size>
+        <size>78</size>
       </method>
     </type>
     <type name="Hello">
@@ -13250,6 +13430,144 @@
       </method>
     </type>
   </test>
+  <test name="gtest-anon-52.cs">
+    <type name="A`1[T]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="A`1+B[T]">
+      <method name="Void .ctor()">
+        <size>18</size>
+      </method>
+      <method name="Void W[R](System.String, System.Func`2[T,R])">
+        <size>39</size>
+      </method>
+    </type>
+    <type name="B">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="A`1+B+&lt;W&gt;c__AnonStorey0`1[T,R]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void &lt;&gt;m__0(T[])">
+        <size>55</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-anon-53.cs">
+    <type name="TestComp.Program">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main(System.String[])">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="TestComp.Program+MyClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void MyTemplate(TestComp.Program+MyClass+MyDelegate)">
+        <size>1</size>
+      </method>
+      <method name="Void UseATemplate()">
+        <size>36</size>
+      </method>
+      <method name="Void &lt;UseATemplate&gt;m__0(System.Collections.Generic.List`1[System.Int32] ByRef)">
+        <size>16</size>
+      </method>
+    </type>
+    <type name="TestComp.Program+MyClass+MyDelegate">
+      <method name="Void .ctor(Object, IntPtr)">
+        <size>0</size>
+      </method>
+      <method name="Void Invoke(System.Collections.Generic.List`1[System.Int32] ByRef)">
+        <size>0</size>
+      </method>
+      <method name="IAsyncResult BeginInvoke(System.Collections.Generic.List`1[System.Int32] ByRef, System.AsyncCallback, System.Object)">
+        <size>0</size>
+      </method>
+      <method name="Void EndInvoke(System.Collections.Generic.List`1[System.Int32] ByRef, IAsyncResult)">
+        <size>0</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-anon-54.cs">
+    <type name="Class">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="System.String get_Property()">
+        <size>6</size>
+      </method>
+      <method name="System.String Method()">
+        <size>44</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>39</size>
+      </method>
+    </type>
+    <type name="Class+&lt;Method&gt;c__AnonStorey0">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="System.String &lt;&gt;m__0()">
+        <size>56</size>
+      </method>
+    </type>
+    <type name="Class+&lt;Method&gt;c__AnonStorey0+&lt;Method&gt;c__AnonStorey2">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="System.String &lt;&gt;m__1(System.String)">
+        <size>52</size>
+      </method>
+    </type>
+    <type name="Class+&lt;Method&gt;c__AnonStorey0+&lt;Method&gt;c__AnonStorey2+&lt;Method&gt;c__AnonStorey1">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="System.String &lt;&gt;m__2()">
+        <size>39</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-anon-55.cs">
+    <type name="Thing`1[TFirst]">
+      <method name="Void .ctor(Action`1)">
+        <size>14</size>
+      </method>
+      <method name="Thing`1[TFirst] Create[TSecond](System.Func`2[TFirst,TSecond])">
+        <size>31</size>
+      </method>
+      <method name="Void SomeAction()">
+        <size>18</size>
+      </method>
+    </type>
+    <type name="Program">
+      <method name="Void Main()">
+        <size>42</size>
+      </method>
+      <method name="System.Object &lt;Main&gt;m__1(System.Object)">
+        <size>2</size>
+      </method>
+    </type>
+    <type name="Thing`1+&lt;Create&gt;c__AnonStorey0`1[TFirst,TSecond]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void &lt;&gt;m__0(TFirst)">
+        <size>47</size>
+      </method>
+    </type>
+  </test>
   <test name="gtest-anon-6.cs">
     <type name="X">
       <method name="Void .ctor()">
@@ -13311,7 +13629,7 @@
         <size>30</size>
       </method>
       <method name="Void Main()">
-        <size>63</size>
+        <size>58</size>
       </method>
     </type>
     <type name="X+&lt;Test&gt;c__Iterator0">
@@ -13393,7 +13711,7 @@
         <size>11</size>
       </method>
       <method name="Void Main()">
-        <size>83</size>
+        <size>78</size>
       </method>
       <method name="Foo op_Implicit(Test)">
         <size>30</size>
@@ -13478,68 +13796,6 @@
       </method>
     </type>
   </test>
-  <test name="gtest-anon-type-09.cs">
-    <type name="My.System.Test">
-      <method name="Void Main()">
-        <size>14</size>
-      </method>
-    </type>
-    <type name="&lt;&gt;__AnonType0`1[&lt;X&gt;__T]">
-      <method name="Void .ctor(&lt;X&gt;__T)">
-        <size>14</size>
-      </method>
-      <method name="&lt;X&gt;__T get_X()">
-        <size>7</size>
-      </method>
-      <method name="Boolean Equals(System.Object)">
-        <size>39</size>
-      </method>
-      <method name="Int32 GetHashCode()">
-        <size>63</size>
-      </method>
-      <method name="System.String ToString()">
-        <size>57</size>
-      </method>
-    </type>
-  </test>
-  <test name="gtest-anon-type-10.cs">
-    <type name="A">
-      <method name="Void .ctor()">
-        <size>7</size>
-      </method>
-      <method name="Int32 get_X()">
-        <size>3</size>
-      </method>
-    </type>
-    <type name="B">
-      <method name="Void .ctor()">
-        <size>7</size>
-      </method>
-      <method name="Int32 Main()">
-        <size>11</size>
-      </method>
-      <method name="Int32 Test()">
-        <size>33</size>
-      </method>
-    </type>
-    <type name="&lt;&gt;__AnonType0`1[&lt;X&gt;__T]">
-      <method name="Void .ctor(&lt;X&gt;__T)">
-        <size>14</size>
-      </method>
-      <method name="&lt;X&gt;__T get_X()">
-        <size>7</size>
-      </method>
-      <method name="Boolean Equals(System.Object)">
-        <size>39</size>
-      </method>
-      <method name="Int32 GetHashCode()">
-        <size>63</size>
-      </method>
-      <method name="System.String ToString()">
-        <size>57</size>
-      </method>
-    </type>
-  </test>
   <test name="gtest-anontype-01.cs">
     <type name="Test">
       <method name="Void .ctor()">
@@ -13566,7 +13822,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
   </test>
@@ -13596,7 +13852,7 @@
         <size>63</size>
       </method>
       <method name="System.String ToString()">
-        <size>57</size>
+        <size>67</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;Foo&gt;__T,&lt;Baz&gt;__T]">
@@ -13616,7 +13872,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
   </test>
@@ -13654,7 +13910,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
   </test>
@@ -13698,7 +13954,7 @@
         <size>132</size>
       </method>
       <method name="System.String ToString()">
-        <size>240</size>
+        <size>258</size>
       </method>
     </type>
   </test>
@@ -13711,7 +13967,7 @@
         <size>2</size>
       </method>
       <method name="Int32 Main()">
-        <size>184</size>
+        <size>287</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType0`2[&lt;Name&gt;__T,&lt;Age&gt;__T]">
@@ -13731,7 +13987,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;Age&gt;__T,&lt;Name&gt;__T]">
@@ -13751,7 +14007,38 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType2">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>15</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>40</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>6</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType3`1[&lt;Foo&gt;__T]">
+      <method name="Void .ctor(&lt;Foo&gt;__T)">
+        <size>14</size>
+      </method>
+      <method name="&lt;Foo&gt;__T get_Foo()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>39</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>63</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>67</size>
       </method>
     </type>
   </test>
@@ -13781,7 +14068,7 @@
         <size>63</size>
       </method>
       <method name="System.String ToString()">
-        <size>57</size>
+        <size>67</size>
       </method>
     </type>
   </test>
@@ -13832,7 +14119,86 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-anontype-09.cs">
+    <type name="My.System.Test">
+      <method name="Int32 Main()">
+        <size>35</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType0`1[&lt;X&gt;__T]">
+      <method name="Void .ctor(&lt;X&gt;__T)">
+        <size>14</size>
+      </method>
+      <method name="&lt;X&gt;__T get_X()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>39</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>63</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>67</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType1`1[&lt;Value&gt;__T]">
+      <method name="Void .ctor(&lt;Value&gt;__T)">
+        <size>14</size>
+      </method>
+      <method name="&lt;Value&gt;__T get_Value()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>39</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>63</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>67</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-anontype-10.cs">
+    <type name="A">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 get_X()">
+        <size>3</size>
+      </method>
+    </type>
+    <type name="B">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>11</size>
+      </method>
+      <method name="Int32 Test()">
+        <size>33</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType0`1[&lt;X&gt;__T]">
+      <method name="Void .ctor(&lt;X&gt;__T)">
+        <size>14</size>
+      </method>
+      <method name="&lt;X&gt;__T get_X()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>39</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>63</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>67</size>
       </method>
     </type>
   </test>
@@ -13875,7 +14241,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
   </test>
@@ -14073,10 +14439,10 @@
         <size>7</size>
       </method>
       <method name="Void TestList(System.Collections.Generic.List`1[System.Int32], Int32)">
-        <size>77</size>
+        <size>81</size>
       </method>
       <method name="Int32 Main()">
-        <size>505</size>
+        <size>507</size>
       </method>
     </type>
     <type name="Test+Wrap">
@@ -14110,7 +14476,7 @@
         <size>34</size>
       </method>
       <method name="Void R(System.Object ByRef)">
-        <size>27</size>
+        <size>28</size>
       </method>
     </type>
   </test>
@@ -14341,10 +14707,10 @@
         <size>59</size>
       </method>
       <method name="Void ConstantTest_2()">
-        <size>75</size>
+        <size>62</size>
       </method>
       <method name="Void ConstantTest_3()">
-        <size>61</size>
+        <size>54</size>
       </method>
       <method name="Void ConstantTest_4()">
         <size>54</size>
@@ -14404,13 +14770,13 @@
         <size>118</size>
       </method>
       <method name="Void ConvertTest_9()">
-        <size>87</size>
+        <size>97</size>
       </method>
       <method name="Void ConvertTest_10()">
-        <size>178</size>
+        <size>163</size>
       </method>
       <method name="Void ConvertTest_11()">
-        <size>116</size>
+        <size>101</size>
       </method>
       <method name="Void ConvertTest_12()">
         <size>166</size>
@@ -14497,7 +14863,7 @@
         <size>113</size>
       </method>
       <method name="Void EqualTestDelegate_2()">
-        <size>342</size>
+        <size>312</size>
       </method>
       <method name="Void ExclusiveOrTest()">
         <size>115</size>
@@ -14647,22 +15013,22 @@
         <size>292</size>
       </method>
       <method name="Void MemberAccessTest()">
-        <size>122</size>
+        <size>132</size>
       </method>
       <method name="Void MemberAccessTest_2()">
         <size>63</size>
       </method>
       <method name="Void MemberAccessTest_3()">
-        <size>103</size>
+        <size>113</size>
       </method>
       <method name="Void MemberAccessTest_4()">
-        <size>81</size>
+        <size>91</size>
       </method>
       <method name="Void MemberAccessTest_5()">
         <size>39</size>
       </method>
       <method name="Void MemberAccessTest_6()">
-        <size>94</size>
+        <size>104</size>
       </method>
       <method name="Void MemberAccessTest_7()">
         <size>109</size>
@@ -14671,13 +15037,13 @@
         <size>63</size>
       </method>
       <method name="Void MemberAccessTest_9()">
-        <size>70</size>
+        <size>80</size>
       </method>
       <method name="Void MemberInitTest()">
         <size>302</size>
       </method>
       <method name="Void MemberInitTest_2()">
-        <size>265</size>
+        <size>250</size>
       </method>
       <method name="Void MemberInitTest_3()">
         <size>124</size>
@@ -15079,7 +15445,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="Tester">
@@ -15241,27 +15607,35 @@
         <size>7</size>
       </method>
     </type>
-    <type name="Tester+&lt;MemberAccessTest&gt;c__AnonStorey1">
+    <type name="Tester">
+      <method name="Void NewArrayInitTest_6()">
+        <size>103</size>
+      </method>
+      <method name="Void LambdaTest()">
+        <size>89</size>
+      </method>
+    </type>
+    <type name="Tester+&lt;MemberAccessTest&gt;c__AnonStorey2">
       <method name="Void .ctor()">
         <size>7</size>
       </method>
     </type>
-    <type name="Tester+&lt;MemberAccessTest_3&gt;c__AnonStorey2">
+    <type name="Tester+&lt;MemberAccessTest_3&gt;c__AnonStorey3">
       <method name="Void .ctor()">
         <size>7</size>
       </method>
     </type>
-    <type name="Tester+&lt;MemberAccessTest_4&gt;c__AnonStorey3">
+    <type name="Tester+&lt;MemberAccessTest_4&gt;c__AnonStorey4">
       <method name="Void .ctor()">
         <size>7</size>
       </method>
     </type>
-    <type name="Tester+&lt;MemberAccessTest_6&gt;c__AnonStorey4">
+    <type name="Tester+&lt;MemberAccessTest_6&gt;c__AnonStorey5">
       <method name="Void .ctor()">
         <size>7</size>
       </method>
     </type>
-    <type name="Tester+&lt;MemberAccessTest_9&gt;c__AnonStorey5">
+    <type name="Tester+&lt;MemberAccessTest_9&gt;c__AnonStorey6">
       <method name="Void .ctor()">
         <size>7</size>
       </method>
@@ -15301,7 +15675,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>346</size>
+        <size>366</size>
       </method>
     </type>
     <type name="C+&lt;Main&gt;c__AnonStorey0">
@@ -15353,6 +15727,50 @@
       </method>
     </type>
   </test>
+  <test name="gtest-etree-07.cs">
+    <type name="C">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Test()">
+        <size>14</size>
+      </method>
+      <method name="Int32* Foo()">
+        <size>3</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>594</size>
+      </method>
+    </type>
+    <type name="EmptyDelegate">
+      <method name="Void .ctor(Object, IntPtr)">
+        <size>0</size>
+      </method>
+      <method name="Void Invoke()">
+        <size>0</size>
+      </method>
+      <method name="IAsyncResult BeginInvoke(System.AsyncCallback, System.Object)">
+        <size>0</size>
+      </method>
+      <method name="Void EndInvoke(IAsyncResult)">
+        <size>0</size>
+      </method>
+    </type>
+    <type name="UnsafeDelegate">
+      <method name="Void .ctor(Object, IntPtr)">
+        <size>0</size>
+      </method>
+      <method name="Int32* Invoke()">
+        <size>0</size>
+      </method>
+      <method name="IAsyncResult BeginInvoke(System.AsyncCallback, System.Object)">
+        <size>0</size>
+      </method>
+      <method name="Int32* EndInvoke(IAsyncResult)">
+        <size>0</size>
+      </method>
+    </type>
+  </test>
   <test name="gtest-etree-08.cs">
     <type name="Foo">
       <method name="Void .ctor()">
@@ -15362,7 +15780,7 @@
         <size>3</size>
       </method>
       <method name="Int32 Goo(Boolean)">
-        <size>199</size>
+        <size>204</size>
       </method>
       <method name="Int32 Main()">
         <size>14</size>
@@ -15380,7 +15798,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>289</size>
+        <size>299</size>
       </method>
       <method name="System.Int64[] GetValues()">
         <size>23</size>
@@ -15471,7 +15889,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>58</size>
+        <size>53</size>
       </method>
       <method name="IEnumerable`1 Test[T](Int32)">
         <size>30</size>
@@ -15554,6 +15972,64 @@
       </method>
       <method name="Void Reset()">
         <size>6</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-etree-15.cs">
+    <type name="Foo">
+      <method name="Int32 Helper(System.Linq.Expressions.Expression`1[System.Predicate`1[System.Int32]])">
+        <size>2</size>
+      </method>
+      <method name="Void Main()">
+        <size>190</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-etree-16.cs">
+    <type name="Program">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>136</size>
+      </method>
+    </type>
+    <type name="Foo">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-etree-17.cs">
+    <type name="CompilerCrashTest.QueryCompiler">
+      <method name="D Compile[D](System.Linq.Expressions.Expression`1[D])">
+        <size>12</size>
+      </method>
+      <method name="System.Delegate Compile(System.Linq.Expressions.LambdaExpression)">
+        <size>6</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-etree-18.cs">
+    <type name="FooBase">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="Foo">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="Program">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>140</size>
       </method>
     </type>
   </test>
@@ -15782,7 +16258,7 @@
     </type>
     <type name="ChatExtensions">
       <method name="Void Say(ChatClient, System.String, System.Collections.Specialized.StringCollection)">
-        <size>60</size>
+        <size>62</size>
       </method>
     </type>
   </test>
@@ -16004,6 +16480,39 @@
       </method>
       <method name="Void Main()">
         <size>11</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-exmethod-26.cs">
+    <type name="test.TypeExtensions">
+      <method name="Boolean IsNullable(System.Type)">
+        <size>2</size>
+      </method>
+    </type>
+    <type name="testmono.MainClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>33</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-exmethod-27.cs">
+    <type name="Foo.Extensions">
+      <method name="System.String AsString(IList`1)">
+        <size>6</size>
+      </method>
+    </type>
+    <type name="Bar.Program">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>17</size>
+      </method>
+      <method name="System.String Pan(System.Byte[])">
+        <size>7</size>
       </method>
     </type>
   </test>
@@ -16295,7 +16804,7 @@
         <size>39</size>
       </method>
       <method name="Void Foo(Point ByRef)">
-        <size>25</size>
+        <size>31</size>
       </method>
     </type>
   </test>
@@ -16359,6 +16868,16 @@
       </method>
       <method name="Int32 Main()">
         <size>13</size>
+      </method>
+    </type>
+  </test>
+  <test name="gtest-initialize-09.cs">
+    <type name="Test">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>54</size>
       </method>
     </type>
   </test>
@@ -16482,10 +17001,10 @@
         <size>7</size>
       </method>
       <method name="Boolean MoveNext()">
-        <size>213</size>
+        <size>218</size>
       </method>
       <method name="Void Dispose()">
-        <size>51</size>
+        <size>56</size>
       </method>
       <method name="Void Reset()">
         <size>6</size>
@@ -16624,7 +17143,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>121</size>
+        <size>116</size>
       </method>
       <method name="Nullable`1 &lt;Main&gt;m__0(Int32)">
         <size>30</size>
@@ -16688,10 +17207,10 @@
         <size>7</size>
       </method>
       <method name="Boolean MoveNext()">
-        <size>181</size>
+        <size>186</size>
       </method>
       <method name="Void Dispose()">
-        <size>51</size>
+        <size>56</size>
       </method>
       <method name="Void Reset()">
         <size>6</size>
@@ -16713,7 +17232,7 @@
         <size>16</size>
       </method>
       <method name="Int32 Main()">
-        <size>114</size>
+        <size>116</size>
       </method>
     </type>
     <type name="App+&lt;QueryEnumerable&gt;c__Iterator0`1[T]">
@@ -16762,7 +17281,7 @@
         <size>30</size>
       </method>
       <method name="Int32 Main()">
-        <size>99</size>
+        <size>94</size>
       </method>
     </type>
     <type name="Test+&lt;Create&gt;c__Iterator0`1[T]">
@@ -16801,7 +17320,7 @@
         <size>44</size>
       </method>
       <method name="Int32 Main()">
-        <size>168</size>
+        <size>159</size>
       </method>
     </type>
     <type name="Test+&lt;FromTo&gt;c__Iterator0">
@@ -16831,13 +17350,78 @@
       </method>
     </type>
   </test>
+  <test name="gtest-iter-11.cs">
+    <type name="Foo">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="Bar">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="System.String get_Name()">
+        <size>7</size>
+      </method>
+      <method name="Void set_Name(System.String)">
+        <size>8</size>
+      </method>
+    </type>
+    <type name="Collection`1[T]">
+      <method name="Void .ctor()">
+        <size>18</size>
+      </method>
+      <method name="IEnumerator System.Collections.IEnumerable.GetEnumerator()">
+        <size>7</size>
+      </method>
+      <method name="Void Add(T)">
+        <size>13</size>
+      </method>
+      <method name="IEnumerator`1 GetEnumerator()">
+        <size>15</size>
+      </method>
+    </type>
+    <type name="BarCollection">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="Program">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>137</size>
+      </method>
+    </type>
+    <type name="Collection`1+&lt;GetEnumerator&gt;c__Iterator0[T]">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="T System.Collections.Generic.IEnumerator&lt;T&gt;.get_Current()">
+        <size>7</size>
+      </method>
+      <method name="System.Object System.Collections.IEnumerator.get_Current()">
+        <size>12</size>
+      </method>
+      <method name="Boolean MoveNext()">
+        <size>175</size>
+      </method>
+      <method name="Void Dispose()">
+        <size>56</size>
+      </method>
+      <method name="Void Reset()">
+        <size>6</size>
+      </method>
+    </type>
+  </test>
   <test name="gtest-linq-01.cs">
     <type name="from.C">
       <method name="Void .ctor()">
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>2008</size>
+        <size>2137</size>
       </method>
       <method name="Void Foo(Int32, Boolean)">
         <size>11</size>
@@ -16871,7 +17455,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;i&gt;__T,&lt;l&gt;__T]">
@@ -16891,7 +17475,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType3`2[&lt;i9&gt;__T,&lt;i&gt;__T]">
@@ -16911,7 +17495,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="from.C">
@@ -17102,7 +17686,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="from.C+&lt;Main&gt;c__AnonStorey0">
@@ -17116,6 +17700,45 @@
         <size>7</size>
       </method>
     </type>
+    <type name="from.C">
+      <method name="Int32 &lt;Main&gt;m__39(Int32)">
+        <size>2</size>
+      </method>
+      <method name="&lt;&gt;__AnonType4`2[&lt;&gt;__AnonType1`2[System.Int32,System.Collections.Generic.IEnumerable`1[System.Int32]],System.Int32] &lt;Main&gt;m__3B(&lt;&gt;__AnonType1`2[System.Int32,System.Collections.Generic.IEnumerable`1[System.Int32]])">
+        <size>9</size>
+      </method>
+      <method name="Int32 &lt;Main&gt;m__3C(&lt;&gt;__AnonType4`2[&lt;&gt;__AnonType1`2[System.Int32,System.Collections.Generic.IEnumerable`1[System.Int32]],System.Int32])">
+        <size>2</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType4`2[&lt;&lt;&gt;__TranspIdent13&gt;__T,&lt;l2&gt;__T]">
+      <method name="Void .ctor(&lt;&lt;&gt;__TranspIdent13&gt;__T, &lt;l2&gt;__T)">
+        <size>21</size>
+      </method>
+      <method name="&lt;&lt;&gt;__TranspIdent13&gt;__T get_&lt;&gt;__TranspIdent13()">
+        <size>7</size>
+      </method>
+      <method name="&lt;l2&gt;__T get_l2()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>69</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>86</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>142</size>
+      </method>
+    </type>
+    <type name="from.C+&lt;Main&gt;c__AnonStorey0">
+      <method name="&lt;&gt;__AnonType1`2[System.Int32,System.Collections.Generic.IEnumerable`1[System.Int32]] &lt;&gt;m__3A(Int32)">
+        <size>47</size>
+      </method>
+      <method name="Int32 &lt;&gt;m__3D(Int32)">
+        <size>2</size>
+      </method>
+    </type>
   </test>
   <test name="gtest-linq-02.cs">
     <type name="Test">
@@ -17123,7 +17746,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>517</size>
+        <size>501</size>
       </method>
       <method name="Int32 &lt;Main&gt;m__0(Int32)">
         <size>2</size>
@@ -17164,7 +17787,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>569</size>
+        <size>553</size>
       </method>
     </type>
     <type name="&lt;PrivateImplementationDetails&gt;">
@@ -17276,7 +17899,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>414</size>
+        <size>406</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType0`2[&lt;i&gt;__T,&lt;u&gt;__T]">
@@ -17296,7 +17919,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="Let">
@@ -17336,7 +17959,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
   </test>
@@ -17346,7 +17969,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>761</size>
+        <size>748</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType0`2[&lt;i1&gt;__T,&lt;i2&gt;__T]">
@@ -17366,7 +17989,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType2`3[&lt;pp&gt;__T,&lt;i1&gt;__T,&lt;i3&gt;__T]">
@@ -17389,7 +18012,7 @@
         <size>109</size>
       </method>
       <method name="System.String ToString()">
-        <size>183</size>
+        <size>199</size>
       </method>
     </type>
     <type name="SelectMany+&lt;Main&gt;c__AnonStorey0">
@@ -17449,7 +18072,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
   </test>
@@ -17510,7 +18133,7 @@
         <size>63</size>
       </method>
       <method name="System.String ToString()">
-        <size>57</size>
+        <size>67</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;a&gt;__T,&lt;b&gt;__T]">
@@ -17530,7 +18153,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="Join">
@@ -17600,7 +18223,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>635</size>
+        <size>631</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType0`2[&lt;a&gt;__T,&lt;ab&gt;__T]">
@@ -17620,7 +18243,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;a&gt;__T,&lt;b&gt;__T]">
@@ -17640,7 +18263,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="GroupJoin">
@@ -17710,7 +18333,7 @@
         <size>108</size>
       </method>
       <method name="Int32 Main()">
-        <size>481</size>
+        <size>464</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType0`2[&lt;values&gt;__T,&lt;length&gt;__T]">
@@ -17730,7 +18353,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;type&gt;__T,&lt;x&gt;__T]">
@@ -17750,7 +18373,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="NestedQuery">
@@ -17983,7 +18606,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="C+&lt;Test_1&gt;c__AnonStorey0">
@@ -18021,7 +18644,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>161</size>
+        <size>157</size>
       </method>
       <method name="Int32 &lt;Main&gt;m__0(Int32)">
         <size>2</size>
@@ -18101,7 +18724,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;&gt;__AnonType1`2[&lt;i&gt;__T,&lt;l&gt;__T]">
@@ -18121,7 +18744,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="&lt;PrivateImplementationDetails&gt;">
@@ -18201,7 +18824,7 @@
         <size>86</size>
       </method>
       <method name="System.String ToString()">
-        <size>108</size>
+        <size>142</size>
       </method>
     </type>
     <type name="C+&lt;Main&gt;c__AnonStorey0">
@@ -18294,7 +18917,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>214</size>
+        <size>219</size>
       </method>
     </type>
   </test>
@@ -19009,7 +19632,7 @@
         <size>32</size>
       </method>
       <method name="TR Sum[TA,TR](IEnumerable`1, System.Func`3[TR,TA,TR])">
-        <size>125</size>
+        <size>120</size>
       </method>
     </type>
     <type name="Repro">
@@ -19054,7 +19677,7 @@
         <size>7</size>
       </method>
       <method name="Void &lt;&gt;m__0(Int32)">
-        <size>57</size>
+        <size>52</size>
       </method>
     </type>
   </test>
@@ -19178,6 +19801,61 @@
         <size>2</size>
       </method>
       <method name="Void &lt;Main&gt;m__2(System.String)">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="ltest-22.cs">
+    <type name="Product">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="MainClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>136</size>
+      </method>
+      <method name="Int32 &lt;Main&gt;m__0(Product)">
+        <size>7</size>
+      </method>
+      <method name="Product &lt;Main&gt;m__1(Product)">
+        <size>2</size>
+      </method>
+      <method name="&lt;&gt;__AnonType0`2[System.Linq.IGrouping`2[System.Int32,Product],System.Collections.Generic.IEnumerable`1[Product]] &lt;Main&gt;m__2(IGrouping`2)">
+        <size>48</size>
+      </method>
+    </type>
+    <type name="&lt;&gt;__AnonType0`2[&lt;g&gt;__T,&lt;ExpensiveProducts&gt;__T]">
+      <method name="Void .ctor(&lt;g&gt;__T, &lt;ExpensiveProducts&gt;__T)">
+        <size>21</size>
+      </method>
+      <method name="&lt;g&gt;__T get_g()">
+        <size>7</size>
+      </method>
+      <method name="&lt;ExpensiveProducts&gt;__T get_ExpensiveProducts()">
+        <size>7</size>
+      </method>
+      <method name="Boolean Equals(System.Object)">
+        <size>69</size>
+      </method>
+      <method name="Int32 GetHashCode()">
+        <size>86</size>
+      </method>
+      <method name="System.String ToString()">
+        <size>142</size>
+      </method>
+    </type>
+    <type name="MainClass+&lt;Main&gt;c__AnonStorey0">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Boolean &lt;&gt;m__3(Product)">
+        <size>52</size>
+      </method>
+      <method name="Decimal &lt;&gt;m__4(Product)">
         <size>7</size>
       </method>
     </type>
@@ -20202,7 +20880,7 @@
         <size>8</size>
       </method>
       <method name="Int32 GetInfo(MonoEnumInfo ByRef)">
-        <size>23</size>
+        <size>20</size>
       </method>
       <method name="Int32 Main()">
         <size>32</size>
@@ -20338,7 +21016,7 @@
         <size>54</size>
       </method>
       <method name="Int32 Test()">
-        <size>358</size>
+        <size>356</size>
       </method>
       <method name="Int32 Main()">
         <size>94</size>
@@ -20997,7 +21675,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>88</size>
+        <size>87</size>
       </method>
     </type>
   </test>
@@ -21118,10 +21796,10 @@
         <size>9</size>
       </method>
       <method name="Void test5(A ByRef)">
-        <size>10</size>
+        <size>9</size>
       </method>
       <method name="Void test6(B ByRef)">
-        <size>9</size>
+        <size>8</size>
       </method>
       <method name="Void test7()">
         <size>28</size>
@@ -21854,7 +22532,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main(System.String[])">
-        <size>76</size>
+        <size>78</size>
       </method>
     </type>
   </test>
@@ -22665,7 +23343,7 @@
         <size>7</size>
       </method>
       <method name="Void Main(System.String[])">
-        <size>36</size>
+        <size>31</size>
       </method>
     </type>
     <type name="S">
@@ -22771,7 +23449,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>180</size>
+        <size>174</size>
       </method>
       <method name="System.Object compare_gte(Int32, Int32)">
         <size>13</size>
@@ -22853,7 +23531,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main(System.String[])">
-        <size>133</size>
+        <size>138</size>
       </method>
     </type>
     <type name="MonoBUG.Foo">
@@ -22889,7 +23567,7 @@
         <size>12</size>
       </method>
       <method name="MonoBUG.Foo get_Current()">
-        <size>51</size>
+        <size>46</size>
       </method>
       <method name="Boolean MoveNext()">
         <size>12</size>
@@ -23025,7 +23703,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>68</size>
+        <size>65</size>
       </method>
     </type>
   </test>
@@ -23147,13 +23825,13 @@
         <size>38</size>
       </method>
       <method name="Boolean One()">
-        <size>63</size>
+        <size>62</size>
       </method>
       <method name="Boolean Two()">
-        <size>63</size>
+        <size>62</size>
       </method>
       <method name="Boolean Three()">
-        <size>63</size>
+        <size>62</size>
       </method>
     </type>
     <type name="List+MyEnumerator">
@@ -23339,7 +24017,7 @@
         <size>7</size>
       </method>
       <method name="Int32 RunTests(System.Type, System.String[])">
-        <size>572</size>
+        <size>571</size>
       </method>
       <method name="Int32 RunTests(System.Type)">
         <size>8</size>
@@ -23605,7 +24283,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>32</size>
+        <size>36</size>
       </method>
     </type>
     <type name="Blah">
@@ -23620,7 +24298,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>65</size>
+        <size>67</size>
       </method>
     </type>
     <type name="Blah">
@@ -24127,28 +24805,28 @@
         <size>361</size>
       </method>
       <method name="Int32 AddABunchOfInts(...)">
-        <size>64</size>
+        <size>63</size>
       </method>
       <method name="Int32 AddASecondBunchOfInts(Int32, ...)">
-        <size>64</size>
+        <size>63</size>
       </method>
       <method name="Result VtAddABunchOfInts(...)">
-        <size>69</size>
+        <size>68</size>
       </method>
       <method name="Result VtAddASecondBunchOfInts(Int32, ...)">
-        <size>69</size>
+        <size>68</size>
       </method>
       <method name="Int32 InstAddABunchOfInts(...)">
-        <size>64</size>
+        <size>63</size>
       </method>
       <method name="Int32 InstAddASecondBunchOfInts(Int32, ...)">
-        <size>64</size>
+        <size>63</size>
       </method>
       <method name="Result InstVtAddABunchOfInts(...)">
-        <size>69</size>
+        <size>68</size>
       </method>
       <method name="Result InstVtAddASecondBunchOfInts(Int32, ...)">
-        <size>69</size>
+        <size>68</size>
       </method>
     </type>
     <type name="Result">
@@ -24220,7 +24898,7 @@
         <size>10</size>
       </method>
       <method name="Void Main()">
-        <size>59</size>
+        <size>61</size>
       </method>
     </type>
     <type name="T+C">
@@ -24440,7 +25118,7 @@
         <size>26</size>
       </method>
       <method name="Int32 Main()">
-        <size>123</size>
+        <size>122</size>
       </method>
     </type>
   </test>
@@ -24505,10 +25183,10 @@
         <size>7</size>
       </method>
       <method name="System.Object Add(integer, System.Object)">
-        <size>72</size>
+        <size>70</size>
       </method>
       <method name="Int32 Main()">
-        <size>69</size>
+        <size>68</size>
       </method>
     </type>
     <type name="integer">
@@ -24874,7 +25552,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>313</size>
+        <size>311</size>
       </method>
       <method name="Void Login(System.String)">
         <size>1</size>
@@ -24969,7 +25647,7 @@
     </type>
     <type name="A+B">
       <method name="Void .ctor()">
-        <size>468</size>
+        <size>473</size>
       </method>
     </type>
     <type name="A+B+C">
@@ -25065,7 +25743,7 @@
     </type>
     <type name="A+B">
       <method name="Void .ctor()">
-        <size>468</size>
+        <size>473</size>
       </method>
     </type>
     <type name="A+B+C">
@@ -25448,9 +26126,6 @@
       <method name="Int32 CreateFromString(Int32)">
         <size>10</size>
       </method>
-      <method name="System.Double* GetValue(Double)">
-        <size>5</size>
-      </method>
       <method name="Void Main()">
         <size>1</size>
       </method>
@@ -25461,6 +26136,11 @@
       </method>
       <method name="Void EventInterface.remove_Event(System.EventHandler)">
         <size>1</size>
+      </method>
+    </type>
+    <type name="C">
+      <method name="Double* GetValue(Double)">
+        <size>5</size>
       </method>
     </type>
   </test>
@@ -25710,14 +26390,14 @@
       <method name="Void .ctor()">
         <size>7</size>
       </method>
-      <method name="System.Byte* get_Ptr()">
-        <size>7</size>
-      </method>
-      <method name="Void set_Ptr(System.Byte*)">
-        <size>8</size>
-      </method>
       <method name="Void Main()">
         <size>1</size>
+      </method>
+      <method name="Byte* get_Ptr()">
+        <size>7</size>
+      </method>
+      <method name="Void set_Ptr(Byte*)">
+        <size>8</size>
       </method>
     </type>
   </test>
@@ -26021,7 +26701,20 @@
         <size>11</size>
       </method>
       <method name="Void Main()">
-        <size>12</size>
+        <size>24</size>
+      </method>
+    </type>
+    <type name="A">
+      <method name="Boolean get_Item(Int32)">
+        <size>2</size>
+      </method>
+      <method name="Boolean get_Item(Double)">
+        <size>11</size>
+      </method>
+    </type>
+    <type name="B">
+      <method name="Boolean get_Item(Double)">
+        <size>11</size>
       </method>
     </type>
   </test>
@@ -26432,7 +27125,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>260</size>
+        <size>272</size>
       </method>
     </type>
     <type name="X">
@@ -26908,7 +27601,7 @@
         <size>16</size>
       </method>
       <method name="Void Main()">
-        <size>113</size>
+        <size>108</size>
       </method>
     </type>
   </test>
@@ -27584,11 +28277,11 @@
       <method name="Void .ctor()">
         <size>7</size>
       </method>
-      <method name="System.Int32* get_v()">
-        <size>20</size>
-      </method>
       <method name="Int32 Main()">
         <size>48</size>
+      </method>
+      <method name="Int32* get_v()">
+        <size>20</size>
       </method>
     </type>
   </test>
@@ -27618,10 +28311,10 @@
       <method name="Int32 Main(System.String[])">
         <size>180</size>
       </method>
-      <method name="UInt32 DoOp(System.UInt32*)">
+      <method name="UInt32 DoOp(UInt32*)">
         <size>11</size>
       </method>
-      <method name="UInt32 DoOp2(System.UInt32*)">
+      <method name="UInt32 DoOp2(UInt32*)">
         <size>10</size>
       </method>
     </type>
@@ -27940,14 +28633,14 @@
       <method name="Void .ctor()">
         <size>7</size>
       </method>
-      <method name="Void lowLevelCall(System.Int32*)">
-        <size>1</size>
-      </method>
       <method name="Void Func(Int32 ByRef)">
-        <size>13</size>
+        <size>12</size>
       </method>
       <method name="Void Main()">
         <size>10</size>
+      </method>
+      <method name="Void lowLevelCall(Int32*)">
+        <size>1</size>
       </method>
     </type>
   </test>
@@ -27963,7 +28656,7 @@
         <size>16</size>
       </method>
       <method name="Void Main()">
-        <size>62</size>
+        <size>63</size>
       </method>
     </type>
     <type name="XX+&lt;X&gt;c__Iterator0">
@@ -28494,7 +29187,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>239</size>
+        <size>237</size>
       </method>
     </type>
   </test>
@@ -28612,40 +29305,40 @@
         <size>7</size>
       </method>
       <method name="Int32 cast_int(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="UInt32 cast_uint(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Int16 cast_short(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Char cast_char(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="UInt16 cast_ushort(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Byte cast_byte(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="SByte cast_sbyte(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Int64 cast_long(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="UInt64 cast_ulong(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Single cast_float(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Double cast_double(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Boolean cast_bool(System.Object)">
-        <size>8</size>
+        <size>7</size>
       </method>
       <method name="Int32 Main()">
         <size>1120</size>
@@ -28671,7 +29364,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>52</size>
+        <size>50</size>
       </method>
     </type>
     <type name="Value">
@@ -29307,7 +30000,7 @@
         <size>2</size>
       </method>
       <method name="Void Main()">
-        <size>160</size>
+        <size>165</size>
       </method>
     </type>
     <type name="Q">
@@ -29542,7 +30235,7 @@
         <size>11</size>
       </method>
       <method name="Void Run()">
-        <size>166</size>
+        <size>176</size>
       </method>
     </type>
     <type name="Test+&lt;GetEnumerator&gt;c__Iterator0">
@@ -29590,11 +30283,16 @@
   </test>
   <test name="test-498.cs">
     <type name="C">
+      <method name="Int32 Main()">
+        <size>81</size>
+      </method>
+    </type>
+    <type name="A">
       <method name="Void .ctor(Single)">
         <size>0</size>
       </method>
-      <method name="Int32 Main()">
-        <size>39</size>
+      <method name="Int32 get_Foo()">
+        <size>0</size>
       </method>
     </type>
   </test>
@@ -30036,7 +30734,7 @@
         <size>6</size>
       </method>
       <method name="Int32 Main()">
-        <size>484</size>
+        <size>498</size>
       </method>
     </type>
   </test>
@@ -30983,7 +31681,7 @@
         <size>7</size>
       </method>
       <method name="System.Object TestMethod(TestCollection)">
-        <size>62</size>
+        <size>64</size>
       </method>
       <method name="Void Main()">
         <size>1</size>
@@ -31386,7 +32084,7 @@
         <size>76</size>
       </method>
       <method name="System.String BuildNode_D()">
-        <size>151</size>
+        <size>155</size>
       </method>
       <method name="Void BuildNode_E(System.String[,] ByRef)">
         <size>68</size>
@@ -32018,7 +32716,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>62</size>
+        <size>60</size>
       </method>
     </type>
   </test>
@@ -32369,7 +33067,7 @@
         <size>7</size>
       </method>
       <method name="Void Foo(A ByRef)">
-        <size>9</size>
+        <size>8</size>
       </method>
       <method name="Void Foo(System.Object ByRef)">
         <size>9</size>
@@ -32507,7 +33205,7 @@
         <size>16</size>
       </method>
       <method name="Int32 Main()">
-        <size>63</size>
+        <size>65</size>
       </method>
     </type>
     <type name="Foo+&lt;foo&gt;c__Iterator0">
@@ -32904,16 +33602,16 @@
       <method name="Int32 Main()">
         <size>130</size>
       </method>
-      <method name="System.Int32* Conversions(Int64)">
+      <method name="Int32* Conversions(Int64)">
         <size>3</size>
       </method>
-      <method name="Int32 CheckAdd(System.Byte*, Int32)">
+      <method name="Int32 CheckAdd(Byte*, Int32)">
         <size>14</size>
       </method>
-      <method name="Int32 CheckSub(System.Int16*, Int32)">
+      <method name="Int32 CheckSub(Int16*, Int32)">
         <size>16</size>
       </method>
-      <method name="Int32 CheckSub2(System.Int16*, Int32)">
+      <method name="Int32 CheckSub2(Int16*, Int32)">
         <size>23</size>
       </method>
     </type>
@@ -33153,7 +33851,7 @@
       <method name="Int32 Main()">
         <size>8</size>
       </method>
-      <method name="Int32 Test(System.SByte*)">
+      <method name="Int32 Test(SByte*)">
         <size>33</size>
       </method>
     </type>
@@ -33282,10 +33980,10 @@
         <size>67</size>
       </method>
       <method name="Int32 TestObjectSingle()">
-        <size>49</size>
+        <size>48</size>
       </method>
       <method name="Int32 TestObjectDouble()">
-        <size>73</size>
+        <size>72</size>
       </method>
       <method name="Int32 Main()">
         <size>80</size>
@@ -33467,14 +34165,14 @@
       <method name="Void .ctor()">
         <size>7</size>
       </method>
-      <method name="System.Int32* get_Foo()">
-        <size>3</size>
-      </method>
       <method name="S* get_Foo2()">
         <size>3</size>
       </method>
       <method name="Void Main()">
         <size>1</size>
+      </method>
+      <method name="Int32* get_Foo()">
+        <size>3</size>
       </method>
     </type>
   </test>
@@ -33795,24 +34493,24 @@
       <method name="Void .ctor()">
         <size>7</size>
       </method>
-      <method name="System.Byte* GetFoo()">
-        <size>7</size>
-      </method>
-      <method name="System.Byte* GetFoo2()">
-        <size>7</size>
-      </method>
       <method name="Int32 Main()">
         <size>46</size>
+      </method>
+      <method name="Byte* GetFoo()">
+        <size>7</size>
+      </method>
+      <method name="Byte* GetFoo2()">
+        <size>7</size>
       </method>
     </type>
   </test>
   <test name="test-689.cs">
     <type name="Sample">
-      <method name="Void Foo(System.Byte*, System.Byte*)">
-        <size>46</size>
-      </method>
       <method name="Void Main()">
         <size>3</size>
+      </method>
+      <method name="Void Foo(Byte*, Byte*)">
+        <size>46</size>
       </method>
     </type>
   </test>
@@ -33858,10 +34556,10 @@
         <size>7</size>
       </method>
       <method name="Void test1(DateTime ByRef)">
-        <size>11</size>
+        <size>10</size>
       </method>
       <method name="Void test2(DateTime ByRef)">
-        <size>14</size>
+        <size>13</size>
       </method>
       <method name="Int32 Main()">
         <size>141</size>
@@ -34099,6 +34797,172 @@
       </method>
     </type>
   </test>
+  <test name="test-703.cs">
+    <type name="A">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void add_Finished(System.EventHandler)">
+        <size>0</size>
+      </method>
+      <method name="Void remove_Finished(System.EventHandler)">
+        <size>0</size>
+      </method>
+      <method name="Void test(A)">
+        <size>19</size>
+      </method>
+      <method name="Void TestA(System.Object, System.EventArgs)">
+        <size>25</size>
+      </method>
+    </type>
+    <type name="B">
+      <method name="Void .ctor()">
+        <size>65</size>
+      </method>
+      <method name="Void add_Finished(System.EventHandler)">
+        <size>24</size>
+      </method>
+      <method name="Void remove_Finished(System.EventHandler)">
+        <size>24</size>
+      </method>
+      <method name="Void TestB(System.Object, System.EventArgs)">
+        <size>25</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>14</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-705.cs">
+    <type name="Test">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void .cctor()">
+        <size>1</size>
+      </method>
+      <method name="Nested GetEnumerator()">
+        <size>10</size>
+      </method>
+    </type>
+    <type name="Test+Nested">
+      <method name="Void System.IDisposable.Dispose()">
+        <size>13</size>
+      </method>
+      <method name="Int32 get_Current()">
+        <size>2</size>
+      </method>
+      <method name="Boolean MoveNext()">
+        <size>2</size>
+      </method>
+      <method name="Void Reset()">
+        <size>1</size>
+      </method>
+      <method name="Void Dispose()">
+        <size>11</size>
+      </method>
+    </type>
+    <type name="Program">
+      <method name="Int32 Main()">
+        <size>70</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-706.cs">
+    <type name="Test.CustomParentAttribute">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void DoSomething()">
+        <size>0</size>
+      </method>
+    </type>
+    <type name="Test.MyClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="Test.MyClass+CustomChildAttribute">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void DoSomething()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-707.cs">
+    <type name="Tzap">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="Tzap+Baz">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Gazonk()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="Tzap+Bar">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Foo()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-708.cs">
+    <type name="A">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="A+ADelegate Delegate2(Boolean)">
+        <size>25</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="A+ADelegate">
+      <method name="Void .ctor(Object, IntPtr)">
+        <size>0</size>
+      </method>
+      <method name="A+ADelegate Invoke(Boolean)">
+        <size>0</size>
+      </method>
+      <method name="IAsyncResult BeginInvoke(Boolean, System.AsyncCallback, System.Object)">
+        <size>0</size>
+      </method>
+      <method name="A+ADelegate EndInvoke(IAsyncResult)">
+        <size>0</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-709.cs">
+    <type name="C">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void CopyTo(Int32, System.Char[], Int32, Int32)">
+        <size>68</size>
+      </method>
+      <method name="Void CharCopy(Char*, Char*, Int32)">
+        <size>35</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>58</size>
+      </method>
+    </type>
+  </test>
   <test name="test-71.cs">
     <type name="X">
       <method name="Void .ctor()">
@@ -34111,6 +34975,196 @@
     <type name="MethodSignature">
       <method name="Void .ctor(String, Type, Type[])">
         <size>22</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-710.cs">
+    <type name="Z">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="C">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-711.cs">
+    <type name="N.Test">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void .ctor(Int32)">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-712.cs">
+    <type name="Hello">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>22</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-713.cs">
+    <type name="DispBar">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Dispose()">
+        <size>11</size>
+      </method>
+    </type>
+    <type name="Foo">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="IDisposable GetBar()">
+        <size>6</size>
+      </method>
+    </type>
+    <type name="Test">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void .cctor()">
+        <size>11</size>
+      </method>
+      <method name="Boolean TryThing()">
+        <size>46</size>
+      </method>
+      <method name="Void Main()">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-714.cs">
+    <type name="Hello">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void IBar.Test()">
+        <size>1</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-716.cs">
+    <type name="SS">
+      <method name="Void .cctor()">
+        <size>8</size>
+      </method>
+    </type>
+    <type name="SSS">
+      <method name="Void .cctor()">
+        <size>15</size>
+      </method>
+    </type>
+    <type name="C">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+    </type>
+    <type name="CC">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void .cctor()">
+        <size>8</size>
+      </method>
+    </type>
+    <type name="CCC">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void .cctor()">
+        <size>11</size>
+      </method>
+    </type>
+    <type name="X">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>192</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-717.cs">
+    <type name="AA">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Foo(Int32)">
+        <size>2</size>
+      </method>
+    </type>
+    <type name="A">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Foo(Byte)">
+        <size>2</size>
+      </method>
+      <method name="Int32 Foo(Int32)">
+        <size>2</size>
+      </method>
+    </type>
+    <type name="B">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Foo(Int32)">
+        <size>2</size>
+      </method>
+      <method name="Void Foo(System.String)">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="S">
+      <method name="System.String ToString()">
+        <size>6</size>
+      </method>
+    </type>
+    <type name="MyClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Int32 Main()">
+        <size>61</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-718.cs">
+    <type name="A">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Foo(Int32, Int32)">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="B">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Main()">
+        <size>8</size>
+      </method>
+      <method name="Void Foo(Int32)">
+        <size>1</size>
       </method>
     </type>
   </test>
@@ -35114,7 +36168,7 @@
         <size>257</size>
       </method>
       <method name="System.Collections.ArrayList Find(predicate, System.Collections.ArrayList)">
-        <size>79</size>
+        <size>81</size>
       </method>
     </type>
     <type name="predicate">
@@ -35133,7 +36187,7 @@
     </type>
     <type name="X">
       <method name="Boolean &lt;Main&gt;m__0(System.Object)">
-        <size>13</size>
+        <size>12</size>
       </method>
     </type>
   </test>
@@ -35991,7 +37045,7 @@
   <test name="test-anon-35.cs">
     <type name="CustomDict">
       <method name="Void .ctor()">
-        <size>64</size>
+        <size>66</size>
       </method>
       <method name="IEnumerator GetEnumerator()">
         <size>15</size>
@@ -36518,7 +37572,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>62</size>
+        <size>64</size>
       </method>
       <method name="IEnumerator GetEnumerator()">
         <size>8</size>
@@ -36700,7 +37754,7 @@
         <size>7</size>
       </method>
       <method name="Void Main()">
-        <size>62</size>
+        <size>64</size>
       </method>
       <method name="IEnumerator GetEnumerator()">
         <size>8</size>
@@ -36714,10 +37768,10 @@
         <size>7</size>
       </method>
       <method name="Boolean MoveNext()">
-        <size>184</size>
+        <size>185</size>
       </method>
       <method name="Void Dispose()">
-        <size>60</size>
+        <size>62</size>
       </method>
       <method name="Void Reset()">
         <size>6</size>
@@ -36741,7 +37795,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>201</size>
+        <size>196</size>
       </method>
     </type>
     <type name="Test+&lt;Foo&gt;c__Iterator0">
@@ -37628,9 +38682,6 @@
       <method name="Void .ctor()">
         <size>7</size>
       </method>
-      <method name="System.Int32* GetUnsafeValue()">
-        <size>3</size>
-      </method>
     </type>
     <type name="C">
       <method name="Void UnsafeTests()">
@@ -37659,6 +38710,11 @@
     <type name="C">
       <method name="Void &lt;Main&gt;m__3()">
         <size>16</size>
+      </method>
+    </type>
+    <type name="UnsafeClass">
+      <method name="Int32* GetUnsafeValue()">
+        <size>3</size>
       </method>
     </type>
   </test>
@@ -39141,6 +40197,27 @@
       </method>
     </type>
   </test>
+  <test name="test-cls-18.cs">
+    <type name="Base">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Test(System.Int32[])">
+        <size>1</size>
+      </method>
+    </type>
+    <type name="CLSClass">
+      <method name="Void .ctor()">
+        <size>7</size>
+      </method>
+      <method name="Void Test(System.Int32[])">
+        <size>1</size>
+      </method>
+      <method name="Void Main()">
+        <size>1</size>
+      </method>
+    </type>
+  </test>
   <test name="test-externalias-01.cs">
     <type name="Test">
       <method name="Void .ctor()">
@@ -39271,7 +40348,7 @@
         <size>16</size>
       </method>
       <method name="Int32 Main()">
-        <size>168</size>
+        <size>171</size>
       </method>
     </type>
     <type name="X+&lt;GetIt&gt;c__Iterator0">
@@ -39334,7 +40411,7 @@
         <size>8</size>
       </method>
       <method name="Int32 Main()">
-        <size>89</size>
+        <size>88</size>
       </method>
     </type>
     <type name="X+&lt;GetRange&gt;c__Iterator0">
@@ -39370,7 +40447,7 @@
         <size>30</size>
       </method>
       <method name="Int32 Main()">
-        <size>237</size>
+        <size>245</size>
       </method>
     </type>
     <type name="&lt;PrivateImplementationDetails&gt;">
@@ -39444,7 +40521,7 @@
         <size>44</size>
       </method>
       <method name="Void Main()">
-        <size>97</size>
+        <size>98</size>
       </method>
     </type>
     <type name="X+&lt;GetRange&gt;c__Iterator0">
@@ -39483,7 +40560,7 @@
         <size>16</size>
       </method>
       <method name="Int32 Main()">
-        <size>103</size>
+        <size>104</size>
       </method>
     </type>
     <type name="List">
@@ -39511,7 +40588,7 @@
         <size>7</size>
       </method>
       <method name="Boolean MoveNext()">
-        <size>184</size>
+        <size>183</size>
       </method>
       <method name="Void Dispose()">
         <size>8</size>
@@ -39555,7 +40632,7 @@
         <size>30</size>
       </method>
       <method name="Int32 Main()">
-        <size>383</size>
+        <size>399</size>
       </method>
     </type>
     <type name="S+&lt;Get&gt;c__Iterator0">
@@ -39693,7 +40770,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>374</size>
+        <size>372</size>
       </method>
     </type>
     <type name="Test+&lt;Foo&gt;c__Iterator0">
@@ -39740,7 +40817,7 @@
         <size>44</size>
       </method>
       <method name="Int32 Main()">
-        <size>169</size>
+        <size>167</size>
       </method>
     </type>
     <type name="X+&lt;Test&gt;c__Iterator0">
@@ -39784,7 +40861,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>263</size>
+        <size>268</size>
       </method>
     </type>
     <type name="Tester+&lt;GetEnumerator&gt;c__Iterator0">
@@ -39795,10 +40872,10 @@
         <size>7</size>
       </method>
       <method name="Boolean MoveNext()">
-        <size>621</size>
+        <size>623</size>
       </method>
       <method name="Void Dispose()">
-        <size>80</size>
+        <size>82</size>
       </method>
       <method name="Void Reset()">
         <size>6</size>
@@ -39826,7 +40903,7 @@
         <size>1</size>
       </method>
       <method name="Int32 Main()">
-        <size>181</size>
+        <size>184</size>
       </method>
     </type>
     <type name="X+&lt;&gt;c__Iterator0">
@@ -40297,7 +41374,7 @@
         <size>7</size>
       </method>
       <method name="Int32 Main()">
-        <size>100</size>
+        <size>102</size>
       </method>
     </type>
     <type name="Test1.Foo+&lt;E&gt;c__Iterator0">

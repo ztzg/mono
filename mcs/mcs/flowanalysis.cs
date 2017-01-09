@@ -1038,8 +1038,19 @@ namespace Mono.CSharp
 		// </summary>
 		public TypeInfo[] SubStructInfo;
 
-		protected readonly StructInfo struct_info;
-		private static Hashtable type_hash = new Hashtable ();
+		readonly StructInfo struct_info;
+		private static Hashtable type_hash;
+		
+		static TypeInfo ()
+		{
+			Reset ();
+		}
+		
+		public static void Reset ()
+		{
+			type_hash = new Hashtable ();
+			StructInfo.field_type_hash = new Hashtable ();
+		}
 
 		public static TypeInfo GetTypeInfo (Type type)
 		{
@@ -1097,7 +1108,7 @@ namespace Mono.CSharp
 			}
 		}
 
-		protected TypeInfo (StructInfo struct_info, int offset)
+		TypeInfo (StructInfo struct_info, int offset)
 		{
 			this.struct_info = struct_info;
 			this.Offset = offset;
@@ -1139,7 +1150,7 @@ namespace Mono.CSharp
 
 				if (!branching.IsFieldAssigned (vi, field.Name)) {
 					FieldBase fb = TypeManager.GetField (field);
-					if (fb != null && (fb.ModFlags & Modifiers.BACKING_FIELD) != 0) {
+					if (fb is Property.BackingField) {
 						Report.Error (843, loc,
 							"An automatically implemented property `{0}' must be fully assigned before control leaves the constructor. Consider calling default contructor",
 							fb.GetSignatureForError ());
@@ -1161,7 +1172,7 @@ namespace Mono.CSharp
 					      Type, Offset, Length, TotalLength);
 		}
 
-		protected class StructInfo {
+		class StructInfo {
 			public readonly Type Type;
 			public readonly FieldInfo[] Fields;
 			public readonly TypeInfo[] StructFields;
@@ -1172,7 +1183,7 @@ namespace Mono.CSharp
 			public readonly int TotalLength;
 			public readonly bool HasStructFields;
 
-			private static Hashtable field_type_hash = new Hashtable ();
+			public static Hashtable field_type_hash;
 			private Hashtable struct_field_hash;
 			private Hashtable field_hash;
 
@@ -1186,7 +1197,7 @@ namespace Mono.CSharp
 
 				field_type_hash.Add (type, this);
 
-				if (type.Module == CodeGen.Module.Builder) {
+				if (type.Module == RootContext.ToplevelTypes.Builder) {
 					TypeContainer tc = TypeManager.LookupTypeContainer (TypeManager.DropGenericTypeArguments (type));
 
 					ArrayList public_fields = new ArrayList ();
@@ -1208,22 +1219,6 @@ namespace Mono.CSharp
 								non_public_fields.Add (field.FieldBuilder);
 						}
 					}
-
-					if (tc.Events != null) {
-						foreach (Event e in tc.Events) {
-							if ((e.ModFlags & Modifiers.STATIC) != 0)
-								continue;
-
-							EventField ef = e as EventField;
-							if (ef == null)
-								continue;
-
-							if ((ef.ModFlags & Modifiers.PUBLIC) != 0)
-								public_fields.Add (ef.FieldBuilder);
-							else
-								non_public_fields.Add (ef.FieldBuilder);
-						}
-					}
 					}
 
 					CountPublic = public_fields.Count;
@@ -1233,12 +1228,10 @@ namespace Mono.CSharp
 					Fields = new FieldInfo [Count];
 					public_fields.CopyTo (Fields, 0);
 					non_public_fields.CopyTo (Fields, CountPublic);
-#if GMCS_SOURCE
 				} else if (type is GenericTypeParameterBuilder) {
 					CountPublic = CountNonPublic = Count = 0;
 
 					Fields = new FieldInfo [0];
-#endif
 				} else {
 					FieldInfo[] public_fields = type.GetFields (
 						BindingFlags.Instance|BindingFlags.Public);
@@ -1420,7 +1413,7 @@ namespace Mono.CSharp
 			this.IsParameter = false;
 		}
 
-		public VariableInfo (Parameters ip, int i, int offset)
+		public VariableInfo (ParametersCompiled ip, int i, int offset)
 			: this (ip.FixedParameters [i].Name, ip.Types [i], offset)
 		{
 			this.IsParameter = true;

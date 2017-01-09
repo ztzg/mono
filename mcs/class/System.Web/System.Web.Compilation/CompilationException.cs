@@ -88,7 +88,7 @@ namespace System.Web.Compilation
 		public override string Message {
 			get { return ErrorMessage; }
 		}
-				
+		
 		public override string SourceFile {
 			get {
 				if (errors == null || errors.Count == 0)
@@ -167,7 +167,10 @@ namespace System.Web.Compilation
 				return results.Output;
 			}
 		}
-			
+
+		public CompilerResults Results {
+			get { return results; }
+		}
 	}
 }
 

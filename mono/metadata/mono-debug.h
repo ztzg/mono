@@ -128,7 +128,7 @@ struct _MonoDebugVarInfo {
 	MonoType *type;
 };
 
-#define MONO_DEBUGGER_MAJOR_VERSION			80
+#define MONO_DEBUGGER_MAJOR_VERSION			81
 #define MONO_DEBUGGER_MINOR_VERSION			1
 #define MONO_DEBUGGER_MAGIC				0x7aff65af4253d427ULL
 
@@ -170,6 +170,9 @@ mono_debug_free_method_jit_info (MonoDebugMethodJitInfo *jit);
 
 void
 mono_debug_add_delegate_trampoline (gpointer code, int size);
+
+int
+mono_debug_lookup_locals (MonoMethod *method, char ***names, int **indexes);
 
 /*
  * Line number support.

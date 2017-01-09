@@ -6,8 +6,8 @@
 
 2009-02-28 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
-	* FormsAuthentication.cs: use GetWebApplication
-	instead of GetSection for application level configuration.
+	* FormsAuthentication.cs: use GetWebApplication instead of GetSection
+	for application level configuration.
 
 2009-01-12  Marek Habersack  <mhabersack@novell.com>
 

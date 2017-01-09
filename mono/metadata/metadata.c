@@ -5,10 +5,14 @@
  *   Miguel de Icaza (miguel@ximian.com)
  *   Paolo Molaro (lupus@ximian.com)
  *
- * (C) 2001-2002 Ximian, Inc.
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  */
 
 #include <config.h>
+#ifdef HAVE_ALLOCA_H
+#include <alloca.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +37,7 @@ static gboolean _mono_metadata_generic_class_equal (const MonoGenericClass *g1, 
 static void free_generic_inst (MonoGenericInst *ginst);
 static void free_generic_class (MonoGenericClass *ginst);
 static void free_inflated_method (MonoMethodInflated *method);
+static void mono_metadata_field_info_full (MonoImage *meta, guint32 index, guint32 *offset, guint32 *rva, MonoMarshalSpec **marshal_spec, gboolean alloc_from_image);
 
 /*
  * This enumeration is used to describe the data types in the metadata
@@ -440,42 +445,6 @@ typedef struct {
 	MonoMethodSignature *sig;
 	MonoGenericContext context;
 } MonoInflatedMethodSignature;
-
-/**
- * mono_image_alloc_lock:
- *
- *   Same as mono_image_alloc, but do the locking as well.
- * LOCKING: Acquires the loader lock.
- */
-static gpointer
-mono_image_alloc_lock (MonoImage *image, guint size)
-{
-	gpointer res;
-
-	mono_loader_lock ();
-	res = mono_image_alloc (image, size);
-	mono_loader_unlock ();
-
-	return res;
-}
-
-/**
- * mono_image_alloc0_lock:
- *
- *   Same as mono_image_alloc, but do the locking as well.
- * LOCKING: Acquires the loader lock.
- */
-static gpointer
-mono_image_alloc0_lock (MonoImage *image, guint size)
-{
-	gpointer res;
-
-	mono_loader_lock ();
-	res = mono_image_alloc0 (image, size);
-	mono_loader_unlock ();
-
-	return res;
-}
 
 /**
  * mono_meta_table_name:
@@ -1302,7 +1271,7 @@ mono_metadata_parse_array_full (MonoImage *m, MonoGenericContainer *container,
 	MonoArrayType *array;
 	MonoType *etype;
 	
-	array = mono_image_alloc0_lock (m, sizeof (MonoArrayType));
+	array = mono_image_alloc0 (m, sizeof (MonoArrayType));
 	etype = mono_metadata_parse_type_full (m, container, MONO_PARSE_TYPE, 0, ptr, &ptr);
 	if (!etype)
 		return NULL;
@@ -1619,7 +1588,7 @@ mono_metadata_parse_type_full (MonoImage *m, MonoGenericContainer *container, Mo
 	}
 
 	if (count) {
-		type = mono_image_alloc0_lock (m, sizeof (MonoType) + ((gint32)count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoCustomMod));
+		type = mono_image_alloc0 (m, sizeof (MonoType) + ((gint32)count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoCustomMod));
 		type->num_mods = count;
 		if (count > 64)
 			g_warning ("got more than 64 modifiers in type");
@@ -1698,7 +1667,7 @@ mono_metadata_parse_type_full (MonoImage *m, MonoGenericContainer *container, Mo
 	/* printf ("%x %x %c %s\n", type->attrs, type->num_mods, type->pinned ? 'p' : ' ', mono_type_full_name (type)); */
 	
 	if (type == &stype) {
-		type = mono_image_alloc_lock (m, sizeof (MonoType));
+		type = mono_image_alloc (m, sizeof (MonoType));
 		memcpy (type, &stype, sizeof (MonoType));
 	}
 	return type;
@@ -1813,31 +1782,42 @@ mono_metadata_signature_alloc (MonoImage *m, guint32 nparams)
 {
 	MonoMethodSignature *sig;
 
-	sig = mono_image_alloc0_lock (m, sizeof (MonoMethodSignature) + ((gint32)nparams - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType*));
+	sig = mono_image_alloc0 (m, sizeof (MonoMethodSignature) + ((gint32)nparams - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType*));
 	sig->param_count = nparams;
 	sig->sentinelpos = -1;
 
 	return sig;
 }
 
-MonoMethodSignature*
-mono_metadata_signature_dup_full (MonoMemPool *mp, MonoMethodSignature *sig)
+static MonoMethodSignature*
+mono_metadata_signature_dup_internal (MonoImage *image, MonoMemPool *mp, MonoMethodSignature *sig)
 {
 	int sigsize;
-
+	MonoMethodSignature *ret;
 	sigsize = sizeof (MonoMethodSignature) + (sig->param_count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType *);
 
-	if (mp) {
-		MonoMethodSignature *ret;
-		mono_loader_lock ();
+	if (image) {
+		ret = mono_image_alloc (image, sigsize);
+	} else if (mp) {
 		ret = mono_mempool_alloc (mp, sigsize);
-		mono_loader_unlock ();
-
-		memcpy (ret, sig, sigsize);
-		return ret;
 	} else {
-		return g_memdup (sig, sigsize);
+		ret = g_malloc (sigsize);
 	}
+	memcpy (ret, sig, sigsize);
+	return ret;
+}
+
+MonoMethodSignature*
+mono_metadata_signature_dup_full (MonoImage *image, MonoMethodSignature *sig)
+{
+	return mono_metadata_signature_dup_internal (image, NULL, sig);
+}
+
+/*The mempool is accessed without synchronization*/
+MonoMethodSignature*
+mono_metadata_signature_dup_mempool (MonoMemPool *mp, MonoMethodSignature *sig)
+{
+	return mono_metadata_signature_dup_internal (NULL, mp, sig);
 }
 
 /*
@@ -1853,6 +1833,17 @@ MonoMethodSignature*
 mono_metadata_signature_dup (MonoMethodSignature *sig)
 {
 	return mono_metadata_signature_dup_full (NULL, sig);
+}
+
+/*
+ * mono_metadata_signature_size:
+ *
+ *   Return the amount of memory allocated to SIG.
+ */
+guint32
+mono_metadata_signature_size (MonoMethodSignature *sig)
+{
+	return sizeof (MonoMethodSignature) + (sig->param_count - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType *);
 }
 
 /*
@@ -2014,7 +2005,7 @@ inflated_method_equal (gconstpointer a, gconstpointer b)
 	const MonoMethodInflated *mb = b;
 	if (ma->declaring != mb->declaring)
 		return FALSE;
-	if (ma->is_mb_open != mb->is_mb_open)
+	if (ma->method.method.is_mb_open != mb->method.method.is_mb_open)
 		return FALSE;
 	return mono_metadata_generic_context_equal (&ma->context, &mb->context);
 }
@@ -2023,7 +2014,7 @@ static guint
 inflated_method_hash (gconstpointer a)
 {
 	const MonoMethodInflated *ma = a;
-	return (mono_metadata_generic_context_hash (&ma->context) ^ mono_aligned_addr_hash (ma->declaring)) + ma->is_mb_open;
+	return (mono_metadata_generic_context_hash (&ma->context) ^ mono_aligned_addr_hash (ma->declaring)) + ma->method.method.is_mb_open;
 }
 
 static gboolean
@@ -2196,7 +2187,7 @@ inflated_method_in_image (gpointer key, gpointer value, gpointer data)
 	// https://bugzilla.novell.com/show_bug.cgi?id=458168
 	return method->declaring->klass->image == image ||
 		(method->context.class_inst && ginst_in_image (method->context.class_inst, image)) ||
-		(method->context.method_inst && ginst_in_image (method->context.method_inst, image)) || signature_in_image (mono_method_signature ((MonoMethod*)method), image);
+		(method->context.method_inst && ginst_in_image (method->context.method_inst, image)) || (((MonoMethod*)method)->signature && signature_in_image (mono_method_signature ((MonoMethod*)method), image));
 }
 
 static gboolean
@@ -2271,7 +2262,6 @@ free_generic_inst (MonoGenericInst *ginst)
 
 	for (i = 0; i < ginst->type_argc; ++i)
 		mono_metadata_free_type (ginst->type_argv [i]);
-	g_free (ginst->type_argv);
 	g_free (ginst);
 }
 
@@ -2287,7 +2277,8 @@ free_generic_class (MonoGenericClass *gclass)
 
 		/* Allocated in mono_class_init () */
 		g_free (class->methods);
-		g_free (class->properties);
+		if (class->ext)
+			g_free (class->ext->properties);
 		/* Allocated in mono_generic_class_get_class () */
 		g_free (class->interfaces);
 		g_free (class);
@@ -2390,40 +2381,37 @@ MonoGenericInst *
 mono_metadata_get_generic_inst (int type_argc, MonoType **type_argv)
 {
 	MonoGenericInst *ginst;
-	MonoGenericInst helper;
+	gboolean is_open;
 	int i;
-
-	helper.type_argc = type_argc;
-	helper.type_argv = type_argv;
-	helper.id = 0;
+	int size = sizeof (MonoGenericInst) + (type_argc - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType *);
 
 	for (i = 0; i < type_argc; ++i)
 		if (mono_class_is_open_constructed_type (type_argv [i]))
 			break;
-	helper.is_open = (i < type_argc);
+	is_open = (i < type_argc);
 
-	/*dump_ginst (&helper);*/
+	ginst = alloca (size);
+	ginst->id = 0;
+	ginst->is_open = is_open;
+	ginst->type_argc = type_argc;
+	memcpy (ginst->type_argv, type_argv, type_argc * sizeof (MonoType *));
+
 	mono_loader_lock ();
-	ginst = g_hash_table_lookup (generic_inst_cache, &helper);
-	if (ginst) {
-		mono_loader_unlock ();
-		/*g_print (" found cached\n");*/
-		return ginst;
+
+	ginst = g_hash_table_lookup (generic_inst_cache, ginst);
+	if (!ginst) {
+		ginst = g_malloc (size);
+		ginst->id = ++next_generic_inst_id;
+		ginst->is_open = is_open;
+		ginst->type_argc = type_argc;
+
+		for (i = 0; i < type_argc; ++i)
+			ginst->type_argv [i] = mono_metadata_type_dup (NULL, type_argv [i]);
+
+		g_hash_table_insert (generic_inst_cache, ginst, ginst);
 	}
 
-	ginst = g_new0 (MonoGenericInst, 1);
-	ginst->type_argc = type_argc;
-	ginst->type_argv = g_new (MonoType*, type_argc);
-	ginst->id = ++next_generic_inst_id;
-	ginst->is_open = helper.is_open;
-
-	for (i = 0; i < type_argc; ++i)
-		ginst->type_argv [i] = mono_metadata_type_dup (NULL, type_argv [i]);
-
-	g_hash_table_insert (generic_inst_cache, ginst, ginst);
-
 	mono_loader_unlock ();
-	/*g_print (" inserted\n");*/
 	return ginst;
 }
 
@@ -2626,8 +2614,8 @@ mono_metadata_parse_generic_param (MonoImage *m, MonoGenericContainer *generic_c
 		/* Create dummy MonoGenericParam */
 		MonoGenericParam *param;
 
-		param = mono_image_alloc0_lock (m, sizeof (MonoGenericParam));
-		param->name = mono_image_alloc0_lock (m, 8);
+		param = mono_image_alloc0 (m, sizeof (MonoGenericParam));
+		param->name = mono_image_alloc0 (m, 8);
 		sprintf ((char*)param->name, "%d", index);
 		param->num = index;
 		param->image = m;
@@ -2860,7 +2848,7 @@ parse_section_data (MonoImage *m, MonoMethodHeader *mh, const unsigned char *ptr
 			int i;
 			mh->num_clauses = is_fat ? sect_data_len / 24: sect_data_len / 12;
 			/* we could just store a pointer if we don't need to byteswap */
-			mh->clauses = mono_image_alloc0_lock (m, sizeof (MonoExceptionClause) * mh->num_clauses);
+			mh->clauses = mono_image_alloc0 (m, sizeof (MonoExceptionClause) * mh->num_clauses);
 			for (i = 0; i < mh->num_clauses; ++i) {
 				MonoExceptionClause *ec = &mh->clauses [i];
 				guint32 tof_value;
@@ -2928,7 +2916,7 @@ mono_metadata_parse_mh_full (MonoImage *m, MonoGenericContainer *container, cons
 
 	switch (format) {
 	case METHOD_HEADER_TINY_FORMAT:
-		mh = mono_image_alloc0_lock (m, sizeof (MonoMethodHeader));
+		mh = mono_image_alloc0 (m, sizeof (MonoMethodHeader));
 		ptr++;
 		mh->max_stack = 8;
 		local_var_sig_tok = 0;
@@ -2936,7 +2924,7 @@ mono_metadata_parse_mh_full (MonoImage *m, MonoGenericContainer *container, cons
 		mh->code = (unsigned char*)ptr;
 		return mh;
 	case METHOD_HEADER_TINY_FORMAT1:
-		mh = mono_image_alloc0_lock (m, sizeof (MonoMethodHeader));
+		mh = mono_image_alloc0 (m, sizeof (MonoMethodHeader));
 		ptr++;
 		mh->max_stack = 8;
 		local_var_sig_tok = 0;
@@ -2991,7 +2979,7 @@ mono_metadata_parse_mh_full (MonoImage *m, MonoGenericContainer *container, cons
 			g_warning ("wrong signature for locals blob");
 		locals_ptr++;
 		len = mono_metadata_decode_value (locals_ptr, &locals_ptr);
-		mh = mono_image_alloc0_lock (m, sizeof (MonoMethodHeader) + (len - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType*));
+		mh = mono_image_alloc0 (m, sizeof (MonoMethodHeader) + (len - MONO_ZERO_LEN_ARRAY) * sizeof (MonoType*));
 		mh->num_locals = len;
 		for (i = 0; i < len; ++i) {
 			mh->locals [i] = mono_metadata_parse_type_full (
@@ -3001,7 +2989,7 @@ mono_metadata_parse_mh_full (MonoImage *m, MonoGenericContainer *container, cons
 			}
 		}
 	} else {
-		mh = mono_image_alloc0_lock (m, sizeof (MonoMethodHeader));
+		mh = mono_image_alloc0 (m, sizeof (MonoMethodHeader));
 	}
 	mh->code = code;
 	mh->code_size = code_size;
@@ -3461,7 +3449,7 @@ mono_metadata_interfaces_from_typedef_full (MonoImage *meta, guint32 index, Mono
 		++pos;
 	}
 
-	result = mono_image_alloc0_lock (meta, sizeof (MonoClass*) * (pos - start));
+	result = mono_image_alloc0 (meta, sizeof (MonoClass*) * (pos - start));
 
 	pos = start;
 	while (pos < tdef->rows) {
@@ -3745,7 +3733,7 @@ mono_type_size (MonoType *t, int *align)
 		return sizeof (gpointer);
 	case MONO_TYPE_VALUETYPE: {
 		if (t->data.klass->enumtype)
-			return mono_type_size (t->data.klass->enum_basetype, align);
+			return mono_type_size (mono_class_enum_basetype (t->data.klass), align);
 		else
 			return mono_class_value_size (t->data.klass, (guint32*)align);
 	}
@@ -3766,7 +3754,7 @@ mono_type_size (MonoType *t, int *align)
 
 		if (container_class->valuetype) {
 			if (container_class->enumtype)
-				return mono_type_size (container_class->enum_basetype, align);
+				return mono_type_size (mono_class_enum_basetype (container_class), align);
 			else
 				return mono_class_value_size (mono_class_from_mono_type (t), (guint32*)align);
 		} else {
@@ -3862,7 +3850,7 @@ mono_type_stack_size_internal (MonoType *t, int *align, gboolean allow_open)
 		guint32 size;
 
 		if (t->data.klass->enumtype)
-			return mono_type_stack_size_internal (t->data.klass->enum_basetype, align, allow_open);
+			return mono_type_stack_size_internal (mono_class_enum_basetype (t->data.klass), align, allow_open);
 		else {
 			size = mono_class_value_size (t->data.klass, (guint32*)align);
 
@@ -3884,7 +3872,7 @@ mono_type_stack_size_internal (MonoType *t, int *align, gboolean allow_open)
 
 		if (container_class->valuetype) {
 			if (container_class->enumtype)
-				return mono_type_stack_size_internal (container_class->enum_basetype, align, allow_open);
+				return mono_type_stack_size_internal (mono_class_enum_basetype (container_class), align, allow_open);
 			else {
 				guint32 size = mono_class_value_size (mono_class_from_mono_type (t), (guint32*)align);
 
@@ -4212,32 +4200,30 @@ mono_metadata_signature_equal (MonoMethodSignature *sig1, MonoMethodSignature *s
 
 /**
  * mono_metadata_type_dup:
- * @mp: mempool to use
+ * @image: image to alloc memory from
  * @original: type to duplicate
  *
- * Returns: copy of type allocated from mempool (or from the heap, if @mp is null).
+ * Returns: copy of type allocated from the image's mempool (or from the heap, if @image is null).
  */
 MonoType *
-mono_metadata_type_dup (MonoMemPool *mp, const MonoType *o)
+mono_metadata_type_dup (MonoImage *image, const MonoType *o)
 {
 	MonoType *r = NULL;
 	int sizeof_o = sizeof (MonoType);
 	if (o->num_mods)
 		sizeof_o += (o->num_mods - MONO_ZERO_LEN_ARRAY) * sizeof (MonoCustomMod);
 
-	mono_loader_lock ();
-	r = mp ? mono_mempool_alloc0 (mp, sizeof_o) : g_malloc (sizeof_o);
-	mono_loader_unlock ();
+	r = image ? mono_image_alloc0 (image, sizeof_o) : g_malloc (sizeof_o);
 
 	memcpy (r, o, sizeof_o);
 
 	if (o->type == MONO_TYPE_PTR) {
-		r->data.type = mono_metadata_type_dup (mp, o->data.type);
+		r->data.type = mono_metadata_type_dup (image, o->data.type);
 	} else if (o->type == MONO_TYPE_ARRAY) {
-		r->data.array = mono_dup_array_type (mp, o->data.array);
+		r->data.array = mono_dup_array_type (image, o->data.array);
 	} else if (o->type == MONO_TYPE_FNPTR) {
 		/*FIXME the dup'ed signature is leaked mono_metadata_free_type*/
-		r->data.method = mono_metadata_signature_deep_dup (mp, o->data.method);
+		r->data.method = mono_metadata_signature_deep_dup (image, o->data.method);
 	}
 	return r;
 }
@@ -4305,12 +4291,19 @@ void
 mono_metadata_field_info (MonoImage *meta, guint32 index, guint32 *offset, guint32 *rva, 
 			  MonoMarshalSpec **marshal_spec)
 {
-	return mono_metadata_field_info_with_mempool (NULL, meta, index, offset, rva, marshal_spec);
+	mono_metadata_field_info_full (meta, index, offset, rva, marshal_spec, FALSE);
 }
 
 void
-mono_metadata_field_info_with_mempool (MonoMemPool *mempool, MonoImage *meta, guint32 index, guint32 *offset, guint32 *rva, 
+mono_metadata_field_info_with_mempool (MonoImage *meta, guint32 index, guint32 *offset, guint32 *rva, 
 			  MonoMarshalSpec **marshal_spec)
+{
+	mono_metadata_field_info_full (meta, index, offset, rva, marshal_spec, TRUE);
+}
+
+static void
+mono_metadata_field_info_full (MonoImage *meta, guint32 index, guint32 *offset, guint32 *rva, 
+				       MonoMarshalSpec **marshal_spec, gboolean alloc_from_image)
 {
 	MonoTableInfo *tdef;
 	locator_t loc;
@@ -4350,7 +4343,7 @@ mono_metadata_field_info_with_mempool (MonoMemPool *mempool, MonoImage *meta, gu
 		const char *p;
 		
 		if ((p = mono_metadata_get_marshal_info (meta, index, TRUE))) {
-			*marshal_spec = mono_metadata_parse_marshal_spec_with_mempool (mempool, p);
+			*marshal_spec = mono_metadata_parse_marshal_spec_full (alloc_from_image ? meta : NULL, p);
 		}
 	}
 
@@ -4666,12 +4659,12 @@ mono_type_create_from_typespec (MonoImage *image, guint32 type_spec)
 
 
 static char*
-mono_mempool_strndup (MonoMemPool *mp, const char *data, guint len)
+mono_image_strndup (MonoImage *image, const char *data, guint len)
 {
 	char *res;
-	if (!mp)
+	if (!image)
 		return g_strndup (data, len);
-	res = mono_mempool_alloc (mp, len + 1);
+	res = mono_image_alloc (image, len + 1);
 	memcpy (res, data, len);
 	res [len] = 0;
 	return res;
@@ -4680,11 +4673,11 @@ mono_mempool_strndup (MonoMemPool *mp, const char *data, guint len)
 MonoMarshalSpec *
 mono_metadata_parse_marshal_spec (MonoImage *image, const char *ptr)
 {
-	return mono_metadata_parse_marshal_spec_with_mempool (NULL, ptr);
+	return mono_metadata_parse_marshal_spec_full (NULL, ptr);
 }
 
 MonoMarshalSpec *
-mono_metadata_parse_marshal_spec_with_mempool (MonoMemPool *mempool, const char *ptr)
+mono_metadata_parse_marshal_spec_full (MonoImage *image, const char *ptr)
 {
 	MonoMarshalSpec *res;
 	int len;
@@ -4692,8 +4685,8 @@ mono_metadata_parse_marshal_spec_with_mempool (MonoMemPool *mempool, const char 
 
 	/* fixme: this is incomplete, but I cant find more infos in the specs */
 
-	if (mempool)
-		res = mono_mempool_alloc0 (mempool, sizeof (MonoMarshalSpec));
+	if (image)
+		res = mono_image_alloc0 (image, sizeof (MonoMarshalSpec));
 	else
 		res = g_new0 (MonoMarshalSpec, 1);
 	
@@ -4744,11 +4737,11 @@ mono_metadata_parse_marshal_spec_with_mempool (MonoMemPool *mempool, const char 
 		ptr += len;
 		/* read custom marshaler type name */
 		len = mono_metadata_decode_value (ptr, &ptr);
-		res->data.custom_data.custom_name = mono_mempool_strndup (mempool, ptr, len);		
+		res->data.custom_data.custom_name = mono_image_strndup (image, ptr, len);		
 		ptr += len;
 		/* read cookie string */
 		len = mono_metadata_decode_value (ptr, &ptr);
-		res->data.custom_data.cookie = mono_mempool_strndup (mempool, ptr, len);
+		res->data.custom_data.cookie = mono_image_strndup (image, ptr, len);
 	}
 
 	if (res->native == MONO_NATIVE_SAFEARRAY) {
@@ -4870,7 +4863,7 @@ handle_enum:
 	case MONO_TYPE_PTR: return MONO_NATIVE_UINT;
 	case MONO_TYPE_VALUETYPE: /*FIXME*/
 		if (type->data.klass->enumtype) {
-			t = type->data.klass->enum_basetype->type;
+			t = mono_class_enum_basetype (type->data.klass)->type;
 			goto handle_enum;
 		}
 		if (type->data.klass == mono_defaults.handleref_class){
@@ -5222,7 +5215,7 @@ mono_metadata_load_generic_params (MonoImage *image, guint32 token, MonoGenericC
 	mono_metadata_decode_row (tdef, i - 1, cols, MONO_GENERICPARAM_SIZE);
 	params = NULL;
 	n = 0;
-	container = mono_image_alloc0_lock (image, sizeof (MonoGenericContainer));
+	container = mono_image_alloc0 (image, sizeof (MonoGenericContainer));
 	do {
 		n++;
 		params = g_realloc (params, sizeof (MonoGenericParam) * n);
@@ -5237,7 +5230,7 @@ mono_metadata_load_generic_params (MonoImage *image, guint32 token, MonoGenericC
 	} while (cols [MONO_GENERICPARAM_OWNER] == owner);
 
 	container->type_argc = n;
-	container->type_params = mono_image_alloc0_lock (image, sizeof (MonoGenericParam) * n);
+	container->type_params = mono_image_alloc0 (image, sizeof (MonoGenericParam) * n);
 	memcpy (container->type_params, params, sizeof (MonoGenericParam) * n);
 	g_free (params);
 	container->parent = parent_container;
@@ -5433,8 +5426,8 @@ mono_metadata_get_corresponding_event_from_generic_type_definition (MonoEvent *e
 		return event;
 
 	gtd = event->parent->generic_class->container_class;
-	offset = event - event->parent->events;
-	return gtd->events + offset;
+	offset = event - event->parent->ext->events;
+	return gtd->ext->events + offset;
 }
 
 /*
@@ -5451,7 +5444,7 @@ mono_metadata_get_corresponding_property_from_generic_type_definition (MonoPrope
 		return property;
 
 	gtd = property->parent->generic_class->container_class;
-	offset = property - property->parent->properties;
-	return gtd->properties + offset;
+	offset = property - property->parent->ext->properties;
+	return gtd->ext->properties + offset;
 }
 

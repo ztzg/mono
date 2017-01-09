@@ -83,6 +83,9 @@ void arm_patch (guchar *code, const guchar *target);
 guint8* mono_arm_emit_load_imm (guint8 *code, int dreg, guint32 val);
 int mono_arm_is_rotated_imm8 (guint32 val, gint *rot_amount);
 
+void
+mono_arm_throw_exception_by_token (guint32 type_token, unsigned long eip, unsigned long esp, gulong *int_regs, gdouble *fp_regs);
+
 /* keep the size of the structure a multiple of 8 */
 struct MonoLMF {
 	gpointer    previous_lmf;
@@ -123,6 +126,7 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_EMULATE_FREM 1
 #define MONO_ARCH_EMULATE_DIV 1
 #define MONO_ARCH_EMULATE_CONV_R8_UN 1
+#define MONO_ARCH_EMULATE_MUL_OVF 1
 //#define MONO_ARCH_BIGMUL_INTRINS 1
 
 #define ARM_FIRST_ARG_REG 0
@@ -135,6 +139,7 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_HAVE_CREATE_TRAMPOLINE_FROM_TOKEN
 #define MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE
 #define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
+#define MONO_ARCH_HAVE_XP_UNWIND 1
 
 #define ARM_NUM_REG_ARGS (ARM_LAST_ARG_REG-ARM_FIRST_ARG_REG+1)
 #define ARM_NUM_REG_FPARGS 0
@@ -176,6 +181,9 @@ typedef struct MonoCompileArch {
 
 void
 mono_arm_throw_exception (MonoObject *exc, unsigned long eip, unsigned long esp, gulong *int_regs, gdouble *fp_regs);
+
+void
+mono_arm_throw_exception_by_token (guint32 type_token, unsigned long eip, unsigned long esp, gulong *int_regs, gdouble *fp_regs);
 
 #endif /* __MONO_MINI_ARM_H__ */
 

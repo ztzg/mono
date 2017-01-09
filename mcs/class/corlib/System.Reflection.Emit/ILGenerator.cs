@@ -62,10 +62,14 @@ namespace System.Reflection.Emit {
 		}
 	}
 	internal struct ILExceptionInfo {
+#pragma warning disable 169
+#pragma warning disable 414
 		ILExceptionBlock[] handlers;
 		internal int start;
 		int len;
 		internal Label end;
+#pragma warning restore 169
+#pragma warning restore 414
 
 		internal int NumHandlers ()
 		{
@@ -364,7 +368,8 @@ namespace System.Reflection.Emit {
 
 			if (open_blocks.Count <= 0)
 				throw new NotSupportedException ("Not in an exception block");
-
+			if (exceptionType != null && exceptionType.IsUserType)
+				throw new NotSupportedException ("User defined subclasses of System.Type are not yet supported.");
 			if (ex_handlers [cur_block].LastClauseType () == ILExceptionBlock.FILTER_START) {
 				if (exceptionType != null)
 					throw new ArgumentException ("Do not supply an exception type for filter clause");
@@ -474,7 +479,8 @@ namespace System.Reflection.Emit {
 		{
 			if (localType == null)
 				throw new ArgumentNullException ("localType");
-
+			if (localType.IsUserType)
+				throw new NotSupportedException ("User defined subclasses of System.Type are not yet supported.");
 			LocalBuilder res = new LocalBuilder (localType, this);
 			res.is_pinned = pinned;
 			

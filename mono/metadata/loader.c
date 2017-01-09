@@ -6,8 +6,8 @@
  *   Miguel de Icaza (miguel@ximian.com)
  *   Patrik Torstensson (patrik.torstensson@labs2.com)
  *
- * (C) 2001 Ximian, Inc.
- * Copyright (C) 2002-2006 Novell, Inc.
+ * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
+ * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  *
  * This file is used by the interpreter and the JIT engine to locate
  * assemblies.  Used to load AssemblyRef and later to resolve various
@@ -36,9 +36,11 @@
 #include <mono/metadata/profiler-private.h>
 #include <mono/metadata/exception.h>
 #include <mono/metadata/marshal.h>
+#include <mono/metadata/lock-tracer.h>
 #include <mono/utils/mono-logger.h>
 #include <mono/utils/mono-dl.h>
 #include <mono/utils/mono-membar.h>
+#include <mono/utils/mono-counters.h>
 
 MonoDefaults mono_defaults;
 
@@ -51,6 +53,9 @@ MonoDefaults mono_defaults;
  */
 static CRITICAL_SECTION loader_mutex;
 
+/* Statistics */
+static guint32 inflated_signatures_size;
+static guint32 memberref_sig_cache_size;
 
 /*
  * This TLS variable contains the last type load error encountered by the loader.
@@ -66,6 +71,11 @@ mono_loader_init ()
 		InitializeCriticalSection (&loader_mutex);
 
 		loader_error_thread_id = TlsAlloc ();
+
+		mono_counters_register ("Inflated signatures size",
+								MONO_COUNTER_GENERICS | MONO_COUNTER_INT, &inflated_signatures_size);
+		mono_counters_register ("Memberref signature cache size",
+								MONO_COUNTER_METADATA | MONO_COUNTER_INT, &memberref_sig_cache_size);
 
 		inited = TRUE;
 	}
@@ -343,6 +353,52 @@ mono_loader_error_prepare_exception (MonoLoaderError *error)
 	return ex;
 }
 
+/*
+ * find_cached_memberref_sig:
+ *
+ *   Return a cached copy of the memberref signature identified by SIG_IDX.
+ * We use a gpointer since the cache stores both MonoTypes and MonoMethodSignatures.
+ * A cache is needed since the type/signature parsing routines allocate everything 
+ * from a mempool, so without a cache, multiple requests for the same signature would 
+ * lead to unbounded memory growth. For normal methods/fields this is not a problem 
+ * since the resulting methods/fields are cached, but inflated methods/fields cannot
+ * be cached.
+ * LOCKING: Acquires the loader lock.
+ */
+static gpointer
+find_cached_memberref_sig (MonoImage *image, guint32 sig_idx)
+{
+	gpointer res;
+
+	mono_loader_lock ();
+	res = g_hash_table_lookup (image->memberref_signatures, GUINT_TO_POINTER (sig_idx));
+	mono_loader_unlock ();
+
+	return res;
+}
+
+static gpointer
+cache_memberref_sig (MonoImage *image, guint32 sig_idx, gpointer sig)
+{
+	gpointer prev_sig;
+
+	mono_loader_lock ();
+	prev_sig = g_hash_table_lookup (image->memberref_signatures, GUINT_TO_POINTER (sig_idx));
+	if (prev_sig) {
+		/* Somebody got in before us */
+		sig = prev_sig;
+	}
+	else {
+		g_hash_table_insert (image->memberref_signatures, GUINT_TO_POINTER (sig_idx), sig);
+		/* An approximation based on glib 2.18 */
+		memberref_sig_cache_size += sizeof (gpointer) * 4;
+	}
+
+	mono_loader_unlock ();
+
+	return sig;
+}
+
 static MonoClassField*
 field_from_memberref (MonoImage *image, guint32 token, MonoClass **retklass,
 		      MonoGenericContext *context)
@@ -371,7 +427,14 @@ field_from_memberref (MonoImage *image, guint32 token, MonoClass **retklass,
 		mono_loader_set_error_bad_image (g_strdup_printf ("Bad field signature class token %08x field name %s token %08x", class, fname, token));
 		return NULL;
 	}
-	sig_type = mono_metadata_parse_type (image, MONO_PARSE_TYPE, 0, ptr, &ptr);
+	/* FIXME: This needs a cache, especially for generic instances, since
+	 * mono_metadata_parse_type () allocates everything from a mempool.
+	 */
+	sig_type = find_cached_memberref_sig (image, cols [MONO_MEMBERREF_SIGNATURE]);
+	if (!sig_type) {
+		sig_type = mono_metadata_parse_type (image, MONO_PARSE_TYPE, 0, ptr, &ptr);
+		sig_type = cache_memberref_sig (image, cols [MONO_MEMBERREF_SIGNATURE], sig_type);
+	}
 
 	switch (class) {
 	case MONO_MEMBERREF_PARENT_TYPEDEF:
@@ -675,12 +738,9 @@ inflate_generic_header (MonoMethodHeader *header, MonoGenericContext *context)
 		res->clauses = g_memdup (header->clauses, sizeof (MonoExceptionClause) * res->num_clauses);
 		for (i = 0; i < header->num_clauses; ++i) {
 			MonoExceptionClause *clause = &res->clauses [i];
-			MonoType *t;
 			if (clause->flags != MONO_EXCEPTION_CLAUSE_NONE)
 				continue;
-			t = mono_class_inflate_generic_type (&clause->data.catch_class->byval_arg, context);
-			clause->data.catch_class = mono_class_from_mono_type (t);
-			mono_metadata_free_type (t);
+			clause->data.catch_class = mono_class_inflate_generic_class (clause->data.catch_class, context);
 		}
 	}
 	return res;
@@ -694,8 +754,9 @@ mono_method_get_signature_full (MonoMethod *method, MonoImage *image, guint32 to
 {
 	int table = mono_metadata_token_table (token);
 	int idx = mono_metadata_token_index (token);
+	int sig_idx;
 	guint32 cols [MONO_MEMBERREF_SIZE];
-	MonoMethodSignature *sig, *prev_sig;
+	MonoMethodSignature *sig;
 	const char *ptr;
 
 	/* !table is for wrappers: we should really assign their own token to them */
@@ -717,25 +778,16 @@ mono_method_get_signature_full (MonoMethod *method, MonoImage *image, guint32 to
 		/* FIXME: This might be incorrect for vararg methods */
 		return mono_method_signature (method);
 
-	mono_loader_lock ();
-	sig = g_hash_table_lookup (image->memberref_signatures, GUINT_TO_POINTER (token));
-	mono_loader_unlock ();
-	if (!sig) {
-		mono_metadata_decode_row (&image->tables [MONO_TABLE_MEMBERREF], idx-1, cols, MONO_MEMBERREF_SIZE);
+	mono_metadata_decode_row (&image->tables [MONO_TABLE_MEMBERREF], idx-1, cols, MONO_MEMBERREF_SIZE);
+	sig_idx = cols [MONO_MEMBERREF_SIGNATURE];
 
-		ptr = mono_metadata_blob_heap (image, cols [MONO_MEMBERREF_SIGNATURE]);
+	sig = find_cached_memberref_sig (image, sig_idx);
+	if (!sig) {
+		ptr = mono_metadata_blob_heap (image, sig_idx);
 		mono_metadata_decode_blob_size (ptr, &ptr);
 		sig = mono_metadata_parse_method_signature (image, 0, ptr, NULL);
 
-		mono_loader_lock ();
-		prev_sig = g_hash_table_lookup (image->memberref_signatures, GUINT_TO_POINTER (token));
-		if (prev_sig) {
-			/* Somebody got in before us */
-			sig = prev_sig;
-		}
-		else
-			g_hash_table_insert (image->memberref_signatures, GUINT_TO_POINTER (token), sig);
-		mono_loader_unlock ();
+		sig = cache_memberref_sig (image, sig_idx, sig);
 	}
 
 	if (context) {
@@ -746,6 +798,8 @@ mono_method_get_signature_full (MonoMethod *method, MonoImage *image, guint32 to
 		cached = mono_metadata_get_inflated_signature (sig, context);
 		if (cached != sig)
 			mono_metadata_free_inflated_signature (sig);
+		else
+			inflated_signatures_size += mono_metadata_signature_size (cached);
 		sig = cached;
 	}
 
@@ -759,8 +813,8 @@ mono_method_get_signature (MonoMethod *method, MonoImage *image, guint32 token)
 }
 
 /* this is only for the typespec array methods */
-static MonoMethod*
-search_in_array_class (MonoClass *klass, const char *name, MonoMethodSignature *sig)
+MonoMethod*
+mono_method_search_in_array_class (MonoClass *klass, const char *name, MonoMethodSignature *sig)
 {
 	int i;
 
@@ -782,7 +836,7 @@ method_from_memberref (MonoImage *image, guint32 idx, MonoGenericContext *typesp
 	MonoMethod *method = NULL;
 	MonoTableInfo *tables = image->tables;
 	guint32 cols[6];
-	guint32 nindex, class;
+	guint32 nindex, class, sig_idx;
 	const char *mname;
 	MonoMethodSignature *sig;
 	const char *ptr;
@@ -852,12 +906,19 @@ method_from_memberref (MonoImage *image, guint32 idx, MonoGenericContext *typesp
 	g_assert (klass);
 	mono_class_init (klass);
 
-	ptr = mono_metadata_blob_heap (image, cols [MONO_MEMBERREF_SIGNATURE]);
+	sig_idx = cols [MONO_MEMBERREF_SIGNATURE];
+
+	ptr = mono_metadata_blob_heap (image, sig_idx);
 	mono_metadata_decode_blob_size (ptr, &ptr);
 
-	sig = mono_metadata_parse_method_signature (image, 0, ptr, NULL);
-	if (sig == NULL)
-		return NULL;
+	sig = find_cached_memberref_sig (image, sig_idx);
+	if (!sig) {
+		sig = mono_metadata_parse_method_signature (image, 0, ptr, NULL);
+		if (sig == NULL)
+			return NULL;
+
+		sig = cache_memberref_sig (image, sig_idx, sig);
+	}
 
 	switch (class) {
 	case MONO_MEMBERREF_PARENT_TYPEREF:
@@ -877,7 +938,7 @@ method_from_memberref (MonoImage *image, guint32 idx, MonoGenericContext *typesp
 		}
 
 		/* we're an array and we created these methods already in klass in mono_class_init () */
-		method = search_in_array_class (klass, mname, sig);
+		method = mono_method_search_in_array_class (klass, mname, sig);
 		break;
 	}
 	default:
@@ -902,7 +963,6 @@ method_from_memberref (MonoImage *image, guint32 idx, MonoGenericContext *typesp
 		g_free (msig);
 		g_free (class_name);
 	}
-	mono_metadata_free_method_signature (sig);
 
 	return method;
 }
@@ -1358,7 +1418,7 @@ mono_get_method_from_token (MonoImage *image, guint32 token, MonoClass *klass,
 	MonoTableInfo *tables = image->tables;
 	MonoGenericContainer *generic_container = NULL, *container = NULL;
 	const char *sig = NULL;
-	int size, i;
+	int size;
 	guint32 cols [MONO_TYPEDEF_SIZE];
 
 	if (image->dynamic) {
@@ -1423,9 +1483,6 @@ mono_get_method_from_token (MonoImage *image, guint32 token, MonoClass *klass,
 
 		mono_metadata_load_generic_param_constraints (image, token, generic_container);
 
-		for (i = 0; i < generic_container->type_argc; i++)
-			mono_class_from_generic_parameter (&generic_container->type_params [i], image, TRUE);
-
 		container = generic_container;
 	}
 
@@ -1482,7 +1539,7 @@ mono_get_method_full (MonoImage *image, guint32 token, MonoClass *klass,
 
 	/* We do everything inside the lock to prevent creation races */
 
-	mono_loader_lock ();
+	mono_image_lock (image);
 
 	if (mono_metadata_token_table (token) == MONO_TABLE_METHOD) {
 		if (!image->method_cache)
@@ -1493,34 +1550,35 @@ mono_get_method_full (MonoImage *image, guint32 token, MonoClass *klass,
 			image->methodref_cache = g_hash_table_new (NULL, NULL);
 		result = g_hash_table_lookup (image->methodref_cache, GINT_TO_POINTER (token));
 	}
-	if (result) {
-		mono_loader_unlock ();
+	mono_image_unlock (image);
+
+	if (result)
 		return result;
-	}
 
 	result = mono_get_method_from_token (image, token, klass, context, &used_context);
+	if (!result)
+		return NULL;
 
-	//printf ("GET: %s\n", mono_method_full_name (result, TRUE));
+	mono_image_lock (image);
+	if (!used_context && !result->is_inflated) {
+		MonoMethod *result2;
+		if (mono_metadata_token_table (token) == MONO_TABLE_METHOD)
+			result2 = mono_value_hash_table_lookup (image->method_cache, GINT_TO_POINTER (token));
+		else
+			result2 = g_hash_table_lookup (image->methodref_cache, GINT_TO_POINTER (token));
 
-#if 0
-	g_message (G_STRLOC ": %s - %d - %d", mono_method_full_name (result, TRUE),
-		   result->is_inflated, used_context);
-#endif
-
-	/*
-	 * `used_context' specifies whether or not mono_get_method_from_token() actually
-	 * used the `context' to get the method.  See bug #80969.
-	 */
-
-	if (!used_context && !(result && result->is_inflated) && result) {
-		if (mono_metadata_token_table (token) == MONO_TABLE_METHOD) {
-			mono_value_hash_table_insert (image->method_cache, GINT_TO_POINTER (token), result);
-		} else {
-			g_hash_table_insert (image->methodref_cache, GINT_TO_POINTER (token), result);
+		if (result2) {
+			mono_image_unlock (image);
+			return result2;
 		}
+
+		if (mono_metadata_token_table (token) == MONO_TABLE_METHOD)
+			mono_value_hash_table_insert (image->method_cache, GINT_TO_POINTER (token), result);
+		else
+			g_hash_table_insert (image->methodref_cache, GINT_TO_POINTER (token), result);
 	}
 
-	mono_loader_unlock ();
+	mono_image_unlock (image);
 
 	return result;
 }
@@ -1621,9 +1679,7 @@ mono_free_method  (MonoMethod *method)
 
 		mono_marshal_free_dynamic_wrappers (method);
 
-		mono_loader_lock ();
-		mono_property_hash_remove_object (method->klass->image->property_hash, method);
-		mono_loader_unlock ();
+		mono_image_property_remove (method->klass->image, method);
 
 		g_free ((char*)method->name);
 		if (mw->method.header) {
@@ -1834,6 +1890,8 @@ mono_method_get_wrapper_data (MonoMethod *method, guint32 id)
 	g_assert (method != NULL);
 	g_assert (method->wrapper_type != MONO_WRAPPER_NONE);
 
+	if (method->is_inflated)
+		method = ((MonoMethodInflated *) method)->declaring;
 	data = ((MonoMethodWrapper *)method)->method_data;
 	g_assert (data != NULL);
 	g_assert (id <= GPOINTER_TO_UINT (*data));
@@ -1883,16 +1941,21 @@ mono_method_get_last_managed (void)
 	return m;
 }
 
+/**
+ * mono_loader_lock:
+ *
+ * See docs/thread-safety.txt for the locking strategy.
+ */
 void
 mono_loader_lock (void)
 {
-	EnterCriticalSection (&loader_mutex);
+	mono_locks_acquire (&loader_mutex, LoaderLock);
 }
 
 void
 mono_loader_unlock (void)
 {
-	LeaveCriticalSection (&loader_mutex);
+	mono_locks_release (&loader_mutex, LoaderLock);
 }
 
 /**
@@ -1929,6 +1992,9 @@ mono_method_signature (MonoMethod *m)
 		/* the lock is recursive */
 		signature = mono_method_signature (imethod->declaring);
 		signature = inflate_generic_signature (imethod->declaring->klass->image, signature, mono_method_get_context (m));
+
+		inflated_signatures_size += mono_metadata_signature_size (signature);
+
 		mono_memory_barrier ();
 		m->signature = signature;
 		mono_loader_unlock ();
