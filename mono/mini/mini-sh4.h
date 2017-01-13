@@ -287,6 +287,9 @@
  */
 #define MONO_SH4_FREG_LAST_ARG sh4_fr11
 
+#define MONO_ARCH_HAVE_IMT 1
+#define MONO_ARCH_IMT_REG sh4_r2
+
 /* Structure where the arch-specific code can store
  * data during a compilation. */
 typedef struct {

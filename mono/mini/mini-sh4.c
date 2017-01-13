@@ -4557,3 +4557,133 @@ void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
 		return;
 	}
 }
+
+#ifdef MONO_ARCH_HAVE_IMT
+
+#define DEBUG_IMT 0
+
+gpointer
+mono_arch_get_this_arg_from_call (MonoGenericSharingContext *gsctx, MonoMethodSignature *sig, gssize *regs, guint8 *code)
+{
+	/* Currently, valuetypes are always transmitted onto the stack. */
+	return (gpointer)regs [MONO_SH4_REG_FIRST_ARG];
+}
+
+MonoMethod*
+mono_arch_find_imt_method (gpointer *regs, guint8 *code)
+{
+	return (MonoMethod*) regs [MONO_ARCH_IMT_REG];
+}
+
+MonoObject*
+mono_arch_find_this_argument (gpointer *regs, MonoMethod *method, MonoGenericSharingContext *gsctx)
+{
+	return mono_arch_get_this_arg_from_call (gsctx, mono_method_signature (method), (gssize*)regs, NULL);
+}
+
+gpointer
+mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckItem **imt_entries, int count, gpointer fail_tramp)
+{
+	int size, i;
+	guint8 *code = NULL, *start = NULL;
+
+	/* TODO(dd): IMT, compute size. */
+	guint max_entry_size = 50;
+	size = count * max_entry_size;
+
+#if DEBUG_IMT
+	printf ("building IMT thunk for class %s %s entries %d code size %d code at %p end %p vtable %p fail_tramp %p\n", vtable->klass->name_space, vtable->klass->name, count, size, start, ((guint8*)start) + size, vtable, fail_tramp);
+	for (i = 0; i < count; ++i) {
+		MonoIMTCheckItem *item = imt_entries [i];
+		printf ("method %d (%p) %s vtable slot %p is_equals %d chunk size %d has_target_code %d\n", i, item->key, "<?>" /* item->key->name */, &vtable->vtable [item->value.vtable_slot], item->is_equals, item->chunk_size, item->has_target_code);
+	}
+#endif
+
+	if (fail_tramp)
+		code = mono_method_alloc_generic_virtual_thunk (domain, size);
+	else
+		code = mono_domain_code_reserve (domain, size);
+	start = code;
+
+	for (i = 0; i < count; ++i) {
+		MonoIMTCheckItem *item = imt_entries [i];
+
+		item->code_target = code;
+
+		if (item->is_equals) {
+			guint8 *eq = NULL;
+
+			if (item->check_target_idx) {
+				/*   if (magic_reg == item->method) */
+				/*     goto eq; */
+				sh4_load(&code, (guint32)item->key, sh4_temp);
+				sh4_cmpeq(&code, MONO_ARCH_IMT_REG, sh4_temp);
+				eq = code + 18;
+				sh4_bt_label(&code, eq);
+
+				/*   jump_to_item (array [item->check_target_idx]); */
+				sh4_load(&code, (guint32)-1, sh4_temp);
+				item->jmp_code = code;
+				sh4_jmp_indRx(&code, sh4_temp);
+				sh4_nop(&code);
+			}
+
+			g_assert (eq == NULL || code == eq);
+			/* eq: */
+			/*   jump_to_vtable (item->vtable_slot); */
+			sh4_load(&code, (guint32)&(vtable->vtable[item->value.vtable_slot]), sh4_temp);
+			sh4_movl_indRy(&code, sh4_temp, sh4_temp);
+			sh4_jmp_indRx(&code, sh4_temp);
+			sh4_nop(&code);
+		} else {
+			guint8 *not_ge = NULL;
+
+			/*   if (! (magic_reg >= item->method)) */
+			/*     goto not_ge; */
+			sh4_load(&code, (guint32)item->key, sh4_temp);
+			sh4_cmphi(&code, MONO_ARCH_IMT_REG, sh4_temp);
+			not_ge = code + 18;
+			sh4_bt_label(&code, not_ge);
+
+			/*   jump_to_item (array [item->check_target_idx]); */
+			sh4_load(&code, (guint32)-1, sh4_temp);
+			item->jmp_code = code;
+			sh4_jmp_indRx(&code, sh4_temp);
+			sh4_nop(&code);
+
+			g_assert (code == not_ge);
+			/* not_ge: */
+		}
+
+		g_assert (code - item->code_target <= max_entry_size);
+	}
+
+	for (i = 0; i < count; ++i) {
+		MonoIMTCheckItem *item = imt_entries [i];
+		int idx = item->check_target_idx;
+
+		if (idx) {
+			MonoIMTCheckItem *target_item = imt_entries [idx];
+			guint8* patch = item->jmp_code - 4;
+
+			g_assert(*(guint32*)patch == (guint32)-1);
+			sh4_emit32(&patch, (guint32)target_item->code_target);
+		}
+	}
+
+#if DEBUG_IMT
+	{
+		char *buff = g_strdup_printf ("thunk_for_class_%s_%s_entries_%d", vtable->klass->name_space, vtable->klass->name, count);
+		mono_disassemble_code (NULL, start, code - start, buff);
+		g_free (buff);
+	}
+#endif
+
+	mono_arch_flush_icache ((guint8*)start, size);
+	mono_stats.imt_thunks_size += code - start;
+
+	g_assert (code - start <= size);
+	return start;
+}
+
+#endif
