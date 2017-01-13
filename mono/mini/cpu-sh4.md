@@ -127,6 +127,10 @@ vcall_reg: src1:i clob:c len:18
 vcall2_reg: src1:i clob:c len:18
 lcall_reg: dest:Z src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
+sh4_voidcall_virt_reg: src1:i src2:i clob:c len:18
+sh4_call_virt_reg: dest:z src1:i src2:i clob:c len:18
+sh4_fcall_virt_reg: dest:y src1:i src2:i clob:c len:18
+sh4_lcall_virt_reg: dest:Z src1:i src2:i clob:c len:18
 call_handler: len:16
 throw: src1:i len:18
 rethrow: src1:i len:18

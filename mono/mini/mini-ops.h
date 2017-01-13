@@ -1282,4 +1282,8 @@ MINI_OP(OP_SH4_F32MOVEL,		"sh4_f32movel",			FREG, FREG, NONE)
 MINI_OP(OP_SH4_DUMMY_FUSE,		"sh4_dummy_fuse",		NONE, FREG, NONE)
 MINI_OP(OP_SH4_BZERO4,			"sh4_bzero4",			IREG, IREG, IREG)
 MINI_OP(OP_SH4_SHAD,			"sh4_shad",			IREG, IREG, IREG)
+MINI_OP(OP_SH4_VOIDCALL_VIRT_REG,	"sh4_voidcall_virt_reg",	NONE, IREG, IREG)
+MINI_OP(OP_SH4_CALL_VIRT_REG,		"sh4_call_virt_reg",		IREG, IREG, IREG)
+MINI_OP(OP_SH4_FCALL_VIRT_REG,		"sh4_fcall_virt_reg",		FREG, IREG, IREG)
+MINI_OP(OP_SH4_LCALL_VIRT_REG,		"sh4_lcall_virt_reg",		LREG, IREG, IREG)
 #endif
