@@ -83,6 +83,18 @@ static inline int is_sh4_load(guint16 *code, SH4IntRegister sh4_rX)
 }
 
 /**
+ * Returns the value corresponding to a constant pool load previously
+ * checked with is_sh4_load (and the same offset).
+ */
+static inline guint32 get_sh4_load_value(guint16 *code)
+{
+        guint16 w1 = code[0];
+        guint16 w2 = code[-1];
+
+        return w1 << 16 | w2;
+}
+
+/**
  * Return the address of the constant used to call a method.
  *
  * The calling sequence is (for OP_.*CALL opcodes):

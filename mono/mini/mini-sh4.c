@@ -2044,9 +2044,10 @@ MonoInst* mono_arch_get_thread_intrinsic(MonoCompile* cfg)
  *           nop
  *             <- code points here
  */
-gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
+gpointer
+mono_arch_get_vcall_slot (guint8 *code_ptr, gpointer *regs, int *displacement)
 {
-	guint16 *code16 = (void *)code;
+	guint16 *code16 = (void *)code_ptr;
 	SH4IntRegister sh4_rW = sh4_r0;
 	SH4IntRegister sh4_rX = sh4_r0;
 	SH4IntRegister sh4_rY = sh4_r0;
@@ -2089,6 +2090,7 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 			if (offset == 0)
 				return NULL;
 
+			index = get_sh4_load_value(&code16[-5]);
 			offset = -offset - 5;
 		}
 	}
@@ -2107,7 +2109,20 @@ gpointer *mono_arch_get_vcall_slot_addr(guint8 *code, gpointer *regs)
 	}
 
 	/* So far, so good! */
-	return (gpointer*)(regs[sh4_rX]);
+	*displacement = index;
+	return regs[sh4_rY];
+}
+
+gpointer*
+mono_arch_get_vcall_slot_addr (guint8* code, gpointer *regs)
+{
+	gpointer vt;
+	int displacement;
+	vt = mono_arch_get_vcall_slot (code, regs, &displacement);
+	if (!vt)
+		return NULL;
+
+	return (gpointer*)((char*)vt + displacement);
 }
 
 /**
