@@ -4499,6 +4499,8 @@ void mono_arch_emit_outarg_vt(MonoCompile *cfg, MonoInst *inst, MonoInst *src)
 
 void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
 {
+	MonoInst *new_inst = NULL;
+
 	/* The macros MONO_EMIT_NEW_* use internally a variable named "inst",
 	   so do not use something like "inst->XXX" as parameter. */
 
@@ -4514,23 +4516,40 @@ void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
 		break;
 
 	case OP_LADD_OVF:
-		/* A long register N is splitted into two integer registers N+1, N+2. */
-		MONO_EMIT_NEW_BIALU(cfg, OP_IADDCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
-		MONO_EMIT_NEW_BIALU(cfg, OP_SH4_IADC_OVF, ins->dreg + 2, ins->sreg1 + 2, ins->sreg2 + 2);
-		MONO_EMIT_NEW_COND_EXC(cfg, IC, "OverflowException");
-		ins->opcode = OP_NOP;
-		break;
-
 	case OP_LSUB_OVF:
 		/* A long register N is splitted into two integer registers N+1, N+2. */
-		MONO_EMIT_NEW_BIALU(cfg, OP_ISUBCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
-		MONO_EMIT_NEW_BIALU(cfg, OP_SH4_ISBB_OVF, ins->dreg + 2, ins->sreg1 + 2, ins->sreg2 + 2);
+		if (ins->opcode == OP_LADD_OVF) {
+			MONO_EMIT_NEW_BIALU(cfg, OP_IADDCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
+			MONO_EMIT_NEW_BIALU(cfg, OP_SH4_IADC_OVF, ins->dreg + 2, ins->sreg1 + 2, ins->sreg2 + 2);
+		} else {
+			MONO_EMIT_NEW_BIALU(cfg, OP_ISUBCC, ins->dreg + 1, ins->sreg1 + 1, ins->sreg2 + 1);
+			MONO_EMIT_NEW_BIALU(cfg, OP_SH4_ISBB_OVF, ins->dreg + 2, ins->sreg1 + 2, ins->sreg2 + 2);
+		}
 		MONO_EMIT_NEW_COND_EXC(cfg, IC, "OverflowException");
-		ins->opcode = OP_NOP;
+
+		/*
+		 * We do NULLIFY_INS 'ins' below, but the decomposer
+		 * then checks that the last instruction inserted in
+		 * the decomposition has the same dreg as 'ins'.
+		 *
+		 * This is not the case in the sequence above, which
+		 * ends with cond_exc_ic--and the register splitting
+		 * ensures that we cannot use any of the other
+		 * instructions as 'repl' (cf. mono_decompose_opcode),
+		 * even after changing this function's signature.
+		 *
+		 * So we just insert an extra NOP, and set its dreg to
+		 * the expected value.
+		 */
+		MONO_INST_NEW (cfg, new_inst, OP_NOP);
+		new_inst->dreg = ins->dreg;
+		MONO_ADD_INS (cfg->cbb, new_inst);
+
+		NULLIFY_INS (ins);
 		break;
 
 	default:
-		return;
+		break;
 	}
 }
 
