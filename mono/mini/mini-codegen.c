@@ -520,6 +520,12 @@ mono_print_ins_index (int i, MonoInst *ins)
 	case OP_R4CONST:
 		printf (" [%f]", *(float*)ins->inst_p0);
 		break;
+#ifdef __SH4__
+        case OP_SH4_VOIDCALL_VIRT_REG:
+        case OP_SH4_CALL_VIRT_REG:
+        case OP_SH4_FCALL_VIRT_REG:
+        case OP_SH4_LCALL_VIRT_REG:
+#endif
 	case OP_CALL:
 	case OP_CALL_MEMBASE:
 	case OP_CALL_REG:
