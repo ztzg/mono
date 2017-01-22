@@ -51,6 +51,7 @@
 #include <mono/metadata/lock-tracer.h>
 #include <mono/metadata/console-io.h>
 #include <mono/metadata/threads-types.h>
+#include <mono/metadata/tokentype.h>
 #include <mono/utils/mono-uri.h>
 #include <mono/utils/mono-logger.h>
 #include <mono/utils/mono-path.h>
@@ -71,7 +72,7 @@
  * Changes which are already detected at runtime, like the addition
  * of icalls, do not require an increment.
  */
-#define MONO_CORLIB_VERSION 74
+#define MONO_CORLIB_VERSION 82
 
 typedef struct
 {
@@ -399,6 +400,7 @@ mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *
 	MonoClass *adclass;
 	MonoAppDomain *ad;
 	MonoDomain *data;
+	char *shadow_location;
 	
 	MONO_ARCH_SAVE_REGS;
 
@@ -412,9 +414,6 @@ mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *
 	data->domain = ad;
 	data->setup = setup;
 	data->friendly_name = g_strdup (friendly_name);
-	// FIXME: The ctor runs in the current domain
-	// FIXME: Initialize null_reference_ex and stack_overflow_ex
-	data->out_of_memory_ex = mono_exception_from_name_domain (data, mono_defaults.corlib, "System", "OutOfMemoryException");
 
 	if (!setup->application_base) {
 		/* Inherit from the root domain since MS.NET does this */
@@ -429,7 +428,14 @@ mono_domain_create_appdomain_internal (char *friendly_name, MonoAppDomainSetup *
 	
 	add_assemblies_to_domain (data, mono_defaults.corlib->assembly, NULL);
 
-	mono_debugger_event_create_appdomain (data, get_shadow_assembly_location_base (data));
+#ifndef DISABLE_SHADOW_COPY
+	shadow_location = get_shadow_assembly_location_base (data);
+	mono_debugger_event_create_appdomain (data, shadow_location);
+	g_free (shadow_location);
+#endif
+
+	// FIXME: Initialize null_reference_ex and stack_overflow_ex
+	data->out_of_memory_ex = mono_exception_from_name_domain (data, mono_defaults.corlib, "System", "OutOfMemoryException");
 
 	return ad;
 }
@@ -785,7 +791,7 @@ ves_icall_System_AppDomain_GetAssemblies (MonoAppDomain *ad, MonoBoolean refonly
 	mono_domain_assemblies_lock (domain);
 	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
 		ass = tmp->data;
-		if (refonly && !ass->ref_only)
+		if (refonly != ass->ref_only)
 			continue;
 		if (ass->corlib_internal)
 			continue;
@@ -811,6 +817,9 @@ mono_try_assembly_resolve (MonoDomain *domain, MonoString *fname, gboolean refon
 	MonoMethod *method;
 	MonoBoolean isrefonly;
 	gpointer params [2];
+
+	if (mono_runtime_get_no_exec ())
+		return NULL;
 
 	g_assert (domain != NULL && fname != NULL);
 
@@ -1158,6 +1167,9 @@ get_cstring_hash (const char *str)
 	return h;
 }
 
+/*
+ * Returned memory is malloc'd. Called must free it 
+ */
 static char *
 get_shadow_assembly_location_base (MonoDomain *domain)
 {
@@ -1944,12 +1956,15 @@ static void
 clear_cached_vtable (gpointer key, gpointer value, gpointer user_data)
 {
 	MonoClass *klass = (MonoClass*)key;
+	MonoVTable *vtable = value;
 	MonoDomain *domain = (MonoDomain*)user_data;
 	MonoClassRuntimeInfo *runtime_info;
 
 	runtime_info = klass->runtime_info;
 	if (runtime_info && runtime_info->max_domain >= domain->domain_id)
 		runtime_info->domain_vtables [domain->domain_id] = NULL;
+	if (vtable->data && klass->has_static_refs)
+		mono_gc_free_fixed (vtable->data);
 }
 
 typedef struct unload_data {
@@ -1957,6 +1972,73 @@ typedef struct unload_data {
 	char *failure_reason;
 } unload_data;
 
+#ifdef HAVE_SGEN_GC
+static void
+deregister_reflection_info_roots_nspace_table (gpointer key, gpointer value, gpointer image)
+{
+	guint32 index = GPOINTER_TO_UINT (value);
+	MonoClass *class = mono_class_get (image, MONO_TOKEN_TYPE_DEF | index);
+
+	g_assert (class);
+
+	if (class->reflection_info)
+		mono_gc_deregister_root ((char*) &class->reflection_info);
+}
+
+static void
+deregister_reflection_info_roots_name_space (gpointer key, gpointer value, gpointer user_data)
+{
+	g_hash_table_foreach (value, deregister_reflection_info_roots_nspace_table, user_data);
+}
+
+static void
+deregister_reflection_info_roots_from_list (MonoImage *image)
+{
+	GSList *list = image->reflection_info_unregister_classes;
+
+	while (list) {
+		MonoClass *class = list->data;
+
+		g_assert (class->reflection_info);
+		mono_gc_deregister_root ((char*) &class->reflection_info);
+
+		list = list->next;
+	}
+
+	g_slist_free (image->reflection_info_unregister_classes);
+	image->reflection_info_unregister_classes = NULL;
+}
+
+static void
+deregister_reflection_info_roots (MonoDomain *domain)
+{
+	GSList *list;
+
+	mono_loader_lock ();
+	mono_domain_assemblies_lock (domain);
+	for (list = domain->domain_assemblies; list; list = list->next) {
+		MonoAssembly *assembly = list->data;
+		MonoImage *image = assembly->image;
+		int i;
+		/*No need to take the image lock here since dynamic images are appdomain bound and at this point the mutator is gone.*/
+		if (image->dynamic && image->name_cache)
+			g_hash_table_foreach (image->name_cache, deregister_reflection_info_roots_name_space, image);
+		deregister_reflection_info_roots_from_list (image);
+		for (i = 0; i < image->module_count; ++i) {
+			MonoImage *module = image->modules [i];
+			if (module) {
+				if (module->dynamic && module->name_cache) {
+					g_hash_table_foreach (module->name_cache,
+							deregister_reflection_info_roots_name_space, module);
+				}
+				deregister_reflection_info_roots_from_list (module);
+			}
+		}
+	}
+	mono_domain_assemblies_unlock (domain);
+	mono_loader_unlock ();
+}
+#endif
 
 static guint32 WINAPI
 unload_thread_main (void *arg)
@@ -1995,6 +2077,9 @@ unload_thread_main (void *arg)
 	mono_loader_lock ();
 	mono_domain_lock (domain);
 	g_hash_table_foreach (domain->class_vtable_hash, clear_cached_vtable, domain);
+#ifdef HAVE_SGEN_GC
+	deregister_reflection_info_roots (domain);
+#endif
 	mono_domain_unlock (domain);
 	mono_loader_unlock ();
 
@@ -2073,6 +2158,7 @@ mono_domain_unload (MonoDomain *domain)
 		mono_domain_set (caller_domain, FALSE);
 		mono_raise_exception ((MonoException*)exc);
 	}
+	mono_domain_set (caller_domain, FALSE);
 
 	thread_data.domain = domain;
 	thread_data.failure_reason = NULL;
@@ -2107,8 +2193,6 @@ mono_domain_unload (MonoDomain *domain)
 			return;
 	}
 	CloseHandle (thread_handle);
-
-	mono_domain_set (caller_domain, FALSE);
 
 	if (thread_data.failure_reason) {
 		MonoException *ex;

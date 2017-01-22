@@ -1,3 +1,34 @@
+2009-04-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py (MonoClassPrinter.to_string): Add a MonoClass* pretty
+	printer.
+
+2009-04-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py (MonoMethodPrinter.to_string): Add a MonoMethod* pretty
+	printer.
+
+2009-04-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py: Update to the latest archer api.
+
+2009-04-07  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py (ObjectPrinter.__init__): Update to latest archer api.
+
+2009-04-06  Zoltan Varga  <vargaz@gmail.com>
+
+	* test-xdb.py: New file, tester script for xdb.
+
+	* mono-gdb.py (stringify_class_name): Handle classes without a namespace
+	correctly.
+	
+	* mono-gdb.py: Update after the changes to dwarfwriter.c.
+
+2009-04-05  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py: Handle superclasses in the pretty printer.
+
 2009-03-27  Zoltan Varga  <vargaz@gmail.com>
 
 	* mono-gdb.py (StringPrinter.to_string): Fix support for non-ascii characters.

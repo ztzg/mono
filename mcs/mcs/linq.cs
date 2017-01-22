@@ -28,12 +28,12 @@ namespace Mono.CSharp.Linq
 			this.next = query;
 		}
 
-		public override Expression BuildQueryClause (EmitContext ec, Expression lSide)
+		public override Expression BuildQueryClause (ResolveContext ec, Expression lSide)
 		{
 			return next.BuildQueryClause (ec, lSide);
 		}
 
-		public override Expression DoResolve (EmitContext ec)
+		public override Expression DoResolve (ResolveContext ec)
 		{
 			int counter = QueryBlock.TransparentParameter.Counter;
 
@@ -69,10 +69,10 @@ namespace Mono.CSharp.Linq
 			{
 			}
 
-			protected override Expression Error_MemberLookupFailed (Type container_type, Type qualifier_type,
+			protected override Expression Error_MemberLookupFailed (ResolveContext ec, Type container_type, Type qualifier_type,
 				Type queried_type, string name, string class_name, MemberTypes mt, BindingFlags bf)
 			{
-				Report.Error (1935, loc, "An implementation of `{0}' query expression pattern could not be found. " +
+				ec.Report.Error (1935, loc, "An implementation of `{0}' query expression pattern could not be found. " +
 					"Are you missing `System.Linq' using directive or `System.Core.dll' assembly reference?",
 					name);
 				return null;
@@ -81,39 +81,39 @@ namespace Mono.CSharp.Linq
 
 		class QueryExpressionInvocation : Invocation, MethodGroupExpr.IErrorHandler
 		{
-			public QueryExpressionInvocation (QueryExpressionAccess expr, ArrayList arguments)
+			public QueryExpressionInvocation (QueryExpressionAccess expr, Arguments arguments)
 				: base (expr, arguments)
 			{
 			}
 
-			protected override MethodGroupExpr DoResolveOverload (EmitContext ec)
+			protected override MethodGroupExpr DoResolveOverload (ResolveContext ec)
 			{
 				mg.CustomErrorHandler = this;
-				MethodGroupExpr rmg = mg.OverloadResolve (ec, ref Arguments, false, loc);
+				MethodGroupExpr rmg = mg.OverloadResolve (ec, ref arguments, false, loc);
 				return rmg;
 			}
 
-			public bool AmbiguousCall (MethodBase ambiguous)
+			public bool AmbiguousCall (ResolveContext ec, MethodBase ambiguous)
 			{
-				Report.SymbolRelatedToPreviousError ((MethodInfo) mg);
-				Report.SymbolRelatedToPreviousError (ambiguous);
-				Report.Error (1940, loc, "Ambiguous implementation of the query pattern `{0}' for source type `{1}'",
+				ec.Report.SymbolRelatedToPreviousError ((MethodInfo) mg);
+				ec.Report.SymbolRelatedToPreviousError (ambiguous);
+				ec.Report.Error (1940, loc, "Ambiguous implementation of the query pattern `{0}' for source type `{1}'",
 					mg.Name, mg.InstanceExpression.GetSignatureForError ());
 				return true;
 			}
 
-			public bool NoExactMatch (EmitContext ec, MethodBase method)
+			public bool NoExactMatch (ResolveContext ec, MethodBase method)
 			{
 				AParametersCollection pd = TypeManager.GetParameterData (method);
 				Type source_type = pd.ExtensionMethodType;
 				if (source_type != null) {
-					Argument a = (Argument) Arguments [0];
+					Argument a = arguments [0];
 
 					if (TypeManager.IsGenericType (source_type) && TypeManager.ContainsGenericParameters (source_type)) {
 #if GMCS_SOURCE
 						TypeInferenceContext tic = new TypeInferenceContext (TypeManager.GetTypeArguments (source_type));
 						tic.OutputTypeInference (ec, a.Expr, source_type);
-						if (tic.FixAllTypes ()) {
+						if (tic.FixAllTypes (ec)) {
 							source_type = TypeManager.DropGenericTypeArguments (source_type).MakeGenericType (tic.InferredTypeArguments);
 						}
 #else
@@ -122,7 +122,7 @@ namespace Mono.CSharp.Linq
 					}
 
 					if (!Convert.ImplicitConversionExists (ec, a.Expr, source_type)) {
-						Report.Error (1936, loc, "An implementation of `{0}' query expression pattern for source type `{1}' could not be found",
+						ec.Report.Error (1936, loc, "An implementation of `{0}' query expression pattern for source type `{1}' could not be found",
 							mg.Name, TypeManager.CSharpName (a.Type));
 						return true;
 					}
@@ -132,11 +132,11 @@ namespace Mono.CSharp.Linq
 					return false;
 
 				if (mg.Name == "SelectMany") {
-					Report.Error (1943, loc,
+					ec.Report.Error (1943, loc,
 						"An expression type is incorrect in a subsequent `from' clause in a query expression with source type `{0}'",
-						((Argument) Arguments [0]).GetSignatureForError ());
+						arguments [0].GetSignatureForError ());
 				} else {
-					Report.Error (1942, loc,
+					ec.Report.Error (1942, loc,
 						"An expression type in `{0}' clause is incorrect. Type inference failed in the call to `{1}'",
 						mg.Name.ToLower (), mg.Name);
 				}
@@ -170,20 +170,20 @@ namespace Mono.CSharp.Linq
 				t.next = (AQueryClause) next.Clone (clonectx);
 		}
 
-		public override Expression CreateExpressionTree (EmitContext ec)
+		public override Expression CreateExpressionTree (ResolveContext ec)
 		{
 			// Should not be reached
 			throw new NotSupportedException ("ET");
 		}
 
-		public override Expression DoResolve (EmitContext ec)
+		public override Expression DoResolve (ResolveContext ec)
 		{
 			return expr.DoResolve (ec);
 		}
 
-		public virtual Expression BuildQueryClause (EmitContext ec, Expression lSide)
+		public virtual Expression BuildQueryClause (ResolveContext ec, Expression lSide)
 		{
-			ArrayList args;
+			Arguments args;
 			CreateArguments (ec, out args);
 			lSide = CreateQueryExpression (lSide, args);
 			if (next != null) {
@@ -199,9 +199,9 @@ namespace Mono.CSharp.Linq
 			return lSide;
 		}
 
-		protected virtual void CreateArguments (EmitContext ec, out ArrayList args)
+		protected virtual void CreateArguments (ResolveContext ec, out Arguments args)
 		{
-			args = new ArrayList (2);
+			args = new Arguments (2);
 
 			LambdaExpression selector = new LambdaExpression (loc);
 			selector.Block = block;
@@ -210,13 +210,13 @@ namespace Mono.CSharp.Linq
 			args.Add (new Argument (selector));
 		}
 
-		protected Invocation CreateQueryExpression (Expression lSide, ArrayList arguments)
+		protected Invocation CreateQueryExpression (Expression lSide, Arguments arguments)
 		{
 			return new QueryExpressionInvocation (
 				new QueryExpressionAccess (lSide, MethodName, loc), arguments);
 		}
 
-		protected Invocation CreateQueryExpression (Expression lSide, TypeArguments typeArguments, ArrayList arguments)
+		protected Invocation CreateQueryExpression (Expression lSide, TypeArguments typeArguments, Arguments arguments)
 		{
 			return new QueryExpressionInvocation (
 				new QueryExpressionAccess (lSide, MethodName, typeArguments, loc), arguments);
@@ -259,9 +259,9 @@ namespace Mono.CSharp.Linq
 			{
 			}
 
-			protected override void Error_InvalidInitializer (string initializer)
+			protected override void Error_InvalidInitializer (ResolveContext ec, string initializer)
 			{
-				Report.Error (1932, loc, "A range variable `{0}' cannot be initialized with `{1}'",
+				ec.Report.Error (1932, loc, "A range variable `{0}' cannot be initialized with `{1}'",
 					Name, initializer);
 			}
 		}
@@ -271,12 +271,12 @@ namespace Mono.CSharp.Linq
 		{
 		}
 
-		protected static Expression CreateRangeVariableType (ToplevelBlock block, TypeContainer container, LocatedToken name, Expression init)
+		protected static Expression CreateRangeVariableType (ToplevelBlock block, IMemberContext context, LocatedToken name, Expression init)
 		{
 			ArrayList args = new ArrayList (2);
 			args.Add (new AnonymousTypeParameter (block.Parameters [0]));
 			args.Add (new RangeAnonymousTypeParameter (init, name));
-			return new AnonymousTypeDeclaration (args, container, name.Location);
+			return new AnonymousTypeDeclaration (args, context.CurrentTypeDefinition, name.Location);
 		}
 	}
 
@@ -287,12 +287,12 @@ namespace Mono.CSharp.Linq
 		{
 		}
 
-		public override Expression BuildQueryClause (EmitContext ec, Expression lSide)
+		public override Expression BuildQueryClause (ResolveContext ec, Expression lSide)
 		{
 			return next.BuildQueryClause (ec, expr);
 		}
 
-		public override Expression DoResolve (EmitContext ec)
+		public override Expression DoResolve (ResolveContext ec)
 		{
 			Expression e = BuildQueryClause (ec, null);
 			return e.Resolve (ec);
@@ -314,7 +314,7 @@ namespace Mono.CSharp.Linq
 			this.type_expr = type;
 		}
 		
-		public override Expression BuildQueryClause (EmitContext ec, Expression lSide)
+		public override Expression BuildQueryClause (ResolveContext ec, Expression lSide)
 		{
 			lSide = CreateQueryExpression (expr, new TypeArguments (type_expr), null);
 			if (next != null)
@@ -345,7 +345,7 @@ namespace Mono.CSharp.Linq
 			}
 		}
 
-		protected override void CreateArguments (EmitContext ec, out ArrayList args)
+		protected override void CreateArguments (ResolveContext ec, out Arguments args)
 		{
 			base.CreateArguments (ec, out args);
 
@@ -386,9 +386,9 @@ namespace Mono.CSharp.Linq
 			this.inner_selector = innerSelector;
 		}
 
-		protected override void CreateArguments (EmitContext ec, out ArrayList args)
+		protected override void CreateArguments (ResolveContext ec, out Arguments args)
 		{
-			args = new ArrayList (4);
+			args = new Arguments (4);
 
 			args.Add (new Argument (expr));
 
@@ -409,12 +409,12 @@ namespace Mono.CSharp.Linq
 				result_selector_expr = next.expr;
 				next = next.next;
 			} else {
-				result_selector_expr = CreateRangeVariableType (block, (TypeContainer) ec.TypeContainer, into_variable,
+				result_selector_expr = CreateRangeVariableType (block, ec.MemberContext, into_variable,
 					new SimpleName (into_variable.Value, into_variable.Location));
 			}
 
 			LambdaExpression result_selector = new LambdaExpression (lt.Location);
-			result_selector.Block = new QueryBlock (block.Parent, block.Parameters, into_variable, block.StartLocation);
+			result_selector.Block = new QueryBlock (ec.Compiler, block.Parent, block.Parameters, into_variable, block.StartLocation);
 			result_selector.Block.AddStatement (new ContextualReturn (result_selector_expr));
 
 			args.Add (new Argument (result_selector));
@@ -507,7 +507,7 @@ namespace Mono.CSharp.Linq
 			this.lt = lt;
 		}
 
-		protected override void CreateArguments (EmitContext ec, out ArrayList args)
+		protected override void CreateArguments (ResolveContext ec, out Arguments args)
 		{
 			base.CreateArguments (ec, out args);
 
@@ -519,11 +519,11 @@ namespace Mono.CSharp.Linq
 				result_selector_expr = next.expr;
 				next = next.next;
 			} else {
-				result_selector_expr = CreateRangeVariableType (block, (TypeContainer)ec.TypeContainer, lt, new SimpleName (lt.Value, lt.Location));
+				result_selector_expr = CreateRangeVariableType (block, ec.MemberContext, lt, new SimpleName (lt.Value, lt.Location));
 			}
 
 			LambdaExpression result_selector = new LambdaExpression (lt.Location);
-			result_selector.Block = new QueryBlock (block.Parent, block.Parameters, lt, block.StartLocation);
+			result_selector.Block = new QueryBlock (ec.Compiler, block.Parent, block.Parameters, lt, block.StartLocation);
 			result_selector.Block.AddStatement (new ContextualReturn (result_selector_expr));
 
 			args.Add (new Argument (result_selector));
@@ -632,20 +632,20 @@ namespace Mono.CSharp.Linq
 			}
 		}
 
-		public QueryBlock (Block parent, LocatedToken lt, Location start)
-			: base (parent, new ParametersCompiled (new ImplicitQueryParameter (lt.Value, lt.Location)), start)
+		public QueryBlock (CompilerContext ctx, Block parent, LocatedToken lt, Location start)
+			: base (ctx, parent, new ParametersCompiled (new ImplicitQueryParameter (lt.Value, lt.Location)), start)
 		{
 			if (parent != null)
 				base.CheckParentConflictName (parent.Toplevel, lt.Value, lt.Location);
 		}
 
-		public QueryBlock (Block parent, ParametersCompiled parameters, LocatedToken lt, Location start)
-			: base (parent, new ParametersCompiled (parameters [0].Clone (), new ImplicitQueryParameter (lt.Value, lt.Location)), start)
+		public QueryBlock (CompilerContext ctx, Block parent, ParametersCompiled parameters, LocatedToken lt, Location start)
+			: base (ctx, parent, new ParametersCompiled (parameters [0].Clone (), new ImplicitQueryParameter (lt.Value, lt.Location)), start)
 		{
 		}
 
-		public QueryBlock (Block parent, Location start)
-			: base (parent, parent.Toplevel.Parameters.Clone (), start)
+		public QueryBlock (CompilerContext ctx, Block parent, Location start)
+			: base (ctx, parent, parent.Toplevel.Parameters.Clone (), start)
 		{
 		}
 
@@ -710,9 +710,9 @@ namespace Mono.CSharp.Linq
 				var);		
 		}
 		
-		public override void Error_AlreadyDeclaredTypeParameter (Location loc, string name, string conflict)
+		public override void Error_AlreadyDeclaredTypeParameter (Report r, Location loc, string name, string conflict)
 		{
-			Report.Error (1948, loc, "A range variable `{0}' conflicts with a method type parameter",
+			r.Error (1948, loc, "A range variable `{0}' conflicts with a method type parameter",
 				name);
 		}
 	}

@@ -37,8 +37,11 @@ using System.Threading;
 namespace System.ServiceModel
 {
 	[MonoTODO ("It somehow rejects classes, but dunno how we can do that besides our code wise.")]
-	public abstract class ClientBase<TChannel>
-		: IDisposable, ICommunicationObject where TChannel : class
+	public abstract class ClientBase<TChannel> :
+#if !NET_2_1
+		IDisposable,
+#endif
+		ICommunicationObject where TChannel : class
 	{
 		static InstanceContext initialContxt = new InstanceContext (null);
 #if NET_2_1
@@ -47,22 +50,20 @@ namespace System.ServiceModel
 
 		static ClientBase ()
 		{
-			foreach (Assembly ass in AppDomain.CurrentDomain.GetAssemblies ()) {
-				if (ass.GetName ().Name != "System.Windows")
-					continue;
-				Type dispatcher_type = ass.GetType ("System.Windows.Threading.Dispatcher", true);
-				dispatcher_main_property = dispatcher_type.GetProperty ("Main", BindingFlags.NonPublic | BindingFlags.Static);
-				dispatcher_begin_invoke_method = dispatcher_type.GetMethod ("BeginInvoke", new Type [] {typeof (Delegate), typeof (object [])});
-			}
+			Type dispatcher_type = Type.GetType ("System.Windows.Threading.Dispatcher, System.Windows, Version=2.0.5.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e", true);
+
+			dispatcher_main_property = dispatcher_type.GetProperty ("Main", BindingFlags.NonPublic | BindingFlags.Static);
 			if (dispatcher_main_property == null)
 				throw new SystemException ("Dispatcher.Main not found");
+
+			dispatcher_begin_invoke_method = dispatcher_type.GetMethod ("BeginInvoke", new Type [] {typeof (Delegate), typeof (object [])});
 			if (dispatcher_begin_invoke_method == null)
 				throw new SystemException ("Dispatcher.BeginInvoke not found");
 		}
 #endif
 
 		ChannelFactory<TChannel> factory;
-		ChannelBase<TChannel> inner_channel;
+		IClientChannel inner_channel;
 		CommunicationState state;
 
 		protected delegate IAsyncResult BeginOperationDelegate (object[] inValues, AsyncCallback asyncCallback, object state);
@@ -152,13 +153,13 @@ namespace System.ServiceModel
 			ChannelFactory = factory;
 		}
 
-		void Initialize (InstanceContext instance,
+		internal virtual void Initialize (InstanceContext instance,
 			string endpointConfigurationName, EndpointAddress remoteAddress)
 		{
 			ChannelFactory = new ChannelFactory<TChannel> (endpointConfigurationName, remoteAddress);
 		}
 
-		void Initialize (InstanceContext instance,
+		internal virtual void Initialize (InstanceContext instance,
 			Binding binding, EndpointAddress remoteAddress)
 		{
 			ChannelFactory = new ChannelFactory<TChannel> (binding, remoteAddress);
@@ -166,7 +167,7 @@ namespace System.ServiceModel
 
 		public ChannelFactory<TChannel> ChannelFactory {
 			get { return factory; }
-			private set {
+			internal set {
 				factory = value;
 				factory.OwnerClientBase = this;
 			}
@@ -185,7 +186,7 @@ namespace System.ServiceModel
 		public IClientChannel InnerChannel {
 			get {
 				if (inner_channel == null)
-					inner_channel = (ChannelBase<TChannel>) (object) CreateChannel ();
+					inner_channel = (IClientChannel) (object) CreateChannel ();
 				return inner_channel;
 			}
 		}
@@ -213,7 +214,6 @@ namespace System.ServiceModel
 			InnerChannel.DisplayInitializationUI ();
 		}
 
-#if NET_2_1
 		protected T GetDefaultValueForInitialization<T> ()
 		{
 			return default (T);
@@ -223,6 +223,9 @@ namespace System.ServiceModel
 
 		void RunCompletedCallback (SendOrPostCallback callback, InvokeAsyncCompletedEventArgs args)
 		{
+#if !NET_2_1
+			callback (args);
+#else
 			object dispatcher = dispatcher_main_property.GetValue (null, null);
 			if (dispatcher == null) {
 				callback (args);
@@ -238,6 +241,7 @@ namespace System.ServiceModel
 				}
 			};
 			dispatcher_begin_invoke_method.Invoke (dispatcher, new object [] {a, new object [] {this, new EventArgs ()}});
+#endif
 		}
 
 		protected void InvokeAsync (BeginOperationDelegate beginOperationDelegate,
@@ -272,13 +276,13 @@ namespace System.ServiceModel
 			begin_async_result = beginOperationDelegate (inValues, cb, userState);
 		}
 		IAsyncResult begin_async_result;
-#endif
-		
+
+#if !NET_2_1
 		void IDisposable.Dispose ()
 		{
 			Close ();
 		}
-
+#endif
 		protected virtual TChannel CreateChannel ()
 		{
 			return ChannelFactory.CreateChannel ();
@@ -358,12 +362,7 @@ namespace System.ServiceModel
 
 		#endregion
 
-#if NET_2_1
-		protected
-#else
-		internal
-#endif
-		class InvokeAsyncCompletedEventArgs : AsyncCompletedEventArgs
+		protected class InvokeAsyncCompletedEventArgs : AsyncCompletedEventArgs
 		{
 			internal InvokeAsyncCompletedEventArgs (object [] results, Exception error, bool cancelled, object userState)
 				: base (error, cancelled, userState)
@@ -381,18 +380,25 @@ namespace System.ServiceModel
 #endif
 		class ChannelBase<T> : IClientChannel, IOutputChannel, IRequestChannel where T : class
 		{
-			ClientBase<T> client;
+			ServiceEndpoint endpoint;
+			ChannelFactory factory;
 			ClientRuntimeChannel inner_channel;
 
 			protected ChannelBase (ClientBase<T> client)
+				: this (client.Endpoint, client.ChannelFactory)
 			{
-				this.client = client;
+			}
+
+			internal ChannelBase (ServiceEndpoint endpoint, ChannelFactory factory)
+			{
+				this.endpoint = endpoint;
+				this.factory = factory;
 			}
 
 			internal ClientRuntimeChannel Inner {
 				get {
 					if (inner_channel == null)
-						inner_channel = new ClientRuntimeChannel (client.Endpoint.CreateRuntime (), client.ChannelFactory);
+						inner_channel = new ClientRuntimeChannel (endpoint, factory, endpoint.Address, null);
 					return inner_channel;
 				}
 			}
@@ -400,7 +406,7 @@ namespace System.ServiceModel
 #if !NET_2_1
 			public object Invoke (string methodName, object [] args)
 			{
-				var cd = client.Endpoint.Contract;
+				var cd = endpoint.Contract;
 				var od = cd.Operations.Find (methodName);
 				if (od == null)
 					throw new ArgumentException (String.Format ("Operation '{0}' not found in the service contract '{1}' in namespace '{2}'", methodName, cd.Name, cd.Namespace));
@@ -410,7 +416,7 @@ namespace System.ServiceModel
 
 			protected IAsyncResult BeginInvoke (string methodName, object [] args, AsyncCallback callback, object state)
 			{
-				var cd = client.Endpoint.Contract;
+				var cd = endpoint.Contract;
 				var od = cd.Operations.Find (methodName);
 				if (od == null)
 					throw new ArgumentException (String.Format ("Operation '{0}' not found in the service contract '{1}' in namespace '{2}'", methodName, cd.Name, cd.Namespace));
@@ -419,7 +425,7 @@ namespace System.ServiceModel
 
 			protected object EndInvoke (string methodName, object [] args, IAsyncResult result)
 			{
-				var cd = client.Endpoint.Contract;
+				var cd = endpoint.Contract;
 				var od = cd.Operations.Find (methodName);
 				if (od == null)
 					throw new ArgumentException (String.Format ("Operation '{0}' not found in the service contract '{1}' in namespace '{2}'", methodName, cd.Name, cd.Namespace));
@@ -602,7 +608,7 @@ namespace System.ServiceModel
 
 			IAsyncResult IRequestChannel.BeginRequest (Message message, AsyncCallback callback, object state)
 			{
-				return ((IRequestChannel) this).BeginRequest (message, client.Endpoint.Binding.SendTimeout, callback, state);
+				return ((IRequestChannel) this).BeginRequest (message, endpoint.Binding.SendTimeout, callback, state);
 			}
 
 			IAsyncResult IRequestChannel.BeginRequest (Message message, TimeSpan timeout, AsyncCallback callback, object state)
@@ -617,7 +623,7 @@ namespace System.ServiceModel
 
 			Message IRequestChannel.Request (Message message)
 			{
-				return ((IRequestChannel) this).Request (message, client.Endpoint.Binding.SendTimeout);
+				return ((IRequestChannel) this).Request (message, endpoint.Binding.SendTimeout);
 			}
 
 			Message IRequestChannel.Request (Message message, TimeSpan timeout)
@@ -626,7 +632,7 @@ namespace System.ServiceModel
 			}
 
 			EndpointAddress IRequestChannel.RemoteAddress {
-				get { return client.Endpoint.Address; }
+				get { return endpoint.Address; }
 			}
 
 			Uri IRequestChannel.Via {
@@ -639,7 +645,7 @@ namespace System.ServiceModel
 
 			IAsyncResult IOutputChannel.BeginSend (Message message, AsyncCallback callback, object state)
 			{
-				return ((IOutputChannel) this).BeginSend (message, client.Endpoint.Binding.SendTimeout, callback, state);
+				return ((IOutputChannel) this).BeginSend (message, endpoint.Binding.SendTimeout, callback, state);
 			}
 
 			IAsyncResult IOutputChannel.BeginSend (Message message, TimeSpan timeout, AsyncCallback callback, object state)
@@ -654,7 +660,7 @@ namespace System.ServiceModel
 
 			void IOutputChannel.Send (Message message)
 			{
-				((IOutputChannel) this).Send (message, client.Endpoint.Binding.SendTimeout);
+				((IOutputChannel) this).Send (message, endpoint.Binding.SendTimeout);
 			}
 
 			void IOutputChannel.Send (Message message, TimeSpan timeout)

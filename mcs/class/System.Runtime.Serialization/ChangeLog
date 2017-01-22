@@ -1,3 +1,44 @@
+2009-09-21  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* net_2_1_raw_System.Runtime.Serialization.dll.sources: Remove 
+	System.Xml/XmlMtomDictionaryWriter.cs
+
+2009-09-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_System.Runtime.Serialization.dll.sources : ditto.
+
+2009-09-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* System.Runtime.Serialization.dll.sources :
+	  added IgnoreDataMemberAttribute.cs.
+
+2009-07-20  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: filter the valid profile on the framework version,
+	to make it easier to have custom variants.
+
+2009-04-21  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* System.Xml.Schema/*: Remove (not needed for 2.1 anymore)
+	* net_2_1_raw_System.Runtime.Serialization.dll.sources: Remove 
+	more code duplication for 2.1 and fix the build
+
+2009-04-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* net_2_1_raw_System.Runtime.Serialization.dll.sources: Remove
+	MonoTODOAttribute since we get it from mscorlib (fix build too).
+	Remove System.Xml.Schema/XmlSchema.cs from build since we can
+	get the fields directly from System.Xml.dll
+
+2009-04-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* System.Runtime.Serialization.dll.sources : added mtom reader.
+
+2009-04-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* System.Runtime.Serialization.dll.sources : added mtom writer.
+	* System.Runtime.Serialization_test.dll.sources : added mtom writer test.
+
 2009-03-31  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* binary-writer-method-gen.cs : another easy code writer for binary

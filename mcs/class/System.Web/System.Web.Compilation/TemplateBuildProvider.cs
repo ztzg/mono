@@ -47,7 +47,6 @@ namespace System.Web.Compilation
 	{
 		delegate void ExtractDirectiveDependencies (string baseDirectory, CaptureCollection names, CaptureCollection values, TemplateBuildProvider bp);
 		
-		static Regex directiveRegex = new Regex (@"<%\s*@(\s*(?<attrname>\w[\w:]*(?=\W))(\s*(?<equal>=)\s*""(?<attrval>[^""]*)""|\s*(?<equal>=)\s*'(?<attrval>[^']*)'|\s*(?<equal>=)\s*(?<attrval>[^\s%>]*)|(?<equal>)(?<attrval>\s*?)))*\s*?%>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 		static SortedDictionary <string, ExtractDirectiveDependencies> directiveAttributes;
 		static char[] directiveValueTrimChars = {' ', '\t', '\r', '\n', '"', '\''};
 
@@ -213,31 +212,56 @@ namespace System.Web.Compilation
 
 			bp.dependencies.Add (value, true);
 		}
+
+		IDictionary <string, bool> AddParsedDependencies (IDictionary <string, bool> dict)
+		{
+			if (Parsed) {
+				ArrayList deps = Parser.Dependencies;
+				if (deps == null || deps.Count > 0)
+					return dict;
+				
+				if (dict == null) {
+					dict = dependencies;
+					if (dict == null)
+						dict = dependencies = new SortedDictionary <string, bool> (StringComparer.InvariantCultureIgnoreCase);
+				}
+				
+				string s;
+				foreach (object o in deps) {
+					s = o as string;
+					if (s == null || dict.ContainsKey (s))
+						continue;
+					dict.Add (s, true);
+				}
+			}
+
+			if (dict == null || dict.Count == 0)
+				return null;
+			
+			return dict;
+		}
 		
 		internal override IDictionary <string, bool> ExtractDependencies ()
 		{
-			if (dependencies != null) {
-				if (dependencies.Count == 0)
-					return null;
-				return dependencies;
-			}
+			if (dependencies != null)
+				return AddParsedDependencies (dependencies);
 
 			string vpath = VirtualPath;
 			if (String.IsNullOrEmpty (vpath))
-				return null;
+				return AddParsedDependencies (null);
 
 			VirtualPathProvider vpp = HostingEnvironment.VirtualPathProvider;
 			if (!vpp.FileExists (vpath))
-				return null;
+				return AddParsedDependencies (null);
 			
 			VirtualFile vf = vpp.GetFile (vpath);
 			if (vf == null)
-				return null;
+				return AddParsedDependencies (null);
 
 			string input;
 			using (Stream st = vf.Open ()) {
 				if (st == null || !st.CanRead)
-					return null;
+					return AddParsedDependencies (null);
 				
 				using (StreamReader sr = new StreamReader (st, WebEncoding.FileEncoding)) {
 					input = sr.ReadToEnd ();
@@ -245,11 +269,11 @@ namespace System.Web.Compilation
 			}
 					
 			if (String.IsNullOrEmpty (input))
-				return null;
+				return AddParsedDependencies (null);
 
-			MatchCollection matches = directiveRegex.Matches (input);
+			MatchCollection matches = AspGenerator.DirectiveRegex.Matches (input);
 			if (matches == null || matches.Count == 0)
-				return null;
+				return AddParsedDependencies (null);
 			
 			dependencies = new SortedDictionary <string, bool> (StringComparer.InvariantCultureIgnoreCase);
 			CaptureCollection ccNames;
@@ -270,10 +294,7 @@ namespace System.Web.Compilation
 				edd (baseDirectory, ccNames, groups [5].Captures, this);
 			}
 
-			if (dependencies.Count == 0)
-				return null;
-
-			return dependencies;
+			return AddParsedDependencies (dependencies);
 		}
 		
 		protected override string GetClassType (BaseCompiler compiler, TemplateParser parser)

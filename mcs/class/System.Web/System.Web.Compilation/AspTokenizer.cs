@@ -57,12 +57,14 @@ namespace System.Web.Compilation
 			public readonly string Value;
 			public readonly int Position;
 			public readonly int CurrentToken;
+			public readonly bool InTag;
 			
-			public PutBackItem (string value, int position, int currentToken)
+			public PutBackItem (string value, int position, int currentToken, bool inTag)
 			{
 				Value = value;
 				Position = position;
 				CurrentToken = currentToken;
+				InTag = inTag;
 			}
 		}
 		
@@ -118,20 +120,40 @@ namespace System.Web.Compilation
 				putBackBuffer = new Stack ();
 
 			string val = Value;
-			putBackBuffer.Push (new PutBackItem (val, position, current_token));
+			putBackBuffer.Push (new PutBackItem (val, position, current_token, inTag));
 			position -= val.Length;
 		}
 		
 		public int get_token ()
 		{
 			if (hasPutBack) {
-				PutBackItem pbi = putBackBuffer.Pop () as PutBackItem;
+				PutBackItem pbi;
+				if (verbatim) {
+					pbi = putBackBuffer.Pop () as PutBackItem;
+					string value = pbi.Value;
+					switch (value.Length) {
+						case 0:
+							// do nothing, CurrentToken will be used
+							break;
+
+						case 1:
+							pbi = new PutBackItem (String.Empty, pbi.Position, (int)value [0], false);
+							break;
+
+						default:
+							pbi = new PutBackItem (value, pbi.Position, (int)value [0], false);
+							break;
+					}		
+				} else
+					pbi = putBackBuffer.Pop () as PutBackItem;
+				
 				hasPutBack = putBackBuffer.Count > 0;
 				position = pbi.Position;
 				have_value = false;
 				val = null;
 				sb = new StringBuilder (pbi.Value);
 				current_token = pbi.CurrentToken;
+				inTag = pbi.InTag;
 				return current_token;
 			}
 

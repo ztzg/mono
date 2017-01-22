@@ -27,7 +27,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if !NET_2_1
+#if !NET_2_1 || MONOTOUCH
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
@@ -80,6 +80,12 @@ namespace System.IO.IsolatedStorage {
 
 			// other directories (provided by 'path') must already exists
 			string file = Path.Combine (isf.Root, path);
+
+			string full = Path.GetFullPath (file);
+			full = Path.GetFullPath (file);
+			if (!full.StartsWith (isf.Root))
+				throw new IsolatedStorageException ();
+
 			fi = new FileInfo (file);
 			if (!fi.Directory.Exists) {
 				// don't leak the path information for isolated storage

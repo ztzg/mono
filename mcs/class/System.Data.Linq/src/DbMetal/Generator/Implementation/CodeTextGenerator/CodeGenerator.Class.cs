@@ -254,6 +254,23 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
             return (from a in attributes select GetName(a)).ToArray();
         }
 
+        private class EnumFullname
+        {
+            private string _EnumName;
+            private object _EnumValue;
+
+            public EnumFullname(string enumName, object enumValue)
+            {
+                _EnumName = enumName;
+                _EnumValue = enumValue;
+            }
+
+            public override string ToString()
+            {
+                return string.Format("{0}.{1}", _EnumName, _EnumValue.ToString());
+            }
+        }
+
         /// <summary>
         /// Writes property accessor
         /// </summary>
@@ -274,6 +291,8 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                 column["IsPrimaryKey"] = property.IsPrimaryKey;
             if (property.IsDbGenerated != columnAttribute.IsDbGenerated)
                 column["IsDbGenerated"] = property.IsDbGenerated;
+            if (property.AutoSync != DbLinq.Schema.Dbml.AutoSync.Default)
+                column["AutoSync"] = new EnumFullname("AutoSync", property.AutoSync);
             if (property.CanBeNull != columnAttribute.CanBeNull)
                 column["CanBeNull"] = property.CanBeNull;
             if (property.Expression != null)
@@ -407,6 +426,7 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
             var storageAttribute = NewAttributeDefinition<AssociationAttribute>();
             storageAttribute["Storage"] = child.Storage;
             storageAttribute["OtherKey"] = child.OtherKey;
+            storageAttribute["ThisKey"] = child.ThisKey;
             storageAttribute["Name"] = child.Name;
 
             SpecificationDefinition specifications;
@@ -498,7 +518,8 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                                                     targetTable.Type.Name));
 
             var storageAttribute = NewAttributeDefinition<AssociationAttribute>();
-            storageAttribute["Storage"] = storageField;
+			storageAttribute["Storage"] = storageField;
+			storageAttribute["OtherKey"] = parent.OtherKey;
             storageAttribute["ThisKey"] = parent.ThisKey;
             storageAttribute["Name"] = parent.Name;
             storageAttribute["IsForeignKey"] = parent.IsForeignKey;

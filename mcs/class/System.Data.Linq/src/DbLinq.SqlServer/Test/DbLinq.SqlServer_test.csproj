@@ -31,7 +31,7 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>..\..\..\build\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;MSSQL</DefineConstants>
+    <DefineConstants>TRACE;MSSQL</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -62,6 +62,9 @@
   <ItemGroup>
     <Compile Include="..\..\..\examples\DbLinq.Mssql.Example\nwind\Northwind.cs">
       <Link>nwind\Northwind.cs</Link>
+    </Compile>
+    <Compile Include="..\..\..\examples\DbLinq.Mssql.Example\nwind\NorthwindCustom.cs">
+      <Link>nwind\NorthwindCustom.cs</Link>
     </Compile>
     <Compile Include="..\..\..\lib\DynamicLinq.cs">
       <Link>lib\DynamicLinq.cs</Link>

@@ -1,6 +1,7 @@
 System.ServiceModel.Channels/AddressHeaderTest.cs
 System.ServiceModel.Channels/AddressingVersionTest.cs
 System.ServiceModel.Channels/AsymmetricSecurityBindingElementTest.cs
+System.ServiceModel.Channels/BinaryMessageEncodingBindingElementTest.cs
 System.ServiceModel.Channels/BindingContextTest.cs
 System.ServiceModel.Channels/BindingElementTest.cs
 System.ServiceModel.Channels/BindingTest.cs
@@ -14,6 +15,7 @@ System.ServiceModel.Channels/FaultConverterTest.cs
 System.ServiceModel.Channels/FaultExceptionTest.cs
 System.ServiceModel.Channels/HandlerBodyWriter.cs
 System.ServiceModel.Channels/HandlerTransportBindingElement.cs
+System.ServiceModel.Channels/HttpRequestMessagePropertyTest.cs
 System.ServiceModel.Channels/HttpTransportBindingElementTest.cs
 System.ServiceModel.Channels/InterceptorBindingElement.cs
 System.ServiceModel.Channels/InvalidBindingElement.cs
@@ -21,14 +23,17 @@ System.ServiceModel.Channels/LocalClientSecuritySettingsTest.cs
 System.ServiceModel.Channels/MessageBufferTest.cs
 System.ServiceModel.Channels/MessageEncoderTest.cs
 System.ServiceModel.Channels/MessageEncodingBindingElementTest.cs
+System.ServiceModel.Channels/MessageFaultTest.cs
 System.ServiceModel.Channels/MessageHeaderTest.cs
 System.ServiceModel.Channels/MessageHeadersTest.cs
+System.ServiceModel.Channels/MessagePropertiesTest.cs
 System.ServiceModel.Channels/MessageTest.cs
 System.ServiceModel.Channels/MessageVersionTest.cs
 System.ServiceModel.Channels/MsmqTransportBindingElementTest.cs
 System.ServiceModel.Channels/NamedPipeTransportBindingElementTest.cs
 System.ServiceModel.Channels/OneWayBindingElementTest.cs
 System.ServiceModel.Channels/OutputChannelBase.cs
+System.ServiceModel.Channels/PeerTransportBindingElementTest.cs
 System.ServiceModel.Channels/ReplyChannelBase.cs
 System.ServiceModel.Channels/RequestChannelBase.cs
 System.ServiceModel.Channels/SecurityAssert.cs
@@ -66,7 +71,9 @@ System.ServiceModel.Description/OperationDescriptionTest.cs
 System.ServiceModel.Description/ServiceAuthorizationBehaviorTest.cs
 System.ServiceModel.Description/ServiceCredentialsTest.cs
 System.ServiceModel.Description/ServiceDebugBehaviorTest.cs
+System.ServiceModel.Description/ServiceEndpointTest.cs
 System.ServiceModel.Description/ServiceMetadataBehaviorTest.cs
+System.ServiceModel.Description/ServiceThrottlingBehaviorTest.cs
 System.ServiceModel.Description/TypedMessageConverterTest.cs
 System.ServiceModel.Description/WsdlExporterTest.cs
 System.ServiceModel.Description/WsdlImporterTest.cs
@@ -81,6 +88,7 @@ System.ServiceModel.Dispatcher/InvalidBodyAccessExceptionTest.cs
 System.ServiceModel.Dispatcher/PrefixEndpointAddressMessageFilterTest.cs
 System.ServiceModel.Dispatcher/ChannelDispatcherTest.cs
 System.ServiceModel.PeerResolvers/CustomPeerResolverServiceTest.cs
+System.ServiceModel.PeerResolvers/PeerResolverSerializationTest.cs
 System.ServiceModel.Security.Tokens/IssuedSecurityTokenParametersTest.cs
 System.ServiceModel.Security.Tokens/IssuedSecurityTokenProviderTest.cs
 System.ServiceModel.Security.Tokens/RsaSecurityTokenParametersTest.cs
@@ -105,6 +113,7 @@ System.ServiceModel.Security/ServiceSecurityContextTest.cs
 System.ServiceModel.Security/SupportingTokenParametersTest.cs
 System.ServiceModel.Security/WSSecurityTokenSerializerTest.cs
 System.ServiceModel/BasicHttpBindingTest.cs
+System.ServiceModel/CallbackBehaviorAttributeTest.cs
 System.ServiceModel/ChannelFactoryTest.cs
 System.ServiceModel/ChannelFactory_1Test.cs
 System.ServiceModel/ClientBaseTest.cs
@@ -122,6 +131,10 @@ System.ServiceModel/FaultReasonTest.cs
 System.ServiceModel/IntegratedConnectionTest.cs
 System.ServiceModel/MessageSecurityVersionTest.cs
 System.ServiceModel/NetMsmqBindingTest.cs
+System.ServiceModel/NetTcpBindingTest.cs
+System.ServiceModel/NetPeerTcpBindingTest.cs
+System.ServiceModel/OperationContextTest.cs
+System.ServiceModel/PeerNodeAddressTest.cs
 System.ServiceModel/ServiceAssert.cs
 System.ServiceModel/ServiceEndpointCollectionTest.cs
 System.ServiceModel/ServiceEndpointTest.cs

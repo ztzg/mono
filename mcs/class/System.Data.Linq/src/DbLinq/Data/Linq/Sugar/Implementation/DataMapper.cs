@@ -30,18 +30,16 @@ using System.Collections.ObjectModel;
 using System.Data.Linq.Mapping;
 using System.Linq;
 using System.Reflection;
-#if MONO_STRICT
-using System.Data.Linq.Sugar;
-using System.Data.Linq.Sugar.Expressions;
-#else
+
 using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
 
 #if MONO_STRICT
-namespace System.Data.Linq.Sugar.Implementation
+using System.Data.Linq;
 #else
-namespace DbLinq.Data.Linq.Sugar.Implementation
+using DbLinq.Data.Linq;
 #endif
+
+namespace DbLinq.Data.Linq.Sugar.Implementation
 {
     internal class DataMapper : IDataMapper
     {
@@ -172,6 +170,10 @@ namespace DbLinq.Data.Linq.Sugar.Implementation
 
         public IList<MemberInfo> GetEntitySetAssociations(Type type)
         {
+            // BUG: This is ignoring External Mappings from XmlMappingSource.
+
+            // TODO: Should be cached in a static thread safe cache.
+
             return type.GetProperties()
                 .Where(p => p.PropertyType.IsGenericType 
                     && (p.PropertyType.GetGenericTypeDefinition() == typeof(System.Data.Linq.EntitySet<>) 
@@ -185,15 +187,28 @@ namespace DbLinq.Data.Linq.Sugar.Implementation
 
         public IList<MemberInfo> GetEntityRefAssociations(Type type)
         {
-            return (from p in type.GetProperties()
-                    let associationAttribute = p.GetCustomAttributes(typeof(AssociationAttribute), true).FirstOrDefault() as AssociationAttribute
-                    let field = type.GetField(associationAttribute != null ? (associationAttribute.Storage ?? string.Empty) : string.Empty, BindingFlags.NonPublic | BindingFlags.Instance)
-                    where associationAttribute != null &&
-                             field != null &&
-                            field.FieldType.IsGenericType &&
-                            field.FieldType.GetGenericTypeDefinition() == typeof(System.Data.Linq.EntityRef<>)
-                    select p)
-                .Cast<MemberInfo>().ToList();
+            // BUG: This is ignoring External Mappings from XmlMappingSource.
+
+            // TODO: Should be cached in a static thread safe cache.
+
+            List<MemberInfo> associations = new List<MemberInfo>();
+            foreach (var p in type.GetProperties())
+            {
+                AssociationAttribute associationAttribute = p.GetCustomAttributes(typeof(AssociationAttribute), true).FirstOrDefault() as AssociationAttribute;
+                if (associationAttribute != null)
+                {
+                    FieldInfo field = type.GetField(associationAttribute.Storage, BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (field != null && field.FieldType.IsGenericType &&
+#if MONO_STRICT
+                        field.FieldType.GetGenericTypeDefinition() == typeof(System.Data.Linq.EntityRef<>)
+#else
+                        field.FieldType.GetGenericTypeDefinition() == typeof(DbLinq.Data.Linq.EntityRef<>)
+#endif
+                        )
+                        associations.Add(p);
+                }
+            }
+            return associations;
         }
     }
 }

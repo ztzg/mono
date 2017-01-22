@@ -29,12 +29,31 @@
 #if NET_2_0
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Security;
 using System.Threading;
 
 namespace System.Net.Sockets
 {
 	public class SocketAsyncEventArgs : EventArgs, IDisposable
 	{
+#if NET_2_1 && !MONOTOUCH
+		static MethodInfo check_socket_policy;
+
+		static SocketAsyncEventArgs ()
+		{
+			Type type = Type.GetType ("System.Windows.Browser.Net.CrossDomainPolicyManager, System.Windows.Browser, Version=2.0.5.0, Culture=Neutral, PublicKeyToken=7cec85d7bea7798e");
+			check_socket_policy = type.GetMethod ("CheckEndPoint");
+		}
+
+		static internal bool CheckEndPoint (EndPoint endpoint)
+		{
+			if (check_socket_policy == null)
+				throw new SecurityException ();
+			return ((bool) check_socket_policy.Invoke (null, new object [1] { endpoint }));
+		}
+#endif
+
 		public event EventHandler<SocketAsyncEventArgs> Completed;
 
 		IList <ArraySegment <byte>> _bufferList;
@@ -42,10 +61,11 @@ namespace System.Net.Sockets
 		public Socket AcceptSocket { get; set; }
 		public byte[] Buffer { get; private set; }
 
+		[MonoTODO ("not supported in all cases")]
 		public IList<ArraySegment<byte>> BufferList {
 			get { return _bufferList; }
 			set {
-				if (Buffer != null)
+				if (Buffer != null && value != null)
 					throw new ArgumentException ("Buffer and BufferList properties cannot both be non-null.");
 				_bufferList = value;
 			}
@@ -56,16 +76,38 @@ namespace System.Net.Sockets
 		public bool DisconnectReuseSocket { get; set; }
 		public SocketAsyncOperation LastOperation { get; private set; }
 		public int Offset { get; private set; }
-		public IPPacketInformation ReceiveMessageFromPacketInfo { get; private set; }
 		public EndPoint RemoteEndPoint { get; set; }
+#if !NET_2_1
+		public IPPacketInformation ReceiveMessageFromPacketInfo { get; private set; }
 		public SendPacketsElement[] SendPacketsElements { get; set; }
 		public TransmitFileOptions SendPacketsFlags { get; set; }
+#endif
 		public int SendPacketsSendSize { get; set; }
 		public SocketError SocketError { get; set; }
 		public SocketFlags SocketFlags { get; set; }
 		public object UserToken { get; set; }
 
 		Socket curSocket;
+#if NET_2_1
+		public Socket ConnectSocket {
+			get {
+				switch (SocketError) {
+				case SocketError.AccessDenied:
+					return null;
+				default:
+					return curSocket;
+				}
+			}
+		}
+
+		internal bool PolicyRestricted { get; private set; }
+
+		internal SocketAsyncEventArgs (bool policy) : 
+			this ()
+		{
+			PolicyRestricted = policy;
+		}
+#endif
 		
 		public SocketAsyncEventArgs ()
 		{
@@ -78,8 +120,10 @@ namespace System.Net.Sockets
 			LastOperation = SocketAsyncOperation.None;
 			Offset = 0;
 			RemoteEndPoint = null;
+#if !NET_2_1
 			SendPacketsElements = null;
 			SendPacketsFlags = TransmitFileOptions.UseDefaultWorkerThread;
+#endif
 			SendPacketsSendSize = 0;
 			SocketError = SocketError.Success;
 			SocketFlags = SocketFlags.None;
@@ -145,6 +189,124 @@ namespace System.Net.Sockets
 		}
 
 #region Internals
+		void ReceiveCallback ()
+		{
+			SocketError = SocketError.Success;
+			LastOperation = SocketAsyncOperation.Receive;
+			SocketError error = SocketError.Success;
+
+			if (!curSocket.Connected) {
+				SocketError = SocketError.NotConnected;
+				return;
+			}
+			
+			try {
+				// FIXME: this does not support using BufferList
+				BytesTransferred = curSocket.Receive_nochecks (Buffer, Offset, Count, SocketFlags, out error);
+			} finally {
+				SocketError = error;
+				OnCompleted (this);
+			}
+		}
+
+		void ConnectCallback ()
+		{
+			LastOperation = SocketAsyncOperation.Connect;
+			SocketError error = SocketError.Success;
+			try {
+#if NET_2_1 && !MONOTOUCH
+				// Connect to the first address that match the host name, like:
+				// http://blogs.msdn.com/ncl/archive/2009/07/20/new-ncl-features-in-net-4-0-beta-2.aspx
+				// while skipping entries that do not match the address family
+				DnsEndPoint dep = (RemoteEndPoint as DnsEndPoint);
+				if (dep != null) {
+					IPAddress[] addresses = Dns.GetHostAddresses (dep.Host);
+					foreach (IPAddress addr in addresses) {
+						try {
+							if (curSocket.AddressFamily == addr.AddressFamily) {
+								error = TryConnect (new IPEndPoint (addr, dep.Port));
+								if (error == SocketError.Success)
+									break;
+							}
+						}
+						catch (SocketException) {
+							error = SocketError.AccessDenied;
+						}
+					}
+				} else {
+					error = TryConnect (RemoteEndPoint);
+				}
+#else
+				error = TryConnect (RemoteEndPoint);
+#endif
+			} finally {
+				SocketError = error;
+				OnCompleted (this);
+			}
+		}
+
+		SocketError TryConnect (EndPoint endpoint)
+		{
+			curSocket.Connected = false;
+			SocketError error = SocketError.Success;
+#if NET_2_1 && !MONOTOUCH
+			// if we're not downloading a socket policy then check the policy
+			if (!PolicyRestricted) {
+				error = SocketError.AccessDenied;
+				if (!CheckEndPoint (endpoint)) {
+					return error;
+				}
+			}
+#endif
+			try {
+				if (!curSocket.Blocking) {
+					int success;
+					curSocket.Poll (-1, SelectMode.SelectWrite, out success);
+					error = (SocketError)success;
+					if (success == 0)
+						curSocket.Connected = true;
+					else
+						return error;
+				} else {
+					curSocket.seed_endpoint = endpoint;
+					curSocket.Connect (endpoint);
+					curSocket.Connected = true;
+				}
+			} catch (SocketException se){
+				error = se.SocketErrorCode;
+			}
+			return error;
+		}
+
+		void SendCallback ()
+		{
+			SocketError = SocketError.Success;
+			LastOperation = SocketAsyncOperation.Send;
+			SocketError error = SocketError.Success;
+
+			if (!curSocket.Connected) {
+				SocketError = SocketError.NotConnected;
+				return;
+			}
+
+			try {
+				if (Buffer != null) {
+					BytesTransferred = curSocket.Send_nochecks (Buffer, Offset, Count, SocketFlags.None, out error);
+				} else if (BufferList != null) {
+					BytesTransferred = 0;
+					foreach (ArraySegment<byte> asb in BufferList) {
+						BytesTransferred += curSocket.Send_nochecks (asb.Array, asb.Offset, asb.Count, 
+							SocketFlags.None, out error);
+						if (error != SocketError.Success)
+							break;
+					}
+				}
+			} finally {
+				SocketError = error;
+				OnCompleted (this);
+			}
+		}
+#if !NET_2_1
 		void AcceptCallback ()
 		{
 			SocketError = SocketError.Success;
@@ -155,62 +317,6 @@ namespace System.Net.Sockets
 				SocketError = ex.SocketErrorCode;
 				throw;
 			} finally {
-				OnCompleted (this);
-			}
-		}
-
-		void ReceiveCallback ()
-		{
-			SocketError = SocketError.Success;
-			LastOperation = SocketAsyncOperation.Receive;
-			SocketError error = SocketError.Success;
-			
-			try {
-				BytesTransferred = curSocket.Receive_nochecks (Buffer, Offset, Count, SocketFlags, out error);
-			} finally {
-				SocketError = error;
-				OnCompleted (this);
-			}
-		}
-
-		void ConnectCallback ()
-		{
-			SocketError = SocketError.Success;
-			LastOperation = SocketAsyncOperation.Connect;
-			SocketError error = SocketError.Success;
-
-			try {
-				if (!curSocket.Blocking) {
-					int success;
-					curSocket.Poll (-1, SelectMode.SelectWrite, out success);
-					SocketError = (SocketError)success;
-					if (success == 0)
-						curSocket.Connected = true;
-					else
-						return;
-				} else {
-					curSocket.seed_endpoint = RemoteEndPoint;
-					curSocket.Connect (RemoteEndPoint);
-					curSocket.Connected = true;
-				}
-			} catch (SocketException se){
-				error = se.SocketErrorCode;
-			} finally {
-				SocketError = error;
-				OnCompleted (this);
-			}
-		}
-
-		void SendCallback ()
-		{
-			SocketError = SocketError.Success;
-			LastOperation = SocketAsyncOperation.Send;
-			SocketError error = SocketError.Success;
-
-			try {
-				BytesTransferred = curSocket.Send_nochecks (Buffer, Offset, Count, SocketFlags.None, out error);
-			} finally {
-				SocketError = error;
 				OnCompleted (this);
 			}
 		}
@@ -265,23 +371,16 @@ namespace System.Net.Sockets
 				OnCompleted (this);
 			}
 		}
-		
+#endif
 		internal void DoOperation (SocketAsyncOperation operation, Socket socket)
 		{
 			ThreadStart callback;
 			curSocket = socket;
 			
 			switch (operation) {
+#if !NET_2_1
 				case SocketAsyncOperation.Accept:
 					callback = new ThreadStart (AcceptCallback);
-					break;
-
-				case SocketAsyncOperation.Receive:
-					callback = new ThreadStart (ReceiveCallback);
-					break;
-
-				case SocketAsyncOperation.Connect:
-					callback = new ThreadStart (ConnectCallback);
 					break;
 
 				case SocketAsyncOperation.Disconnect:
@@ -291,15 +390,23 @@ namespace System.Net.Sockets
 				case SocketAsyncOperation.ReceiveFrom:
 					callback = new ThreadStart (ReceiveFromCallback);
 					break;
-					
-				case SocketAsyncOperation.Send:
-					callback = new ThreadStart (SendCallback);
-					break;
 
 				case SocketAsyncOperation.SendTo:
 					callback = new ThreadStart (SendToCallback);
 					break;
-					
+#endif
+				case SocketAsyncOperation.Receive:
+					callback = new ThreadStart (ReceiveCallback);
+					break;
+
+				case SocketAsyncOperation.Connect:
+					callback = new ThreadStart (ConnectCallback);
+					break;
+
+				case SocketAsyncOperation.Send:
+					callback = new ThreadStart (SendCallback);
+					break;
+				
 				default:
 					throw new NotSupportedException ();
 			}

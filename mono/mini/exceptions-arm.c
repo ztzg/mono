@@ -124,9 +124,9 @@ mono_arch_get_restore_context_full (guint32 *code_size, MonoJumpInfo **ji, gbool
 	start = code = mono_global_codeman_reserve (128);
 
 	restore_regs_from_context (ARMREG_R0, ARMREG_R1, ARMREG_R2);
-	/* restore also the stack pointer, FIXME: handle sp != fp */
-	ARM_LDR_IMM (code, ARMREG_SP, ARMREG_R0, G_STRUCT_OFFSET (MonoContext, ebp));
-	ARM_LDR_IMM (code, ARMREG_FP, ARMREG_R0, G_STRUCT_OFFSET (MonoContext, esp));
+	/* restore also the stack pointer */
+	ARM_LDR_IMM (code, ARMREG_SP, ARMREG_R0, G_STRUCT_OFFSET (MonoContext, esp));
+	ARM_LDR_IMM (code, ARMREG_FP, ARMREG_R0, G_STRUCT_OFFSET (MonoContext, ebp));
 
 	/* jump to the saved IP */
 	ARM_MOV_REG_REG (code, ARMREG_PC, ARMREG_R1);
@@ -200,7 +200,7 @@ mono_arm_throw_exception (MonoObject *exc, unsigned long eip, unsigned long esp,
 	setup_context (&ctx);
 
 	/*printf ("stack in throw: %p\n", esp);*/
-	MONO_CONTEXT_SET_BP (&ctx, esp);
+	MONO_CONTEXT_SET_BP (&ctx, int_regs [ARMREG_FP - 4]);
 	MONO_CONTEXT_SET_SP (&ctx, esp);
 	MONO_CONTEXT_SET_IP (&ctx, eip);
 	memcpy (&ctx.regs, int_regs, sizeof (gulong) * 8);
@@ -371,7 +371,7 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 	if (prev_ji && (ip > prev_ji->code_start && ((guint8*)ip < ((guint8*)prev_ji->code_start) + prev_ji->code_size)))
 		ji = prev_ji;
 	else
-		ji = mono_jit_info_table_find (domain, ip);
+		ji = mini_jit_info_table_find (domain, ip);
 
 	if (managed)
 		*managed = FALSE;
@@ -430,11 +430,11 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 		
 		*new_ctx = *ctx;
 
-		if ((ji = mono_jit_info_table_find (domain, (gpointer)(*lmf)->eip))) {
+		if ((ji = mini_jit_info_table_find (domain, (gpointer)(*lmf)->eip))) {
 		} else {
 			if (!(*lmf)->method)
 				return (gpointer)-1;
-			memset (res, 0, sizeof (MonoJitInfo));
+			memset (res, 0, MONO_SIZEOF_JIT_INFO);
 			res->method = (*lmf)->method;
 		}
 
@@ -459,16 +459,17 @@ mono_arch_sigctx_to_monoctx (void *sigctx, MonoContext *mctx)
 	struct ucontext *uc = sigctx;
 
 	mctx->eip = uc->uc_mcontext.gregs [ARMREG_PC];
-	mctx->ebp = uc->uc_mcontext.gregs [ARMREG_SP];
+	mctx->esp = uc->uc_mcontext.gregs [ARMREG_SP];
 	memcpy (&mctx->regs, &uc->uc_mcontext.gregs [ARMREG_R4], sizeof (gulong) * 8);
 	/* memcpy (&mctx->fregs, &uc->uc_mcontext.uc_regs->fpregs.fpregs [14], sizeof (double) * MONO_SAVED_FREGS);*/
 #else
 	my_ucontext *my_uc = sigctx;
 
 	mctx->eip = UCONTEXT_REG_PC (my_uc);
-	mctx->ebp = UCONTEXT_REG_SP (my_uc);
+	mctx->esp = UCONTEXT_REG_SP (my_uc);
 	memcpy (&mctx->regs, &UCONTEXT_REG_R4 (my_uc), sizeof (gulong) * 8);
 #endif
+	mctx->ebp = mctx->regs [ARMREG_FP - 4];
 }
 
 void

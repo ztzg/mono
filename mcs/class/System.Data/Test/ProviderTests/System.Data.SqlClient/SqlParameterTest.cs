@@ -4,6 +4,7 @@
 // Author:
 //      Senganal T (tsenganal@novell.com)
 //      Amit Biswas (amit@amitbiswas.com)
+//      Veerapuram Varadhan  (vvaradhan@novell.com)
 //
 // Copyright (c) 2004 Novell Inc., and the individuals listed
 // on the ChangeLog entries.
@@ -43,12 +44,14 @@ namespace MonoTests.System.Data.SqlClient
 		SqlConnection conn;
 		SqlCommand cmd;
 		SqlDataReader rdr;
+		EngineConfig engine;
 
 		[SetUp]
 		public void SetUp ()
 		{
 			conn = (SqlConnection) ConnectionManager.Singleton.Connection;
 			ConnectionManager.Singleton.OpenConnection ();
+			engine = ConnectionManager.Singleton.Engine;
 		}
 
 		[TearDown]
@@ -64,6 +67,9 @@ namespace MonoTests.System.Data.SqlClient
 		[Test] // bug #324840
 		public void ParameterSizeTest ()
 		{
+			if (ClientVersion == 7)
+				Assert.Ignore ("Hangs on SQL Server 7.0");
+
 			string longstring = new String('x', 20480);
 			SqlParameter prm;
 			cmd = new SqlCommand ("create table #text1 (ID int not null, Val1 ntext)", conn);
@@ -217,6 +223,188 @@ namespace MonoTests.System.Data.SqlClient
 				}
 			} finally {
 				DBHelper.ExecuteNonQuery (conn, delete_data);
+			}
+		}
+
+		[Test] // bug #382589
+		public void DecimalMaxAsParamValueTest ()
+		{
+			if (ClientVersion == 7)
+				Assert.Ignore ("Maximum precision is 28.");
+
+			string create_sp = "CREATE PROCEDURE #sp_bug382539 (@decmax decimal(29,0) OUT)"
+				+ "AS " + Environment.NewLine
+				+ "BEGIN" + Environment.NewLine
+				+ "SET @decmax = 102.34" + Environment.NewLine
+				+ "END";
+
+			cmd = new SqlCommand (create_sp, conn);
+			cmd.ExecuteNonQuery ();
+
+			cmd.CommandText = "[#sp_bug382539]";
+			cmd.CommandType = CommandType.StoredProcedure;
+			SqlParameter pValue = new SqlParameter("@decmax", Decimal.MaxValue);
+			pValue.Direction = ParameterDirection.InputOutput;
+			cmd.Parameters.Add(pValue);
+
+			Assert.AreEqual (Decimal.MaxValue, pValue.Value, "Parameter initialization value mismatch");
+			cmd.ExecuteNonQuery();
+
+			Assert.AreEqual (102m, pValue.Value, "Parameter value mismatch");
+		}
+
+		[Test] // bug #382589
+		public void DecimalMinAsParamValueTest ()
+		{
+			if (ClientVersion == 7)
+				Assert.Ignore ("Maximum precision is 28.");
+
+			string create_sp = "CREATE PROCEDURE #sp_bug382539 (@decmax decimal(29,0) OUT)"
+				+ "AS " + Environment.NewLine
+				+ "BEGIN" + Environment.NewLine
+				+ "SET @decmax = 102.34" + Environment.NewLine
+				+ "END";
+
+			cmd = new SqlCommand (create_sp, conn);
+			cmd.ExecuteNonQuery ();
+
+			cmd.CommandText = "[#sp_bug382539]";
+			cmd.CommandType = CommandType.StoredProcedure;
+			SqlParameter pValue = new SqlParameter("@decmax", Decimal.MinValue);
+			pValue.Direction = ParameterDirection.InputOutput;
+			cmd.Parameters.Add(pValue);
+
+			Assert.AreEqual (Decimal.MinValue, pValue.Value, "Parameter initialization value mismatch");
+			cmd.ExecuteNonQuery();
+
+			Assert.AreEqual (102m, pValue.Value, "Parameter value mismatch");
+		}
+
+		[Test] // bug #382589
+		public void DecimalMaxAsParamValueExceptionTest ()
+		{
+			if (ClientVersion == 7)
+				Assert.Ignore ("Maximum precision is 28.");
+
+			string create_sp = "CREATE PROCEDURE #sp_bug382539 (@decmax decimal(29,10) OUT)"
+				+ "AS " + Environment.NewLine
+				+ "BEGIN" + Environment.NewLine
+				+ "SET @decmax = 102.36" + Environment.NewLine
+				+ "END";
+
+			cmd = new SqlCommand (create_sp, conn);
+			cmd.ExecuteNonQuery ();
+
+			cmd.CommandText = "[#sp_bug382539]";
+			cmd.CommandType = CommandType.StoredProcedure;
+			SqlParameter pValue = new SqlParameter("@decmax", Decimal.MaxValue);
+			pValue.Direction = ParameterDirection.InputOutput;
+			cmd.Parameters.Add(pValue);
+
+			try {
+				cmd.ExecuteNonQuery ();
+				Assert.Fail ("#1");
+			} catch (SqlException ex) {
+				// Error converting data type numeric to decimal
+				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#2");
+				Assert.AreEqual ((byte) 16, ex.Class, "#3");
+				Assert.IsNull (ex.InnerException, "#4");
+				Assert.IsNotNull (ex.Message, "#5");
+				Assert.AreEqual (8114, ex.Number, "#6");
+				Assert.AreEqual ((byte) 5, ex.State, "#7");
+			}
+		}
+
+		[Test] // bug# 382589
+		public void DecimalMinAsParamValueExceptionTest ()
+		{
+			if (ClientVersion == 7)
+				Assert.Ignore ("Maximum precision is 28.");
+
+			string create_sp = "CREATE PROCEDURE #sp_bug382539 (@decmax decimal(29,10) OUT)"
+				+ "AS " + Environment.NewLine
+				+ "BEGIN" + Environment.NewLine
+				+ "SET @decmax = 102.36" + Environment.NewLine
+				+ "END";
+
+			cmd = new SqlCommand (create_sp, conn);
+			cmd.ExecuteNonQuery ();
+
+			cmd.CommandText = "[#sp_bug382539]";
+			cmd.CommandType = CommandType.StoredProcedure;
+			SqlParameter pValue = new SqlParameter("@decmax", Decimal.MinValue);
+			pValue.Direction = ParameterDirection.InputOutput;
+			cmd.Parameters.Add(pValue);
+			try {
+				cmd.ExecuteNonQuery ();
+				Assert.Fail ("#1");
+			} catch (SqlException ex) {
+				// Error converting data type numeric to decimal
+				Assert.AreEqual (typeof (SqlException), ex.GetType (), "#2");
+				Assert.AreEqual ((byte) 16, ex.Class, "#3");
+				Assert.IsNull (ex.InnerException, "#4");
+				Assert.IsNotNull (ex.Message, "#5");
+				Assert.AreEqual (8114, ex.Number, "#6");
+				Assert.AreEqual ((byte) 5, ex.State, "#7");
+			}
+		}
+
+		[Test] // bug #526794
+		public void ZeroLengthString ()
+		{
+			cmd = new SqlCommand ("create table #bug526794 (name varchar(20) NULL)", conn);
+			cmd.ExecuteNonQuery ();
+
+			SqlParameter param;
+
+			param = new SqlParameter ("@name", SqlDbType.VarChar);
+			param.Value = string.Empty;
+
+			cmd = new SqlCommand ("insert into #bug526794 values (@name)", conn);
+			cmd.Parameters.Add (param);
+			cmd.ExecuteNonQuery ();
+
+			cmd = new SqlCommand ("select * from #bug526794", conn);
+			rdr = cmd.ExecuteReader ();
+			Assert.IsTrue (rdr.Read (), "#A1");
+			Assert.AreEqual (string.Empty, rdr.GetValue (0), "#A2");
+			rdr.Close ();
+
+			param = new SqlParameter ("@name", SqlDbType.Int);
+			param.Value = string.Empty;
+
+			cmd = new SqlCommand ("insert into #bug526794 values (@name)", conn);
+			cmd.Parameters.Add (param);
+
+			try {
+				cmd.ExecuteNonQuery ();
+				Assert.Fail ("#B1");
+			} catch (FormatException ex) {
+#if NET_2_0
+				// Failed to convert parameter value from a String to a Int32
+				Assert.AreEqual (typeof (FormatException), ex.GetType (), "#B2");
+				Assert.IsNotNull (ex.Message, "#B3");
+				Assert.IsTrue (ex.Message.IndexOf (typeof (string).Name) != -1, "#B4");
+				Assert.IsTrue (ex.Message.IndexOf (typeof (int).Name) != -1, "#B5");
+
+				// Input string was not in a correct format
+				Exception inner = ex.InnerException;
+				Assert.IsNotNull (inner, "#B6");
+				Assert.AreEqual (typeof (FormatException), inner.GetType (), "#B7");
+				Assert.IsNull (inner.InnerException, "#B8");
+				Assert.IsNotNull (inner.Message, "#B9");
+#else
+				// Input string was not in a correct format
+				Assert.AreEqual (typeof (FormatException), ex.GetType (), "#B2");
+				Assert.IsNull (ex.InnerException, "#B3");
+				Assert.IsNotNull (ex.Message, "#B4");
+#endif
+			}
+		}
+
+		int ClientVersion {
+			get {
+				return (engine.ClientVersion);
 			}
 		}
 	}

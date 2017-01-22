@@ -57,7 +57,7 @@
 /* Represents one unwind instruction */
 typedef struct {
 	guint8 op; /* One of DW_CFA_... */
-	guint8 reg; /* register number in the hardware encoding */
+	guint16 reg; /* register number in the hardware encoding */
 	gint32 val; /* arbitrary value */
 	guint32 when; /* The offset _after_ the cpu instruction this unwind op belongs to */
 } MonoUnwindOp;
@@ -100,7 +100,7 @@ mono_unwind_ops_encode (GSList *unwind_ops, guint32 *out_len) MONO_INTERNAL;
 
 void
 mono_unwind_frame (guint8 *unwind_info, guint32 unwind_info_len, 
-				   guint8 *start_ip, guint8 *end_ip, guint8 *ip, gssize *regs, 
+				   guint8 *start_ip, guint8 *end_ip, guint8 *ip, mgreg_t *regs, 
 				   int nregs, guint8 **out_cfa) MONO_INTERNAL;
 
 void mono_unwind_init (void) MONO_INTERNAL;
@@ -110,5 +110,7 @@ void mono_unwind_cleanup (void) MONO_INTERNAL;
 guint32 mono_cache_unwind_info (guint8 *unwind_info, guint32 unwind_info_len) MONO_INTERNAL;
 
 guint8* mono_get_cached_unwind_info (guint32 index, guint32 *unwind_info_len) MONO_INTERNAL;
+
+guint8* mono_unwind_get_ops_from_fde (guint8 *fde, guint32 *out_len, guint32 *code_len) MONO_INTERNAL;
 
 #endif

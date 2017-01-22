@@ -37,11 +37,14 @@
 #define CONFIG_OS "aix"
 #elif defined(__hpux)
 #define CONFIG_OS "hpux"
+#elif defined(SN_TARGET_PS3)
+#define CONFIG_OS "CellOS"
 #else
 #warning Unknown operating system
 #define CONFIG_OS "unknownOS"
 #endif
 
+#ifndef CONFIG_CPU
 #if defined(__i386__)
 #define CONFIG_CPU "x86"
 #define CONFIG_WORDSIZE "32"
@@ -52,8 +55,12 @@
 #define CONFIG_CPU "sparc"
 #define CONFIG_WORDSIZE "32"
 #elif defined(__ppc64__) || defined(__powerpc64__)
-#define CONFIG_CPU "ppc64"
 #define CONFIG_WORDSIZE "64"
+#ifdef __mono_ppc_ilp32__
+#   define CONFIG_CPU "ppc64ilp32"
+#else
+#   define CONFIG_CPU "ppc64"
+#endif
 #elif defined(__ppc__) || defined(__powerpc__)
 #define CONFIG_CPU "ppc"
 #define CONFIG_WORDSIZE "32"
@@ -84,6 +91,7 @@
 #else
 #warning Unknown CPU
 #define CONFIG_CPU "unknownCPU"
+#endif
 #endif
 
 static void start_element (GMarkupParseContext *context, 
@@ -321,7 +329,7 @@ legacyUEP_start (gpointer user_data,
 			(attribute_names [0] != NULL) &&
 			(strcmp (attribute_names [0], "enabled") == 0)) {
 		if ((strcmp (attribute_values [0], "1") == 0) ||
-				(g_strcasecmp (attribute_values [0], "true") == 0)) {
+				(g_ascii_strcasecmp (attribute_values [0], "true") == 0)) {
 			mono_runtime_unhandled_exception_policy_set (MONO_UNHANDLED_POLICY_LEGACY);
 		}
 	}

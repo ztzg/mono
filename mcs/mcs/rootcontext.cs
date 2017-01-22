@@ -22,16 +22,19 @@ namespace Mono.CSharp {
 	public enum LanguageVersion
 	{
 		ISO_1		= 1,
-		Default_MCS	= 2,
-		ISO_2		= 3,
-		LINQ		= 4,
-		Future		= 5,
+		ISO_2		= 2,
+		V_3			= 3,
+		V_4			= 4,
+		Future		= 100,
 
-#if GMCS_SOURCE
-		Default		= LINQ
-#else
-		Default		= Default_MCS
-#endif
+		Default		= LanguageVersion.V_4,
+	}
+
+	public enum MetadataVersion
+	{
+		v1,
+		v2,
+		v4
 	}
 
 	public class RootContext {
@@ -40,10 +43,15 @@ namespace Mono.CSharp {
 		// COMPILER OPTIONS CLASS
 		//
 		public static Target Target;
+#if GMCS_SOURCE
+		public static Platform Platform;
+#endif
 		public static string TargetExt;
 		public static bool VerifyClsCompliance = true;
 		public static bool Optimize = true;
 		public static LanguageVersion Version;
+
+		public static MetadataVersion MetadataCompatibilityVersion;
 
 		//
 		// We keep strongname related info here because
@@ -149,7 +157,6 @@ namespace Mono.CSharp {
 			
 			type_container_resolve_order = new ArrayList ();
 			EntryPoint = null;
-			Report.WarningLevel = 4;
 			Checked = false;
 			Unsafe = false;
 			StdLib = true;
@@ -159,10 +166,19 @@ namespace Mono.CSharp {
 			MainClass = null;
 			Target = Target.Exe;
 			TargetExt = ".exe";
+#if GMCS_SOURCE
+			Platform = Platform.AnyCPU;
+#endif
 			Version = LanguageVersion.Default;
 			Documentation = null;
 			impl_details_class = null;
 			helper_classes = null;
+
+#if GMCS_SOURCE
+			MetadataCompatibilityVersion = MetadataVersion.v2;
+#else
+			MetadataCompatibilityVersion = MetadataVersion.v1;
+#endif
 
 			//
 			// Setup default defines
@@ -344,7 +360,7 @@ namespace Mono.CSharp {
 				foreach (TypeContainer tc in type_container_resolve_order)
 					tc.EmitType ();
 
-				if (Report.Errors > 0)
+				if (RootContext.ToplevelTypes.Compiler.Report.Errors > 0)
 					return;
 
 				foreach (TypeContainer tc in type_container_resolve_order)
@@ -405,7 +421,7 @@ namespace Mono.CSharp {
 			return fb;
 		}
 
-		public static void CheckUnsafeOption (Location loc)
+		public static void CheckUnsafeOption (Location loc, Report Report)
 		{
 			if (!Unsafe) {
 				Report.Error (227, loc, 
@@ -414,5 +430,3 @@ namespace Mono.CSharp {
 		}
 	}
 }
-	      
-

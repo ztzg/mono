@@ -1,3 +1,59 @@
+2009-09-23  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* StreamReader.cs: Add back UTF32 under NET_2_1 (for smcs)
+
+2009-09-23  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Directory.cs: Don't expose SearchOption in NET_2_1
+	* DirectoryInfo.cs: Don't expose SearchOption in NET_2_1
+	* MonoIO.cs: Don't throw a DriveNotFoundException under NET_2_1 -
+	an IOExpection will be thrown (like the 1.x profile)
+
+2009-09-22  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* StreamReader.cs: Don't use UTF32 under NET_2_1
+
+2009-09-18  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Directory.cs: Avoid imperative CAS checks and remove 
+	AccessControl types for NET_2_1
+	* DirectoryInfo.cs: Remove AccessControl types for NET_2_1
+	* File.cs: Remove AccessControl types for NET_2_1
+	* FileInfo.cs: Remove AccessControl types for NET_2_1
+	* FileStream.cs: Remove AccessControl types for NET_2_1
+	* Path.cs: Avoid imperative CAS checks for NET_2_1
+
+2009-09-17 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* DirectoryInfo.cs: throw if FullPath is not a directory.
+	Fixes bug #539791.
+
+2009-09-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* UnmanagedMemoryAccessor.cs: New net 4.0 class.
+
+2009-07-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Path.cs: only trim the end of the file.
+	Fixes bug #521924.
+
+2009-05-05  Miguel de Icaza  <miguel@novell.com>
+
+	* Contribution from David Uvalle <david.uvalle@gmail.com> that
+	implements FileInfo.Replace.
+
+2009-04-25  Miguel de Icaza  <miguel@novell.com>
+
+	* StreamReader.cs (DataAvailable): New internal function to work
+	around the fact that StreamReaders are now blocking on Peek(), and
+	that our own Console.TermInfoDriver used Peek() as a way of
+	probing if there was data on a stream before to avoid blocking. o
+
+2009-04-24 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* StreamReader.cs: if Peek() needs to block, do it.
+	Fixes bug #496905.
+
 2009-03-22  Marek Habersack  <mhabersack@novell.com>
 
 	* FileStream.cs: implemented the SafeFileHandle property.

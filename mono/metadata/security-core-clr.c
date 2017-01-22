@@ -152,12 +152,17 @@ get_caller_no_reflection_related (MonoMethod *m, gint32 no, gint32 ilo, gboolean
 	/* calls from System.Delegate are also possible and allowed */
 	if (strcmp (ns, "System") == 0) {
 		const char *kname = m->klass->name;
-		if ((*kname == 'D') && (strcmp (kname, "Delegate") == 0))
-			return FALSE;
-		if ((*kname == 'M') && (strcmp (kname, "MulticastDelegate")) == 0)
-			return FALSE;
 		if ((*kname == 'A') && (strcmp (kname, "Activator") == 0))
 			return FALSE;
+
+		// the security check on the delegate is made at creation time, not at invoke time
+		if (((*kname == 'D') && (strcmp (kname, "Delegate") == 0)) || 
+			((*kname == 'M') && (strcmp (kname, "MulticastDelegate")) == 0)) {
+
+			// if we're invoking then we can stop our stack walk
+			if (strcmp (m->name, "DynamicInvoke") != 0)
+				return FALSE;
+		}
 	}
 
 	if (m == *dest) {
@@ -183,8 +188,10 @@ get_caller_no_reflection_related (MonoMethod *m, gint32 no, gint32 ilo, gboolean
 static MonoMethod*
 get_reflection_caller (void)
 {
-	MonoMethod *m = mono_method_get_last_managed ();
+	MonoMethod *m = NULL;
 	mono_stack_walk_no_il (get_caller_no_reflection_related, &m);
+	if (!m)
+		g_warning ("could not find a caller outside reflection");
 	return m;
 }
 
@@ -196,8 +203,12 @@ get_reflection_caller (void)
 static gboolean
 check_field_access (MonoMethod *caller, MonoClassField *field)
 {
-	MonoClass *klass = (mono_field_get_flags (field) & FIELD_ATTRIBUTE_STATIC) ? NULL : mono_field_get_parent (field);
-	return mono_method_can_access_field_full (caller, field, klass);
+	/* if get_reflection_caller returns NULL then we assume the caller has NO privilege */
+	if (caller) {
+		MonoClass *klass = (mono_field_get_flags (field) & FIELD_ATTRIBUTE_STATIC) ? NULL : mono_field_get_parent (field);
+		return mono_method_can_access_field_full (caller, field, klass);
+	}
+	return FALSE;
 }
 
 /*
@@ -208,8 +219,12 @@ check_field_access (MonoMethod *caller, MonoClassField *field)
 static gboolean
 check_method_access (MonoMethod *caller, MonoMethod *callee)
 {
-	MonoClass *klass = (callee->flags & METHOD_ATTRIBUTE_STATIC) ? NULL : callee->klass;
-	return mono_method_can_access_method_full (caller, callee, klass);
+	/* if get_reflection_caller returns NULL then we assume the caller has NO privilege */
+	if (caller) {
+		MonoClass *klass = (callee->flags & METHOD_ATTRIBUTE_STATIC) ? NULL : callee->klass;
+		return mono_method_can_access_method_full (caller, callee, klass);
+	}
+	return FALSE;
 }
 
 /*
@@ -265,12 +280,44 @@ mono_security_core_clr_ensure_reflection_access_method (MonoMethod *method)
 }
 
 /*
+ * can_avoid_corlib_reflection_delegate_optimization:
+ *
+ *	Mono's mscorlib use delegates to optimize PropertyInfo and EventInfo
+ *	reflection calls. This requires either a bunch of additional, and not
+ *	really required, [SecuritySafeCritical] in the class libraries or 
+ *	(like this) a way to skip them. As a bonus we also avoid the stack
+ *	walk to find the caller.
+ *
+ *	Return TRUE if we can skip this "internal" delegate creation, FALSE
+ *	otherwise.
+ */
+static gboolean
+can_avoid_corlib_reflection_delegate_optimization (MonoMethod *method)
+{
+	if (!mono_security_core_clr_is_platform_image (method->klass->image))
+		return FALSE;
+
+	if (strcmp (method->klass->name_space, "System.Reflection") != 0)
+		return FALSE;
+
+	if (strcmp (method->klass->name, "MonoProperty") == 0) {
+		if ((strcmp (method->name, "GetterAdapterFrame") == 0) || strcmp (method->name, "StaticGetterAdapterFrame") == 0)
+			return TRUE;
+	} else if (strcmp (method->klass->name, "EventInfo") == 0) {
+		if ((strcmp (method->name, "AddEventFrame") == 0) || strcmp (method->name, "StaticAddEventAdapterFrame") == 0)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+/*
  * mono_security_core_clr_ensure_delegate_creation:
  *
  *	Return TRUE if a delegate can be created on the specified method. 
  *	CoreCLR also affect the binding, so throwOnBindFailure must be 
  * 	FALSE to let this function return (FALSE) normally, otherwise (if
- *	throwOnBindFailure is TRUE) itwill throw an ArgumentException.
+ *	throwOnBindFailure is TRUE) it will throw an ArgumentException.
  *
  *	A MethodAccessException is thrown if the specified method is not
  *	visible from the caller point of view.
@@ -278,8 +325,13 @@ mono_security_core_clr_ensure_reflection_access_method (MonoMethod *method)
 gboolean
 mono_security_core_clr_ensure_delegate_creation (MonoMethod *method, gboolean throwOnBindFailure)
 {
+	MonoMethod *caller;
+
 	/* note: mscorlib creates delegates to avoid reflection (optimization), we ignore those cases */
-	MonoMethod *caller = get_reflection_caller ();
+	if (can_avoid_corlib_reflection_delegate_optimization (method))
+		return TRUE;
+
+	caller = get_reflection_caller ();
 	/* if the "real" caller is not Transparent then it do can anything */
 	if (mono_security_core_clr_method_level (caller, TRUE) != MONO_SECURITY_CORE_CLR_TRANSPARENT)
 		return TRUE;
@@ -357,6 +409,31 @@ mono_security_core_clr_level_from_cinfo (MonoCustomAttrInfo *cinfo, MonoImage *i
 }
 
 /*
+ * mono_security_core_clr_class_level_no_platform_check:
+ *
+ *	Return the MonoSecurityCoreCLRLevel for the specified class, without 
+ *	checking for platform code. This help us avoid multiple redundant 
+ *	checks, e.g.
+ *	- a check for the method and one for the class;
+ *	- a check for the class and outer class(es) ...
+ */
+static MonoSecurityCoreCLRLevel
+mono_security_core_clr_class_level_no_platform_check (MonoClass *class)
+{
+	MonoSecurityCoreCLRLevel level = MONO_SECURITY_CORE_CLR_TRANSPARENT;
+	MonoCustomAttrInfo *cinfo = mono_custom_attrs_from_class (class);
+	if (cinfo) {
+		level = mono_security_core_clr_level_from_cinfo (cinfo, class->image);
+		mono_custom_attrs_free (cinfo);
+	}
+
+	if (level == MONO_SECURITY_CORE_CLR_TRANSPARENT && class->nested_in)
+		level = mono_security_core_clr_class_level_no_platform_check (class->nested_in);
+
+	return level;
+}
+
+/*
  * mono_security_core_clr_class_level:
  *
  *	Return the MonoSecurityCoreCLRLevel for the specified class.
@@ -364,23 +441,11 @@ mono_security_core_clr_level_from_cinfo (MonoCustomAttrInfo *cinfo, MonoImage *i
 MonoSecurityCoreCLRLevel
 mono_security_core_clr_class_level (MonoClass *class)
 {
-	MonoCustomAttrInfo *cinfo;
-	MonoSecurityCoreCLRLevel level = MONO_SECURITY_CORE_CLR_TRANSPARENT;
-
 	/* non-platform code is always Transparent - whatever the attributes says */
 	if (!mono_security_core_clr_test && !mono_security_core_clr_is_platform_image (class->image))
-		return level;
+		return MONO_SECURITY_CORE_CLR_TRANSPARENT;
 
-	cinfo = mono_custom_attrs_from_class (class);
-	if (cinfo) {
-		level = mono_security_core_clr_level_from_cinfo (cinfo, class->image);
-		mono_custom_attrs_free (cinfo);
-	}
-
-	if (level == MONO_SECURITY_CORE_CLR_TRANSPARENT && class->nested_in)
-		level = mono_security_core_clr_class_level (class->nested_in);
-
-	return level;
+	return mono_security_core_clr_class_level_no_platform_check (class);
 }
 
 /*
@@ -396,6 +461,10 @@ mono_security_core_clr_method_level (MonoMethod *method, gboolean with_class_lev
 {
 	MonoCustomAttrInfo *cinfo;
 	MonoSecurityCoreCLRLevel level = MONO_SECURITY_CORE_CLR_TRANSPARENT;
+
+	/* if get_reflection_caller returns NULL then we assume the caller has NO privilege */
+	if (!method)
+		return level;
 
 	/* non-platform code is always Transparent - whatever the attributes says */
 	if (!mono_security_core_clr_test && !mono_security_core_clr_is_platform_image (method->klass->image))
@@ -427,12 +496,23 @@ mono_security_core_clr_is_platform_image (MonoImage *image)
 /*
  * default_platform_check:
  *
- *	Default platform check. Always return FALSE.
+ *	Default platform check. Always TRUE for current corlib (minimum 
+ *	trust-able subset) otherwise return FALSE. Any real CoreCLR host
+ *	should provide its own callback to define platform code (i.e.
+ *	this default is meant for test only).
  */
 static gboolean
 default_platform_check (const char *image_name)
 {
-	return FALSE;
+	if (mono_defaults.corlib) {
+		return (strcmp (mono_defaults.corlib->name, image_name) == 0);
+	} else {
+		/* this can get called even before we load corlib (e.g. the EXE itself) */
+		const char *corlib = "mscorlib.dll";
+		int ilen = strlen (image_name);
+		int clen = strlen (corlib);
+		return ((ilen >= clen) && (strcmp ("mscorlib.dll", image_name + ilen - clen) == 0));
+	}
 }
 
 static MonoCoreClrPlatformCB platform_callback = default_platform_check;

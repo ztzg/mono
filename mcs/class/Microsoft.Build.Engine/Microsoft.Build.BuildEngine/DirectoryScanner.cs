@@ -31,13 +31,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
+
 namespace Microsoft.Build.BuildEngine {
 	internal class DirectoryScanner {
 		
 		DirectoryInfo	baseDirectory;
-		string		includes;
+		ITaskItem[]	includes;
 		string		excludes;
-		string[]	matchedFilenames;
+		ITaskItem[]	matchedItems;
 		
 		public DirectoryScanner ()
 		{
@@ -46,7 +49,7 @@ namespace Microsoft.Build.BuildEngine {
 		public void Scan ()
 		{
 			Dictionary <string, bool> excludedItems;
-			List <string> includedItems;
+			List <ITaskItem> includedItems;
 			string[] splitInclude, splitExclude;
 			
 			if (includes == null)
@@ -57,33 +60,32 @@ namespace Microsoft.Build.BuildEngine {
 				throw new ArgumentNullException ("BaseDirectory");
 			
 			excludedItems = new Dictionary <string, bool> ();
-			includedItems = new List <string> ();
+			includedItems = new List <ITaskItem> ();
 			
-			splitInclude = includes.Split (';');
-			splitExclude = excludes.Split (';');
+			splitExclude = excludes.Split (new char[] {';'}, StringSplitOptions.RemoveEmptyEntries);
 			
 			if (excludes != String.Empty) {
 				foreach (string si in splitExclude) {
 					ProcessExclude (si, excludedItems);
 				}
 			}
-			if (includes != String.Empty) {
-				foreach (string si in splitInclude) {
-					ProcessInclude (si, excludedItems, includedItems);
-				}
-			}
 
-			matchedFilenames = includedItems.ToArray ();
+			foreach (ITaskItem include_item in includes)
+				ProcessInclude (include_item, excludedItems, includedItems);
+
+			matchedItems = includedItems.ToArray ();
 		}
 		
-		private void ProcessInclude (string name, Dictionary <string, bool> excludedItems, List <string> includedItems)
+		private void ProcessInclude (ITaskItem include_item, Dictionary <string, bool> excludedItems,
+				List <ITaskItem> includedItems)
 		{
 			string[] separatedPath;
 			FileInfo[] fileInfo;
 
+			string name = include_item.ItemSpec;
 			if (name.IndexOf ('?') == -1 && name.IndexOf ('*') == -1) {
 				if (!excludedItems.ContainsKey (Path.GetFullPath(name)))
-					includedItems.Add (name);
+					includedItems.Add (include_item);
 			} else {
 				if (name.Split (Path.DirectorySeparatorChar).Length > name.Split (Path.AltDirectorySeparatorChar).Length) {
 					separatedPath = name.Split (Path.DirectorySeparatorChar);
@@ -93,9 +95,13 @@ namespace Microsoft.Build.BuildEngine {
 				if (separatedPath.Length == 1 && separatedPath [0] == String.Empty)
 					return;
 				fileInfo = ParseIncludeExclude (separatedPath, 0, baseDirectory);
-				foreach (FileInfo fi in fileInfo)
-					if (!excludedItems.ContainsKey (fi.FullName))
-						includedItems.Add (fi.FullName);
+				foreach (FileInfo fi in fileInfo) {
+					if (!excludedItems.ContainsKey (fi.FullName)) {
+						TaskItem item = new TaskItem (include_item);
+						item.ItemSpec = fi.FullName;
+						includedItems.Add (item);
+					}
+				}
 			}
 		}
 		
@@ -140,6 +146,25 @@ namespace Microsoft.Build.BuildEngine {
 				} else if (input [ptr] == "..") {
 					di = new DirectoryInfo [1];
 					di [0] = directory.Parent;
+				} else if (input[ptr] == "**")
+				{
+					// Read this directory and all subdirectories recursive
+					Stack<DirectoryInfo> currentDirectories = new Stack<DirectoryInfo>();					
+					currentDirectories.Push(directory);
+					List<DirectoryInfo> allDirectories = new List<DirectoryInfo>();
+					
+					while (currentDirectories.Count > 0)
+					{
+						DirectoryInfo current = currentDirectories.Pop();
+						allDirectories.Add (current);
+						foreach (DirectoryInfo dir in current.GetDirectories())
+						{
+							currentDirectories.Push(dir);
+						}						
+					}
+					
+					// No further directories shall be read
+					di = allDirectories.ToArray();					
 				} else
 					di = directory.GetDirectories (input [ptr]);
 				foreach (DirectoryInfo info in di) {
@@ -160,7 +185,7 @@ namespace Microsoft.Build.BuildEngine {
 			set { baseDirectory = value; }
 		}
 		
-		public string Includes {
+		public ITaskItem[] Includes {
 			get { return includes; }
 			set { includes = value; }
 		}
@@ -170,8 +195,8 @@ namespace Microsoft.Build.BuildEngine {
 			set { excludes = value; }
 		}
 		
-		public string[] MatchedFilenames {
-			get { return matchedFilenames; }
+		public ITaskItem[] MatchedItems {
+			get { return matchedItems; }
 		}
 		
 	}

@@ -75,6 +75,32 @@ mono_arch_get_unbox_trampoline (MonoGenericSharingContext *gsctx, MonoMethod *m,
 	return start;
 }
 
+gpointer
+mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericContext *mrgctx, gpointer addr)
+{
+	guint8 *code, *start;
+	int buf_len;
+
+	MonoDomain *domain = mono_domain_get ();
+
+	buf_len = 16;
+
+	start = code = mono_domain_code_reserve (domain, buf_len);
+
+	ARM_LDR_IMM (code, MONO_ARCH_RGCTX_REG, ARMREG_PC, 0);
+	ARM_LDR_IMM (code, ARMREG_PC, ARMREG_PC, 0);
+	*(guint32*)code = (guint32)mrgctx;
+	code += 4;
+	*(guint32*)code = (guint32)addr;
+	code += 4;
+
+	g_assert ((code - start) <= buf_len);
+
+	mono_arch_flush_icache (start, code - start);
+
+	return start;
+}
+
 void
 mono_arch_patch_callsite (guint8 *method_start, guint8 *code_ptr, guint8 *addr)
 {
@@ -104,28 +130,36 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *code_ptr, guint8 *addr)
 }
 
 void
-mono_arch_patch_plt_entry (guint8 *code, guint8 *addr)
+mono_arch_patch_plt_entry (guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
+	guint8 *jump_entry;
+
 	/* Patch the jump table entry used by the plt entry */
-	guint32 offset = ((guint32*)code)[3];
-	guint8 *jump_entry = code + offset + 12;
+	if (*(guint32*)code == 0xe59fc000) {
+		/* ARM_LDR_IMM (code, ARMREG_IP, ARMREG_PC, 0); */
+		guint32 offset = ((guint32*)code)[2];
+		
+		jump_entry = code + offset + 12;
+	} else {
+		g_assert_not_reached ();
+	}
 
 	*(guint8**)jump_entry = addr;
 }
 
 void
-mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
+mono_arch_nullify_class_init_trampoline (guint8 *code, mgreg_t *regs)
 {
 	mono_arch_patch_callsite (NULL, code, nullified_class_init_trampoline);
 }
 
 void
-mono_arch_nullify_plt_entry (guint8 *code)
+mono_arch_nullify_plt_entry (guint8 *code, mgreg_t *regs)
 {
 	if (mono_aot_only && !nullified_class_init_trampoline)
 		nullified_class_init_trampoline = mono_aot_get_named_code ("nullified_class_init_trampoline");
 
-	mono_arch_patch_plt_entry (code, nullified_class_init_trampoline);
+	mono_arch_patch_plt_entry (code, NULL, regs, nullified_class_init_trampoline);
 }
 
 /* Stack size for trampoline function 
@@ -201,10 +235,12 @@ mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *c
 	ARM_MOV_REG_REG (code, ARMREG_V1, ARMREG_SP);
 	if (aot && tramp_type != MONO_TRAMPOLINE_GENERIC_CLASS_INIT) {
 		/* 
-		 * The trampoline contains a pc-relative offset to the got slot where the
-		 * value is stored. The offset can be found at [lr + 4].
+		 * The trampoline contains a pc-relative offset to the got slot 
+		 * preceeding the got slot where the value is stored. The offset can be
+		 * found at [lr + 0].
 		 */
-		ARM_LDR_IMM (code, ARMREG_V2, ARMREG_LR, 4);
+		ARM_LDR_IMM (code, ARMREG_V2, ARMREG_LR, 0);
+		ARM_ADD_REG_IMM (code, ARMREG_V2, ARMREG_V2, 4, 0);
 		ARM_LDR_REG_REG (code, ARMREG_V2, ARMREG_V2, ARMREG_LR);
 	} else {
 		if (tramp_type != MONO_TRAMPOLINE_GENERIC_CLASS_INIT)
@@ -250,6 +286,10 @@ mono_arch_create_trampoline_code_full (MonoTrampolineType tramp_type, guint32 *c
 	/* save method info (it's in v2) */
 	if ((tramp_type == MONO_TRAMPOLINE_JIT) || (tramp_type == MONO_TRAMPOLINE_JUMP))
 		ARM_STR_IMM (code, ARMREG_V2, ARMREG_R1, G_STRUCT_OFFSET (MonoLMF, method));
+	else {
+		ARM_MOV_REG_IMM8 (code, ARMREG_R2, 0);
+		ARM_STR_IMM (code, ARMREG_R2, ARMREG_R1, G_STRUCT_OFFSET (MonoLMF, method));
+	}
 	ARM_STR_IMM (code, ARMREG_SP, ARMREG_R1, G_STRUCT_OFFSET (MonoLMF, ebp));
 	/* save the IP (caller ip) */
 	if (tramp_type == MONO_TRAMPOLINE_JUMP) {
@@ -488,7 +528,7 @@ mono_arch_create_rgctx_lazy_fetch_trampoline_full (guint32 slot, guint32 *code_s
 	mrgctx = MONO_RGCTX_SLOT_IS_MRGCTX (slot);
 	index = MONO_RGCTX_SLOT_INDEX (slot);
 	if (mrgctx)
-		index += sizeof (MonoMethodRuntimeGenericContext) / sizeof (gpointer);
+		index += MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT / sizeof (gpointer);
 	for (depth = 0; ; ++depth) {
 		int size = mono_class_rgctx_get_array_size (depth, mrgctx);
 
@@ -524,8 +564,8 @@ mono_arch_create_rgctx_lazy_fetch_trampoline_full (guint32 slot, guint32 *code_s
 	for (i = 0; i < depth; ++i) {
 		/* load ptr to next array */
 		if (mrgctx && i == 0) {
-			g_assert (arm_is_imm12 (sizeof (MonoMethodRuntimeGenericContext)));
-			ARM_LDR_IMM (code, ARMREG_R1, ARMREG_R1, sizeof (MonoMethodRuntimeGenericContext));
+			g_assert (arm_is_imm12 (MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT));
+			ARM_LDR_IMM (code, ARMREG_R1, ARMREG_R1, MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT);
 		} else {
 			ARM_LDR_IMM (code, ARMREG_R1, ARMREG_R1, 0);
 		}

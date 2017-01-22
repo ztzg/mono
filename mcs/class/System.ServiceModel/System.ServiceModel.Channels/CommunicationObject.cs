@@ -35,8 +35,8 @@ namespace System.ServiceModel.Channels
 	{
 		object mutex;
 		CommunicationState state = CommunicationState.Created;
-		TimeSpan open_timeout, close_timeout;
-		bool aborted;
+		TimeSpan default_open_timeout = TimeSpan.FromMinutes (1), default_close_timeout = TimeSpan.FromMinutes (1);
+		bool aborted, on_closed_called;
 
 		protected CommunicationObject ()
 			: this (new object ())
@@ -84,10 +84,12 @@ namespace System.ServiceModel.Channels
 
 		#region Methods
 
-		[MonoTODO]
 		public void Abort ()
 		{
-			OnAbort ();
+			if (State != CommunicationState.Closed) {
+				OnAbort ();
+				ProcessClosed ();
+			}
 		}
 
 		[MonoTODO]
@@ -100,12 +102,14 @@ namespace System.ServiceModel.Channels
 		public IAsyncResult BeginClose (AsyncCallback callback,
 			object state)
 		{
-			return BeginClose (close_timeout, callback, state);
+			return BeginClose (default_close_timeout, callback, state);
 		}
 
 		public IAsyncResult BeginClose (TimeSpan timeout,
 			AsyncCallback callback, object state)
 		{
+			if (State == CommunicationState.Created)
+				return new EventHandler (delegate { Abort (); }).BeginInvoke (null, null, callback, state);
 			ProcessClosing ();
 			return OnBeginClose (timeout, callback, state);
 		}
@@ -113,7 +117,7 @@ namespace System.ServiceModel.Channels
 		public IAsyncResult BeginOpen (AsyncCallback callback,
 			object state)
 		{
-			return BeginOpen (open_timeout, callback, state);
+			return BeginOpen (default_open_timeout, callback, state);
 		}
 
 		public IAsyncResult BeginOpen (TimeSpan timeout,
@@ -125,20 +129,29 @@ namespace System.ServiceModel.Channels
 
 		public void Close ()
 		{
-			Close (close_timeout);
+			Close (default_close_timeout);
 		}
 
 		public void Close (TimeSpan timeout)
 		{
-			ProcessClosing ();
-			OnClose (timeout);
-			ProcessClosed ();
+			if (State == CommunicationState.Created)
+				Abort ();
+			else {
+				ProcessClosing ();
+				OnClose (timeout);
+				ProcessClosed ();
+			}
 		}
 
 		public void EndClose (IAsyncResult result)
 		{
-			OnEndClose (result);
-			ProcessClosed ();
+			if (State == CommunicationState.Created || State == CommunicationState.Closed) {
+				if (!result.IsCompleted)
+					result.AsyncWaitHandle.WaitOne ();
+			} else {
+				OnEndClose (result);
+				ProcessClosed ();
+			}
 		}
 
 		public void EndOpen (IAsyncResult result)
@@ -149,7 +162,7 @@ namespace System.ServiceModel.Channels
 
 		public void Open ()
 		{
-			Open (open_timeout);
+			Open (default_open_timeout);
 		}
 
 		public void Open (TimeSpan timeout)
@@ -188,7 +201,10 @@ namespace System.ServiceModel.Channels
 		void ProcessClosed ()
 		{
 			state = CommunicationState.Closed;
+			on_closed_called = false;
 			OnClosed ();
+			if (!on_closed_called)
+				throw new InvalidOperationException ("OnClosed method is implemented but it did not call its base OnClosed method");
 		}
 
 		protected virtual void OnClosed ()
@@ -197,6 +213,7 @@ namespace System.ServiceModel.Channels
 			// Closed event is surpressed.
 			if (Closed != null)
 				Closed (this, new EventArgs ());
+			on_closed_called = true;
 		}
 
 		protected abstract void OnEndClose (IAsyncResult result);

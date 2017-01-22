@@ -1,3 +1,24 @@
+2009-08-11  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* Consts.cs.in: Add BOOTSTRAP_NET_4_0.
+
+2009-07-18  Michael Barker  <mike@middlesoft.co.uk>
+
+	* Consts.cs.in:  Added constant for Mono.Messaging.RabbitMQ.
+
+2009-06-15  Miguel de Icaza  <miguel@novell.com>
+
+	* MonoTODOAttribute.cs: Thin diet, no point in having virtual
+	methods and overrides that do the same thing.
+
+2009-06-10  Marek Safar  <marek.safar@gmail.com>
+
+	* Consts.cs.in: Add AssemblySystemCore_3_5.
+
+2009-06-04  Marek Safar  <marek.safar@gmail.com>
+
+	* Consts.cs.in: Add NET_4_0 constants.
+
 2008-11-25  Rolf Bjarne Kvinge  <RKvinge@novell.com>
 
 	* Consts.cs.in: Update Silverlight's FxFileVersion to final

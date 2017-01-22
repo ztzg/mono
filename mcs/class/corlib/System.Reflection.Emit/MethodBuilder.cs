@@ -72,7 +72,7 @@ namespace System.Reflection.Emit
 		private bool init_locals = true;
 		private IntPtr generic_container;
 #if NET_2_0 || BOOTSTRAP_NET_2_0
-		private GenericTypeParameterBuilder[] generic_params;
+		internal GenericTypeParameterBuilder[] generic_params;
 #else
 		private Object generic_params; /* so offsets are the same */
 #endif
@@ -472,6 +472,7 @@ namespace System.Reflection.Emit
 
 		public void AddDeclarativeSecurity (SecurityAction action, PermissionSet pset)
 		{
+#if !NET_2_1
 			if (pset == null)
 				throw new ArgumentNullException ("pset");
 			if ((action == SecurityAction.RequestMinimum) ||
@@ -496,6 +497,7 @@ namespace System.Reflection.Emit
 
 			permissions [permissions.Length - 1] = new RefEmitPermissionSet (action, pset.ToXml ().ToString ());
 			attrs |= MethodAttributes.HasSecurity;
+#endif
 		}
 
 #if NET_2_0

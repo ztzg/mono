@@ -81,6 +81,8 @@
 /* dyn_load.c isn't linked in.						*/
 #ifdef DYNAMIC_LOADING
 # define GC_REGISTER_MAIN_STATIC_DATA() GC_register_main_static_data()
+#elif defined(GC_DONT_REGISTER_MAIN_STATIC_DATA)
+# define GC_REGISTER_MAIN_STATIC_DATA() FALSE
 #else
 # define GC_REGISTER_MAIN_STATIC_DATA() TRUE
 #endif
@@ -479,7 +481,7 @@ void GC_init()
       BOOL (WINAPI *pfn) (LPCRITICAL_SECTION, DWORD) = NULL;
       HMODULE hK32 = GetModuleHandle(_T("kernel32.dll"));
       if (hK32)
-          (FARPROC) pfn = GetProcAddress(hK32,
+          pfn = GetProcAddress(hK32,
 			  "InitializeCriticalSectionAndSpinCount");
       if (pfn)
           pfn(&GC_allocate_ml, 4000);

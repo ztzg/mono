@@ -19,7 +19,7 @@
 
 #if 0
 #define DEBUG_SCANNER(stmt) do { stmt; } while (0)
-#define SCANNER_DEBUG
+#define SCANNER_DEBUG 1
 #else
 #define DEBUG_SCANNER(stmt)
 #endif
@@ -50,7 +50,7 @@ test_entry:
 	validity patch (',' patch)*
 
 validity:
-	'valid' | 'invalid'
+	'valid' | 'invalid' | 'badrt'
 
 patch:
 	selector effect
@@ -59,7 +59,7 @@ selector:
 	'offset' expression
 
 effect:
-	('set-byte' | 'set-ushort' | 'set-uint' | 'set-bit' ) expression
+	('set-byte' | 'set-ushort' | 'set-uint' | 'set-bit' | 'or-byte' | 'or-ushort' | 'or-uint' | 'truncate' ) expression
 
 expression:
 	atom ([+-] atom)*
@@ -71,11 +71,14 @@ function_call:
 	fun_name '(' arg_list ')'
 
 fun_name:
+	read.byte |
+	read.ushort |
 	read.uint |
 	translate.rva |
 	translate.rva.ind |
 	stream-header |
-	table-row
+	table-row |
+	blob.i
 
 arg_list:
 	expression |
@@ -122,7 +125,8 @@ enum {
 
 enum {
 	TEST_TYPE_VALID,
-	TEST_TYPE_INVALID
+	TEST_TYPE_INVALID,
+	TEST_TYPE_BADRT
 };
 
 enum {
@@ -134,7 +138,10 @@ enum {
 	EFFECT_SET_USHORT,
 	EFFECT_SET_UINT,
 	EFFECT_SET_TRUNC,
-	EFFECT_SET_BIT
+	EFFECT_SET_BIT,
+	EFFECT_OR_BYTE,
+	EFFECT_OR_USHORT,
+	EFFECT_OR_UINT,
 };
 
 enum {
@@ -226,6 +233,8 @@ test_validity_name (int validity)
 		return "valid";
 	case TEST_TYPE_INVALID:
 		return "invalid";
+	case TEST_TYPE_BADRT:
+		return "badrt";
 	default:
 		printf ("Invalid test type %d\n", validity);
 		exit (INVALID_VALIDITY_TEST);
@@ -263,7 +272,7 @@ init_test_set (test_set_t *test_set)
 	if (test_set->init)
 		return;
 	test_set->assembly_data = read_whole_file_and_close (test_set->assembly, &test_set->assembly_size);
-	test_set->image = mono_image_open_from_data (test_set->assembly_data, test_set->assembly_size, TRUE, &status);
+	test_set->image = mono_image_open_from_data (test_set->assembly_data, test_set->assembly_size, FALSE, &status);
 	if (!test_set->image || status != MONO_IMAGE_OK) {
 		printf ("Could not parse image %s\n", test_set->assembly);
 		exit (INVALID_BAD_FILE);
@@ -349,7 +358,7 @@ get_metadata_stream_header (test_entry_t *entry, guint32 idx)
 
 		offset += 8;
 		for (i = 0; i < 32; ++i) {
-			if (!READ_VAR (guint8, entry->data + offset))
+			if (!READ_VAR (guint8, entry->data + offset++))
 				break;
 		}
 		offset = pad4 (offset);
@@ -388,10 +397,28 @@ lookup_var (test_entry_t *entry, const char *name)
 static guint32
 call_func (test_entry_t *entry, const char *name, GSList *args)
 {
+	if (!strcmp ("read.byte", name)) {
+		guint32 offset;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to read.ushort %d\n", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		offset = expression_eval (args->data, entry);
+		return READ_VAR (guint8, entry->data + offset);
+	}
+	if (!strcmp ("read.ushort", name)) {
+		guint32 offset;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to read.ushort %d\n", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		offset = expression_eval (args->data, entry);
+		return READ_VAR (guint16, entry->data + offset);
+	}
 	if (!strcmp ("read.uint", name)) {
 		guint32 offset;
 		if (g_slist_length (args) != 1) {
-			printf ("Invalid number of args to read.uint %d\b", g_slist_length (args));
+			printf ("Invalid number of args to read.uint %d\n", g_slist_length (args));
 			exit (INVALID_ARG_COUNT);
 		}
 		offset = expression_eval (args->data, entry);
@@ -400,7 +427,7 @@ call_func (test_entry_t *entry, const char *name, GSList *args)
 	if (!strcmp ("translate.rva", name)) {
 		guint32 rva;
 		if (g_slist_length (args) != 1) {
-			printf ("Invalid number of args to translate.rva %d\b", g_slist_length (args));
+			printf ("Invalid number of args to translate.rva %d\n", g_slist_length (args));
 			exit (INVALID_ARG_COUNT);
 		}
 		rva = expression_eval (args->data, entry);
@@ -409,7 +436,7 @@ call_func (test_entry_t *entry, const char *name, GSList *args)
 	if (!strcmp ("translate.rva.ind", name)) {
 		guint32 rva;
 		if (g_slist_length (args) != 1) {
-			printf ("Invalid number of args to translate.rva.ind %d\b", g_slist_length (args));
+			printf ("Invalid number of args to translate.rva.ind %d\n", g_slist_length (args));
 			exit (INVALID_ARG_COUNT);
 		}
 		rva = expression_eval (args->data, entry);
@@ -419,7 +446,7 @@ call_func (test_entry_t *entry, const char *name, GSList *args)
 	if (!strcmp ("stream-header", name)) {
 		guint32 idx;
 		if (g_slist_length (args) != 1) {
-			printf ("Invalid number of args to stream-header %d\b", g_slist_length (args));
+			printf ("Invalid number of args to stream-header %d\n", g_slist_length (args));
 			exit (INVALID_ARG_COUNT);
 		}
 		idx = expression_eval (args->data, entry);
@@ -430,7 +457,7 @@ call_func (test_entry_t *entry, const char *name, GSList *args)
 		guint32 table, row;
 		const MonoTableInfo *info;
 		if (g_slist_length (args) != 2) {
-			printf ("Invalid number of args to table-row %d\b", g_slist_length (args));
+			printf ("Invalid number of args to table-row %d\n", g_slist_length (args));
 			exit (INVALID_ARG_COUNT);
 		}
 		table = expression_eval (args->data, entry);
@@ -438,6 +465,18 @@ call_func (test_entry_t *entry, const char *name, GSList *args)
 		info = mono_image_get_table_info (entry->test_set->image, table);
 		data = info->base + row * info->row_size;
 		return data - entry->test_set->assembly_data;
+	}
+	if (!strcmp ("blob.i", name)) {
+		guint32 offset, base;
+		MonoStreamHeader blob = entry->test_set->image->heap_blob;
+		if (g_slist_length (args) != 1) {
+			printf ("Invalid number of args to blob %d\n", g_slist_length (args));
+			exit (INVALID_ARG_COUNT);
+		}
+		base = blob.data - entry->test_set->image->raw_data;
+		offset = expression_eval (args->data, entry);
+		offset = READ_VAR (guint16, entry->data + offset);
+		return base + offset;
 	}
 
 	printf ("Unknown function %s\n", name);
@@ -473,7 +512,7 @@ apply_selector (patch_selector_t *selector, test_entry_t *entry)
 		value = expression_eval (selector->expression, entry);
 	switch (selector->type) {
 	case SELECTOR_ABS_OFFSET:
-		DEBUG_PARSER (printf("\tabsolute offset selector [%d]\n", value));
+		DEBUG_PARSER (printf("\tabsolute offset selector [%04x]\n", value));
 		return value;
 	default:
 		printf ("Invalid selector type %d\n", selector->type);
@@ -510,6 +549,18 @@ apply_effect (patch_effect_t *effect, test_entry_t *entry, guint32 offset)
 		DEBUG_PARSER (printf("\tset-bit effect bit %d old value [%x]\n", value, READ_BIT (ptr, value)));
 		SET_BIT (ptr, value);
 		break;
+	case EFFECT_OR_BYTE:
+		DEBUG_PARSER (printf("\tor-byte effect old value [%x] new value [%x]\n", READ_VAR (guint8, ptr), value));
+		SET_VAR (guint8, ptr, READ_VAR (guint8, ptr) | value);
+		break;
+	case EFFECT_OR_USHORT:
+		DEBUG_PARSER (printf("\tor-ushort effect old value [%x] new value [%x]\n", READ_VAR (guint16, ptr), value));
+		SET_VAR (guint16, ptr, READ_VAR (guint16, ptr) | value);
+		break;
+	case EFFECT_OR_UINT:
+		DEBUG_PARSER (printf("\tor-uint effect old value [%x] new value [%x]\n", READ_VAR (guint32, ptr), value));
+		SET_VAR (guint32, ptr, READ_VAR (guint32, ptr) | value);
+		break;
 	default:
 		printf ("Invalid effect type %d\n", effect->type);
 		exit (INVALID_EFFECT);
@@ -535,7 +586,7 @@ process_test_entry (test_set_t *test_set, test_entry_t *entry)
 	entry->data_size = test_set->assembly_size;
 	entry->test_set = test_set;
 
-	DEBUG_PARSER (printf("(%d)%s\n", test_set->count, entry->validity == TEST_TYPE_VALID? "valid" : "invalid"));
+	DEBUG_PARSER (printf("(%d)%s\n", test_set->count, test_validity_name (entry->validity)));
 	for (tmp = entry->patches; tmp; tmp = tmp->next)
 		apply_patch (entry, tmp->data);
 
@@ -564,6 +615,8 @@ test_set_free (test_set_t *set)
 	free (set->name);
 	free (set->assembly);
 	free (set->assembly_data);
+	if (set->image)
+		mono_image_close (set->image);
 }
 
 static void
@@ -650,6 +703,21 @@ dump_token (scanner_t *scanner, token_t *token)
 
 #endif
 
+static gboolean
+is_special_char (char c)
+{
+	switch (c) {
+	case ';':
+	case ',':
+	case '{':
+	case '}':
+	case '(':
+	case ')':
+		return TRUE;
+	}
+	return FALSE;
+}
+
 static void
 next_token (scanner_t *scanner)
 {
@@ -658,6 +726,13 @@ next_token (scanner_t *scanner)
 	skip_spaces (scanner);
 	start = scanner->idx;
 	while (!is_eof (scanner) && !isspace (CUR_CHAR)) {
+		if (scanner->idx == start) {
+			if (is_special_char (CUR_CHAR)) {
+				++scanner->idx;
+				break;
+			}
+		} else if (is_special_char (CUR_CHAR))
+			break;
 		++scanner->idx;
 	}
 	end = scanner->idx;
@@ -899,8 +974,14 @@ parse_effect (scanner_t *scanner)
 		type = EFFECT_SET_BIT; 
 	else if (!strcmp ("truncate", name))
 		type = EFFECT_SET_TRUNC;
+	else if (!strcmp ("or-byte", name))
+		type = EFFECT_OR_BYTE;
+	else if (!strcmp ("or-ushort", name))
+		type = EFFECT_OR_USHORT;
+	else if (!strcmp ("or-uint", name))
+		type = EFFECT_OR_UINT;
 	else 
-		FAIL(g_strdup_printf ("Invalid effect kind, expected one of: (set-byte set-ushort set-uint) but got %s",name), INVALID_ID_TEXT);
+		FAIL(g_strdup_printf ("Invalid effect kind, expected one of: (set-byte set-ushort set-uint set-bit or-byte or-ushort or-uint truncate) but got %s",name), INVALID_ID_TEXT);
 
 	effect = g_new0 (patch_effect_t, 1);
 	effect->type = type;
@@ -931,8 +1012,10 @@ parse_validity (scanner_t *scanner)
 		validity = TEST_TYPE_VALID;
 	else if (!strcmp (name, "invalid"))
 		validity = TEST_TYPE_INVALID;
+	else if (!strcmp (name, "badrt"))
+		validity = TEST_TYPE_BADRT;
 	else {
-		printf ("Expected either 'valid' or 'invalid' but got '%s' at the begining of a test entry at line %d\n", name, scanner_get_line (scanner));
+		printf ("Expected either 'valid', 'invalid' or 'badtr' but got '%s' at the begining of a test entry at line %d\n", name, scanner_get_line (scanner));
 		exit (INVALID_VALIDITY_TEST);
 	}
 
@@ -1003,12 +1086,7 @@ main (int argc, char **argv)
 		return 1;
 	}
 
-	mono_perfcounters_init ();
-	mono_metadata_init ();
-	mono_images_init ();
-	mono_assemblies_init ();
-	mono_loader_init ();
-	mono_init_from_assembly ("simple-assembly.exe", "simple-assembly.exe");
+	mono_init_version ("gen-md-test", "v2.0.50727");
 	mono_marshal_init ();
 
 	digest_file (argv [1]);

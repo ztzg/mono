@@ -335,6 +335,16 @@ namespace MonoTests.System.Collections.Generic {
 			Assert.AreEqual (42, dest [6]);
 		}
 
+		[Test]
+		public void TestICollection ()
+		{
+			var set = new HashSet<int> () as ICollection<int>;
+			set.Add (42);
+			set.Add (42);
+
+			Assert.AreEqual (1, set.Count);
+		}
+
 		static void AssertContainsOnly<T> (IEnumerable<T> result, IEnumerable<T> data)
 		{
 			Assert.AreEqual (result.Count (), data.Count ());
@@ -351,6 +361,50 @@ namespace MonoTests.System.Collections.Generic {
 		static void AssertIsEmpty<T> (IEnumerable<T> source)
 		{
 			Assert.AreEqual (0, source.Count ());
+		}
+
+
+		delegate void D ();
+		bool Throws (D d)
+		{
+			try {
+				d ();
+				return false;
+			} catch {
+				return true;
+			}
+		}
+
+		[Test]
+		// based on #491858, #517415
+		public void Enumerator_Current ()
+		{
+#pragma warning disable 0168
+			var e1 = new HashSet<int>.Enumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e1.Current; }));
+
+			var d = new HashSet<int> ();
+			var e2 = d.GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+
+			var e3 = ((IEnumerable<int>) d).GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+
+			var e4 = ((IEnumerable) d).GetEnumerator ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			e4.MoveNext ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			((IDisposable) e4).Dispose ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+#pragma warning restore 0168
 		}
 	}
 }

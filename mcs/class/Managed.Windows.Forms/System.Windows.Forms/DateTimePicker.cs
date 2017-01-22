@@ -318,8 +318,10 @@ namespace System.Windows.Forms {
 						for (int i = 0; i < part_data.Length; i++)
 							part_data [i].Selected = false;
 						Invalidate (date_area_rect);
+#if NET_2_0
 						OnUIAChecked ();
 						OnUIASelectionChanged ();
+#endif
 					}
 				}
 			}
@@ -433,7 +435,9 @@ namespace System.Windows.Forms {
 						// invalidate the value inside this control
 						this.Invalidate (date_area_rect);
 					}
+#if NET_2_0
 					OnUIAMaximumChanged ();
+#endif
 				}
 			}
 			get {
@@ -489,7 +493,9 @@ namespace System.Windows.Forms {
 						// invalidate the value inside this control
 						this.Invalidate (date_area_rect);
 					}
+#if NET_2_0
 					OnUIAMinimumChanged ();
+#endif
 				}
 			}
 			get {
@@ -547,7 +553,9 @@ namespace System.Windows.Forms {
 					show_check_box = value;
 					// invalidate the value inside this control
 					this.Invalidate (date_area_rect);
+#if NET_2_0
 					OnUIAShowCheckBoxChanged ();
+#endif
 				}
 			}
 			get {
@@ -563,7 +571,9 @@ namespace System.Windows.Forms {
 					show_up_down = value;
 					// need to invalidate the whole control
 					this.Invalidate ();
+#if NET_2_0
 					OnUIAShowUpDownChanged ();
+#endif
 				}
 			}
 			get {
@@ -1089,11 +1099,11 @@ namespace System.Windows.Forms {
 				case "y":
 				case "yy":
 				case "yyyy":
-					for (int i = 1; i <= 10; i++) {
-						text = PartData.GetText (Value.AddYears (i), format);
-						size = gr.MeasureString (text, font, int.MaxValue, string_format);
-						result = Math.Max (result, size.Width);
-					}
+					// Actually all the allowed year values are between MinDateTime and MaxDateTime,
+					// which are 4 digits always
+					text = PartData.GetText (Value, format);
+					size = gr.MeasureString (text, font, int.MaxValue, string_format);
+					result = Math.Max (result, size.Width);
 					return result;
 				default:
 					return gr.MeasureString (format, font, int.MaxValue, string_format).Width;
@@ -1264,7 +1274,8 @@ namespace System.Windows.Forms {
 			if (month_calendar.Visible) {
 				month_calendar.Hide ();
 			}
-	}
+			Focus ();
+		}
 
 		private int GetSelectedPartIndex()
 		{
@@ -1338,7 +1349,9 @@ namespace System.Windows.Forms {
 			}
 
 			Invalidate ();
+#if NET_2_0
 			OnUIASelectionChanged ();
+#endif
 		}
 
 		internal void SelectNextPart()
@@ -1391,7 +1404,9 @@ namespace System.Windows.Forms {
 				}
 			}
 
+#if NET_2_0
 			OnUIASelectionChanged ();
+#endif
 		}
 
 		internal void SelectPreviousPart()
@@ -1447,7 +1462,9 @@ namespace System.Windows.Forms {
 				}
 			}
 
+#if NET_2_0
 			OnUIASelectionChanged ();
+#endif
 		}
 
 		// raised by key down events.
@@ -1668,6 +1685,9 @@ namespace System.Windows.Forms {
 			if (ShowCheckBox) {
 				is_checkbox_selected = true;
 				Invalidate (CheckBoxRect);
+#if NET_2_0
+				OnUIASelectionChanged ();
+#endif
 			}
 		}
 
@@ -1681,12 +1701,17 @@ namespace System.Windows.Forms {
 				Rectangle invalidate_rect = Rectangle.Ceiling (part_data [selected_index].drawing_rectangle);
 				invalidate_rect.Inflate (2, 2);
 				Invalidate (invalidate_rect);
+#if NET_2_0
 				OnUIASelectionChanged ();
+#endif
 			}
 			else if (is_checkbox_selected)
 			{
 				is_checkbox_selected = false;
 				Invalidate (CheckBoxRect);
+#if NET_2_0
+				OnUIASelectionChanged ();
+#endif
 			}
 		}
 
@@ -1713,7 +1738,6 @@ namespace System.Windows.Forms {
 		private void MonthCalendarDateSelectedHandler (object sender, DateRangeEventArgs e)
 		{
 			this.HideMonthCalendar ();	
-			this.Focus ();			
 		} 
 
 		private void MouseUpHandler(object sender, MouseEventArgs e)
@@ -1741,13 +1765,20 @@ namespace System.Windows.Forms {
 			{
 				is_checkbox_selected = true;
 				Checked = !Checked;
+#if NET_2_0
+				OnUIASelectionChanged ();
+#endif
 				return;
 			}
 
 			// Deselect the checkbox only if the pointer is not on it
 			// *and* the other parts are enabled (Checked as true)
-			if (Checked)
+			if (Checked) {
 				is_checkbox_selected = false;
+#if NET_2_0
+				OnUIASelectionChanged ();
+#endif
+			}
 
 			if (ShowUpDown && drop_down_arrow_rect.Contains (e.X, e.Y))
 			{
@@ -1772,7 +1803,6 @@ namespace System.Windows.Forms {
     				// mouse down on this control anywhere else collapses it
     				if (is_drop_down_visible) {    				
     					HideMonthCalendar ();
-					this.Focus ();
     				}
 				if (!(ShowCheckBox && Checked == false))
 				{
@@ -1794,7 +1824,9 @@ namespace System.Windows.Forms {
 					}
 					if (invalidate_afterwards) {
 						Invalidate ();
+#if NET_2_0
 						OnUIASelectionChanged ();
+#endif
 					}
 				}
 				
@@ -1811,7 +1843,6 @@ namespace System.Windows.Forms {
 				DropDownMonthCalendar ();
 			} else {
 				HideMonthCalendar ();
-				this.Focus ();
 			}
 		}
 		
@@ -1988,8 +2019,12 @@ namespace System.Windows.Forms {
 		
 		#endregion		
 
-	
+#if NET_2_0
 		#region UIA Framework: Methods, Properties and Events
+
+		internal bool UIAIsCheckBoxSelected {
+			get { return is_checkbox_selected; }
+		}
 
 		static object UIAMinimumChangedEvent = new object ();
 		static object UIAMaximumChangedEvent = new object ();
@@ -2071,5 +2106,6 @@ namespace System.Windows.Forms {
 		}
 		
 		#endregion
+#endif
 	}
 }

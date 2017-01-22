@@ -53,7 +53,7 @@ gpointer mono_create_thread (WapiSecurityAttributes *security,
 							 guint32 stacksize, WapiThreadStart start,
 							 gpointer param, guint32 create, gsize *tid) MONO_INTERNAL;
 
-void mono_thread_create_internal (MonoDomain *domain, gpointer func, gpointer arg, gboolean threadpool_thread) MONO_INTERNAL;
+MonoThread* mono_thread_create_internal (MonoDomain *domain, gpointer func, gpointer arg, gboolean threadpool_thread) MONO_INTERNAL;
 
 HANDLE ves_icall_System_Threading_Thread_Thread_internal(MonoThread *this_obj, MonoObject *start) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_Thread_init(MonoThread *this_obj) MONO_INTERNAL;
@@ -96,12 +96,14 @@ gint64 ves_icall_System_Threading_Interlocked_Decrement_Long(gint64 * location) 
 gint32 ves_icall_System_Threading_Interlocked_Exchange_Int(gint32 *location, gint32 value) MONO_INTERNAL;
 gint64 ves_icall_System_Threading_Interlocked_Exchange_Long(gint64 *location, gint64 value) MONO_INTERNAL;
 MonoObject *ves_icall_System_Threading_Interlocked_Exchange_Object(MonoObject **location, MonoObject *value) MONO_INTERNAL;
+gpointer ves_icall_System_Threading_Interlocked_Exchange_IntPtr(gpointer *location, gpointer value) MONO_INTERNAL;
 gfloat ves_icall_System_Threading_Interlocked_Exchange_Single(gfloat *location, gfloat value) MONO_INTERNAL;
 gdouble ves_icall_System_Threading_Interlocked_Exchange_Double(gdouble *location, gdouble value) MONO_INTERNAL;
 
 gint32 ves_icall_System_Threading_Interlocked_CompareExchange_Int(gint32 *location, gint32 value, gint32 comparand) MONO_INTERNAL;
 gint64 ves_icall_System_Threading_Interlocked_CompareExchange_Long(gint64 *location, gint64 value, gint64 comparand) MONO_INTERNAL;
 MonoObject *ves_icall_System_Threading_Interlocked_CompareExchange_Object(MonoObject **location, MonoObject *value, MonoObject *comparand) MONO_INTERNAL;
+gpointer ves_icall_System_Threading_Interlocked_CompareExchange_IntPtr(gpointer *location, gpointer value, gpointer comparand) MONO_INTERNAL;
 gfloat ves_icall_System_Threading_Interlocked_CompareExchange_Single(gfloat *location, gfloat value, gfloat comparand) MONO_INTERNAL;
 gdouble ves_icall_System_Threading_Interlocked_CompareExchange_Double(gdouble *location, gdouble value, gdouble comparand) MONO_INTERNAL;
 MonoObject* ves_icall_System_Threading_Interlocked_CompareExchange_T(MonoObject **location, MonoObject *value, MonoObject *comparand) MONO_INTERNAL;
@@ -119,6 +121,7 @@ gint64 ves_icall_System_Threading_Interlocked_Decrement_Long(gint64 * location) 
 
 void ves_icall_System_Threading_Thread_Abort (MonoThread *thread, MonoObject *state) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_ResetAbort (void) MONO_INTERNAL;
+MonoObject* ves_icall_System_Threading_Thread_GetAbortExceptionState (MonoThread *thread) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_Suspend (MonoThread *thread) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_Resume (MonoThread *thread) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_ClrState (MonoThread *thread, guint32 state) MONO_INTERNAL;
@@ -136,6 +139,7 @@ void ves_icall_System_Threading_Thread_VolatileWrite2 (void *ptr, gint16) MONO_I
 void ves_icall_System_Threading_Thread_VolatileWrite4 (void *ptr, gint32) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_VolatileWrite8 (void *ptr, gint64) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_VolatileWriteIntPtr (void *ptr, void *) MONO_INTERNAL;
+void ves_icall_System_Threading_Thread_VolatileWriteObject (void *ptr, void *) MONO_INTERNAL;
 
 void ves_icall_System_Threading_Thread_MemoryBarrier (void) MONO_INTERNAL;
 void ves_icall_System_Threading_Thread_Interrupt_internal (MonoThread *this_obj) MONO_INTERNAL;
@@ -182,5 +186,11 @@ void mono_threads_install_notify_pending_exc (MonoThreadNotifyPendingExcFunc fun
 	do { g_assert ((i) == 0 || (i) == 1); \
 		(hp)->hazard_pointers [(i)] = NULL; \
 	} while (0)
+
+MonoObject* mono_thread_get_execution_context (void) MONO_INTERNAL;
+void mono_thread_set_execution_context (MonoObject *ec) MONO_INTERNAL;
+
+void mono_runtime_set_has_tls_get (gboolean val) MONO_INTERNAL;
+gboolean mono_runtime_has_tls_get (void) MONO_INTERNAL;
 
 #endif /* _MONO_METADATA_THREADS_TYPES_H_ */

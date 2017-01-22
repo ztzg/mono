@@ -58,6 +58,7 @@ static MonoProfileJitResult    jit_end2;
 static MonoProfileMethodFunc   method_free;
 static MonoProfileMethodResult man_unman_transition;
 static MonoProfileAllocFunc    allocation_cb;
+static MonoProfileMonitorFunc  monitor_event_cb;
 static MonoProfileStatFunc     statistical_cb;
 static MonoProfileStatCallChainFunc statistical_call_chain_cb;
 static int                     statistical_call_chain_depth;
@@ -201,6 +202,12 @@ mono_profiler_install_allocation (MonoProfileAllocFunc callback)
 	allocation_cb = callback;
 }
 
+void
+mono_profiler_install_monitor  (MonoProfileMonitorFunc callback)
+{
+	monitor_event_cb = callback;
+}
+
 void 
 mono_profiler_install_statistical (MonoProfileStatFunc callback)
 {
@@ -330,6 +337,13 @@ mono_profiler_allocation (MonoObject *obj, MonoClass *klass)
 {
 	if ((mono_profiler_events & MONO_PROFILE_ALLOCATIONS) && allocation_cb)
 		allocation_cb (current_profiler, obj, klass);
+}
+
+void
+mono_profiler_monitor_event      (MonoObject *obj, MonoProfilerMonitorEvent event) {
+	if ((mono_profiler_events & MONO_PROFILE_MONITOR_EVENTS) && monitor_event_cb) {
+		monitor_event_cb (current_profiler, obj, event);
+	}
 }
 
 void
@@ -546,6 +560,38 @@ mono_profiler_runtime_initialized (void) {
 		runtime_initialized_event (current_profiler);
 }
 
+static MonoProfilerCodeChunkNew code_chunk_new = NULL;
+void
+mono_profiler_install_code_chunk_new (MonoProfilerCodeChunkNew callback) {
+	code_chunk_new = callback;
+}
+void
+mono_profiler_code_chunk_new (gpointer chunk, int size) {
+	if (code_chunk_new)
+		code_chunk_new (current_profiler, chunk, size);
+}
+
+static MonoProfilerCodeChunkDestroy code_chunk_destroy = NULL;
+void
+mono_profiler_install_code_chunk_destroy (MonoProfilerCodeChunkDestroy callback) {
+	code_chunk_destroy = callback;
+}
+void
+mono_profiler_code_chunk_destroy (gpointer chunk) {
+	if (code_chunk_destroy)
+		code_chunk_destroy (current_profiler, chunk);
+}
+
+static MonoProfilerCodeBufferNew code_buffer_new = NULL;
+void
+mono_profiler_install_code_buffer_new (MonoProfilerCodeBufferNew callback) {
+	code_buffer_new = callback;
+}
+void
+mono_profiler_code_buffer_new (gpointer buffer, int size, MonoProfilerCodeBufferType type, void *data) {
+	if (code_buffer_new)
+		code_buffer_new (current_profiler, buffer, size, type, data);
+}
 
 static GHashTable *coverage_hash = NULL;
 
@@ -1604,7 +1650,7 @@ mono_profiler_load (const char *desc)
 	}
 #endif
 	{
-		MonoDl *pmodule;
+		MonoDl *pmodule = NULL;
 		const char* col = strchr (desc, ':');
 		char* libname;
 		char* path;

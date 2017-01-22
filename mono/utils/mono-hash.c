@@ -161,6 +161,8 @@ mono_g_hash_table_new_type (GHashFunc    hash_func,
 		  MonoGHashGCType type)
 {
   MonoGHashTable *table = mono_g_hash_table_new_full (hash_func, key_equal_func, NULL, NULL);
+  if (type == MONO_HASH_KEY_GC || type == MONO_HASH_KEY_VALUE_GC)
+	  g_assert (hash_func);
   table->gc_type = type;
 #if defined(HAVE_SGEN_GC)
   if (type < 0 || type > MONO_HASH_KEY_VALUE_GC)

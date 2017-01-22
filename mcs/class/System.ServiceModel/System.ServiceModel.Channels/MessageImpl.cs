@@ -142,7 +142,6 @@ namespace System.ServiceModel.Channels
 			if (isEmptyHeader)
 				return;
 
-#if NET_2_1
 			while (!reader.EOF && reader.NodeType != XmlNodeType.EndElement) {
 				if (reader.NodeType == XmlNodeType.Element)
 					headers.Add (new MessageHeader.RawMessageHeader (reader, envNS));
@@ -151,19 +150,6 @@ namespace System.ServiceModel.Channels
 				// FIXME: handle UnderstoodHeaders as well.
 				reader.MoveToContent ();
 			}
-#else
-			XmlDocument doc = null;
-			while (!reader.EOF && reader.NodeType != XmlNodeType.EndElement) {
-				if (doc == null)
-					doc = new XmlDocument ();
-				if (reader.NodeType == XmlNodeType.Element)
-					headers.Add (new MessageHeader.RawMessageHeader (doc.ReadNode (reader) as XmlElement, envNS));
-				else
-					reader.Skip ();
-				// FIXME: handle UnderstoodHeaders as well.
-				reader.MoveToContent ();
-			}
-#endif
 			reader.ReadEndElement ();
 			reader.MoveToContent ();
 		}
@@ -268,6 +254,14 @@ namespace System.ServiceModel.Channels
 			XmlDictionaryWriter writer)
 		{
 			body.WriteBodyContents (writer);
+		}
+
+		protected override MessageBuffer OnCreateBufferedCopy (
+			int maxBufferSize)
+		{
+			var headers = new MessageHeaders (Headers);
+			var props = new MessageProperties (Properties);
+			return new DefaultMessageBuffer (maxBufferSize, headers, props, body.CreateBufferedCopy (maxBufferSize), false);
 		}
 	}
 }

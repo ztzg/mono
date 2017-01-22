@@ -62,7 +62,7 @@ namespace Microsoft.Build.Tasks {
 					commandLine.AppendSwitch ("/checked-");
 
 			if (!String.IsNullOrEmpty (DefineConstants)) {
-				string [] defines = DefineConstants.Split (new char [] {';'},
+				string [] defines = DefineConstants.Split (new char [] {';', ' '},
 						StringSplitOptions.RemoveEmptyEntries);
 				if (defines.Length > 0)
 					commandLine.AppendSwitchUnquotedIfNotNull ("/define:",
@@ -186,7 +186,9 @@ namespace Microsoft.Build.Tasks {
 		}
 
 		protected override string ToolName {
-			get { return "gmcs"; }
+			get {
+				return Utilities.RunningOnWindows ? "gmcs.bat" : "gmcs";
+			}
 		}
 
 		public bool UseHostCompilerIfAvailable {

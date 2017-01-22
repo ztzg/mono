@@ -169,7 +169,10 @@ namespace System.ServiceModel.Channels
 		{
 			// remaining contexts are ignored ... e.g. such binding
 			// element that always causes an error is ignored.
-			return new HttpChannelListener<TChannel> (this, context);
+			if (ServiceHostingEnvironment.InAspNet)
+				return new AspNetChannelListener<TChannel> (this, context);
+			else
+				return new HttpSimpleChannelListener<TChannel> (this, context);
 		}
 #endif
 
@@ -181,6 +184,15 @@ namespace System.ServiceModel.Channels
 		[MonoTODO]
 		public override T GetProperty<T> (BindingContext context)
 		{
+			// http://blogs.msdn.com/drnick/archive/2007/04/10/interfaces-for-getproperty-part-1.aspx
+#if !NET_2_1
+			if (typeof (T) == typeof (ISecurityCapabilities))
+				throw new NotImplementedException ();
+			if (typeof (T) == typeof (IBindingDeliveryCapabilities))
+				throw new NotImplementedException ();
+#endif
+			if (typeof (T) == typeof (TransferMode))
+				return (T) (object) TransferMode;
 			return base.GetProperty<T> (context);
 		}
 

@@ -42,7 +42,6 @@
     <ErrorReport>prompt</ErrorReport>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.VisualStudio.QualityTools.UnitTestFramework, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core">
@@ -94,6 +93,9 @@
     <Compile Include="..\DbLinq.Sqlite\SqliteVendor.cs">
       <Link>Vendors\DbLinq.Sqlite\SqliteVendor.cs</Link>
     </Compile>
+    <Compile Include="..\DbLinq.SqlServer\SqlServerExpressionTranslator.cs">
+      <Link>Vendors\DbLinq.SqlServer\SqlServerExpressionTranslator.cs</Link>
+    </Compile>
     <Compile Include="Data\Linq\ChangeAction.cs" />
     <Compile Include="Data\Linq\ChangeSet.cs" />
     <Compile Include="Data\Linq\Database\IDatabaseContext.cs" />
@@ -116,9 +118,11 @@
     <Compile Include="Data\Linq\Identity\Implementation\IdentityReaderFactory.cs" />
     <Compile Include="Data\Linq\IExecuteResult.cs" />
     <Compile Include="Data\Linq\IMemberModificationHandler.cs" />
+    <Compile Include="Data\Linq\Implementation\DisabledEntityTracker.cs" />
     <Compile Include="Data\Linq\Implementation\EntityState.cs" />
     <Compile Include="Data\Linq\Implementation\EntityTrack.cs" />
     <Compile Include="Data\Linq\Implementation\EntityTracker.cs" />
+    <Compile Include="Data\Linq\Implementation\IEntityTracker.cs" />
     <Compile Include="Data\Linq\Implementation\MemberModificationHandler.cs" />
     <Compile Include="Data\Linq\Implementation\QueryProvider.cs" />
     <Compile Include="Data\Linq\Implementation\VendorProvider.cs" />
@@ -133,7 +137,9 @@
     <Compile Include="Data\Linq\Mapping\AttributedMetaTable.cs" />
     <Compile Include="Data\Linq\Mapping\AttributedMetaType.cs" />
     <Compile Include="Data\Linq\Mapping\AttributeMappingSource.cs" />
+    <Compile Include="Data\Linq\Mapping\LambdaMetaAccessor.cs" />
     <Compile Include="Data\Linq\Mapping\MappingContext.cs" />
+    <Compile Include="Data\Linq\Mapping\XmlMappingSource.cs" />
     <Compile Include="Data\Linq\RefreshMode.cs" />
     <Compile Include="Data\Linq\SqlClient\FirebirdProvider.cs" />
     <Compile Include="Data\Linq\SqlClient\IngresProvider.cs" />
@@ -177,6 +183,7 @@
     <Compile Include="Data\Linq\Sugar\ExpressionQuery.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\ColumnExpression.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\EntitySetExpression.cs" />
+    <Compile Include="Data\Linq\Sugar\Expressions\ExpressionTranslator.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\ObjectInputParameterExpression.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\ObjectOutputParameterExpression.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\CustomExpressionType.cs" />
@@ -193,6 +200,7 @@
     <Compile Include="Data\Linq\Sugar\Expressions\SpecialExpression.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\SpecialExpressionType.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\StartIndexOffsetExpression.cs" />
+    <Compile Include="Data\Linq\Sugar\Expressions\SubSelectExpression.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\TableExpression.cs" />
     <Compile Include="Data\Linq\Sugar\Expressions\TableJoinType.cs" />
     <Compile Include="Data\Linq\Sugar\ExpressionTier.cs" />
@@ -296,13 +304,13 @@
     <Compile Include="System.Data.Linq\System.Data.Linq.Mapping\ResultTypeAttribute.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.Mapping\TableAttribute.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.Mapping\UpdateCheck.cs" />
-    <Compile Include="System.Data.Linq\System.Data.Linq.Mapping\XmlMappingSource.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.SqlClient.Implementation\ObjectMaterializer.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.SqlClient\Sql2000Provider.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.SqlClient\Sql2005Provider.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.SqlClient\SqlHelpers.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.SqlClient\SqlMethods.cs" />
     <Compile Include="System.Data.Linq\System.Data.Linq.SqlClient\SqlProvider.cs" />
+    <Compile Include="Util\DbmlExtensions.cs" />
     <Compile Include="Util\ExpressionChainEqualityComparer.cs" />
     <Compile Include="Util\ExpressionEqualityComparer.cs" />
     <Compile Include="Util\IDataRecordExtensions.cs" />
@@ -310,6 +318,7 @@
     <Compile Include="Language\ILanguages.cs" />
     <Compile Include="Language\ILanguageWords.cs" />
     <Compile Include="Util\IDbDataParameterExtensions.cs" />
+    <Compile Include="Util\IThreadSafeDictionary.cs" />
     <Compile Include="Util\LambdaComparer.cs" />
     <Compile Include="Util\DataCommand.cs" />
     <Compile Include="Schema\INameFormatter.cs" />
@@ -319,10 +328,14 @@
     <Compile Include="Language\Implementation\NoLanguageWords.cs" />
     <Compile Include="Schema\Implementation\NameFormatter.cs" />
     <Compile Include="Util\MemberInfoExtensions.cs" />
+    <Compile Include="Util\Output.cs" />
+    <Compile Include="Util\OutputLevel.cs" />
+    <Compile Include="Util\Profiler.cs" />
     <Compile Include="Util\ReflectionExtensions.cs" />
     <Compile Include="Util\ReflectionUtility.cs" />
     <Compile Include="Util\StringExtensions.cs" />
     <Compile Include="Util\TextWriterExtension.cs" />
+    <Compile Include="Util\ThreadSafeDictionary.cs" />
     <Compile Include="Util\TypeConvert.cs" />
     <Compile Include="Util\QuotesHelper.cs" />
     <Compile Include="Util\ReferenceEqualityComparer.cs" />

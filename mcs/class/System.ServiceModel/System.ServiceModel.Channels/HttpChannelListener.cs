@@ -28,6 +28,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.ServiceModel;
@@ -37,28 +38,112 @@ using System.Text;
 
 namespace System.ServiceModel.Channels
 {
-	internal class HttpChannelListener<TChannel> : ChannelListenerBase<TChannel>
+	internal class HttpSimpleChannelListener<TChannel> : HttpChannelListenerBase<TChannel>
+		where TChannel : class, IChannel
+	{
+		HttpListenerManager<TChannel> httpChannelManager;
+
+		public HttpSimpleChannelListener (HttpTransportBindingElement source,
+			BindingContext context)
+			: base (source, context)
+		{
+		}
+
+		public HttpListener Http {
+			get {  return httpChannelManager.HttpListener; }
+		}
+
+		object creator_lock = new object ();
+
+		protected override TChannel CreateChannel (TimeSpan timeout)
+		{
+			lock (creator_lock) {
+				return CreateChannelCore (timeout);
+			}
+		}
+
+		TChannel CreateChannelCore (TimeSpan timeout)
+		{
+			if (typeof (TChannel) == typeof (IReplyChannel))
+				return (TChannel) (object) new HttpSimpleReplyChannel ((HttpSimpleChannelListener<IReplyChannel>) (object) this);
+			// FIXME: session channel support
+			if (typeof (TChannel) == typeof (IReplySessionChannel))
+				throw new NotImplementedException ();
+
+			throw new NotSupportedException (String.Format ("Channel type {0} is not supported", typeof (TChannel)));
+		}
+
+		protected override void OnOpen (TimeSpan timeout)
+		{
+			base.OnOpen (timeout);
+			StartListening (timeout);
+		}
+
+		protected override void OnAbort ()
+		{
+			httpChannelManager.Stop (true);
+		}
+
+		protected override void OnClose (TimeSpan timeout)
+		{
+			if (State == CommunicationState.Closed)
+				return;
+			base.OnClose (timeout);
+			// FIXME: it is said that channels are not closed
+			// when the channel listener is closed.
+			// http://blogs.msdn.com/drnick/archive/2006/03/22/557642.aspx
+			httpChannelManager.Stop (false);
+		}
+
+		void StartListening (TimeSpan timeout)
+		{
+			httpChannelManager = new HttpListenerManager<TChannel> (this);
+			httpChannelManager.Open (timeout);
+		}
+	}
+
+	internal class AspNetChannelListener<TChannel> : HttpChannelListenerBase<TChannel>
+		where TChannel : class, IChannel
+	{
+		public AspNetChannelListener (HttpTransportBindingElement source,
+			BindingContext context)
+			: base (source, context)
+		{
+			HttpHandler = SvcHttpHandlerFactory.Handlers.Values.First (v => v.Uri.Equals (Uri));
+			if (HttpHandler == null)
+				throw new Exception ("Unexpected internal error: HTTP handler not found for URI " + Uri);
+		}
+
+		internal SvcHttpHandler HttpHandler { get; private set; }
+
+		protected override TChannel CreateChannel (TimeSpan timeout)
+		{
+			if (typeof (TChannel) == typeof (IReplyChannel))
+				return (TChannel) (object) new AspNetReplyChannel ((AspNetChannelListener<IReplyChannel>) (object) this);
+			// FIXME: session channel support
+			if (typeof (TChannel) == typeof (IReplySessionChannel))
+				throw new NotImplementedException ();
+
+			throw new NotSupportedException (String.Format ("Channel type {0} is not supported", typeof (TChannel)));
+		}
+	}
+
+	internal abstract class HttpChannelListenerBase<TChannel> : InternalChannelListenerBase<TChannel>
 		where TChannel : class, IChannel
 	{
 		HttpTransportBindingElement source;
 		BindingContext context;
-		Uri listen_uri;
-		List<IChannel> channels = new List<IChannel> ();
+		List<TChannel> channels = new List<TChannel> ();
 		MessageEncoder encoder;
-		HttpChannelManager<TChannel> httpChannelManager;
 
-		public HttpChannelListener (HttpTransportBindingElement source,
+		public HttpChannelListenerBase (HttpTransportBindingElement source,
 			BindingContext context)
-			: base (context.Binding)
+			: base (context)
 		{
-			// FIXME: consider ListenUriMode
-			// FIXME: there should be some way to post-provide Uri in case of null listenerUri in context.
-			listen_uri = context.ListenUriBaseAddress != null ?
-				new Uri (context.ListenUriBaseAddress, context.ListenUriRelativeAddress) : null;
 			foreach (BindingElement be in context.RemainingBindingElements) {
 				MessageEncodingBindingElement mbe = be as MessageEncodingBindingElement;
 				if (mbe != null) {
-					encoder = mbe.CreateMessageEncoderFactory ().Encoder;
+					encoder = CreateEncoder<TChannel> (mbe);
 					break;
 				}
 			}
@@ -66,120 +151,43 @@ namespace System.ServiceModel.Channels
 				encoder = new TextMessageEncoder (MessageVersion.Default, Encoding.UTF8);
 		}
 
-		public HttpListener Http {
-			get {  return httpChannelManager.HttpListener; }
-		}
-
 		public MessageEncoder MessageEncoder {
 			get { return encoder; }
 		}
 
-		public override Uri Uri {
-			get { return listen_uri; }
+		protected IList<TChannel> Channels {
+			get { return channels; }
 		}
 
 		protected override TChannel OnAcceptChannel (TimeSpan timeout)
 		{
-			TChannel ch = PopulateChannel (timeout);
-			channels.Add (ch);
+			TChannel ch = CreateChannel (timeout);
+			Channels.Add (ch);
 			return ch;
 		}
 
-		TChannel PopulateChannel (TimeSpan timeout)
-		{
-			if (typeof (TChannel) == typeof (IReplyChannel)) {
-				if (ServiceHostingEnvironment.InAspNet)
-					return (TChannel) (object) new AspNetReplyChannel (
-						(HttpChannelListener<IReplyChannel>) (object) this, timeout);
-				else
-					return (TChannel) (object) new HttpReplyChannel (
-						(HttpChannelListener<IReplyChannel>) (object) this, timeout);
-			}
-
-			// FIXME: implement more
-
-			throw new NotImplementedException ();
-		}
-
-		protected override IAsyncResult OnBeginAcceptChannel (
-			TimeSpan timeout, AsyncCallback callback,
-			object asyncState)
-		{
-			throw new NotImplementedException ();
-		}
-
-		protected override TChannel OnEndAcceptChannel (IAsyncResult result)
-		{
-			throw new NotImplementedException ();
-		}
-
-		protected override IAsyncResult OnBeginWaitForChannel (
-			TimeSpan timeout, AsyncCallback callback, object state)
-		{
-			throw new NotImplementedException ();
-		}
-
-		protected override bool OnEndWaitForChannel (IAsyncResult result)
-		{
-			throw new NotImplementedException ();
-		}
+		protected abstract TChannel CreateChannel (TimeSpan timeout);
 
 		protected override bool OnWaitForChannel (TimeSpan timeout)
 		{
 			throw new NotImplementedException ();
 		}
-		
-		void StartListening (TimeSpan timeout)
+
+		protected override void OnAbort ()
 		{
-			httpChannelManager = new HttpChannelManager<TChannel> (this);
-			httpChannelManager.Open (timeout);
+			OnClose (TimeSpan.Zero);
 		}
 
 		protected override void OnOpen (TimeSpan timeout)
 		{
-			if (ServiceHostingEnvironment.InAspNet)
-				return;
-
-			StartListening (timeout);
-		}
-
-		protected override IAsyncResult OnBeginOpen (TimeSpan timeout,
-			AsyncCallback callback, object state)
-		{
-			throw new NotImplementedException ();
-		}
-
-		protected override void OnEndOpen (IAsyncResult result)
-		{
-			throw new NotImplementedException ();
 		}
 
 		protected override void OnClose (TimeSpan timeout)
 		{
-			if (ServiceHostingEnvironment.InAspNet)
-				return;
-
-			foreach (TChannel ch in channels)
-				ch.Close(timeout);
-			httpChannelManager.Stop ();
-		}
-
-		[MonoTODO]
-		protected override IAsyncResult OnBeginClose (TimeSpan timeout,
-			AsyncCallback callback, object state)
-		{
-			throw new NotImplementedException ();
-		}
-
-		[MonoTODO]
-		protected override void OnEndClose (IAsyncResult result)
-		{
-			throw new NotImplementedException ();
-		}
-
-		[MonoTODO ("find out what to do here.")]
-		protected override void OnAbort ()
-		{
+			DateTime start = DateTime.Now;
+			foreach (TChannel ch in new List<TChannel> (Channels)) // they will be removed during iteration, so create another one
+				ch.Close (timeout - (DateTime.Now - start));
+			base.OnClose (timeout - (DateTime.Now - start));
 		}
 	}
 }

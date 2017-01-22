@@ -53,7 +53,11 @@ namespace System.Net.Sockets
 		public UdpClient(AddressFamily family)
 		{
 			if(family != AddressFamily.InterNetwork && family != AddressFamily.InterNetworkV6)
-				throw new ArgumentException("Family must be InterNetwork or InterNetworkV6", "family");
+#if NET_2_0
+				throw new ArgumentException ("Family must be InterNetwork or InterNetworkV6", "family");
+#else
+				throw new ArgumentException ("family");
+#endif
 
 			this.family = family;
 			InitSocket (null);
@@ -84,23 +88,30 @@ namespace System.Net.Sockets
 #if NET_1_1
 		public UdpClient (int port, AddressFamily family)
 		{
-			if (family != AddressFamily.InterNetwork &&
-			    family != AddressFamily.InterNetworkV6) {
+			if (family != AddressFamily.InterNetwork && family != AddressFamily.InterNetworkV6)
+#if NET_2_0
 				throw new ArgumentException ("Family must be InterNetwork or InterNetworkV6", "family");
-			}
-			
+#else
+				throw new ArgumentException ("family");
+#endif
+
 			if (port < IPEndPoint.MinPort ||
 			    port > IPEndPoint.MaxPort) {
 				throw new ArgumentOutOfRangeException ("port");
 			}
-			
+
 			this.family = family;
 
-			IPEndPoint localEP = new IPEndPoint (IPAddress.Any, port);
+			IPEndPoint localEP;
+
+			if (family == AddressFamily.InterNetwork)
+				localEP = new IPEndPoint (IPAddress.Any, port);
+			else
+				localEP = new IPEndPoint (IPAddress.IPv6Any, port);
 			InitSocket (localEP);
 		}
 #endif
-		
+
 		public UdpClient (string hostname, int port)
 		{
 			if (hostname == null)
@@ -181,7 +192,7 @@ namespace System.Net.Sockets
 			if (port < IPEndPoint.MinPort || port > IPEndPoint.MaxPort)
 				throw new ArgumentOutOfRangeException ("port");
 
-			IPAddress[] addresses = Dns.Resolve (hostname).AddressList;
+			IPAddress[] addresses = Dns.GetHostAddresses (hostname);
 			for(int i=0; i<addresses.Length; i++) {
 				try {
 					this.family = addresses[i].AddressFamily;
@@ -245,6 +256,13 @@ namespace System.Net.Sockets
 		{
 			CheckDisposed ();
 
+			if (multicastAddr == null)
+#if NET_2_0
+				throw new ArgumentNullException ("multicastAddr");
+#else
+				throw new NullReferenceException ();
+#endif
+
 			if(family == AddressFamily.InterNetwork)
 				socket.SetSocketOption (SocketOptionLevel.IP, SocketOptionName.AddMembership,
 					new MulticastOption (multicastAddr));
@@ -261,24 +279,25 @@ namespace System.Net.Sockets
 		{
 			CheckDisposed ();
 
-			/* Does this overload only apply to IPv6?
-			 * Only the IPv6MulticastOption has an
-			 * ifindex-using constructor.  The MS docs
-			 * don't say.
-			 */
-			if (family == AddressFamily.InterNetworkV6) {
+			if (multicastAddr == null)
+				throw new ArgumentNullException ("multicastAddr");
+
+			if (family == AddressFamily.InterNetworkV6)
 				socket.SetSocketOption (SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new IPv6MulticastOption (multicastAddr, ifindex));
-			}
+			else
+				throw new SocketException ((int) SocketError.OperationNotSupported);
 		}
 #endif
-		
+
 		public void JoinMulticastGroup (IPAddress multicastAddr, int timeToLive)
 		{
 			CheckDisposed ();
-			JoinMulticastGroup (multicastAddr);
+			if (multicastAddr == null)
+				throw new ArgumentNullException ("multicastAddr");
 			if (timeToLive < 0 || timeToLive > 255)
 				throw new ArgumentOutOfRangeException ("timeToLive");
 
+			JoinMulticastGroup (multicastAddr);
 			if(family == AddressFamily.InterNetwork)
 				socket.SetSocketOption (SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive,
 					timeToLive);
@@ -295,16 +314,15 @@ namespace System.Net.Sockets
 		{
 			CheckDisposed ();
 
-			if (family == AddressFamily.InterNetwork) {
+			if (family == AddressFamily.InterNetwork)
 				socket.SetSocketOption (SocketOptionLevel.IP, SocketOptionName.AddMembership, new MulticastOption (multicastAddr, localAddress));
-			} else if (family == AddressFamily.InterNetworkV6) {
-				socket.SetSocketOption (SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new MulticastOption (multicastAddr, localAddress));
-			}
+			else
+				throw new SocketException ((int) SocketError.OperationNotSupported);
 		}
 #endif
-		
+
 		#endregion
-#region Data I/O
+		#region Data I/O
 		public byte [] Receive (ref IPEndPoint remoteEP)
 		{
 			CheckDisposed ();
@@ -380,7 +398,7 @@ namespace System.Net.Sockets
 		public int Send (byte [] dgram, int bytes, string hostname, int port)
 		{
 			return Send (dgram, bytes, 
-				     new IPEndPoint (Dns.Resolve (hostname).AddressList [0], port));
+				     new IPEndPoint (Dns.GetHostAddresses (hostname) [0], port));
 		}
 
 		private byte [] CutArray (byte [] orig, int length)
@@ -449,7 +467,7 @@ namespace System.Net.Sockets
 					       AsyncCallback requestCallback,
 					       object state)
 		{
-			return(BeginSend (datagram, bytes, new IPEndPoint (Dns.Resolve (hostname).AddressList[0], port), requestCallback, state));
+			return(BeginSend (datagram, bytes, new IPEndPoint (Dns.GetHostAddresses (hostname) [0], port), requestCallback, state));
 		}
 		
 		public int EndSend (IAsyncResult asyncResult)

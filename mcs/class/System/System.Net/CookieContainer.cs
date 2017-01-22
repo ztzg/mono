@@ -40,8 +40,11 @@ namespace System.Net
 {
 	[Serializable]
 	[MonoTODO ("Need to remove older/unused cookies if it reaches the maximum capacity")]
-	public class CookieContainer
-	{
+#if NET_2_1
+	public sealed class CookieContainer {
+#else
+	public class CookieContainer {
+#endif
 		public const int DefaultCookieLengthLimit = 4096;
 		public const int DefaultCookieLimit = 300;
 		public const int DefaultPerDomainCookieLimit = 20;
@@ -60,7 +63,11 @@ namespace System.Net
 		public CookieContainer (int capacity)
 		{
 			if (capacity <= 0)
-				throw new ArgumentException ("Must be greater than zero", "capacity");
+#if NET_2_0
+				throw new ArgumentException ("Must be greater than zero", "Capacity");
+#else
+				throw new ArgumentException ("Capacity");
+#endif
 
 			this.capacity = capacity;
 		}
@@ -69,10 +76,21 @@ namespace System.Net
 			: this (capacity)
 		{
 			if (perDomainCapacity != Int32.MaxValue && (perDomainCapacity <= 0 || perDomainCapacity > capacity))
-				throw new ArgumentException ("Invalid value", "perDomaniCapacity");
+#if NET_2_0
+				throw new ArgumentOutOfRangeException ("perDomainCapacity",
+					string.Format ("PerDomainCapacity must be " +
+					"greater than {0} and less than {1}.", 0,
+					capacity));
+#else
+				throw new ArgumentException ("PerDomainCapacity");
+#endif
 
 			if (maxCookieSize <= 0)
-				throw new ArgumentException ("Must be greater than zero", "maxCookieSize");
+#if NET_2_0
+				throw new ArgumentException ("Must be greater than zero", "MaxCookieSize");
+#else
+				throw new ArgumentException ("MaxCookieSize");
+#endif
 
 			this.perDomainCapacity = perDomainCapacity;
 			this.maxCookieSize = maxCookieSize;
@@ -88,12 +106,11 @@ namespace System.Net
 			get { return capacity; }
 			set { 
 				if (value < 0 || (value < perDomainCapacity && perDomainCapacity != Int32.MaxValue))
-					throw new ArgumentOutOfRangeException ("value");
-
-				if (value < maxCookieSize)
-					maxCookieSize = value;
-
-				capacity = value;							
+					throw new ArgumentOutOfRangeException ("value",
+						string.Format ("Capacity must be greater " +
+						"than {0} and less than {1}.", 0,
+						perDomainCapacity));
+				capacity = value;
 			}
 		}
 		
@@ -101,7 +118,7 @@ namespace System.Net
 			get { return maxCookieSize; }
 			set {
 				if (value <= 0)
-					throw new ArgumentOutOfRangeException ("value");				
+					throw new ArgumentOutOfRangeException ("value");
 				maxCookieSize = value;
 			}
 		}
@@ -110,8 +127,7 @@ namespace System.Net
 			get { return perDomainCapacity; }
 			set {
 				if (value != Int32.MaxValue && (value <= 0 || value > capacity))
-					throw new ArgumentOutOfRangeException ("value");					
-
+					throw new ArgumentOutOfRangeException ("value");
 				perDomainCapacity = value;
 			}
 		}
@@ -122,7 +138,11 @@ namespace System.Net
 				throw new ArgumentNullException ("cookie");
 
 			if (cookie.Domain == "")
-				throw new ArgumentException ("Cookie domain not set.", "cookie");
+#if NET_2_0
+				throw new ArgumentException ("Cookie domain not set.", "cookie.Domain");
+#else
+				throw new ArgumentException ("cookie.Domain");
+#endif
 
 			if (cookie.Value.Length > maxCookieSize)
 				throw new CookieException ("value is larger than MaxCookieSize.");
@@ -251,20 +271,23 @@ namespace System.Net
 
 		static bool CheckDomain (string domain, string host)
 		{
-			if (domain != "" && domain [0] != '.')
-				return (String.Compare (domain, host, true, CultureInfo.InvariantCulture) == 0);
-
-			int dot = host.IndexOf ('.');
-			if (dot == -1)
-				return (String.Compare (host, domain, true, CultureInfo.InvariantCulture) == 0);
-
-			if (dot == 0 && String.Compare ("." + host, domain, true, CultureInfo.InvariantCulture) == 0)
-			    return true;
-	
-			if (host.Length < domain.Length)
+			if (domain == String.Empty)
 				return false;
 
-			string subdomain = host.Substring (host.Length - domain.Length);
+			int hlen = host.Length;
+			int dlen = domain.Length;
+			if (hlen < dlen)
+				return false;
+
+			if (hlen == dlen)
+				return (String.Compare (domain, host, true, CultureInfo.InvariantCulture) == 0);
+
+			if (domain [0] != '.') {
+				domain = "." + domain;
+				dlen++;
+			}
+
+			string subdomain = host.Substring (hlen - dlen);
 			return (String.Compare (subdomain, domain, true, CultureInfo.InvariantCulture) == 0);
 		}
 
@@ -280,8 +303,7 @@ namespace System.Net
 
 			foreach (Cookie cookie in cookies) {
 				string domain = cookie.Domain;
-				string host = uri.Host;
-				if (!CheckDomain (domain, host))
+				if (!CheckDomain (domain, uri.Host))
 					continue;
 
 				if (cookie.Port != "" && cookie.Ports != null && uri.Port != -1) {

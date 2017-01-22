@@ -1,6 +1,2975 @@
-2009-03-31  Martin Baulig  <martin@ximian.com>
+2009-09-24  Zoltan Varga  <vargaz@gmail.com>
 
-	* mono-debug.h (MONO_DEBUGGER_MINOR_VERSION): Bump to 2.
+	* marshal.c (emit_ptr_to_object_conv): Generate an exception instead of
+	aborting when a conversion is not implemented.
+
+2009-09-23  Miguel de Icaza  <miguel@novell.com>
+
+	* verify.c: when comparing culture strings, use g_ascii_strcmp
+
+	* assembly.c (mono_public_tokens_are_equal): Change g_strcasecmp
+	when comparing public key tokens to use memcmp on 16 bytes.   I do
+	not believe this ever worked as advertised in the past.
+
+	The standard Public Key is 00 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00
+	which would have always failed earlier.
+
+2009-06-25  Miguel de Icaza  <miguel@novell.com>
+
+	* gc.c: Raise a NullArgumentException if the object passed is
+	null.
+
+2009-09-22  Zoltan Varga  <vargaz@gmail.com>
+
+	* image.c (mono_image_close): Atomically decrement the reference count and
+	remove the image from the hash tables, to prevent another thread from seeing a
+	dying MonoImage. Fixes #541194.
+
+2009-09-22 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* threadpool.c: actually use the minimum number of 'completion ports'
+	(for us is just a potential worker thread).
+
+2009-09-22 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* threadpool.c: remove ares_htable. It does not make sense any more
+	since the same objects are now stored in GC-tracked arrays while they are
+	in the queue.
+
+2009-09-22 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* threadpool.c: increase the minimum length of the queues to 128.
+	Remove warning.
+
+2009-09-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_string_ctor_signature): New internal function to
+	return the modified signature used by string ctors.
+
+2009-09-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke_dynamic): New internal function
+	to return a runtime-invoke wrapper which uses DYN_CALL to call the wrapped
+	method, to be used by full-aot.
+
+2009-09-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Since the runtime supports lazy initialization of a type's vtable and this can cause a type
+	to fail, we need to ensure that the vtable is properly initialized at spots were the type must
+	be known to be good.
+
+	* class.c (mono_class_init): Fail array types if their element type fails initialization
+	as well.
+
+	* object.c (mono_class_create_runtime_vtable): Fail array types if their element type fails
+	initialization, additionally we request the element_type vtable to be initialized as well.
+
+	This is fine and should not increase the working set in any meaningful way since it's reasonable
+	to assume	that most code will create an array and eventually populate it, which will require the
+	type's vtable to be initialized.
+
+	* loader.c (field_from_memberref): Add a comment for a possibly useless mono_class_init call.
+
+2009-09-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* normalization-tables.h : regenerated.
+
+2009-09-16  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-debug.c (mono_debug_add_method): Increase the size of the buffer,
+	a leb128 encoding can take up to 5 bytes.
+
+2009-09-15  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (verify_class_overrides): Remove useless argument.
+
+	* class.c (mono_class_setup_vtable_general): Move the overrides check to happen
+	before interface enumeration as this is no longer required.
+
+2009-09-15  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c: New function mono_class_is_assignable_from_slow that is safe to be
+	used under mono_class_init context. This functions avoid any code path that
+	calls mono_class_init, which leads it to be slow as some things like the interface
+	bitmap are not available.
+
+	* class.c (verify_class_overrides): Use mono_class_is_assignable_from_slow instead
+	of it's own broken version. Fixes the verifier part of #538588.
+
+	* class-internals.h: Export mono_class_is_assignable_from_slow as part of the internal
+	API.
+
+2009-09-15  Mark Probst  <mark.probst@gmail.com>
+
+	* class.c (mono_class_init): Always set an exception in a class if
+	vtable setup fails.  Fixes #538577.
+
+	* generic-sharing.c: Raise an exception if mono_class_vtable()
+	returns NULL.
+
+2009-09-13  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Don't share instance 
+	methods of vtypes, as they could be incorrectly shared with static methods
+	taking an IntPtr argument.
+
+2009-09-12 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* domain.c:
+	* object.c:
+	* class-internals.h: renamed waithandle_class to
+	manualresetevent_class.
+	* marshal.c: propagate the exception if a remoting BeginInvoke call
+	fails.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* object.c: Properly handle vtable failures.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* socket-io.c: Assert on vtable failure.
+
+	* mono-mlist.c: Assert on vtable failure.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* marshal.c: Assert on vtable failure.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c: Properly handle vtable failures.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* debug-helpers.c (mono_class_describe_statics): Properly handle vtable failures.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* cominterop.c (ves_icall_System_ComObject_CreateRCW): Property handle vtable failures.
+
+	* console-unix.c (do_console_cancel_event): Same.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class-internals.h: Add mono_class_vtable_full function that allows control
+	if an exception should be raised or not.
+
+	* object.c (mono_class_vtable): Call into mono_class_vtable_full. Fix this function
+	to do what its documentation say, that is to return NULL and set exception_type on
+	failure.
+
+	* object.c (mono_class_create_runtime_vtable): Add new raise_on_error parameter
+	and change the code to honor it.
+
+2009-09-11  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c: Fix typo in error message.
+
+2009-09-10  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Fix default_platform_check so it can run
+	the runtime coreclr tests (without an infinite recursion when
+	throwing an exception).
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	object.c (mono_delegate_ctor_with_method): Guard against null method.
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* marshal.c (mono_marshal_get_xappdomain_dispatch): Add an assert
+	that should be replaced with error handling later.
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* marshal.c (mono_delegate_end_invoke): Fix warning.
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_field_from_token): Properly handle invalid
+	dynamic tokens.
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c (verify_image_file): Skip types that can't be
+	decoded.
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c: Look for recursive valuetypes only against the
+	type been initialized as this is a lot simpler and works.
+
+2009-09-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c: Ensure that fields are properly loaded before
+	checking them.
+
+2009-09-10  Bill Holmes  <billholmes54@gmail.com>
+
+	* object.c (mono_object_get_virtual_method) : Call 
+	  mono_cominterop_get_invoke if the object is a COM object.
+
+	Code is contributed under MIT/X11 license.
+
+2009-09-09  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c: Check for recursive valuetype definitions.
+
+2009-09-08  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Use inheritance-aware interface offsets. Inherited types use the same offsets
+	of their parents. This reduce offset duplication in case more than one type in
+	the inheritance tree explicitly implements the same interface.
+
+	This also removes a source of vtable bubbles found in #532409. An abstract type
+	isn't required to provide abstract methods to all interfaces it implements, which
+	resulted in a bubble with the previous scheme as the child would get a non-full
+	vtable from its parent. We fail all concrete types with vtable bubbles, so this
+	should be fixed.
+
+	This change causes an increase of 1.7% in vtable memory usage for IronPython pystone but
+	it's expected to not cause any significant increase beyond that.
+
+	* class.c (setup_interface_offsets): Compute super class iface offsets
+	first to force sharing.
+
+	* class.c: Add VTABLE_SELECTOR macro to the vtable debug macros to help
+	dumping only the relevant ones.
+
+	* class.c (mono_class_setup_vtable_general): Give newslot, non final, virtual
+	methods a new slot regardless if they belong to an interface or not. This allows
+	an inherited type to override the iface method separately from the class one.
+
+2009-09-04 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* threadpool.c: make the Sleep() alertable to prevent delays exiting
+	applications that take less than 2s to execute.
+	Bug #524984 fixed.
+
+2009-09-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* object-internals.h (MonoRuntimeCallbacks): Add a 'get_runtime_build_info' callback.
+
+	* object.c (mono_get_runtime_callbacks): New helper function to return
+	the runtime callbacks.
+
+	* icall.c (ves_icall_Mono_Runtime_GetDisplayName): Use the result of
+	mono_get_runtime_build_info () as the display name.
+	
+2009-09-03  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (emit_marshal_array): Call conv.ovf.i on the array parameter
+	argument, since NEWARR expects a native int. Fixes #481559.
+
+2009-09-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_MonoMethod_GetDllImportAttribute): Guard
+	against broken SRE methods.
+
+2009-09-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_type_get_full): Don't call mono_metadata_free_type on
+	a NULL variable. Abort early on failure.
+
+2009-09-03  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (can_access_type): Fail visibility test for non nested
+	types with nested visibility.
+
+2009-09-02  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* assembly.c (parse_public_key): Avoid allocating (and not 
+	freeing) the public key array when it's not requested by the 
+	caller.
+	* threads.c (mono_thread_manage, mono_thread_create_internal, 
+	ves_icall_System_Threading_Thread_Thread_internal): Free 
+	allocated memory on error.
+
+2009-09-02  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c, icall-def.h: Remove some dead code from early SRE changes.
+
+2009-09-02  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_setup_fields): Remove duplicated local variable
+	named gklass.
+	Rename gklass to gtd to reflect the fact that it points to the generic
+	type definition.
+	Remove the duplicated call to mono_class_setup_fields on gtd and move
+	the error check to the beginning.
+
+2009-09-02  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* marshal.c (mono_array_to_lparray): Do DISABLE_COM properly.
+	Remove cruft of the previous patch.
+
+2009-09-01  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_method_table): Check for abstract + final.
+	Fixes #534175.
+
+2009-09-01  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verify_class_fields): Check for duplicate fields.
+
+2009-09-01  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the typeref table for duplicates.
+
+2009-09-01  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	This reverts r140936 and properly handles interfaces with static methods. The
+	right fix is to ensure vtables without bubles which is an easier to verify
+	constraint. We should avoid such special cases as of the reverted patch as those
+	only make the runtime more brittle.
+
+	* class.c (mono_class_setup_vtable_general): Revert previous change that handle
+	static methods on interfaces.
+
+	* class.c (setup_interface_offsets): Use the number of virtual methods when
+	calculating interface offsets instead of the number of methods. This way we
+	avoid bubles on the layout.
+
+2009-08-31  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_metadata_header): Some very smart
+	obfuscators like to add extra stream headers. Ignore them.
+
+2009-08-30  Zoltan Varga  <vargaz@gmail.com>
+
+	* class.c (mono_class_setup_vtable_general): Verify interfaces with static
+	methods correctly.
+
+2009-08-29  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify for duplicated types.
+
+2009-08-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Verify for nested types
+	without an entry on the nested class table.
+
+2009-08-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* cominterop.c (cominterop_get_ccw): Applied patch from tom hindle
+	<tom_hindle@sil.org>. Add locking around hash table accesses.
+
+2009-08-25  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_verifier_verify_class): Verify all interface if
+	really are interfaces. Fixes #534184.
+
+2009-08-27  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c: Initialize all types during metadata validation so we report
+	errors only detected as part of class initialization.
+
+2009-08-26  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_method_table): PInvoke requires method to
+	be static. Fixes #534189
+
+2009-08-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* threads.c (mono_thread_suspend_all_other_threads): Handle 'threads_starting_ip'
+	being NULL.
+
+2009-08-25  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_setup_vtable_general): Verify the resulting vtable
+	for holes or bad methods. Fixes #525314.
+
+2009-08-25  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (setup_interface_offsets): Don't allocate slot
+	for the same interface multiple times. This creates bubbles
+	that waster space and make vtable verification harder.
+
+	The same interface get a slot multiple times since we need
+	to get the closure of all implemented interfaces, which means
+	the same interface is reported multiple times.
+
+2009-08-25  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_verifier_verify_class): Don't check the fields
+	of generic instances since the context on which they got expanded
+	might lead to false positives.
+
+	Such thing happens when a generic type is inflated in the context
+	of a generic method and the inflated type of a field turns into a
+	generic method argument, which causes the checking code to think
+	it's an invalid class when it's not.
+
+2009-08-25  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_type_is_valid_in_context): Verify if type
+	is NULL and remove duplicate test.
+
+2009-08-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_verifier_verify_class): Check fields for
+	invalid generic arguments.
+
+2009-08-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (verify_class_overrides): Verify if for static
+	and non virtual methods.
+
+2009-08-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icaa.c (ves_icall_System_Runtime_CompilerServices_RuntimeHelpers_RunClassConstructor):
+	Check for errors after retrieving the vtable.
+
+2009-08-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_setup_vtable_general): Verify
+	if method overrides are valid before processing them.
+
+2009-08-24  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* marshal.c (mono_array_to_lparray): Fix minimal build with
+	cominterop disabled.
+
+	* marshal.c (mono_free_lparray): Same.
+
+2009-08-21  Mark Probst  <mark.probst@gmail.com>
+
+	* threadpool.c (mono_thread_pool_init): Use mono_object_hash() as
+	the hash function for the ares_htable.
+
+2009-08-20  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_assembly_table): Accept 0x10 as a valid
+	bit for assembly flags. MS is ok with it but there is no spec anywhere
+	on its mean
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_create_from_typedef): Emit profiler events
+	in all cases.
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_Type_GetMethodsByName): Don't leak loader errors.
+	Release memory on failure.
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class-internals.h: Add mono_metadata_load_generic_param_constraints_full
+	to the internal API.
+
+	* metadata.c (get_constraints): Use a single-linked table as we don't
+	traverse it backward. Fail and return FALSE if only of the contraint types
+	is not found.
+
+	* metadata.c (mono_metadata_load_generic_param_constraints_full): Identical
+	to mono_metadata_load_generic_param_constraints except for having a return value.
+	This has to be done since the later is part of the public API.
+
+	* class.c (mono_class_create_from_typedef): Properly check the loading of constrains
+	and fail the type.
+
+	* loader.c (mono_get_method_from_token): Properly check the loading of constraints
+	and fail the method.
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_method_header): Add work-around to deal
+	with MS broken behavior of emmitting EH section sizes without the
+	header size added.
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (mono_type_create_from_typespec): Don't allocate image
+	memory until we're sure that we'll need it. This avoids leaking for
+	broken types or duplicated instantiation.
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_method_header): Fix stupid formating
+	mistake.
+
+2009-08-19  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_method_header): Fix number of clauses
+	and expected size calculation.
+
+2009-08-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_get_field_idx): Add fixme for broken
+	behavior for types with multiple fields with the same name.
+	I would rather fix it, but have no idea on how to generate
+	such artifact for testing.
+
+2009-08-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verifier_load_field): We should allow references to
+	fields to be made using the generic type definition. It's up to
+	the loader system to fail invalid ops.
+
+	* verify.c (get_boxable_mono_type): Only uninstantiated GTDs
+	are invalid.
+
+2009-08-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c: Fix usage of mono_metadata_interfaces_from_typedef_full.
+
+	* metadata-internals.h: Fix declaration of 
+	mono_metadata_interfaces_from_typedef_full.
+
+	* metadata.c (mono_metadata_interfaces_from_typedef_full): Add extra
+	heap_alloc_result parameter that controls if the result should be
+	g_malloc'd.
+
+	* metadata.c (mono_metadata_interfaces_from_typedef): Let the resulting
+	array be g_malloc'd and properly document this public API function.
+
+2009-08-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* cil-coff.h: Fix METHOD_HEADER_FORMAT_MASK to be 2 bits and
+	remove METHOD_HEADER_TINY_FORMAT1.
+
+	* reflection.c: Remove reference to METHOD_HEADER_TINY_FORMAT1.
+
+	* metadata.c (mono_metadata_parse_mh_full): Kill tiny format1.
+
+	Both spec and MS uses only 2 bits to enumerate the kind of header.
+	So given that 0x6 and 0x2 are equal under a 2 bits mask, tiny format1
+	is superfluous, only used for tiny headers with odd code lengths.
+
+	This change also make sure that mono doesn't wronly interpret bit 2
+	of fat header flags, which is currently reserved.
+
+2009-08-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (do_mono_metadata_parse_type): Do error
+	checking for element types. Don't abort if presented
+	with a broken type kind.
+
+2009-08-18  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (mono_metadata_parse_method_signature_full):
+	Gracefully fail bad vararg signatures.
+
+2009-08-18  Christian Hergert  <chris@dronelabs.com>
+
+	* profiler.c:
+	* class.c: Fix warnings for uninitialized variables.
+
+2009-08-18  Christian Hergert  <chris@dronelabs.com>
+
+	* icall.c: Fix _NSGetEnviron method declaration warning.
+
+2009-08-18  Christian Hergert  <chris@dronelabs.com>
+
+	* icall.c:
+	* reflection.c: Make bitwise checks explicit.
+
+2009-08-18  Christian Hergert  <chris@dronelabs.com>
+
+	* debug-helpers.c:
+	* marshal.c: Fix printf warnings.
+
+2009-08-18  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c (encode_cattr_value): Fix a warning.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (mono_metadata_parse_array_full): Fix memory leak
+	of array bounds.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_method_signature): Don't assert on broken
+	signature. Print a more useful error message.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_method_get_marshal_info): Assert if
+	signature is invalid. Bounds check stores to the
+	mspecs array;
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (field_from_memberref): Fix warning.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_method_get_param_names): Check if signature
+	is null. Don't store beyond the size of the name array.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_get_method_constrained): Check if signature
+	is null.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_loader_set_error_bad_image): Improve
+	error messages.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_get_method_full): Convert an assertion
+	into a loader error.
+
+2009-08-17  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class-internals.h, class.c: Better naming and documentation.
+
+2009-08-17  Zoltan Varga  <vargaz@gmail.com>
+
+	* boehm-gc.c (mono_gc_add_weak_track_handle): Don't do any work if
+	obj is NULL.
+
+2009-08-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_method_get_signature_full): Fail gracefully if signature
+	parsing fails.
+
+2009-08-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_loader_error_prepare_exception): Handle missing field
+	errors with no class set.
+
+	* loader.c (field_from_memberref): If the field signature is of the wrong
+	type fail with a MissingFieldException instead of a BadImageException as
+	this is the behavior observed on MS. 
+
+2009-08-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (field_from_memberref): Don't crash if either the field
+	signature or the typespec class are invalid.
+
+2009-08-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verifier_load_field): Don't allow field related
+	ops to reference fields on generic type definition.
+
+2009-08-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add new warning level for errors specified
+	by ECMA 335 but that MS ignores.
+
+	* metadata-verify.c (verify_method_table): Make compiler controled
+	visibility + (rt)specialname error a warning as MS ignores this. Ignoring
+	this check is safe because the end result will only be some visibility
+	exceptions been thrown.
+
+2009-08-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (get_boxable_mono_type): Don't allow the
+	use of the generic type definition on boxed type positions.
+
+	Fixes #531237.
+
+2009-08-14  Mark Probst  <mark.probst@gmail.com>
+
+	* threadpool.c: Make sure no cross-domain references remain in
+	ares_htable or the arrays that are thrown away when resizing.
+
+2009-08-14  Mark Probst  <mark.probst@gmail.com>
+
+	* appdomain.c, metadata-internals.h, image.c: In MonoImage add a
+	list of classes for which we have to unregister reflection_info
+	with the GC and which are not in the namespace cache.
+
+	* reflection.c (mono_reflection_initialize_generic_parameter): Add
+	the class to the list.
+
+2009-08-14  Mark Probst  <mark.probst@gmail.com>
+
+	* domain.c (mono_domain_free): Unregister the GC roots in
+	MonoDomain.
+
+2009-08-12  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* reflection.c (mono_reflection_type_get_handle): Fix typo.
+
+2009-08-12  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c: Add mono_class_get_field_from_name_full which does
+	the same as mono_class_get_field_from_name but does check field
+	signature as well.
+
+	* class-internals.h: Export mono_class_get_field_from_name_full as
+	part of the internal API.
+
+	* loader.c (field_from_memberref): Search fields by name and signature
+	as it's valid to have two fields with same name but different types.
+
+	Fixes #528055.
+
+2009-08-10  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall-def.h: Add a bunch of temporary icalls to MonoGenericClass.
+
+	* reflection.c (mono_reflection_type_get_handle): Handle MonoGenericClass.
+
+	* reflection.c (encode_cattr_value): Use mono_reflection_type_get_handle to encode
+	System.Type.
+
+2009-08-13  Zoltan Varga  <vargaz@gmail.com>
+
+	* gc.c (GCHandle_CheckCurrentDomain): Moved this here from icall.c.
+
+	* boehm-gc.c (mono_gc_add_weak_track_handle): Handle nulls.
+
+2009-08-12  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c, sgen-scan-object.h: Object scanning code factored out
+	to sgen-scan-object.h, which can be included and parameterized via
+	macros.
+
+	* Makefile.am: sgen-scan-object.h added.
+
+2009-08-12  Mark Probst  <mark.probst@gmail.com>
+
+	* gc.c: #define GC_dont_gc if we're compiling with SGen.
+
+2009-08-12  Mark Probst  <mark.probst@gmail.com>
+
+	* domain.c (mono_domain_free): Free a domain's mono_g_hash_tables
+	before clearing a domain in the GC.
+
+2009-08-12  Mark Probst  <mark.probst@gmail.com>
+
+	* exception.c (mono_exception_from_name_domain): Actually create
+	the exception in the specified domain.
+
+	* appdomain.c (mono_domain_create_appdomain_internal): Create the
+	OutOfMemoryException a bit later so that the domain is inialized
+	"enough" that it works.
+
+2009-08-12  Mark Probst  <mark.probst@gmail.com>
+
+	* threads.c (thread_cleanup): Clean up the cached_culture_info
+	array to prevent cross-domain references.
+
+Tue Aug 11 14:38:57 CEST 2009 Paolo Molaro <lupus@ximian.com>
+
+	* metadata.c: more documentation for MonoType accessors.
+
+2009-08-11  Raja R Harinath  <harinath@hurrynot.org>
+
+	Fix incorrect size definitions where the tail array isn't a list
+	of pointers
+	* class-internals.h (MONO_SIZEOF_MARSHAL_TYPE): Use offsetof to
+	define size.
+	* domain-internals.h (MONO_SIZEOF_JIT_INFO): Likewise.
+	* metadata.h (MONO_SIZEOF_TYPE): Likewise.
+	* reflection.h (MONO_SIZEOF_CUSTOM_ATTR_INFO): Likewise.
+
+2009-08-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* reflection.h:
+	* reflection.c: MONO_SIZEOF_CUSTOM_ATTR_INFO.
+
+2009-08-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* metadata.c:
+	* loader.c:
+	* metadata-internals.h:
+	* method-builder.c:
+	* reflection.c: use MONO_SIZEOF_METHOD_HEADER.
+
+2009-08-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* cominterop.c:
+	* metadata.c:
+	* metadata.h:
+	* loader.c:
+	* marshal.c:
+	* reflection.c: #define for sizeof in MonoType and
+	MonoMethodSignature.
+
+2009-08-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* domain.c:
+	* domain-internals.h: add and use #define's instead of sizeof()
+	for MonoJitInfo and MonoJitInfoTable.
+
+2009-08-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* object.c:
+	* class.h: use #define instead of sizeof() for MonoRemoteClass.
+
+2009-08-10 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* metadata.c:
+	* metadata.h:
+	* object.c:
+	* class-internals.h:
+	* generic-sharing.c:
+	* marshal.c: use a #define instead of sizeof() for a few
+	structures that use a zero-length array.
+
+2009-08-06  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* object-internals.h (MonoReflectionMethodOnTypeBuilderInst): Add new fields
+	to handle inflated generic methods.
+
+	* appdomain.c: Bump corlib version.
+
+	* reflection.c (mono_image_get_method_on_inst_token): Handle generic method
+	instances.
+
+	* reflection.c (fixup_method): Same
+
+	* reflection.c (resolve_object): Same.
+
+	* reflection.c (inflate_method): Replace a g_assert_not_reached with a
+	g_error and a decent message.
+
+2009-08-06  Massimiliano Mantione  <massi@ximian.com>
+
+	* bohem-gc.c (mono_gc_add_weak_track_handle): Get the domain
+	from the object because it could not yet be available globally
+	(it happens if the profiler tries to create a gchandle on the
+	MonoThread object of a thread that is still registering itself
+	with the runtime).
+
+2009-08-04  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* reflection.c (mono_generic_class_get_object): Initialized the
+	managed type arguments array.
+
+	* object-internals.h (MonoReflectionGenericClass): Add type_arguments field.
+
+	* appdomain.c: Bump corlib version.
+
+2009-08-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* threads.c (thread_cleanup): Free serialized_ui_culture_info. Fixes
+	#527902.
+
+2009-08-03  Zoltan Varga  <vargaz@gmail.com>
+
+	* threads.c (ves_icall_System_Threading_Thread_Thread_free_internal): 
+	Avoid a crash if synch_cs is not set.
+	
+	* threads.c (ves_icall_System_Threading_Thread_Thread_free_internal): 
+	Handle the case when the handle is 0.
+
+	* appdomain.c: Bump corlib version.
+
+2009-08-02  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c (mono_type_get_object): Fix a warning.
+
+2009-08-01  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c (mono_gc_wbarrier_value_copy): Don't compute the GC
+	descriptor here.  We assume it's already been computed.
+
+	* generic-sharing.c (instantiate_other_info): Compute the GC
+	descriptor for info type MONO_RGCTX_INFO_KLASS.
+
+2009-08-01  Mark Probst  <mark.probst@gmail.com>
+
+	* reflection.c (mono_type_get_object): MonoDomain is an unmanaged
+	type, so don't use MONO_OBJECT_SETREF to set a field.
+
+2009-08-01  Mark Probst  <mark.probst@gmail.com>
+
+	* gc.c: We were missing one case where invoking a finalizer would
+	not reset the domain.  Also, in the finalizer thread loop, assert
+	that we're in the root domain.
+
+2009-07-31  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_MonoType_GetArrayRank): Throw ArgumentException
+	if the type is not an array.
+
+2009-07-31  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_MonoType_get_DeclaringMethod): Return the
+	method bound to the declaring type of the method. Raise an exception
+	if the type is not a generic param.
+
+2009-07-31  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (print_unimplemented_interface_method_info): Print the
+	full type name.
+
+	* class.c (mono_class_setup_vtable_general): When dealing with a
+	generic instance first check if the generic type definition is
+	not broken.
+
+2009-02-11 Tom Hindke <tom_hindle@sil.org>
+
+	* marshal.c (mono_array_to_lparray): Implemented so managed object types are converted to native types.
+
+	* marshal.c: Added new method mono_free_lparray to free memory allocated by mono_array_to_lparray
+
+	* marshal.c (emit_marshal_array): call emit mono_free_lparray where approprate.
+
+	* marshal.c (conv_to_icall): added MONO_MARSHAL_FREE_LPARRAY case
+
+	* metadata.h (MonoMarshalConv enum): added MONO_MARSHAL_FREE_LPARRAY
+
+	Code is contributed under MIT/X11 license
+
+2009-08-30  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c: Fix naming of stelem and ldelem.
+
+2009-07-30  Mark Probst  <mark.probst@gmail.com>
+
+	* generic-sharing.c: Replace the templates lock with the loader
+	lock because of very hard to resolve deadlock issues.
+
+2009-07-30  Zoltan Varga  <vargaz@gmail.com>
+
+	* icall.c (ves_icall_Type_GetMethodsByName): Use 
+	mono_class_get_vtable_size () instead of accessing klass->vtable_size
+	directly. Fixes #525338.
+
+	* class.c (mono_class_get_vtable_size): New helper function.
+
+	* icall.c (ves_icall_System_Reflection_FieldInfo_internal_from_handle_type): Fix the second argument, its a MonoType* not a MonoClass*. Check whenever
+	the field belongs to the type. Fixes #525733.
+
+2009-07-30  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: When we stop a thread and its stack top is not within
+	its allocated stack (because it's in an altstack signal handler),
+	restart it and stop it again, until it is.
+
+2009-07-30  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Take a thread's stack top and registers from the
+	sigcontext in the suspend signal handler.
+
+	* sgen-gc.h, sgen-archdep.h, Makefile.am: Move arch-dependent
+	stuff to sgen-archdep.h.
+
+	* gc.c, gc-internal.h: Remove the get_ip_from_sigctx installer and
+	caller, because have code in sgen-archdep.h to acquire that data.
+
+2009-07-29  Massimiliano Mantione  <massi@ximian.com>
+
+	* profiler.c, profiler.h, profiler-private.h:
+	Added support for keeping track of code chunks and buffers.
+
+2009-07-29 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Fix endianness problems on decoding functions.
+	Based on a patch by Ulrich Weigand <uweigand@de.ibm.com>
+
+2009-07-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_Type_make_array_type): Handle the new encoding
+	schema for vectors and one dimension SZARRAY.
+
+2009-07-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* reflection.c (mono_reflection_type_get_handle): Handle the new encoding
+	schema for vectors and one dimension SZARRAY.
+
+2009-07-27  Mark Probst  <mark.probst@gmail.com>
+
+	* icall-def.h, thread-types.h, threads.c: New separate icalls for
+	Interlocked.(Compare)Exchange with object arguments, which invoke
+	write barriers.
+
+2009-07-26  Miguel de Icaza  <miguel@novell.com>
+
+	* icall.c (ves_icall_Type_GetNestedType): Throw an exception when
+	passed invalid arguments.   Fixes another crasher in the
+	Silverlight test suite.
+
+	* class.c (mono_class_array_element_size): Return 0 for the size
+	of the class;  This fixes the crasher exposed by :
+
+	typeof (void).MakeArrayType ();
+
+	* icall.c (ves_icall_MonoType_GetEvent): Do not dereference method
+	if there is no method to dereference.    Put all the code that
+	depends on this inside the if (method) block.
+
+	This fixes the crasher exposed by Microsoft's Silvelright CLR test
+	suite  ./Reflection/Emit/TypeBuilder/TypeBuilderGetEvent.exe
+
+	With this change, we pass the test.
+	
+	* reflection.c (mono_reflection_sighelper_get_signature_local):
+	Only dereference the assembly if it has been set.    Fixes a
+	crasher exposed by #525328
+
+2009-07-25  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c, object.h, null-gc.c, boehm-gc.c, marshal.c: Really
+	don't perform the store in mono_gc_wbarrier_generic_nostore().
+	Remove the second argument (value), which is not needed.
+
+2009-07-24  Zoltan Varga  <vargaz@gmail.com>
+
+	* null-gc.c (mono_gc_wbarrier_generic_nostore): Define this to fix
+	the build.
+
+	* boehm-gc.c: Ditto.
+	
+2009-07-24  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c, marshal.c, object.h: Make the managed write barrier
+	not perform the store itself.  Introduce
+	mono_gc_wbarrier_generic_nostore(), which is the same as
+	mono_gc_wbarrier_generic_store(), except it doesn't perform the
+	store.
+
+2009-07-24  Mark Probst  <mark.probst@gmail.com>
+
+	* icall.c (ves_icall_System_Array_SetGenericValueImpl):
+	mono_gc_wbarrier_value_copy() doesn't perform the copy itself, so
+	we still need the memcpy().
+
+2009-07-22  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Align array bounds calculation to mono_array_size_t
+	so that big arrays are handled correctly.  Always use
+	safe_object_get_size() to calculate array object sizes, which
+	takes bounds into account.
+
+2009-07-22  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c (mono_gc_wbarrier_value_copy): Make sure the class's
+	GC descriptor is computed before we use it.
+
+2009-07-22  Mark Probst  <mark.probst@gmail.com>
+
+	* icall.c (ves_icall_System_Array_SetGenericValueImpl): Use a
+	write barrier if necessary.
+
+2009-07-22  Mark Probst  <mark.probst@gmail.com>
+
+	* icall-def.h, icall.c, thread-types.h: New separate icall for
+	VolatileWrite(object&,object) that uses a write barrier.
+
+	* console-unix.c, file-io.c, icall.c, threads.c: Use write
+	barriers in icalls which write to "ref" or "out" arguments.
+
+2009-07-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Do the work done in the exception
+	handler in a separate icall, to reduce the size of the wrappers.
+
+2009-07-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_typespec_blob): Fix error message.
+
+2009-07-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_field): Allow byref field.
+
+	* metadata-verify.c (parse_locals_signature): Allow byref locals.
+
+	* metadata-verify.c (is_valid_typespec_blob): Allow byref typespec.
+
+2009-07-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (do_cast): Fail for any non reference type that isn't boxed.
+	Fixes #522784.
+
+2009-07-20  Robert Jordan  <robertj@gmx.net>
+
+	* cominterop.c (cominterop_get_managed_wrapper_adjusted):
+	Fix invalid IL in valuetype handling (STOBJ must push the
+	corresponding class). Fixes bug #523149.
+
+	Code is contributed under MIT/X11 license.
+
+2009-07-20  Geoff Norton  <gnorton@novell.com>
+
+	* gc.c: Use proper semaphores where available on posix and darwin.
+
+2009-07-19  Geoff Norton  <gnorton@novell.com>
+
+	* gc.c: Unnamed posix semaphores are broken on darwin-arm too.
+
+2009-07-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* refletion.c (is_sre_usertype): Change name to is_usertype and
+	invert it's result so it returns true if the type is an user type
+	and not the opposite.
+
+	* reflection.c (is_*_type): Change all of those to use new macro
+	check_corlib_type_cached that cached the type lookup so we don't
+	need to do string comparisons all the type. Changed the signature
+	to take a MonoClass instead.
+
+	* reflection.c: Change mono_image_create_token and resolve_object
+	to use is_sre_* functions.
+
+2009-07-18  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Check for writes to the stack in the managed
+	wbarrier as well.
+
+2009-07-18  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: When a thread is unregistered, don't free its remsets
+	but put them on a list which is processed with the other thread's
+	remsets.
+
+2009-07-18  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Fix and enable the internal allocator instead of
+	using malloc/free (which causes deadlocks).
+
+2009-07-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* refletion.c: Fix builds with SRE disabled by adding a minimal
+	implementation of mono_reflection_type_get_handle.
+
+2009-07-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* refletion.c: Make mono_reflection_type_get_handle non static.
+
+	* object-internals.h: Export mono_reflection_type_get_handle.
+
+	* icall.c (ves_icall_MonoGenericClass_InflateType): Resolve the
+	unmanaged handle using mono_reflection_type_get_handle.
+
+2009-07-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* refletion.c: Replace all reads of MonoReflectionType::type with
+	calls to mono_reflection_type_get_handle. Only the functions that
+	deal with constructing TypeBuilder::type have not been changed
+	because they have to deal with NULL values.
+
+	This is a first step into supporting reflection types that don't
+	map directly into their unmanaged counterpart.
+
+2009-07-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_locals_signature): Don't complain
+	on signature with zero locals since MS generates it and doesn't
+	bother with.
+
+2009-07-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* reflection.c (mono_image_get_array_token): Resolve return
+	type using mono_reflection_type_get_handle.
+
+	* reflection.c (mono_image_get_array_token): Resolve array method
+	parent type using mono_reflection_type_get_handle.
+
+2009-07-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c (mono_image_basic_init): Applied patch from
+	<Dax@daxxfiles.net>. Set the public key token from the assembly
+	builder. Fixes #518909.
+
+	* appdomain.c: Bump corlib version.
+
+2009-07-13  Zoltan Varga  <vargaz@gmail.com>
+
+	* class.c (mono_class_needs_cctor_run): Make this return false if
+	the class has no cctor.
+
+2009-07-13  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: When the minor GC needs to allocate a new section,
+	invoke the major GC afterwards.
+
+2009-07-14  Bill Holmes  <billholmes54@gmail.com>
+
+	* process.c  (ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal) :
+	  Applying the window_style field to the SHELLEXECUTEINFO struct.
+
+	Code is contributed under MIT/X11 license.
+
+2009-07-13  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Fix the race condition in the unmanaged allocator by
+	locking earlier.  Fix it in the managed allocator by making sure
+	that no thread is stopped there before the GC runs.  If we do stop
+	a thread there, we restart it and let it run a but, until it stops
+	somewhere else.
+
+	* gc-internal.h, gc.c: Function for getting the IP from a signal
+	context via a function registered by mini.
+
+2009-07-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* object-internals.h (MonoIntPtr): New structure describing a boxed
+	IntPtr.
+
+	* object.c (mono_runtime_invoke_array): Handle ptr arguments and
+	returns. Fixes #519953.
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Handle pointer returns.
+
+2009-07-09  Mark Probst  <mark.probst@gmail.com>
+
+	* class-internals.h, generic-sharing.c: New RGCTX info type for
+	getting a remoting invoke with check wrapper.
+
+2009-07-07  Geoff Norton  <gnorton@novell.com>
+
+	* icall-def.h: Fix the enable-minimal build.
+
+2009-07-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* object-internals.h: Add MonoReflectionDerivedType.
+
+	* reflection.c: Implement support for PointerType.
+	Fixed tons of warnings.
+
+2009-07-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* object-internals.h: Add MonoReflectionByRefType.
+
+	* reflection.c: Implement support for ByRefType.
+
+2009-07-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall-def.h: Add System.Reflection.Emit.DerivedType::create_unmanaged_type.
+
+	* object-internals.h: Add MonoReflectionArrayType and
+	mono_reflection_create_unmanaged_type.
+
+	* reflection.c: Implement support for ArrayType.
+
+2009-07-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_method_header): Parse EH block
+	flags correctly.
+
+2009-07-03  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c (finish_gray_stack): Set the to_space pointer after
+	processing the disappearing links, and process disappearing links
+	in a loop until no new objects are copied.
+
+2009-07-03  Mark Probst  <mark.probst@gmail.com>
+
+	* object.c (handle_enum): Invoke the write barrier when copying
+	value type instances.
+
+	* sgen-gc.c: Register remsets for unmanaged write barriers only
+	when the address written to is actually on the heap.  This makes
+	set_value() in object.c work without requiring that the result be
+	on the heap.
+
+2009-07-02 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	The runtime wrappers are all bound to a given type that must
+	exist in the same image. For regular images we use the <Module>
+	type, which is required to exist for all images.
+
+	The <Module> type can't be used for dynamic images because it
+	might not exist at the time the wrapper is required, so we create
+	a synthetic type to use instead.
+
+	The current code works because of the 2 stage setup of MonoClass,
+	but once this is gone it will no longer work.
+
+	* icall-def.h: Add ModuleBuilder::set_wrappers_type.
+
+	* metadata-internals.h (MonoDynamicImage): Add wrappers_type.
+
+	* object-internals.h: Export mono_image_set_wrappers_type icall
+	as part of the internal API.
+
+	* marshal.c (get_wrapper_target_class): If the image is dynamic,
+	use MonoDynamicImage::wrappers_type instead of the <Module> type.
+
+	reflection.c: Add mono_image_set_wrappers_type qhixh sets the dynamic
+	image wrappers_type to the provided value.
+
+2009-07-01 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* appdomain.c (deregister_reflection_info_roots): No need
+	to use the image lock here.
+
+2009-07-02  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c (collect_nursery): Also scan from write-barrier roots.
+
+2009-06-29  Zoltan Varga  <vargaz@gmail.com>
+
+	* threads.c: Store the thread start argument in a hash table instead of
+	registering it as a root, as libgc doesn't support unregistering roots
+	under windows, leading to 'too many root sets' errors when many threads
+	are created.
+
+	* gc.c (mono_gc_run_finalize): Avoid finalizing dynamic methods during
+	shutdown, they can still be referenced by the other dying objects.
+	Fixes #514506.
+
+2009-06-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: DontLinger does not allow LingerOptions.
+
+2009-06-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: The spec doesn't mention that it's possible to add
+	custom attribute to a generic parameter. Fixed.
+
+2009-06-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (inflate_generic_type): Don't crash while trying to output a message
+	on why we're aborting.
+
+2009-06-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: DontLinger can take an int or a boolean too.
+
+Fri Jun 26 17:00:04 CEST 2009 Paolo Molaro <lupus@ximian.com>
+
+	* gc.c: check for a null argument to SuppressFinalize () and
+	ReRegisterForFinalize ().
+
+2009-06-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (method_from_methodspec): Call into the verifier to check
+	the signature.
+
+	* metadata-verify.c: Addmono_verifier_verify_methodspec_signature.
+
+	* verify-internals.h: Export mono_verifier_verify_methodspec_signature as
+	part of the internal API.
+
+2009-06-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (mono_type_create_from_typespec): Call into the verifier to check
+	the signature.
+
+	* metadata-verify.c: Add mono_verifier_verify_typespec_signature.
+
+	* verify-internals.h: Export mono_verifier_verify_typespec_signature as
+	part of the internal API.
+
+2009-06-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (mono_metadata_parse_mh_full): Call into the verifier to check
+	the signature.
+
+	* metadata-verify.c: Add mono_verifier_verify_standalone_signature. Fix
+	blob verification.
+
+	* verify-internals.h: Export mono_verifier_verify_memberref_signature as
+	part of the internal API.
+
+2009-06-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Use is_valid_blob_object to verify blob validity
+	when doing basic verification. 
+
+	This check must be done since the runtime peeks into signatures in much
+	more places than it does decoding so it makes sense to ensure that all
+	pointers to blob objects are well formed.
+
+2009-06-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_blob_object): Add extra minsize argument.
+	Use proper overflow dectection. Fix usage of it.
+
+2009-06-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (field_from_memberref): Call into the verifier to check
+	the signature.
+
+	* loader.c (mono_method_get_signature_full): Same.
+
+	* loader.c (method_from_memberref): Same.
+
+	* metadata-verify.c: Add mono_verifier_verify_memberref_signature.
+
+	* verify-internals.h: Export mono_verifier_verify_memberref_signature as
+	part of the internal API.
+
+2009-06-25  Mark Probst  <mark.probst@gmail.com>
+
+	* threadpool.c (mono_thread_pool_add): If the domain is unloading
+	or unloaded, still return an AsyncResult, but don't add it to the
+	threadpool.
+
+2009-06-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* threads.c: fix missing colon when DEBUG is defined.
+
+2009-06-25  Mark Probst  <mark.probst@gmail.com>
+
+	* threadpool.c: Don't add new calls to a threadpool if the domain
+	of the call is unloading or unloaded.  When dequeuing a job, null
+	the reference in the queue.
+
+2009-06-25  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c (null_link_in_range): Add the dislink for the old
+	generation if an object was moved.
+
+2009-06-25  Sylvain Dupont <duposyl@gmail.com>
+
+	* cominterop.h cominterop.c marshal.c: Added support for marshalling out 
+	  parameters of type SAFEARRAY[VARIANT].
+
+	* reflection.c (encode_marshal_blob): Properly generate element type
+	  (SafeArraySubType marshal attribute option).
+
+	Code is contributed under MIT/X11 license.
+
+Thu Jun 25 15:48:09 CEST 2009 Paolo Molaro <lupus@ximian.com>
+
+	* reflection.c: in mono_method_clear_object () really ensure all the
+	objects are removed.
+
+2009-06-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_method_signature): Call into the verifier to check
+	the method signature.
+
+	* metadata-verify.c (verify_method_table): Move signature verification
+	to verify_method_table_full.
+
+	* metadata-verify.c: Add mono_verifier_verify_method_signature.
+
+	* verify-internals.h: Export mono_verifier_verify_method_signature as
+	part of the internal API.
+
+2009-06-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_method_get_header): Call into the verifier to
+	check the method header.
+
+	* metadata-verify.c: Add mono_verifier_verify_method_header.
+
+	* verify-internals.h: Export mono_verifier_verify_method_header as
+	part of the internal API.
+
+2009-06-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_find_enum_basetype): Call into the verifier to
+	check the field signature. Replace an assert with an explicit check.
+
+	* class.c (mono_class_setup_fields): Call into the verifier to check
+	the field signature.
+
+	* metadata-verify.c: Add mono_verifier_verify_field_signature.
+
+	* verify-internals.h: Export mono_verifier_verify_field_signature as
+	part of the internal API.
+
+2009-06-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_find_enum_basetype): Simplify this function
+	by moving code outside of the loop and not decoding static fields.
+
+2009-06-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Check the extends
+	token here. Move to here a flags check from verify_typedef_table_full.
+
+2009-06-24  Zoltan Varga  <vargaz@gmail.com>
+
+	* metadata-verify.c (is_valid_method_header): Fix a warning.
+
+	* metadata-internals.h (MonoImage): Remove the unused 
+	static_rgctx_invoke_wrapper_cache.
+
+	* image.c marshal.c: Ditto.
+
+2009-06-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* image.c (do_mono_image_load): Enable table data verification.
+
+2009-06-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_constant): Fix nullref check.
+
+2009-06-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_constant): Fix string bounds check.
+
+2009-06-22  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Managed allocation with pthreads TLS.
+
+	* threads.c, threads-types.h: Functions for the JIT to tell the
+	runtime whether it supports the MONO_TLS opcode.
+
+2009-06-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_param_table): Fix a crash for assemblies
+	without methods.
+
+2009-06-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_constant): Fix the string length check.
+	Use safe overflow checking. Add decent error messages.
+
+2009-06-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Move remaininh blob checks to the offline
+	verification path.
+
+2009-06-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Move more blob checks to the offline verification
+	path.
+
+2009-06-22  Bill Holmes  <billholmes54@gmail.com>
+
+	* object-internals.h : Adding interrupt_on_stop field.
+
+	* threads.c (mono_thread_request_interruption) : On Windows exit the
+	  thread if interrupt_on_stop is set.
+
+	* socket-io.c (ves_icall_System_Net_Sockets_Socket_Accept_internal) :
+	 Removing old interrupt logic and setting the interrupt_on_stop for the
+	 thread when calling accept.
+
+	* socket-io.c (ves_icall_System_Net_Sockets_Socket_Receive_internal) :
+	 setting the interrupt_on_stop for the thread when calling accept.
+
+	Contributed under MIT/X11 license.
+
+2009-06-20  Martin Baulig  <martin@ximian.com>
+
+	* mono-debug.h (MONO_DEBUGGER_MINOR_VERSION): Bump to 3.
+
+2009-06-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* appdomain.c (mono_try_assembly_resolve): Don't call managed code when
+	running in no-exec mode.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_method_table): Move header
+	checking to verify_method_table_full.
+
+	* metata-verify.c (mono_verifier_verify_full_table_data):
+	Call verify_method_table_full.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_field_table): Move signature
+	checking to verify_field_table_full.
+
+	* metata-verify.c (mono_verifier_verify_full_table_data):
+	Call verify_field_table_full.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Move remaining
+	stuff to verify_typedef_table_full.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Kill is_corlib from VerifyContext.
+	It is only used by the offline mode.
+	So we better remove it from the runtime path.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add new mono_verifier_verify_full_table_data
+	function that perform the offline metadata verification steps.
+
+	* metadata-verify.c (verify_typedef_table): Move some checks to
+	verify_typedef_table_full and make it been called by new function
+	mono_verifier_verify_full_table_data.
+
+	* pedump.c: Call mono_verifier_verify_full_table_data.
+
+	* verify-internals.h: Export mono_verifier_verify_full_table_data as
+	part of the internal API.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (typedef_is_system_object): Fix System.Object
+	check.
+
+	* metadata-verify.c (verify_implmap_table): Fix implmap invalid
+	flags bits. SupportLastError was confused as bit 7 instead of 6.
+
+	* metadata-verify.c (verify_implmap_table): Fix import scope verification
+	to check against the module ref table instead of module.
+
+	* metadata-verify.c (verify_implmap_table): Fix corlib check.
+
+	* pedump.c: Call mono_image_load_names.
+
+2009-06-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* image.c: Extract mono_image_load_names from do_mono_image_load.
+
+	* metadata-internals.h: Export mono_image_load_names as part of
+	the internal API.
+	
+2009-06-19  Zoltan Varga  <vargaz@gmail.com>
+
+	* metadata.c (mono_metadata_cleanup): Free the generic method cache
+	first, as it could reference data in the other caches.
+
+2009-06-18 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Finished with method header verification.
+
+2009-06-18 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Added more header verification code.
+	Now only EH clauses are missing.
+
+2009-06-17  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (get_runtime_invoke_type): Don't share primitive types
+	for return values.
+
+2009-06-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Initial method header verification.
+
+2009-06-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_import_table): The IAT contents
+	might end been patched by the windows DL when running with
+	coree enabled.
+
+2009-06-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_from_typeref): If the enclosing type is not
+	found return null instead of crashing. Fixes #508487.
+
+2009-06-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* normalization-tables.h : updated to the latest unicode charcter
+	  data.
+	* appdomain.c : bump corlib version.
+
+2009-06-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* class.c (mono_class_from_name): Fix support for assembly references
+	in the EXPORTEDTYPE table. Fixes #511704.
+
+2009-06-13  Geoff Norton  <gnorton@novell.com>
+
+	* domain.c: Ensure that mono_domain_assembly_open actually opens the
+	assembly in the target domain.
+
+2009-06-12  Robert Jordan  <robertj@gmx.net>
+
+	* cominterop.c (cominterop_get_ccw): Increment mspec's SizeParamIndex
+	because "this" of the managed signature has become an
+	ordinary parameter in the unmanaged signature.
+
+2009-06-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* class-internals.h (struct _MonoGenericContainer): Add an 'image'
+	field for owner-less generic containers.
+
+	* reflection.c (mono_reflection_initialize_generic_parameter): Set the
+	image field of the owner-less generic containers created here.
+
+	* metadata.c (mono_metadata_load_generic_params): Ditto, the
+	contain is ownerless until the caller sets its owner.
+
+	* metadata.c (type_in_image): Handle owner-less generic containers
+	correctly.
+	
+2009-06-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* image.c (mono_image_close): Support debug_assembly_unload for
+	dynamic images too.
+
+2009-06-11 Andr√©s G. Aragoneses  <aaragoneses@novell.com>
+
+	* class.c: Fix some typos in comments.
+
+2009-06-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c (add_custom_modifiers): Avoid reading invalid memory.
+
+	* threads.c (mono_thread_execute_interruption): Avoid creating the
+	abort exception object while holding the synch_cs lock.
+
+2009-06-10 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify basic cattr content.
+
+2009-06-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c (add_exported_type): Don't set the FORWARDER flag on
+	nested types.
+	
+	* reflection.c (mono_image_fill_export_table_from_type_forwarders): Add
+	support for nested types. Fixes #511704.
+
+2009-06-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify methodspec signatures.
+
+2009-06-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify typespec signatures.
+
+2009-06-09  Zoltan Varga  <vargaz@gmail.com>
+
+	* metadata.c (free_inflated_method): Call 
+	mono_marshal_free_inflated_wrappers (), which was missed earlier.
+
+2009-06-08  Miguel de Icaza  <miguel@novell.com>
+
+	* mono-config.c: Small change to report the PPC64/ILP32 model.
+
+2009-06-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_type): Check szarray.
+
+2009-06-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_type): Check fnptr.
+
+2009-06-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_type): Check generic instances.
+
+2009-06-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_type): Check array shape.
+
+2009-06-05  Robert Jordan  <robertj@gmx.net>
+
+	* class.c (mono_class_create_from_typedef): Check only for
+	mscorlib's System.Array.
+
+2009-06-04 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_type): Check pointer, class/valuetype
+	and generic params. 
+
+	* metadata-verify.c (parse_field): Check the signature.
+
+2009-06-04 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Implement locals signature check.
+
+2009-06-04  Marek Safar  <marek.safar@gmail.com>
+
+	* domain.c: Add .NET 4.0 Beta 1 version.
+
+2009-06-04  Bill Holmes  <billholmes54@gmail.com>
+
+	* cominterop.c (cominterop_ccw_queryinterface): Fix for bug 499566.
+	  For QueryInterface on CCWs consider the base class
+	  interfaces as well.
+
+	Code is contributed under MIT/X11 license.
+
+2009-06-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* wrapper-types.h: Delete STATIC_RGCTX_INVOKE.
+
+	* marshal.c (mono_marshal_ret_static_rgctx_invoke): Remove, no longer
+	used.
+
+	* icall.c (ves_icall_System_Delegate_CreateDelegate_internal): Avoid
+	adding a static-rgctx invoke wrapper, it is done by the runtime trampolines.
+
+	* generic-sharing.c (inflate_other_data): Ditto.
+	
+2009-06-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Implement property signature check.
+
+2009-06-04  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.h: Register saving support for PPC.
+
+2009-06-04  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Fixed a pthread TLS screwup.
+
+2009-06-04  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Do TLS using pthread API if __thread keyword is not
+	supported.
+
+2009-06-04  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Disable TLA and managed allocation if the __thread
+	keyword is not supported.
+
+2009-06-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c metadata.c: Applied patch from Ulrich Weigand 
+	<uweigand@de.ibm.com>: Free the wrappers of inflated generic methods when
+	the inflated method is freed. Fixes #508389.
+
+	The code is contributed under the MIT/X11 license.
+	
+2009-06-03  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (get_wrapper_target_class): New helper function.
+	(mono_marshal_get_runtime_invoke): Place runtime-invoke wrappers into
+	the <Module> class of the image. Fixes #509049.
+
+2009-06-01 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* threads.c (ves_icall_System_Threading_Thread_Sleep_internal):
+	Check if the thread was interrupted and proccess it straight away.
+	Makes abortion much more responsive.
+
+2009-06-01 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* threads.c (mono_thread_execute_interruption): Use atomic cas with
+	MonoThread::interruption_requested to match it's counterpart.
+
+	Fixes a hang in abort-stress-1 on a 2 core x86.
+
+	* threads.c (ves_icall_System_Threading_Thread_GetAbortExceptionState):
+	Fix warning.
+
+2009-06-01 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Change MonoImage::name_cache to be protected by the image lock
+	instead of the loader lock.
+
+	* appdomain.c (deregister_reflection_info_roots): Protect access
+	to name_cache.
+
+	* class.c (mono_image_init_name_cache): Change from the loader lock
+	to the image lock. Check if the cache wasn't already created.
+
+	* class.c: Change from the loader to the image lock.
+
+	* icall.c (ves_icall_System_Reflection_Assembly_GetNamespaces): Fix
+	the code to hold the image lock while iterating over name_cache and
+	not go into mono_array_new holding it.
+
+	* metadata-internals.h: Add a comment about this change.
+
+2009-06-01 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_System_Reflection_Assembly_InternalGetType):
+	Under the 2.0 profile raise the loader error.
+
+	Fixes #508532.
+
+2009-06-01 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Emit the right kind
+	of ldind opcode for generic instances so we don't fail for direct wrappers.
+	This only affect direct calls.
+
+2009-05-31  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c (create_dynamic_mono_image): Fix warnings.
+
+	* generic-sharing.c (other_info_equal): Ditto.
+	
+2009-05-29 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Implement field signature check.
+
+2009-05-29 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Implement standalone signature check.
+
+2009-05-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Implement methodref signature check.
+
+2009-05-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* object-internals.h (MonoRuntimeCallbacks): New structure containing
+	callbacks supplied by the runtime.
+
+	* object.c (mono_install_callbacks): New internal function to install
+	the callbacks.
+
+	* object.c (mono_create_ftnptr): Move the implementation of this to
+	mini/.
+
+	* object.c (mono_get_addr_from_ftnptr): Ditto.	
+
+2009-05-27 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (parse_return_type): Proper byref check.
+	* metadata-verify.c (is_valid_method_signature): Check for zero arity
+	generic signatures and method params.
+
+2009-05-27 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (decode_signature_header): Fix bounds check.
+
+	* metadata-verify.c (parse_custom_mods): Check custom mods.
+
+	* metadata-verify.c (parse_type): Do initial basic verification
+	of valid values.
+	
+	* metadata-verify.c (is_valid_method_signature): Parse the generic
+	param count.
+
+2009-05-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_Type_GetMethodsByName): Virtual methods should be
+	discarded based on their most specific definition so we set the method_slots
+	array before checking if the method is acceptable or not.
+
+	Fixes #506757.
+
+2009-05-26  Mark Probst  <mark.probst@gmail.com>
+
+	* icall.c: Free the old array when resizing a mono_ptr_array.
+
+2009-05-26  Mark Probst  <mark.probst@gmail.com>
+
+	* reflection.c (create_dynamic_mono_image): Use mono_object_hash()
+	for the hashes whose keys are managed objects.
+
+2009-05-26  Mark Probst  <mark.probst@gmail.com>
+
+	* object-internals.h, threads.c: Set the execution context on
+	thread start here, not in corlib.
+
+	* appdomain.c: Bump corlib version.
+
+2009-05-27  Martin Baulig  <martin@ximian.com>
+
+	* mono-debug.c (mono_debug_init): Use `MONO_DEBUG_FORMAT_DEBUGGER'
+	if `_mono_debug_using_mono_debugger' is set to make things work
+	properly when embedding Mono.
+
+2009-05-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_class_setup_fields): Don't mark simd types as having
+	16 bytes alignment as the whole runtime doesn't support.
+
+2009-05-25 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (safe_read): Use endian safe read macros.
+
+2009-05-25  Zoltan Varga  <vargaz@gmail.com>
+
+	* object.c (mono_create_ftnptr): Don't allocate from the code mempool since
+	it is read-only when using full aot.
+
+2009-05-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_method_signature): Verify parts
+	of the return type. Provide an error message in case of failure.
+
+2009-05-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (is_valid_method_signature): Verify the call conv.
+
+2009-05-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Include the size prefix in the bounds check.
+
+2009-05-22  Miguel de Icaza  <miguel@novell.com>
+
+	* icall.c: Remove warnings.
+
+	* mono-config.c: Allow for CONFIG_CPU to be set in config.h and
+	prevent auto-detection based on GCC defines.
+
+	Add PS3
+
+	* metadata-verify.c: Do not include signal.h
+
+	* generic-sharing.c, marshal.c: Add returns to avoid some warning
+	messages.  Not sure why the g_assert_not_reached is not enough to
+	quiet the compiler.
+	
+
+	* appdomain.c: Remove code that is not used when
+	DISABLE_SHADOW_COPY is set.
+
+	* image.c: use g_getenv
+
+2009-05-21  Miguel de Icaza  <miguel@novell.com>
+
+	* reflection.c: Remove code that it not used with
+	DISABLE_REFLECTION_EMIT is defined.
+
+2009-05-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke): Share more runtime
+	invoke wrappers.
+
+2009-05-20  Miguel de Icaza  <miguel@novell.com>
+
+	* socket-io.c
+	(ves_icall_System_Net_Sockets_Socket_Available_internal): Remove
+	the ifdef here and instead put that on io-layer
+
+2009-05-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the generic param constraint table.
+
+2009-05-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_generic_param_table): Fix
+	thinko on the valid flags bits for generic params.
+
+2009-05-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the methodspec table.
+
+2009-05-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the generic param table.
+
+2009-05-19  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Store and use the count with REMSET_VTYPE.
+
+2009-05-19  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Use generation enum more consistently and use the
+	correct generation in mono_gc_register_for_finalization().
+
+2009-05-18 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the nested class table.
+
+2009-05-18 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the manifest resource table.
+
+2009-05-17  Zoltan Varga  <vargaz@gmail.com>
+
+	* debug-helpers.c (dis_one): Add little-endian support for ldstr.
+
+2009-05-16  Zoltan Varga  <vargaz@gmail.com>
+
+	* class.c (mono_class_get_vtable_entry): Avoid adding static-rgctx
+	wrappers, this is now done in the JIT.
+	
+	* class.c (mono_set_generic_sharing_supported): New internal function.
+	(mono_class_generic_sharing_enabled): Move the #ifdef stuff to the JIT.
+
+2009-05-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the exported type table.
+
+2009-05-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c (main): Fake an assembly for netmodules to make the verifier happy.
+
+2009-05-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the file table.
+
+2009-05-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_assembly_table): Fix an error message.
+
+	* metadata-verify.c: Verify the assemblyref table.
+
+2009-05-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_assembly_table): Fix the valid
+	bits mask for flags.
+
+2009-05-15  Zoltan Varga  <vargaz@gmail.com>
+
+	* debug-helpers.c (mono_method_full_name): Print generic parameters of
+	generic methods as well.
+
+2009-05-15  Geoff Norton  <gnorton@novell.com>
+
+	* gc.c: MachO/Darwin supports and uses semaphores fine for this 
+	use-case and is significantly more performant than the wapi layer.
+
+2009-05-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the assembly table.
+
+2009-05-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Fix rows limit check.
+
+2009-05-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the fieldrva table.
+
+2009-05-13  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen.c: Speed up weak links and finalizers by grouping them by
+	generation.
+
+2009-05-13  Mark Probst  <mark.probst@gmail.com>
+
+	* marshal.c (delegate_hash_table_add): When overwriting an entry,
+	free the old GCHandle (only applies to SGen).
+
+2009-05-13  Zoltan Varga  <vargaz@gmail.com>
+
+	* loader.c (mono_get_method_from_token): Avoid the expensive call to
+	mono_metadata_load_generic_params () for non-generic methods.
+
+2009-05-12  Mark Probst  <mark.probst@gmail.com>
+
+	* monitor.c, monitor.h (mono_monitor_get_object_monitor_weak_link):
+	New function for returning a monitor's weak link if it has one.
+
+	* sgen-gc.c: Remove an object's monitor's weak link (if it has
+	one) when clearing a domain.  These can still be around because
+	the object might not have been collected.
+
+2009-05-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* gc.c: Fix a warning.
+
+2009-05-12  Korn√©l P√°l  <kornelpal@gmail.com>
+
+	* gc.c (mono_gc_init): Set gc_thread on creation. This avoids the
+	prevous wait that resulted in a deadlock on Windows when initializing
+	the runtime form DllMain. Also results in improved startup time.
+	(finalizer_thread): Get rid of thread_started_event.
+	* threads.c, threads-types.h (mono_thread_create_internal): Return the
+	resulting MonoThread.
+
+	Contributed under MIT/X11 license.
+
+2009-05-11 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the implmap table.
+	Don't require that #US and #Strings be present.
+
+2009-05-11  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Delegate checks are done at creation time,
+	not a invocation time. Fix exception for Telerik Silverlight demo
+
+2009-05-11  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c (need_remove_object_for_domain): Remove the special
+	case for the Thread class.
+
+	* threads.c: Do clean-up of abort exception/state in
+	thread_cleanup() instead of Thread.free_internal().  Also clean up
+	current_appcontext.  The reason we have to do that is because
+	those references might point into another domain and if that
+	domain is unloaded before the thread is finalized, they point to
+	invalid data.
+
+2009-05-10  Andreas Faerber  <andreas.faerber@web.de>
+
+	* null-gc.c (mono_gc_weak_link_add, mono_gc_clear_domain): Fix
+	stub signatures.
+	
+	Contributed unter MIT/X11 license.
+
+2009-05-09  Miguel de Icaza  <miguel@novell.com>
+
+	* verify.c, metadata-verifier.c: Add support for disabling the
+	verifier in some builds.
+
+	[ Sorry, my previous commit accidentally commited some work in
+	progress ]
+
+2009-05-08  Zoltan Varga  <vargaz@gmail.com>
+
+	* class.c (mono_class_setup_fields): Set class->field.first for
+	generic instances.
+
+2009-05-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the typespec table.
+
+2009-05-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the module table.
+
+2009-05-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the methodimpl table.
+
+2009-05-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the property table.
+
+2009-05-06  Zoltan Varga  <vargaz@gmail.com>
+
+	* debug-helpers.c (mono_method_desc_match): Add support for generic
+	glob patterns.
+
+2009-05-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the propertymap table.
+
+2009-05-04 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the event table.
+
+	* metadata-verify.c (search_sorted_table): Fix offset
+	calculation.
+
+2009-05-02  Zoltan Varga  <vargaz@gmail.com>
+
+	* domain-internals.h (struct _MonoJitInfo): Add a 'from_llvm' flag.
+
+2009-05-01  Mark Probst  <mark.probst@gmail.com>
+
+	* gc.c (mono_gc_run_finalize): Don't set the domain too late,
+	because mono_delegate_free_ftnptr() needs it.
+
+2009-04-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the eventmap table.
+
+2009-04-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the standalonesig table.
+
+2009-04-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the field layout table.
+
+2009-04-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (mono_type_get_name_recurse): Don't crash
+	for ownerless generic params.
+
+	* debug-helpers.c (mono_type_get_desc): Correct the format
+	for ownerless generic params.
+
+2009-04-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the class layout table.
+
+2009-04-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the decl security table.
+
+2009-04-30  Mark Probst  <mark.probst@gmail.com>
+
+	* domain.c (mono_domain_set_internal_with_options): Don't do
+	anything if the old domain is the same as the old one.  Fixes
+	#499326.
+
+2009-04-30  Mark Probst  <mark.probst@gmail.com>
+
+	* appdomain.c: Deregister the reflection_info roots when unloading
+	a domain.
+
+	* sgen-gc.c, domain.c, gc-internal.h: mono_gc_clear_domain() nulls
+	memory allocated by a domain and frees its disappearing links.
+
+	* boehm-gc.c, null-gc.c: Empty implementation of
+	mono_gc_clear_domain().
+
+2009-04-30  Mark Probst  <mark.probst@gmail.com>
+
+	* appdomain.c (clear_cached_vtable): Free the static fields memory
+	block.
+
+2009-04-30  Mark Probst  <mark.probst@gmail.com>
+
+	* gc.c: Set the correct domain when invoking finalizers.
+
+	* appdomain.c: Set the correct domain when creating threads.
+
+2009-04-30  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Fix skip size for vectors.
+
+2009-05-03  Martin Baulig  <martin@ximian.com>
+
+	* mono-debug-debugger.c
+	(mono_debugger_check_breakpoints): Check class init handlers even
+	if we don't have any method load handers.
+
+2009-04-30  Zoltan Varga  <vargaz@gmail.com>
+
+	* appdomain.c (ves_icall_System_AppDomain_GetAssemblies): Avoid 
+	returning refonly assemblies if refonly is FALSE. Fixes #499013.
+
+2009-04-29 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the field marshal table.
+
+2009-04-29 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the custom attribute table.
+
+2009-04-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the constant table.
+
+2009-04-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the memberef table.
+
+2009-04-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (get_coded_index_token): Remove
+	dead argument.
+
+2009-04-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the interfaceimpl table.
+
+2009-04-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c: Improve error message.
+
+	* debug-helpers.c (mono_type_get_desc): Harden the code that
+	deals with VAR and MVAR.
+
+2009-04-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* image.c (mono_image_fixup_vtable): Avoid casting an lvalue. Fixes 
+	part of #498692.
+
+2009-04-23 Tom Hindle <tom_hindle@sil.org>
+
+	* cominterop.c (ves_icall_System_Runtime_InteropServices_Marshal_ReleaseComObjectInternal):
+	changed to match .Net behaviour of not aborting on additional calls to ReleaseComObject.
+
+2009-04-28  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Avoid redundant checks for platform code, 
+	e.g. check for method and for class (very common) and check
+	for class and outer class (less common)...
+
+2009-04-27  Zoltan Varga  <vargaz@gmail.com>
+
+	* reflection.c: Avoid returning random cattrs for synthetic methods.
+	Fixes #498545.
+
+2009-04-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* assembly.c: assemblies in the GAC should never be shadow-copied.
+
+2009-04-26  Mark Probst  <mark.probst@gmail.com>
+
+	* domain.c, domain-internals.h: Disable
+	track_resurrection_{objects,handles}_hash in MonoDomain if using
+	SGen.
+
+2009-04-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the param table.
+
+2009-04-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Range check FieldList and
+	MethodList.
+
+	* metadata-verify.c (verify_method_table): Proper check the ParamList
+	field.
+
+2009-04-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_method_table): Check for runtime
+	implemented functions such as delegate .ctors. Remove spurious
+	printf.
+	
+2009-04-24 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c: Proper initialize the runtime forcing the 2.0 profile.
+
+2009-04-24  Raja R Harinath  <harinath@hurrynot.org>
+
+	Don't allocate MonoGenericInfo for ownerless generic params.
+	* class-internals.h (MonoGenericParam::info): Move field to ...
+	(MonoGenericParamFull): ... this.  New struct.
+	(MonoGenericContainer::type_params): Change type to
+	MonoGenericParamFull.
+	(MonoGenericParam, MonoGenericContainer): Update accessors.
+	* metadata.c (mono_metadata_parse_generic_param): Don't initialize
+	'info' field for ownerless generic param.
+	(mono_metadata_load_generic_params): Update to changes.
+	* reflection.c (mono_reflection_create_generic_class): Likewise.
+	(reflection_methodbuilder_to_mono_method): Likewise.
+	(mono_reflection_initialize_generic_parameter): Likewise.
+
+2009-04-24  Raja R Harinath  <harinath@hurrynot.org>
+
+	Don't use MonoGenericParamInfo for ownerless generic params.
+	* class.c (get_anon_gparam_class, set_anon_gparam_class): New.  Don't
+	use ParamInfo class at all.
+	(mono_class_from_generic_parameter): Use them.
+	(make_generic_param_class): Fix a couple of instances where 'pinfo
+	== NULL' wasn't handle.
+
+2009-04-24  Raja R Harinath  <harinath@hurrynot.org>
+
+	* class.c (make_generic_param_class): Carve out of ...
+	(mono_class_from_generic_parameter): ... here.
+
+2009-04-24  Raja R Harinath  <harinath@hurrynot.org>
+
+	Simplify mono_class_from_generic_parameter
+	* class-internals.h (MonoGenericParamInfo::token): New field.
+	* metadata.c (mono_metadata_load_generic_params): Initialize it
+	from metadata.
+	* class.c (mono_class_from_generic_parameter): Use it instead of
+	searching through metadata.
+
+2009-04-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add verification of the method table.
+
+2009-04-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* icall.c (ves_icall_Type_GetMethodsByName): Fix memleak for the
+	Delegate::Invoke optimization.
+
+2009-04-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* appdomain.c (mono_domain_create_appdomain_internal): Free the
+	string returned by get_shadow_assembly_location_base.
+
+	* appdomain.c (get_shadow_assembly_location_base): Add a comment
+	about caller's ownership.
+
+2009-04-23 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* reflection.c: Add mono_reflection_cleanup_domain to cleanup
+	reflection memory on domain unload.
+
+	* domain.c (mono_domain_free): Don't free refobject_hash, let the
+	reflection cleanup code do it.
+
+	* domain-internals.h: Add mono_reflection_cleanup_domain.
+
+	This fixes a memory leak for managed mirrors of reflection objects
+	on domain unload. 
+
+2009-04-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Implement more verification of the field table.
+
+2009-04-22 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c (main): Init mono with mscorlib so it defaults to 2.0 and
+	doesn't try to parse the input assembly, which can be broken.
+
+2009-04-23  Mark Probst  <mark.probst@gmail.com>
+
+	* boehm-gc.c, gc-internal.h, gc.c, monitor.c, null-gc.c,
+	sgen-gc.c: Implement track resurrection in weak GC handles in SGen
+	by using the lowest bit in the link to store whether the link is
+	tracked.  Move the track_resurrection hashes into boehm-gc.c.
+
+2009-04-22  Miguel de Icaza  <miguel@novell.com>
+
+	* Makefile.am: Split the console support in platform specific code
+	and put together a framework for making this easy in the future so
+	that we can start splitting code instead of having a mess of PLATFORM_WIN32
+
+2009-04-21 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c: Fix a warning.
+
+2009-04-21 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_delegate_type_equal): Compare valuetypes using
+	mono_class_from_mono_type to avoid bad interactions with the dual representation
+	of the generic type definition.
+
+2009-04-21 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (do_invoke_method): Use mono_class_from_mono_type to
+	get the MonoClass for the call context type as it might be a generic
+	instance.
+
+	Fixes #491483.
+
+2009-04-21  Mark Probst  <mark.probst@gmail.com>
+
+	* object-internals.h: The Thread object has no execution_context
+	member anymore.
+
+	* threads.c, threadpool.c, threads-types.h: Accessor functions for
+	the execution context.
+
+	* appdomain.c: Bump corlib version.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (do_newobj): Improve error message.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verify_clause_relationship): Only mask as an error if the exception clause
+	is nested in the filter block.
+
+	* verify.c (verify_clause_relationship): The disjoint check must verify if the exception
+	block is not fully nested.
+
+	Fixes #495656.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verify_type_compatibility_full): Compare MonoClass and
+	not MonoType to check for equality of valuetypes as the generic type
+	definition allows for two different encodings: the generic type definition
+	class or a generic instance over the GTD arguments.
+
+	Fixes #496175.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (dump_stack_value): Fix compilation with extra debug turned on.
+
+	* verify.c (do_initobj): Improve error message.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Enable pe verification as the issue with #496453
+	is that the authenticode data directory have a different unspecified
+	format. Ignore it for now.
+
+	* pedump.c: Run the metadata verifier together with the IL verifier.
+
+	Fixes ##496453.
+
+2009-04-20  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* metadata-verify.c: Temporarily disable pe verification due to #496453.
+
+2009-04-17 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (can_access_type): Check visibility against
+	the element type for pointers and arrays.
+
+	Fixes #496150.
+
+2009-04-17 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Fix cli and table verification to use information
+	from the MonoImage. A lot of duplicated code got killed.
+
+2009-04-17 Rodrigo Kumpera  <rkumpera@novell.com>
+
+
+	This patch starts to integrate the metadata verifier with the runtime code.
+
+	This patch causes major regression in functionality for the metadata verifier
+	as cli and table verification are disabled since they require to be ported to
+	use MonoImage information.
+
+	* image.c (do_mono_image_load): Split the code in this function
+	into mono_image_load_pe_data and mono_image_load_cli_data.
+	Add	care_about_pecoff parameter to not load pecoff data.
+	Call into the metadata verifier for pecoff and cli verification.
+
+	* image.c (mono_image_open_raw): New function that doesn't perform
+	any parsing of the image contents.
+	
+	The reason for the 3 new functions is to give pedump better control
+	into the interaction with the verifier.
+
+	* metadata-internals.h: Add new functions from image.c as part of the
+	internal mono API.
+
+	* metadata-verify.c: Split mono_image_verify into mono_verifier_verify_pe_data,
+	mono_verifier_verify_cli_data and mono_verifier_verify_table_data. Prepare
+	to make those functions work together with the runtime.
+
+	* verify.c: Add mono_verifier_is_enabled_for_image function that returns
+	true if the image needs to be verified.
+
+	* verify-internals.h: Export new functions from metadata-verify.c and verify.c.
+
+	* pedump.c: Use new metadata verifier API.
+
+2009-04-19  Zoltan Varga  <vargaz@gmail.com>
+
+	* object.c (mono_install_vtable_trampoline): Make this receive a
+	trampoline creation function instead of trampoline, allowing the JIT
+	to use a different trampoline for each vtable.
+
+2009-04-18  Mark Probst  <mark.probst@gmail.com>
+
+	* object.c (mono_raise_exception): Don't reset the thread abort
+	exception state here.
+
+2009-04-18  Mark Probst  <mark.probst@gmail.com>
+
+	* icall-def.h: New icall for getting the thread abort exception
+	state for a thread.
+
+	* object.c, thread.c, object-internals.h: A thread's abort
+	exception state is now a GC handle.  To get the object it stands
+	for, we must move it into the current app domain, if it's
+	different than the one where it originated from.
+
+	* appdomain.c: Bump corlib version.
+
+	* domain.c, domain-internals.h: New function for setting the
+	domain and migrate the thread abort exception or not.
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add initial verification of the
+	field table.
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add a macro to conditionally enable
+	dumping of verification information. Add  make_coded_token
+	and search_sorted_table to enable search sorted tables
+	by a given coded token.
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add array mapping from table index
+	to description offset. Add get_col_offset and get_col_size
+	functions.
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Add remaining table descriptions offsets.
+	Add remaining coded index descriptions.
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Fixed constant table description.
+	Fixed calculation of HasCustomAttribute coded index size.
+	Fixed calculation of size for many table indexes. 
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c (dump_metadata): Dump table offset instead
+	of useless pointer in memory.
+
+2009-04-16 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Add tests for MethodList.
+
+2009-04-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Add tests for FieldList and
+	a missing of for interface types.
+
+2009-04-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_pe_optional_header): Add comment of why
+	the code is commented.
+
+	* metadata-verify.c (verify_resources_table): Remove spurious printf
+	and don't fail if there are unmanaged resources. Gmcs generates a useless
+	one	for all assemblies - I bet it's some MS compatibility junk.
+
+2009-04-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Verify the extends field.
+
+	* metadata-verify.c (mono_image_verify): Add a is_corlib.
+
+	* verify-internals.h: Same.
+
+	* pedump.c: Fix for mono_image_verify new signature.
+
+2009-04-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_typedef_table): Verify for some invalid
+	flags combinations.
+
+2009-04-15 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c (verify_module_table): Ignore the generation field.
+
+2009-04-15  Martin Baulig  <martin@ximian.com>
+
+	* debug-mono-symfile.c
+	(mono_debug_symfile_lookup_location): Don't print a warning for
+	unknown extended opcodes if they're within 0x40 and 0x7f.
+
+2009-04-15  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_get_runtime_invoke_sig): Don't share runtime
+	invoke signatures returning an enum. Fixes #494847.
+
+2009-04-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Initial code to verify the typedef table.
+
+2009-04-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_method_verify): Don't fail if an unconditional branch
+	with non empty stack happens before the beginning of a try block.
+
+	Fixes #494812.
+
+2009-04-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify typename and typenamespace fields of
+	the typeref table.
+
+2009-04-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Initial code to verify the typeref table.
+
+2009-04-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verify_delegate_compatibility): Fix error message.
+
+2009-04-14  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Fix typo
+
+2009-04-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (delegate_hash_table_add): Make delegate_target_locations 
+	a MonoGHashTable to keep its values alive.
+	(emit_marshal_boolean): Fix a warning.
+
+2009-04-13 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* socket-io.c: don't return IPv4/IPv6 addresses if the machine does
+	not have any interface configured for IPv4/IPv6.
+
+2009-04-13 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* assembly.c: fix typo in error message.
+
+2009-04-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_delegate_to_ftnptr): Use mono_gc_alloc_fixed () for
+	allocating the location holding the this argument to prevent
+	'too many root sets' errors.
+
+	* object.c (mono_class_create_runtime_vtable): Set field->offset to -1
+	to mark fields as special static.
+	(mono_field_static_get_value): Handle special static fields.
+	(mono_field_static_set_value): Ditto.
+
+	* class-internals.h (struct _MonoClassField): Document this.
+
+2009-04-13  Bill Holmes  <billholmes54@gmail.com>
+
+	* cominterop.c (mono_cominterop_emit_marshal_com_interface): Assigning
+	  the argument a value of null for the MARSHAL_ACTION_MANAGED_CONV_OUT
+	  case.  This will handle when managed code returns null to native code.
+
+	Code is contributed under MIT/X11 license.
+
+2009-04-13  Bill Holmes  <billholmes54@gmail.com>
+
+	* object.c (build_imt_slots): Changing a free to a g_free to match
+	  the g_malloc0 in add_imt_builder_entry that allocated this memory.
+
+	Code is contributed under MIT/X11 license.
+
+2009-04-13  Bill Holmes  <billholmes54@gmail.com>
+
+	* marshal.c (emit_marshal_boolean): Adding code to ensure that
+	  the correct TRUE value is passed through the marshaling layer.
+
+	Code is contributed under MIT/X11 license.
+
+2009-04-13  Zoltan Varga  <vargaz@gmail.com>
+
+	* marshal.c (mono_marshal_emit_managed_wrapper): Handle closed delegates
+	correctly. Fixes #492330.
+	
+	* marshal.c: Fix the embedding of object pointers into JITted code in
+	the native-to-managed wrappers by allocating some GC tracked memory, and
+	embedding the address of that.
+
+2009-04-11  Zoltan Varga  <vargaz@gmail.com>
+
+	* object.c (mono_class_create_runtime_vtable): Avoid putting MonoMethod
+	pointers into the vtable.
+
+2009-04-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_delegate_type_equal): Proper check MONO_TYPE_CLASS.
+
+	* verify.c (verify_ldftn_delegate): Improve error message.
+
+2009-04-09  Raja R Harinath  <harinath@hurrynot.org>
+
+	* reflection.c (my_mono_class_from_mono_type): Remove.
+
+2009-04-09  Raja R Harinath  <harinath@hurrynot.org>
+
+	Prepare to reduce memory usage of owner-less generic parameters (1/n)
+	* class-internals.h (MonoGenericParam): Carve out pklass, name, flags
+	and constraints fields into ...
+	(MonoGenericParamInfo): ... this.
+	(mono_generic_param_info, mono_generic_container_get_param_info):
+	New accessors.
+	* class.c, debug-helpers.c, icall.c: Update to changes.
+	* metadata.c, reflection.c, verify.c: Likewise.
+
+2009-04-09  Zoltan Varga  <vargaz@gmail.com>
+
+	* debug-helpers.c (dis_one): Fix decoding of strings in dynamic images.
+
+	* marshal.c (get_runtime_invoke_type): Share enums with their base types.
+	
+	* marshal.c (get_runtime_invoke_type): Share pointers with ints and
+	booleans with sbytes.
+
+2009-04-08 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* class.c (can_access_instantiation): Verify accesibility of element types
+	for arrays and pointers.
+
+	* class.c (can_access_type): Return true if the target class is VAR or MVAR.
+
+	* class.c (mono_method_can_access_method_full): Fix typos in the documentation.
+
+	Fixes #493068.
+
+2009-04-08 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (do_invoke_method): Improve error messages.
+
+2009-04-08  Bill Holmes  <billholmes54@gmail.com>
+
+	* verify.c:  Fixing the MSVC build.
+
+	Code is contributed under MIT/X11 license.
+
+2009-04-08  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Simplify get_reflection_caller not to call
+	mono_method_get_last_managed (another stack walk) and adjust the
+	callers to handle a (should not happen) NULL return value.
+
+2009-04-08  Raja R Harinath  <harinath@hurrynot.org>
+
+	Add accessors to some MonoGenericParam fields
+	* class-internals.h (mono_generic_param_owner): New accessor.
+	(mono_generic_param_num): Likewise.
+	(mono_type_get_generic_param_owner): New helper.
+	(mono_type_get_generic_param_num): New helper.
+	* class.c, icall.c, metadata.c, reflection.c, verify.c: Use them.
+
+2009-04-08  Raja R Harinath  <harinath@hurrynot.org>
+
+	* class-internals.h (mono_generic_container_get_param): New wrapper.
+	* class.c, icall.c, metadata.c, verify.c: Use it.
+
+2009-04-08  Raja R Harinath  <harinath@hurrynot.org>
+
+	Fix gtest-252.cs
+	* verify.c (mono_type_is_valid_type_in_context): Rewrite to use
+	the standard case/loop.  In particular, don't complain about
+	references to generic type definitions.
+
+2009-04-07  Zoltan Varga  <vargaz@gmail.com>
+
+	* debug-helpers.c (dis_one): Decode string arguments.
+
+2009-04-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c (dump_verify_info): Dump type name correctly.
+
+2009-04-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_method_verify): Don't init code slots for exception boundaries if they
+	are larger than code size.
+
+	This can happen in valid code if the try/catch block is not followed by any instruction
+	and do a backward branch on the leave instruction.
+
+	Fixes #492494.
+
+2009-04-06  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Fix typo while comparing second method names
+	in can_avoid_corlib_reflection_delegate_optimization
+
+2009-04-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (do_throw): Don't allow an unboxed generic param ar argument.
+
+	Fixes #487738.
+
+2009-04-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata.c (do_mono_metadata_parse_type): Fail if we are decoding
+	a MVAR using a class context.
+
+	Fixes #490335.
+
+2009-04-06  Zoltan Varga  <vargaz@gmail.com>
+
+	* object.c (mono_class_compute_gc_descriptor): Make this non-static.
+
+	* domain-internals.h (struct _MonoJitInfo): Add a 'gc_info' field.
+
+	* gc-internal.h (MonoGCCallbacks): New stucture containing the callback
+	functions supplied by the JIT for the SGEN GC.
+
+	* sgen-gc.c: Call the callbacks supplied by the JIT to do stack marking.
+	
+2009-04-06  Massimiliano Mantione  <massi@ximian.com>
+
+	monitor.c (mono_monitor_try_enter_internal):
+	Added calls to profile monitor contentions.
+	Also duplicated a small piece of code (the "get the monitor" logic)
+	from the fast path to the slow path, and changed the relevant goto
+	statements, so that monitor acquisition events can be emitted from the
+	slow path (this is by Paolo Molaro).
+
+2009-04-06  Massimiliano Mantione  <massi@ximian.com>
+
+	* profiler.c, profiler.h, profiler-private.h:
+	Added support for profiling monitor contentions.
+
+2009-04-03 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* metadata-verify.c: Verify the modules table.
+
+2009-04-02 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (mono_generic_param_is_constraint_compatible): Inflate the candidate
+	using the context of the method been verifier and not of the method been called.
+
+	* verify.c: Add verifier_inflate_type and mono_type_is_valid_type_in_context to
+	safely inflate generic types. 
+
+2009-04-02  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* security-core-clr.c: Change the strategy for checking the 
+	"reflection using delegates optimization" to avoid unneeded 
+	attributes in multiple class libraries.
+
+2009-04-02  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Remove object element in the disappearing link struct
+	by storing the object pointer in the link.
+
+2009-03-31 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* pedump.c (dump_verify_info): Don't crash if signature decoding fails.
+
+2009-03-31 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* verify.c (verifier_load_field): Fail if the field parent could not be loaded.
+
+	* verify.c (mono_method_verify): Do proper bounds checking of exception
+	clause ranges.
+
+2009-03-31 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* loader.c (mono_field_from_token): Don't crash if the field parent could
+	not be decoded.
+
+2009-03-31  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Execute critical finalizers after ordinary
+	finalizers.
+
+	* class-internals.h, domain.c: Add CriticalFinalizerObject to
+	mono_defaults.
+
+2009-03-31 Jb Evain <jbevain@novell.com>
+
+	* verify.c (do_ldstr): don't check if a string is in the user strings
+	heap if the current image is dynamic.
+
+2009-03-31  Mark Probst  <mark.probst@gmail.com>
+
+	* sgen-gc.c: Wait until the last finalizer has executed when
+	returning from WaitForPendingFinalizers.
 
 2009-03-31  Martin Baulig  <martin@ximian.com>
 
@@ -2164,7 +5133,7 @@ Thu Dec 18 16:35:22 CET 2008 Paolo Molaro <lupus@ximian.com>
 
 	Fixes #448560.
 
-2008-11-29  KornÈl P·l  <kornelpal@gmail.com>
+2008-11-29  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* coree.c (MonoFixupExe): Use sizeof(IMAGE_BASE_RELOCATION) instead of
 	IMAGE_SIZEOF_BASE_RELOCATION as newer Vista SDKs no longer define the latter.
@@ -2885,7 +5854,7 @@ Mon Oct 6 16:10:02 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	for the no-gc case.
 	* attach.c (mono_attach_init): Remove the #ifdef.
 
-2008-10-04  Andreas F‰rber  <andreas.faerber@web.de>
+2008-10-04  Andreas F√§rber  <andreas.faerber@web.de>
 
 	* attach.c (mono_attach_init): Don't use
 	mono_gc_add_finalizer_thread_callback when compiling without GC.
@@ -3065,7 +6034,7 @@ Mon Sep 22 17:29:54 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	(mono_image_get_generic_field_token): Call add_custom_modifiers ().
 	(fieldbuilder_to_mono_class_field): Ditto. Fixes #424663.
 
-2008-09-19  KornÈl P·l  <kornelpal@gmail.com>
+2008-09-19  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* coree.c (_CorValidateImage): Some 64-bit IL only images have entry point
 	calling _CorDllMain imported from mscoree.dll. Set entry point RVA to 0 for
@@ -3518,7 +6487,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	(ves_icall_System_Diagnostics_Process_ProcessHandle_duplicate):
 	New internal calls to duplicate and close a process handle.
 
-2008-07-27  Andreas F‰rber  <andreas.faerber@web.de>
+2008-07-27  Andreas F√§rber  <andreas.faerber@web.de>
 
 	* object.c (CHECK_ADD_OVERFLOW_UN): Add missing bracket. Fixes #412499.
 
@@ -3645,7 +6614,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	* class-internals.h: New exception type MONO_EXCEPTION_OBJECT_SUPPLIED
 	for the case where the exception object is supplied.
 
-2008-07-16  KornÈl P·l  <kornelpal@gmail.com>
+2008-07-16  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* coree.h: Define __ImageBase as _image_base__ on cygwin that fixes build with
 	old ld versions.
@@ -3816,7 +6785,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 
 	* domain.c: Initialize+cleanup jit_code_hash_lock.
 	
-2008-06-30  KornÈl P·l  <kornelpal@gmail.com>
+2008-06-30  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* coree.c (mono_load_coree): Set coree_module_handle global variable only
 	after initialization.
@@ -3825,7 +6794,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 
 	Contributed under MIT/X11 license.
 
-2008-06-30  KornÈl P·l  <kornelpal@gmail.com>
+2008-06-30  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* coree.c (_CorValidateImage): Retain IMAGE_DIRECTORY_ENTRY_SECURITY
 	because that is platform independent. Check NumberOfRvaAndSizes in PE32
@@ -3883,7 +6852,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 
 	* object.c (mono_value_box): Fix boxing of nullables.
 
-2008-06-26  KornÈl P·l  <kornelpal@gmail.com>
+2008-06-26  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* assembly.c (mono_set_rootdir): Use __ImageBase instead of
 	mono_module_handle that is defined by the linker; no initialization required.
@@ -4002,7 +6971,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	* icall-def.h: Implement Socket generic Send() and Receive()
 	methods.  Fixes bug 395168.
 
-2008-06-19  KornÈl P·l  <kornelpal@gmail.com>
+2008-06-19  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* icall-def.h, icall.c: Add ves_icall_System_Reflection_Module_GetHINSTANCE.
 
@@ -4476,7 +7445,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	* appdomain.c (set_domain_search_path): Acquire the domain lock since we
 	modify domain state.
 
-2008-06-05  Andreas F‰rber  <andreas.faerber@web.de>
+2008-06-05  Andreas F√§rber  <andreas.faerber@web.de>
 
 	* boehm-gc.c: Add DTrace probes gc-{begin,end}.
 	* Makefile.am (pedump_LDADD): Post-process object files and
@@ -5012,14 +7981,14 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	* reflection.c (mono_image_create_token): Add a 'register_token' argument, and use
 	it to avoid registering tokens during metadata generation. Fixes #390023.
 
-2008-05-14  KornÈl P·l  <kornelpal@gmail.com>
+2008-05-14  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* coree.c: Rename dwOldProtect to OldProtect that makes naming convention
 	consistent.
 
 	Contributed under MIT/X11 license.
 
-2008-05-14  KornÈl P·l  <kornelpal@gmail.com>
+2008-05-14  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* domain.c (mono_init_internal): Enable LoadLibrary support. Load EXE image
 	even when get_runtimes_from_exe didn't load it that allows mono_fixup_exe_image
@@ -5175,13 +8144,13 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	(MONO_SYMBOL_FILE_COMPATIBILITY_VERSION): Removed; dropped support
 	for old pre-terrania symbol files.
 
-2008-05-05  Andreas F‰rber  <andreas.faerber@web.de>
+2008-05-05  Andreas F√§rber  <andreas.faerber@web.de>
 
 	* mono-config.c: Add ppc64 architecture.
 
 	Code is contributed under MIT/X11 license.
 
-2008-05-05  Andreas F‰rber  <andreas.faerber@web.de>
+2008-05-05  Andreas F√§rber  <andreas.faerber@web.de>
 
 	* object.c (mono_create_ftnptr, mono_get_addr_from_ftnptr):
 	  PPC64 uses function descriptors as well.
@@ -5264,7 +8233,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	* verify.c (mono_method_verify): Check the bounds of
 	all access of the code array.
 
-2008-04-29  KornÈl P·l  <kornelpal@gmail.com>
+2008-04-29  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* appdomain.c: Use HAVE_SYS_UTIME_H that fixes MSVC build.
 
@@ -5273,7 +8242,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 	* image.c (mono_image_strong_name_position): Fix return value when the rva is
 	not valid.
 
-2008-04-28  KornÈl P·l  <kornelpal@gmail.com>
+2008-04-28  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* loader.c (mono_get_method_from_token, mono_method_signature): Add
 	support for METHOD_IMPL_ATTRIBUTE_NATIVE.
@@ -5639,7 +8608,7 @@ Fri Aug 1 16:07:09 CEST 2008 Paolo Molaro <lupus@ximian.com>
 
 	* verify.c: Implemented readonly prefix and verify controled mutability pointers.
 
-2008-03-20  KornÈl P·l  <kornelpal@gmail.com>
+2008-03-20  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* file-io.c, filewatcher.c, threadpool.c, threads.c: Removed Windows
 	version macros.
@@ -7492,7 +10461,7 @@ Thu Nov 8 15:31:21 CET 2007 Paolo Molaro <lupus@ximian.com>
 	* socket-io.c: Apple requires sin(6)_len to be set for getnameinfo
 	to succeed
 
-2007-11-05  KornÈl P·l  <kornelpal@gmail.com>
+2007-11-05  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* process.c: Added run-time GetProcessId API detection for Windows.
 
@@ -11803,7 +14772,7 @@ Fri Jul 28 19:04:34 CEST 2006 Paolo Molaro <lupus@ximian.com>
 	* threads.c (start_wrapper): Do the thread cleanup while we still
 	hold a reference to its object.  Fixes bug 78123.
 
-2006-07-18  KornÈl P·l  <kornelpal@gmail.com>
+2006-07-18  Korn√©l P√°l  <kornelpal@gmail.com>
 
 	* class-internals.h: Added MONO_WRAPPER_MANAGED_TO_MANAGED wrapper type.
 	* debug-helpers.c: Map MONO_WRAPPER_MANAGED_TO_MANAGED to
@@ -15644,7 +18613,7 @@ Wed Jun 8 19:26:38 CEST 2005 Paolo Molaro <lupus@ximian.com>
 
 	* threads.c: avoid segfault when an unstarted thread is aborted.
 
-2005-06-05  KornÈl P·l <kornelpal@hotmail.com>
+2005-06-05  Korn√©l P√°l <kornelpal@hotmail.com>
 
 	* icall.c: Added ves_icall_Mono_Runtime_GetDisplayName:
 	Returns the name and version of the runtime for reporting.

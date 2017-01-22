@@ -39,7 +39,6 @@ EXTRA_DIST = \
 	local-regalloc.txt	\
 	magic.diff		\
 	mini-doc.txt		\
-	mini-porting.txt	\
 	mono-api-metadata.html	\
 	mono-file-formats.config\
 	mono-file-formats.source\
@@ -102,5 +101,5 @@ $(srcdir)/deploy/.stamp: convert.exe Makefile.am
 extract: $(srcdir)/deploy/.stamp
 
 convert.exe: convert.cs AgilityPack.dll
-	cd $(srcdir) && $(MAKE) -f docs.make topdir=$(mcs_topdir_from_srcdir) convert.exe
+	cd $(srcdir) && $(MAKE) PROFILE=net_1_1 -f docs.make topdir=$(mcs_topdir_from_srcdir) convert.exe
 

@@ -31,25 +31,22 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
 
-#if MONO_STRICT
-using System.Data.Linq.Sql;
-using System.Data.Linq.Sugar.Expressions;
-#else
 using DbLinq.Data.Linq.Sql;
 using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
 
 using DbLinq.Util;
 
 namespace DbLinq.Vendor.Implementation
 {
-#if MONO_STRICT
-    internal
-#else
+#if !MONO_STRICT
     public
 #endif
- class SqlProvider : ISqlProvider
+    class SqlProvider : ISqlProvider
     {
+        public virtual ExpressionTranslator GetTranslator()
+        {
+            return new ExpressionTranslator();
+        }
 
         /// <summary>
         /// Builds an insert clause
@@ -74,12 +71,37 @@ namespace DbLinq.Vendor.Implementation
         /// <summary>
         /// Builds the statements that gets back the IDs for the inserted statement
         /// </summary>
+        /// <param name="table"></param>
+        /// <param name="autoPKColumn">Auto-generated PK columns for reference (i.e. AUTO_INCREMENT)</param>
+        /// <param name="inputPKColumns">PK columns for reference</param>
+        /// <param name="inputPKValues">PK values for reference</param>
         /// <param name="outputParameters">Expected output parameters</param>
         /// <param name="outputExpressions">Expressions (to help generate output parameters)</param>
         /// <returns></returns>
-        public virtual SqlStatement GetInsertIds(IList<SqlStatement> outputParameters, IList<SqlStatement> outputExpressions)
+        public virtual SqlStatement GetInsertIds(SqlStatement table, IList<SqlStatement> autoPKColumn, IList<SqlStatement> pkColumns, IList<SqlStatement> pkValues, IList<SqlStatement> outputColumns, IList<SqlStatement> outputParameters, IList<SqlStatement> outputExpressions)
         {
-            return "SELECT @@IDENTITY";
+            if (autoPKColumn.Count == outputParameters.Count)
+                return "SELECT @@IDENTITY";
+
+            var insertIds = new SqlStatementBuilder("SELECT ");
+            insertIds.AppendFormat(" ({0})", SqlStatement.Join(", ", outputColumns));
+            insertIds.Append(" FROM ");
+            insertIds.Append(table);
+            insertIds.Append(" WHERE ");
+            bool valueSet = false;
+            if (autoPKColumn.Count > 0)
+            {
+                insertIds.AppendFormat("{0} = @@IDENTITY", autoPKColumn[0]);
+                valueSet = true;
+            }
+            for (IEnumerator<SqlStatement> column = pkColumns.GetEnumerator(), value = pkValues.GetEnumerator(); column.MoveNext() && value.MoveNext();)
+            {
+                if (valueSet)
+                    insertIds.Append(" AND ");
+                insertIds.AppendFormat("{0} = {1}", column.Current, value.Current);
+                valueSet = true;
+            }
+            return insertIds.ToSqlStatement();
         }
 
         /// <summary>
@@ -104,18 +126,22 @@ namespace DbLinq.Vendor.Implementation
             var updateBuilder = new SqlStatementBuilder("UPDATE ");
             updateBuilder.Append(table);
             updateBuilder.Append(" SET ");
-            for (int inputIndex = 0; inputIndex < inputColumns.Count; inputIndex++)
+            bool valueSet = false;
+            for (IEnumerator<SqlStatement> column = inputColumns.GetEnumerator(), value = inputValues.GetEnumerator(); column.MoveNext() && value.MoveNext(); )
             {
-                if (inputIndex > 0)
+                if (valueSet)
                     updateBuilder.Append(", ");
-                updateBuilder.AppendFormat("{0} = {1}", inputColumns[inputIndex], inputValues[inputIndex]);
+                updateBuilder.AppendFormat("{0} = {1}", column.Current, value.Current);
+                valueSet = true;
             }
             updateBuilder.Append(" WHERE ");
-            for (int pkIndex = 0; pkIndex < inputPKColumns.Count; pkIndex++)
+            valueSet = false;
+            for (IEnumerator<SqlStatement> column = inputPKColumns.GetEnumerator(), value = inputPKValues.GetEnumerator(); column.MoveNext() && value.MoveNext(); )
             {
-                if (pkIndex > 0)
+                if (valueSet)
                     updateBuilder.Append(" AND ");
-                updateBuilder.AppendFormat("{0} = {1}", inputPKColumns[pkIndex], inputPKValues[pkIndex]);
+                updateBuilder.AppendFormat("{0} = {1}", column.Current, value.Current);
+                valueSet = true;
             }
             return updateBuilder.ToSqlStatement();
         }
@@ -135,11 +161,13 @@ namespace DbLinq.Vendor.Implementation
             var deleteBuilder = new SqlStatementBuilder("DELETE FROM ");
             deleteBuilder.Append(table);
             deleteBuilder.Append(" WHERE ");
-            for (int pkIndex = 0; pkIndex < inputPKColumns.Count; pkIndex++)
+            bool valueSet = false;
+            for (IEnumerator<SqlStatement> column = inputPKColumns.GetEnumerator(), value = inputPKValues.GetEnumerator(); column.MoveNext() && value.MoveNext(); )
             {
-                if (pkIndex > 0)
+                if (valueSet)
                     deleteBuilder.Append(" AND ");
-                deleteBuilder.AppendFormat("{0} = {1}", inputPKColumns[pkIndex], inputPKValues[pkIndex]);
+                deleteBuilder.AppendFormat("{0} = {1}", column.Current, value.Current);
+                valueSet = true;
             }
             return deleteBuilder.ToSqlStatement();
         }
@@ -168,10 +196,15 @@ namespace DbLinq.Vendor.Implementation
             if (literal is bool)
                 return GetLiteral((bool)literal);
             if (literal is DateTime)
-                return GetLiteral(literal.ToString());
+                return GetLiteral((DateTime)literal);
             if (literal.GetType().IsArray)
                 return GetLiteral((Array)literal);
             return Convert.ToString(literal, CultureInfo.InvariantCulture);
+        }
+
+        public virtual SqlStatement GetLiteral(DateTime literal)
+        {
+            return literal.ToString("o");
         }
 
         public virtual SqlStatement GetLiteral(bool literal)
@@ -281,7 +314,6 @@ namespace DbLinq.Vendor.Implementation
             throw new ArgumentException(operationType.ToString());
         }
 
-
         /// <summary>
         /// Converts a special expression type to literal
         /// </summary>
@@ -300,6 +332,8 @@ namespace DbLinq.Vendor.Implementation
                 return GetLiteralStringConcat(p[0], p[1]);
             case SpecialExpressionType.Count:
                 return GetLiteralCount(p[0]);
+            case SpecialExpressionType.Exists:
+                return GetLiteralExists(p[0]);
             case SpecialExpressionType.Like:
                 return GetLiteralLike(p[0], p[1]);
             case SpecialExpressionType.Min:
@@ -350,6 +384,8 @@ namespace DbLinq.Vendor.Implementation
             case SpecialExpressionType.Second:
             case SpecialExpressionType.Millisecond:
                 return GetLiteralDateTimePart(p[0], operationType);
+            case SpecialExpressionType.Date:
+                return p[0];
             case SpecialExpressionType.DateDiffInMilliseconds:
                 return GetLiteralDateDiff(p[0], p[1]);
             case SpecialExpressionType.Abs:
@@ -377,6 +413,11 @@ namespace DbLinq.Vendor.Implementation
 
             }
             throw new ArgumentException(operationType.ToString());
+        }
+
+        protected virtual SqlStatement GetLiteralExists(SqlStatement sqlStatement)
+        {
+            return SqlStatement.Format("EXISTS {0}", sqlStatement);
         }
 
         private int SpecificVendorStringIndexStart
@@ -693,6 +734,18 @@ namespace DbLinq.Vendor.Implementation
 
         /// <summary>
         /// Returns a table alias
+        /// Ensures about the right case
+        /// </summary>
+        /// <param name="table"></param>
+        /// <param name="alias"></param>
+        /// <returns></returns>
+        public virtual string GetSubQueryAsAlias(string subquery, string alias)
+        {
+            return string.Format("({0}) {1}", subquery, GetTableAlias(alias));
+        }
+
+        /// <summary>
+        /// Returns a table alias
         /// </summary>
         /// <param name="table"></param>
         /// <returns></returns>
@@ -769,7 +822,7 @@ namespace DbLinq.Vendor.Implementation
         {
             if (wheres.Length == 0)
                 return SqlStatement.Empty;
-            return SqlStatement.Format("WHERE {0}", SqlStatement.Join(" AND ", wheres));
+            return SqlStatement.Format("WHERE ({0})", SqlStatement.Join(") AND (", wheres));
         }
 
         /// <summary>
@@ -794,6 +847,18 @@ namespace DbLinq.Vendor.Implementation
             if (selects.Length == 0)
                 return SqlStatement.Empty;
             return SqlStatement.Format("SELECT {0}", SqlStatement.Join(", ", selects));
+        }
+
+        /// <summary>
+        /// Joins a list of operands to make a SELECT clause
+        /// </summary>
+        /// <param name="selects"></param>
+        /// <returns></returns>
+        public virtual SqlStatement GetSelectDistinctClause(SqlStatement[] selects)
+        {
+            if (selects.Length == 0)
+                return SqlStatement.Empty;
+            return SqlStatement.Format("SELECT DISTINCT {0}", SqlStatement.Join(", ", selects));
         }
 
         /// <summary>
@@ -854,7 +919,7 @@ namespace DbLinq.Vendor.Implementation
         /// <returns></returns>
         protected virtual SqlStatement GetLiteralAnd(SqlStatement a, SqlStatement b)
         {
-            return SqlStatement.Format("{0} AND {1}", a, b);
+            return SqlStatement.Format("({0}) AND ({1})", a, b);
         }
 
         /// <summary>
@@ -964,7 +1029,7 @@ namespace DbLinq.Vendor.Implementation
         /// <returns></returns>
         protected virtual SqlStatement GetLiteralExclusiveOr(SqlStatement a, SqlStatement b)
         {
-            return SqlStatement.Format("{0} XOR {1}", a, b);
+            return SqlStatement.Format("({0}) XOR ({1})", a, b);
         }
 
         /// <summary>
@@ -1114,7 +1179,7 @@ namespace DbLinq.Vendor.Implementation
         /// <returns></returns>
         protected virtual SqlStatement GetLiteralOr(SqlStatement a, SqlStatement b)
         {
-            return SqlStatement.Format("{0} OR {1}", a, b);
+            return SqlStatement.Format("({0}) OR ({1})", a, b);
         }
 
         /// <summary>
@@ -1534,7 +1599,7 @@ namespace DbLinq.Vendor.Implementation
         /// </summary>
         /// <param name="namePart">The name part.</param>
         /// <returns>
-        /// 	<c>true</c> if [is made safe] [the specified name part]; otherwise, <c>false</c>.
+        ///     <c>true</c> if [is made safe] [the specified name part]; otherwise, <c>false</c>.
         /// </returns>
         protected virtual bool IsMadeSafe(string namePart)
         {
@@ -1549,7 +1614,7 @@ namespace DbLinq.Vendor.Implementation
         /// </summary>
         /// <param name="namePart">The name part.</param>
         /// <returns>
-        /// 	<c>true</c> if [is name case safe] [the specified name part]; otherwise, <c>false</c>.
+        ///     <c>true</c> if [is name case safe] [the specified name part]; otherwise, <c>false</c>.
         /// </returns>
         protected virtual bool IsNameCaseSafe(string namePart)
         {
@@ -1619,6 +1684,8 @@ namespace DbLinq.Vendor.Implementation
             case "where":
             case "order":
             case "by":
+            case "key":
+			case "index":
 
                 return false;
             default:

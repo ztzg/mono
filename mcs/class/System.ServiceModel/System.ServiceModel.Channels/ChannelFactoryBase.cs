@@ -34,10 +34,21 @@ using System.ServiceModel.Dispatcher;
 
 namespace System.ServiceModel.Channels
 {
+	internal abstract class TransportChannelFactoryBase<TChannel> : ChannelFactoryBase<TChannel>
+	{
+		protected TransportChannelFactoryBase (TransportBindingElement source, BindingContext ctx)
+		{
+			Source = source;
+		}
+
+		public TransportBindingElement Source { get; private set; }
+	}
+
 	public abstract class ChannelFactoryBase<TChannel>
 		: ChannelFactoryBase, IChannelFactory<TChannel>
 	{
-		[MonoTODO]
+		List<TChannel> channels = new List<TChannel> ();
+
 		protected ChannelFactoryBase ()
 			: this (DefaultCommunicationTimeouts.Instance)
 		{
@@ -58,35 +69,32 @@ namespace System.ServiceModel.Channels
 		public TChannel CreateChannel (
 			EndpointAddress remoteAddress, Uri via)
 		{
+			if (remoteAddress == null)
+				throw new ArgumentNullException ("remoteAddress");
 			ValidateCreateChannel ();
-			return OnCreateChannel (remoteAddress, via);
+			var ch = OnCreateChannel (remoteAddress, via);
+			channels.Add (ch);
+			return ch;
 		}
 
 		protected abstract TChannel OnCreateChannel (
 			EndpointAddress remoteAddress, Uri via);
 
-		[MonoTODO ("find out what to do here.")]
 		protected override void OnAbort ()
 		{
+			// this implicitly premises: TChannel is IChannel
+			foreach (IChannel ch in channels)
+				ch.Abort ();
 			base.OnAbort ();
 		}
 
-		[MonoTODO ("find out what to do here.")]
 		protected override void OnClose (TimeSpan timeout)
 		{
-			base.OnClose (timeout);
-		}
-
-		[MonoTODO ("find out what to do here.")]
-		protected override IAsyncResult OnBeginClose (TimeSpan timeout, AsyncCallback callback, object state)
-		{
-			return base.OnBeginClose (timeout, callback, state);
-		}
-
-		[MonoTODO ("find out what to do here.")]
-		protected override void OnEndClose (IAsyncResult result)
-		{
-			base.OnEndClose (result);
+			DateTime start = DateTime.Now;
+			// this implicitly premises: TChannel is IChannel
+			foreach (IChannel ch in channels)
+				ch.Close (timeout - (DateTime.Now - start));
+			base.OnClose (timeout - (DateTime.Now - start));
 		}
 
 		protected void ValidateCreateChannel ()
@@ -102,7 +110,6 @@ namespace System.ServiceModel.Channels
 	{
 		TimeSpan open_timeout, close_timeout, receive_timeout, send_timeout;
 
-		[MonoTODO]
 		protected ChannelFactoryBase ()
 			: this (DefaultCommunicationTimeouts.Instance)
 		{
@@ -133,33 +140,57 @@ namespace System.ServiceModel.Channels
 			get { return send_timeout; }
 		}
 
-		[MonoTODO]
 		public virtual T GetProperty<T> () where T : class
 		{
-			throw new NotImplementedException ();
+			return null;
 		}
 
-		[MonoTODO ("find out what to do here.")]
 		protected override void OnAbort ()
 		{
+			// what should we do here?
 		}
 
-		[MonoTODO]
-		protected override IAsyncResult OnBeginClose (TimeSpan timeout,
+		Action<TimeSpan> open_delegate;
+
+		protected override IAsyncResult OnBeginOpen (TimeSpan timeout,
 			AsyncCallback callback, object state)
 		{
-			throw new NotImplementedException ();
+			if (open_delegate == null)
+				open_delegate = new Action<TimeSpan> (OnOpen);
+			return open_delegate.BeginInvoke (timeout, callback, state);
 		}
 
-		[MonoTODO]
+		protected override void OnEndOpen (IAsyncResult result)
+		{
+			if (open_delegate == null)
+				throw new InvalidOperationException ("Async open operation has not started");
+			open_delegate.EndInvoke (result);
+		}
+
+		protected override void OnOpen (TimeSpan timeout)
+		{
+			// what should we do here?
+		}
+
+		Action<TimeSpan> close_delegate;
+
+		protected override IAsyncResult OnBeginClose (TimeSpan timeout, AsyncCallback callback, object state)
+		{
+			if (close_delegate == null)
+				close_delegate = new Action<TimeSpan> (OnClose);
+			return close_delegate.BeginInvoke (timeout, callback, state);
+		}
+
 		protected override void OnEndClose (IAsyncResult result)
 		{
-			throw new NotImplementedException ();
+			if (close_delegate == null)
+				throw new InvalidOperationException ("Async close operation has not started");
+			close_delegate.EndInvoke (result);
 		}
 
-		[MonoTODO]
 		protected override void OnClose (TimeSpan timeout)
 		{
+			// what should we do here?
 		}
 	}
 }

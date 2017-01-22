@@ -1,3 +1,25 @@
+2009-06-16  Marek Habersack  <mhabersack@novell.com>
+
+	* HtmlHeadBuilder.cs: use faster String.Compare overloads.
+
+	* HtmlHead.cs: implemented 4.0 properties Description and
+	Keywords.
+
+2009-06-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HtmlTitle.cs: HtmlTitle allows children that are not
+	LiteralControls. Fixes bug #511882.
+
+2009-05-15  Marek Habersack  <mhabersack@novell.com>
+
+	* HtmlForm.cs: if application isn't running on /, make sure we
+	generate the correct relative path for the action form attribute.
+
+2009-04-15 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HtmlInputText.cs: make sure we're inside a Page before dereferencing
+	it.
+
 2008-11-06  Marek Habersack  <mhabersack@novell.com>
 
 	* HtmlForm.cs: added the undocumented, but supported, Action

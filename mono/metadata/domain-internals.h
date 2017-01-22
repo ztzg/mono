@@ -69,6 +69,8 @@ struct _MonoJitInfoTable
 	MonoJitInfoTableChunk  *chunks [MONO_ZERO_LEN_ARRAY];
 };
 
+#define MONO_SIZEOF_JIT_INFO_TABLE (sizeof (struct _MonoJitInfoTable) - MONO_ZERO_LEN_ARRAY * SIZEOF_VOID_P)
+
 typedef GArray MonoAotModuleInfoTable;
 
 typedef struct {
@@ -123,9 +125,16 @@ struct _MonoJitInfo {
 	gboolean    cas_method_permitonly:1;
 	gboolean    has_generic_jit_info:1;
 	gboolean    from_aot:1;
+	gboolean    from_llvm:1;
+#ifdef HAVE_SGEN_GC
+	/* FIXME: Embed this after the structure later */
+	gpointer    gc_info;
+#endif
 	MonoJitExceptionInfo clauses [MONO_ZERO_LEN_ARRAY];
 	/* There is an optional MonoGenericJitInfo after the clauses */
 };
+
+#define MONO_SIZEOF_JIT_INFO (offsetof (struct _MonoJitInfo, clauses))
 
 struct _MonoAppContext {
 	MonoObject obj;
@@ -227,10 +236,12 @@ struct _MonoDomain {
 	 * if the hashtable contains a GC visible reference to them.
 	 */
 	GHashTable         *finalizable_objects_hash;
+#ifndef HAVE_SGEN_GC
 	/* Maps MonoObjects to a GSList of WeakTrackResurrection GCHandles pointing to them */
 	GHashTable         *track_resurrection_objects_hash;
 	/* Maps WeakTrackResurrection GCHandles to the MonoObjects they point to */
 	GHashTable         *track_resurrection_handles_hash;
+#endif
 	/* Protects the three hashes above */
 	CRITICAL_SECTION   finalizable_objects_hash_lock;
 	/* Used when accessing 'domain_assemblies' */
@@ -347,6 +358,9 @@ mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize) 
 
 void
 mono_domain_code_foreach (MonoDomain *domain, MonoCodeManagerFunc func, void *user_data) MONO_INTERNAL;
+
+void
+mono_domain_set_internal_with_options (MonoDomain *domain, gboolean migrate_exception) MONO_INTERNAL;
 
 /* 
  * Installs a new function which is used to return a MonoJitInfo for a method inside
@@ -481,5 +495,7 @@ MonoAssembly* mono_assembly_load_full_nosearch (MonoAssemblyName *aname,
 void mono_set_private_bin_path_from_config (MonoDomain *domain) MONO_INTERNAL;
 
 int mono_framework_version (void) MONO_INTERNAL;
+
+void mono_reflection_cleanup_domain (MonoDomain *domain) MONO_INTERNAL;
 
 #endif /* __MONO_METADATA_DOMAIN_INTERNALS_H__ */

@@ -43,6 +43,7 @@ namespace Mono.CSharp
 		SeekableStreamReader reader;
 		SourceFile ref_name;
 		CompilationUnit file_name;
+		CompilerContext context;
 		bool hidden = false;
 		int ref_line = 1;
 		int line = 1;
@@ -113,6 +114,14 @@ namespace Mono.CSharp
 		bool tokens_seen = false;
 
 		//
+		// Set to true once the GENERATE_COMPLETION token has bee
+		// returned.   This helps produce one GENERATE_COMPLETION,
+		// as many COMPLETE_COMPLETION as necessary to complete the
+		// AST tree and one final EOF.
+		//
+		bool generated;
+		
+		//
 		// Whether a token has been seen on the file
 		// This is needed because `define' is not allowed to be used
 		// after a token has been seen.
@@ -152,6 +161,10 @@ namespace Mono.CSharp
 			}
 		}
 
+		//
+		// This is used to trigger completion generation on the parser
+		public bool CompleteOnEOF;
+		
 		void AddEscapedIdentifier (LocatedToken lt)
 		{
 			if (escaped_identifiers == null)
@@ -526,7 +539,7 @@ namespace Mono.CSharp
 							Report.FeatureIsNotAvailable (Location, "query expressions");
 						break;
 					case Token.VOID:
-						Expression.Error_VoidInvalidInTheContext (Location);
+						Expression.Error_VoidInvalidInTheContext (Location, Report);
 						break;
 					default:
 						PopPosition ();
@@ -606,10 +619,11 @@ namespace Mono.CSharp
 			}
 		}
 
-		public Tokenizer (SeekableStreamReader input, CompilationUnit file)
+		public Tokenizer (SeekableStreamReader input, CompilationUnit file, CompilerContext ctx)
 		{
 			this.ref_name = file;
 			this.file_name = file;
+			this.context = ctx;
 			reader = input;
 			
 			putback_char = -1;
@@ -1542,7 +1556,7 @@ namespace Mono.CSharp
 
 		public bool advance ()
 		{
-			return peek_char () != -1;
+			return peek_char () != -1 || CompleteOnEOF;
 		}
 
 		public Object Value {
@@ -1862,7 +1876,7 @@ namespace Mono.CSharp
 				int[] codes = ParseNumbers (arg.Substring (w_disable.Length));
 				foreach (int code in codes) {
 					if (code != 0)
-						Report.RegisterWarningRegion (Location).WarningDisable (Location, code);
+						Report.RegisterWarningRegion (Location).WarningDisable (Location, code, Report);
 				}
 				return;
 			}
@@ -1872,8 +1886,8 @@ namespace Mono.CSharp
 				Hashtable w_table = Report.warning_ignore_table;
 				foreach (int code in codes) {
 					if (w_table != null && w_table.Contains (code))
-						Report.Warning (1635, 1, Location, String.Format ("Cannot restore warning `CS{0:0000}' because it was disabled globally", code));
-					Report.RegisterWarningRegion (Location).WarningEnable (Location, code);
+						Report.Warning (1635, 1, Location, "Cannot restore warning `CS{0:0000}' because it was disabled globally", code);
+					Report.RegisterWarningRegion (Location).WarningEnable (Location, code, Report);
 				}
 				return;
 			}
@@ -2599,7 +2613,7 @@ namespace Mono.CSharp
 					}
 
 					return Token.OP_GT;
-				
+
 				case '+':
 					d = peek_char ();
 					if (d == '+') {
@@ -2870,7 +2884,16 @@ namespace Mono.CSharp
 				error_details = ((char)c).ToString ();
 				return Token.ERROR;
 			}
+
+			if (CompleteOnEOF){
+				if (generated)
+					return Token.COMPLETE_COMPLETION;
+				
+				generated = true;
+				return Token.GENERATE_COMPLETION;
+			}
 			
+
 			return Token.EOF;
 		}
 
@@ -3054,6 +3077,10 @@ namespace Mono.CSharp
 				return ret;
 			}
 			return null;
+		}
+
+		Report Report {
+			get { return context.Report; }
 		}
 
 		void reset_doc_comment ()

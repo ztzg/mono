@@ -65,6 +65,8 @@ System.Web.Compilation/ClientBuildManager.cs
 System.Web.Compilation/CompilationException.cs
 System.Web.Compilation/CompilerType.cs
 System.Web.Compilation/ConnectionStringsExpressionBuilder.cs
+System.Web.Compilation/DefaultResourceProviderFactory.cs
+System.Web.Compilation/DefaultResourceProvider.cs
 System.Web.Compilation/DesignTimeResourceProviderFactoryAttribute.cs
 System.Web.Compilation/Directive.cs
 System.Web.Compilation/ExpressionBuilderContext.cs
@@ -106,6 +108,7 @@ System.Web.Compilation/WebServiceCompiler.cs
 System.Web.Compilation/WebHandlerBuildProvider.cs
 System.Web.Compilation/WebServiceBuildProvider.cs
 System.Web.Compilation/WsdlBuildProvider.cs
+../System.Design/System.Data.Design/TypedDataSetGenerator.cs
 System.Web.Compilation/XsdBuildProvider.cs
 System.Web.Configuration/AuthConfig.cs
 System.Web.Configuration/AuthenticationConfigHandler.cs
@@ -143,6 +146,7 @@ System.Web.Configuration/WebConfigurationSettings.cs
 System.Web.Configuration/WebControlsSectionHandler.cs
 System.Web.Configuration_2.0/AdapterDictionary.cs
 System.Web.Configuration_2.0/AnonymousIdentificationSection.cs
+System.Web.Configuration_2.0/ApplicationSettingsConfigurationFileMap.cs
 System.Web.Configuration_2.0/AssemblyCollection.cs
 System.Web.Configuration_2.0/AssemblyInfo.cs
 System.Web.Configuration_2.0/AuthenticationSection.cs

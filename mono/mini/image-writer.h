@@ -46,6 +46,8 @@ void img_writer_emit_global (MonoImageWriter *w, const char *name, gboolean func
 
 void img_writer_emit_local_symbol (MonoImageWriter *w, const char *name, const char *end_label, gboolean func) MONO_INTERNAL;
 
+void img_writer_emit_symbol_size (MonoImageWriter *w, const char *start, const char *end_label);
+
 void img_writer_emit_label (MonoImageWriter *w, const char *name) MONO_INTERNAL;
 
 void img_writer_emit_bytes (MonoImageWriter *w, const guint8* buf, int size) MONO_INTERNAL;
@@ -75,5 +77,11 @@ void img_writer_emit_byte (MonoImageWriter *w, guint8 val) MONO_INTERNAL;
 void img_writer_emit_reloc (MonoImageWriter *acfg, int reloc_type, const char *symbol, int addend) MONO_INTERNAL;
 
 void img_writer_emit_unset_mode (MonoImageWriter *acfg) MONO_INTERNAL;
+
+gboolean img_writer_subsections_supported (MonoImageWriter *acfg) MONO_INTERNAL;
+
+FILE * img_writer_get_fp (MonoImageWriter *acfg) MONO_INTERNAL;
+
+const char *img_writer_get_temp_label_prefix (MonoImageWriter *acfg) MONO_INTERNAL;
 
 #endif

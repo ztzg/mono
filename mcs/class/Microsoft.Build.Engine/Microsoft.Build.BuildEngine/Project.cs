@@ -32,11 +32,13 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Xml;
 using System.Xml.Schema;
 using Microsoft.Build.Framework;
 using Mono.XBuild.Framework;
+using Mono.XBuild.CommandLine;
 
 namespace Microsoft.Build.BuildEngine {
 	public class Project {
@@ -72,7 +74,10 @@ namespace Microsoft.Build.BuildEngine {
 		bool				unloaded;
 		bool				initialTargetsBuilt;
 		List<string>			builtTargetKeys;
+		bool				building;
+		BuildSettings			current_settings;
 
+		static string extensions_path;
 		static XmlNamespaceManager	manager;
 		static string ns = "http://schemas.microsoft.com/developer/msbuild/2003";
 
@@ -92,6 +97,10 @@ namespace Microsoft.Build.BuildEngine {
 			xmlDocument.DocumentElement.SetAttribute ("xmlns", ns);
 			
 			fullFileName = String.Empty;
+			timeOfLastDirty = DateTime.Now;
+			current_settings = BuildSettings.None;
+
+			builtTargetKeys = new List<string> ();
 
 			globalProperties = new BuildPropertyGroup (null, this, null, false);
 			foreach (BuildProperty bp in parentEngine.GlobalProperties)
@@ -254,11 +263,19 @@ namespace Microsoft.Build.BuildEngine {
 		
 		{
 			bool result = false;
-			LogProjectStarted (targetNames);
+			ParentEngine.StartProjectBuild (this, targetNames);
+			string current_directory = Environment.CurrentDirectory;
 			try {
+				current_settings = buildFlags;
+				if (!String.IsNullOrEmpty (fullFileName))
+					Directory.SetCurrentDirectory (Path.GetDirectoryName (fullFileName));
+				building = true;
 				result = BuildInternal (targetNames, targetOutputs, buildFlags);
 			} finally {
-				LogProjectFinished (result);
+				ParentEngine.EndProjectBuild (this, result);
+				current_settings = BuildSettings.None;
+				Directory.SetCurrentDirectory (current_directory);
+				building = false;
 			}
 
 			return result;
@@ -269,7 +286,6 @@ namespace Microsoft.Build.BuildEngine {
 				   BuildSettings buildFlags)
 		{
 			CheckUnloaded ();
-			ParentEngine.StartBuild ();
 			if (buildFlags == BuildSettings.None)
 				Reevaluate ();
 			
@@ -297,35 +313,41 @@ namespace Microsoft.Build.BuildEngine {
 			return true;
 		}
 
-		bool BuildTarget (string target, IDictionary targetOutputs)
+		bool BuildTarget (string target_name, IDictionary targetOutputs)
 		{
-			if (target == null)
+			if (target_name == null)
 				throw new ArgumentException ("targetNames cannot contain null strings");
 
-			if (!targets.Exists (target)) {
+			if (!targets.Exists (target_name)) {
 				//FIXME: Log this!
-				Console.WriteLine ("Target named '{0}' not found in the project.", target);
+				Console.WriteLine ("Target named '{0}' not found in the project.", target_name);
 				return false;
 			}
 
-			string key = fullFileName + ":" + target;
+			string key = GetKeyForTarget (target_name);
+			if (!targets [target_name].Build (key))
+				return false;
+
 			ITaskItem[] outputs;
 			if (ParentEngine.BuiltTargetsOutputByName.TryGetValue (key, out outputs)) {
 				if (targetOutputs != null)
-					targetOutputs.Add (target, outputs);
-				LogTargetSkipped ();
-				return true;
+					targetOutputs.Add (target_name, outputs);
 			}
-
-			if (!targets [target].Build ())
-				return false;
-
-			ParentEngine.BuiltTargetsOutputByName [key] = (ITaskItem[]) targets [target].Outputs.Clone ();
-			builtTargetKeys.Add (key);
-			if (targetOutputs != null)
-				targetOutputs.Add (target, targets [target].Outputs);
-
 			return true;
+		}
+
+		internal string GetKeyForTarget (string target_name)
+		{
+			// target name is case insensitive
+			return fullFileName + ":" + target_name.ToLower () + ":" + GlobalPropertiesToString (GlobalProperties);
+		}
+
+		string GlobalPropertiesToString (BuildPropertyGroup bgp)
+		{
+			StringBuilder sb = new StringBuilder ();
+			foreach (BuildProperty bp in bgp)
+				sb.AppendFormat (" {0}:{1}", bp.Name, bp.FinalValue);
+			return sb.ToString ();
 		}
 
 		[MonoTODO]
@@ -396,7 +418,26 @@ namespace Microsoft.Build.BuildEngine {
 		public void Load (string projectFileName)
 		{
 			this.fullFileName = Utilities.FromMSBuildPath (Path.GetFullPath (projectFileName));
-			DoLoad (new StreamReader (fullFileName));
+
+			string filename = fullFileName;
+			if (String.Compare (Path.GetExtension (fullFileName), ".sln", true) == 0) {
+				Project tmp_project = ParentEngine.CreateNewProject ();
+				SolutionParser sln_parser = new SolutionParser ();
+				sln_parser.ParseSolution (fullFileName, tmp_project, delegate (int errorNumber, string message) {
+						LogWarning (filename, message);
+					});
+				filename = fullFileName + ".proj";
+				try {
+					tmp_project.Save (filename);
+					ParentEngine.RemoveLoadedProject (tmp_project);
+					DoLoad (new StreamReader (filename));
+				} finally {
+					if (Environment.GetEnvironmentVariable ("XBUILD_EMIT_SOLUTION") == null)
+						File.Delete (filename);
+				}
+			} else {
+				DoLoad (new StreamReader (filename));
+			}
 		}
 		
 		[MonoTODO ("Not tested")]
@@ -522,7 +563,10 @@ namespace Microsoft.Build.BuildEngine {
 		[MonoTODO]
 		public void ResetBuildStatus ()
 		{
+			// hack to allow built targets to be removed
+			building = true;
 			Reevaluate ();
+			building = false;
 		}
 
 		public void Save (string projectFileName)
@@ -674,6 +718,12 @@ namespace Microsoft.Build.BuildEngine {
 				XmlReader xmlReader = XmlReader.Create (textReader, settings);
 				xmlDocument.Load (xmlReader);
 
+				if (xmlDocument.DocumentElement.Name == "VisualStudioProject")
+					throw new InvalidProjectFileException (String.Format (
+							"Project file '{0}' is a VS2003 project, which is not " +
+							"supported by xbuild. You need to convert it to msbuild " +
+							"format to build with xbuild.", fullFileName));
+
 				if (xmlDocument.DocumentElement.Name != "Project") {
 					throw new InvalidProjectFileException (String.Format (
 						"The element <{0}> is unrecognized, or not supported in this context.", xmlDocument.DocumentElement.Name));
@@ -789,8 +839,8 @@ namespace Microsoft.Build.BuildEngine {
 			evaluatedItemsIgnoringCondition = new BuildItemGroup (null, this, null, true);
 			evaluatedItemsByName = new Dictionary <string, BuildItemGroup> (StringComparer.InvariantCultureIgnoreCase);
 			evaluatedItemsByNameIgnoringCondition = new Dictionary <string, BuildItemGroup> (StringComparer.InvariantCultureIgnoreCase);
-			evaluatedProperties = new BuildPropertyGroup (null, null, null, true);
-			RemoveBuiltTargets ();
+			if (building && current_settings == BuildSettings.None)
+				RemoveBuiltTargets ();
 
 			InitializeProperties ();
 
@@ -804,29 +854,47 @@ namespace Microsoft.Build.BuildEngine {
 		// Removes entries of all earlier built targets for this project
 		void RemoveBuiltTargets ()
 		{
-			if (builtTargetKeys != null)
-				foreach (string key in builtTargetKeys)
-					ParentEngine.BuiltTargetsOutputByName.Remove (key);
-
-			builtTargetKeys = new List<string> ();
+			foreach (string key in builtTargetKeys)
+				ParentEngine.BuiltTargetsOutputByName.Remove (key);
 		}
 
 		void InitializeProperties ()
 		{
 			BuildProperty bp;
 
+			evaluatedProperties = new BuildPropertyGroup (null, null, null, true);
+
 			foreach (BuildProperty gp in GlobalProperties) {
 				bp = new BuildProperty (gp.Name, gp.Value, PropertyType.Global);
 				EvaluatedProperties.AddProperty (bp);
 			}
 			
+			foreach (BuildProperty gp in GlobalProperties)
+				ParentEngine.GlobalProperties.AddProperty (gp);
+
+			// add properties that we dont have from parent engine's
+			// global properties
+			foreach (BuildProperty gp in ParentEngine.GlobalProperties) {
+				if (EvaluatedProperties [gp.Name] == null) {
+					bp = new BuildProperty (gp.Name, gp.Value, PropertyType.Global);
+					EvaluatedProperties.AddProperty (bp);
+				}
+			}
+
 			foreach (DictionaryEntry de in Environment.GetEnvironmentVariables ()) {
 				bp = new BuildProperty ((string) de.Key, (string) de.Value, PropertyType.Environment);
 				EvaluatedProperties.AddProperty (bp);
 			}
 
+			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildProjectFile", Path.GetFileName (fullFileName),
+						PropertyType.Reserved));
+			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildProjectName",
+						Path.GetFileNameWithoutExtension (fullFileName),
+						PropertyType.Reserved));
 			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildBinPath", parentEngine.BinPath, PropertyType.Reserved));
 			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildToolsPath", parentEngine.BinPath, PropertyType.Reserved));
+			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildExtensionsPath", ExtensionsPath, PropertyType.Reserved));
+			EvaluatedProperties.AddProperty (new BuildProperty ("MSBuildProjectDefaultTargets", DefaultTargets, PropertyType.Reserved));
 
 			// FIXME: make some internal method that will work like GetDirectoryName but output String.Empty on null/String.Empty
 			string projectDir;
@@ -1003,7 +1071,7 @@ namespace Microsoft.Build.BuildEngine {
 			if (group != null) {
 				foreach (BuildItem item in group) {
 					if (item.HasMetadata (metadataName))
-						return item.GetMetadata (metadataName);
+						return item.GetEvaluatedMetadata (metadataName);
 				}
 			}
 			return String.Empty;
@@ -1035,13 +1103,30 @@ namespace Microsoft.Build.BuildEngine {
 			return default (T);
 		}
 
-		void LogTargetSkipped ()
+		void LogWarning (string filename, string message, params object[] messageArgs)
 		{
-			BuildMessageEventArgs bmea;
-			bmea = new BuildMessageEventArgs ("Target {0} skipped, as it has already been built.",
-					null, null, MessageImportance.Low);
+			BuildWarningEventArgs bwea = new BuildWarningEventArgs (
+				null, null, filename, 0, 0, 0, 0, String.Format (message, messageArgs),
+				null, null);
+			ParentEngine.EventSource.FireWarningRaised (this, bwea);
+		}
 
-			ParentEngine.EventSource.FireMessageRaised (this, bmea);
+		static string ExtensionsPath {
+			get {
+				if (extensions_path == null) {
+					// NOTE: code from mcs/tools/gacutil/driver.cs
+					PropertyInfo gac = typeof (System.Environment).GetProperty (
+							"GacPath", BindingFlags.Static | BindingFlags.NonPublic);
+
+					if (gac != null) {
+						MethodInfo get_gac = gac.GetGetMethod (true);
+						string gac_path = (string) get_gac.Invoke (null, null);
+						extensions_path = Path.GetFullPath (Path.Combine (
+									gac_path, Path.Combine ("..", "xbuild")));
+					}
+				}
+				return extensions_path;
+			}
 		}
 
 		public BuildPropertyGroup EvaluatedProperties {
@@ -1130,6 +1215,10 @@ namespace Microsoft.Build.BuildEngine {
 			get { return xmlDocument.InnerXml; }
 		}
 
+		internal List<string> BuiltTargetKeys {
+			get { return builtTargetKeys; }
+		}
+
 		internal Dictionary <string, BuildItemGroup> LastItemGroupContaining {
 			get { return last_item_group_containing; }
 		}
@@ -1156,29 +1245,6 @@ namespace Microsoft.Build.BuildEngine {
 		internal static string XmlNamespace {
 			get { return ns; }
 		}
-
-		void LogProjectStarted (string [] targetNames)
-		{
-			ProjectStartedEventArgs psea;
-			if (targetNames == null || targetNames.Length == 0) {
-				if (DefaultTargets != String.Empty)
-					psea = new ProjectStartedEventArgs ("Project started.", null, FullFileName,
-						DefaultTargets, null, null);
-				else
-					psea = new ProjectStartedEventArgs ("Project started.", null, FullFileName, "default", null, null);
-			} else
-			psea = new ProjectStartedEventArgs ("Project started.", null, FullFileName, String.Join (";",
-				targetNames), null, null);
-			ParentEngine.EventSource.FireProjectStarted (this, psea);
-		}
-
-		void LogProjectFinished (bool succeeded)
-		{
-			ProjectFinishedEventArgs pfea;
-			pfea = new ProjectFinishedEventArgs ("Project started.", null, FullFileName, succeeded);
-			ParentEngine.EventSource.FireProjectFinished (this, pfea);
-		}
-
 	}
 }
 

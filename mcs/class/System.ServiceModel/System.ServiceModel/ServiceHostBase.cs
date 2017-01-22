@@ -37,7 +37,7 @@ using System.Reflection;
 
 namespace System.ServiceModel
 {
-	public abstract class ServiceHostBase
+	public abstract partial class ServiceHostBase
 		: CommunicationObject, IExtensibleObject<ServiceHostBase>, IDisposable
 	{
 		ServiceCredentials credentials;
@@ -67,8 +67,21 @@ namespace System.ServiceModel
 		public event EventHandler<UnknownMessageReceivedEventArgs>
 			UnknownMessageReceived;
 
+		internal void OnUnknownMessageReceived (Message message)
+		{
+			if (UnknownMessageReceived != null)
+				UnknownMessageReceived (this, new UnknownMessageReceivedEventArgs (message));
+			else
+				// FIXME: better be logged
+				throw new EndpointNotFoundException (String.Format ("The request message has the target '{0}' with action '{1}' which is not reachable in this service contract", message.Headers.To, message.Headers.Action));
+		}
+
 		public ReadOnlyCollection<Uri> BaseAddresses {
-			get { return new ReadOnlyCollection<Uri> (base_addresses.InternalItems); }
+			get {
+				if (base_addresses == null)
+					base_addresses = new UriSchemeKeyedCollection ();
+				return new ReadOnlyCollection<Uri> (base_addresses.InternalItems);
+			}
 		}
 
 		internal Uri CreateUri (string sheme, Uri relatieUri) {
@@ -83,7 +96,6 @@ namespace System.ServiceModel
 			return new Uri (baseUri, relatieUri);
 		}
 
-		[MonoTODO]
 		public ChannelDispatcherCollection ChannelDispatchers {
 			get { return channel_dispatchers; }
 		}
@@ -138,6 +150,13 @@ namespace System.ServiceModel
 			set { flow_limit = value; }
 		}
 
+		protected void AddBaseAddress (Uri baseAddress)
+		{
+			if (Description != null)
+				throw new InvalidOperationException ("Base addresses must be added before the service description is initialized");
+			base_addresses.Add (baseAddress);
+		}
+
 		public ServiceEndpoint AddServiceEndpoint (
 			string implementedContract, Binding binding, string address)
 		{
@@ -146,17 +165,15 @@ namespace System.ServiceModel
 				new Uri (address, UriKind.RelativeOrAbsolute));
 		}
 
-		[MonoTODO]
 		public ServiceEndpoint AddServiceEndpoint (
 			string implementedContract, Binding binding,
 			string address, Uri listenUri)
 		{
 			Uri uri = new Uri (address, UriKind.RelativeOrAbsolute);
 			return AddServiceEndpoint (
-				implementedContract, binding, uri, uri);
+				implementedContract, binding, uri, listenUri);
 		}
 
-		[MonoTODO]
 		public ServiceEndpoint AddServiceEndpoint (
 			string implementedContract, Binding binding,
 			Uri address)
@@ -164,7 +181,6 @@ namespace System.ServiceModel
 			return AddServiceEndpoint (implementedContract, binding, address, address);
 		}
 
-		[MonoTODO]
 		public ServiceEndpoint AddServiceEndpoint (
 			string implementedContract, Binding binding,
 			Uri address, Uri listenUri)
@@ -189,7 +205,7 @@ namespace System.ServiceModel
 			return null;
 		}
 
-		ContractDescription GetContract (string typeName)
+		ContractDescription GetContract (string name)
 		{
 			//FIXME: hack hack hack
 			ImplementedContracts ["IHttpGetHelpPageAndMetadataContract"] =
@@ -198,7 +214,7 @@ namespace System.ServiceModel
 			// FIXME: As long as I tried, *only* IMetadataExchange
 			// is the exception case that does not require full
 			// type name. Hence I treat it as a special case.
-			if (typeName == ServiceMetadataBehavior.MexContractName) {
+			if (name == ServiceMetadataBehavior.MexContractName) {
 				if (!Description.Behaviors.Contains (typeof (ServiceMetadataBehavior)) && Array.IndexOf (Description.ServiceType.GetInterfaces (), typeof (IMetadataExchange)) < 0)
 					throw new InvalidOperationException (
 						"Add ServiceMetadataBehavior to the ServiceHost to add a endpoint for IMetadataExchange contract.");
@@ -212,15 +228,19 @@ namespace System.ServiceModel
 				return null;
 			}
 
-			Type type = PopulateType (typeName);
-			if (type == null)
-				return null;
+			Type type = PopulateType (name);
 
 			foreach (ContractDescription cd in ImplementedContracts.Values) {
 				// FIXME: This check is a negative side effect 
 				// of the above hack.
 				if (cd.ContractType == typeof (IMetadataExchange))
 					continue;
+
+				if (type == null) {
+					if (cd.Name == name)
+						return cd;
+					continue;
+				}
 
 				if (cd.ContractType == type ||
 				    cd.ContractType.IsSubclassOf (type) ||
@@ -240,7 +260,7 @@ namespace System.ServiceModel
 
 				Uri baseaddr = base_addresses [binding.Scheme];
 
-				if (!baseaddr.AbsoluteUri.EndsWith ("/"))
+				if (!baseaddr.AbsoluteUri.EndsWith ("/") && address.OriginalString.Length > 0) // with empty URI it should not add '/' to possible file name of the absolute URI
 					baseaddr = new Uri (baseaddr.AbsoluteUri + "/");
 				address = new Uri (baseaddr, address);
 			}
@@ -273,7 +293,7 @@ namespace System.ServiceModel
 				//base addresses
 				HostElement host = service.Host;
 				foreach (BaseAddressElement baseAddress in host.BaseAddresses) {
-					this.base_addresses.Add (new Uri (baseAddress.BaseAddress));
+					AddBaseAddress (new Uri (baseAddress.BaseAddress));
 				}
 
 				// services
@@ -332,7 +352,6 @@ namespace System.ServiceModel
 		protected abstract ServiceDescription CreateDescription (
 			out IDictionary<string,ContractDescription> implementedContracts);
 
-		[MonoTODO]
 		protected void InitializeDescription (UriSchemeKeyedCollection baseAddresses)
 		{
 			this.base_addresses = baseAddresses;
@@ -343,7 +362,6 @@ namespace System.ServiceModel
 			ApplyConfiguration ();
 		}
 
-		[MonoTODO]
 		protected virtual void InitializeRuntime ()
 		{
 			//First validate the description, which should call all behaviors
@@ -357,13 +375,14 @@ namespace System.ServiceModel
 			ServiceEndpoint[] endPoints = new ServiceEndpoint[Description.Endpoints.Count];
 			Description.Endpoints.CopyTo (endPoints, 0);
 			foreach (ServiceEndpoint se in endPoints) {
-				//Let all behaviors add their binding parameters
-				BindingParameterCollection commonParams =
-					new BindingParameterCollection ();
-				AddBindingParameters (commonParams, se);
+
+				var commonParams = new BindingParameterCollection ();
+				foreach (IServiceBehavior b in Description.Behaviors)
+					b.AddBindingParameters (Description, this, Description.Endpoints, commonParams);
+
 				ChannelDispatcher channel = BuildChannelDispatcher (se, commonParams);
-				ChannelDispatchers.Add (channel);				
-				endPointToDispatcher[se] = channel;				
+				ChannelDispatchers.Add (channel);
+				endPointToDispatcher[se] = channel;
 			}
 
 			//After the ChannelDispatchers are created, and attached to the service host
@@ -372,130 +391,34 @@ namespace System.ServiceModel
 				b.ApplyDispatchBehavior (Description, this);
 
 			foreach(KeyValuePair<ServiceEndpoint, ChannelDispatcher> val in endPointToDispatcher)
-				ApplyDispatchBehavior(val.Value, val.Key);			
+				foreach (var ed in val.Value.Endpoints)
+					ApplyDispatchBehavior (ed, val.Key);			
 		}
 
-		private void ValidateDescription () {
+		private void ValidateDescription ()
+		{
 			foreach (IServiceBehavior b in Description.Behaviors)
 				b.Validate (Description, this);
 			foreach (ServiceEndpoint endPoint in Description.Endpoints)
 				endPoint.Validate ();
 		}		
 
-		private void ApplyDispatchBehavior (ChannelDispatcher dispatcher, ServiceEndpoint endPoint) {			
-			foreach (IContractBehavior b in endPoint.Contract.Behaviors)
-				b.ApplyDispatchBehavior (endPoint.Contract, endPoint, dispatcher.Endpoints[0].DispatchRuntime);
-			foreach (IEndpointBehavior b in endPoint.Behaviors)
-				b.ApplyDispatchBehavior (endPoint, dispatcher.Endpoints [0]);
-			foreach (OperationDescription operation in endPoint.Contract.Operations) {
-				foreach (IOperationBehavior b in operation.Behaviors)
-					b.ApplyDispatchBehavior (operation, dispatcher.Endpoints [0].DispatchRuntime.Operations [operation.Name]);
-			}
-
-		}
-
-		internal ChannelDispatcher BuildChannelDispatcher (ServiceEndpoint se, BindingParameterCollection commonParams) {
-
-			//User the binding parameters to build the channel listener and Dispatcher
-			IChannelListener lf = BuildListener (se, commonParams);
-			ChannelDispatcher cd = new ChannelDispatcher (
-				lf, se.Binding.Name);
-			cd.MessageVersion = se.Binding.MessageVersion;
-			if (cd.MessageVersion == null)
-				cd.MessageVersion = MessageVersion.Default;
-
-			//Attach one EndpointDispacher to the ChannelDispatcher
-			EndpointDispatcher endpoint_dispatcher =
-				new EndpointDispatcher (se.Address, se.Contract.Name, se.Contract.Namespace);
-			endpoint_dispatcher.ContractFilter = GetContractFilter (se.Contract);
-			endpoint_dispatcher.ChannelDispatcher = cd;
-			cd.Endpoints.Add (endpoint_dispatcher);
-			
-			//Build the dispatch operations
-			DispatchRuntime db = endpoint_dispatcher.DispatchRuntime;
-			foreach (OperationDescription od in se.Contract.Operations)
-				if (!db.Operations.Contains (od.Name))
-					PopulateDispatchOperation (db, od);
-
-			return cd;
-		}
-
-		private MessageFilter GetContractFilter (ContractDescription contractDescription)
+		private void ApplyDispatchBehavior (EndpointDispatcher ed, ServiceEndpoint endPoint)
 		{
-			List<string> actions = new List<string> ();
-			foreach (OperationDescription od in contractDescription.Operations)
-				foreach (MessageDescription md in od.Messages)
-					if (md.Direction == MessageDirection.Input)
-						if (md.Action == "*")
-							return new MatchAllMessageFilter ();
-						else
-							actions.Add (md.Action);
-
-			return new ActionMessageFilter (actions.ToArray ());
-		}
-
-		private void AddBindingParameters (BindingParameterCollection commonParams, ServiceEndpoint endPoint) {
-
-			commonParams.Add (ChannelProtectionRequirements.CreateFromContract (endPoint.Contract));
-			foreach (IServiceBehavior b in Description.Behaviors)
-				b.AddBindingParameters (Description, this, Description.Endpoints, commonParams);
-
 			foreach (IContractBehavior b in endPoint.Contract.Behaviors)
-				b.AddBindingParameters (endPoint.Contract, endPoint, commonParams);
+				b.ApplyDispatchBehavior (endPoint.Contract, endPoint, ed.DispatchRuntime);
 			foreach (IEndpointBehavior b in endPoint.Behaviors)
-				b.AddBindingParameters (endPoint, commonParams);
+				b.ApplyDispatchBehavior (endPoint, ed);
 			foreach (OperationDescription operation in endPoint.Contract.Operations) {
 				foreach (IOperationBehavior b in operation.Behaviors)
-					b.AddBindingParameters (operation, commonParams);
+					b.ApplyDispatchBehavior (operation, ed.DispatchRuntime.Operations [operation.Name]);
 			}
+
 		}
 
-		void PopulateDispatchOperation (DispatchRuntime db, OperationDescription od) {
-			string reqA = null, resA = null;
-			foreach (MessageDescription m in od.Messages) {
-				if (m.Direction == MessageDirection.Input)
-					reqA = m.Action;
-				else
-					resA = m.Action;
-			}
-			DispatchOperation o =
-				od.IsOneWay ?
-				new DispatchOperation (db, od.Name, reqA) :
-				new DispatchOperation (db, od.Name, reqA, resA);
-			bool has_void_reply = false;
-			foreach (MessageDescription md in od.Messages) {
-				if (md.Direction == MessageDirection.Input &&
-					md.Body.Parts.Count == 1 &&
-					md.Body.Parts [0].Type == typeof (Message))
-					o.DeserializeRequest = false;
-				if (md.Direction == MessageDirection.Output &&
-					md.Body.ReturnValue != null) {
-					if (md.Body.ReturnValue.Type == typeof (Message))
-						o.SerializeReply = false;
-					else if (md.Body.ReturnValue.Type == typeof (void))
-						has_void_reply = true;
-				}
-			}
-
-			// Setup Invoker
-			// FIXME: support async method
-			if (od.SyncMethod != null)
-				o.Invoker = new SyncMethodInvoker (od.SyncMethod);
-			else
-				o.Invoker = new AsyncMethodInvoker (od.BeginMethod, od.EndMethod);
-
-			// Setup Formater
-			o.Formatter = BaseMessagesFormatter.Create (od);
-
-			if (o.Action == "*" && o.ReplyAction == "*") {
-				//Signature : Message  (Message)
-				//	    : void  (Message)
-				//FIXME: void (IChannel)
-				if (!o.DeserializeRequest && (!o.SerializeReply || has_void_reply))
-					db.UnhandledDispatchOperation = o;
-			}
-
-			db.Operations.Add (o);
+		internal ChannelDispatcher BuildChannelDispatcher (ServiceEndpoint se, BindingParameterCollection commonParams)
+		{
+			return new DispatcherBuilder ().BuildChannelDispatcher (Description.ServiceType, se, commonParams);
 		}
 
 		[MonoTODO]
@@ -506,23 +429,12 @@ namespace System.ServiceModel
 
 		void DoOpen (TimeSpan timeout)
 		{
-			for (int i = 0; i < ChannelDispatchers.Count; i++)
-				ChannelDispatchers [i].Open (timeout);
-		}
-
-		IChannelListener BuildListener (ServiceEndpoint se,
-			BindingParameterCollection pl)
-		{
-			Binding b = se.Binding;
-			if (b.CanBuildChannelListener<IReplySessionChannel> (pl))
-				return b.BuildChannelListener<IReplySessionChannel> (se.ListenUri, "", se.ListenUriMode, pl);
-			if (b.CanBuildChannelListener<IReplyChannel> (pl))
-				return b.BuildChannelListener<IReplyChannel> (se.ListenUri, "", se.ListenUriMode, pl);
-			if (b.CanBuildChannelListener<IInputSessionChannel> (pl))
-				return b.BuildChannelListener<IInputSessionChannel> (se.ListenUri, "", se.ListenUriMode, pl);
-			if (b.CanBuildChannelListener<IInputChannel> (pl))
-				return b.BuildChannelListener<IInputChannel> (se.ListenUri, "", se.ListenUriMode, pl);
-			throw new InvalidOperationException ("None of the listener channel types is supported");
+			foreach (var cd in ChannelDispatchers) {
+				cd.Open (timeout);
+				// This is likely hack.
+				if (cd is ChannelDispatcher)
+					((ChannelDispatcher) cd).StartLoop ();
+			}
 		}
 
 		[MonoTODO]
@@ -530,27 +442,42 @@ namespace System.ServiceModel
 		{
 		}
 
-		[MonoTODO]
+		Action<TimeSpan> close_delegate;
+		Action<TimeSpan> open_delegate;
+
 		protected override sealed IAsyncResult OnBeginClose (
 			TimeSpan timeout, AsyncCallback callback, object state)
 		{
-			throw new NotImplementedException ();
+			if (close_delegate != null)
+				close_delegate = new Action<TimeSpan> (OnClose);
+			return close_delegate.BeginInvoke (timeout, callback, state);
 		}
 
-		[MonoTODO]
 		protected override sealed IAsyncResult OnBeginOpen (
 			TimeSpan timeout, AsyncCallback callback, object state)
 		{
-			throw new NotImplementedException ();
+			if (open_delegate == null)
+				open_delegate = new Action<TimeSpan> (OnOpen);
+			return open_delegate.BeginInvoke (timeout, callback, state);
 		}
 
-		[MonoTODO]
 		protected override void OnClose (TimeSpan timeout)
 		{
+			DateTime start = DateTime.Now;
 			ReleasePerformanceCounters ();
 			List<ChannelDispatcherBase> l = new List<ChannelDispatcherBase> (ChannelDispatchers);
-			foreach (ChannelDispatcherBase e in l)
-				e.Close ();
+			foreach (ChannelDispatcherBase e in l) {
+				try {
+					TimeSpan ts = timeout - (DateTime.Now - start);
+					if (ts < TimeSpan.Zero)
+						e.Abort ();
+					else
+						e.Close (ts);
+				} catch (Exception ex) {
+					Console.WriteLine ("ServiceHostBase failed to close the channel dispatcher:");
+					Console.WriteLine (ex);
+				}
+			}
 		}
 
 		protected override sealed void OnOpen (TimeSpan timeout)
@@ -559,20 +486,23 @@ namespace System.ServiceModel
 			DoOpen (timeout);
 		}
 
-		[MonoTODO]
 		protected override void OnEndClose (IAsyncResult result)
 		{
-			throw new NotImplementedException ();
+			if (close_delegate == null)
+				throw new InvalidOperationException ("Async close operation has not started");
+			close_delegate.EndInvoke (result);
 		}
 
-		[MonoTODO]
 		protected override sealed void OnEndOpen (IAsyncResult result)
 		{
-			throw new NotImplementedException ();
+			if (open_delegate == null)
+				throw new InvalidOperationException ("Aync open operation has not started");
+			open_delegate.EndInvoke (result);
 		}
 
 		protected override void OnOpened ()
 		{
+			base.OnOpened ();
 		}
 
 		[MonoTODO]
@@ -585,6 +515,7 @@ namespace System.ServiceModel
 			Close ();
 		}
 
+		/*
 		class SyncMethodInvoker : IOperationInvoker
 		{
 			readonly MethodInfo _methodInfo;
@@ -664,6 +595,56 @@ namespace System.ServiceModel
 			}
 
 			#endregion
+		}
+		*/
+	}
+
+	partial class DispatcherBuilder
+	{
+		internal ChannelDispatcher BuildChannelDispatcher (Type serviceType, ServiceEndpoint se, BindingParameterCollection commonParams)
+		{
+			//Let all behaviors add their binding parameters
+			AddBindingParameters (commonParams, se);
+			//User the binding parameters to build the channel listener and Dispatcher
+			IChannelListener lf = BuildListener (se, commonParams);
+			ChannelDispatcher cd = new ChannelDispatcher (
+				lf, se.Binding.Name);
+			cd.InitializeServiceEndpoint (serviceType, se);
+			return cd;
+		}
+
+		private void AddBindingParameters (BindingParameterCollection commonParams, ServiceEndpoint endPoint) {
+
+			commonParams.Add (ChannelProtectionRequirements.CreateFromContract (endPoint.Contract));
+
+			foreach (IContractBehavior b in endPoint.Contract.Behaviors)
+				b.AddBindingParameters (endPoint.Contract, endPoint, commonParams);
+			foreach (IEndpointBehavior b in endPoint.Behaviors)
+				b.AddBindingParameters (endPoint, commonParams);
+			foreach (OperationDescription operation in endPoint.Contract.Operations) {
+				foreach (IOperationBehavior b in operation.Behaviors)
+					b.AddBindingParameters (operation, commonParams);
+			}
+		}
+
+		static IChannelListener BuildListener (ServiceEndpoint se,
+			BindingParameterCollection pl)
+		{
+			Binding b = se.Binding;
+			if (b.CanBuildChannelListener<IReplySessionChannel> (pl))
+				return b.BuildChannelListener<IReplySessionChannel> (se.ListenUri, "", se.ListenUriMode, pl);
+			if (b.CanBuildChannelListener<IReplyChannel> (pl))
+				return b.BuildChannelListener<IReplyChannel> (se.ListenUri, "", se.ListenUriMode, pl);
+			if (b.CanBuildChannelListener<IInputSessionChannel> (pl))
+				return b.BuildChannelListener<IInputSessionChannel> (se.ListenUri, "", se.ListenUriMode, pl);
+			if (b.CanBuildChannelListener<IInputChannel> (pl))
+				return b.BuildChannelListener<IInputChannel> (se.ListenUri, "", se.ListenUriMode, pl);
+
+			if (b.CanBuildChannelListener<IDuplexChannel> (pl))
+				return b.BuildChannelListener<IDuplexChannel> (se.ListenUri, "", se.ListenUriMode, pl);
+			if (b.CanBuildChannelListener<IDuplexSessionChannel> (pl))
+				return b.BuildChannelListener<IDuplexSessionChannel> (se.ListenUri, "", se.ListenUriMode, pl);
+			throw new InvalidOperationException ("None of the listener channel types is supported");
 		}
 	}
 }

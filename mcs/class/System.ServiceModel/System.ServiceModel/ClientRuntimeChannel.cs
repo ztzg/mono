@@ -32,22 +32,20 @@ using System.ServiceModel.Description;
 using System.ServiceModel.Dispatcher;
 using System.ServiceModel.Security;
 using System.Threading;
+using System.Xml;
 
 namespace System.ServiceModel
 {
-#if TARGET_DOTNET
-	[MonoTODO]
-	public
-#else
-	internal
-#endif
-	class ClientRuntimeChannel
+	internal class ClientRuntimeChannel
 		: CommunicationObject, IClientChannel
 	{
 		ClientRuntime runtime;
-		ChannelFactory factory;
-		IRequestChannel request_channel;
-		IOutputChannel output_channel;
+		EndpointAddress remote_address;
+		ContractDescription contract;
+		MessageVersion message_version;
+		TimeSpan default_open_timeout, default_close_timeout;
+		IChannel channel;
+		IChannelFactory factory;
 
 		#region delegates
 		readonly ProcessDelegate _processDelegate;
@@ -63,21 +61,52 @@ namespace System.ServiceModel
 		delegate void SendDelegate (Message msg, TimeSpan timeout);
 		#endregion
 
-		public ClientRuntimeChannel (ClientRuntime runtime,
-			ChannelFactory factory)
+		public ClientRuntimeChannel (ServiceEndpoint endpoint,
+			ChannelFactory channelFactory, EndpointAddress remoteAddress, Uri via)
+			: this (endpoint.CreateRuntime (), endpoint.Contract, channelFactory.DefaultOpenTimeout, channelFactory.DefaultCloseTimeout, null, channelFactory.OpenedChannelFactory, endpoint.Binding.MessageVersion, remoteAddress, via)
+		{
+		}
+
+		public ClientRuntimeChannel (ClientRuntime runtime, ContractDescription contract, TimeSpan openTimeout, TimeSpan closeTimeout, IChannel contextChannel, IChannelFactory factory, MessageVersion messageVersion, EndpointAddress remoteAddress, Uri via)
 		{
 			this.runtime = runtime;
-			this.factory = factory;
+			this.remote_address = remoteAddress;
+			runtime.Via = via;
+			this.contract = contract;
+			this.message_version = messageVersion;
+			default_open_timeout = openTimeout;
+			default_close_timeout = closeTimeout;
 			_processDelegate = new ProcessDelegate (Process);
 			requestDelegate = new RequestDelegate (Request);
 			sendDelegate = new SendDelegate (Send);
 
 			// default values
 			AllowInitializationUI = true;
+			OperationTimeout = TimeSpan.FromMinutes (1);
+
+			if (contextChannel != null)
+				channel = contextChannel;
+			else {
+				var method = factory.GetType ().GetMethod ("CreateChannel", new Type [] {typeof (EndpointAddress), typeof (Uri)});
+				channel = (IChannel) method.Invoke (factory, new object [] {remote_address, Via});
+				this.factory = factory;
+			}
 		}
 
 		public ClientRuntime Runtime {
 			get { return runtime; }
+		}
+
+		IRequestChannel RequestChannel {
+			get { return channel as IRequestChannel; }
+		}
+
+		IOutputChannel OutputChannel {
+			get { return channel as IOutputChannel; }
+		}
+
+		internal IDuplexChannel DuplexChannel {
+			get { return channel as IDuplexChannel; }
 		}
 
 		#region IClientChannel
@@ -236,108 +265,133 @@ namespace System.ServiceModel
 		#region IContextChannel
 
 		[MonoTODO]
-		public bool AllowOutputBatching {
-			get { throw new NotImplementedException (); }
-			set { throw new NotImplementedException (); }
-		}
+		public bool AllowOutputBatching { get; set; }
 
-		[MonoTODO]
 		public IInputSession InputSession {
 			get {
-				ISessionChannel<IInputSession> ch = request_channel as ISessionChannel<IInputSession>;
-				ch = ch ?? output_channel as ISessionChannel<IInputSession>;
-				return ch != null ? ch.Session : null;
+				ISessionChannel<IInputSession> ch = RequestChannel as ISessionChannel<IInputSession>;
+				ch = ch ?? OutputChannel as ISessionChannel<IInputSession>;
+				if (ch != null)
+					return ch.Session;
+				var dch = OutputChannel as ISessionChannel<IDuplexSession>;
+				return dch != null ? dch.Session : null;
+			}
+		}
+
+		public EndpointAddress LocalAddress {
+			get {
+				var dc = OperationChannel as IDuplexChannel;
+				return dc != null ? dc.LocalAddress : null;
 			}
 		}
 
 		[MonoTODO]
-		public EndpointAddress LocalAddress {
-			get { throw new NotImplementedException (); }
-		}
+		public TimeSpan OperationTimeout { get; set; }
 
-		[MonoTODO]
-		public TimeSpan OperationTimeout {
-			get { throw new NotImplementedException (); }
-			set { throw new NotImplementedException (); }
-		}
-
-		[MonoTODO]
 		public IOutputSession OutputSession {
 			get {
-				ISessionChannel<IOutputSession> ch = request_channel as ISessionChannel<IOutputSession>;
-				ch = ch ?? output_channel as ISessionChannel<IOutputSession>;
-				return ch != null ? ch.Session : null;
+				ISessionChannel<IOutputSession> ch = RequestChannel as ISessionChannel<IOutputSession>;
+				ch = ch ?? OutputChannel as ISessionChannel<IOutputSession>;
+				if (ch != null)
+					return ch.Session;
+				var dch = OutputChannel as ISessionChannel<IDuplexSession>;
+				return dch != null ? dch.Session : null;
 			}
 		}
 
-		[MonoTODO]
 		public EndpointAddress RemoteAddress {
-			get { throw new NotImplementedException (); }
+			get { return RequestChannel != null ? RequestChannel.RemoteAddress : OutputChannel.RemoteAddress; }
 		}
 
-		[MonoTODO]
 		public string SessionId {
-			get { throw new NotImplementedException (); }
+			get { return OutputSession != null ? OutputSession.Id : InputSession != null ? InputSession.Id : null; }
 		}
 
 		#endregion
 
 		// CommunicationObject
 		protected internal override TimeSpan DefaultOpenTimeout {
-			get { return factory.DefaultOpenTimeout; }
+			get { return default_open_timeout; }
 		}
 
 		protected internal override TimeSpan DefaultCloseTimeout {
-			get { return factory.DefaultCloseTimeout; }
+			get { return default_close_timeout; }
 		}
 
 		protected override void OnAbort ()
 		{
-			factory.Abort ();
+			channel.Abort ();
+			if (factory != null) // ... is it valid?
+				factory.Abort ();
 		}
+
+		Action<TimeSpan> close_delegate;
 
 		protected override IAsyncResult OnBeginClose (
 			TimeSpan timeout, AsyncCallback callback, object state)
 		{
-			return factory.BeginClose (timeout, callback, state);
+			if (close_delegate == null)
+				close_delegate = new Action<TimeSpan> (OnClose);
+			return close_delegate.BeginInvoke (timeout, callback, state);
 		}
 
 		protected override void OnEndClose (IAsyncResult result)
 		{
-			factory.EndClose (result);
+			close_delegate.EndInvoke (result);
 		}
 
 		protected override void OnClose (TimeSpan timeout)
 		{
-			factory.Close (timeout);
+			DateTime start = DateTime.Now;
+			channel.Close (timeout);
 		}
+
+		Action<TimeSpan> open_callback;
 
 		protected override IAsyncResult OnBeginOpen (
 			TimeSpan timeout, AsyncCallback callback, object state)
 		{
-			throw new SystemException ("INTERNAL ERROR: this should not be called (or not supported yet)");
+			if (open_callback == null)
+				open_callback = new Action<TimeSpan> (OnOpen);
+			return open_callback.BeginInvoke (timeout, callback, state);
 		}
 
 		protected override void OnEndOpen (IAsyncResult result)
 		{
+			if (open_callback == null)
+				throw new InvalidOperationException ("Async open operation has not started");
+			open_callback.EndInvoke (result);
 		}
 
 		protected override void OnOpen (TimeSpan timeout)
 		{
 			if (runtime.InteractiveChannelInitializers.Count > 0 && !DidInteractiveInitialization)
 				throw new InvalidOperationException ("The client runtime is assigned interactive channel initializers, and in such case DisplayInitializationUI must be called before the channel is opened.");
+			if (channel.State == CommunicationState.Created)
+				channel.Open (timeout);
 		}
 
 		// IChannel
+
+		IChannel OperationChannel {
+			get { return channel; }
+		}
+
 		public T GetProperty<T> () where T : class
 		{
-			return factory.GetProperty<T> ();
+			return OperationChannel.GetProperty<T> ();
 		}
 
 		// IExtensibleObject<IContextChannel>
-		[MonoTODO]
+
+		IExtensionCollection<IContextChannel> extensions;
+
 		public IExtensionCollection<IContextChannel> Extensions {
-			get { throw new NotImplementedException (); }
+			get {
+				if (extensions == null)
+					extensions = new ExtensionCollection<IContextChannel> (this);
+				return extensions;
+			}
 		}
 
 		#region Request/Output processing
@@ -389,113 +443,25 @@ namespace System.ServiceModel
 				operation = Runtime.OperationSelector.SelectOperation (method, parameters);
 			else
 				operation = operationName;
-			OperationDescription od = factory.Endpoint.Contract.Operations.Find (operation);
+			OperationDescription od = contract.Operations.Find (operation);
 			if (od == null)
 				throw new Exception (String.Format ("OperationDescription for operation '{0}' was not found in its internally-generated contract.", operation));
 			return od;
 		}
 
-		BindingParameterCollection CreateBindingParameters ()
-		{
-			BindingParameterCollection pl =
-				new BindingParameterCollection ();
-
-			ContractDescription cd = factory.Endpoint.Contract;
-#if !NET_2_1
-			pl.Add (ChannelProtectionRequirements.CreateFromContract (cd));
-
-			foreach (IEndpointBehavior behavior in factory.Endpoint.Behaviors)
-				behavior.AddBindingParameters (factory.Endpoint, pl);
-#endif
-
-			return pl;
-		}
-
-		void SetupOutputChannel ()
-		{
-			if (output_channel != null)
-				return;
-			BindingParameterCollection pl =
-				CreateBindingParameters ();
-			bool session = false;
-			switch (factory.Endpoint.Contract.SessionMode) {
-			case SessionMode.Required:
-				session = factory.Endpoint.Binding.CanBuildChannelFactory<IOutputSessionChannel> (pl);
-				if (!session)
-					throw new InvalidOperationException ("The contract requires session support, but the binding does not support it.");
-				break;
-			case SessionMode.Allowed:
-				session = !factory.Endpoint.Binding.CanBuildChannelFactory<IOutputChannel> (pl);
-				break;
-			}
-
-			EndpointAddress address = factory.Endpoint.Address;
-			Uri via = Runtime.Via;
-
-			if (session) {
-				IChannelFactory<IOutputSessionChannel> f =
-					factory.Endpoint.Binding.BuildChannelFactory<IOutputSessionChannel> (pl);
-				f.Open ();
-				output_channel = f.CreateChannel (address, via);
-			} else {
-				IChannelFactory<IOutputChannel> f =
-					factory.Endpoint.Binding.BuildChannelFactory<IOutputChannel> (pl);
-				f.Open ();
-				output_channel = f.CreateChannel (address, via);
-			}
-
-			output_channel.Open ();
-		}
-
-		void SetupRequestChannel ()
-		{
-			if (request_channel != null)
-				return;
-
-			BindingParameterCollection pl =
-				CreateBindingParameters ();
-			bool session = false;
-			switch (factory.Endpoint.Contract.SessionMode) {
-			case SessionMode.Required:
-				session = factory.Endpoint.Binding.CanBuildChannelFactory<IRequestSessionChannel> (pl);
-				if (!session)
-					throw new InvalidOperationException ("The contract requires session support, but the binding does not support it.");
-				break;
-			case SessionMode.Allowed:
-				session = !factory.Endpoint.Binding.CanBuildChannelFactory<IRequestChannel> (pl);
-				break;
-			}
-
-			EndpointAddress address = factory.Endpoint.Address;
-			Uri via = Runtime.Via;
-
-			if (session) {
-				IChannelFactory<IRequestSessionChannel> f =
-					factory.Endpoint.Binding.BuildChannelFactory<IRequestSessionChannel> (pl);
-				f.Open ();
-				request_channel = f.CreateChannel (address, via);
-			} else {
-				IChannelFactory<IRequestChannel> f =
-					factory.Endpoint.Binding.BuildChannelFactory<IRequestChannel> (pl);
-				f.Open ();
-				request_channel = f.CreateChannel (address, via);
-			}
-
-			request_channel.Open ();
-		}
-
 		void Output (OperationDescription od, object [] parameters)
 		{
-			SetupOutputChannel ();
+			if (OutputChannel.State != CommunicationState.Opened)
+				OutputChannel.Open ();
 
 			ClientOperation op = runtime.Operations [od.Name];
-			// FIXME: pass configured default timeout
-			Send (CreateRequest (op, parameters), factory.Endpoint.Binding.SendTimeout);
+			Send (CreateRequest (op, parameters), OperationTimeout);
 		}
 
 		object Request (OperationDescription od, object [] parameters)
 		{
-			SetupRequestChannel ();
+			if (OperationChannel.State != CommunicationState.Opened)
+				OperationChannel.Open ();
 
 			ClientOperation op = runtime.Operations [od.Name];
 			object [] inspections = new object [runtime.MessageInspectors.Count];
@@ -504,8 +470,7 @@ namespace System.ServiceModel
 			for (int i = 0; i < inspections.Length; i++)
 				inspections [i] = runtime.MessageInspectors [i].BeforeSendRequest (ref req, this);
 
-			// FIXME: pass configured default timeout
-			Message res = Request (req, factory.Endpoint.Binding.SendTimeout);
+			Message res = Request (req, OperationTimeout);
 			if (res.IsFault) {
 				MessageFault fault = MessageFault.CreateFault (res, runtime.MaxFaultSize);
 				if (fault.HasDetail && fault is MessageFault.SimpleMessageFault) {
@@ -536,7 +501,13 @@ namespace System.ServiceModel
 		// They are internal for ClientBase<T>.ChannelBase use.
 		internal Message Request (Message msg, TimeSpan timeout)
 		{
-			return request_channel.Request (msg, timeout);
+			if (RequestChannel != null)
+				return RequestChannel.Request (msg, timeout);
+			else {
+				DateTime startTime = DateTime.Now;
+				OutputChannel.Send (msg, timeout);
+				return ((IDuplexChannel) OutputChannel).Receive (timeout - (DateTime.Now - startTime));
+			}
 		}
 
 		internal IAsyncResult BeginRequest (Message msg, TimeSpan timeout, AsyncCallback callback, object state)
@@ -551,7 +522,7 @@ namespace System.ServiceModel
 
 		internal void Send (Message msg, TimeSpan timeout)
 		{
-			output_channel.Send (msg, timeout);
+			OutputChannel.Send (msg, timeout);
 		}
 
 		internal IAsyncResult BeginSend (Message msg, TimeSpan timeout, AsyncCallback callback, object state)
@@ -567,15 +538,33 @@ namespace System.ServiceModel
 
 		Message CreateRequest (ClientOperation op, object [] parameters)
 		{
-			MessageVersion version = factory.Endpoint.Binding.MessageVersion;
+			MessageVersion version = message_version;
 			if (version == null)
 				version = MessageVersion.Default;
 
+			Message msg;
 			if (op.SerializeRequest)
-				return op.GetFormatter ().SerializeRequest (
+				msg = op.GetFormatter ().SerializeRequest (
 					version, parameters);
 			else
-				return (Message) parameters [0];
+				msg = (Message) parameters [0];
+
+			if (OperationContext.Current != null) {
+				// CopyHeadersFrom does not work here (brings duplicates -> error)
+				foreach (var mh in OperationContext.Current.OutgoingMessageHeaders) {
+					int x = msg.Headers.FindHeader (mh.Name, mh.Namespace, mh.Actor);
+					if (x >= 0)
+						msg.Headers.RemoveAt (x);
+					msg.Headers.Add ((MessageHeader) mh);
+				}
+				msg.Properties.CopyProperties (OperationContext.Current.OutgoingMessageProperties);
+			}
+
+			if (OutputSession != null)
+				msg.Headers.MessageId = new UniqueId (OutputSession.Id);
+			msg.Properties.AllowOutputBatching = AllowOutputBatching;
+
+			return msg;
 		}
 
 		#endregion

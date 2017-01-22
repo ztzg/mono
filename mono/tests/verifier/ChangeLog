@@ -1,3 +1,85 @@
+2009-08-17 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_generic_type_definition_on_boxing_position.cs: Valid encoding of GTD on
+	box position.
+
+2009-08-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	*unverifiable_ldobj_with_generic_type_definition.il: Regression test for
+	bug #531237.
+
+2009-07-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: Add support for new test kind badmd for tests with broken
+	metadata.
+
+	* make_tests.sh: Fix some tests that have broken metadata.
+
+	* *.sh: Add execute bit.
+
+2009-04-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_ldflda_owned_field_on_cctor.il: Fix visibility of .ctor.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_nested_eh_in_try_of_try_filter_block.il:  Regression
+	test for #495656.
+
+2009-04-20 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_initobj_this.cs: Regression test for #496175.
+
+2009-04-19 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_access_nested_class_multidym_array.cs: Regression test for
+	#496150.
+
+2009-04-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_br_before_try_block.il: Regression test for #494812.
+
+2009-04-13 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* invalid_backward_branch.il: Fix typo.
+
+2009-04-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_delegate_signature_with_generics.cs: Test for the compatibility
+	of delegate arguments when a function has a non generic type argument
+	and the delegate has a generic one.
+
+2009-04-08 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_nested_access_with_multi_array_instance.cs:
+	* valid_nested_access_with_array_instance.cs: Regression tests for
+	#493068.
+
+2009-04-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_eh_block_with_no_instructions_after.il: Regression test
+	for #492494.
+
+2009-04-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* unverifiable_throw_with_unboxed_generic_argument.il: Regression test
+	for #487738.
+
+2009-04-02 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_candidate_contraint_is_inflated_using_global_context.cs:
+	New test for cases where the candidate constraint type refers to the
+	global generic context.
+
+	We have to use it because it might be the case the the global context
+	has more arguments than the local one.
+
+2009-03-31 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* invalid_catch_block_out_of_bounds.il
+	* invalid_try_block_out_of_bounds.il: Tests for proper bounds
+	check of exception clauses.
+
 2009-03-16 Rodrigo Kumpera  <rkumpera@novell.com>
 
 	* invalid_generic_generic_object_is_boxed.il: Regression test

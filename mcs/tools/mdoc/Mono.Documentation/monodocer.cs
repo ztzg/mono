@@ -27,6 +27,7 @@ class MDocUpdater : MDocCommand
 {
 	string srcPath;
 	List<AssemblyDefinition> assemblies;
+	readonly DefaultAssemblyResolver assemblyResolver = new DefaultAssemblyResolver();
 	
 	bool delete;
 	bool show_exceptions;
@@ -83,9 +84,16 @@ class MDocUpdater : MDocCommand
 			{ "i|import=", 
 				"Import documentation from {FILE}.",
 				v => import = v },
+			{ "L|lib=",
+				"Check for assembly references in {DIRECTORY}.",
+				v => assemblyResolver.AddSearchDirectory (v) },
 			{ "o|out=",
 				"Root {DIRECTORY} to generate/update documentation.",
 				v => srcPath = v },
+			{ "r=",
+				"Search for dependent assemblies in the directory containing {ASSEMBLY}.\n" +
+				"(Equivalent to '-L `dirname ASSEMBLY`'.)",
+				v => assemblyResolver.AddSearchDirectory (Path.GetDirectoryName (v)) },
 			{ "since=",
 				"Manually specify the assembly {VERSION} that new members were added in.",
 				v => since = v },
@@ -100,6 +108,11 @@ class MDocUpdater : MDocCommand
 			return;
 		if (assemblies.Count == 0)
 			Error ("No assemblies specified.");
+
+		foreach (var dir in assemblies
+				.Where (a => a.Contains (Path.DirectorySeparatorChar))
+				.Select (a => Path.GetDirectoryName (a)))
+			assemblyResolver.AddSearchDirectory (dir);
 
 		// PARSE BASIC OPTIONS AND LOAD THE ASSEMBLY TO DOCUMENT
 		
@@ -170,7 +183,7 @@ class MDocUpdater : MDocCommand
 		Message (TraceLevel.Warning, "mdoc: " + format, args);
 	}
 	
-	private static AssemblyDefinition LoadAssembly (string name)
+	private AssemblyDefinition LoadAssembly (string name)
 	{
 		AssemblyDefinition assembly = null;
 		try {
@@ -180,10 +193,7 @@ class MDocUpdater : MDocCommand
 		if (assembly == null)
 			throw new InvalidOperationException("Assembly " + name + " not found.");
 
-		var r = assembly.Resolver as BaseAssemblyResolver;
-		if (r != null && name.Contains (Path.DirectorySeparatorChar)) {
-			r.AddSearchDirectory (Path.GetDirectoryName (name));
-		}
+		assembly.Resolver = assemblyResolver;
 		return assembly;
 	}
 
@@ -483,7 +493,7 @@ class MDocUpdater : MDocCommand
 		XmlElement index_assembly = parent.OwnerDocument.CreateElement("Assembly");
 		index_assembly.SetAttribute ("Name", assembly.Name.Name);
 		index_assembly.SetAttribute ("Version", assembly.Name.Version.ToString());
-		MakeAttributes (index_assembly, assembly.CustomAttributes, true);
+		MakeAttributes (index_assembly, assembly.CustomAttributes, 0);
 		parent.AppendChild(index_assembly);
 	}
 
@@ -1469,7 +1479,7 @@ class MDocUpdater : MDocCommand
 			ClearElement(root, "Interfaces");
 		}
 
-		MakeAttributes (root, type.CustomAttributes, false);
+		MakeAttributes (root, type.CustomAttributes, 0);
 		
 		if (DocUtils.IsDelegate (type)) {
 			MakeTypeParameters (root, type.GenericParameters);
@@ -1520,9 +1530,28 @@ class MDocUpdater : MDocCommand
 		else {
 			ClearElement (me, "AssemblyInfo");
 		}
+
 		ICustomAttributeProvider p = mi as ICustomAttributeProvider;
 		if (p != null)
-			MakeAttributes (me, p.CustomAttributes, false);
+			MakeAttributes (me, p.CustomAttributes, 0);
+
+		PropertyReference pr = mi as PropertyReference;
+		if (pr != null) {
+			PropertyDefinition pd = pr.Resolve ();
+			if (pd.GetMethod != null)
+				MakeAttributes (me, pd.GetMethod.CustomAttributes, AttributeFlags.KeepExistingAttributes, "get: ");
+			if (pd.SetMethod != null)
+				MakeAttributes (me, pd.SetMethod.CustomAttributes, AttributeFlags.KeepExistingAttributes, "set: ");
+		}
+		EventReference er = mi as EventReference;
+		if (er != null) {
+			EventDefinition ed = er.Resolve ();
+			if (ed.AddMethod != null)
+				MakeAttributes (me, ed.AddMethod.CustomAttributes, AttributeFlags.KeepExistingAttributes, "add: ");
+			if (ed.RemoveMethod != null)
+				MakeAttributes (me, ed.RemoveMethod.CustomAttributes, AttributeFlags.KeepExistingAttributes, "remove: ");
+		}
+
 		MakeReturnValue(me, mi);
 		if (mi is MethodReference) {
 			MethodReference mb = (MethodReference) mi;
@@ -2111,12 +2140,9 @@ class MDocUpdater : MDocCommand
 			e = root.OwnerDocument.CreateElement("AssemblyInfo");
 			root.AppendChild(e);
 		}
-		MyXmlNodeList matches = new MyXmlNodeList (assemblyVersions.Length);
-		foreach (XmlElement v in e.SelectNodes ("AssemblyVersion")) {
-			foreach (string sv in assemblyVersions)
-				if (v.InnerText == sv)
-					matches.Add (v);
-		}
+		List<XmlNode> matches = e.SelectNodes ("AssemblyVersion").Cast<XmlNode>()
+			.Where(v => Array.IndexOf (assemblyVersions, v.InnerText) >= 0)
+			.ToList ();
 		// matches.Count > 0 && add: ignore -- already present
 		if (matches.Count > 0 && !add) {
 			foreach (XmlNode c in matches)
@@ -2158,18 +2184,31 @@ class MDocUpdater : MDocCommand
 		"System.Runtime.CompilerServices.ExtensionAttribute",
 	};
 
-	private void MakeAttributes (XmlElement root, CustomAttributeCollection attributes, bool assemblyAttributes)
+	[Flags]
+	enum AttributeFlags {
+		None,
+		KeepExistingAttributes = 0x1,
+	}
+
+	private void MakeAttributes (XmlElement root, CustomAttributeCollection attributes, AttributeFlags flags)
 	{
+		MakeAttributes (root, attributes, flags, null);
+	}
+
+	private void MakeAttributes (XmlElement root, CustomAttributeCollection attributes, AttributeFlags flags, string prefix)
+	{
+		bool keepExisting = (flags & AttributeFlags.KeepExistingAttributes) != 0;
 		if (attributes.Count == 0) {
-			ClearElement(root, "Attributes");
+			if (!keepExisting)
+				ClearElement(root, "Attributes");
 			return;
 		}
 
 		bool b = false;
 		XmlElement e = (XmlElement)root.SelectSingleNode("Attributes");
-		if (e != null)
+		if (e != null && !keepExisting)
 			e.RemoveAll();
-		else
+		else if (e == null)
 			e = root.OwnerDocument.CreateElement("Attributes");
 		
 		foreach (CustomAttribute attribute in attributes.Cast<CustomAttribute> ()
@@ -2217,7 +2256,7 @@ class MDocUpdater : MDocCommand
 			
 			string name = attribute.Constructor.DeclaringType.FullName;
 			if (name.EndsWith("Attribute")) name = name.Substring(0, name.Length-"Attribute".Length);
-			WriteElementText(ae, "AttributeName", name + a2);
+			WriteElementText(ae, "AttributeName", prefix + name + a2);
 		}
 		
 		if (b && e.ParentNode == null)
@@ -2259,11 +2298,14 @@ class MDocUpdater : MDocCommand
 
 	private static Dictionary<ulong, string> GetEnumerationValues (TypeDefinition type)
 	{
-		return
-			(from f in type.Fields.Cast<FieldDefinition> ()
-			 where !(f.IsRuntimeSpecialName || f.IsSpecialName)
-			 select f)
-			.ToDictionary (f => Convert.ToUInt64 (f.Constant), f => f.Name);
+		var values = new Dictionary<ulong, string> ();
+		foreach (var f in 
+				(from f in type.Fields.Cast<FieldDefinition> ()
+				 where !(f.IsRuntimeSpecialName || f.IsSpecialName)
+				 select f)) {
+			values [Convert.ToUInt64 (f.Constant)] = f.Name;
+		}
+		return values;
 	}
 	
 	private void MakeParameters (XmlElement root, ParameterDefinitionCollection parameters)
@@ -2279,7 +2321,7 @@ class MDocUpdater : MDocCommand
 				if (p.IsOut) pe.SetAttribute("RefType", "out");
 				else pe.SetAttribute("RefType", "ref");
 			}
-			MakeAttributes (pe, p.CustomAttributes, false);
+			MakeAttributes (pe, p.CustomAttributes, 0);
 		}
 	}
 	
@@ -2297,7 +2339,7 @@ class MDocUpdater : MDocCommand
 			XmlElement pe = root.OwnerDocument.CreateElement("TypeParameter");
 			e.AppendChild(pe);
 			pe.SetAttribute("Name", t.Name);
-			MakeAttributes (pe, t.CustomAttributes, false);
+			MakeAttributes (pe, t.CustomAttributes, 0);
 			XmlElement ce = (XmlElement) e.SelectSingleNode ("Constraints");
 			ConstraintCollection constraints = t.Constraints;
 			GenericParameterAttributes attrs = t.Attributes;
@@ -2367,7 +2409,7 @@ class MDocUpdater : MDocCommand
 		e.RemoveAll();
 		WriteElementText(e, "ReturnType", GetDocTypeFullName (type));
 		if (attributes != null)
-			MakeAttributes(e, attributes, false);
+			MakeAttributes(e, attributes, 0);
 	}
 	
 	private void MakeReturnValue (XmlElement root, IMemberReference mi)

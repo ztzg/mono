@@ -20,6 +20,7 @@ System.Runtime.Serialization/ExportOptions.cs
 System.Runtime.Serialization/ExtensionDataObject.cs
 System.Runtime.Serialization/IDataContractSurrogate.cs
 System.Runtime.Serialization/IExtensibleDataObject.cs
+System.Runtime.Serialization/IgnoreDataMemberAttribute.cs
 System.Runtime.Serialization/ImportOptions.cs
 System.Runtime.Serialization/InvalidDataContractException.cs
 System.Runtime.Serialization/KnownTypeAttribute.cs
@@ -58,5 +59,7 @@ System.Xml/XmlDictionaryReaderQuotas.cs
 System.Xml/XmlDictionaryString.cs
 System.Xml/XmlDictionaryWriter.cs
 System.Xml/XmlDictionaryWriterAutoGen.cs
+System.Xml/XmlMtomDictionaryReader.cs
+System.Xml/XmlMtomDictionaryWriter.cs
 System.Xml/XmlSimpleDictionaryReader.cs
 System.Xml/XmlSimpleDictionaryWriter.cs

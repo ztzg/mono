@@ -32,49 +32,39 @@ using System.Reflection;
 using DbLinq.Util;
 using System.Collections.Generic;
 
-#if MONO_STRICT
-namespace System.Data.Linq.Mapping
-#else
 namespace DbLinq.Data.Linq.Mapping
-#endif
 {
     internal class AttributedMetaAssociation : MetaAssociation
     {
 		//Seperator used for key lists
 		private static readonly char[] STRING_SEPERATOR =  new[] { ',' };
 
+		private static string AttributeNameNullCheck (AssociationAttribute attribute)
+		{
+			if ( attribute == null )
+				return null;
+			else
+				return attribute.Name;
+		}
+
         public AttributedMetaAssociation(MemberInfo member, AssociationAttribute attribute, MetaDataMember metaDataMember)
         {
             _memberInfo = member;
             _associationAttribute = attribute;
             _thisMember = metaDataMember;
-            _otherMember = metaDataMember; // see https://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=376669
+			// The bug described here:
+			// https://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=376669
+			// says that under certain conditions, there's a bug where _otherMember == _thisMember
+			// Not only is there no point in reproducing a MS bug, it's not as simple as simply setting _otherMember = metaDataMember
+			Type otherType = _memberInfo.GetFirstInnerReturnType();
+			string associationName = member.GetAttribute<AssociationAttribute>().Name;
+			AttributedMetaType ownedMetaType = metaDataMember.DeclaringType.Model.GetMetaType(otherType) as AttributedMetaType;
 
-        	SetupRelationship();
+			if ( ownedMetaType == null )
+				throw new InvalidOperationException("Key in referenced table is of a different SQL MetaData provider");
+
+			_otherMember = ownedMetaType.AssociationsLookup[otherType.GetMembers().Where(m => (AttributeNameNullCheck(m.GetAttribute<AssociationAttribute>()) == associationName) && (m != member)).Single()];
         }
-
-		/// <summary>
-		/// This function sets up the relationship information based on the attribute <see cref="AttributedMetaModel"/>.
-		/// </summary>
-		private void SetupRelationship()
-		{
-			//Get the association target type
-			Type targetType = _memberInfo.GetFirstInnerReturnType();
-
-			var metaModel = ThisMember.DeclaringType.Model as AttributedMetaModel;
-			if (metaModel == null)
-			{
-				throw new InvalidOperationException("Internal Error: MetaModel is not a AttributedMetaModel");
-			}
-
-			MetaTable otherTable = metaModel.GetTable(targetType);
-
-			//Setup "this key"
-			_thisKey = GetKeys(_associationAttribute.ThisKey, ThisMember.DeclaringType);
-
-			//Setup other key
-			_otherKeys = GetKeys(_associationAttribute.OtherKey, otherTable.RowType);
-		}
 
 		/// <summary>
 		/// Returns a list of keys from the given meta type based on the key list string.
@@ -157,7 +147,19 @@ namespace DbLinq.Data.Linq.Mapping
         private ReadOnlyCollection<MetaDataMember> _otherKeys;
         public override ReadOnlyCollection<MetaDataMember> OtherKey
         {
-            get { return _otherKeys; }
+            get {
+                if (_otherKeys == null)
+                {
+                    //Get the association target type
+                    var targetType = _memberInfo.GetFirstInnerReturnType();
+
+                    var otherTable = ThisMember.DeclaringType.Model.GetTable(targetType);
+
+                    //Setup other key
+                    _otherKeys = GetKeys(_associationAttribute.OtherKey, otherTable.RowType);
+                }
+                return _otherKeys;
+            }
         }
 
         public override bool OtherKeyIsPrimaryKey
@@ -187,7 +189,11 @@ namespace DbLinq.Data.Linq.Mapping
         private ReadOnlyCollection<MetaDataMember> _thisKey;
         public override ReadOnlyCollection<MetaDataMember> ThisKey
         {
-            get { return _thisKey; }
+            get {
+                if (_thisKey == null)
+                    _thisKey = GetKeys(_associationAttribute.ThisKey, ThisMember.DeclaringType);
+                return _thisKey;
+            }
         }
 
         public override bool ThisKeyIsPrimaryKey

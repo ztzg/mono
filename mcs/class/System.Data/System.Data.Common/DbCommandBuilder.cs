@@ -181,7 +181,7 @@ namespace System.Data.Common {
 			// If no table was found, then we can't do an delete
 			if (QuotedTableName == String.Empty)
 				return null;
-
+			
 			CreateNewCommand (ref _deleteCommand);
 
 			string command = String.Format ("DELETE FROM {0}", QuotedTableName);
@@ -200,6 +200,7 @@ namespace System.Data.Common {
 
 				bool isKey = (bool) schemaRow ["IsKey"];
 				DbParameter parameter = null;
+				string sourceColumnName;
 
 				if (isKey)
 					keyFound = true;
@@ -211,22 +212,34 @@ namespace System.Data.Common {
 				if (!isKey && allowNull) {
 					parameter = _deleteCommand.CreateParameter ();
 					if (option) {
-						parameter.ParameterName = String.Format ("@{0}",
+						parameter.ParameterName = String.Format ("@IsNull_{0}",
 											 schemaRow ["BaseColumnName"]);
 					} else {
 						parameter.ParameterName = String.Format ("@p{0}", parmIndex++);
 					}
-					String sourceColumnName = (string) schemaRow ["BaseColumnName"];
 					parameter.Value = 1;
-
+					parameter.DbType = DbType.Int32;
+					// This should be set for nullcheckparam
+					sourceColumnName = (string) schemaRow ["BaseColumnName"];
+					parameter.SourceColumn = sourceColumnName;
+					parameter.SourceColumnNullMapping = true;
+					parameter.SourceVersion = DataRowVersion.Original;
+					_deleteCommand.Parameters.Add (parameter);
+					
 					whereClause.Append ("(");
 					whereClause.Append (String.Format (clause1, parameter.ParameterName, 
 									   GetQuotedString (sourceColumnName)));
 					whereClause.Append (" OR ");
 				}
 
-				parameter = CreateParameter (_deleteCommand, String.Format ("@{0}", option ? schemaRow ["BaseColumnName"] : "p" + parmIndex++), schemaRow);
+				if (option)
+					parameter = CreateParameter (_deleteCommand, schemaRow, true);
+				else 
+					parameter = CreateParameter (_deleteCommand, parmIndex++, schemaRow);
+				
 				parameter.SourceVersion = DataRowVersion.Original;
+				ApplyParameterInfo (parameter, schemaRow, StatementType.Delete, true);
+				//parameter.IsNullable = allowNull;
 
 				whereClause.Append (String.Format (clause2, GetQuotedString (parameter.SourceColumn), parameter.ParameterName));
 
@@ -256,6 +269,7 @@ namespace System.Data.Common {
 			StringBuilder values = new StringBuilder ();
 
 			int parmIndex = 1;
+			DbParameter parameter = null;
 			foreach (DataRow schemaRow in _dbSchemaTable.Rows) {
 				if (!IncludedInInsert (schemaRow))
 					continue;
@@ -265,9 +279,14 @@ namespace System.Data.Common {
 					values.Append (", ");
 				}
 
-				DbParameter parameter = CreateParameter (_insertCommand, String.Format ("@{0}", option ? schemaRow ["BaseColumnName"] : "p" + parmIndex++), schemaRow);
+				if (option)
+					parameter = CreateParameter (_insertCommand, schemaRow, false);
+				else 
+					parameter = CreateParameter (_insertCommand, parmIndex++, schemaRow);			
 				parameter.SourceVersion = DataRowVersion.Current;
-
+				ApplyParameterInfo (parameter, schemaRow, StatementType.Insert, false);
+				//parameter.IsNullable = (bool) schemaRow ["AllowDBNull"];
+				
 				columns.Append (GetQuotedString (parameter.SourceColumn));
 				values.Append (parameter.ParameterName);
 			}
@@ -304,6 +323,7 @@ namespace System.Data.Common {
 			StringBuilder whereClause = new StringBuilder ();
 			int parmIndex = 1;
 			bool keyFound = false;
+			DbParameter parameter = null;
 
 			// First, create the X=Y list for UPDATE
 			foreach (DataRow schemaRow in _dbSchemaTable.Rows) {
@@ -312,9 +332,13 @@ namespace System.Data.Common {
 				if (columns.Length > 0) 
 					columns.Append (", ");
 
-				DbParameter parameter = CreateParameter (_updateCommand, String.Format ("@{0}", option ? schemaRow ["BaseColumnName"] : "p" + parmIndex++), schemaRow);
+				if (option)
+					parameter = CreateParameter (_updateCommand, schemaRow, false);
+				else 
+					parameter = CreateParameter (_updateCommand, parmIndex++, schemaRow);
 				parameter.SourceVersion = DataRowVersion.Current;
-
+				ApplyParameterInfo (parameter, schemaRow, StatementType.Update, false);
+				//parameter.IsNullable = (bool) schemaRow ["AllowDBNull"];
 				columns.Append (String.Format ("{0} = {1}", GetQuotedString (parameter.SourceColumn), parameter.ParameterName));
 			}
 
@@ -331,8 +355,6 @@ namespace System.Data.Common {
 					whereClause.Append (" AND ");
 
 				bool isKey = (bool) schemaRow ["IsKey"];
-				DbParameter parameter = null;
-
 				if (isKey)
 					keyFound = true;
 
@@ -343,23 +365,30 @@ namespace System.Data.Common {
 				if (!isKey && allowNull) {
 					parameter = _updateCommand.CreateParameter ();
 					if (option) {
-						parameter.ParameterName = String.Format ("@{0} IS NULL",
+						parameter.ParameterName = String.Format ("@IsNull_{0}",
 											 schemaRow ["BaseColumnName"]);
 					} else {
 						parameter.ParameterName = String.Format ("@p{0}", parmIndex++);
 					}
+					parameter.DbType = DbType.Int32;
 					parameter.Value = 1;
+					parameter.SourceColumn = (string) schemaRow ["BaseColumnName"];
+					parameter.SourceColumnNullMapping = true;
+					parameter.SourceVersion = DataRowVersion.Original;
 					whereClause.Append ("(");
 					whereClause.Append (String.Format (clause1, parameter.ParameterName,
 									   GetQuotedString ((string) schemaRow ["BaseColumnName"])));
 					whereClause.Append (" OR ");
+					_updateCommand.Parameters.Add (parameter);
 				}
 
 				if (option)
-					parameter = CreateParameter (_updateCommand, String.Format ("@Original_{0}", schemaRow ["BaseColumnName"]), schemaRow);
-				else
-					parameter = CreateParameter (_updateCommand, String.Format ("@p{0}", parmIndex++), schemaRow);
+					parameter = CreateParameter (_updateCommand, schemaRow, true);
+				else 
+					parameter = CreateParameter (_updateCommand, parmIndex++, schemaRow);
 				parameter.SourceVersion = DataRowVersion.Original;
+				//parameter.IsNullable = allowNull;
+				ApplyParameterInfo (parameter, schemaRow, StatementType.Update, true);
 
 				whereClause.Append (String.Format (clause2, GetQuotedString (parameter.SourceColumn), parameter.ParameterName));
 
@@ -376,16 +405,31 @@ namespace System.Data.Common {
 			return _updateCommand;
 		}
 
-		private DbParameter CreateParameter (DbCommand _dbCommand, string parameterName, DataRow schemaRow)
+		private DbParameter CreateParameter (DbCommand _dbCommand, DataRow schemaRow, bool whereClause)
 		{
+			string sourceColumn = (string) schemaRow ["BaseColumnName"];
 			DbParameter parameter = _dbCommand.CreateParameter ();
-			parameter.ParameterName = parameterName;
-			parameter.SourceColumn = (string) schemaRow ["BaseColumnName"];
-			parameter.Size = (int) schemaRow ["ColumnSize"];
+			if (whereClause)
+				parameter.ParameterName = GetParameterName ("Original_" + sourceColumn);
+			else
+				parameter.ParameterName = GetParameterName (sourceColumn);
+			parameter.SourceColumn = sourceColumn;
+			//parameter.Size = (int) schemaRow ["ColumnSize"];
 			_dbCommand.Parameters.Add (parameter);
 			return parameter;
 		}
 
+		private DbParameter CreateParameter (DbCommand _dbCommand, int paramIndex, DataRow schemaRow)
+		{
+			string sourceColumn = (string) schemaRow ["BaseColumnName"];
+			DbParameter parameter = _dbCommand.CreateParameter ();
+			parameter.ParameterName = GetParameterName (paramIndex);
+			parameter.SourceColumn = sourceColumn;
+			//parameter.Size = (int) schemaRow ["ColumnSize"];
+			_dbCommand.Parameters.Add (parameter);
+			return parameter;
+		}
+		
 		[DefaultValue (CatalogLocation.Start)]
 		public virtual CatalogLocation CatalogLocation {
 			get { return _catalogLocation; }
@@ -505,48 +549,39 @@ namespace System.Data.Common {
 
 		public DbCommand GetDeleteCommand ()
 		{
-			BuildCache (true);
-			if (_deleteCommand == null)
-				return CreateDeleteCommand (false);
-			return _deleteCommand;
+			return GetDeleteCommand (false);
 		}
 
 		public DbCommand GetDeleteCommand (bool option)
 		{
 			BuildCache (true);
-			if (_deleteCommand == null)
+			if (_deleteCommand == null || option)
 				return CreateDeleteCommand (option);
 			return _deleteCommand;
 		}
 
 		public DbCommand GetInsertCommand ()
 		{
-			BuildCache (true);
-			if (_insertCommand == null)
-				return CreateInsertCommand (false);
-			return _insertCommand;
+			return GetInsertCommand (false);
 		}
 
 		public DbCommand GetInsertCommand (bool option)
 		{
 			BuildCache (true);
-			if (_insertCommand == null)
+			if (_insertCommand == null || option)
 				return CreateInsertCommand (option);
 			return _insertCommand;
 		}
 
 		public DbCommand GetUpdateCommand ()
 		{
-			BuildCache (true);
-			if (_updateCommand == null)
-				return CreateUpdateCommand (false);
-			return _updateCommand;
+			return GetUpdateCommand (false);
 		}
 
 		public DbCommand GetUpdateCommand (bool option)
 		{
 			BuildCache (true);
-			if (_updateCommand == null)
+			if (_updateCommand == null || option)
 				return CreateUpdateCommand (option);
 			return _updateCommand;
 		}

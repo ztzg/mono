@@ -1,3 +1,34 @@
+2009-09-10  Ankit Jain  <jankit@novell.com>
+
+	* Items.cs (TestItems2a):
+	(TestInheritedMetadataFromItemRefs):
+	(TestInheritedMetadataFromItemRefs2):
+	(TestMetadataFromItemReferences): New.
+
+2009-09-08  Ankit Jain  <jankit@novell.com>
+
+	* Items.cs (TestItems5):
+	(TestItems6): Remove 'NotWorking' attribute.
+
+2009-08-29  Ankit Jain  <jankit@novell.com>
+
+	* Items.cs: Add tests for property/item evaluation.
+
+2009-06-12  Ankit Jain  <jankit@novell.com>
+
+	* Items.cs (TestItemsInTarget3a): Add another case for valid whitespace
+	around an item ref.
+
+2009-05-29  Ankit Jain  <jankit@novell.com>
+
+	* Conditions.cs (TestHasTrailingSlash1): New.
+	(TestUnknownFunction): New.
+
+2009-05-15  Marek Sieradzki  <marek.sieradzki@gmail.com>
+
+	* Items.cs
+	* Conditions.cs: Don't check exception messages.
+
 2009-02-23  Ankit Jain  <jankit@novell.com>
 
 	* Items.cs (TestItemsInTarget8): New.

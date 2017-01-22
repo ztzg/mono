@@ -27,24 +27,20 @@
 using System;
 using System.Diagnostics;
 using System.Linq.Expressions;
-#if MONO_STRICT
-using System.Data.Linq.Sugar.Expressions;
-#else
-using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
 
-#if MONO_STRICT
-namespace System.Data.Linq.Sugar.Expressions
-#else
+using DbLinq.Data.Linq.Sugar.Expressions;
+
 namespace DbLinq.Data.Linq.Sugar.Expressions
-#endif
 {
     /// <summary>
     /// A table is a default table, or a joined table
     /// Different joins specify different tables
     /// </summary>
     [DebuggerDisplay("TableExpression {Name} (as {Alias})")]
-    internal class TableExpression : MutableExpression
+#if !MONO_STRICT
+    public
+#endif
+    class TableExpression : MutableExpression
     {
         public const ExpressionType ExpressionType = (ExpressionType)CustomExpressionType.Table;
 
@@ -127,7 +123,7 @@ namespace DbLinq.Data.Linq.Sugar.Expressions
             Name = tableExpression.Name;
         }
 
-        public bool IsEqualTo(TableExpression expression)
+        public virtual bool IsEqualTo(TableExpression expression)
         {
             return Name == expression.Name && JoinID == expression.JoinID;
         }

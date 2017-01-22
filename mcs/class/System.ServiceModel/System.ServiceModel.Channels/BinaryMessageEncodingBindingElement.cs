@@ -111,25 +111,17 @@ namespace System.ServiceModel.Channels
 			return new BinaryMessageEncodingBindingElement (this);
 		}
 
-		[MonoTODO]
 		public override T GetProperty<T> (BindingContext context)
 		{
-			throw new NotImplementedException ();
+			if (typeof (T) == typeof (MessageVersion))
+				return (T) (object) MessageVersion;
+			return null;
 		}
 
 		public override MessageEncoderFactory
 			CreateMessageEncoderFactory ()
 		{
 			return new BinaryMessageEncoderFactory (this);
-		}
-
-		[MonoTODO]
-		protected override void OnImportPolicy (XmlElement assertion,
-			MessageVersion messageVersion,
-			MetadataImporter exporter,
-			PolicyConversionContext context)
-		{
-			throw new NotImplementedException ();
 		}
 
 		[MonoTODO]
@@ -147,7 +139,7 @@ namespace System.ServiceModel.Channels
 		}
 
 		[MonoTODO]
-		public void ExportPolicy (MetadataExporter exporter,
+		void IPolicyExportExtension.ExportPolicy (MetadataExporter exporter,
 			PolicyConversionContext context)
 		{
 			throw new NotImplementedException ();

@@ -81,6 +81,8 @@ G_BEGIN_DECLS
 /*type of the function pointer of methods returned by mono_marshal_get_runtime_invoke*/
 typedef MonoObject *(*RuntimeInvokeFunction) (MonoObject *this, void **params, MonoObject **exc, void* compiled_method);
 
+typedef void (*RuntimeInvokeDynamicFunction) (void *args, MonoObject **exc, void* compiled_method);
+
 /* marshaling helper functions */
 
 void
@@ -107,6 +109,9 @@ mono_array_to_savearray (MonoArray *array) MONO_INTERNAL;
 
 gpointer
 mono_array_to_lparray (MonoArray *array) MONO_INTERNAL;
+
+void
+mono_free_lparray (MonoArray *array, gpointer* nativeArray) MONO_INTERNAL;
 
 void
 mono_string_utf8_to_builder (MonoStringBuilder *sb, char *text) MONO_INTERNAL;
@@ -184,11 +189,14 @@ mono_marshal_get_delegate_invoke (MonoMethod *method, MonoDelegate *del) MONO_IN
 MonoMethod *
 mono_marshal_get_runtime_invoke (MonoMethod *method, gboolean virtual) MONO_INTERNAL;
 
-MonoMethod *
-mono_marshal_get_static_rgctx_invoke (MonoMethod *method) MONO_INTERNAL;
+MonoMethod*
+mono_marshal_get_runtime_invoke_dynamic (void) MONO_INTERNAL;
+
+MonoMethodSignature*
+mono_marshal_get_string_ctor_signature (MonoMethod *method) MONO_INTERNAL;
 
 MonoMethod *
-mono_marshal_get_managed_wrapper (MonoMethod *method, MonoClass *delegate_klass, MonoObject *this) MONO_INTERNAL;
+mono_marshal_get_managed_wrapper (MonoMethod *method, MonoClass *delegate_klass, MonoObject **this_loc) MONO_INTERNAL;
 
 gpointer
 mono_marshal_get_vtfixup_ftnptr (MonoImage *image, guint32 token, guint16 type) MONO_INTERNAL;
@@ -253,6 +261,9 @@ mono_marshal_get_thunk_invoke_wrapper (MonoMethod *method) MONO_INTERNAL;
 
 void
 mono_marshal_free_dynamic_wrappers (MonoMethod *method) MONO_INTERNAL;
+
+void
+mono_marshal_free_inflated_wrappers (MonoMethod *method) MONO_INTERNAL;
 
 /* marshaling internal calls */
 
@@ -450,7 +461,7 @@ void
 mono_marshal_emit_native_wrapper (MonoImage *image, MonoMethodBuilder *mb, MonoMethodSignature *sig, MonoMethodPInvoke *piinfo, MonoMarshalSpec **mspecs, gpointer func, gboolean aot, gboolean check_exceptions) MONO_INTERNAL;
 
 void
-mono_marshal_emit_managed_wrapper (MonoMethodBuilder *mb, MonoMethodSignature *invoke_sig, MonoMarshalSpec **mspecs, EmitMarshalContext* m, MonoMethod *method, MonoObject* this) MONO_INTERNAL;
+mono_marshal_emit_managed_wrapper (MonoMethodBuilder *mb, MonoMethodSignature *invoke_sig, MonoMarshalSpec **mspecs, EmitMarshalContext* m, MonoMethod *method, MonoObject** this_loc) MONO_INTERNAL;
 
 GHashTable*
 mono_marshal_get_cache (GHashTable **var, GHashFunc hash_func, GCompareFunc equal_func) MONO_INTERNAL;

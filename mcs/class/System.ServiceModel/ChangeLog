@@ -1,3 +1,156 @@
+2009-09-15  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: remove WebServiceHelper.cs.
+
+2009-09-14  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources: add MessagePropertiesTest.cs.
+
+2009-09-02  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources:
+	  add HttpRequestMessagePropertyTest.cs
+
+2009-08-24  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: added 
+	  DuplexClientRuntimeChannel.cs and CallbackInstanceContextProvider.cs.
+
+2009-08-20  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add more named pipe files.
+
+2009-08-20  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources: add OperationContextTest.cs.
+
+2009-08-19  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add named pipe files.
+
+2009-08-11  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add DefaultOperationInvoker.cs.
+
+2009-08-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add ServiceProxyGenerator.cs.
+
+2009-07-31  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add IPeerConnectorContract.cs.
+
+2009-07-31  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources: add ServiceEndpointTest.cs.
+
+2009-07-28  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add TransactionFlowAttribute.cs.
+
+2009-07-23  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  split out binary frame manager class into separate file.
+
+2009-07-21  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add TcpReplyChannel.
+
+2009-07-20  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: filter the valid profile on the framework version,
+	to make it easier to have custom variants.
+
+2009-07-17  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add TcpRequestChannel.
+
+2009-07-14  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources:
+	  add CallbackBehaviorAttributeTest.cs.
+
+2009-07-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  Added new custom peer resolver files.
+
+2009-07-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources:
+	  add PeerNodeAddressTest.cs.
+
+2009-06-25  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  add SessionInstanceContextProvider.cs.
+
+2009-06-09  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources:
+	  add ServiceThrottlingBehaviorTest.
+
+2009-06-08  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: renamed a file.
+
+2009-06-05  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources: Remove 
+	ClientAccessPolicy.cs, CrossDomainPolicy.cs and 
+	CrossDomainAccessManager.cs since the code and checks is now done
+	inside System.Windows.Browser.dll, by BrowserHttpWebRequest, for
+	every non-site-or-origin web connection - i.e. http[s]
+
+2009-05-26  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: cosmetic file renaming.
+
+2009-05-25  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll_test.sources:
+	  added PeerResolverSerializationTest.cs.
+
+2009-05-15  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll_test.sources: added MessageFaultTest.cs.
+
+2009-05-13  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : remove xlinq dependency.
+
+2009-04-28  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll_test.sources: added
+	  BinaryMessageEncodingBindingElementTest.cs.
+
+2009-04-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources: Remove 
+	MonoTODOAttribute since we can get it from mscorlib.dll
+
+2009-04-20  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  added several Peer transport support files.
+	* System.ServiceModel.dll_test.sources: added
+	  NetPeerTcpBindingTest.cs and PeerTransportBindingElementTest.cs.
+
+2009-04-08  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  added PeerTransportSecuritySettings.cs.
+	* Makefile: use -r:System.Core in non-2.1 build too.
+
+2009-04-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources: added NetTcpBindingTest.cs.
+
+2009-04-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: added IOnlineStatus.cs.
+
 2009-03-05  Astushi Enomoto  <atsushi@ximian.com>
 
 	* Makefile : added /r:System.Xml.Linq in 2.1 too.

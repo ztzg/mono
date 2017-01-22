@@ -352,6 +352,25 @@ namespace System.Xml.Linq
 					yield return a;
 		}
 
+		static void DefineDefaultSettings (XmlReaderSettings settings, LoadOptions options)
+		{
+#if NET_2_1 && !MONOTOUCH
+			// 2.1 has a DtdProcessing property which defaults to DtdProcessing.Prohibit
+			settings.DtdProcessing = DtdProcessing.Parse;
+#else
+			settings.ProhibitDtd = false;
+#endif
+
+			settings.IgnoreWhitespace = (options & LoadOptions.PreserveWhitespace) == 0;
+		}
+
+		static XmlReaderSettings CreateDefaultSettings (LoadOptions options)
+		{
+			var settings = new XmlReaderSettings ();
+			DefineDefaultSettings (settings, options);
+			return settings;
+		}
+
 		public static XElement Load (string uri)
 		{
 			return Load (uri, LoadOptions.None);
@@ -359,9 +378,8 @@ namespace System.Xml.Linq
 
 		public static XElement Load (string uri, LoadOptions options)
 		{
-			XmlReaderSettings s = new XmlReaderSettings ();
-			s.ProhibitDtd = false;
-			s.IgnoreWhitespace = (options & LoadOptions.PreserveWhitespace) == 0;
+			XmlReaderSettings s = CreateDefaultSettings (options);
+
 			using (XmlReader r = XmlReader.Create (uri, s)) {
 				return LoadCore (r, options);
 			}
@@ -374,9 +392,8 @@ namespace System.Xml.Linq
 
 		public static XElement Load (TextReader tr, LoadOptions options)
 		{
-			XmlReaderSettings s = new XmlReaderSettings ();
-			s.ProhibitDtd = false;
-			s.IgnoreWhitespace = (options & LoadOptions.PreserveWhitespace) == 0;
+			XmlReaderSettings s = CreateDefaultSettings (options);
+
 			using (XmlReader r = XmlReader.Create (tr, s)) {
 				return LoadCore (r, options);
 			}
@@ -389,9 +406,9 @@ namespace System.Xml.Linq
 
 		public static XElement Load (XmlReader reader, LoadOptions options)
 		{
-			XmlReaderSettings s = reader.Settings.Clone ();
-			s.ProhibitDtd = false;
-			s.IgnoreWhitespace = (options & LoadOptions.PreserveWhitespace) == 0;
+			XmlReaderSettings s = reader.Settings != null ? reader.Settings.Clone () : new XmlReaderSettings ();
+			DefineDefaultSettings (s, options);
+
 			using (XmlReader r = XmlReader.Create (reader, s)) {
 				return LoadCore (r, options);
 			}
@@ -596,7 +613,7 @@ namespace System.Xml.Linq
 		{
 			for (XElement el = this; el != null; el = el.Parent)
 				foreach (XAttribute a in el.Attributes ())
-					if (a.IsNamespaceDeclaration && a.Name.LocalName == prefix)
+					if (a.IsNamespaceDeclaration && (prefix.Length == 0 && a.Name.LocalName == "xmlns" || a.Name.LocalName == prefix))
 						return XNamespace.Get (a.Value);
 			return XNamespace.None; // nothing is declared.
 		}

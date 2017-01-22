@@ -7,8 +7,7 @@ AM_MAINTAINER_MODE
 
 AC_PROG_CC
 AM_PROG_LIBTOOL
-CFLAGS='-g -O0 -D_GNU_SOURCE'
-AC_SUBST(CFLAGS)
+CFLAGS="$CFLAGS -g -O0 -D_GNU_SOURCE"
 GNUC_PRETTY=
 GNUC_UNUSED=
 BREAKPOINT="G_STMT_START { raise (SIGTRAP); } G_STMT_END"
@@ -44,10 +43,11 @@ esac
 
 case $target in
 arm*-darwin*)
-    CFLAGS="$CLAFGS -U_FORTIFY_SOURCE"
+    CFLAGS="$CFLAGS -U_FORTIFY_SOURCE"
     ;;
 esac
 
+AC_SUBST(CFLAGS)
 AC_SUBST(PATHSEP)
 AC_SUBST(SEARCHSEP)
 AC_SUBST(OS)
@@ -84,10 +84,34 @@ else
    G_GUINT64_FORMAT='"llu"'
 fi
 
-PKG_CHECK_MODULES(GLIB, glib-2.0,
-	[AM_CONDITIONAL(HAVE_GLIB, test x = x)],
-	[AM_CONDITIONAL(HAVE_GLIB, test x = y)]
-	)
+AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
+if test "x$PKG_CONFIG" = "xno"; then
+	AC_MSG_ERROR([You need to install pkg-config])
+fi
+
+pkg_config_path=
+AC_ARG_WITH(crosspkgdir, [  --with-crosspkgdir=/path/to/pkg-config/dir      Change pkg-config dir to custom dir],
+	if test x$with_crosspkgdir = "x"; then
+		if test -s $PKG_CONFIG_PATH; then
+			pkg_config_path=$PKG_CONFIG_PATH
+		fi
+	else
+		pkg_config_path=$with_crosspkgdir
+		PKG_CONFIG_PATH=$pkg_config_path
+		export PKG_CONFIG_PATH
+	fi
+)
+
+dnl
+dnl No, you can not replace the call below with a pkg.m4 macro
+dnl
+if $PKG_CONFIG --atleast-version=$GLIB_REQUIRED_VERSION glib-2.0; then
+    have_glib=true;
+else
+    have_glib=false;
+fi
+AM_CONDITIONAL(HAVE_GLIB, $have_glib)
+
 AC_SUBST(GPOINTER_TO_INT)
 AC_SUBST(GPOINTER_TO_UINT)
 AC_SUBST(GINT_TO_POINTER)

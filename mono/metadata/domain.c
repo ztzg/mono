@@ -132,6 +132,7 @@ static const MonoRuntimeInfo supported_runtimes[] = {
 	{"v1.1.4322", "1.0", { {1,0,5000,0}, {7,0,5000,0} }	},
 	{"v2.0.50215","2.0", { {2,0,0,0},    {8,0,0,0} }	},
 	{"v2.0.50727","2.0", { {2,0,0,0},    {8,0,0,0} }	},
+	{"v4.0.20506","4.0", { {4,0,0,0},    {10,0,0,0} }   },
 	{"moonlight", "2.1", { {2,0,5,0},    {9,0,0,0} }    },
 };
 
@@ -221,7 +222,7 @@ jit_info_table_new_chunk (void)
 static MonoJitInfoTable *
 jit_info_table_new (MonoDomain *domain)
 {
-	MonoJitInfoTable *table = g_malloc0 (sizeof (MonoJitInfoTable) + sizeof (MonoJitInfoTableChunk*));
+	MonoJitInfoTable *table = g_malloc0 (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*));
 
 	table->domain = domain;
 	table->num_chunks = 1;
@@ -506,7 +507,7 @@ jit_info_table_realloc (MonoJitInfoTable *old)
 	required_size = (int)((long)num_elements * JIT_INFO_TABLE_FILL_RATIO_DENOM / JIT_INFO_TABLE_FILL_RATIO_NOM);
 	num_chunks = (required_size + MONO_JIT_INFO_TABLE_CHUNK_SIZE - 1) / MONO_JIT_INFO_TABLE_CHUNK_SIZE;
 
-	new = g_malloc (sizeof (MonoJitInfoTable) + sizeof (MonoJitInfoTableChunk*) * num_chunks);
+	new = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*) * num_chunks);
 	new->domain = old->domain;
 	new->num_chunks = num_chunks;
 
@@ -575,7 +576,7 @@ jit_info_table_split_chunk (MonoJitInfoTableChunk *chunk, MonoJitInfoTableChunk 
 static MonoJitInfoTable*
 jit_info_table_copy_and_split_chunk (MonoJitInfoTable *table, MonoJitInfoTableChunk *chunk)
 {
-	MonoJitInfoTable *new_table = g_malloc (sizeof (MonoJitInfoTable)
+	MonoJitInfoTable *new_table = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE
 		+ sizeof (MonoJitInfoTableChunk*) * (table->num_chunks + 1));
 	int i, j;
 
@@ -623,7 +624,7 @@ jit_info_table_purify_chunk (MonoJitInfoTableChunk *old)
 static MonoJitInfoTable*
 jit_info_table_copy_and_purify_chunk (MonoJitInfoTable *table, MonoJitInfoTableChunk *chunk)
 {
-	MonoJitInfoTable *new_table = g_malloc (sizeof (MonoJitInfoTable)
+	MonoJitInfoTable *new_table = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE
 		+ sizeof (MonoJitInfoTableChunk*) * table->num_chunks);
 	int i, j;
 
@@ -1199,7 +1200,9 @@ mono_domain_create (void)
 	domain->jit_info_table = jit_info_table_new (domain);
 	domain->jit_info_free_queue = NULL;
 	domain->finalizable_objects_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
+#ifndef HAVE_SGEN_GC
 	domain->track_resurrection_handles_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
+#endif
 
 	InitializeCriticalSection (&domain->lock);
 	InitializeCriticalSection (&domain->assemblies_lock);
@@ -1442,9 +1445,9 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 		"AsyncResult");
 	g_assert (mono_defaults.asyncresult_class != 0 );
 
-	mono_defaults.waithandle_class = mono_class_from_name (
-		mono_defaults.corlib, "System.Threading", "WaitHandle");
-	g_assert (mono_defaults.waithandle_class != 0 );
+	mono_defaults.manualresetevent_class = mono_class_from_name (
+		mono_defaults.corlib, "System.Threading", "ManualResetEvent");
+	g_assert (mono_defaults.manualresetevent_class != 0 );
 
 	mono_defaults.typehandle_class = mono_class_from_name (
                 mono_defaults.corlib, "System", "RuntimeTypeHandle");
@@ -1562,6 +1565,9 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 
 	mono_defaults.internals_visible_class = mono_class_from_name (
 	        mono_defaults.corlib, "System.Runtime.CompilerServices", "InternalsVisibleToAttribute");
+
+	mono_defaults.critical_finalizer_object = mono_class_from_name (
+		mono_defaults.corlib, "System.Runtime.ConstrainedExecution", "CriticalFinalizerObject");
 
 	/*
 	 * mscorlib needs a little help, only now it can load its friends list (after we have
@@ -1751,6 +1757,28 @@ mono_domain_get ()
 	return GET_APPDOMAIN ();
 }
 
+void
+mono_domain_set_internal_with_options (MonoDomain *domain, gboolean migrate_exception)
+{
+	MonoThread *thread;
+
+	if (mono_domain_get () == domain)
+		return;
+
+	SET_APPDOMAIN (domain);
+	SET_APPCONTEXT (domain->default_context);
+
+	if (migrate_exception) {
+		thread = mono_thread_current ();
+		if (!thread->abort_exc)
+			return;
+
+		g_assert (thread->abort_exc->object.vtable->domain != domain);
+		MONO_OBJECT_SETREF (thread, abort_exc, mono_get_exception_thread_abort ());
+		g_assert (thread->abort_exc->object.vtable->domain == domain);
+	}
+}
+
 /**
  * mono_domain_set_internal:
  * @domain: the new domain
@@ -1760,8 +1788,7 @@ mono_domain_get ()
 void
 mono_domain_set_internal (MonoDomain *domain)
 {
-	SET_APPDOMAIN (domain);
-	SET_APPCONTEXT (domain->default_context);
+	mono_domain_set_internal_with_options (domain, TRUE);
 }
 
 void
@@ -1799,6 +1826,7 @@ mono_domain_foreach (MonoDomainFunc func, gpointer user_data)
 MonoAssembly *
 mono_domain_assembly_open (MonoDomain *domain, const char *name)
 {
+	MonoDomain *current;
 	MonoAssembly *ass;
 	GSList *tmp;
 
@@ -1812,8 +1840,15 @@ mono_domain_assembly_open (MonoDomain *domain, const char *name)
 	}
 	mono_domain_assemblies_unlock (domain);
 
-	if (!(ass = mono_assembly_open (name, NULL)))
-		return NULL;
+	if (domain != mono_domain_get ()) {
+		current = mono_domain_get ();
+
+		mono_domain_set (domain, FALSE);
+		ass = mono_assembly_open (name, NULL);
+		mono_domain_set (current, FALSE);
+	} else {
+		ass = mono_assembly_open (name, NULL);
+	}
 
 	return ass;
 }
@@ -1848,6 +1883,40 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	appdomains_list [domain->domain_id] = NULL;
 	mono_appdomains_unlock ();
 
+	/*
+	 * We must destroy all these hash tables here because they
+	 * contain references to managed objects belonging to the
+	 * domain.  Once we let the GC clear the domain there must be
+	 * no more such references, or we'll crash if a collection
+	 * occurs.
+	 */
+	mono_g_hash_table_destroy (domain->ldstr_table);
+	domain->ldstr_table = NULL;
+
+	mono_g_hash_table_destroy (domain->env);
+	domain->env = NULL;
+
+	mono_reflection_cleanup_domain (domain);
+
+	if (domain->type_hash) {
+		mono_g_hash_table_destroy (domain->type_hash);
+		domain->type_hash = NULL;
+	}
+	if (domain->type_init_exception_hash) {
+		mono_g_hash_table_destroy (domain->type_init_exception_hash);
+		domain->type_init_exception_hash = NULL;
+	}
+
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		MonoAssembly *ass = tmp->data;
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Unloading domain %s %p, assembly %s %p, refcount=%d\n", domain->friendly_name, domain, ass->aname.name, ass, ass->ref_count);
+		mono_assembly_close (ass);
+	}
+	g_slist_free (domain->domain_assemblies);
+	domain->domain_assemblies = NULL;
+
+	mono_gc_clear_domain (domain);
+
 	/* FIXME: free delegate_hash_table when it's used */
 	if (domain->search_path) {
 		g_strfreev (domain->search_path);
@@ -1866,18 +1935,9 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		g_hash_table_destroy (domain->special_static_fields);
 		domain->special_static_fields = NULL;
 	}
-	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
-		MonoAssembly *ass = tmp->data;
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Unloading domain %s %p, assembly %s %p, refcount=%d\n", domain->friendly_name, domain, ass->aname.name, ass, ass->ref_count);
-		mono_assembly_close (ass);
-	}
-	g_slist_free (domain->domain_assemblies);
-	domain->domain_assemblies = NULL;
 
 	g_free (domain->friendly_name);
 	domain->friendly_name = NULL;
-	mono_g_hash_table_destroy (domain->env);
-	domain->env = NULL;
 	g_hash_table_destroy (domain->class_vtable_hash);
 	domain->class_vtable_hash = NULL;
 	g_hash_table_destroy (domain->proxy_vtable_hash);
@@ -1887,8 +1947,6 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		domain->static_data_array = NULL;
 	}
 	mono_internal_hash_table_destroy (&domain->jit_code_hash);
-	mono_g_hash_table_destroy (domain->ldstr_table);
-	domain->ldstr_table = NULL;
 
 	/*
 	 * There might still be jit info tables of this domain which
@@ -1917,26 +1975,17 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	mono_code_manager_destroy (domain->code_mp);
 	domain->code_mp = NULL;
 #endif	
-	if (domain->type_hash) {
-		mono_g_hash_table_destroy (domain->type_hash);
-		domain->type_hash = NULL;
-	}
-	if (domain->refobject_hash) {
-		mono_g_hash_table_destroy (domain->refobject_hash);
-		domain->refobject_hash = NULL;
-	}
-	if (domain->type_init_exception_hash) {
-		mono_g_hash_table_destroy (domain->type_init_exception_hash);
-		domain->type_init_exception_hash = NULL;
-	}
+
 	g_hash_table_destroy (domain->finalizable_objects_hash);
 	domain->finalizable_objects_hash = NULL;
+#ifndef HAVE_SGEN_GC
 	if (domain->track_resurrection_objects_hash) {
 		g_hash_table_foreach (domain->track_resurrection_objects_hash, free_slist, NULL);
 		g_hash_table_destroy (domain->track_resurrection_objects_hash);
 	}
 	if (domain->track_resurrection_handles_hash)
 		g_hash_table_destroy (domain->track_resurrection_handles_hash);
+#endif
 	if (domain->method_rgctx_hash) {
 		g_hash_table_destroy (domain->method_rgctx_hash);
 		domain->method_rgctx_hash = NULL;
@@ -1951,6 +2000,8 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	DeleteCriticalSection (&domain->jit_code_hash_lock);
 	DeleteCriticalSection (&domain->lock);
 	domain->setup = NULL;
+
+	mono_gc_deregister_root ((char*)&(domain->MONO_DOMAIN_FIRST_GC_TRACKED));
 
 	/* FIXME: anything else required ? */
 

@@ -765,7 +765,7 @@ namespace MonoTests.System.Runtime.Serialization
 			using (XmlWriter xw = XmlWriter.Create (sw, settings)) {
 				ser.WriteObject (xw, new SerializeNonDCArrayType ());
 			}
-			Assert.AreEqual (@"<SerializeNonDCArrayType xmlns:i=""http://www.w3.org/2001/XMLSchema-instance"" xmlns=""http://schemas.datacontract.org/2004/07/MonoTests.System.Runtime.Serialization""><IPAddresses xmlns:d2p1=""http://schemas.datacontract.org/2004/07/System.Net"" /></SerializeNonDCArrayType>",
+			Assert.AreEqual (@"<SerializeNonDCArrayType xmlns:i=""http://www.w3.org/2001/XMLSchema-instance"" xmlns=""http://schemas.datacontract.org/2004/07/MonoTests.System.Runtime.Serialization""><IPAddresses /></SerializeNonDCArrayType>",
 				sw.ToString ());
 		}
 
@@ -776,7 +776,7 @@ namespace MonoTests.System.Runtime.Serialization
 			StringWriter sw = new StringWriter ();
 			using (XmlWriter xw = XmlWriter.Create (sw, settings)) {
 				SerializeNonDCArrayType obj = new SerializeNonDCArrayType ();
-				obj.IPAddresses = new IPAddress [] {new IPAddress (new byte [] {1, 2, 3, 4})};
+				obj.IPAddresses = new NonDCItem [] {new NonDCItem () { Data = new int [] {1, 2, 3, 4} } };
 				ser.WriteObject (xw, obj);
 			}
 
@@ -787,11 +787,10 @@ namespace MonoTests.System.Runtime.Serialization
 			nsmgr.AddNamespace ("n", "http://schemas.datacontract.org/2004/07/System.Net");
 			nsmgr.AddNamespace ("a", "http://schemas.microsoft.com/2003/10/Serialization/Arrays");
 
-			Assert.AreEqual (1, doc.SelectNodes ("/s:SerializeNonDCArrayType/s:IPAddresses/n:IPAddress", nsmgr).Count, "#1");
-			Assert.AreEqual ("67305985", doc.SelectSingleNode ("/s:SerializeNonDCArrayType/s:IPAddresses/n:IPAddress/n:m_Address", nsmgr).InnerText, "#2");
-			XmlElement el = doc.SelectSingleNode ("/s:SerializeNonDCArrayType/s:IPAddresses/n:IPAddress/n:m_Numbers", nsmgr) as XmlElement;
+			Assert.AreEqual (1, doc.SelectNodes ("/s:SerializeNonDCArrayType/s:IPAddresses/s:NonDCItem", nsmgr).Count, "#1");
+			XmlElement el = doc.SelectSingleNode ("/s:SerializeNonDCArrayType/s:IPAddresses/s:NonDCItem/s:Data", nsmgr) as XmlElement;
 			Assert.IsNotNull (el, "#3");
-			Assert.AreEqual (8, el.SelectNodes ("a:unsignedShort", nsmgr).Count, "#4");
+			Assert.AreEqual (4, el.SelectNodes ("a:int", nsmgr).Count, "#4");
 		}
 
 		[Test]
@@ -836,6 +835,13 @@ namespace MonoTests.System.Runtime.Serialization
 			//"red" instead of "Red"
 			Deserialize<Colors> (
 				@"<Colors xmlns=""http://schemas.datacontract.org/2004/07/MonoTests.System.Runtime.Serialization"">red</Colors>");
+		}
+
+		[Test]
+		public void DeserializeEnumFlags ()
+		{
+			Deserialize<Colors2> (
+				@"<Colors2 xmlns=""http://schemas.datacontract.org/2004/07/MonoTests.System.Runtime.Serialization""/>");
 		}
 
 		[Test]
@@ -1181,6 +1187,81 @@ namespace MonoTests.System.Runtime.Serialization
 			Assert.AreEqual ("bar", d ["foo"], "#3");
 		}
 
+		[Test]
+		public void SerializeInterfaceCollection ()
+		{
+			var ser = new DataContractSerializer (typeof (InterfaceCollectionType));
+			var sw = new StringWriter ();
+			var obj = new InterfaceCollectionType ();
+			using (var xw = XmlWriter.Create (sw))
+				ser.WriteObject (xw, obj);
+			using (var xr = XmlReader.Create (new StringReader (sw.ToString ()))) {
+				obj = (InterfaceCollectionType) ser.ReadObject (xr);
+				Assert.IsNull (obj.Array, "#1");
+			}
+
+			sw = new StringWriter ();
+			obj.Array = new List<int> ();
+			obj.Array.Add (5);
+			using (var xw = XmlWriter.Create (sw))
+				ser.WriteObject (xw, obj);
+			using (var xr = XmlReader.Create (new StringReader (sw.ToString ()))) {
+				obj = (InterfaceCollectionType) ser.ReadObject (xr);
+				Assert.AreEqual (5, obj.Array [0], "#2");
+			}
+		}
+
+		[Test]
+		public void EmptyChildren ()
+		{
+                string xml = @"
+<DummyPlaylist xmlns='http://example.com/schemas/asx'>
+        <Entries>
+                <DummyEntry>
+                        <EntryInfo xmlns:i='http://www.w3.org/2001/XMLSchema-instance' i:type='PartDummyEntryInfo'/>
+                        <Href>http://vmsservices.example.com:8080/VideoService.svc?crid=45541/part=1/guid=ae968b5d-e4a5-41fe-9b23-ed631b27cd21/</Href>
+                </DummyEntry>
+        </Entries>
+</DummyPlaylist>
+";
+			var reader = XmlReader.Create (new StringReader (xml));
+			DummyPlaylist playlist = (DummyPlaylist) new DataContractSerializer (typeof (DummyPlaylist)).ReadObject (reader);
+			Assert.AreEqual (1, playlist.entries.Count, "#1");
+			Assert.IsTrue (playlist.entries [0] is DummyEntry, "#2");
+			Assert.IsNotNull (playlist.entries [0].Href, "#3");
+		}
+
+		[Test]
+		public void BaseKnownTypeAttributes ()
+		{
+			// bug #524088
+			string xml = @"
+<DummyPlaylist xmlns='http://example.com/schemas/asx'>
+  <Entries>
+    <DummyEntry>
+      <EntryInfo xmlns:i='http://www.w3.org/2001/XMLSchema-instance' i:type='PartDummyEntryInfo'/>
+    </DummyEntry>
+  </Entries>
+</DummyPlaylist>";
+
+			using (XmlReader reader = XmlReader.Create (new StringReader (xml))) {
+				DummyPlaylist playlist = new DataContractSerializer(typeof(DummyPlaylist)).ReadObject(reader) as DummyPlaylist;
+				Assert.IsNotNull (playlist);
+			}
+		}
+
+		[Test]
+		public void Bug524083 ()
+		{
+			string xml = @"
+<AsxEntryInfo xmlns='http://example.com/schemas/asx'>
+	<AdvertPrompt/>
+</AsxEntryInfo>";
+						
+			using (XmlReader reader = XmlReader.Create (new StringReader (xml)))
+				new DataContractSerializer(typeof (AsxEntryInfo)).ReadObject (reader);
+		}
+		
 		private T Deserialize<T> (string xml)
 		{
 			return Deserialize<T> (xml, typeof (T));
@@ -1194,9 +1275,71 @@ namespace MonoTests.System.Runtime.Serialization
 			Assert.AreEqual (runtimeType, o.GetType (), "#DS0");
 			return (T)o;
 		}
- 	}
- 
+
+		public Dictionary<string, object> GenericDictionary (Dictionary<string, object> settings)
+		{
+			using (MemoryStream ms = new MemoryStream ()) {
+				DataContractSerializer save = new DataContractSerializer (settings.GetType ());
+				save.WriteObject (ms, settings);
+
+				ms.Position = 0;
+
+				DataContractSerializer load = new DataContractSerializer (typeof (Dictionary<string, object>));
+				return (Dictionary<string, object>) load.ReadObject (ms);
+			}
+		}
+
+		[Test]
+		public void GenericDictionaryEmpty ()
+		{
+			Dictionary<string, object> in_settings = new Dictionary<string, object> ();
+			Dictionary<string, object> out_settings = GenericDictionary (in_settings);
+			out_settings.Clear ();
+		}
+
+		[Test]
+		public void GenericDictionaryOneElement ()
+		{
+			Dictionary<string, object> in_settings = new Dictionary<string, object> ();
+			in_settings.Add ("one", "ONE");
+			Dictionary<string, object> out_settings = GenericDictionary (in_settings);
+			Assert.AreEqual ("ONE", out_settings ["one"], "out");
+			out_settings.Clear ();
+		}
+
+		[Test]
+		public void IgnoreDataMember ()
+		{
+			var ser = new DataContractSerializer (typeof (MemberIgnored));
+			var sw = new StringWriter ();
+			using (var w = XmlWriter.Create (sw, settings)) {
+				ser.WriteObject (w, new MemberIgnored ());
+			}
+			Assert.AreEqual (@"<MemberIgnored xmlns:i=""http://www.w3.org/2001/XMLSchema-instance"" xmlns=""http://schemas.datacontract.org/2004/07/MonoTests.System.Runtime.Serialization""><body><Bar>bar</Bar></body></MemberIgnored>", sw.ToString (), "#1");
+		}
+	}
+
+	[DataContract]
+	public class MemberIgnored
+	{
+		[DataMember]
+		MemberIgnoredBody body = new MemberIgnoredBody ();
+	}
+
+	public class MemberIgnoredBody
+	{
+		[IgnoreDataMember]
+		public string Foo = "foo";
+
+		public string Bar = "bar";
+	}
+
 	public enum Colors {
+		Red, Green, Blue
+	}
+
+	[Flags]
+	public enum Colors2 {
 		Red, Green, Blue
 	}
 
@@ -1384,7 +1527,12 @@ namespace MonoTests.System.Runtime.Serialization
 	class SerializeNonDCArrayType
 	{
 		[DataMember]
-		public IPAddress [] IPAddresses = new IPAddress [0];
+		public NonDCItem [] IPAddresses = new NonDCItem [0];
+	}
+
+	public class NonDCItem
+	{
+		public int [] Data { get; set; }
 	}
 
 	[DataContract]
@@ -1450,6 +1598,12 @@ namespace MonoTests.System.Runtime.Serialization
 		public string this [int index] { get { return l [index]; } set { l [index] = value; } }
 	}
 
+	[DataContract]
+	internal class InterfaceCollectionType
+	{
+		[DataMember]
+		public IList<int> Array { get; set; }
+	}
 }
 
 [DataContract]
@@ -1467,4 +1621,44 @@ class Foo<X,Y,Z>
 [CollectionDataContract (Name = "NAME", Namespace = "urn:foo", ItemName = "ITEM", KeyName = "KEY", ValueName = "VALUE")]
 public class MyDictionary<K,V> : Dictionary<K,V>
 {
+}
+
+// bug #524086
+[DataContract(Namespace="http://example.com/schemas/asx")]
+public class DummyEntry
+{
+    [DataMember]
+    public DummyEntryInfo EntryInfo { get; set; }
+    [DataMember]
+    public string Href { get; set; }
+}
+
+[DataContract(Namespace="http://example.com/schemas/asx"),
+KnownType(typeof(PartDummyEntryInfo))]
+public abstract class DummyEntryInfo
+{
+}
+
+[DataContract(Namespace="http://example.com/schemas/asx")]
+public class DummyPlaylist
+{
+    public IList<DummyEntry> entries = new List<DummyEntry> ();
+
+    [DataMember]
+    public IList<DummyEntry> Entries { get { return entries; } set {entries = value;} }
+}
+
+[DataContract(Namespace="http://example.com/schemas/asx")]
+public class PartDummyEntryInfo : DummyEntryInfo
+{
+    public PartDummyEntryInfo() {}
+}
+
+// bug #524088
+
+[DataContract(Namespace="http://example.com/schemas/asx")]
+public class AsxEntryInfo
+{
+    [DataMember]
+    public string AdvertPrompt { get; set; }
 }

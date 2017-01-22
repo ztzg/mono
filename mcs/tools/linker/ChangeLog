@@ -1,3 +1,66 @@
+2009-09-10  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Mono.Linker.Steps/MarkStep.cs: Make IgnoreScope() virtual to
+	  prevent marking custom attributes of foreign assemblies in a
+	  derived step in the tuner. ( r: jb )
+
+2009-09-09  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Mono.Linker.Steps/MarkStep.cs: Visibility changes needed by
+	  the need of some new tuner step to redefine or call some
+	  methods.
+
+2009-07-02  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: fix cecil's location.
+
+2009-06-09  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Mono.Linker.Steps/BaseStep.cs: New virtual API needed.
+
+	* Mono.Linker/Pipeline.cs: API love.
+
+2009-06-09  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Mono.Linker.csproj: Update.
+
+	* Mono.Linker/Driver.cs: Prevent InvalidCastException.
+
+2009-06-05  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Linker.Steps/MarkStep.cs: fix a nre.
+	Based on patch by Andres G. Aragoneses  <aaragoneses@novell.com>.
+
+2009-06-05  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Linker.Steps/ResolveFromXmlStep.cs: more ways of choosing fields.
+
+2009-06-05  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Linker.Steps/ResolveFromXmlStep.cs: give us more
+	possibilities to detail the xml descriptors.
+
+2009-06-04  Jb Evain  <jbevain@novell.com>
+
+	* Mono.Linker.Steps/ResolveFromXmlStep.cs: fix handling
+	of wildcards constructors.
+
+2009-04-23  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Mono.Linker/Driver.cs: Report error and exit if it cannot
+	  resolve some type (useful to avoid an ugly TypeLoadException
+	  when specifying an erroneus custom step).
+
+2009-04-21  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Driver.cs: Postprocess custom steps in order to make them
+	able to find steps determined by the resolve method. Fixes
+	#493702.
+
+2009-04-08  Andrés G. Aragoneses  <aaragoneses@novell.com>
+
+	* Mono.Linker.csproj: Update.
+
 2009-02-18  Jb Evain  <jbevain@novell.com>
 
 	* Mono.Linker/XApiService.cs: delete, unused.

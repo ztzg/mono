@@ -27,14 +27,12 @@
 //
 
 using System;
+using System.IO;
 using System.Runtime.Serialization;
 using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Text;
 using System.Xml;
-#if NET_2_1
-using System.Xml.Linq;
-#endif
 
 namespace System.ServiceModel.Channels
 {
@@ -201,37 +199,49 @@ namespace System.ServiceModel.Channels
 
 		public override bool Relay { get { return default_relay; }}
 
-#if NET_2_1 // FIXME: this should be rewritten to eliminate XmlElement
 		internal class RawMessageHeader : MessageHeader
 		{
-			XElement element;
 			string soap_ns;
 			bool is_ref, must_understand, relay;
 			string actor;
+			string body;
+			string local_name;
+			string namespace_uri;
 
 			public RawMessageHeader (XmlReader reader, string soap_ns)
 			{
 				Id = reader.GetAttribute ("Id", Constants.WsuNamespace);
 
-				// FIXME: fill is_ref
 				string s = reader.GetAttribute ("relay", soap_ns);
 				relay = s != null ? XmlConvert.ToBoolean (s) : false;
 				s = reader.GetAttribute ("mustUnderstand", soap_ns);
 				must_understand = s != null ? XmlConvert.ToBoolean (s) : false;
-				actor = reader.GetAttribute ("actor", soap_ns);
-				element = XElement.Load (reader);
+				actor = reader.GetAttribute ("actor", soap_ns) ?? String.Empty;
+
+				s = reader.GetAttribute ("IsReferenceParameter", Constants.WsaNamespace);
+				is_ref = s != null ? XmlConvert.ToBoolean (s) : false;
+
+				local_name = reader.LocalName;
+				namespace_uri = reader.NamespaceURI;
+				body = reader.ReadOuterXml ();
 			}
 
 			public XmlReader CreateReader ()
 			{
-				return element.CreateReader ();
+				var reader = XmlReader.Create (new StringReader (body));
+				reader.MoveToContent ();
+				return reader;
 			}
 
 			protected override void OnWriteHeaderContents (
 				XmlDictionaryWriter writer, MessageVersion version)
 			{
-				foreach (var n in element.Nodes ())
-					n.WriteTo (writer);
+				var r = CreateReader ();
+				r.MoveToContent ();
+				if (r.IsEmptyElement)
+					return; // write nothing
+				for (r.Read (); r.NodeType != XmlNodeType.EndElement;)
+					writer.WriteNode (r, false);
 			}
 
 			public override string Actor { get { return actor; }}
@@ -240,60 +250,12 @@ namespace System.ServiceModel.Channels
 
 			public override bool MustUnderstand { get { return must_understand; }}
 
-			public override string Name { get { return element.Name.LocalName; }}
+			public override string Name { get { return local_name; }}
 
-			public override string Namespace { get { return element.Name.NamespaceName; }}
-
-			public override bool Relay { get { return relay; }}
-		}
-#else
-		internal class RawMessageHeader : MessageHeader
-		{
-			XmlElement source;
-			string soap_ns;
-			bool is_ref, must_understand, relay;
-			string actor;
-
-			public RawMessageHeader (XmlElement source, string soap_ns)
-			{
-				this.source = source;
-
-				Id = source.HasAttribute ("Id", Constants.WsuNamespace) ?
-					source.GetAttribute ("Id", Constants.WsuNamespace) :
-					null;
-
-				// FIXME: fill is_ref
-				string s = source.GetAttribute ("relay", soap_ns);
-				relay = s.Length > 0 ? XmlConvert.ToBoolean (s) : false;
-				s = source.GetAttribute ("mustUnderstand", soap_ns);
-				must_understand = s.Length > 0 ? XmlConvert.ToBoolean (s) : false;
-				actor = source.GetAttribute ("actor", soap_ns);
-			}
-
-			public XmlReader CreateReader ()
-			{
-				return new XmlNodeReader (source);
-			}
-
-			protected override void OnWriteHeaderContents (
-				XmlDictionaryWriter writer, MessageVersion version)
-			{
-				source.WriteContentTo (writer);
-			}
-
-			public override string Actor { get { return actor; }}
-
-			public override bool IsReferenceParameter { get { return is_ref; }}
-
-			public override bool MustUnderstand { get { return must_understand; }}
-
-			public override string Name { get { return source.LocalName; }}
-
-			public override string Namespace { get { return source.NamespaceURI; }}
+			public override string Namespace { get { return namespace_uri; }}
 
 			public override bool Relay { get { return relay; }}
 		}
-#endif
 
 		internal class DefaultMessageHeader : MessageHeader
 		{
@@ -324,6 +286,8 @@ namespace System.ServiceModel.Channels
 				else
 					this.formatter.WriteObjectContent (writer, value);
 			}
+
+			public object Value { get { return value; } }
 
 			public override string Actor { get { return actor; }}
 

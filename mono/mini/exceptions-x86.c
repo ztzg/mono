@@ -24,6 +24,7 @@
 
 #include "mini.h"
 #include "mini-x86.h"
+#include "tasklets.h"
 #include "debug-mini.h"
 
 #ifdef PLATFORM_WIN32
@@ -373,8 +374,8 @@ throw_exception (unsigned long eax, unsigned long ecx, unsigned long edx, unsign
 	if (!restore_context)
 		restore_context = mono_arch_get_restore_context ();
 
-	/* Pop argument and return address */
-	ctx.esp = esp + (2 * sizeof (gpointer));
+	/* Pop alignment added in get_throw_exception (), the return address, plus the argument and the alignment added at the call site */
+	ctx.esp = esp + 8 + MONO_ARCH_FRAME_ALIGNMENT;
 	ctx.eip = eip;
 	ctx.ebp = ebp;
 	ctx.edi = edi;
@@ -383,6 +384,11 @@ throw_exception (unsigned long eax, unsigned long ecx, unsigned long edx, unsign
 	ctx.edx = edx;
 	ctx.ecx = ecx;
 	ctx.eax = eax;
+
+#ifdef __APPLE__
+	/* The OSX ABI specifies 16 byte alignment at call sites */
+	g_assert ((ctx.esp % MONO_ARCH_FRAME_ALIGNMENT) == 0);
+#endif
 
 	if (mono_object_isinst (exc, mono_defaults.exception_class)) {
 		MonoException *mono_ex = (MonoException*)exc;
@@ -411,6 +417,7 @@ throw_exception (unsigned long eax, unsigned long ecx, unsigned long edx, unsign
 	ctx.eip -= 1;
 
 	mono_handle_exception (&ctx, exc, (gpointer)eip, FALSE);
+
 	restore_context (&ctx);
 
 	g_assert_not_reached ();
@@ -423,9 +430,13 @@ get_throw_exception (gboolean rethrow)
 
 	start = code = mono_global_codeman_reserve (64);
 
+	/* 
+	 * Align the stack on apple, since we push 10 args, and the call pushed 4 bytes.
+	 */
+	x86_alu_reg_imm (code, X86_SUB, X86_ESP, 4);
 	x86_push_reg (code, X86_ESP);
-	x86_push_membase (code, X86_ESP, 4); /* IP */
-	x86_push_membase (code, X86_ESP, 12); /* exception */
+	x86_push_membase (code, X86_ESP, 8); /* IP */
+	x86_push_membase (code, X86_ESP, 16); /* exception */
 	x86_push_reg (code, X86_EBP);
 	x86_push_reg (code, X86_EDI);
 	x86_push_reg (code, X86_ESI);
@@ -502,26 +513,15 @@ mono_arch_get_rethrow_exception (void)
 gpointer 
 mono_arch_get_throw_exception_by_name (void)
 {
-	static guint8* start;
-	static int inited = 0;
+	guint8* start;
 	guint8 *code;
 
-	if (inited)
-		return start;
+	start = code = mono_global_codeman_reserve (32);
 
-	inited = 1;
-	code = start = mono_global_codeman_reserve (32);
+	/* Not used */
+	x86_breakpoint (code);
 
-	x86_push_membase (code, X86_ESP, 4); /* exception name */
-	x86_push_imm (code, "System");
-	x86_push_imm (code, mono_defaults.exception_class->image);
-	x86_call_code (code, mono_exception_from_name);
-	x86_alu_reg_imm (code, X86_ADD, X86_ESP, 12);
-	/* save the newly create object (overwrite exception name)*/
-	x86_mov_membase_reg (code, X86_ESP, 4, X86_EAX, 4);
-	x86_jump_code (code, mono_arch_get_throw_exception ());
-
-	g_assert ((code - start) < 32);
+	mono_arch_flush_icache (start, code - start);
 
 	return start;
 }
@@ -549,18 +549,28 @@ mono_arch_get_throw_corlib_exception (void)
 	inited = 1;
 	code = start = mono_global_codeman_reserve (64);
 
-	x86_mov_reg_membase (code, X86_EAX, X86_ESP, 4, 4); /* token */
+	/* 
+	 * Align the stack on apple, the caller doesn't do this to save space,
+	 * two arguments + the return addr are already on the stack.
+	 */
+	x86_alu_reg_imm (code, X86_SUB, X86_ESP, 4);
+	x86_mov_reg_membase (code, X86_EAX, X86_ESP, 4 + 4, 4); /* token */
 	x86_alu_reg_imm (code, X86_ADD, X86_EAX, MONO_TOKEN_TYPE_DEF);
+	/* Align the stack on apple */
+	x86_alu_reg_imm (code, X86_SUB, X86_ESP, 8);
 	x86_push_reg (code, X86_EAX);
 	x86_push_imm (code, mono_defaults.exception_class->image);
 	x86_call_code (code, mono_exception_from_token);
-	x86_alu_reg_imm (code, X86_ADD, X86_ESP, 8);
+	x86_alu_reg_imm (code, X86_ADD, X86_ESP, 16);
 	/* Compute caller ip */
-	x86_pop_reg (code, X86_ECX);
-	/* Pop token */
-	x86_alu_reg_imm (code, X86_ADD, X86_ESP, 4);
-	x86_pop_reg (code, X86_EDX);
+	x86_mov_reg_membase (code, X86_ECX, X86_ESP, 4, 4);
+	/* Compute offset */
+	x86_mov_reg_membase (code, X86_EDX, X86_ESP, 4 + 4 + 4, 4);
+	/* Pop everything */
+	x86_alu_reg_imm (code, X86_ADD, X86_ESP, 4 + 4 + 4 + 4);
 	x86_alu_reg_reg (code, X86_SUB, X86_ECX, X86_EDX);
+	/* Align the stack on apple, mirrors the sub in OP_THROW. */
+	x86_alu_reg_imm (code, X86_SUB, X86_ESP, MONO_ARCH_FRAME_ALIGNMENT - 4);
 	/* Push exception object */
 	x86_push_reg (code, X86_EAX);
 	/* Push throw IP */
@@ -592,7 +602,7 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 	if (prev_ji && (ip > prev_ji->code_start && ((guint8*)ip < ((guint8*)prev_ji->code_start) + prev_ji->code_size)))
 		ji = prev_ji;
 	else
-		ji = mono_jit_info_table_find (domain, ip);
+		ji = mini_jit_info_table_find (domain, ip);
 
 	if (managed)
 		*managed = FALSE;
@@ -662,13 +672,13 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 		
 		*new_ctx = *ctx;
 
-		if ((ji = mono_jit_info_table_find (domain, (gpointer)(*lmf)->eip))) {
+		if ((ji = mini_jit_info_table_find (domain, (gpointer)(*lmf)->eip))) {
 		} else {
 			if (!((guint32)((*lmf)->previous_lmf) & 1))
 				/* Top LMF entry */
 				return (gpointer)-1;
 			/* Trampoline lmf frame */
-			memset (res, 0, sizeof (MonoJitInfo));
+			memset (res, 0, MONO_SIZEOF_JIT_INFO);
 			res->method = (*lmf)->method;
 		}
 
@@ -861,7 +871,7 @@ mono_arch_handle_altstack_exception (void *sigctx, gpointer fault_addr, gboolean
 #ifdef MONO_ARCH_USE_SIGACTION
 	MonoException *exc = NULL;
 	ucontext_t *ctx = (ucontext_t*)sigctx;
-	MonoJitInfo *ji = mono_jit_info_table_find (mono_domain_get (), (gpointer)UCONTEXT_REG_EIP (ctx));
+	MonoJitInfo *ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)UCONTEXT_REG_EIP (ctx));
 	gpointer *sp;
 	int frame_size;
 
@@ -871,7 +881,7 @@ mono_arch_handle_altstack_exception (void *sigctx, gpointer fault_addr, gboolean
 	 */
 	if (!ji && fault_addr == (gpointer)UCONTEXT_REG_EIP (ctx)) {
 		glong *sp = (gpointer)UCONTEXT_REG_ESP (ctx);
-		ji = mono_jit_info_table_find (mono_domain_get (), (gpointer)sp [0]);
+		ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)sp [0]);
 		if (ji)
 			UCONTEXT_REG_EIP (ctx) = sp [0];
 	}
@@ -909,4 +919,46 @@ mono_arch_handle_altstack_exception (void *sigctx, gpointer fault_addr, gboolean
 	UCONTEXT_REG_ESP (ctx) = (unsigned long)(sp - 1);
 #endif
 }
+
+#if MONO_SUPPORT_TASKLETS
+MonoContinuationRestore
+mono_tasklets_arch_restore (void)
+{
+	static guint8* saved = NULL;
+	guint8 *code, *start;
+
+	if (saved)
+		return (MonoContinuationRestore)saved;
+	code = start = mono_global_codeman_reserve (48);
+	/* the signature is: restore (MonoContinuation *cont, int state, MonoLMF **lmf_addr) */
+	/* put cont in edx */
+	x86_mov_reg_membase (code, X86_EDX, X86_ESP, 4, 4);
+	/* setup the copy of the stack */
+	x86_mov_reg_membase (code, X86_ECX, X86_EDX, G_STRUCT_OFFSET (MonoContinuation, stack_used_size), 4);
+	x86_shift_reg_imm (code, X86_SHR, X86_ECX, 2);
+	x86_cld (code);
+	x86_mov_reg_membase (code, X86_ESI, X86_EDX, G_STRUCT_OFFSET (MonoContinuation, saved_stack), 4);
+	x86_mov_reg_membase (code, X86_EDI, X86_EDX, G_STRUCT_OFFSET (MonoContinuation, return_sp), 4);
+	x86_prefix (code, X86_REP_PREFIX);
+	x86_movsl (code);
+
+	/* now restore the registers from the LMF */
+	x86_mov_reg_membase (code, X86_ECX, X86_EDX, G_STRUCT_OFFSET (MonoContinuation, lmf), 4);
+	x86_mov_reg_membase (code, X86_EBX, X86_ECX, G_STRUCT_OFFSET (MonoLMF, ebx), 4);
+	x86_mov_reg_membase (code, X86_EBP, X86_ECX, G_STRUCT_OFFSET (MonoLMF, ebp), 4);
+	x86_mov_reg_membase (code, X86_ESI, X86_ECX, G_STRUCT_OFFSET (MonoLMF, esi), 4);
+	x86_mov_reg_membase (code, X86_EDI, X86_ECX, G_STRUCT_OFFSET (MonoLMF, edi), 4);
+
+	/* restore the lmf chain */
+	/*x86_mov_reg_membase (code, X86_ECX, X86_ESP, 12, 4);
+	x86_mov_membase_reg (code, X86_ECX, 0, X86_EDX, 4);*/
+
+	/* state in eax, so it's setup as the return value */
+	x86_mov_reg_membase (code, X86_EAX, X86_ESP, 8, 4);
+	x86_jump_membase (code, X86_EDX, G_STRUCT_OFFSET (MonoContinuation, return_ip));
+	g_assert ((code - start) <= 48);
+	saved = start;
+	return (MonoContinuationRestore)saved;
+}
+#endif
 

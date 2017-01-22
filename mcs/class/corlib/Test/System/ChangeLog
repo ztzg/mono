@@ -1,3 +1,122 @@
+2009-09-24  Zoltan Varga  <vargaz@gmail.com>
+
+	* TypeTest.cs: Add a test for missing.
+
+2009-09-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* StringTest.cs : add more normalization tests.
+
+2009-08-26  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* TimeSpanTest.cs: Add test case where seconds are not specified.
+
+2009-07-31 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	TypeTest.cs: Add test for Type::GetArrayRank.
+
+2009-07-31 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	TypeTest.cs: Add test for Type::DeclaringMethod.
+	In special for throwing when the type is not a
+	generic param and for DeclaringMethod returning
+	a method bound to the right type.
+
+2009-07-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	TypeTest.cs: Fix the test.
+
+2009-07-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	TypeTest.cs: Add test for one-dym multidimensional array
+	created with Type::MakeArrayType (1).
+
+2009-07-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ArrayTest.cs: new LastIndexOf test for 0-length arrays.
+
+2009-07-14 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* AttributeTest.cs: Add tests for user types passed to
+	Attribute.GetCustomAttribute[s].
+	
+2009-07-12  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* TypeTest.cs: Enabled test that was failing due to regression.
+
+2009-07-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* TypeTest.cs: Add a test for #520690. Disable a test which fails on
+	MS.NET.
+
+2009-06-30  Zoltan Varga  <vargaz@gmail.com>
+
+	* IntPtrTest.cs: Disable a test whose corresponding fix was reverted.
+
+	* *.cs: Convert all tests to new-style nunit classes/methods. Enable
+	some hidden tests.
+
+	* ObjectTest.cs RandomTest.cs SByteTest.cs SingleTest.cs 
+	TimeZoneTest.cs UInt16Test.cs UInt32Test.cs UInt64Test.cs 
+	UIntPtrTest.cs ValueTypeTest.cs: Convert all tests to new-style nunit 
+	classes/methods. Enable some hidden tests.
+
+2009-06-26  Robert Jordan  <robertj@gmx.net>
+
+	* StringTest.cs: Convert all tests to new-style nunit 
+	classes/methods.
+
+	* ArrayTest.cs, ConvertTest.cs, DecimalTest.cs, TimeSpanTest.cs:
+	likewise.
+
+	* DecimalTest2.cs: likewise, 5 hidden tests enabled.
+
+2009-06-26  Zoltan Varga  <vargaz@gmail.com>
+
+	* NumberFormatterTest.cs: Convert all tests to new-style nunit 
+	classes/methods.
+
+2009-06-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* StringTest.cs : Fix the previous test. It was expecting wrong
+	  results. Added another NFC composition test.
+
+2009-06-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* DateTimeTest.cs: add test for parsing a negative timezone.
+	* DateTimeOffsetTest.cs: several tests for Parse.
+
+2009-06-16  Zoltan Varga  <vargaz@gmail.com>
+
+	* StringTest.cs: Fix make check.
+
+2009-06-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* StringTest.cs : added string normalization test.
+
+2009-05-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* TypeTest.cs: test for bug #506757.
+
+2009-05-22  Zoltan Varga  <vargaz@gmail.com>
+
+	* LazyTest.cs: New file.
+
+2009-05-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TypeTest.cs: test for bug #503728
+
+2009-05-01  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* AppDomainManagerTest.cs: New. Unit test for CheckSecuritySettings
+
+2009-04-30  Zoltan Varga  <vargaz@gmail.com>
+
+	* AppDomainTest.cs: Add a test for #499013.
+
+2009-04-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* ArrayTest.cs: Add a test for ICollection:IsReadOnly on generic arrays.
+
 2009-03-27  Zoltan Varga  <vargaz@gmail.com>
 
 	* DelegateTest.cs: Mark a test as working.

@@ -14,7 +14,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/ioctl.h>
+#ifdef HAVE_SYS_IOCTL_H
+#  include <sys/ioctl.h>
+#endif
 #include <sys/poll.h>
 #ifdef HAVE_SYS_FILIO_H
 #include <sys/filio.h>     /* defines FIONBIO and FIONREAD */
@@ -332,7 +334,9 @@ int _wapi_connect(guint32 fd, const struct sockaddr *serv_addr,
 							  WAPI_HANDLE_SOCKET,
 							  (gpointer *)&socket_handle);
 				if (ok == FALSE) {
-					g_warning ("%s: error looking up socket handle %p", __func__, handle);
+					/* ECONNRESET means the socket was closed by another thread */
+					if (errnum != WSAECONNRESET)
+						g_warning ("%s: error looking up socket handle %p (error %d)", __func__, handle, errnum);
 				} else {
 					socket_handle->saved_error = errnum;
 				}
@@ -840,7 +844,7 @@ int _wapi_setsockopt(guint32 fd, int level, int optname,
 	/* BSD's and MacOS X multicast sockets also need SO_REUSEPORT when SO_REUSEADDR is requested.  */
 	if (level == SOL_SOCKET && optname == SO_REUSEADDR) {
 		int type;
-		int type_len = sizeof (type);
+		socklen_t type_len = sizeof (type);
 
 		if (!getsockopt (fd, level, SO_TYPE, &type, &type_len)) {
 			if (type == SOCK_DGRAM)
@@ -1249,6 +1253,7 @@ WSAIoctl (guint32 fd, gint32 command,
 	return(0);
 }
 
+#ifndef PLATFORM_PORT_PROVIDES_IOCTLSOCKET
 int ioctlsocket(guint32 fd, gint32 command, gpointer arg)
 {
 	gpointer handle = GUINT_TO_POINTER (fd);
@@ -1282,10 +1287,32 @@ int ioctlsocket(guint32 fd, gint32 command, gpointer arg)
 			}
 			break;
 #endif /* O_NONBLOCK */
-		case FIONREAD:
+			/* Unused in Mono */
 		case SIOCATMARK:
 			ret = ioctl (fd, command, arg);
 			break;
+			
+		case FIONREAD:
+		{
+#if defined (PLATFORM_MACOSX)
+			
+			// ioctl (fd, FIONREAD, XXX) returns the size of
+			// the UDP header as well on
+			// Darwin.
+			//
+			// Use getsockopt SO_NREAD instead to get the
+			// right values for TCP and UDP.
+			// 
+			// ai_canonname can be null in some cases on darwin, where the runtime assumes it will
+			// be the value of the ip buffer.
+
+			socklen_t optlen = sizeof (int);
+			ret = getsockopt (fd, SOL_SOCKET, SO_NREAD, arg, &optlen);
+#else
+			ret = ioctl (fd, command, arg);
+#endif
+			break;
+		}
 		default:
 			WSASetLastError (WSAEINVAL);
 			return(SOCKET_ERROR);
@@ -1399,6 +1426,7 @@ void _wapi_FD_SET(guint32 fd, fd_set *set)
 
 	FD_SET (fd, set);
 }
+#endif
 
 static void
 wsabuf_to_msghdr (WapiWSABuf *buffers, guint32 count, struct msghdr *hdr)

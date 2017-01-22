@@ -2,6 +2,7 @@
 #define __MONO_MINI_X86_H__
 
 #include <mono/arch/x86/x86-codegen.h>
+#include <mono/utils/mono-sigcontext.h>
 #ifdef PLATFORM_WIN32
 #include <windows.h>
 /* use SIG* defines if possible */
@@ -43,7 +44,7 @@ LONG CALLBACK seh_handler(EXCEPTION_POINTERS* ep);
 
 #endif /* PLATFORM_WIN32 */
 
-#if defined( __linux__) || defined(__sun) || defined(__APPLE__) || defined(__NetBSD__)
+#if defined( __linux__) || defined(__sun) || defined(__APPLE__) || defined(__NetBSD__) || defined(__FreeBSD__)
 #define MONO_ARCH_USE_SIGACTION
 #endif
 
@@ -63,6 +64,7 @@ LONG CALLBACK seh_handler(EXCEPTION_POINTERS* ep);
 #endif /* !PLATFORM_WIN32 */
 
 #define MONO_ARCH_SUPPORT_SIMD_INTRINSICS 1
+#define MONO_ARCH_SUPPORT_TASKLETS 1
 
 #ifndef DISABLE_SIMD
 #define MONO_ARCH_SIMD_INTRINSICS 1
@@ -141,62 +143,6 @@ typedef struct {
 	gboolean need_stack_frame;
 } MonoCompileArch;
 
-#if defined(__FreeBSD__) || defined(__APPLE__)
-#include <ucontext.h>
-#endif 
-
-#if defined(__FreeBSD__)
-	#define UCONTEXT_REG_EAX(ctx) ((ctx)->uc_mcontext.mc_eax)
-	#define UCONTEXT_REG_EBX(ctx) ((ctx)->uc_mcontext.mc_ebx)
-	#define UCONTEXT_REG_ECX(ctx) ((ctx)->uc_mcontext.mc_ecx)
-	#define UCONTEXT_REG_EDX(ctx) ((ctx)->uc_mcontext.mc_edx)
-	#define UCONTEXT_REG_EBP(ctx) ((ctx)->uc_mcontext.mc_ebp)
-	#define UCONTEXT_REG_ESP(ctx) ((ctx)->uc_mcontext.mc_esp)
-	#define UCONTEXT_REG_ESI(ctx) ((ctx)->uc_mcontext.mc_esi)
-	#define UCONTEXT_REG_EDI(ctx) ((ctx)->uc_mcontext.mc_edi)
-	#define UCONTEXT_REG_EIP(ctx) ((ctx)->uc_mcontext.mc_eip)
-#elif defined(__APPLE__) && defined(_STRUCT_MCONTEXT)
-	#define UCONTEXT_REG_EAX(ctx) ((ctx)->uc_mcontext->__ss.__eax)
-	#define UCONTEXT_REG_EBX(ctx) ((ctx)->uc_mcontext->__ss.__ebx)
-	#define UCONTEXT_REG_ECX(ctx) ((ctx)->uc_mcontext->__ss.__ecx)
-	#define UCONTEXT_REG_EDX(ctx) ((ctx)->uc_mcontext->__ss.__edx)
-	#define UCONTEXT_REG_EBP(ctx) ((ctx)->uc_mcontext->__ss.__ebp)
-	#define UCONTEXT_REG_ESP(ctx) ((ctx)->uc_mcontext->__ss.__esp)
-	#define UCONTEXT_REG_ESI(ctx) ((ctx)->uc_mcontext->__ss.__esi)
-	#define UCONTEXT_REG_EDI(ctx) ((ctx)->uc_mcontext->__ss.__edi)
-	#define UCONTEXT_REG_EIP(ctx) ((ctx)->uc_mcontext->__ss.__eip)
-#elif defined(__APPLE__) && !defined(_STRUCT_MCONTEXT)
-	#define UCONTEXT_REG_EAX(ctx) ((ctx)->uc_mcontext->ss.eax)
-	#define UCONTEXT_REG_EBX(ctx) ((ctx)->uc_mcontext->ss.ebx)
-	#define UCONTEXT_REG_ECX(ctx) ((ctx)->uc_mcontext->ss.ecx)
-	#define UCONTEXT_REG_EDX(ctx) ((ctx)->uc_mcontext->ss.edx)
-	#define UCONTEXT_REG_EBP(ctx) ((ctx)->uc_mcontext->ss.ebp)
-	#define UCONTEXT_REG_ESP(ctx) ((ctx)->uc_mcontext->ss.esp)
-	#define UCONTEXT_REG_ESI(ctx) ((ctx)->uc_mcontext->ss.esi)
-	#define UCONTEXT_REG_EDI(ctx) ((ctx)->uc_mcontext->ss.edi)
-	#define UCONTEXT_REG_EIP(ctx) ((ctx)->uc_mcontext->ss.eip)
-#elif defined(__NetBSD__)
-	#define UCONTEXT_REG_EAX(ctx) ((ctx)->uc_mcontext.__gregs [_REG_EAX])
-	#define UCONTEXT_REG_EBX(ctx) ((ctx)->uc_mcontext.__gregs [_REG_EBX])
-	#define UCONTEXT_REG_ECX(ctx) ((ctx)->uc_mcontext.__gregs [_REG_ECX])
-	#define UCONTEXT_REG_EDX(ctx) ((ctx)->uc_mcontext.__gregs [_REG_EDX])
-	#define UCONTEXT_REG_EBP(ctx) ((ctx)->uc_mcontext.__gregs [_REG_EBP])
-	#define UCONTEXT_REG_ESP(ctx) ((ctx)->uc_mcontext.__gregs [_REG_ESP])
-	#define UCONTEXT_REG_ESI(ctx) ((ctx)->uc_mcontext.__gregs [_REG_ESI])
-	#define UCONTEXT_REG_EDI(ctx) ((ctx)->uc_mcontext.__gregs [_REG_EDI])
-	#define UCONTEXT_REG_EIP(ctx) ((ctx)->uc_mcontext.__gregs [_REG_EIP])
-#else
-	#define UCONTEXT_REG_EAX(ctx) ((ctx)->uc_mcontext.gregs [REG_EAX])
-	#define UCONTEXT_REG_EBX(ctx) ((ctx)->uc_mcontext.gregs [REG_EBX])
-	#define UCONTEXT_REG_ECX(ctx) ((ctx)->uc_mcontext.gregs [REG_ECX])
-	#define UCONTEXT_REG_EDX(ctx) ((ctx)->uc_mcontext.gregs [REG_EDX])
-	#define UCONTEXT_REG_EBP(ctx) ((ctx)->uc_mcontext.gregs [REG_EBP])
-	#define UCONTEXT_REG_ESP(ctx) ((ctx)->uc_mcontext.gregs [REG_ESP])
-	#define UCONTEXT_REG_ESI(ctx) ((ctx)->uc_mcontext.gregs [REG_ESI])
-	#define UCONTEXT_REG_EDI(ctx) ((ctx)->uc_mcontext.gregs [REG_EDI])
-	#define UCONTEXT_REG_EIP(ctx) ((ctx)->uc_mcontext.gregs [REG_EIP])
-#endif
-
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
 # define SC_EAX sc_eax
 # define SC_EBX sc_ebx
@@ -272,9 +218,7 @@ typedef struct {
 #define MONO_ARCH_HAVE_INVALIDATE_METHOD 1
 #define MONO_ARCH_NEED_GOT_VAR 1
 #define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION 1
-#define MONO_ARCH_ENABLE_EMIT_STATE_OPT 1
 #define MONO_ARCH_ENABLE_MONO_LMF_VAR 1
-#define MONO_ARCH_HAVE_CREATE_TRAMPOLINE_FROM_TOKEN 1
 #define MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE 1
 #define MONO_ARCH_HAVE_ATOMIC_ADD 1
 #define MONO_ARCH_HAVE_ATOMIC_EXCHANGE 1
@@ -283,7 +227,6 @@ typedef struct {
 #define MONO_ARCH_HAVE_TLS_GET 1
 #define MONO_ARCH_IMT_REG X86_EDX
 #define MONO_ARCH_VTABLE_REG X86_EDX
-#define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
 #define MONO_ARCH_RGCTX_REG X86_EDX
 #define MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK 1
 #define MONO_ARCH_HAVE_LIVERANGE_OPS 1
@@ -292,13 +235,15 @@ typedef struct {
 #if defined(__linux__) && !defined(HAVE_MOVING_COLLECTOR)
 #define MONO_ARCH_MONITOR_OBJECT_REG X86_EAX
 #endif
+#define MONO_ARCH_HAVE_STATIC_RGCTX_TRAMPOLINE 1
 
 #define MONO_ARCH_HAVE_CMOV_OPS 1
 
 #ifdef MONO_ARCH_SIMD_INTRINSICS
 #define MONO_ARCH_HAVE_DECOMPOSE_OPTS 1
-#define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 #endif
+
+#define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 
 #if !defined(__APPLE__)
 #define MONO_ARCH_AOT_SUPPORTED 1
@@ -307,6 +252,8 @@ typedef struct {
 #if defined(__linux__) || defined(__sun)
 #define MONO_ARCH_ENABLE_MONITOR_IL_FASTPATH 1
 #endif
+
+#define MONO_ARCH_GSHARED_SUPPORTED 1
 
 /* Used for optimization, not complete */
 #define MONO_ARCH_IS_OP_MEMBASE(opcode) ((opcode) == OP_X86_PUSH_MEMBASE)

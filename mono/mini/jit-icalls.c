@@ -52,8 +52,7 @@ ldvirtfn_internal (MonoObject *obj, MonoMethod *method, gboolean gshared)
 		res = mono_class_inflate_generic_method (res, &context);
 	}
 
-	if (mono_method_needs_static_rgctx_invoke (res, FALSE))
-		res = mono_marshal_get_static_rgctx_invoke (res);
+	/* An rgctx wrapper is added by the trampolines no need to do it here */
 
 	return mono_ldftn (res);
 }
@@ -744,7 +743,7 @@ mono_class_static_field_address (MonoDomain *domain, MonoClassField *field)
 
 	mono_class_init (field->parent);
 
-	vtable = mono_class_vtable (domain, field->parent);
+	vtable = mono_class_vtable_full (domain, field->parent, TRUE);
 	if (!vtable->initialized)
 		mono_runtime_class_init (vtable);
 
@@ -912,9 +911,11 @@ mono_helper_compile_generic_method (MonoObject *obj, MonoMethod *method, gpointe
 	g_assert (!vmethod->klass->generic_container);
 	g_assert (!vmethod->klass->generic_class || !vmethod->klass->generic_class->context.class_inst->is_open);
 	g_assert (!context->method_inst || !context->method_inst->is_open);
-	if (mono_method_needs_static_rgctx_invoke (vmethod, FALSE))
-		vmethod = mono_marshal_get_static_rgctx_invoke (vmethod);
+
 	addr = mono_compile_method (vmethod);
+
+	if (mono_method_needs_static_rgctx_invoke (vmethod, FALSE))
+		addr = mono_create_static_rgctx_trampoline (vmethod, addr);
 
 	/* Since this is a virtual call, have to unbox vtypes */
 	if (obj->vtable->klass->valuetype)

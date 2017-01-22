@@ -181,7 +181,7 @@ struct _MonoImage {
 	/*
 	 * Indexes namespaces to hash tables that map class name to typedef token.
 	 */
-	GHashTable *name_cache;
+	GHashTable *name_cache;  /*protected by the image lock*/
 
 	/*
 	 * Indexed by MonoClass
@@ -218,8 +218,7 @@ struct _MonoImage {
 	GHashTable *synchronized_cache;
 	GHashTable *unbox_wrapper_cache;
 	GHashTable *cominterop_invoke_cache;
-	GHashTable *cominterop_wrapper_cache;
-	GHashTable *static_rgctx_invoke_cache; /* LOCKING: marshal lock */
+	GHashTable *cominterop_wrapper_cache; /* LOCKING: marshal lock */
 	GHashTable *thunk_invoke_cache;
 
 	/*
@@ -254,6 +253,8 @@ struct _MonoImage {
 
 	/* interfaces IDs from this image */
 	MonoBitSet *interface_bitset;
+
+	GSList *reflection_info_unregister_classes;
 
 	/*
 	 * No other runtime locks must be taken while holding this lock.
@@ -343,6 +344,7 @@ struct _MonoDynamicImage {
 	MonoDynamicStream tstream;
 	MonoDynamicStream guid;
 	MonoDynamicTable tables [MONO_TABLE_NUM];
+	MonoClass *wrappers_type; /*wrappers are bound to this type instead of <Module>*/
 };
 
 /* Contains information about assembly binding */
@@ -372,6 +374,8 @@ struct _MonoMethodHeader {
 	MonoExceptionClause *clauses;
 	MonoType    *locals [MONO_ZERO_LEN_ARRAY];
 };
+
+#define MONO_SIZEOF_METHOD_HEADER (sizeof (struct _MonoMethodHeader) - MONO_ZERO_LEN_ARRAY * SIZEOF_VOID_P)
 
 /* for use with allocated memory blocks (assumes alignment is to 8 bytes) */
 guint mono_aligned_addr_hash (gconstpointer ptr) MONO_INTERNAL;
@@ -427,6 +431,7 @@ mono_metadata_interfaces_from_typedef_full  (MonoImage             *image,
 											 guint32                table_index,
 											 MonoClass           ***interfaces,
 											 guint                 *count,
+											 gboolean               heap_alloc_result,
 											 MonoGenericContext    *context) MONO_INTERNAL;
 
 MonoArrayType *
@@ -548,6 +553,14 @@ mono_metadata_get_corresponding_property_from_generic_type_definition (MonoPrope
 
 guint32
 mono_metadata_signature_size (MonoMethodSignature *sig) MONO_INTERNAL;
+
+gboolean mono_image_load_pe_data (MonoImage *image) MONO_INTERNAL;
+
+gboolean mono_image_load_cli_data (MonoImage *image) MONO_INTERNAL;
+
+void mono_image_load_names (MonoImage *image) MONO_INTERNAL;
+
+MonoImage *mono_image_open_raw (const char *fname, MonoImageOpenStatus *status) MONO_INTERNAL;
 
 #endif /* __MONO_METADATA_INTERNALS_H__ */
 

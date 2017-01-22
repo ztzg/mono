@@ -102,7 +102,8 @@ struct _MonoMethodPInvoke {
 
 /* 
  * Stores the default value / RVA of fields.
- * This information is rarely needed, so it is stored separately from MonoClassField.
+ * This information is rarely needed, so it is stored separately from 
+ * MonoClassField.
  */
 typedef struct MonoFieldDefaultValue {
 	/*
@@ -137,6 +138,7 @@ struct _MonoClassField {
 	 * field, it's the offset from the start of the object, if
 	 * it's static, it's from the start of the memory chunk
 	 * allocated for statics for the class.
+	 * For special static fields, this is set to -1 during vtable construction.
 	 */
 	int              offset;
 };
@@ -158,6 +160,8 @@ typedef struct {
 	MonoMethod *str_to_ptr;
 	MonoMarshalField fields [MONO_ZERO_LEN_ARRAY];
 } MonoMarshalType;
+
+#define MONO_SIZEOF_MARSHAL_TYPE (offsetof (MonoMarshalType, fields))
 
 struct _MonoProperty {
 	MonoClass *parent;
@@ -205,6 +209,8 @@ typedef struct {
 	MonoVTable *domain_vtables [MONO_ZERO_LEN_ARRAY];
 } MonoClassRuntimeInfo;
 
+#define MONO_SIZEOF_CLASS_RUNTIME_INFO (sizeof (MonoClassRuntimeInfo) - MONO_ZERO_LEN_ARRAY * SIZEOF_VOID_P)
+
 enum {
 	MONO_RGCTX_INFO_STATIC_DATA,
 	MONO_RGCTX_INFO_KLASS,
@@ -215,7 +221,8 @@ enum {
 	MONO_RGCTX_INFO_GENERIC_METHOD_CODE,
 	MONO_RGCTX_INFO_CLASS_FIELD,
 	MONO_RGCTX_INFO_METHOD_RGCTX,
-	MONO_RGCTX_INFO_METHOD_CONTEXT
+	MONO_RGCTX_INFO_METHOD_CONTEXT,
+	MONO_RGCTX_INFO_REMOTING_INVOKE_WITH_CHECK
 };
 
 typedef struct _MonoRuntimeGenericContextOtherInfoTemplate {
@@ -235,6 +242,8 @@ typedef struct {
 	MonoGenericInst *method_inst;
 	gpointer infos [MONO_ZERO_LEN_ARRAY];
 } MonoMethodRuntimeGenericContext;
+
+#define MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT (sizeof (MonoMethodRuntimeGenericContext) - MONO_ZERO_LEN_ARRAY * SIZEOF_VOID_P)
 
 #define MONO_RGCTX_SLOT_MAKE_RGCTX(i)	(i)
 #define MONO_RGCTX_SLOT_MAKE_MRGCTX(i)	((i) | 0x80000000)
@@ -433,6 +442,8 @@ struct MonoVTable {
         gpointer    vtable [MONO_ZERO_LEN_ARRAY];	
 };
 
+#define MONO_SIZEOF_VTABLE (sizeof (MonoVTable) - MONO_ZERO_LEN_ARRAY * SIZEOF_VOID_P)
+
 #define MONO_VTABLE_IMPLEMENTS_INTERFACE(vt,uiid) (((uiid) <= (vt)->max_interface_id) && ((vt)->interface_bitmap [(uiid) >> 3] & (1 << ((uiid)&7))))
 
 /*
@@ -452,6 +463,7 @@ struct _MonoGenericInst {
 	MonoType *type_argv [MONO_ZERO_LEN_ARRAY];
 };
 
+#define MONO_SIZEOF_GENERIC_INST (sizeof (MonoGenericInst) - MONO_ZERO_LEN_ARRAY * SIZEOF_VOID_P)
 /*
  * The generic context: an instantiation of a set of class and method generic parameters.
  *
@@ -514,6 +526,35 @@ struct _MonoDynamicGenericClass {
 };
 
 /*
+ * A type parameter.
+ */
+struct _MonoGenericParam {
+	MonoGenericContainer *owner;	/* Type or method this parameter was defined in. */
+	guint16 num;
+	/* 
+	 * If owner is NULL, or owner is 'owned' by this gparam,
+	 * then this is the image whose mempool this struct was allocated from.
+	 * The second case happens for gparams created in
+	 * mono_reflection_initialize_generic_parameter ().
+	 */
+	MonoImage *image;
+};
+
+/* Additional details about a MonoGenericParam */
+typedef struct {
+	MonoClass *pklass;		/* The corresponding `MonoClass'. */
+	const char *name;
+	guint16 flags;
+	guint32 token;
+	MonoClass** constraints; /* NULL means end of list */
+} MonoGenericParamInfo;
+
+typedef struct {
+	MonoGenericParam param;
+	MonoGenericParamInfo info;
+} MonoGenericParamFull;
+
+/*
  * The generic container.
  *
  * Stores the type parameters of a generic type definition or a generic method definition.
@@ -533,22 +574,23 @@ struct _MonoGenericContainer {
 	/* Invariant: parent != NULL => is_method */
 	int is_method    : 1;
 	/* Our type parameters. */
-	MonoGenericParam *type_params;
-};
+	MonoGenericParamFull *type_params;
 
-/*
- * A type parameter.
- */
-struct _MonoGenericParam {
-	MonoGenericContainer *owner;	/* Type or method this parameter was defined in. */
-	MonoClass *pklass;		/* The corresponding `MonoClass'. */
-	const char *name;
-	guint16 flags;
-	guint16 num;
-	MonoClass** constraints; /* NULL means end of list */
-	/* If owner is NULL, this is the image whose mempool this struct was allocated from */
+	/* 
+	 * For owner-less containers created by SRE, the image the container was
+	 * allocated from.
+	 */
 	MonoImage *image;
 };
+
+#define mono_generic_container_get_param(gc, i) ((MonoGenericParam *) ((gc)->type_params + (i)))
+#define mono_generic_container_get_param_info(gc, i) (&((gc)->type_params + (i))->info)
+
+#define mono_generic_param_owner(p)		((p)->owner)
+#define mono_generic_param_num(p)		((p)->num)
+#define mono_generic_param_info(p)		(mono_generic_param_owner (p) ? &((MonoGenericParamFull *) p)->info : NULL)
+#define mono_type_get_generic_param_owner(t)	(mono_generic_param_owner ((t)->data.generic_param))
+#define mono_type_get_generic_param_num(t)	(mono_generic_param_num   ((t)->data.generic_param))
 
 /*
  * Class information which might be cached by the runtime in the AOT file for
@@ -806,6 +848,9 @@ mono_class_get_vtable_entry (MonoClass *class, int offset) MONO_INTERNAL;
 GPtrArray*
 mono_class_get_implemented_interfaces (MonoClass *klass) MONO_INTERNAL;
 
+int
+mono_class_get_vtable_size (MonoClass *klass) MONO_INTERNAL;
+
 gboolean
 mono_class_is_open_constructed_type (MonoType *t) MONO_INTERNAL;
 
@@ -928,7 +973,7 @@ typedef struct {
 	MonoClass *delegate_class;
 	MonoClass *multicastdelegate_class;
 	MonoClass *asyncresult_class;
-	MonoClass *waithandle_class;
+	MonoClass *manualresetevent_class;
 	MonoClass *typehandle_class;
 	MonoClass *fieldhandle_class;
 	MonoClass *methodhandle_class;
@@ -970,6 +1015,7 @@ typedef struct {
 	MonoClass *handleref_class;
 	MonoClass *attribute_class;
 	MonoClass *customattribute_data_class;
+	MonoClass *critical_finalizer_object;
 } MonoDefaults;
 
 extern MonoDefaults mono_defaults MONO_INTERNAL;
@@ -1034,6 +1080,10 @@ mono_metadata_load_generic_params (MonoImage *image, guint32 token,
 void
 mono_metadata_load_generic_param_constraints (MonoImage *image, guint32 token,
 					      MonoGenericContainer *container);
+
+gboolean
+mono_metadata_load_generic_param_constraints_full (MonoImage *image, guint32 token,
+					      MonoGenericContainer *container) MONO_INTERNAL;
 
 MonoMethodSignature*
 mono_create_icall_signature (const char *sigstr) MONO_INTERNAL;
@@ -1104,6 +1154,9 @@ mono_class_get_method_generic (MonoClass *klass, MonoMethod *method) MONO_INTERN
 
 MonoType*
 mono_type_get_basic_type_from_generic (MonoType *type) MONO_INTERNAL;
+
+void
+mono_set_generic_sharing_supported (gboolean supported) MONO_INTERNAL;
 
 gboolean
 mono_class_generic_sharing_enabled (MonoClass *class) MONO_INTERNAL;
@@ -1182,5 +1235,14 @@ mono_class_alloc_ext (MonoClass *klass) MONO_INTERNAL;
 
 void
 mono_class_setup_interfaces (MonoClass *klass) MONO_INTERNAL;
+
+MonoClassField*
+mono_class_get_field_from_name_full (MonoClass *klass, const char *name, MonoType *type) MONO_INTERNAL;
+
+MonoVTable*
+mono_class_vtable_full (MonoDomain *domain, MonoClass *class, gboolean raise_on_error) MONO_INTERNAL;
+
+gboolean
+mono_class_is_assignable_from_slow (MonoClass *target, MonoClass *candidate) MONO_INTERNAL;
 
 #endif /* __MONO_METADATA_CLASS_INTERBALS_H__ */

@@ -36,7 +36,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 using System.Security.AccessControl;
 #endif
 
@@ -93,7 +93,7 @@ namespace System.IO {
 			}
 		}
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 		public bool IsReadOnly {
 			get {
 				if (!Exists)
@@ -271,7 +271,7 @@ namespace System.IO {
 #endif
 		}
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 		public FileSecurity GetAccessControl ()
 		{
 			throw new NotImplementedException ();
@@ -286,7 +286,32 @@ namespace System.IO {
 		public FileInfo Replace (string destinationFileName,
 					 string destinationBackupFileName)
 		{
-			throw new NotImplementedException ();
+			string destinationFullPath = null;
+			if (!Exists)
+                		throw new FileNotFoundException ();
+			if (destinationFileName == null)
+                		throw new ArgumentNullException ("destinationFileName");
+            		if (destinationFileName.Length == 0)
+                		throw new ArgumentException ("An empty file name is not valid.", "destinationFileName");
+
+			destinationFullPath = Path.GetFullPath (destinationFileName);
+
+			if (!File.Exists (destinationFullPath))
+				throw new FileNotFoundException ();
+
+			FileAttributes attrs = File.GetAttributes (destinationFullPath);
+
+			if ( (attrs & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+					throw new UnauthorizedAccessException (); 
+
+            		if (destinationBackupFileName != null) {
+                		if (destinationBackupFileName.Length == 0)
+                    			throw new ArgumentException ("An empty file name is not valid.", "destinationBackupFileName");
+                		File.Copy (destinationFullPath, Path.GetFullPath (destinationBackupFileName), true);
+            		}
+            		File.Copy (FullPath, destinationFullPath,true);
+            		File.Delete (FullPath);
+			return new FileInfo (destinationFullPath);
 		}
 		
 		[ComVisible (false)]

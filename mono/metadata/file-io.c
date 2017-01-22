@@ -14,7 +14,6 @@
 #include <glib.h>
 #include <string.h>
 #include <errno.h>
-#include <signal.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -188,7 +187,7 @@ static void convert_win32_file_attribute_data (const WIN32_FILE_ATTRIBUTE_DATA *
 	while (name [len])
 		++ len;
 
-	stat->name = mono_string_new_utf16 (mono_domain_get (), name, len);
+	MONO_STRUCT_SETREF (stat, name, mono_string_new_utf16 (mono_domain_get (), name, len));
 }
 
 /* Managed file attributes have nearly but not quite the same values
@@ -1044,12 +1043,11 @@ ves_icall_System_IO_MonoIO_GetTempPath (MonoString **mono_name)
 	
 	if(ret>0) {
 #ifdef DEBUG
-		g_message (G_GNUC_PRETTY_FUNCTION
-			   ": Temp path is [%s] (len %d)", name, ret);
+		g_message ("%s: Temp path is [%s] (len %d)", __func__, name, ret);
 #endif
 
-		*mono_name=mono_string_new_utf16 (mono_domain_get (), name,
-						  ret);
+		mono_gc_wbarrier_generic_store ((gpointer) mono_name,
+				(MonoObject*) mono_string_new_utf16 (mono_domain_get (), name, ret));
 	}
 
 	g_free (name);

@@ -27,11 +27,7 @@
 using System;
 using System.Collections.Generic;
 
-#if MONO_STRICT
-namespace System.Data.Linq.Identity
-#else
 namespace DbLinq.Data.Linq.Identity
-#endif
 {
     /// <summary>
     /// Identifies an object in a unique way (think Primay Keys in a database table)
@@ -42,12 +38,10 @@ namespace DbLinq.Data.Linq.Identity
     /// Example: to store Product with ProductID=1, we use the following IdentityKey:
     ///  IdentityKey{Type=Product, Keys={1}}
     /// </summary>
-#if MONO_STRICT
-    internal
-#else
+#if !MONO_STRICT
     public
 #endif
-    class IdentityKey
+    sealed class IdentityKey
     {
         /// <summary>
         /// Entity type
@@ -57,6 +51,8 @@ namespace DbLinq.Data.Linq.Identity
         /// Entity keys
         /// </summary>
         public IList<object> Keys { get; private set; }
+
+        private readonly int hashCode;
 
         /// <summary>
         /// Determines equality between two refs
@@ -84,12 +80,7 @@ namespace DbLinq.Data.Linq.Identity
         /// <returns></returns>
         public override int GetHashCode()
         {
-            int hash = Type.GetHashCode();
-            foreach (object key in Keys)
-            {
-                hash ^= key.GetHashCode();
-            }
-            return hash;
+            return hashCode;
         }
 
         /// <summary>
@@ -101,6 +92,13 @@ namespace DbLinq.Data.Linq.Identity
         {
             Type = type;
             Keys = new List<object>(keys);
+
+            // Done here becouse IdentityKeys exists to be keys in dictionaries...
+            hashCode = type.GetHashCode();
+            foreach (object key in keys)
+            {
+                hashCode ^= key.GetHashCode();
+            }
         }
 
         /// <summary>
@@ -112,6 +110,13 @@ namespace DbLinq.Data.Linq.Identity
         {
             Type = type;
             Keys = new List<object>(keys);
+
+            // Done here becouse IdentityKeys exists to be keys in dictionaries...
+            hashCode = Type.GetHashCode();
+            foreach (object key in Keys)
+            {
+                hashCode ^= key.GetHashCode();
+            }
         }
     }
 }

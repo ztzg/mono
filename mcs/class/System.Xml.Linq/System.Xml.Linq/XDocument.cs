@@ -122,7 +122,7 @@ namespace System.Xml.Linq
 
 		public static XDocument Load (XmlReader reader, LoadOptions options)
 		{
-			XmlReaderSettings s = reader.Settings.Clone ();
+			XmlReaderSettings s = reader.Settings != null ? reader.Settings.Clone () : new XmlReaderSettings ();
 			s.IgnoreWhitespace = (options & LoadOptions.PreserveWhitespace) == 0;
 			using (XmlReader r = XmlReader.Create (reader, s)) {
 				return LoadCore (r, options);
@@ -181,13 +181,9 @@ namespace System.Xml.Linq
 		public void Save (string filename, SaveOptions options)
 		{
 			XmlWriterSettings s = new XmlWriterSettings ();
-			if ((options & SaveOptions.DisableFormatting) == 0) {
-				// hacky!
+			if ((options & SaveOptions.DisableFormatting) == SaveOptions.None)
 				s.Indent = true;
-				s.IndentChars = String.Empty;
-				s.NewLineChars = String.Empty;
-			}
-			using (XmlWriter w = XmlWriter.Create (filename)) {
+			using (XmlWriter w = XmlWriter.Create (filename, s)) {
 				Save (w);
 			}
 		}

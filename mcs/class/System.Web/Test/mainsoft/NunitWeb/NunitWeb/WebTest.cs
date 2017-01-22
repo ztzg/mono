@@ -123,9 +123,7 @@ namespace MonoTests.SystemWeb.Framework
 		/// <seealso cref="MonoTests.SystemWeb.Framework.Response.Body"/>
 		public string Run ()
 		{
-#if NET_2_0
-			global::System.Web.Compilation.BuildManager.suppressDebugModeMessages = true;
-#endif
+			SystemWebTestShim.BuildManager.SuppressDebugModeMessages ();
 
 			if (Request.Url == null)
 				Request.Url = Invoker.GetDefaultUrl ();
@@ -349,6 +347,21 @@ namespace MonoTests.SystemWeb.Framework
 #endif
 		}
 
+		static WebTestResourcesSetupAttribute.SetupHandler CheckResourcesSetupHandler ()
+		{
+			// It is assumed WebTest is included in the same assembly which contains the
+			// tests themselves
+			object[] attributes = typeof (WebTest).Assembly.GetCustomAttributes (typeof (WebTestResourcesSetupAttribute), true);
+			if (attributes == null || attributes.Length == 0)
+				return null;
+			
+			WebTestResourcesSetupAttribute attr = attributes [0] as WebTestResourcesSetupAttribute;
+			if (attr == null)
+				return null;
+
+			return attr.Handler;
+		}
+		
 		public static void EnsureHosting ()
 		{
 			if (host != null)
@@ -360,7 +373,12 @@ namespace MonoTests.SystemWeb.Framework
 			host = AppDomain.CurrentDomain.GetData (HOST_INSTANCE_NAME) as MyHost;
 			if (host != null)
 				return;
-			CopyResources ();
+			WebTestResourcesSetupAttribute.SetupHandler resHandler = CheckResourcesSetupHandler ();
+			if (resHandler == null)
+				CopyResources ();
+			else
+				resHandler ();
+			
 			foreach (Assembly ass in AppDomain.CurrentDomain.GetAssemblies ())
 				LoadAssemblyRecursive (ass);
 
@@ -425,13 +443,23 @@ namespace MonoTests.SystemWeb.Framework
 		}
 
 		public static event EventHandler AppUnloaded;
-			
+
+		public static string TestBaseDir {
+			get {
+#if !TARGET_JVM
+				return baseDir;
+#else
+				return String.Empty;
+#endif
+			}
+		}
+		
 #if !TARGET_JVM
 		const string VIRTUAL_BASE_DIR = "/NunitWeb";
 		private static string baseDir;
 		private static string binDir;
 		const string HOST_INSTANCE_NAME = "MonoTests/SysWeb/Framework/Host";
-
+		
 		static void LoadAssemblyRecursive (Assembly ass)
 		{
 			if (ass.GlobalAssemblyCache)
@@ -506,7 +534,6 @@ namespace MonoTests.SystemWeb.Framework
 		{
 			CopyResource (typeof (WebTest), "My.ashx", "My.ashx");
 			CopyResource (typeof (WebTest), "Global.asax", "Global.asax");
-			CopyResource (typeof (WebTest), "Global.asax.cs", "Global.asax.cs");
 #if VISUAL_STUDIO
 			CopyResource (typeof (WebTest),
 				"MonoTests.SystemWeb.Framework.Resources.Web.config",

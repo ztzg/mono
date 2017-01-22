@@ -31,14 +31,13 @@ using System.Data;
 using System.Linq;
 
 #if MONO_STRICT
-using DataContext = System.Data.Linq.DataContext;
-using Data = System.Data;
 using System.Data.Linq;
 #else
-using DataContext = DbLinq.Data.Linq.DataContext;
-using Data = DbLinq.Data;
 using DbLinq.Data.Linq;
 #endif
+
+using Data = DbLinq.Data;
+
 using IExecuteResult = System.Data.Linq.IExecuteResult;
 
 namespace DbLinq.Vendor.Implementation
@@ -47,12 +46,10 @@ namespace DbLinq.Vendor.Implementation
     /// some IVendor functionality is the same for many vendors,
     /// implemented here as virtual functions.
     /// </summary>
-#if MONO_STRICT
-    internal
-#else
+#if !MONO_STRICT
     public
 #endif
- abstract partial class Vendor : IVendor
+    abstract partial class Vendor : IVendor
     {
         /// <summary>
         /// Pings requested DB, true is result is OK.
@@ -166,21 +163,25 @@ namespace DbLinq.Vendor.Implementation
         /// </summary>
         public IDbConnection CreateDbConnection(string connectionString)
         {
-            var reConnectionType = new System.Text.RegularExpressions.Regex(@"DbLinqConnectionType=([^;]+)");
+            var reConnectionType = new System.Text.RegularExpressions.Regex(@"DbLinqConnectionType=([^;]*);?");
+            string connTypeVal = null;
             if (!reConnectionType.IsMatch(connectionString))
-                throw new ArgumentException("No DbLinqConnectionType parameter found.  " +
-                    "Please specify the assembly qualified type name to use for the Connection Type.",
-                    "connectionString");
+            {
+                connTypeVal = "System.Data.SqlClient.SqlConnection, System.Data, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089";
+            }
+            else
+            {
+                var    match        = reConnectionType.Match(connectionString);
+                connTypeVal         = match.Groups[1].Value;
+                connectionString    = reConnectionType.Replace(connectionString, "");
+            }
 
-            var    match        = reConnectionType.Match(connectionString);
-            string connTypeVal  = match.Groups[1].Value;
             var    connType     = Type.GetType(connTypeVal);
             if (connType == null)
                 throw new ArgumentException(string.Format(
                         "Could not load the specified DbLinqConnectionType `{0}'.",
                         connTypeVal),
                     "connectionString");
-            connectionString = reConnectionType.Replace(connectionString, "");
             return (IDbConnection)Activator.CreateInstance(connType, connectionString);
         }
     }

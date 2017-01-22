@@ -27,19 +27,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-#if MONO_STRICT
-using System.Data.Linq.Sql;
-#else
 using DbLinq.Data.Linq.Sql;
-#endif
 using DbLinq.Util;
 using DbLinq.Vendor.Implementation;
 
 namespace DbLinq.Oracle
 {
-#if MONO_STRICT
-    internal
-#else
+#if !MONO_STRICT
     public
 #endif
     class OracleSqlProvider : SqlProvider
@@ -49,7 +43,7 @@ namespace DbLinq.Oracle
         //     return "BEGIN " + base.GetInsert(table, inputColumns, inputValues);
         //}
 
-        public override SqlStatement GetInsertIds(IList<SqlStatement> outputParameters, IList<SqlStatement> outputExpressions)
+        public override SqlStatement GetInsertIds(SqlStatement table, IList<SqlStatement> autoPKColumn, IList<SqlStatement> inputPKColumns, IList<SqlStatement> inputPKValues, IList<SqlStatement> outputColumns, IList<SqlStatement> outputParameters, IList<SqlStatement> outputExpressions)
         {
             // no parameters? no need to get them back
             if (outputParameters.Count == 0)

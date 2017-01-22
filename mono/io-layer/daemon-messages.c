@@ -15,7 +15,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 /* Freebsd needs this included explicitly, but it doesn't hurt on Linux */
-#include <sys/uio.h>
+#ifdef HAVE_SYS_UIO_H
+#    include <sys/uio.h>
+#endif
 
 #ifndef HAVE_MSG_NOSIGNAL
 #include <signal.h>
@@ -31,6 +33,9 @@
 #ifndef CMSG_SPACE
 #define CMSG_SPACE(size)  (sizeof (struct cmsghdr) + (size))
 #endif
+
+#define LOGDEBUG(...)
+// #define LOGDEBUG(...) g_message(__VA_ARGS__)
 
 static mono_mutex_t req_mutex;
 static mono_once_t attr_key_once = MONO_ONCE_INIT;
@@ -89,10 +94,10 @@ static void _wapi_daemon_request_response_internal (int fd,
 
 	if(ret!=sizeof(WapiHandleRequest)) {
 		if(errno==EPIPE) {
-			g_critical (G_GNUC_PRETTY_FUNCTION ": The handle daemon vanished!");
+			g_critical ("%s: The handle daemon vanished!", __func__);
 			exit (-1);
 		} else {
-			g_warning (G_GNUC_PRETTY_FUNCTION ": Send error: %s",
+			g_warning ("%s: Send error: %s", __func__,
 				   strerror (errno));
 			g_assert_not_reached ();
 		}
@@ -113,11 +118,10 @@ static void _wapi_daemon_request_response_internal (int fd,
 
 	if(ret==-1) {
 		if(errno==EPIPE) {
-			g_critical (G_GNUC_PRETTY_FUNCTION ": The handle daemon vanished!");
+			g_critical ("%s: The handle daemon vanished!", __func__);
 			exit (-1);
 		} else {
-			g_warning (G_GNUC_PRETTY_FUNCTION ": Send error: %s",
-				   strerror (errno));
+			g_warning ("%s: Send error: %s", __func__, strerror (errno));
 			g_assert_not_reached ();
 		}
 	}
@@ -222,47 +226,32 @@ int _wapi_daemon_request (int fd, WapiHandleRequest *req, int *fds,
 		/* Make sure we dont do anything with this response */
 		req->type=WapiHandleRequestType_Error;
 		
-#ifdef DEBUG
-		g_warning (G_GNUC_PRETTY_FUNCTION ": Recv error: %s",
-			   strerror (errno));
-#endif
+		g_warning ("%s: Recv error: %s", __func__, strerror (errno));
 		/* The next loop around poll() should tidy up */
 	}
 
 #ifdef DEBUG
 	if(msg.msg_flags & MSG_OOB) {
-		g_message (G_GNUC_PRETTY_FUNCTION ": OOB data received");
+		g_message ("%s: OOB data received", __func__);
 	}
 	if(msg.msg_flags & MSG_CTRUNC) {
-		g_message (G_GNUC_PRETTY_FUNCTION ": ancillary data was truncated");
+		g_message ("%s: ancillary data was truncated", __func__);
 	}
-	g_message (G_GNUC_PRETTY_FUNCTION ": msg.msg_controllen=%d",
-		   msg.msg_controllen);
+	g_message ("%s: msg.msg_controllen=%d", __func__, msg.msg_controllen);
 #endif
 
 	cmsg=CMSG_FIRSTHDR (&msg);
 	if(cmsg!=NULL && cmsg->cmsg_level==SOL_SOCKET &&
 	   cmsg->cmsg_type==SCM_RIGHTS) {
-#ifdef DEBUG
-		g_message (G_GNUC_PRETTY_FUNCTION ": cmsg->cmsg_len=%d",
-			   cmsg->cmsg_len);
-		g_message (G_GNUC_PRETTY_FUNCTION
-			   ": cmsg->level=%d cmsg->type=%d", cmsg->cmsg_level,
-			   cmsg->cmsg_type);
-#endif
+		LOGDEBUG ("%s: cmsg->cmsg_len=%d", __func__, cmsg->cmsg_len);
+		LOGDEBUG ("%s: cmsg->level=%d cmsg->type=%d", __func__, cmsg->cmsg_level, cmsg->cmsg_type);
 
 		memcpy (fds, (int *)CMSG_DATA (cmsg), sizeof(int)*3);
 		*has_fds=TRUE;
 
-#ifdef DEBUG
-		g_message (G_GNUC_PRETTY_FUNCTION
-			   ": fd[0]=%d, fd[1]=%d, fd[2]=%d", fds[0], fds[1],
-			   fds[2]);
-#endif
+		LOGDEBUG ("%s: fd[0]=%d, fd[1]=%d, fd[2]=%d", __func__, fds[0], fds[1], fds[2]);
 	} else {
-#ifdef DEBUG
-		g_message (G_GNUC_PRETTY_FUNCTION ": no ancillary data");
-#endif
+		LOGDEBUG ("%s: no ancillary data", __func__);
 		*has_fds=FALSE;
 	}
 
@@ -284,10 +273,8 @@ int _wapi_daemon_response (int fd, WapiHandleResponse *resp)
 	while (ret==-1 && errno==EINTR);
 
 #ifdef DEBUG
-
 	if(ret==-1 || ret != sizeof(WapiHandleResponse)) {
-		g_warning (G_GNUC_PRETTY_FUNCTION ": Send error: %s",
-			   strerror (errno));
+		g_warning ("%s: Send error: %s", __func__, strerror (errno));
 		/* The next loop around poll() should tidy up */
 	}
 #endif

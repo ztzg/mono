@@ -179,7 +179,6 @@ namespace System.Net
 			set { SendContinue = value; }
 		}
 
-		[MonoTODO ("Use me")]
 		public bool UseNagleAlgorithm {
 			get { return useNagle; }
 			set { useNagle = value; }
@@ -271,7 +270,7 @@ namespace System.Net
 		{
 			protocolVersion = version;
 		}
-#if !TARGET_JVM && !NET_2_1
+#if MONOTOUCH || (!TARGET_JVM && !NET_2_1)
 		WebConnectionGroup GetConnectionGroup (string name)
 		{
 			if (name == null)

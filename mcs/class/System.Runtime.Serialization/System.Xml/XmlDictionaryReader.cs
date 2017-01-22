@@ -25,7 +25,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_2_0
+
 using System;
 using System.IO;
 using System.Reflection;
@@ -54,7 +54,6 @@ namespace System.Xml
 			}
 		}
 
-		[MonoTODO]
 		public virtual void EndCanonicalization ()
 		{
 			throw new NotSupportedException ();
@@ -107,6 +106,12 @@ namespace System.Xml
 			return -1;
 		}
 
+		public virtual bool IsArray (out Type type)
+		{
+			type = null;
+			return false;
+		}
+
 		public virtual bool IsLocalName (string localName)
 		{
 			return LocalName == localName;
@@ -131,10 +136,10 @@ namespace System.Xml
 			return NamespaceURI == namespaceUri.Value;
 		}
 
-		[MonoTODO]
 		public virtual bool IsStartArray (out Type type)
 		{
-			throw new NotImplementedException ();
+			type = null;
+			return false;
 		}
 
 		public virtual bool IsStartElement (
@@ -210,7 +215,6 @@ namespace System.Xml
 			MoveToStartElement (localName.Value, namespaceUri.Value);
 		}
 
-		[MonoTODO]
 		public virtual void StartCanonicalization (
 			Stream stream, bool includeComments,
 			string [] inclusivePrefixes)
@@ -246,7 +250,6 @@ namespace System.Xml
 
 		#region Content Reader Methods
 
-		[MonoTODO]
 		public override object ReadContentAs (Type type, IXmlNamespaceResolver nsResolver)
 		{
 			return base.ReadContentAs (type, nsResolver);
@@ -290,13 +293,11 @@ namespace System.Xml
 			throw new NotImplementedException ();
 		}
 
-		[MonoTODO]
 		public override decimal ReadContentAsDecimal ()
 		{
 			return base.ReadContentAsDecimal ();
 		}
 
-		[MonoTODO]
 		public override float ReadContentAsFloat ()
 		{
 			return base.ReadContentAsFloat ();
@@ -325,13 +326,13 @@ namespace System.Xml
 			return base.ReadContentAsString ();
 		}
 
-		[MonoTODO]
+		[MonoTODO ("there is exactly no information on the web")]
 		public virtual string ReadContentAsString (string [] strings, out int index)
 		{
 			throw new NotImplementedException ();
 		}
 
-		[MonoTODO]
+		[MonoTODO ("there is exactly no information on the web")]
 		public virtual string ReadContentAsString (XmlDictionaryString [] strings, out int index)
 		{
 			throw new NotImplementedException ();
@@ -432,6 +433,15 @@ namespace System.Xml
 			ReadStartElement (localName.Value, namespaceUri.Value);
 		}
 
+		public virtual void ReadStartElement (XmlDictionaryString localName, XmlDictionaryString namespaceUri)
+		{
+			if (localName == null)
+				throw new ArgumentNullException ("localName");
+			if (namespaceUri == null)
+				throw new ArgumentNullException ("namespaceUri");
+			ReadStartElement (localName.Value, namespaceUri.Value);
+		}
+
 		public override string ReadString ()
 		{
 			return ReadString (Quotas.MaxStringContentLength);
@@ -443,10 +453,12 @@ namespace System.Xml
 			return base.ReadString ();
 		}
 
+#if NET_2_1
 		public virtual byte [] ReadValueAsBase64 (byte [] bytes, int start, int length)
 		{
 			throw new NotSupportedException (); // as it is documented ...
 		}
+#endif
 
 		public virtual bool TryGetValueAsDictionaryString (out XmlDictionaryString value)
 		{
@@ -542,66 +554,59 @@ namespace System.Xml
 			return new XmlSimpleDictionaryReader (reader);
 		}
 
-		[MonoTODO]
+#if !NET_2_1
 		public static XmlDictionaryReader CreateMtomReader (
 			Stream stream, Encoding encoding,
 			XmlDictionaryReaderQuotas quotas)
 		{
-			throw new NotImplementedException ();
+			return new XmlMtomDictionaryReader (stream, encoding, quotas);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			Stream stream, Encoding [] encodings,
 			XmlDictionaryReaderQuotas quotas)
 		{
-			throw new NotImplementedException ();
+			return CreateMtomReader (stream, encodings, null, quotas);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			Stream stream, Encoding [] encodings, string contentType,
 			XmlDictionaryReaderQuotas quotas)
 		{
-			throw new NotImplementedException ();
+			return CreateMtomReader (stream, encodings, contentType, quotas, int.MaxValue, null);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			Stream stream, Encoding [] encodings, string contentType,
 			XmlDictionaryReaderQuotas quotas,
 			int maxBufferSize,
 			OnXmlDictionaryReaderClose onClose)
 		{
-			throw new NotImplementedException ();
+			return new XmlMtomDictionaryReader (stream, encodings, contentType, quotas, maxBufferSize, onClose);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			byte [] buffer, int offset, int count,
 			Encoding encoding, XmlDictionaryReaderQuotas quotas)
 		{
-			throw new NotImplementedException ();
+			return CreateMtomReader (new MemoryStream (buffer, offset, count), encoding, quotas);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			byte [] buffer, int offset, int count,
 			Encoding [] encodings, XmlDictionaryReaderQuotas quotas)
 		{
-			throw new NotImplementedException ();
+			return CreateMtomReader (new MemoryStream (buffer, offset, count), encodings, quotas);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			byte [] buffer, int offset, int count,
 			Encoding [] encodings, string contentType,
 			XmlDictionaryReaderQuotas quotas)
 		{
-			throw new NotImplementedException ();
+			return CreateMtomReader (new MemoryStream (buffer, offset, count), encodings, contentType, quotas);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryReader CreateMtomReader (
 			byte [] buffer, int offset, int count,
 			Encoding [] encodings, string contentType,
@@ -609,8 +614,9 @@ namespace System.Xml
 			int maxBufferSize,
 			OnXmlDictionaryReaderClose onClose)
 		{
-			throw new NotImplementedException ();
+			return CreateMtomReader (new MemoryStream (buffer, offset, count), encodings, contentType, quotas, maxBufferSize, onClose);
 		}
+#endif
 
 		public static XmlDictionaryReader CreateTextReader (byte [] buffer, XmlDictionaryReaderQuotas quotas)
 		{
@@ -656,4 +662,3 @@ namespace System.Xml
 		#endregion
 	}
 }
-#endif

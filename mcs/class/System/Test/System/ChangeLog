@@ -1,3 +1,25 @@
+2009-09-01  Andres Aragoneses  <aaragoneses@novell.com>
+
+	* UriTest.cs: New tests from #533572.
+
+2009-06-25  Robert Jordan  <robertj@gmx.net>
+
+	* UriTest.cs: Upgrade to new NUnit style.
+
+2009-04-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* UriParserTest.cs: Ensure "tcp" is not a registred scheme
+	* UriTest2.cs: Make sure GetComponents and IsBaseOf do not throw
+	NRE is no UriParser was registred for the URI scheme
+
+2009-04-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* UriTest2.cs: More constructor test cases
+
+2009-04-14  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* UriTest2.cs: More test cases for the handling of %2f and %5c
+
 2009-02-18  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* UriTest.cs : added test for windows local path with '\' (used in

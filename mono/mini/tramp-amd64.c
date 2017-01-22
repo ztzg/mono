@@ -63,6 +63,40 @@ mono_arch_get_unbox_trampoline (MonoGenericSharingContext *gsctx, MonoMethod *m,
 }
 
 /*
+ * mono_arch_get_static_rgctx_trampoline:
+ *
+ *   Create a trampoline which sets RGCTX_REG to MRGCTX, then jumps to ADDR.
+ */
+gpointer
+mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericContext *mrgctx, gpointer addr)
+{
+	guint8 *code, *start;
+	int buf_len;
+
+	MonoDomain *domain = mono_domain_get ();
+
+#ifdef MONO_ARCH_NOMAP32BIT
+	buf_len = 32;
+#else
+	/* AOTed code could still have a non-32 bit address */
+	if ((((guint64)addr) >> 32) == 0)
+		buf_len = 16;
+	else
+		buf_len = 30;
+#endif
+
+	start = code = mono_domain_code_reserve (domain, buf_len);
+
+	amd64_mov_reg_imm (code, MONO_ARCH_RGCTX_REG, mrgctx);
+	amd64_jump_code (code, addr);
+	g_assert ((code - start) < buf_len);
+
+	mono_arch_flush_icache (start, code - start);
+
+	return start;
+}
+
+/*
  * mono_arch_patch_callsite:
  *
  *   Patch the callsite whose address is given by ORIG_CODE so it calls ADDR. ORIG_CODE
@@ -87,6 +121,7 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 			}
 		} else {
 			if ((((guint64)(addr)) >> 32) != 0) {
+#ifdef MONO_ARCH_NOMAP32BIT
 				/* Print some diagnostics */
 				MonoJitInfo *ji = mono_jit_info_table_find (mono_domain_get (), (char*)orig_code);
 				if (ji)
@@ -96,6 +131,19 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 				if (ji)
 					fprintf (stderr, "Callee: %s\n", mono_method_full_name (ji->method, TRUE));
 				g_assert_not_reached ();
+#else
+				/* 
+				 * This might happen when calling AOTed code. Create a thunk.
+				 */
+				guint8 *thunk_start, *thunk_code;
+
+				thunk_start = thunk_code = mono_domain_code_reserve (mono_domain_get (), 32);
+				amd64_jump_membase (thunk_code, AMD64_RIP, 0);
+				*(guint64*)thunk_code = (guint64)addr;
+				addr = thunk_start;
+				g_assert ((((guint64)(addr)) >> 32) == 0);
+				mono_arch_flush_icache (thunk_start, thunk_code - thunk_start);
+#endif
 			}
 			g_assert ((((guint64)(orig_code)) >> 32) == 0);
 			if (can_write) {
@@ -119,7 +167,7 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 }
 
 void
-mono_arch_patch_plt_entry (guint8 *code, guint8 *addr)
+mono_arch_patch_plt_entry (guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
 	gint32 disp;
 	gpointer *plt_jump_table_entry;
@@ -136,10 +184,19 @@ mono_arch_patch_plt_entry (guint8 *code, guint8 *addr)
 }
 
 void
-mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
+mono_arch_nullify_class_init_trampoline (guint8 *code, mgreg_t *regs)
 {
 	guint8 buf [16];
-	gboolean can_write = mono_breakpoint_clean_code (NULL, code, 7, buf, sizeof (buf));
+	MonoJitInfo *ji = NULL;
+	gboolean can_write;
+
+#ifdef ENABLE_LLVM
+	/* code - 7 might be before the start of the method */
+	/* FIXME: Avoid this expensive call somehow */
+	ji = mono_jit_info_table_find (mono_domain_get (), (char*)code);
+#endif
+
+	can_write = mono_breakpoint_clean_code (ji ? ji->code_start : NULL, code, 7, buf, sizeof (buf));
 
 	if (!can_write)
 		return;
@@ -151,15 +208,15 @@ mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
 	 * really careful about the ordering of the cases. Longer sequences
 	 * come first.
 	 */
-	if ((code [-4] == 0x41) && (code [-3] == 0xff) && (code [-2] == 0x15)) {
+	if ((buf [0] == 0x41) && (buf [1] == 0xff) && (buf [2] == 0x15)) {
 		gpointer *vtable_slot;
 
 		/* call *<OFFSET>(%rip) */
-		vtable_slot = mono_arch_get_vcall_slot_addr (code + 3, (gpointer*)regs);
+		vtable_slot = mono_get_vcall_slot_addr (code + 3, regs);
 		g_assert (vtable_slot);
 
 		*vtable_slot = nullified_class_init_trampoline;
-	} else if (code [-2] == 0xe8) {
+	} else if (buf [2] == 0xe8) {
 		/* call <TARGET> */
 		//guint8 *buf = code - 2;
 
@@ -177,7 +234,7 @@ mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
 		*/
 
 		mono_arch_patch_callsite (code - 2, code - 2 + 5, nullified_class_init_trampoline);
-	} else if ((code [0] == 0x41) && (code [1] == 0xff)) {
+	} else if ((buf [4] == 0x41) && (buf [5] == 0xff)) {
 		/* call <REG> */
 		/* happens on machines without MAP_32BIT like freebsd */
 		/* amd64_set_reg_template is 10 bytes long */
@@ -198,23 +255,23 @@ mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
 		buf [10] = 0x90;
 		buf [11] = 0x66;
 		buf [12] = 0x90;
-	} else if (code [0] == 0x90 || code [0] == 0xeb || code [0] == 0x66) {
+	} else if (buf [4] == 0x90 || buf [5] == 0xeb || buf [6] == 0x66) {
 		/* Already changed by another thread */
 		;
 	} else {
-		printf ("Invalid trampoline sequence: %x %x %x %x %x %x %x\n", code [0], code [1], code [2], code [3],
-			code [4], code [5], code [6]);
+		printf ("Invalid trampoline sequence: %x %x %x %x %x %x %x\n", buf [0], buf [1], buf [2], buf [3],
+			buf [4], buf [5], buf [6]);
 		g_assert_not_reached ();
 	}
 }
 
 void
-mono_arch_nullify_plt_entry (guint8 *code)
+mono_arch_nullify_plt_entry (guint8 *code, mgreg_t *regs)
 {
 	if (mono_aot_only && !nullified_class_init_trampoline)
 		nullified_class_init_trampoline = mono_aot_get_named_code ("nullified_class_init_trampoline");
 
-	mono_arch_patch_plt_entry (code, nullified_class_init_trampoline);
+	mono_arch_patch_plt_entry (code, NULL, regs, nullified_class_init_trampoline);
 }
 
 guchar*
@@ -599,7 +656,7 @@ mono_arch_create_rgctx_lazy_fetch_trampoline_full (guint32 slot, guint32 *code_s
 	mrgctx = MONO_RGCTX_SLOT_IS_MRGCTX (slot);
 	index = MONO_RGCTX_SLOT_INDEX (slot);
 	if (mrgctx)
-		index += sizeof (MonoMethodRuntimeGenericContext) / sizeof (gpointer);
+		index += MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT / sizeof (gpointer);
 	for (depth = 0; ; ++depth) {
 		int size = mono_class_rgctx_get_array_size (depth, mrgctx);
 
@@ -630,7 +687,7 @@ mono_arch_create_rgctx_lazy_fetch_trampoline_full (guint32 slot, guint32 *code_s
 	for (i = 0; i < depth; ++i) {
 		/* load ptr to next array */
 		if (mrgctx && i == 0)
-			amd64_mov_reg_membase (code, AMD64_RAX, AMD64_RAX, sizeof (MonoMethodRuntimeGenericContext), 8);
+			amd64_mov_reg_membase (code, AMD64_RAX, AMD64_RAX, MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT, 8);
 		else
 			amd64_mov_reg_membase (code, AMD64_RAX, AMD64_RAX, 0, 8);
 		/* is the ptr null? */

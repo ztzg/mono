@@ -36,7 +36,7 @@ namespace DbMetal.Schema
     /// </summary>
     //[XmlRoot("Database")]
     [XmlRoot("Database", Namespace = "http://schemas.microsoft.com/linqtosql/dbml/2007", IsNullable = false)]
-    public class DbmlRename : INameAliases
+    class DbmlRename : INameAliases
     {
         [XmlNamespaceDeclarations]
         public XmlSerializerNamespaces XmlNamespaceDeclarations { get; set; }
@@ -84,6 +84,44 @@ namespace DbMetal.Schema
 
             [XmlAttribute("Type")]
             public string Type { get; set; }
+
+            [XmlAttribute("IsDbGenerated")]
+            public bool IsDbGeneratedXml
+            {
+                get
+                {
+                    return IsDbGenerated.HasValue ? IsDbGenerated.Value : default(bool);
+                }
+                set
+                {
+                    IsDbGenerated = value;
+                }
+            }
+
+            public bool? IsDbGenerated
+            {
+                get;
+                set;
+            }
+
+            [XmlAttribute("AutoSync")]
+            public DbLinq.Schema.Dbml.AutoSync AutoSyncXml
+            {
+                get
+                {
+                    return AutoSync.HasValue ? AutoSync.Value : DbLinq.Schema.Dbml.AutoSync.Default;
+                }
+                set
+                {
+                    AutoSync = value;
+                }
+            }
+
+            public DbLinq.Schema.Dbml.AutoSync? AutoSync
+            {
+                get;
+                set;
+            }
         }
 
         protected Table GetTable(string table, string schema)
@@ -134,6 +172,32 @@ namespace DbMetal.Schema
             if (c == null)
                 return null;
             return c.Type;
+        }
+
+        public bool? GetColumnGenerated(string column, string table, string schema)
+        {
+            var c = GetColumn(column, table, schema);
+            if (c == null)
+                return null;
+            return c.IsDbGenerated;
+        }
+
+        public DbLinq.Schema.Dbml.AutoSync? GetColumnAutoSync(string column, string table, string schema)
+        {
+            var c = GetColumn(column, table, schema);
+            if (c == null)
+                return null;
+            return c.AutoSync;
+        }
+
+        public string GetDatabaseNameAlias(string databaseName)
+        {
+            return Name;
+        }
+
+        public string GetClassNameAlias(string className)
+        {
+            return Class;
         }
     }
 }

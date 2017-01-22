@@ -3,8 +3,10 @@
 //
 // Author:
 //   Marek Sieradzki (marek.sieradzki@gmail.com)
+//   Ankit Jain (jankit@novell.com)
 //
 // (C) 2005 Marek Sieradzki
+// Copyright 2009 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -89,11 +91,6 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 		*/
 
 		[Test]
-		[ExpectedException (typeof (InvalidProjectFileException),
-		@"The default XML namespace of the project must be the MSBuild XML namespace." + 
-		" If the project is authored in the MSBuild 2003 format, please add " +
-		"xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\" to the <Project> element. " +
-		"If the project has been authored in the old 1.0 or 1.2 format, please convert it to MSBuild 2003 format.  ")]
 		public void TestAssignment1 ()
 		{
 			Engine engine;
@@ -102,18 +99,25 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 				"<Project></Project>";
 			
 			engine = new Engine (Consts.BinPath);
+
 			DateTime time = DateTime.Now;
 			project = engine.CreateNewProject ();
-			project.LoadXml (documentString);
+			try {
+				project.LoadXml (documentString);
+			} catch (InvalidProjectFileException) {
+				Assert.AreEqual (true, project.BuildEnabled, "A1");
+				Assert.AreEqual (String.Empty, project.DefaultTargets, "A2");
+				Assert.AreEqual (String.Empty, project.FullFileName, "A3");
+				Assert.AreEqual (false, project.IsDirty, "A4");
+				Assert.AreEqual (false, project.IsValidated, "A5");
+				Assert.AreEqual (engine, project.ParentEngine, "A6");
+				Console.WriteLine ("time: {0} p.t: {1}", time, project.TimeOfLastDirty);
+				Assert.IsTrue (time <= project.TimeOfLastDirty, "A7");
+				Assert.IsTrue (String.Empty != project.Xml, "A8");
+				return;
+			}
 
-			Assert.AreEqual (true, project.BuildEnabled, "A1");
-			Assert.AreEqual (String.Empty, project.DefaultTargets, "A2");
-			Assert.AreEqual (String.Empty, project.FullFileName, "A3");
-			Assert.AreEqual (false, project.IsDirty, "A4");
-			Assert.AreEqual (false, project.IsValidated, "A5");
-			Assert.AreEqual (engine, project.ParentEngine, "A6");
-			Assert.IsTrue (time <= project.TimeOfLastDirty, "A7");
-			Assert.IsTrue (String.Empty != project.Xml, "A8");
+			Assert.Fail ("Expected InvalidProjectFileException");
 		}
 
 		[Test]
@@ -931,9 +935,9 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 			p1.RemoveItemGroup (null);
 		}
 
+		// The "BuildItemGroup" object specified does not belong to the correct "Project" object.
 		[Test]
-		[ExpectedException (typeof (InvalidOperationException),
-					"The \"BuildItemGroup\" object specified does not belong to the correct \"Project\" object.")]
+		[ExpectedException (typeof (InvalidOperationException))]
 		[Category ("NotWorking")]
 		public void TestRemoveItemGroup2 ()
 		{
@@ -966,9 +970,9 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 			project.RemoveItem (null);
 		}
 
+		// The object passed in is not part of the project.
 		[Test]
-		[ExpectedException (typeof (InvalidOperationException),
-			"The object passed in is not part of the project.")]
+		[ExpectedException (typeof (InvalidOperationException))]
 		public void TestRemoveItem2 ()
 		{
 			Engine engine;
@@ -980,9 +984,9 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 			project.RemoveItem (new BuildItem ("name", "include"));
 		}
 
+		// The "BuildItemGroup" object specified does not belong to the correct "Project" object.
 		[Test]
-		[ExpectedException (typeof (InvalidOperationException),
-					"The \"BuildItemGroup\" object specified does not belong to the correct \"Project\" object.")]
+		[ExpectedException (typeof (InvalidOperationException))]
 		public void TestRemoveItem3 ()
 		{
 			Engine engine;
@@ -1066,9 +1070,11 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 			project.Build ("T");
 			project.ResetBuildStatus ();
 			project.Build (new string [1] { "T" }, null, BuildSettings.DoNotResetPreviouslyBuiltTargets);
+			project.ResetBuildStatus ();
+			project.Build (new string [1] { "T" }, null, BuildSettings.DoNotResetPreviouslyBuiltTargets);
 
-			Assert.AreEqual (2, tl.TargetStartedEvents, "A1");
-			Assert.AreEqual (2, tl.TargetFinishedEvents, "A1");
+			Assert.AreEqual (3, tl.TargetStartedEvents, "A1");
+			Assert.AreEqual (3, tl.TargetFinishedEvents, "A1");
 		}
 		
 		[Test]
@@ -1521,35 +1527,89 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 		public void TestRequiredTask_String1 ()
 		{
 			CheckProjectForRequiredTests ("RequiredTestTask_String", "@(NonExistant)",
-				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_String");
+				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_String", null);
 		}
 
 		[Test]
 		public void TestRequiredTask_String2 ()
 		{
 			CheckProjectForRequiredTests ("RequiredTestTask_String", "$(NonExistant)",
-				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_String");
+				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_String", null);
+		}
+
+		[Test]
+		public void TestRequiredTask_Strings1 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_Strings", "@(NonExistant)",
+				true, "Build failed", "0");
+		}
+
+		[Test]
+		public void TestRequiredTask_Strings2 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_Strings", "$(NonExistant)",
+				true, "Build failed", "0");
+		}
+
+		[Test]
+		public void TestRequiredTask_Strings3 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_Strings", "%(NonExistant.Md)",
+				true, "Build failed", "0");
+		}
+
+		[Test]
+		public void TestRequiredTask_Strings4 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_Strings", "  %(NonExistant.Md)",
+				true, "Build failed", "0");
+		}
+
+		[Test]
+		public void TestRequiredTask_Ints1 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_IntArray", "@(NonExistant)",
+				true, "Build failed", "count: 0");
+		}
+
+		[Test]
+		public void TestRequiredTask_Ints2 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_IntArray", "$(NonExistant)",
+				true, "Build failed", "count: 0");
+		}
+
+		[Test]
+		public void TestRequiredTask_OtherObjectsArray () {
+			CheckProjectForRequiredTests ("RequiredTestTask_OtherObjectArray", "@(NonExistant)",
+				false, "Should've failed: ObjectArray type not supported as a property type", null);
+		}
+
+		[Test]
+		public void TestRequiredTask_OtherObject () {
+			CheckProjectForRequiredTests ("RequiredTestTask_OtherObjectArray", "@(NonExistant)",
+				false, "Should've failed: ObjectArray type not supported as a property type", null);
+		}
+
+		[Test]
+		public void TestRequiredTask_MyTaskItems1 () {
+			CheckProjectForRequiredTests ("RequiredTestTask_MyTaskItemArray", "@(NonExistant)",
+				false, "Should've failed: ObjectArray type not supported as a property type", null);
 		}
 
 		[Test]
 		public void TestRequiredTask_TaskItem1 ()
 		{
 			Project p = CheckProjectForRequiredTests ("RequiredTestTask_TaskItem", "@(NonExistant)",
-				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_TaskItem");
+				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_TaskItem", null);
 		}
 
 		[Test]
 		public void TestRequiredTask_TaskItem2 ()
 		{
 			Project p = CheckProjectForRequiredTests ("RequiredTestTask_TaskItem", "$(NonExistant)",
-				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_TaskItem");
+				false, "Should've failed: No value specified for required field - 'Property' of RequiredTestTask_TaskItem", null);
 		}
 
 		[Test]
 		public void TestRequiredTask_TaskItemArray1 ()
 		{
 			Project p = CheckProjectForRequiredTests ("RequiredTestTask_TaskItems", "@(NonExistant)",
-				true, "Build failed");
+				true, "Build failed", "count: 0");
 
 			BuildItemGroup group = p.GetEvaluatedItemsByName ("OutItem");
 			Assert.AreEqual (1, group.Count, "A2");
@@ -1560,7 +1620,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 		public void TestRequiredTask_TaskItemArray2 ()
 		{
 			Project p = CheckProjectForRequiredTests ("RequiredTestTask_TaskItems", "$(NonExistant)",
-				true, "Build failed");
+				true, "Build failed", "count: 0");
 
 			BuildItemGroup group = p.GetEvaluatedItemsByName ("OutItem");
 			Assert.AreEqual (1, group.Count, "A2");
@@ -1571,15 +1631,217 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 		public void TestRequiredTask_TaskItemArray3 ()
 		{
 			Project p = CheckProjectForRequiredTests ("RequiredTestTask_IntArray", "$(NonExistant)",
-				true, "Build failed");
+				true, "Build failed", "count: 0");
 
 			BuildItemGroup group = p.GetEvaluatedItemsByName ("OutItem");
 			Assert.AreEqual (1, group.Count, "A2");
 			Assert.AreEqual ("count: 0", group [0].FinalItemSpec, "A3");
 		}
 
+		[Test]
+		public void TestRequiredTask_TaskItemArray4 () {
+			Project p = CheckProjectForRequiredTests ("RequiredTestTask_IntArray", "%(NonExistant.Md)",
+				true, "Build failed", "count: 0");
 
-		Project CheckProjectForRequiredTests (string taskname, string property_arg, bool expected_result, string error_msg)
+			BuildItemGroup group = p.GetEvaluatedItemsByName ("OutItem");
+			Assert.AreEqual (1, group.Count, "A2");
+			Assert.AreEqual ("count: 0", group[0].FinalItemSpec, "A3");
+		}
+
+		[Test]
+		public void TestRequiredTask_TaskItemArray5 () {
+			// with extra space in prop value
+			Project p = CheckProjectForRequiredTests ("RequiredTestTask_IntArray", "  %(NonExistant.Md)",
+				true, "Build failed", "count: 0");
+
+			BuildItemGroup group = p.GetEvaluatedItemsByName ("OutItem");
+			Assert.AreEqual (1, group.Count, "A2");
+			Assert.AreEqual ("count: 0", group[0].FinalItemSpec, "A3");
+		}
+
+
+		[Test]
+		public void TestCaseSensitivityOfProjectElements ()
+		{
+			string projectXml = @"<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"" ToolsVersion=""3.5"">
+        <ItemGroup>
+                <Abc Include=""foo"">
+                        <MetaDaTA1>md1</MetaDaTA1>
+                        <METadata2>md2</METadata2>
+                </Abc>
+                <Abc Include=""FOO"">
+                        <MetaDaTA1>MD1 caps</MetaDaTA1>
+                        <METadata2>MD2 caps</METadata2>
+                </Abc>
+                <Abc Include=""hmm"">
+                        <MetaDaTA1>Md1 CAPS</MetaDaTA1>
+                        <METadata2>MD2 CAPS</METadata2>
+                </Abc>
+                <Abc Include=""bar"">
+                        <MeTAdata1>md3</MeTAdata1>
+                        <Metadata2>md4</Metadata2>
+                </Abc>
+        </ItemGroup> 
+        <PropertyGroup><ProP1>ValueProp</ProP1></PropertyGroup>
+	<Target Name=""Main"">
+		<MesSAGE Text=""Full item: @(ABC)""/>
+		<MEssaGE Text=""metadata1 :%(AbC.MetaDATA1) metadata2: %(ABC.MetaDaTa2)""/>
+		<MEssaGE Text=""metadata2 : %(AbC.MetaDAta2)""/>
+		<MEssaGE Text=""Abc identity: %(ABC.IDENTitY)""/>
+		<MEssaGE Text=""prop1 : $(pROp1)""/>
+	</Target>
+</Project>
+";
+			Engine engine = new Engine (Consts.BinPath);
+			Project project = engine.CreateNewProject ();
+			MonoTests.Microsoft.Build.Tasks.TestMessageLogger logger =
+				new MonoTests.Microsoft.Build.Tasks.TestMessageLogger ();
+			engine.RegisterLogger (logger);
+
+			project.LoadXml (projectXml);
+			bool result = project.Build ("Main");
+			if (!result) {
+				logger.DumpMessages ();
+				Assert.Fail ("A1: Build failed");
+			}
+			logger.DumpMessages ();
+
+			logger.CheckLoggedMessageHead ("Full item: foo;FOO;hmm;bar", "#A2");
+			logger.CheckLoggedMessageHead ("metadata1 :md1 metadata2: md2", "#A3");
+			logger.CheckLoggedMessageHead ("metadata1 :MD1 caps metadata2: MD2 caps", "#A4");
+			logger.CheckLoggedMessageHead ("metadata1 :md3 metadata2: md4", "#A5");
+			logger.CheckLoggedMessageHead ("metadata2 : md2", "#A6");
+			logger.CheckLoggedMessageHead ("metadata2 : MD2 caps", "#A7");
+			logger.CheckLoggedMessageHead ("metadata2 : md4", "#A8");
+			logger.CheckLoggedMessageHead ("Abc identity: foo", "#A9");
+			logger.CheckLoggedMessageHead ("Abc identity: hmm", "#A10");
+			logger.CheckLoggedMessageHead ("Abc identity: bar", "#A11");
+			logger.CheckLoggedMessageHead ("prop1 : ValueProp", "#A12");
+
+			Assert.AreEqual (0, logger.NormalMessageCount, "Unexpected extra messages found");
+
+		}
+
+		// full solution test
+		//[Test]
+		public void TestBuildSolutionProject ()
+		{
+			string basepath = Path.Combine ("Test", Path.Combine ("resources", "Project01"));
+			string [] project_dirs = new string [] {
+				Path.Combine (basepath, "Lib4"),
+				Path.Combine (basepath, "Lib3"),
+				Path.Combine (basepath, "Lib2"),
+				Path.Combine (basepath, "Lib1"),
+				Path.Combine (basepath, "Project01")
+			};
+			string debug_extn = Consts.RunningOnMono () ? ".dll.mdb" : ".pdb";
+
+			// List of expected output files
+			// Lib3
+			string [] [] project_files = new string [5][] {
+				new string [] { "Lib4.dll", "Lib4" + debug_extn },
+				new string [] { "Lib3.dll" , "Lib3" + debug_extn },
+				// Lib2
+				new string [] {
+					"Lib2.dll", "Lib2" + debug_extn,
+					"lib2_folder/Lib2.deploy.txt",
+					Path.Combine ("fr-CA", "Lib2.resources.dll"),
+					Path.Combine ("fr-FR", "Lib2.resources.dll"),
+					"Lib4.dll", "Lib4" + debug_extn
+				},
+				
+				// lib1
+				new string [] {
+					// lib1 files
+					"Lib1.dll", "Lib2" + debug_extn,
+					"Lib1.deploy.txt",
+					Path.Combine ("fr-CA", "Lib1.resources.dll"),
+					Path.Combine ("fr-FR", "Lib1.resources.dll"),
+					Path.Combine ("en-US", "Lib1.resources.dll"),
+					// lib2 files
+					"Lib2.dll", "Lib2" + debug_extn,
+					"lib2_folder/Lib2.deploy.txt",
+					Path.Combine ("fr-CA", "Lib2.resources.dll"),
+					Path.Combine ("fr-FR", "Lib2.resources.dll"),
+					// lib3 files
+					"Lib3.dll", "Lib3" + debug_extn,
+					"Lib4.dll", "Lib4" + debug_extn
+					},
+
+				new string [] {
+					"Project01.exe",
+					"Project01" + (Consts.RunningOnMono () ? ".exe.mdb" : ".pdb"),
+					// lib1 files
+					"Lib1.dll", "Lib1" + debug_extn,
+					"Lib1.deploy.txt",
+					Path.Combine ("fr-CA", "Lib1.resources.dll"),
+					Path.Combine ("fr-FR", "Lib1.resources.dll"),
+					Path.Combine ("en-US", "Lib1.resources.dll"),
+					// lib2 files
+					"Lib2.dll", "Lib2" + debug_extn,
+					"lib2_folder/Lib2.deploy.txt",
+					Path.Combine ("fr-CA", "Lib2.resources.dll"),
+					Path.Combine ("fr-FR", "Lib2.resources.dll"),
+					"Lib4.dll", "Lib4" + debug_extn,
+					}
+			};
+
+			// Cleanup
+			for (int i = 0; i < project_dirs.Length; i ++) {
+				string bin_path = Path.Combine (project_dirs [i], Path.Combine ("bin", "Debug"));
+				string obj_path = Path.Combine (project_dirs [i], Path.Combine ("obj", "Debug"));
+
+				DeleteAllInDir (bin_path);
+
+				DeleteAllInDir (obj_path);
+			}
+
+			Engine engine = new Engine (Consts.BinPath);
+			MonoTests.Microsoft.Build.Tasks.TestMessageLogger logger =
+				new MonoTests.Microsoft.Build.Tasks.TestMessageLogger ();
+			engine.RegisterLogger (logger);
+
+			engine.GlobalProperties = new BuildPropertyGroup ();
+			engine.GlobalProperties.SetProperty ("TreatWarningsAsErrors", "false");
+
+			Project project = engine.CreateNewProject ();
+			project.Load (Path.Combine (basepath, "Project01.sln.proj"));
+			
+			bool result = project.Build ();
+			if (!result) {
+				logger.DumpMessages ();
+				Assert.Fail ("Build failed");
+			}
+
+			// We check only the output dir, not the 'obj'
+			string debug = Path.Combine ("bin", "Debug");
+			for (int i = 0; i < project_dirs.Length; i++) {
+				CheckFilesExistInDir (Path.Combine (project_dirs [i], debug),
+					project_files [i]);
+			}
+		}
+
+		void DeleteAllInDir (string path)
+		{
+			if (!Directory.Exists (path))
+				return;
+
+			foreach (string file in Directory.GetFiles (path))
+				File.Delete (file);
+			Directory.Delete (path, true);
+		}
+
+		void CheckFilesExistInDir (string dir, params string [] files)
+		{
+			foreach (string file in files) {
+				string path = Path.Combine (dir, file);
+				Assert.IsTrue (File.Exists (path),
+					String.Format ("Expected to find file {0}", path));
+			}
+		}
+
+		Project CheckProjectForRequiredTests (string taskname, string property_arg, bool expected_result, string error_msg,
+			string expected_output_msg)
 		{
 			string projectString = String.Format (@"<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">
 				<UsingTask TaskName=""{0}"" AssemblyFile=""Test/resources/TestTasks.dll"" />
@@ -1587,6 +1849,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 					<{0} Property=""{1}"">
 						<Output TaskParameter=""Output"" ItemName=""OutItem""/>
 					</{0}>
+					<Message Text='@(OutItem)'/>
 				</Target>
 			</Project>", taskname, property_arg);
 
@@ -1596,9 +1859,12 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 			engine.RegisterLogger (logger);
 			Project project = engine.CreateNewProject ();
 			project.LoadXml (projectString);
-
 			try {
 				Assert.AreEqual (expected_result, project.Build (), error_msg);
+				if (expected_result) {
+					logger.CheckLoggedMessageHead (expected_output_msg, "A");
+					Assert.AreEqual (0, logger.NormalMessageCount, "Unexpected messages found");
+				}
 			} finally {
 				logger.DumpMessages ();
 			}

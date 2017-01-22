@@ -28,36 +28,32 @@ using System;
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Data.Linq;
 using System.Data.Linq.Mapping;
+using System.Linq.Expressions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 
 #if MONO_STRICT
-using System.Data.Linq.Implementation;
-using System.Data.Linq.Sugar;
-using System.Data.Linq.Identity;
-using DbLinq.Util;
-using AttributeMappingSource = System.Data.Linq.Mapping.AttributeMappingSource;
-using MappingContext = System.Data.Linq.Mapping.MappingContext;
-using DbLinq;
+using AttributeMappingSource  = System.Data.Linq.Mapping.AttributeMappingSource;
 #else
-using DbLinq.Data.Linq.Implementation;
-using DbLinq.Data.Linq.Sugar;
-using DbLinq.Data.Linq.Identity;
-using DbLinq.Util;
-using AttributeMappingSource = DbLinq.Data.Linq.Mapping.AttributeMappingSource;
-using MappingContext = DbLinq.Data.Linq.Mapping.MappingContext;
-using System.Data.Linq;
+using AttributeMappingSource  = DbLinq.Data.Linq.Mapping.AttributeMappingSource;
 #endif
 
-using DbLinq.Factory;
-using DbLinq.Vendor;
+using DbLinq;
+using DbLinq.Data.Linq;
 using DbLinq.Data.Linq.Database;
 using DbLinq.Data.Linq.Database.Implementation;
-using System.Linq.Expressions;
-using System.Reflection.Emit;
+using DbLinq.Data.Linq.Identity;
+using DbLinq.Data.Linq.Implementation;
+using DbLinq.Data.Linq.Mapping;
+using DbLinq.Data.Linq.Sugar;
+using DbLinq.Factory;
+using DbLinq.Util;
+using DbLinq.Vendor;
 
 #if MONO_STRICT
 namespace System.Data.Linq
@@ -68,7 +64,7 @@ namespace DbLinq.Data.Linq
     public partial class DataContext : IDisposable
     {
         //private readonly Dictionary<string, ITable> _tableMap = new Dictionary<string, ITable>();
-		private readonly Dictionary<Type, ITable> _tableMap = new Dictionary<Type, ITable>();
+        private readonly Dictionary<Type, ITable> _tableMap = new Dictionary<Type, ITable>();
 
         public MetaModel Mapping { get; private set; }
         // PC question: at ctor, we get a IDbConnection and the Connection property exposes a DbConnection
@@ -83,7 +79,52 @@ namespace DbLinq.Data.Linq
         internal IDatabaseContext DatabaseContext { get; private set; }
         // /all properties...
 
-        private readonly EntityTracker entityTracker = new EntityTracker();
+        private bool objectTrackingEnabled = true;
+        private bool deferredLoadingEnabled = true;
+
+        private bool queryCacheEnabled = false;
+
+        /// <summary>
+        /// Disable the QueryCache: this is surely good for rarely used Select, since preparing
+        /// the SelectQuery to be cached could require more time than build the sql from scratch.
+        /// </summary>
+        [DBLinqExtended]
+        public bool QueryCacheEnabled 
+        {
+            get { return queryCacheEnabled; }
+            set { queryCacheEnabled = value; }
+        }
+
+        private IEntityTracker currentTransactionEntities;
+        private IEntityTracker CurrentTransactionEntities
+        {
+            get
+            {
+                if (this.currentTransactionEntities == null)
+                {
+                    if (this.ObjectTrackingEnabled)
+                        this.currentTransactionEntities = new EntityTracker();
+                    else
+                        this.currentTransactionEntities = new DisabledEntityTracker();
+                }
+                return this.currentTransactionEntities;
+            }
+        }
+
+        private IEntityTracker allTrackedEntities;
+        private IEntityTracker AllTrackedEntities
+        {
+            get
+            {
+                if (this.allTrackedEntities == null)
+                {
+                    allTrackedEntities = ObjectTrackingEnabled
+                        ? (IEntityTracker) new EntityTracker()
+                        : (IEntityTracker) new DisabledEntityTracker();
+                }
+                return this.allTrackedEntities;
+            }
+        }
 
         private IIdentityReaderFactory identityReaderFactory;
         private readonly IDictionary<Type, IIdentityReader> identityReaders = new Dictionary<Type, IIdentityReader>();
@@ -99,21 +140,45 @@ namespace DbLinq.Data.Linq
 
         public DataContext(IDbConnection connection, MappingSource mapping)
         {
+            Profiler.At("START DataContext(IDbConnection, MappingSource)");
             Init(new DatabaseContext(connection), mapping, null);
+            Profiler.At("END DataContext(IDbConnection, MappingSource)");
         }
 
         public DataContext(IDbConnection connection)
         {
+            Profiler.At("START DataContext(IDbConnection)");
             if (connection == null)
                 throw new ArgumentNullException("connection");
 
             Init(new DatabaseContext(connection), null, null);
+            Profiler.At("END DataContext(IDbConnection)");
         }
 
         [DbLinqToDo]
         public DataContext(string fileOrServerOrConnection, MappingSource mapping)
         {
-            throw new NotImplementedException();
+            Profiler.At("START DataContext(string, MappingSource)");
+            if (fileOrServerOrConnection == null)
+                throw new ArgumentNullException("fileOrServerOrConnection");
+            if (mapping == null)
+                throw new ArgumentNullException("mapping");
+
+            if (File.Exists(fileOrServerOrConnection))
+                throw new NotImplementedException("File names not supported.");
+
+            // Is this a decent server name check?
+            // It assumes that the connection string will have at least 2
+            // parameters (separated by ';')
+            if (!fileOrServerOrConnection.Contains(";"))
+                throw new NotImplementedException("Server name not supported.");
+
+            // Assume it's a connection string...
+            IVendor ivendor = GetVendor(ref fileOrServerOrConnection);
+
+            IDbConnection dbConnection = ivendor.CreateDbConnection(fileOrServerOrConnection);
+            Init(new DatabaseContext(dbConnection), mapping, ivendor);
+            Profiler.At("END DataContext(string, MappingSource)");
         }
 
         /// <summary>
@@ -129,21 +194,23 @@ namespace DbLinq.Data.Linq
         [DbLinqToDo]
         public DataContext(string connectionString)
         {
-            IVendor ivendor = GetVendor(connectionString);
+            Profiler.At("START DataContext(string)");
+            IVendor ivendor = GetVendor(ref connectionString);
 
             IDbConnection dbConnection = ivendor.CreateDbConnection(connectionString);
             Init(new DatabaseContext(dbConnection), null, ivendor);
 
+            Profiler.At("END DataContext(string)");
         }
 
-        private IVendor GetVendor(string connectionString)
+        private IVendor GetVendor(ref string connectionString)
         {
             if (connectionString == null)
                 throw new ArgumentNullException("connectionString");
 
             Assembly assy;
             string vendorClassToLoad;
-            GetVendorInfo(connectionString, out assy, out vendorClassToLoad);
+            GetVendorInfo(ref connectionString, out assy, out vendorClassToLoad);
 
             var types =
                 from type in assy.GetTypes()
@@ -164,10 +231,10 @@ namespace DbLinq.Data.Linq
             return (IVendor) Activator.CreateInstance(types.First());
         }
 
-        private void GetVendorInfo(string connectionString, out Assembly assembly, out string typeName)
+        private void GetVendorInfo(ref string connectionString, out Assembly assembly, out string typeName)
         {
             System.Text.RegularExpressions.Regex reProvider
-                = new System.Text.RegularExpressions.Regex(@"DbLinqProvider=([\w\.]+)");
+                = new System.Text.RegularExpressions.Regex(@"DbLinqProvider=([\w\.]+);?");
 
             string assemblyFile = null;
             string vendor;
@@ -224,13 +291,12 @@ namespace DbLinq.Data.Linq
             if (databaseContext.Connection.ConnectionString == null)
                 throw new NullReferenceException();
 
+            string connectionString = databaseContext.Connection.ConnectionString;
             _VendorProvider = ObjectFactory.Get<IVendorProvider>();
             Vendor = vendor ?? 
-                (databaseContext.Connection.ConnectionString != null
-                    ? GetVendor(databaseContext.Connection.ConnectionString)
-                    : null) ??
+                (connectionString != null ? GetVendor(ref connectionString) : null) ??
                 _VendorProvider.FindVendorByProviderType(typeof(SqlClient.Sql2005Provider));
-
+            
             DatabaseContext = databaseContext;
 
             MemberModificationHandler = ObjectFactory.Create<IMemberModificationHandler>(); // not a singleton: object is stateful
@@ -248,56 +314,54 @@ namespace DbLinq.Data.Linq
             Mapping = mappingSource.GetModel(GetType());
         }
 
-		/// <summary>
-		/// Checks if the table is allready mapped or maps it if not.
-		/// </summary>
-		/// <param name="tableType">Type of the table.</param>
-		/// <exception cref="InvalidOperationException">Thrown if the table is not mappable.</exception>
-		private void CheckTableMapping(Type tableType)
-		{
-			//This will throw an exception if the table is not found
-			if(Mapping.GetTable(tableType) == null)
-			{
-				throw new InvalidOperationException("The type '" + tableType.Name + "' is not mapped as a Table.");
-			}
-		}
+        /// <summary>
+        /// Checks if the table is allready mapped or maps it if not.
+        /// </summary>
+        /// <param name="tableType">Type of the table.</param>
+        /// <exception cref="InvalidOperationException">Thrown if the table is not mappable.</exception>
+        private void CheckTableMapping(Type tableType)
+        {
+            //This will throw an exception if the table is not found
+            if(Mapping.GetTable(tableType) == null)
+            {
+                throw new InvalidOperationException("The type '" + tableType.Name + "' is not mapped as a Table.");
+            }
+        }
 
-		/// <summary>
-		/// Returns a Table for the type TEntity.
-		/// </summary>
-		/// <exception cref="InvalidOperationException">If the type TEntity is not mappable as a Table.</exception>
-		/// <typeparam name="TEntity">The table type.</typeparam>
-    	public Table<TEntity> GetTable<TEntity>() where TEntity : class
+        /// <summary>
+        /// Returns a Table for the type TEntity.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">If the type TEntity is not mappable as a Table.</exception>
+        /// <typeparam name="TEntity">The table type.</typeparam>
+        public Table<TEntity> GetTable<TEntity>() where TEntity : class
         {
             return (Table<TEntity>)GetTable(typeof(TEntity));
         }
 
-		/// <summary>
-		/// Returns a Table for the given type.
-		/// </summary>
-		/// <param name="type">The table type.</param>
-		/// <exception cref="InvalidOperationException">If the type is not mappable as a Table.</exception>
+        /// <summary>
+        /// Returns a Table for the given type.
+        /// </summary>
+        /// <param name="type">The table type.</param>
+        /// <exception cref="InvalidOperationException">If the type is not mappable as a Table.</exception>
         public ITable GetTable(Type type)
         {
-            lock (_tableMap)
-            {
-                ITable tableExisting;
-				if (_tableMap.TryGetValue(type, out tableExisting))
-                    return tableExisting;
+            Profiler.At("DataContext.GetTable(typeof({0}))", type != null ? type.Name : null);
+            ITable tableExisting;
+            if (_tableMap.TryGetValue(type, out tableExisting))
+                return tableExisting;
 
-				//Check for table mapping
-				CheckTableMapping(type);
+            //Check for table mapping
+            CheckTableMapping(type);
 
-                var tableNew = Activator.CreateInstance(
-                                  typeof(Table<>).MakeGenericType(type)
-                                  , BindingFlags.NonPublic | BindingFlags.Instance
-                                  , null
-                                  , new object[] { this }
-                                  , System.Globalization.CultureInfo.CurrentCulture) as ITable;
+            var tableNew = Activator.CreateInstance(
+                              typeof(Table<>).MakeGenericType(type)
+                              , BindingFlags.NonPublic | BindingFlags.Instance
+                              , null
+                              , new object[] { this }
+                              , System.Globalization.CultureInfo.CurrentCulture) as ITable;
 
-                _tableMap[type] = tableNew;
-                return tableNew;
-            }
+            _tableMap[type] = tableNew;
+            return tableNew;
         }
 
         public void SubmitChanges()
@@ -327,35 +391,49 @@ namespace DbLinq.Data.Linq
         /// <param name="failureMode"></param>
         public virtual void SubmitChanges(ConflictMode failureMode)
         {
+            if (this.objectTrackingEnabled == false)
+                throw new InvalidOperationException("Object tracking is not enabled for the current data context instance.");
             using (DatabaseContext.OpenConnection()) //ConnMgr will close connection for us
             using (IDatabaseTransaction transaction = DatabaseContext.Transaction())
             {
                 var queryContext = new QueryContext(this);
-                var entityTracks = entityTracker.EnumerateAll().ToList();
-                foreach (var entityTrack in entityTracks)
+
+                // There's no sense in updating an entity when it's going to 
+                // be deleted in the current transaction, so do deletes first.
+                foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll().ToList())
                 {
                     switch (entityTrack.EntityState)
                     {
-                        case EntityState.ToInsert:
-                            var insertQuery = QueryBuilder.GetInsertQuery(entityTrack.Entity, queryContext);
-                            QueryRunner.Insert(entityTrack.Entity, insertQuery);
-                            Register(entityTrack.Entity);
-                            break;
-                        case EntityState.ToWatch:
-                            if (MemberModificationHandler.IsModified(entityTrack.Entity, Mapping))
-                            {
-                                var modifiedMembers = MemberModificationHandler.GetModifiedProperties(entityTrack.Entity, Mapping);
-                                var updateQuery = QueryBuilder.GetUpdateQuery(entityTrack.Entity, modifiedMembers, queryContext);
-                                QueryRunner.Update(entityTrack.Entity, updateQuery, modifiedMembers);
-
-                                RegisterUpdateAgain(entityTrack.Entity);
-                            }
-                            break;
                         case EntityState.ToDelete:
                             var deleteQuery = QueryBuilder.GetDeleteQuery(entityTrack.Entity, queryContext);
                             QueryRunner.Delete(entityTrack.Entity, deleteQuery);
 
                             UnregisterDelete(entityTrack.Entity);
+                            AllTrackedEntities.RegisterToDelete(entityTrack.Entity);
+                            AllTrackedEntities.RegisterDeleted(entityTrack.Entity);
+                            break;
+                        default:
+                            // ignore.
+                            break;
+                    }
+                }
+                foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll()
+                        .Concat(AllTrackedEntities.EnumerateAll())
+                        .ToList())
+                {
+                    switch (entityTrack.EntityState)
+                    {
+                        case EntityState.ToInsert:
+                            foreach (var toInsert in GetReferencedObjects(entityTrack.Entity))
+                            {
+                                InsertEntity(toInsert, queryContext);
+                            }
+                            break;
+                        case EntityState.ToWatch:
+                            foreach (var toUpdate in GetReferencedObjects(entityTrack.Entity))
+                            {
+                                UpdateEntity(toUpdate, queryContext);
+                            }
                             break;
                         default:
                             throw new ArgumentOutOfRangeException();
@@ -363,6 +441,120 @@ namespace DbLinq.Data.Linq
                 }
                 // TODO: handle conflicts (which can only occur when concurrency mode is implemented)
                 transaction.Commit();
+            }
+        }
+
+        private IEnumerable<object> GetReferencedObjects(object value)
+        {
+            var values = new EntitySet<object>();
+            FillReferencedObjects(value, values);
+            return values;
+        }
+
+        // Breadth-first traversal of an object graph
+        private void FillReferencedObjects(object parent, EntitySet<object> values)
+        {
+            if (parent == null)
+                return;
+            var children = new Queue<object>();
+			children.Enqueue(parent);
+			while (children.Count > 0)
+			{
+                object value = children.Dequeue();
+                values.Add(value);
+                IEnumerable<MetaAssociation> associationList = Mapping.GetMetaType(value.GetType()).Associations.Where(a => !a.IsForeignKey);
+                if (associationList.Any())
+			    {
+				    foreach (MetaAssociation association in associationList)
+                    {
+                        var memberData = association.ThisMember;
+                        var entitySetValue = memberData.Member.GetMemberValue(value);
+
+                        if (entitySetValue != null)
+                        {
+						    var hasLoadedOrAssignedValues = entitySetValue.GetType().GetProperty("HasLoadedOrAssignedValues");
+						    if (!((bool)hasLoadedOrAssignedValues.GetValue(entitySetValue, null)))
+							    continue;   // execution deferred; ignore.
+						    foreach (var o in ((IEnumerable)entitySetValue))
+							    children.Enqueue(o);
+					    }
+                    }
+                }
+			}
+        }
+
+        private void InsertEntity(object entity, QueryContext queryContext)
+        {
+            var insertQuery = QueryBuilder.GetInsertQuery(entity, queryContext);
+            QueryRunner.Insert(entity, insertQuery);
+            Register(entity);
+            UpdateReferencedObjects(entity);
+            MoveToAllTrackedEntities(entity, true);
+        }
+
+        private void UpdateEntity(object entity, QueryContext queryContext)
+        {
+            if (!AllTrackedEntities.ContainsReference(entity))
+                InsertEntity(entity, queryContext);
+            else if (MemberModificationHandler.IsModified(entity, Mapping))
+            {
+                var modifiedMembers = MemberModificationHandler.GetModifiedProperties(entity, Mapping);
+                var updateQuery = QueryBuilder.GetUpdateQuery(entity, modifiedMembers, queryContext);
+                QueryRunner.Update(entity, updateQuery, modifiedMembers);
+
+                RegisterUpdateAgain(entity);
+                UpdateReferencedObjects(entity);
+                MoveToAllTrackedEntities(entity, false);
+            }
+        }
+
+        private void UpdateReferencedObjects(object root)
+        {
+            var metaType = Mapping.GetMetaType(root.GetType());
+            foreach (var assoc in metaType.Associations)
+            {
+                var memberData = assoc.ThisMember;
+				//This is not correct - AutoSyncing applies to auto-updating columns, such as a TimeStamp, not to foreign key associations, which is always automatically synched
+				//Confirmed against default .NET l2sql - association columns are always set, even if AutoSync==AutoSync.Never
+				//if (memberData.Association.ThisKey.Any(m => (m.AutoSync != AutoSync.Always) && (m.AutoSync != sync)))
+                //    continue;
+                var oks = memberData.Association.OtherKey.Select(m => m.StorageMember).ToList();
+                if (oks.Count == 0)
+                    continue;
+                var pks = memberData.Association.ThisKey
+                    .Select(m => m.StorageMember.GetMemberValue(root))
+                    .ToList();
+                if (pks.Count != oks.Count)
+                    throw new InvalidOperationException(
+                        string.Format("Count of primary keys ({0}) doesn't match count of other keys ({1}).",
+                            pks.Count, oks.Count));
+                var members = memberData.Member.GetMemberValue(root) as IEnumerable;
+                if (members == null)
+                    continue;
+                foreach (var member in members)
+                {
+                    for (int i = 0; i < pks.Count; ++i)
+                    {
+                        oks[i].SetMemberValue(member, pks[i]);
+                    }
+                }
+            }
+        }
+
+        private void MoveToAllTrackedEntities(object entity, bool insert)
+        {
+            if (!ObjectTrackingEnabled)
+                return;
+            if (CurrentTransactionEntities.ContainsReference(entity))
+            {
+                CurrentTransactionEntities.RegisterToDelete(entity);
+                if (!insert)
+                    CurrentTransactionEntities.RegisterDeleted(entity);
+            }
+            if (!AllTrackedEntities.ContainsReference(entity))
+            {
+                var identityReader = _GetIdentityReader(entity.GetType());
+                AllTrackedEntities.RegisterToWatch(entity, identityReader.GetIdentityKey(entity));
             }
         }
 
@@ -391,13 +583,10 @@ namespace DbLinq.Data.Linq
         internal IIdentityReader _GetIdentityReader(Type t)
         {
             IIdentityReader identityReader;
-            lock (identityReaders)
+            if (!identityReaders.TryGetValue(t, out identityReader))
             {
-                if (!identityReaders.TryGetValue(t, out identityReader))
-                {
-                    identityReader = identityReaderFactory.GetReader(t, this);
-                    identityReaders[t] = identityReader;
-                }
+                identityReader = identityReaderFactory.GetReader(t, this);
+                identityReaders[t] = identityReader;
             }
             return identityReader;
         }
@@ -411,7 +600,9 @@ namespace DbLinq.Data.Linq
             if (identityKey == null) // if we don't have an entitykey here, it means that the entity has no PK
                 return entity;
             // even 
-            var registeredEntityTrack = entityTracker.FindByIdentity(identityKey);
+            var registeredEntityTrack = 
+                CurrentTransactionEntities.FindByIdentity(identityKey) ??
+                AllTrackedEntities.FindByIdentity(identityKey);
             if (registeredEntityTrack != null)
                 return registeredEntityTrack.Entity;
             return null;
@@ -440,70 +631,89 @@ namespace DbLinq.Data.Linq
                 return entity;
 
             // try to find an already registered entity and return it
-            var registeredEntityTrack = entityTracker.FindByIdentity(identityKey);
+            var registeredEntityTrack = 
+                CurrentTransactionEntities.FindByIdentity(identityKey) ??
+                AllTrackedEntities.FindByIdentity(identityKey);
             if (registeredEntityTrack != null)
                 return registeredEntityTrack.Entity;
 
             // otherwise, register and return
-            entityTracker.RegisterToWatch(entity, identityKey);
+            AllTrackedEntities.RegisterToWatch(entity, identityKey);
             return entity;
         }
 
         readonly IDataMapper DataMapper = ObjectFactory.Get<IDataMapper>();
-        private void SetEntityRefQueries(object entity)
-        {
-            Type thisType = entity.GetType();
-            IList<MemberInfo> properties = DataMapper.GetEntityRefAssociations(thisType);
+		private void SetEntityRefQueries(object entity)
+		{
+            if (!this.deferredLoadingEnabled)
+                return;
+
+            // BUG: This is ignoring External Mappings from XmlMappingSource.
+
+			Type thisType = entity.GetType();
+			IEnumerable<MetaAssociation> associationList = Mapping.GetMetaType(entity.GetType()).Associations.Where(a => a.IsForeignKey);
+			foreach (MetaAssociation association in associationList)
+			{
+				//example of entityRef:Order.Employee
+				var memberData = association.ThisMember;
+				Type otherTableType = association.OtherType.Type;
+				ParameterExpression p = Expression.Parameter(otherTableType, "other");
+
+				var otherTable = GetTable(otherTableType);
+
+				//ie:EmployeeTerritories.EmployeeID
+				var foreignKeys = memberData.Association.ThisKey;
+				BinaryExpression predicate = null;
+				var otherPKs = memberData.Association.OtherKey;
+				IEnumerator<MetaDataMember> otherPKEnumerator = otherPKs.GetEnumerator();
+
+				if (otherPKs.Count != foreignKeys.Count)
+					throw new InvalidOperationException("Foreign keys don't match ThisKey");
+				foreach (MetaDataMember key in foreignKeys)
+				{
+					otherPKEnumerator.MoveNext();
+
+					var thisForeignKeyProperty = (PropertyInfo)key.Member;
+					object thisForeignKeyValue = thisForeignKeyProperty.GetValue(entity, null);
+
+					if (thisForeignKeyValue != null)
+					{
+						BinaryExpression keyPredicate;
+						if (!(thisForeignKeyProperty.PropertyType.IsNullable()))
+						{
+							keyPredicate = Expression.Equal(Expression.MakeMemberAccess(p, otherPKEnumerator.Current.Member),
+																		Expression.Constant(thisForeignKeyValue));
+						}
+						else
+						{
+							var ValueProperty = thisForeignKeyProperty.PropertyType.GetProperty("Value");
+							keyPredicate = Expression.Equal(Expression.MakeMemberAccess(p, otherPKEnumerator.Current.Member),
+																	 Expression.Constant(ValueProperty.GetValue(thisForeignKeyValue, null)));
+						}
+
+						if (predicate == null)
+							predicate = keyPredicate;
+						else
+							predicate = Expression.And(predicate, keyPredicate);
+					}
+				}
+				IEnumerable query = null;
+				if (predicate != null)
+				{
+					query = GetOtherTableQuery(predicate, p, otherTableType, otherTable) as IEnumerable;
+					//it would be interesting surround the above query with a .Take(1) expression for performance.
+				}
 
 
-            foreach (PropertyInfo prop in properties)
-            {
-                //example of entityRef:Order.Employee
-                AssociationAttribute associationInfo = prop.GetAttribute<AssociationAttribute>();
-                Type otherTableType = prop.PropertyType;
-                IList<MemberInfo> otherPKs = DataMapper.GetPrimaryKeys(Mapping.GetTable(otherTableType));
-
-                if (otherPKs.Count > 1)
-                    throw new NotSupportedException("Multiple keys object not supported yet.");
-
-                var otherTable = GetTable(otherTableType);
-
-                //ie:EmployeeTerritories.EmployeeID
-
-                var thisForeignKeyProperty = thisType.GetProperty(associationInfo.ThisKey);
-                object thisForeignKeyValue = thisForeignKeyProperty.GetValue(entity, null);
-
-                IEnumerable query = null;
-                if (thisForeignKeyValue != null)
-                {
-                    ParameterExpression p = Expression.Parameter(otherTableType, "other");
-                    Expression predicate;
-                    if (!(thisForeignKeyProperty.PropertyType.IsNullable()))
-                    {
-                        predicate = Expression.Equal(Expression.MakeMemberAccess(p, otherPKs.First()),
-                                                                    Expression.Constant(thisForeignKeyValue));
-                    }
-                    else
-                    {
-                        var ValueProperty = thisForeignKeyProperty.PropertyType.GetProperty("Value");
-                        predicate = Expression.Equal(Expression.MakeMemberAccess(p, otherPKs.First()),
-                                                                 Expression.Constant(ValueProperty.GetValue(thisForeignKeyValue, null)));
-                    }
-
-                    query = GetOtherTableQuery(predicate, p, otherTableType, otherTable) as IEnumerable;
-                    //it would be interesting surround the above query with a .Take(1) expression for performance.
-                }
-
-
-                FieldInfo entityRefField = entity.GetType().GetField(associationInfo.Storage, BindingFlags.NonPublic | BindingFlags.Instance);
-                object entityRefValue = null;
-                if (query != null)
-                    entityRefValue = Activator.CreateInstance(entityRefField.FieldType, query);
-                else
-                    entityRefValue = Activator.CreateInstance(entityRefField.FieldType);
-                entityRefField.SetValue(entity, entityRefValue);
-            }
-        }
+				FieldInfo entityRefField = (FieldInfo)memberData.StorageMember;
+				object entityRefValue = null;
+				if (query != null)
+					entityRefValue = Activator.CreateInstance(entityRefField.FieldType, query);
+				else
+					entityRefValue = Activator.CreateInstance(entityRefField.FieldType);
+				entityRefField.SetValue(entity, entityRefValue);
+			}
+		}
 
         /// <summary>
         /// This method is executed when the entity is being registered. Each EntitySet property has a internal query that can be set using the EntitySet.SetSource method.
@@ -512,54 +722,70 @@ namespace DbLinq.Data.Linq
         /// <param name="entity"></param>
         private void SetEntitySetsQueries(object entity)
         {
-            IList<MemberInfo> properties = DataMapper.GetEntitySetAssociations(entity.GetType());
-            
-            if (properties.Any()) {
-                IList<MemberInfo> thisPKs = DataMapper.GetPrimaryKeys(Mapping.GetTable(entity.GetType()));
+            if (!this.deferredLoadingEnabled)
+                return;
 
-                if (thisPKs.Count > 1)
-                    throw new NotSupportedException("Multiple keys object not supported yet.");
+            // BUG: This is ignoring External Mappings from XmlMappingSource.
 
-                object primaryKeyValue = (thisPKs.First() as PropertyInfo).GetValue(entity, null);
+			IEnumerable<MetaAssociation> associationList = Mapping.GetMetaType(entity.GetType()).Associations.Where(a => !a.IsForeignKey);
 
-
-                foreach (PropertyInfo prop in properties)
+			if (associationList.Any())
+			{
+				foreach (MetaAssociation association in associationList)
                 {
-                    //example of entitySet: Employee.EmployeeTerritories
-                    var associationInfo = prop.GetAttribute<AssociationAttribute>();
-                    Type otherTableType = prop.PropertyType.GetGenericArguments().First();
+					//example of entitySet: Employee.EmployeeTerritories
+					var memberData = association.ThisMember;
+					Type otherTableType = association.OtherType.Type;
+                    ParameterExpression p = Expression.Parameter(otherTableType, "other");
 
                     //other table:EmployeeTerritories
                     var otherTable = GetTable(otherTableType);
-                    //other table member:EmployeeTerritories.EmployeeID
-                    var otherTableMember = otherTableType.GetProperty(associationInfo.OtherKey);
 
+					var otherKeys = memberData.Association.OtherKey;
+					var thisKeys = memberData.Association.ThisKey;
+                    if (otherKeys.Count != thisKeys.Count)
+                        throw new InvalidOperationException("This keys don't match OtherKey");
+                    BinaryExpression predicate = null;
+                    IEnumerator<MetaDataMember> thisKeyEnumerator = thisKeys.GetEnumerator();
+					foreach (MetaDataMember otherKey in otherKeys)
+                    {
+                        thisKeyEnumerator.MoveNext();
+                        //other table member:EmployeeTerritories.EmployeeID
+						var otherTableMember = (PropertyInfo)otherKey.Member;
 
-                    ParameterExpression p = Expression.Parameter(otherTableType, "other");
-                    Expression predicate;
-                    if (!(otherTableMember.PropertyType.IsNullable()))
-                    {
-                        predicate = Expression.Equal(Expression.MakeMemberAccess(p, otherTableMember),
-                                                                    Expression.Constant(primaryKeyValue));
-                    }
-                    else
-                    {
-                        var ValueProperty = otherTableMember.PropertyType.GetProperty("Value");
-                        predicate = Expression.Equal(Expression.MakeMemberAccess(
-                                                                    Expression.MakeMemberAccess(p, otherTableMember),
-                                                                    ValueProperty),
-                                                                 Expression.Constant(primaryKeyValue));
+                        BinaryExpression keyPredicate;
+                        if (!(otherTableMember.PropertyType.IsNullable()))
+                        {
+                            keyPredicate = Expression.Equal(Expression.MakeMemberAccess(p, otherTableMember),
+                                                                        Expression.Constant(thisKeyEnumerator.Current.Member.GetMemberValue(entity)));
+                        }
+                        else
+                        {
+                            var ValueProperty = otherTableMember.PropertyType.GetProperty("Value");
+                            keyPredicate = Expression.Equal(Expression.MakeMemberAccess(
+                                                                        Expression.MakeMemberAccess(p, otherTableMember),
+                                                                        ValueProperty),
+                                                                     Expression.Constant(thisKeyEnumerator.Current.Member.GetMemberValue(entity)));
+                        }
+                        if (predicate == null)
+                            predicate = keyPredicate;
+                        else
+                            predicate = Expression.And(predicate, keyPredicate);
                     }
 
                     var query = GetOtherTableQuery(predicate, p, otherTableType, otherTable);
 
-                    var entitySetValue = prop.GetValue(entity, null);
+					var entitySetValue = memberData.Member.GetMemberValue(entity);
 
                     if (entitySetValue == null)
                     {
-                        entitySetValue = Activator.CreateInstance(prop.PropertyType);
-                        prop.SetValue(entity, entitySetValue, null);
+						entitySetValue = Activator.CreateInstance(memberData.Member.GetMemberType());
+						memberData.Member.SetMemberValue(entity, entitySetValue);
                     }
+
+                    var hasLoadedOrAssignedValues = entitySetValue.GetType().GetProperty("HasLoadedOrAssignedValues");
+                    if ((bool)hasLoadedOrAssignedValues.GetValue(entitySetValue, null))
+                        continue;
 
                     var setSourceMethod = entitySetValue.GetType().GetMethod("SetSource");
                     setSourceMethod.Invoke(entitySetValue, new[] { query });
@@ -568,18 +794,14 @@ namespace DbLinq.Data.Linq
             }
         }
 
+		private static MethodInfo _WhereMethod = typeof(Queryable).GetMethods().First(m => m.Name == "Where");
         private object GetOtherTableQuery(Expression predicate, ParameterExpression parameter, Type otherTableType, IQueryable otherTable)
         {
             //predicate: other.EmployeeID== "WARTH"
             Expression lambdaPredicate = Expression.Lambda(predicate, parameter);
             //lambdaPredicate: other=>other.EmployeeID== "WARTH"
 
-            var whereMethod = typeof(Queryable)
-                              .GetMethods().First(m => m.Name == "Where")
-                              .MakeGenericMethod(otherTableType);
-
-
-            Expression call = Expression.Call(whereMethod, otherTable.Expression, lambdaPredicate);
+			Expression call = Expression.Call(_WhereMethod.MakeGenericMethod(otherTableType), otherTable.Expression, lambdaPredicate);
             //Table[EmployeesTerritories].Where(other=>other.employeeID="WARTH")
 
             return otherTable.Provider.CreateQuery(call);
@@ -595,7 +817,24 @@ namespace DbLinq.Data.Linq
         /// <param name="entity"></param>
         internal void RegisterInsert(object entity)
         {
-            entityTracker.RegisterToInsert(entity);
+            CurrentTransactionEntities.RegisterToInsert(entity);
+        }
+
+        private void DoRegisterUpdate(object entity)
+        {
+            if (entity == null)
+                throw new ArgumentNullException("entity");
+
+            if (!this.objectTrackingEnabled)
+                return;
+
+            var identityReader = _GetIdentityReader(entity.GetType());
+            var identityKey = identityReader.GetIdentityKey(entity);
+            // if we have no key, we can not watch
+            if (identityKey == null || identityKey.Keys.Count == 0)
+                return;
+            // register entity
+            AllTrackedEntities.RegisterToWatch(entity, identityKey);
         }
 
         /// <summary>
@@ -605,16 +844,8 @@ namespace DbLinq.Data.Linq
         /// <param name="entity"></param>
         internal void RegisterUpdate(object entity)
         {
-            if (entity == null)
-                throw new ArgumentNullException("entity");
-
-            var identityReader = _GetIdentityReader(entity.GetType());
-            var identityKey = identityReader.GetIdentityKey(entity);
-            // if we have no key, we can not watch
-            if (identityKey == null)
-                return;
-            // register entity
-            entityTracker.RegisterToWatch(entity, identityKey);
+            DoRegisterUpdate(entity);
+			MemberModificationHandler.Register(entity, Mapping);
         }
 
         /// <summary>
@@ -624,6 +855,8 @@ namespace DbLinq.Data.Linq
         /// <returns></returns>
         internal object Register(object entity)
         {
+            if (! this.objectTrackingEnabled)
+                return entity;
             var registeredEntity = _GetOrRegisterEntity(entity);
             // the fact of registering again clears the modified state, so we're... clear with that
             MemberModificationHandler.Register(registeredEntity, Mapping);
@@ -638,7 +871,9 @@ namespace DbLinq.Data.Linq
         /// <param name="entityOriginalState"></param>
         internal void RegisterUpdate(object entity, object entityOriginalState)
         {
-            RegisterUpdate(entity);
+            if (!this.objectTrackingEnabled)
+                return;
+            DoRegisterUpdate(entity);
             MemberModificationHandler.Register(entity, entityOriginalState, Mapping);
         }
 
@@ -648,6 +883,8 @@ namespace DbLinq.Data.Linq
         /// <param name="entity"></param>
         internal void RegisterUpdateAgain(object entity)
         {
+            if (!this.objectTrackingEnabled)
+                return;
             MemberModificationHandler.ClearModified(entity, Mapping);
         }
 
@@ -657,7 +894,9 @@ namespace DbLinq.Data.Linq
         /// <param name="entity"></param>
         internal void RegisterDelete(object entity)
         {
-            entityTracker.RegisterToDelete(entity);
+            if (!this.objectTrackingEnabled)
+                return;
+            CurrentTransactionEntities.RegisterToDelete(entity);
         }
 
         /// <summary>
@@ -666,7 +905,9 @@ namespace DbLinq.Data.Linq
         /// <param name="entity"></param>
         internal void UnregisterDelete(object entity)
         {
-            entityTracker.RegisterDeleted(entity);
+            if (!this.objectTrackingEnabled)
+                return;
+            CurrentTransactionEntities.RegisterDeleted(entity);
         }
 
         #endregion
@@ -680,7 +921,8 @@ namespace DbLinq.Data.Linq
             var inserts = new List<object>();
             var updates = new List<object>();
             var deletes = new List<object>();
-            foreach (var entityTrack in entityTracker.EnumerateAll())
+            foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll()
+                    .Concat(AllTrackedEntities.EnumerateAll()))
             {
                 switch (entityTrack.EntityState)
                 {
@@ -730,7 +972,6 @@ namespace DbLinq.Data.Linq
 
         public IEnumerable ExecuteQuery(Type elementType, string query, params object[] parameters)
         {
-            Console.WriteLine("# ExecuteQuery: query={0}", query != null ? query : "<null>");
             if (elementType == null)
                 throw new ArgumentNullException("elementType");
             if (query == null)
@@ -745,7 +986,11 @@ namespace DbLinq.Data.Linq
         /// Gets or sets the load options
         /// </summary>
         [DbLinqToDo]
-        public DataLoadOptions LoadOptions { get; set; }
+		public DataLoadOptions LoadOptions
+		{
+			get { throw new NotImplementedException(); }
+			set { throw new NotImplementedException(); }
+		}
 
         public DbTransaction Transaction { get; set; }
 
@@ -787,6 +1032,9 @@ namespace DbLinq.Data.Linq
         {
             //connection closing should not be done here.
             //read: http://msdn2.microsoft.com/en-us/library/bb292288.aspx
+
+			//We own the instance of MemberModificationHandler - we must unregister listeners of entities we attached to
+			MemberModificationHandler.UnregisterAll();
         }
 
         [DbLinqToDo]
@@ -855,12 +1103,15 @@ namespace DbLinq.Data.Linq
             }
         }
 
-
-        [DbLinqToDo]
         public bool ObjectTrackingEnabled
         {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
+            get { return this.objectTrackingEnabled; }
+            set 
+            {
+                if (this.currentTransactionEntities != null && value != this.objectTrackingEnabled)
+                    throw new InvalidOperationException("Data context options cannot be modified after results have been returned from a query.");
+                this.objectTrackingEnabled = value;
+            }
         }
 
         [DbLinqToDo]
@@ -870,11 +1121,15 @@ namespace DbLinq.Data.Linq
             set { throw new NotImplementedException(); }
         }
 
-        [DbLinqToDo]
         public bool DeferredLoadingEnabled
         {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
+            get { return this.deferredLoadingEnabled; }
+            set
+            {
+                if (this.currentTransactionEntities != null && value != this.deferredLoadingEnabled)
+                    throw new InvalidOperationException("Data context options cannot be modified after results have been returned from a query.");
+                this.deferredLoadingEnabled = value;
+            }
         }
 
         [DbLinqToDo]
@@ -886,6 +1141,16 @@ namespace DbLinq.Data.Linq
         [DbLinqToDo]
         public DbCommand GetCommand(IQueryable query)
         {
+            DbCommand dbCommand = GetIDbCommand(query) as DbCommand;
+            if (dbCommand == null)
+                throw new InvalidOperationException();
+
+            return dbCommand;
+        }
+
+        [DBLinqExtended]
+        public IDbCommand GetIDbCommand(IQueryable query)
+        {
             if (query == null)
                 throw new ArgumentNullException("query");
 
@@ -893,11 +1158,29 @@ namespace DbLinq.Data.Linq
             if (qp == null)
                 throw new InvalidOperationException();
 
-            IDbCommand dbCommand = qp.GetQuery(null).GetCommand().Command;
-            if (!(dbCommand is DbCommand))
-                throw new InvalidOperationException();
+            if (qp.ExpressionChain.Expressions.Count == 0)
+                qp.ExpressionChain.Expressions.Add(CreateDefaultQuery(query));
 
-            return (DbCommand)dbCommand;
+            return qp.GetQuery(null).GetCommand().Command;
+        }
+
+        private Expression CreateDefaultQuery(IQueryable query)
+        {
+            // Manually create the expression tree for: IQueryable<TableType>.Select(e => e)
+            var identityParameter = Expression.Parameter(query.ElementType, "e");
+            var identityBody = Expression.Lambda(
+                typeof(Func<,>).MakeGenericType(query.ElementType, query.ElementType),
+                identityParameter,
+                new[] { identityParameter }
+            );
+
+            return Expression.Call(
+                typeof(Queryable),
+                "Select",
+                new[] { query.ElementType, query.ElementType },
+                query.Expression,
+                Expression.Quote(identityBody)
+            );
         }
 
         [DbLinqToDo]

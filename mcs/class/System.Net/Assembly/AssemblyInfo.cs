@@ -57,18 +57,21 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDelaySign (true)]
 #if NET_2_1
 	[assembly: AssemblyKeyFile ("../silverlight.pub")]
+	[assembly: InternalsVisibleTo ("System.Windows, PublicKey=00240000048000009400000006020000002400005253413100040000010001008D56C76F9E8649383049F383C44BE0EC204181822A6C31CF5EB7EF486944D032188EA1D3920763712CCB12D75FB77E9811149E6148E5D32FBAAB37611C1878DDC19E20EF135D0CB2CFF2BFEC3D115810C3D9069638FE4BE215DBF795861920E5AB6F7DB2E2CEEF136AC23D5DD2BF031700AEC232F6C6B1C785B4305C123B37AB")]
+	[assembly: InternalsVisibleTo ("System.Windows.Browser, PublicKey=00240000048000009400000006020000002400005253413100040000010001008D56C76F9E8649383049F383C44BE0EC204181822A6C31CF5EB7EF486944D032188EA1D3920763712CCB12D75FB77E9811149E6148E5D32FBAAB37611C1878DDC19E20EF135D0CB2CFF2BFEC3D115810C3D9069638FE4BE215DBF795861920E5AB6F7DB2E2CEEF136AC23D5DD2BF031700AEC232F6C6B1C785B4305C123B37AB")]
+	[assembly: InternalsVisibleTo ("System.Xml, PublicKey=00240000048000009400000006020000002400005253413100040000010001008D56C76F9E8649383049F383C44BE0EC204181822A6C31CF5EB7EF486944D032188EA1D3920763712CCB12D75FB77E9811149E6148E5D32FBAAB37611C1878DDC19E20EF135D0CB2CFF2BFEC3D115810C3D9069638FE4BE215DBF795861920E5AB6F7DB2E2CEEF136AC23D5DD2BF031700AEC232F6C6B1C785B4305C123B37AB")]
 #else
 	[assembly: AssemblyKeyFile ("../ecma.pub")]
+	[assembly: AllowPartiallyTrustedCallers]
+	[assembly: SecurityCritical]
+	[assembly: Debuggable (DebuggableAttribute.DebuggingModes.DisableOptimizations | 
+	                       DebuggableAttribute.DebuggingModes.EnableEditAndContinue | 
+	                       DebuggableAttribute.DebuggingModes.IgnoreSymbolStoreSequencePoints)]
 #endif
 
 [assembly: ComVisible (false)]
-[assembly: AllowPartiallyTrustedCallers]
 
 [assembly: CompilationRelaxations (CompilationRelaxations.NoStringInterning)]
-[assembly: Debuggable (DebuggableAttribute.DebuggingModes.DisableOptimizations | 
-                       DebuggableAttribute.DebuggingModes.EnableEditAndContinue | 
-                       DebuggableAttribute.DebuggingModes.IgnoreSymbolStoreSequencePoints)]
 [assembly: RuntimeCompatibility (WrapNonExceptionThrows = true)]
-[assembly: SecurityCritical]
 [assembly: SecurityPermission (SecurityAction.RequestMinimum, Execution = true)]
 [assembly: SecurityPermission (SecurityAction.RequestMinimum, SkipVerification = true)]

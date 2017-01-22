@@ -88,7 +88,21 @@ namespace System.Runtime.Serialization
 				writer.WriteAttributeString ("nil", XmlSchema.InstanceNamespace, "true");
 			else {
 				Type actualType = graph.GetType ();
-				if (actualType != type) {
+
+				SerializationMap map = types.FindUserMap (actualType);
+				// For some collection types, the actual type does not matter. So get nominal serialization type instead.
+				// (The code below also covers the lines above, but I don't remove above lines to avoid extra search cost.)
+				if (map == null) {
+					actualType = types.GetSerializedType (actualType);
+					map = types.FindUserMap (actualType);
+				}
+				// If it is still unknown, then register it.
+				if (map == null) {
+					types.Add (actualType);
+					map = types.FindUserMap (actualType);
+				}
+
+				if (actualType != type && (map == null || map.OutputXsiType)) {
 					QName qname = types.GetXmlName (actualType);
 					string name = qname.Name;
 					string ns = qname.Namespace;
@@ -107,7 +121,7 @@ namespace System.Runtime.Serialization
 				if (predef != QName.Empty)
 					SerializePrimitive (type, graph, predef);
 				else
-					SerializeNonPrimitive (type, graph);
+					map.Serialize (graph, this);
 			}
 		}
 
@@ -129,20 +143,6 @@ namespace System.Runtime.Serialization
 		public void WriteEndElement ()
 		{
 			writer.WriteEndElement ();
-		}
-
-		public void SerializeNonPrimitive (Type type, object graph)
-		{
-			Type actualType = graph.GetType ();
-
-			SerializationMap map = types.FindUserMap (actualType);
-			if (map == null) {
-				/* Unknown actual type */
-				types.Add (actualType);
-				map = types.FindUserMap (actualType);
-			}
-
-			map.Serialize (graph, this);
 		}
 	}
 }

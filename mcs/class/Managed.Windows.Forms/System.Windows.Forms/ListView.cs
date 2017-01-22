@@ -3440,7 +3440,7 @@ namespace System.Windows.Forms
 				eh (this, e);
 		}
 
-		protected virtual void OnColumnClick (ColumnClickEventArgs e)
+		protected internal virtual void OnColumnClick (ColumnClickEventArgs e)
 		{
 			ColumnClickEventHandler eh = (ColumnClickEventHandler)(Events [ColumnClickEvent]);
 			if (eh != null)
@@ -3700,7 +3700,12 @@ namespace System.Windows.Forms
 				return;
 
 			Rectangle view_rect = item_control.ClientRectangle;
-			Rectangle bounds = new Rectangle (GetItemLocation (index), ItemSize);
+#if NET_2_0
+			// Avoid direct access to items in virtual mode, and use item bounds otherwise, since we could have reordered items
+			Rectangle bounds = virtual_mode ? new Rectangle (GetItemLocation (index), ItemSize) : items [index].Bounds;
+#else
+			Rectangle bounds = items [index].Bounds;
+#endif
 
 			if (view == View.Details && header_style != ColumnHeaderStyle.None) {
 				view_rect.Y += header_control.Height;

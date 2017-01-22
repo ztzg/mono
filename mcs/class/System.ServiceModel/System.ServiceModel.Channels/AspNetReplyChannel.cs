@@ -39,33 +39,35 @@ namespace System.ServiceModel.Channels
 	internal class AspNetReplyChannel : HttpReplyChannel
 	{
 		HttpContext http_context;
+		AspNetChannelListener<IReplyChannel> listener;
 		Uri uri;
 
-		public AspNetReplyChannel (HttpChannelListener<IReplyChannel> listener,
-			TimeSpan timeout)
-			: base (listener, timeout)
+		public AspNetReplyChannel (AspNetChannelListener<IReplyChannel> listener)
+			: base (listener)
 		{
+			this.listener = listener;
 			uri = listener.Uri;
 		}
 
 		public override bool TryReceiveRequest (TimeSpan timeout, out RequestContext context)
 		{
-#if false
-			context = null;
-			if (waiting.Count == 0 && !WaitForRequest (timeout))
-				return false;
-			HttpListenerContext ctx = null;
-			lock (waiting) {
-				if (waiting.Count > 0) {
-					ctx = waiting [0];
-					waiting.RemoveAt (0);
-				}
+			try {
+				return TryReceiveRequestCore (timeout, out context);
+			} catch (Exception ex) {
+				// FIXME: log it
+				Console.WriteLine ("AspNetReplyChannel caught an error: " + ex);
+				throw;
+			} finally {
+				listener.HttpHandler.EndRequest (http_context);
+				http_context = null;
 			}
-			if (ctx == null) 
-				// Though as long as this instance is used
-				// synchronously, it should not happen.
+		}
+
+		bool TryReceiveRequestCore (TimeSpan timeout, out RequestContext context)
+		{
+			context = null;
+			if (!WaitForRequest (timeout))
 				return false;
-#endif
 
 			Message msg;
 			if (http_context.Request.HttpMethod == "GET") {
@@ -95,38 +97,11 @@ namespace System.ServiceModel.Channels
 			return true;
 		}
 
-		public HttpContext Context {
-			get { return http_context; }
-			set { http_context = value; }
-		}
-
 		public override bool WaitForRequest (TimeSpan timeout)
 		{
-			// FIXME: we might want to take other approaches.
-			if (timeout.Ticks > int.MaxValue)
-				timeout = TimeSpan.FromDays (20);
-
-			SvcHttpHandler h = SvcHttpHandlerFactory.GetHandler (uri.OriginalString.Replace ("file://", ""));
-			return h.WaitForRequest (this, timeout);
-
-#if false
-			AutoResetEvent wait = new AutoResetEvent (false);
-			source.Http.BeginGetContext (HttpContextReceived, wait);
-			// FIXME: we might want to take other approaches.
-			if (timeout.Ticks > int.MaxValue)
-				timeout = TimeSpan.FromDays (20);
-			return wait.WaitOne (timeout, false);
-#endif
-		}
-
-		void HttpContextReceived (IAsyncResult result)
-		{
-			throw new NotImplementedException ();
-#if false	
-			waiting.Add (source.Http.EndGetContext (result));
-			AutoResetEvent wait = (AutoResetEvent) result.AsyncState;
-			wait.Set ();
-#endif
+			if (http_context == null)
+				http_context = listener.HttpHandler.WaitForRequest (timeout);
+			return http_context != null;
 		}
 	}
 }

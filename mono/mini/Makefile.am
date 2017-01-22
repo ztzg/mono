@@ -36,8 +36,10 @@ ILASM = $(RUNTIME) $(CLASS)/ilasm.exe
 AM_CFLAGS = \
 	-I$(top_srcdir) 	\
 	$(LIBGC_CFLAGS)		\
-	$(GLIB_CFLAGS)
+	$(GLIB_CFLAGS)		\
 	$(PLATFORM_CFLAGS) $(ARCH_CFLAGS)
+
+AM_CXXFLAGS = $(LLVM_CXXFLAGS) $(GLIB_CFLAGS)
 
 if PLATFORM_WIN32
 export HOST_CC
@@ -110,11 +112,13 @@ endif
 mono_LDADD = \
 	$(MONO_LIB)			\
 	$(GLIB_LIBS)		\
+	$(LLVM_LIBS)		\
 	-lm	\
-	$(MONO_DTRACE_OBJECT)
+	$(MONO_DTRACE_OBJECT) \
+	$(LLVM_LDFLAGS)
 
 mono_LDFLAGS = \
-	$(static_flags) -export-dynamic $(monobinldflags)
+	$(static_flags) -export-dynamic $(monobinldflags) $(monobin_platform_ldflags)
 
 if DTRACE_G_REQUIRED
 
@@ -227,6 +231,13 @@ windows_sources = \
 posix_sources = \
 	mini-posix.c
 
+if ENABLE_LLVM
+# Disabled for now to fix the windows build
+#llvm_sources = \
+#	mini-llvm.c		\
+#	mini-llvm-cpp.cpp
+endif
+
 common_sources = \
 	mini.c			\
 	ir-emit.h		\
@@ -271,13 +282,17 @@ common_sources = \
 	mini-generic-sharing.c	\
 	regalloc2.c		\
 	simd-methods.h		\
+	tasklets.c		\
+	tasklets.h		\
 	simd-intrinsics.c	\
 	unwind.h		\
 	unwind.c		\
 	image-writer.h	\
 	image-writer.c	\
 	dwarfwriter.h	\
-	dwarfwriter.c
+	dwarfwriter.c	\
+	mini-gc.h		\
+	mini-gc.c
 
 test_sources = 			\
 	basic-calls.cs 		\
@@ -297,11 +312,15 @@ test_sources = 			\
 	basic-simd.cs
 
 if MONO_DEBUGGER_SUPPORTED
+if PLATFORM_DARWIN
+mono_debugger_arch_sources = mdb-debug-info32-darwin.s
+else
 if AMD64
 mono_debugger_arch_sources = mdb-debug-info64.s
 else
 if X86
 mono_debugger_arch_sources = mdb-debug-info32.s
+endif
 endif
 endif
 mono_debugger_sources = debug-debugger.c debug-debugger.h $(mono_debugger_arch_sources)
@@ -363,7 +382,6 @@ endif
 
 if S390
 arch_sources = $(s390_sources)
-arch_BURGSRC= $(srcdir)/inssel-long32.brg $(srcdir)/inssel-s390.brg
 arch_built=cpu-s390.h
 arch_define=__s390__
 endif
@@ -402,17 +420,20 @@ endif
 
 if PLATFORM_WIN32
 os_sources = $(windows_sources)
+monobin_platform_ldflags=
 endif
 
 if PLATFORM_SIGPOSIX
 os_sources = $(posix_sources)
+monobin_platform_ldflags=
 endif
 
 if PLATFORM_DARWIN
 os_sources = $(darwin_sources) $(posix_sources)
+monobin_platform_ldflags=-sectcreate __TEXT __info_plist $(top_srcdir)/mono/mini/Info.plist
 endif
 
-libmono_la_SOURCES = $(common_sources) $(arch_sources) $(os_sources)
+libmono_la_SOURCES = $(common_sources) $(llvm_sources) $(arch_sources) $(os_sources)
 
 libmono_static_la_SOURCES = $(libmono_la_SOURCES)
 nodist_libmono_static_la_SOURCES = $(nodist_libmono_la_SOURCES)
@@ -461,43 +482,43 @@ GENMDESC_PRG=./genmdesc
 endif !CROSS_COMPILING
 
 cpu-x86.h: cpu-x86.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-x86.md cpu-x86.h x86_desc
+	$(GENMDESC_PRG) cpu-x86.h x86_desc $(srcdir)/cpu-x86.md
 
 cpu-amd64.h: cpu-amd64.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-amd64.md cpu-amd64.h amd64_desc
+	$(GENMDESC_PRG) cpu-amd64.h amd64_desc $(srcdir)/cpu-amd64.md
 
 cpu-ppc.h: cpu-ppc.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-ppc.md cpu-ppc.h ppcg4
+	$(GENMDESC_PRG) cpu-ppc.h ppcg4 $(srcdir)/cpu-ppc.md
 
 cpu-ppc64.h: cpu-ppc64.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-ppc64.md cpu-ppc64.h ppc64_cpu_desc
+	$(GENMDESC_PRG) cpu-ppc64.h ppc64_cpu_desc $(srcdir)/cpu-ppc64.md
 
 cpu-arm.h: cpu-arm.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-arm.md cpu-arm.h arm_cpu_desc
+	$(GENMDESC_PRG) cpu-arm.h arm_cpu_desc $(srcdir)/cpu-arm.md
 
 cpu-sparc.h: cpu-sparc.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-sparc.md cpu-sparc.h sparc_desc
+	$(GENMDESC_PRG) cpu-sparc.h sparc_desc $(srcdir)/cpu-sparc.md
 
 cpu-s390.h: cpu-s390.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-s390.md cpu-s390.h s390_cpu_desc
+	$(GENMDESC_PRG) cpu-s390.h s390_cpu_desc $(srcdir)/cpu-s390.md
 
 cpu-s390x.h: cpu-s390x.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-s390x.md cpu-s390x.h s390x_cpu_desc
+	$(GENMDESC_PRG) cpu-s390x.h s390x_cpu_desc $(srcdir)/cpu-s390x.md
 
 cpu-ia64.h: cpu-ia64.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-ia64.md cpu-ia64.h ia64_desc
+	$(GENMDESC_PRG) cpu-ia64.h ia64_desc $(srcdir)/cpu-ia64.md
 
 cpu-alpha.h: cpu-alpha.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-alpha.md cpu-alpha.h alpha_desc
+	$(GENMDESC_PRG) cpu-alpha.h alpha_desc $(srcdir)/cpu-alpha.md
 
 cpu-hppa.h: cpu-hppa.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-hppa.md cpu-hppa.h hppa_desc
+	$(GENMDESC_PRG) cpu-hppa.h hppa_desc $(srcdir)/cpu-hppa.md
 
 cpu-mips.h: cpu-mips.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-mips.md cpu-mips.h mips_desc
+	$(GENMDESC_PRG) cpu-mips.h mips_desc $(srcdir)/cpu-mips.md
 
 cpu-sh4.h: cpu-sh4.md genmdesc$(EXEEXT)
-	$(GENMDESC_PRG) $(srcdir)/cpu-sh4.md cpu-sh4.h sh4_desc
+	$(GENMDESC_PRG) cpu-sh4.h sh4_desc $(srcdir)/cpu-sh4.md
 
 cpu-sh4.md: mini-sh4.c
 	cd $(srcdir); ./cpu-md.pl sh4
@@ -518,14 +539,14 @@ aotcheck: mono $(regtests)
 	for i in $(regtests); do $(RUNTIME_AOTCHECK) --regression $$i || exit 1; done
 	rm -f *.exe.so
 
-# This is not expected to run successfully
+# This currently only works on amd64/arm
 fullaotcheck: mono $(regtests)
 	rm -rf fullaot-tmp
 	mkdir fullaot-tmp
-	cp $(CLASS)/mscorlib.dll $(CLASS)/Mono.Simd.dll $(regtests) generics-variant-types.dll TestDriver.dll fullaot-tmp/
+	cp $(CLASS)/mscorlib.dll $(CLASS)/System.Core.dll $(CLASS)/System.dll $(CLASS)/Mono.Posix.dll $(CLASS)/System.Configuration.dll $(CLASS)/System.Security.dll $(CLASS)/System.Xml.dll $(CLASS)/Mono.Security.dll $(CLASS)/Mono.Simd.dll $(regtests) generics-variant-types.dll TestDriver.dll fullaot-tmp/
 	cp $(regtests) fullaot-tmp/
 	MONO_PATH=fullaot-tmp $(top_builddir)/runtime/mono-wrapper --aot=full fullaot-tmp/* || exit 1
-	for i in $(regtests); do echo $$i; if [ $$i != generics.exe ]; then MONO_PATH=fullaot-tmp $(top_builddir)/runtime/mono-wrapper --full-aot fullaot-tmp/$$i || exit 1; fi; done
+	for i in $(regtests); do echo $$i; MONO_PATH=fullaot-tmp $(top_builddir)/runtime/mono-wrapper --full-aot fullaot-tmp/$$i --exclude '!FULLAOT' || exit 1; done
 
 bench: mono test.exe
 	time env $(RUNTIME) --ncompile $(count) --compile Test:$(mtest) test.exe
@@ -578,17 +599,17 @@ EXTRA_DIST = $(common_BURGSRC) cprop.c TestDriver.cs ldscript ldscript.mono \
 	$(hppa_sources) cpu-hppa.md 	\
 	$(sh4_sources) inssel-sh4.brg cpu-sh4.md \
 	$(windows_sources)		\
-	$(darwin_sources)		\
+	$(darwin_sources) Info.plist	\
 	$(posix_sources)
 
 version.h: Makefile
-	if test -d $(top_srcdir)/.git/svn; then svn_info='git svn info'; fi; \
+	if test -d $(top_srcdir)/.git/svn; then svn_info="git log --no-color --first-parent -n1 --grep=git-svn-id: --pretty=format:%b | sed -n -e 's,git-svn-id: \(.*\)@\(.*\) .*,URL: \1 Revision: \2,p'"; fi; \
 	if test -d $(srcdir)/.svn; then svn_info='svn info'; fi; \
 	if test -n "$$svn_info"; then \
 		(cd $(top_srcdir); \
 			LANG=C; export LANG; \
-			branch=`$$svn_info | grep URL | sed -e 's/.*source//' -e 's,mono/?$$,,'`; \
-			version=`$$svn_info | grep Revision | sed 's/.*: //'`; \
+			branch=`eval $$svn_info | sed -n -e '/URL/ s,.*source/\(.*\)/mono.*,/\1/mono,p'`; \
+			version=`eval $$svn_info | sed -n -e '/Revision/ s/.*: //p'`; \
 			echo "#define FULL_VERSION \"$$branch r$$version\""; \
 		); \
 	else \

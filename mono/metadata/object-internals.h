@@ -320,7 +320,7 @@ struct _MonoThread {
 	guint32	    name_len;
 	guint32	    state;
 	MonoException *abort_exc;
-	MonoObject *abort_state;
+	int abort_state_handle;
 	guint64 tid;	/* This is accessed as a gsize in the code (so it can hold a 64bit pointer on systems that need it), but needs to reserve 64 bits of space on all machines as it corresponds to a field in managed code */
 	HANDLE	    start_notify;
 	gpointer stack_ptr;
@@ -341,7 +341,6 @@ struct _MonoThread {
 	guint32 serialized_culture_info_len;
 	guint8* serialized_ui_culture_info;
 	guint32 serialized_ui_culture_info_len;
-	MonoObject *execution_context;
 	MonoBoolean thread_dump_requested;
 	gpointer end_stack; /* This is only used when running in the debugger. */
 	MonoBoolean thread_interrupt_requested;
@@ -350,11 +349,12 @@ struct _MonoThread {
 	guint32 small_id; /* A small, unique id, used for the hazard pointer table. */
 	MonoThreadManageCallback manage_callback;
 	MonoException *pending_exception;
+	MonoObject *ec_to_set;
 	/* 
 	 * These fields are used to avoid having to increment corlib versions
 	 * when a new field is added to the unmanaged MonoThread structure.
 	 */
-	gpointer unused2;
+	gpointer interrupt_on_stop;
 	gpointer unused3;
 	gpointer unused4;
 	gpointer unused5;
@@ -499,6 +499,17 @@ typedef struct {
 	guint32 intType;
 } MonoInterfaceTypeAttribute;
 
+/* 
+ * Callbacks supplied by the runtime and called by the modules in metadata/
+ * This interface is easier to extend than adding a new function type +
+ * a new 'install' function for every callback.
+ */
+typedef struct {
+	gpointer (*create_ftnptr) (MonoDomain *domain, gpointer addr);
+	gpointer (*get_addr_from_ftnptr) (gpointer descr);
+	char*    (*get_runtime_build_info) (void);
+} MonoRuntimeCallbacks;
+
 /* used to free a dynamic method */
 typedef void        (*MonoFreeMethodFunc)	 (MonoDomain *domain, MonoMethod *method);
 
@@ -564,6 +575,12 @@ mono_install_compile_method (MonoCompileFunc func) MONO_INTERNAL;
 
 void
 mono_install_free_method    (MonoFreeMethodFunc func) MONO_INTERNAL;
+
+void
+mono_install_callbacks      (MonoRuntimeCallbacks *cbs) MONO_INTERNAL;
+
+MonoRuntimeCallbacks*
+mono_get_runtime_callbacks (void) MONO_INTERNAL;
 
 void
 mono_type_initialization_init (void) MONO_INTERNAL;
@@ -965,6 +982,7 @@ typedef struct {
 	gint32 machine;
 	MonoBoolean corlib_internal;
 	MonoArray *type_forwarders;
+	MonoArray *pktoken; /* as hexadecimal byte[] */
 } MonoReflectionAssemblyBuilder;
 
 typedef struct {
@@ -1052,6 +1070,17 @@ typedef struct {
 
 typedef struct {
 	MonoReflectionType type;
+	MonoReflectionType *element_type;
+	int rank;
+} MonoReflectionArrayType;
+
+typedef struct {
+	MonoReflectionType type;
+	MonoReflectionType *element_type;
+} MonoReflectionDerivedType;
+
+typedef struct {
+	MonoReflectionType type;
 	MonoReflectionTypeBuilder *tbuilder;
 	MonoReflectionMethodBuilder *mbuilder;
 	MonoString *name;
@@ -1068,6 +1097,7 @@ struct _MonoReflectionGenericClass {
 	/* From System.MonoType */
 	MonoObject *type_info;
 	MonoReflectionTypeBuilder *generic_type;
+	MonoArray *type_arguments;
 	guint32 initialized;
 };
 
@@ -1180,6 +1210,8 @@ typedef struct {
 	MonoObject object;
 	MonoReflectionGenericClass *inst;
 	MonoReflectionMethodBuilder *mb;
+	MonoArray *method_args;
+	MonoReflectionMethodBuilder *generic_method_definition;
 } MonoReflectionMethodOnTypeBuilderInst;
 
 typedef struct {
@@ -1199,6 +1231,12 @@ typedef struct {
 	MonoString *filename;
 	guint32 location;
 } MonoManifestResourceInfo;
+
+/* A boxed IntPtr */
+typedef struct {
+	MonoObject object;
+	gpointer m_value;
+} MonoIntPtr;
 
 /* Keep in sync with System.GenericParameterAttributes */
 typedef enum {
@@ -1223,6 +1261,7 @@ guint32       mono_image_create_method_token (MonoDynamicImage *assembly, MonoOb
 void          mono_image_module_basic_init (MonoReflectionModuleBuilder *module) MONO_INTERNAL;
 void          mono_image_register_token (MonoDynamicImage *assembly, guint32 token, MonoObject *obj) MONO_INTERNAL;
 void          mono_dynamic_image_free (MonoDynamicImage *image) MONO_INTERNAL;
+void          mono_image_set_wrappers_type (MonoReflectionModuleBuilder *mb, MonoReflectionType *type) MONO_INTERNAL;
 
 void        mono_reflection_setup_internal_class  (MonoReflectionTypeBuilder *tb) MONO_INTERNAL;
 
@@ -1240,6 +1279,7 @@ void mono_reflection_create_dynamic_method (MonoReflectionDynamicMethod *m) MONO
 void mono_reflection_destroy_dynamic_method (MonoReflectionDynamicMethod *mb) MONO_INTERNAL;
 
 void        mono_reflection_initialize_generic_parameter (MonoReflectionGenericParam *gparam) MONO_INTERNAL;
+void        mono_reflection_create_unmanaged_type (MonoReflectionType *type) MONO_INTERNAL;
 
 MonoArray* mono_param_get_objects_internal  (MonoDomain *domain, MonoMethod *method, MonoClass *refclass) MONO_INTERNAL;
 
@@ -1268,6 +1308,9 @@ mono_reflection_call_is_assignable_to (MonoClass *klass, MonoClass *oklass) MONO
 
 gboolean
 mono_reflection_is_valid_dynamic_token (MonoDynamicImage *image, guint32 token) MONO_INTERNAL;
+
+MonoType*
+mono_reflection_type_get_handle (MonoReflectionType *ref) MONO_INTERNAL;
 
 void
 mono_image_build_metadata (MonoReflectionModuleBuilder *module) MONO_INTERNAL;
@@ -1383,6 +1426,9 @@ mono_runtime_class_init_full (MonoVTable *vtable, gboolean raise_exception) MONO
 
 void
 mono_method_clear_object (MonoDomain *domain, MonoMethod *method) MONO_INTERNAL;
+
+void
+mono_class_compute_gc_descriptor (MonoClass *class) MONO_INTERNAL;
 
 #endif /* __MONO_OBJECT_INTERNALS_H__ */
 

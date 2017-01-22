@@ -913,8 +913,7 @@ namespace MonoTests.System.Reflection.Emit
 
 			/* Is .E a valid name ?
 			TypeBuilder tb4 = module.DefineType (".E");
-			AssertEquals ("",
-						  "E", tb4.Name);
+			Assert.AreEqual ("E", tb4.Name);
 			*/
 		}
 
@@ -932,8 +931,7 @@ namespace MonoTests.System.Reflection.Emit
 
 			/* Is .E a valid name ?
 			TypeBuilder tb4 = module.DefineType (".E");
-			AssertEquals ("",
-						  "E", tb4.Name);
+			Assert.AreEqual ("E", tb4.Name);
 			*/
 		}
 
@@ -2188,6 +2186,21 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.AreEqual (tb.Name + "[System.Int32]", t2.MakeGenericType (typeof (int)).GetMethod ("foo").Invoke (null, null).GetType ().ToString ());
 		}
 #endif
+
+		[Test] //#536243
+		public void CreateTypeThrowsForMethodsWithBadLabels ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+
+			MethodBuilder mb = tb.DefineMethod("F", MethodAttributes.Public, typeof(string), null);
+			ILGenerator il_gen = mb.GetILGenerator ();
+			il_gen.DefineLabel ();
+			il_gen.Emit (OpCodes.Leave, new Label ());
+			try {
+				tb.CreateType ();
+				Assert.Fail ();
+			} catch (ArgumentException) {}
+		}
 
 		[Test]
 		[Category ("NotWorking")]
@@ -10619,6 +10632,173 @@ namespace MonoTests.System.Reflection.Emit
 		}
 #endif
 
+		[Test]
+		public void CreateConcreteTypeWithAbstractMethod ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			tb.DefineMethod("method", MethodAttributes.Abstract | MethodAttributes.Public, typeof (void), Type.EmptyTypes);
+			try {
+				tb.CreateType ();
+				Assert.Fail ("#1");
+			} catch (InvalidOperationException) {}
+		}
+
+#if NET_2_0
+		[Test]
+		public void DeclaringMethodReturnsNull ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			Assert.IsNull (tb.DeclaringMethod, null, "#1");
+		}
+
+		[Test]
+		public void GenericParameterPositionReturns0 ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			Assert.AreEqual (0, tb.GenericParameterPosition, "#1");
+		}
+
+		[Test]
+		public void GetGenericTypeDefinitionBehavior ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			try {
+				tb.GetGenericTypeDefinition ();
+				Assert.Fail ("#1");
+			} catch (InvalidOperationException) {}
+
+			tb.DefineGenericParameters ("T");
+			Assert.AreEqual (tb, tb.GetGenericTypeDefinition (), "#2");
+
+			tb.CreateType ();
+			Assert.AreEqual (tb, tb.GetGenericTypeDefinition (), "#3");
+		}
+
+		[Test]
+		public void GetElementTypeNotSupported ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			try {
+				tb.GetElementType ();
+				Assert.Fail ("#1");
+			} catch (NotSupportedException) {}
+		}
+
+		[Test]
+		public void GenericParameterAttributesReturnsNone ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			Assert.AreEqual (GenericParameterAttributes.None, tb.GenericParameterAttributes, "#1");
+
+			tb.DefineGenericParameters ("T");
+			Assert.AreEqual (GenericParameterAttributes.None, tb.GenericParameterAttributes, "#2");
+
+			tb.CreateType ();
+			Assert.AreEqual (GenericParameterAttributes.None, tb.GenericParameterAttributes, "#3");
+		}
+
+		[Test]
+		public void GetGenericArgumentsReturnsNullForNonGenericTypeBuilder ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			Assert.IsNull (tb.GetGenericArguments (), "#1");
+		}
+
+		public interface IFaceA {}
+		public interface IFaceB : IFaceA {}
+		[Test]
+		public void GetInterfacesAfterCreate ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object), new Type[] { typeof (IFaceB) });
+
+			Type[] ifaces = tb.GetInterfaces ();
+			Assert.AreEqual (1, ifaces.Length, "#1");
+			Assert.AreEqual (typeof (IFaceB), ifaces [0], "#2");
+
+			tb.CreateType ();
+			ifaces = tb.GetInterfaces ();
+			Assert.AreEqual (2, ifaces.Length, "#3");
+			Assert.AreEqual (typeof (IFaceB), ifaces [0], "#4");
+			Assert.AreEqual (typeof (IFaceA), ifaces [1], "#5");
+		}
+
+		public interface MB_Iface
+		{
+		    int Test ();
+		}
+
+		public class MB_Impl : MB_Iface
+		{
+		    public virtual int Test () { return 1; }
+		}
+		[Test]
+		public void MethodOverrideBodyMustBelongToTypeBuilder ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			MethodInfo md = typeof (MB_Iface).GetMethod("Test");
+            MethodInfo md2 = typeof (MB_Impl).GetMethod("Test");
+			try {
+            	tb.DefineMethodOverride (md, md2);
+            	Assert.Fail ("#1");
+			} catch (ArgumentException) {}
+		}
+
+		[Test]
+		public void GetConstructorsThrowWhenIncomplete ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			try {
+				tb.GetConstructors (BindingFlags.Instance);
+				Assert.Fail ("#1");
+			} catch (NotSupportedException) { }
+
+			tb.CreateType ();
+			Assert.IsNotNull (tb.GetConstructors (BindingFlags.Instance), "#2");
+		}
+
+		[Test]
+		public void GetEventsThrowWhenIncomplete ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			try {
+				tb.GetEvents (BindingFlags.Instance);
+				Assert.Fail ("#1");
+			} catch (NotSupportedException) { }
+
+			tb.CreateType ();
+			Assert.IsNotNull (tb.GetEvents (BindingFlags.Instance), "#2");
+		}
+
+		[Test]
+		public void GetNestedTypeCreatedAfterTypeIsCreated ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			TypeBuilder nested = tb.DefineNestedType ("Bar", TypeAttributes.Class | TypeAttributes.NestedPrivate);
+			tb.CreateType ();
+			Assert.IsNull (tb.GetNestedType ("Bar", BindingFlags.NonPublic), "#1");
+			Type res = nested.CreateType ();
+			Assert.AreEqual (res, tb.GetNestedType ("Bar", BindingFlags.NonPublic), "#2");
+
+			TypeBuilder nested2 = tb.DefineNestedType ("Bar2", TypeAttributes.Class | TypeAttributes.NestedPrivate);
+			Assert.IsNull (tb.GetNestedType ("Bar2", BindingFlags.NonPublic), "#3");
+			res = nested2.CreateType ();
+			Assert.AreEqual (res, tb.GetNestedType ("Bar2", BindingFlags.NonPublic), "#4");
+		}
+
+
+		[Test]
+		public void IsDefinedThrowWhenIncomplete ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName ());
+			try {
+				tb.IsDefined (typeof (string), true);
+				Assert.Fail ("#1");
+			} catch (NotSupportedException) { }
+
+			tb.CreateType ();
+			Assert.IsNotNull (tb.IsDefined (typeof (string), true), "#2");
+		}
+#endif
 #if NET_2_0
 #if !WINDOWS
 		/* 

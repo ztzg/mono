@@ -1,3 +1,32 @@
+2009-09-08  Jonathan Chambers  <joncham@gmail.com>
+
+	* libtest.vcproj: Add toplevel include directory for config.h.
+
+2009-04-24  Bill Holmes  <billholmes54@gmail.com>
+
+	Fixing the glib targets for Winx64.
+
+	* libmono.vcproj, mono.vcproj: Correcting the ProgramDatabaseFile
+	  value for the Winx64 glib build.
+
+	* mono.sln: Enabling the glib targets for Winx64.
+
+	Code is contributed under MIT/X11 license.
+
+2009-04-24  Bill Holmes  <billholmes54@gmail.com>
+
+	* libmono.vcproj: Adding metadata/metadata-verify.c to the project.
+
+	* runmdesc.bat: Fixing the argument order to genmdesc.
+
+	Code is contributed under MIT/X11 license.
+
+2009-04-08  Bill Holmes  <billholmes54@gmail.com>
+
+	* libmono.vcproj : Adding mini/mini-gc to the project.
+
+	Code is contributed under MIT/X11 license.
+
 2009-03-05  Bill Holmes  <billholmes54@gmail.com>
 
 	* mono.def : Removing missing methods to remove link errors for

@@ -122,6 +122,7 @@ namespace System.Reflection.Emit
 		ImageFileMachine machine;
 		bool corlib_internal;
 		Type[] type_forwarders;
+		byte[] pktoken;
 		#endregion
 #pragma warning restore 169, 414
 		
@@ -162,6 +163,11 @@ namespace System.Reflection.Emit
 					"access");
 #endif
 
+#if NET_4_0
+			if ((access & AssemblyBuilderAccess.RunAndCollect) == AssemblyBuilderAccess.RunAndCollect)
+				throw new NotSupportedException ("RunAndCollect not yet supported.");
+#endif
+
 			name = n.Name;
 			this.access = (uint)access;
 			flags = (uint) n.Flags;
@@ -198,6 +204,15 @@ namespace System.Reflection.Emit
 				flags |= (uint) AssemblyNameFlags.PublicKey;
 
 			this.corlib_internal = corlib_internal;
+			if (sn != null) {
+				this.pktoken = new byte[sn.PublicKeyToken.Length * 2];
+				int pkti = 0;
+				foreach (byte pkb in sn.PublicKeyToken) {
+					string part = pkb.ToString("x2");
+					this.pktoken[pkti++] = (byte)part[0];
+					this.pktoken[pkti++] = (byte)part[1];
+				}
+			}
 
 			basic_init (this);
 		}
@@ -273,6 +288,7 @@ namespace System.Reflection.Emit
 		/// </summary>
 		internal void AddPermissionRequests (PermissionSet required, PermissionSet optional, PermissionSet refused)
 		{
+#if !NET_2_1
 			if (created)
 				throw new InvalidOperationException ("Assembly was already saved.");
 
@@ -299,6 +315,7 @@ namespace System.Reflection.Emit
 				permissions_refused [0] = new RefEmitPermissionSet (
 					SecurityAction.RequestRefuse, refused.ToXml ().ToString ());
 			}
+#endif
 		}
 
 		internal void EmbedResourceFile (string name, string fileName)
@@ -732,6 +749,17 @@ namespace System.Reflection.Emit
 			}
 		}
 
+		internal bool IsRun {
+			get {
+				return access == (uint)AssemblyBuilderAccess.Run || access == (uint)AssemblyBuilderAccess.RunAndSave
+#if NET_4_0
+					 || access == (uint)AssemblyBuilderAccess.RunAndCollect
+#endif
+				;
+
+			}
+		}
+
 		internal string AssemblyDir {
 			get {
 				return dir;
@@ -766,7 +794,8 @@ namespace System.Reflection.Emit
 		}
 #endif
 
-#if NET_2_0
+#if NET_2_0 || BOOTSTRAP_NET_2_0
+		[MonoLimitation ("No support for PE32+ assemblies for AMD64 and IA64")]
 		public 
 #else
 		internal
@@ -775,6 +804,11 @@ namespace System.Reflection.Emit
 		{
 			this.peKind = portableExecutableKind;
 			this.machine = imageFileMachine;
+
+			if ((peKind & PortableExecutableKinds.PE32Plus) != 0 || (peKind & PortableExecutableKinds.Unmanaged32Bit) != 0)
+				throw new NotImplementedException (peKind.ToString ());
+			if (machine == ImageFileMachine.IA64 || machine == ImageFileMachine.AMD64)
+				throw new NotImplementedException (machine.ToString ());
 
 			if (resource_writers != null) {
 				foreach (IResourceWriter writer in resource_writers) {

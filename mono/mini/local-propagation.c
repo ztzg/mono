@@ -121,7 +121,7 @@ restart:
 
 					if ((def->opcode == OP_MOVE) && (!defs [def->sreg1] || (def_index [def->sreg1] < def_index [sreg])) && !vreg_is_volatile (cfg, def->sreg1)) {
 						int vreg = def->sreg1;
-						//printf ("CCOPY: R%d -> R%d\n", sreg, vreg);
+						if (cfg->verbose_level > 2) printf ("CCOPY: R%d -> R%d\n", sreg, vreg);
 						ins->dreg = vreg;
 					}
 				}
@@ -170,7 +170,7 @@ restart:
 					(def->opcode != OP_FMOVE)) {
 					int vreg = def->sreg1;
 
-					//printf ("CCOPY: R%d -> R%d\n", sreg, vreg);
+					if (cfg->verbose_level > 2) printf ("CCOPY/2: R%d -> R%d\n", sreg, vreg);
 					sregs [srcindex] = vreg;
 					mono_inst_set_src_registers (ins, sregs);
 
@@ -227,7 +227,7 @@ restart:
 					}
 					else {
 						/* Special cases */
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(TARGET_X86) || defined(TARGET_AMD64)
 						if ((ins->opcode == OP_X86_LEA) && (srcindex == 1)) {
 #if SIZEOF_REGISTER == 8
 							/* FIXME: Use OP_PADD_IMM when the new JIT is done */
@@ -257,10 +257,10 @@ restart:
 						ins->inst_basereg = def->sreg1;
 						ins->inst_offset += def->inst_imm;
 					}
-				} else if ((ins->opcode == OP_ISUB_IMM) && (def->opcode == OP_IADD_IMM) && (def->next == ins)) {
+				} else if ((ins->opcode == OP_ISUB_IMM) && (def->opcode == OP_IADD_IMM) && (def->next == ins) && (def->dreg != def->sreg1)) {
 					ins->sreg1 = def->sreg1;
 					ins->inst_imm -= def->inst_imm;
-				} else if ((ins->opcode == OP_IADD_IMM) && (def->opcode == OP_ISUB_IMM) && (def->next == ins)) {
+				} else if ((ins->opcode == OP_IADD_IMM) && (def->opcode == OP_ISUB_IMM) && (def->next == ins) && (def->dreg != def->sreg1)) {
 					ins->sreg1 = def->sreg1;
 					ins->inst_imm -= def->inst_imm;
 				} else if (ins->opcode == OP_STOREI1_MEMBASE_REG &&

@@ -28,17 +28,21 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 using System;
+using System.Runtime.CompilerServices;
 using System.Security.Permissions;
 using System.Text.RegularExpressions;
 using System.Web;
 
 namespace System.Web.Routing
 {
+#if NET_4_0
+	[TypeForwardedFrom ("System.Web.Routing, Version=3.5.0.0, Culture=Neutral, PublicKeyToken=31bf3856ad364e35")]
+#endif
 	[AspNetHostingPermission (SecurityAction.InheritanceDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	[AspNetHostingPermission (SecurityAction.LinkDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	public class Route : RouteBase
 	{
-		UrlPattern url;
+		PatternParser url;
 
 		public RouteValueDictionary Constraints { get; set; }
 
@@ -50,7 +54,7 @@ namespace System.Web.Routing
 
 		public string Url {
 			get { return url != null ? url.Url : String.Empty; }
-			set { url = value != null ? new UrlPattern (value) : null; }
+			set { url = value != null ? new PatternParser (value) : new PatternParser (String.Empty); }
 		}
 
 		public Route (string url, IRouteHandler routeHandler)
@@ -101,8 +105,18 @@ namespace System.Web.Routing
 						return null;
 
 			var rd = new RouteData (this, RouteHandler);
+			RouteValueDictionary rdValues = rd.Values;
+			
 			foreach (var p in values)
-				rd.Values.Add (p.Key, p.Value);
+				rdValues.Add (p.Key, p.Value);
+
+			RouteValueDictionary dataTokens = DataTokens;
+			if (dataTokens != null) {
+				RouteValueDictionary rdDataTokens = rd.DataTokens;
+				foreach (var token in dataTokens)
+					rdDataTokens.Add (token.Key, token.Value);
+			}
+			
 			return rd;
 		}
 
@@ -114,29 +128,52 @@ namespace System.Web.Routing
 				return new VirtualPathData (this, String.Empty);
 
 			// null values is allowed.
-			if (values == null)
-				values = requestContext.RouteData.Values;
+			// if (values == null)
+			// 	values = requestContext.RouteData.Values;
 
 			string s;
-			if (!url.TrySubstitute (values, Defaults, out s))
+			if (!url.BuildUrl (this, requestContext, values, out s))
 				return null;
 
 			return new VirtualPathData (this, s);
 		}
 
-		protected virtual bool ProcessConstraint (HttpContextBase httpContext, object constraint, string parameterName, RouteValueDictionary values, RouteDirection routeDirection)
+		internal static bool ProcessConstraintInternal (HttpContextBase httpContext, Route route, object constraint, string parameterName,
+								RouteValueDictionary values, RouteDirection routeDirection, out bool invalidConstraint)
 		{
+			invalidConstraint = false;
 			IRouteConstraint irc = constraint as IRouteConstraint;
 			if (irc != null)
-				return irc.Match (httpContext, this, parameterName, values, routeDirection);
+				return irc.Match (httpContext, route, parameterName, values, routeDirection);
 
 			string s = constraint as string;
 			if (s != null) {
 				string v = values [parameterName] as string;
-				return Regex.Match (v, s).Success;
+				if (!String.IsNullOrEmpty (v))
+					return Regex.Match (v, s).Success;
+				return false;
 			}
 
-			throw new InvalidOperationException (String.Format ("Constraint parameter '{0}' must be either a string or an IRouteConstraint instance", parameterName));
+			invalidConstraint = true;
+			return false;
+		}
+		
+		protected virtual bool ProcessConstraint (HttpContextBase httpContext, object constraint, string parameterName, RouteValueDictionary values, RouteDirection routeDirection)
+		{
+			if (parameterName == null)
+				throw new ArgumentNullException ("parameterName");
+
+			// .NET "compatibility"
+			if (values == null)
+				throw new NullReferenceException ();
+			
+			bool invalidConstraint;
+			bool ret = ProcessConstraintInternal (httpContext, this, constraint, parameterName, values, routeDirection, out invalidConstraint);
+			
+			if (invalidConstraint)
+				throw new InvalidOperationException (String.Format ("Constraint parameter '{0}' must be either a string or an IRouteConstraint instance", parameterName));
+
+			return ret;
 		}
 	}
 }

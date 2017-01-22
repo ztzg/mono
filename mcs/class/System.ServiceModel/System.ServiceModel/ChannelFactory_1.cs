@@ -33,8 +33,9 @@ using System.ServiceModel.Dispatcher;
 
 namespace System.ServiceModel
 {
-	// I really dislike those TChannels which are rather contract.
-	// If I were to design WCF, I'd rather name them as TContract.
+	// LAMESPEC: TChannel should have been defined as "where TChannel : IClientChannel".
+	// The returned channel is actually used as IClientChannel.
+	// (That's also likely why the type parameter name is TChannel, not TContract.)
 	public class ChannelFactory<TChannel>
 		: ChannelFactory, IChannelFactory<TChannel>
 	{
@@ -110,35 +111,39 @@ namespace System.ServiceModel
 			return CreateChannel (address, null);
 		}
 
+		static TChannel CreateChannelCore (ChannelFactory<TChannel> cf, Func<ChannelFactory<TChannel>, TChannel> f)
+		{
+			var ch = f (cf);
+			((CommunicationObject) (object) ch).Closed += delegate { cf.Close (); };
+			return ch;
+		}
+
 		public static TChannel CreateChannel (Binding binding, EndpointAddress address)
 		{
-			return new ChannelFactory<TChannel> (binding, address).CreateChannel ();
+			return CreateChannelCore (new ChannelFactory<TChannel> (binding, address), f => f.CreateChannel ());
 		}
 
 		public static TChannel CreateChannel (Binding binding, EndpointAddress address, Uri via)
 		{
-			return new ChannelFactory<TChannel> (binding).CreateChannel (address, via);
+			return CreateChannelCore (new ChannelFactory<TChannel> (binding), f => f.CreateChannel (address, via));
 		}
 
 		public virtual TChannel CreateChannel (EndpointAddress address, Uri via)
 		{
 			EnsureOpened ();
-			Type type = ClientProxyGenerator.CreateProxyType (Endpoint.Contract);
+			Endpoint.Validate ();
+			Type type = ClientProxyGenerator.CreateProxyType (typeof (TChannel), Endpoint.Contract, false);
 			// in .NET and SL2, it seems that the proxy is RealProxy.
 			// But since there is no remoting in SL2 (and we have
 			// no special magic), we have to use different approach
 			// that should work either.
-
-			// it's complicated, but since TChannel must be class while it isn't here, we need ugly reflection hack.
-
-			object arg = OwnerClientBase ?? Activator.CreateInstance (typeof (DummyClientBase<>).MakeGenericType (typeof (TChannel)), new object [] {this});
-			object proxy = Activator.CreateInstance (type, new object [] {arg});
+			object proxy = Activator.CreateInstance (type, new object [] {Endpoint, this, address ?? Endpoint.Address, via});
 			return (TChannel) proxy;
 		}
 
 		protected static TChannel CreateChannel (string endpointConfigurationName)
 		{
-			return new ChannelFactory<TChannel> (endpointConfigurationName).CreateChannel ();
+			return CreateChannelCore (new ChannelFactory<TChannel> (endpointConfigurationName), f => f.CreateChannel ());
 		}
 
 		protected override ServiceEndpoint CreateDescription ()

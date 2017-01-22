@@ -33,11 +33,7 @@ using System.Reflection;
 using DbLinq.Util;
 using System.Collections.Generic;
 
-#if MONO_STRICT
-namespace System.Data.Linq.Mapping
-#else
 namespace DbLinq.Data.Linq.Mapping
-#endif
 {
     [DebuggerDisplay("MetaType for {Name}")]
     internal class AttributedMetaType : MetaType
@@ -46,50 +42,21 @@ namespace DbLinq.Data.Linq.Mapping
         {
             type = classType;
 
-            // associations and members
-            var dataMembersList = new List<MetaDataMember>();
-            var persistentMembersList = new List<MetaDataMember>();
-            var identityMembersList = new List<MetaDataMember>();
-            foreach (var memberInfo in classType.GetMembers())
-            {
-                
-                var column = memberInfo.GetAttribute<ColumnAttribute>();
-                if (column != null)
-                {
-                    var dataMember = new AttributedColumnMetaDataMember(memberInfo, column, this);
-                    dataMembersList.Add(dataMember);
-                    if (dataMember.IsPersistent)
-                        persistentMembersList.Add(dataMember);
-                    if (dataMember.IsPrimaryKey)
-                        identityMembersList.Add(dataMember);
-                }
-            }
-            dataMembers = new ReadOnlyCollection<MetaDataMember>(dataMembersList);
-            _persistentDataMembers = new ReadOnlyCollection<MetaDataMember>(persistentMembersList);
-            identityMembers = new ReadOnlyCollection<MetaDataMember>(identityMembersList);
-        }
+			AssociationsLookup = new Dictionary<MemberInfo, MetaDataMember>();
+			_AssociationFixupList = new List<AssociationData>();
 
-		/// <summary>
-		/// This function is used to setup associations.
-		/// It is seperated from the constructor to evade circular dependecies
-		/// </summary>
-		internal void SetupAssociations()
-		{
-			var associationsList = new List<MetaAssociation>();
+			//First add the member to the AssociationsLookup table, because creation of the Association will cause both meta classes to look each other up, or possibly a self lookup
+			//We'll also cache the association data in _AssociationFixupList to be used by GetAssociations
 			foreach (var memberInfo in type.GetMembers())
 			{
 				var association = memberInfo.GetAttribute<AssociationAttribute>();
-				if (association != null)
-				{
-					var dataMember = new AttributedAssociationMetaDataMember(memberInfo, association, this);
-					var metaAssociation = new AttributedMetaAssociation(memberInfo, association, dataMember);
-					associationsList.Add(metaAssociation);
-					dataMember.SetAssociation(metaAssociation);
-				}
+				if (association == null)
+					continue;
+				var dataMember = new AttributedAssociationMetaDataMember(memberInfo, association, this);
+				AssociationsLookup[memberInfo] = dataMember;
+				_AssociationFixupList.Add(new AssociationData() { Association = association, Member = memberInfo, DataMember = dataMember });
 			}
-
-			_associations = new ReadOnlyCollection<MetaAssociation>(associationsList);
-		}
+        }
 
         internal void SetMetaTable(MetaTable metaTable)
         {
@@ -99,7 +66,34 @@ namespace DbLinq.Data.Linq.Mapping
         private ReadOnlyCollection<MetaAssociation> _associations;
         public override ReadOnlyCollection<MetaAssociation> Associations
         {
-            get { return _associations; }
+            get {
+                if (_associations == null)
+                {
+                    _associations = GetAssociations().ToList().AsReadOnly();
+                }
+                return _associations;
+            }
+        }
+
+		private class AssociationData
+		{
+			public AssociationAttribute Association;
+			public MemberInfo Member;
+			public AttributedAssociationMetaDataMember DataMember;
+		}
+
+        private IEnumerable<MetaAssociation> GetAssociations()
+        {
+			//We can clear our fixup list as we're now going to convert it to the association list
+			var associationFixupList = _AssociationFixupList;
+			_AssociationFixupList = null;
+
+			foreach (AssociationData data in associationFixupList)
+			{
+				var metaAssociation = new AttributedMetaAssociation(data.Member, data.Association, data.DataMember);
+				data.DataMember.SetAssociation(metaAssociation);
+                yield return metaAssociation;
+			}
         }
 
         public override bool CanInstantiate
@@ -108,10 +102,21 @@ namespace DbLinq.Data.Linq.Mapping
             get { return true; }
         }
 
-        private readonly ReadOnlyCollection<MetaDataMember> dataMembers;
+        private ReadOnlyCollection<MetaDataMember> dataMembers;
         public override ReadOnlyCollection<MetaDataMember> DataMembers
         {
-            get { return dataMembers; }
+            get {
+                if (dataMembers == null)
+                {
+                    dataMembers =
+                        (from m in type.GetMembers()
+                         let c = m.GetAttribute<ColumnAttribute>()
+                         where c != null
+                         select (MetaDataMember) new AttributedColumnMetaDataMember(m, c, this))
+                        .ToList().AsReadOnly();
+                }
+                return dataMembers;
+            }
         }
 
         public override MetaDataMember DBGeneratedIdentityMember
@@ -133,7 +138,7 @@ namespace DbLinq.Data.Linq.Mapping
         {
             // TODO: optimize?
             // A tip to know the MemberInfo for the same member is not the same when declared from a class and its inheritor
-            return (from dataMember in _persistentDataMembers where dataMember.Member.Name == member.Name select dataMember).SingleOrDefault();
+            return (from m in PersistentDataMembers where m.Member.Name == member.Name select m).SingleOrDefault();
         }
 
         public override MetaType GetInheritanceType(Type baseType)
@@ -171,10 +176,15 @@ namespace DbLinq.Data.Linq.Mapping
             get { throw new NotImplementedException(); }
         }
 
-        private readonly ReadOnlyCollection<MetaDataMember> identityMembers;
+        private ReadOnlyCollection<MetaDataMember> identityMembers;
         public override ReadOnlyCollection<MetaDataMember> IdentityMembers
         {
-            get { return identityMembers; }
+            get {
+                if (identityMembers == null)
+                    identityMembers =
+                        DataMembers.Where(m => m.IsPrimaryKey).ToList().AsReadOnly();
+                return identityMembers; 
+            }
         }
 
         public override MetaType InheritanceBase
@@ -235,7 +245,12 @@ namespace DbLinq.Data.Linq.Mapping
     	private ReadOnlyCollection<MetaDataMember> _persistentDataMembers;
         public override ReadOnlyCollection<MetaDataMember> PersistentDataMembers
         {
-            get { return _persistentDataMembers; }
+            get {
+                if (_persistentDataMembers == null)
+                    _persistentDataMembers =
+                        DataMembers.Where(m => m.IsPersistent).ToList().AsReadOnly();
+                return _persistentDataMembers;
+            }
         }
 
         private MetaTable table;
@@ -254,5 +269,8 @@ namespace DbLinq.Data.Linq.Mapping
         {
             get { throw new NotImplementedException(); }
         }
+
+		internal Dictionary<MemberInfo, MetaDataMember> AssociationsLookup;
+		private List<AssociationData> _AssociationFixupList;
     }
 }

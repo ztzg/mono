@@ -31,6 +31,7 @@ using System;
 using System.IO;
 using System.Collections;
 using System.Text;
+using System.Reflection;
 using Microsoft.Build.BuildEngine;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
@@ -68,7 +69,9 @@ namespace Mono.XBuild.CommandLine {
 			properties = new BuildPropertyGroup ();
 			targets = new string [0];
 			
-			responseFile = Path.Combine (binPath, "xbuild.rsp");
+			responseFile = Path.Combine (
+					Path.GetDirectoryName (Assembly.GetExecutingAssembly ().Location),
+					"xbuild.rsp");
 		}
 		
 		public void ParseArguments (string[] args)
@@ -101,11 +104,22 @@ namespace Mono.XBuild.CommandLine {
 					remainingArguments.Add (s);
 			}
 			if (remainingArguments.Count == 0) {
-				string[] files = Directory.GetFiles (Directory.GetCurrentDirectory (), "*.??proj");
-				if (files.Length > 0)
-					projectFile = files [0];
+				string[] sln_files = Directory.GetFiles (Directory.GetCurrentDirectory (), "*.sln");
+				string[] proj_files = Directory.GetFiles (Directory.GetCurrentDirectory (), "*proj");
+
+				if (sln_files.Length == 0 && proj_files.Length == 0)
+					ErrorUtilities.ReportError (3, "Please specify the project or solution file " +
+							"to build, as none was found in the current directory.");
+
+				if (sln_files.Length + proj_files.Length > 1)
+					ErrorUtilities.ReportError (5, "Please specify the project or solution file " +
+							"to build, as more than one solution or project file was found " +
+							"in the current directory");
+
+				if (sln_files.Length == 1)
+					projectFile = sln_files [0];
 				else
-					ErrorUtilities.ReportError (3, "No .proj file specified and no found in current directory.");
+					projectFile = proj_files [0];
 			} else if (remainingArguments.Count == 1) {
 				projectFile = (string) remainingArguments [0];
 			} else {
@@ -190,7 +204,8 @@ namespace Mono.XBuild.CommandLine {
 				if (s.StartsWith ("/target:") || s.StartsWith ("/t:")) {
 					ProcessTarget (s);
 				} else if (s.StartsWith ("/property:") || s.StartsWith ("/p:")) {
-					ProcessProperty (s);
+					if (!ProcessProperty (s))
+						return false;
 				} else  if (s.StartsWith ("/logger:") || s.StartsWith ("/l:")) {
 					ProcessLogger (s);
 				} else if (s.StartsWith ("/verbosity:") || s.StartsWith ("/v:")) {
@@ -213,15 +228,28 @@ namespace Mono.XBuild.CommandLine {
 			targets = temp [1].Split (';');
 		}
 		
-		internal void ProcessProperty (string s)
+		internal bool ProcessProperty (string s)
 		{
 			string[] parameter, splittedProperties, property;
 			parameter = s.Split (':');
+			if (parameter.Length != 2) {
+				ErrorUtilities.ReportError (5, "Property name and value expected as /p:<prop name>=<prop value>");
+				return false;
+			}
+
 			splittedProperties = parameter [1].Split (';');
 			foreach (string st in splittedProperties) {
+				if (st.IndexOf ('=') < 0) {
+					ErrorUtilities.ReportError (5,
+							"Invalid syntax. Property name and value expected as " +
+							"<prop name>=[<prop value>]");
+					return false;
+				}
 				property = st.Split ('=');
-				properties.SetProperty (property [0], property [1]);
+				properties.SetProperty (property [0], property.Length == 2 ? property [1] : "");
 			}
+
+			return true;
 		}
 		
 		internal void ProcessLogger (string s)

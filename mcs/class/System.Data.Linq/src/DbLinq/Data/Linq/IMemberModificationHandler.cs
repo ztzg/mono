@@ -28,11 +28,7 @@ using System.Collections.Generic;
 using System.Data.Linq.Mapping;
 using System.Reflection;
 
-#if MONO_STRICT
-namespace System.Data.Linq
-#else
 namespace DbLinq.Data.Linq
-#endif
 {
     /// <summary>
     /// Interface to watch modifications on registered entities
@@ -87,5 +83,12 @@ namespace DbLinq.Data.Linq
         /// </summary>
         /// <param name="entity"></param>
         void Unregister(object entity);
+
+		/// <summary>
+		/// Unregisters an entity.
+		/// This is useful when the DataContext has been disposed
+		/// </summary>
+		/// <param name="entity"></param>
+		void UnregisterAll();
     }
 }

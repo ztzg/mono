@@ -37,6 +37,18 @@ namespace Mono.CSharp {
 	/// </remarks>
 	public class Evaluator {
 
+		enum ParseMode {
+			// Parse silently, do not output any error messages
+			Silent,
+
+			// Report errors during parse
+			ReportErrors,
+
+			// Auto-complete, means that the tokenizer will start producing
+			// GETCOMPLETIONS tokens when it reaches a certain point.
+			GetCompletions
+		}
+
 		static object evaluator_lock = new object ();
 		
 		static string current_debug_name;
@@ -44,12 +56,16 @@ namespace Mono.CSharp {
 		static Thread invoke_thread;
 		
 		static ArrayList using_alias_list = new ArrayList ();
-		static ArrayList using_list = new ArrayList ();
+		internal static ArrayList using_list = new ArrayList ();
 		static Hashtable fields = new Hashtable ();
 
 		static Type   interactive_base_class = typeof (InteractiveBase);
 		static Driver driver;
 		static bool inited;
+
+		static CompilerContext ctx;
+		
+		public static TextWriter MessageOutput = Console.Out;
 
 		/// <summary>
 		///   Optional initialization for the Evaluator.
@@ -66,20 +82,53 @@ namespace Mono.CSharp {
 		/// </remarks>
 		public static void Init (string [] args)
 		{
+			InitAndGetStartupFiles (args);
+		}
+
+
+		/// <summary>
+		///   Optional initialization for the Evaluator.
+		/// </summary>
+		/// <remarks>
+		///  Initializes the Evaluator with the command line
+		///  options that would be processed by the command
+		///  line compiler.  Only the first call to
+		///  InitAndGetStartupFiles or Init will work, any future
+		///  invocations are ignored.
+		///
+		///  You can safely avoid calling this method if your application
+		///  does not need any of the features exposed by the command line
+		///  interface.
+		///
+		///  This method return an array of strings that contains any
+		///  files that were specified in `args'.
+		/// </remarks>
+		public static string [] InitAndGetStartupFiles (string [] args)
+		{
 			lock (evaluator_lock){
 				if (inited)
-					return;
+					return new string [0];
 				
-				RootContext.Version = LanguageVersion.Default;
-				driver = Driver.Create (args, false);
+				driver = Driver.Create (args, false, new ConsoleReportPrinter ());
 				if (driver == null)
 					throw new Exception ("Failed to create compiler driver with the given arguments");
+
+				RootContext.ToplevelTypes = new ModuleContainer (ctx, true);
 				
 				driver.ProcessDefaultConfig ();
+
+				ArrayList startup_files = new ArrayList ();
+				foreach (CompilationUnit file in Location.SourceFiles)
+					startup_files.Add (file.Path);
+				
 				CompilerCallableEntryPoint.Reset ();
+				RootContext.ToplevelTypes = new ModuleContainer (ctx, true);
+
 				driver.LoadReferences ();
 				RootContext.EvalMode = true;
 				inited = true;
+
+				return (string []) startup_files.ToArray (typeof (string));
 			}
 		}
 
@@ -91,22 +140,30 @@ namespace Mono.CSharp {
 		static void Reset ()
 		{
 			CompilerCallableEntryPoint.PartialReset ();
+			
+			// Workaround for API limitation where full message printer cannot be passed
+			ReportPrinter printer = MessageOutput == Console.Out || MessageOutput == Console.Error ?
+				new ConsoleReportPrinter (MessageOutput) :
+				new StreamReportPrinter (MessageOutput);
+
+			ctx = new CompilerContext (new Report (printer));
+			RootContext.ToplevelTypes = new ModuleContainer (ctx, true);
 
 			//
 			// PartialReset should not reset the core types, this is very redundant.
 			//
-			if (!TypeManager.InitCoreTypes ())
+			if (!TypeManager.InitCoreTypes (ctx))
 				throw new Exception ("Failed to InitCoreTypes");
-			TypeManager.InitOptionalCoreTypes ();
+			TypeManager.InitOptionalCoreTypes (ctx);
 			
-			Location.AddFile ("{interactive}");
+			Location.AddFile (null, "{interactive}");
 			Location.Initialize ();
 
 			current_debug_name = "interactive" + (count++) + ".dll";
 			if (Environment.GetEnvironmentVariable ("SAVE") != null){
-				CodeGen.Init (current_debug_name, current_debug_name, false);
+				CodeGen.Init (current_debug_name, current_debug_name, false, ctx);
 			} else
-				CodeGen.InitDynamic (current_debug_name);
+				CodeGen.InitDynamic (ctx, current_debug_name);
 		}
 
 		/// <summary>
@@ -190,27 +247,27 @@ namespace Mono.CSharp {
 					Init ();
 				
 				bool partial_input;
-				CSharpParser parser = ParseString (true, input, out partial_input);
+				CSharpParser parser = ParseString (ParseMode.Silent, input, out partial_input);
 				if (parser == null){
 					compiled = null;
 					if (partial_input)
 						return input;
 					
-					ParseString (false, input, out partial_input);
+					ParseString (ParseMode.ReportErrors, input, out partial_input);
 					return null;
 				}
 				
 				object parser_result = parser.InteractiveResult;
 				
 				if (!(parser_result is Class)){
-					int errors = Report.Errors;
+					int errors = ctx.Report.Errors;
 					
 					NamespaceEntry.VerifyAllUsing ();
-					if (errors == Report.Errors)
+					if (errors == ctx.Report.Errors)
 						parser.CurrentNamespace.Extract (using_alias_list, using_list);
 				}
 
-				compiled = CompileBlock (parser_result as Class, parser.undo);
+				compiled = CompileBlock (parser_result as Class, parser.undo, ctx.Report);
 			}
 			
 			return null;
@@ -317,7 +374,69 @@ namespace Mono.CSharp {
 
 			return null;
 		}
+
+		public static string [] GetCompletions (string input, out string prefix)
+		{
+			prefix = "";
+			if (input == null || input.Length == 0)
+				return null;
 			
+			lock (evaluator_lock){
+				if (!inited)
+					Init ();
+				
+				bool partial_input;
+				CSharpParser parser = ParseString (ParseMode.GetCompletions, input, out partial_input);
+				if (parser == null){
+					if (CSharpParser.yacc_verbose_flag != 0)
+						Console.WriteLine ("DEBUG: No completions available");
+					return null;
+				}
+				
+				Class parser_result = parser.InteractiveResult as Class;
+				
+				if (parser_result == null){
+					if (CSharpParser.yacc_verbose_flag != 0)
+						Console.WriteLine ("Do not know how to cope with !Class yet");
+					return null;
+				}
+
+				try {
+					RootContext.ResolveTree ();
+					if (ctx.Report.Errors != 0)
+						return null;
+					
+					RootContext.PopulateTypes ();
+					if (ctx.Report.Errors != 0)
+						return null;
+
+					MethodOrOperator method = null;
+					foreach (MemberCore member in parser_result.Methods){
+						if (member.Name != "Host")
+							continue;
+						
+						method = (MethodOrOperator) member;
+						break;
+					}
+					if (method == null)
+						throw new InternalErrorException ("did not find the the Host method");
+
+					BlockContext bc = new BlockContext (method, method.Block, method.ReturnType);
+
+					try {
+						method.Block.Resolve (null, bc, method.ParameterInfo, method);
+					} catch (CompletionResult cr){
+						prefix = cr.BaseText;
+						return cr.Result;
+					}
+				} finally {
+					parser.undo.ExecuteUndo ();
+				}
+				
+			}
+			return null;
+		}
+		
 		/// <summary>
 		///   Executes the given expression or statement.
 		/// </summary>
@@ -364,7 +483,7 @@ namespace Mono.CSharp {
 
 			return result;
 		}
-		
+	
 		enum InputKind {
 			EOF,
 			StatementOrExpression,
@@ -384,7 +503,7 @@ namespace Mono.CSharp {
 		//
 		static InputKind ToplevelOrStatement (SeekableStreamReader seekable)
 		{
-			Tokenizer tokenizer = new Tokenizer (seekable, (CompilationUnit) Location.SourceFiles [0]);
+			Tokenizer tokenizer = new Tokenizer (seekable, (CompilationUnit) Location.SourceFiles [0], ctx);
 			
 			int t = tokenizer.token ();
 			switch (t){
@@ -486,7 +605,7 @@ namespace Mono.CSharp {
 		// @partial_input: if @silent is true, then it returns whether the
 		// parsed expression was partial, and more data is needed
 		//
-		static CSharpParser ParseString (bool silent, string input, out bool partial_input)
+		static CSharpParser ParseString (ParseMode mode, string input, out bool partial_input)
 		{
 			partial_input = false;
 			Reset ();
@@ -497,14 +616,14 @@ namespace Mono.CSharp {
 
 			InputKind kind = ToplevelOrStatement (seekable);
 			if (kind == InputKind.Error){
-				if (!silent)
-					Report.Error (-25, "Detection Parsing Error");
+				if (mode == ParseMode.ReportErrors)
+					ctx.Report.Error (-25, "Detection Parsing Error");
 				partial_input = false;
 				return null;
 			}
 
 			if (kind == InputKind.EOF){
-				if (silent == false)
+				if (mode == ParseMode.ReportErrors)
 					Console.Error.WriteLine ("Internal error: EOF condition should have been detected in a previous call with silent=true");
 				partial_input = true;
 				return null;
@@ -512,8 +631,7 @@ namespace Mono.CSharp {
 			}
 			seekable.Position = 0;
 
-			CSharpParser parser = new CSharpParser (seekable, (CompilationUnit) Location.SourceFiles [0]);
-			parser.ErrorOutput = Report.Stderr;
+			CSharpParser parser = new CSharpParser (seekable, (CompilationUnit) Location.SourceFiles [0], ctx);
 
 			if (kind == InputKind.StatementOrExpression){
 				parser.Lexer.putback_char = Tokenizer.EvalStatementParserCharacter;
@@ -529,21 +647,30 @@ namespace Mono.CSharp {
 				RootContext.StatementMode = false;
 			}
 
-			if (silent)
-				Report.DisableReporting ();
+			if (mode == ParseMode.GetCompletions)
+				parser.Lexer.CompleteOnEOF = true;
+
+			bool disable_error_reporting;
+			if ((mode == ParseMode.Silent || mode == ParseMode.GetCompletions) && CSharpParser.yacc_verbose_flag == 0)
+				disable_error_reporting = true;
+			else
+				disable_error_reporting = false;
+			
+			if (disable_error_reporting)
+				ctx.Report.DisableReporting ();
 			try {
 				parser.parse ();
 			} finally {
-				if (Report.Errors != 0){
-					if (silent && parser.UnexpectedEOF)
+				if (ctx.Report.Errors != 0){
+					if (mode != ParseMode.ReportErrors  && parser.UnexpectedEOF)
 						partial_input = true;
 
 					parser.undo.ExecuteUndo ();
 					parser = null;
 				}
 
-				if (silent)
-					Report.EnableReporting ();
+				if (disable_error_reporting)
+					ctx.Report.EnableReporting ();
 			}
 			return parser;
 		}
@@ -559,7 +686,7 @@ namespace Mono.CSharp {
 
 		static volatile bool invoking;
 		
-		static CompiledMethod CompileBlock (Class host, Undo undo)
+		static CompiledMethod CompileBlock (Class host, Undo undo, Report Report)
 		{
 			RootContext.ResolveTree ();
 			if (Report.Errors != 0){
@@ -600,7 +727,7 @@ namespace Mono.CSharp {
 			RootContext.CloseTypes ();
 
 			if (Environment.GetEnvironmentVariable ("SAVE") != null)
-				CodeGen.Save (current_debug_name, false);
+				CodeGen.Save (current_debug_name, false, Report);
 
 			if (host == null)
 				return null;
@@ -702,6 +829,21 @@ namespace Mono.CSharp {
 			}
 		}
 
+		static internal ICollection GetUsingList ()
+		{
+			ArrayList res = new ArrayList (using_list.Count);
+			foreach (object ue in using_list)
+				res.Add (ue.ToString ());
+			return res;
+		}
+		
+		static internal string [] GetVarNames ()
+		{
+			lock (evaluator_lock){
+				return (string []) new ArrayList (fields.Keys).ToArray (typeof (string));
+			}
+		}
+		
 		static public string GetVars ()
 		{
 			lock (evaluator_lock){
@@ -738,8 +880,8 @@ namespace Mono.CSharp {
 		static public void LoadAssembly (string file)
 		{
 			lock (evaluator_lock){
-				Driver.LoadAssembly (file, false);
-				GlobalRootNamespace.Instance.ComputeNamespaces ();
+				driver.LoadAssembly (file, false);
+				GlobalRootNamespace.Instance.ComputeNamespaces (ctx);
 			}
 		}
 
@@ -750,7 +892,7 @@ namespace Mono.CSharp {
 		{
 			lock (evaluator_lock){
 				GlobalRootNamespace.Instance.AddAssemblyReference (a);
-				GlobalRootNamespace.Instance.ComputeNamespaces ();
+				GlobalRootNamespace.Instance.ComputeNamespaces (ctx);
 			}
 		}
 		
@@ -853,7 +995,7 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			string pkgout = Driver.GetPackageFlags (pkg, false);
+			string pkgout = Driver.GetPackageFlags (pkg, false, RootContext.ToplevelTypes.Compiler.Report);
 			if (pkgout == null)
 				return;
 
@@ -953,8 +1095,8 @@ namespace Mono.CSharp {
 		TypeContainer container;
 		string name;
 		
-		public LocalVariableReferenceWithClassSideEffect (TypeContainer container, string name, Block current_block, string local_variable_id, Location loc)
-			: base (current_block, local_variable_id, loc)
+		public LocalVariableReferenceWithClassSideEffect (TypeContainer container, string name, Block current_block, string local_variable_id, LocalInfo li, Location loc)
+			: base (current_block, local_variable_id, loc, li, false)
 		{
 			this.container = container;
 			this.name = name;
@@ -977,7 +1119,7 @@ namespace Mono.CSharp {
 			return name.GetHashCode ();
 		}
 		
-		override public Expression DoResolveLValue (EmitContext ec, Expression right_side)
+		override public Expression DoResolveLValue (ResolveContext ec, Expression right_side)
 		{
 			Expression ret = base.DoResolveLValue (ec, right_side);
 			if (ret == null)
@@ -1006,7 +1148,7 @@ namespace Mono.CSharp {
 		{
 		}
 
-		public override Expression DoResolve (EmitContext ec)
+		public override Expression DoResolve (ResolveContext ec)
 		{
 			CloneContext cc = new CloneContext ();
 			Expression clone = source.Clone (cc);

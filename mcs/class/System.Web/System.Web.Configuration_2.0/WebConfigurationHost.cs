@@ -360,6 +360,8 @@ namespace System.Web.Configuration
 					return configPath == MachinePath || configPath == MachineWebPath;
 				case ConfigurationAllowDefinition.MachineToWebRoot:
 				case ConfigurationAllowDefinition.MachineToApplication:
+					if (String.IsNullOrEmpty (configPath))
+						return true;
 					return (String.Compare (configPath, MachinePath, StringComparison.Ordinal) == 0) ||
 						(String.Compare (configPath, MachineWebPath, StringComparison.Ordinal) == 0) ||
 						(String.Compare (configPath, "/", StringComparison.Ordinal) == 0) ||
@@ -409,6 +411,9 @@ namespace System.Web.Configuration
 
 		public virtual Stream OpenStreamForWrite (string streamName, string templateStreamName, ref object writeContext)
 		{
+			string rootConfigPath = GetWebConfigFileName (HttpRuntime.AppDomainAppPath);
+			if (String.Compare (streamName, rootConfigPath, StringComparison.OrdinalIgnoreCase) == 0)
+				WebConfigurationManager.SuppressAppReload (true);
 			return new FileStream (streamName, FileMode.Create, FileAccess.Write);
 		}
 
@@ -436,7 +441,7 @@ namespace System.Web.Configuration
 		}
 
 		public virtual object StartMonitoringStreamForChanges (string streamName, StreamChangeCallback callback)
-		{
+		{			
 			throw new NotImplementedException ();
 		}
 		
@@ -453,14 +458,22 @@ namespace System.Web.Configuration
 				throw new ConfigurationErrorsException ("The section can't be defined in this file (the allowed definition context is '" + allowDefinition + "').", errorInfo.Filename, errorInfo.LineNumber);
 		}
 		
-		[MonoTODO("Does nothing")]
 		public virtual void WriteCompleted (string streamName, bool success, object writeContext)
 		{
-		}
-		
-		[MonoTODO("Does nothing")]
+			WriteCompleted (streamName, success, writeContext, false);
+		}		
+
 		public virtual void WriteCompleted (string streamName, bool success, object writeContext, bool assertPermissions)
 		{
+			// There are probably other things to be done here, but for the moment we
+			// just mark the completed write as one that should not cause application
+			// reload. Note that it might already be too late for suppression, since the
+			// FileSystemWatcher monitor might have already delivered the
+			// notification. If the stream has been open using OpenStreamForWrite then
+			// we're safe, though.
+			string rootConfigPath = GetWebConfigFileName (HttpRuntime.AppDomainAppPath);
+			if (String.Compare (streamName, rootConfigPath, StringComparison.OrdinalIgnoreCase) == 0)
+				WebConfigurationManager.SuppressAppReload (true);
 		}
 
 		public virtual bool SupportsChangeNotifications {

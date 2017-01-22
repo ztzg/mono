@@ -59,11 +59,16 @@ namespace System {
 
 #if NET_2_0
 	[ComVisible (true)]
+#if !NET_2_1
 	[ComDefaultInterface (typeof (_AppDomain))]
 #endif
+#endif
 	[ClassInterface(ClassInterfaceType.None)]
-	public sealed class AppDomain : MarshalByRefObject , _AppDomain , IEvidenceFactory
-	{
+#if NET_2_1
+	public sealed class AppDomain : MarshalByRefObject {
+#else
+	public sealed class AppDomain : MarshalByRefObject, _AppDomain, IEvidenceFactory {
+#endif
         #pragma warning disable 169
         #region Sync with object-internals.h
 		IntPtr _mono_app_domain;
@@ -77,6 +82,9 @@ namespace System {
 		[ThreadStatic]
 		static Hashtable assembly_resolve_in_progress;
 
+		[ThreadStatic]
+		static Hashtable assembly_resolve_in_progress_refonly;
+#if !NET_2_1
 		// CAS
 		private Evidence _evidence;
 		private PermissionSet _granted;
@@ -86,7 +94,7 @@ namespace System {
 
 		[ThreadStatic]
 		private static IPrincipal _principal;
-		
+#endif
 		static AppDomain default_domain;
 
 		private AppDomain ()
@@ -107,13 +115,13 @@ namespace System {
 			}
 		}
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 		[MonoTODO]
 		public ApplicationTrust ApplicationTrust {
 			get { throw new NotImplementedException (); }
 		}
 #endif
-
+#if !NET_2_1
 		public string BaseDirectory {
 			get {
 				string path = SetupInformationNoCopy.ApplicationBase;
@@ -156,6 +164,7 @@ namespace System {
 				return (SetupInformationNoCopy.ShadowCopyFiles == "true");
 			}
 		}
+#endif
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern string getFriendlyName ();
@@ -165,7 +174,7 @@ namespace System {
 				return getFriendlyName ();
 			}
 		}
-
+#if !NET_2_1
 		public Evidence Evidence {
 			get {
 				// if the host (runtime) hasn't provided it's own evidence...
@@ -213,7 +222,7 @@ namespace System {
 		internal PermissionSet GrantedPermissionSet {
 			get { return _granted; }
 		}
-
+#endif
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private static extern AppDomain getCurDomain ();
 		
@@ -238,6 +247,8 @@ namespace System {
 				return default_domain;
 			}
 		}
+
+#if !NET_2_1
 
 #if NET_2_0
 		[Obsolete ("AppDomain.AppendPrivatePath has been deprecated. Please investigate the use of AppDomainSetup.PrivateBinPath instead.")]
@@ -391,6 +402,8 @@ namespace System {
 
 			return (oh != null) ? oh.Unwrap () : null;
 		}
+
+#endif // !NET_2_1
 
 		public AssemblyBuilder DefineDynamicAssembly (AssemblyName name, AssemblyBuilderAccess access)
 		{
@@ -690,7 +703,7 @@ namespace System {
 			assembly.FromByteArray = true;
 			return assembly;
 		}
-
+#if !NET_2_1
 		[SecurityPermission (SecurityAction.Demand, ControlPolicy = true)]
 		public void SetAppDomainPolicy (PolicyLevel domainPolicy)
 		{
@@ -756,7 +769,7 @@ namespace System {
 
 			_principal = principal;
 		}
-
+#endif
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private static extern AppDomain InternalSetDomainByID (int domain_id);
  
@@ -845,6 +858,8 @@ namespace System {
 			return _process_guid;
 		}
 
+#if !NET_2_1
+
 		public static AppDomain CreateDomain (string friendlyName)
 		{
 			return CreateDomain (friendlyName, null, null);
@@ -858,7 +873,7 @@ namespace System {
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private static extern AppDomain createDomain (string friendlyName, AppDomainSetup info);
 
-		[MonoTODO ("Currently it does not allow the setup in the other domain")]
+		[MonoLimitationAttribute ("Currently it does not allow the setup in the other domain")]
 		[SecurityPermission (SecurityAction.Demand, ControlAppDomain = true)]
 		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo, AppDomainSetup info)
 		{
@@ -899,7 +914,7 @@ namespace System {
 			else
 				ad._evidence = new Evidence (securityInfo);	// copy
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 			if (info.AppDomainInitializer != null) {
 				if (!info.AppDomainInitializer.Method.IsStatic)
 					throw new ArgumentException ("Non-static methods cannot be invoked as an appdomain initializer");
@@ -918,7 +933,7 @@ namespace System {
 			return ad;
 		}
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 		[Serializable]
 		class Loader {
 
@@ -959,6 +974,18 @@ namespace System {
 		{
 			return CreateDomain (friendlyName, securityInfo, CreateDomainSetup (appBasePath, appRelativeSearchPath, shadowCopyFiles));
 		}
+		
+#if NET_2_0 && !NET_2_1
+		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo, AppDomainSetup info,
+		                                      PermissionSet grantSet, params StrongName [] fullTrustAssemblies)
+		{
+			if (info == null)
+				throw new ArgumentNullException ("info");
+
+			info.ApplicationTrust = new ApplicationTrust (grantSet, fullTrustAssemblies ?? new StrongName [0]);
+			return CreateDomain (friendlyName, securityInfo, info);		
+		}
+#endif
 
 		static AppDomainSetup CreateDomainSetup (string appBasePath, string appRelativeSearchPath, bool shadowCopyFiles)
 		{
@@ -979,15 +1006,7 @@ namespace System {
 
 			return info;
 		}
-
-#if NET_2_0
-		[MonoTODO]
-		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo, AppDomainSetup info,
-		                                      PermissionSet grantSet, params StrongName [] fullTrustAssemblies)
-		{
-			throw new NotImplementedException ();
-		}
-#endif
+#endif // !NET_2_1
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private static extern bool InternalIsFinalizingForUnload (int domain_id);
@@ -1031,6 +1050,7 @@ namespace System {
 		}
 #endif
 
+#if !NET_2_1
 #if NET_2_0
 		[Obsolete ("Use AppDomainSetup.DynamicBase")]
 #endif
@@ -1039,6 +1059,7 @@ namespace System {
 		{
 			SetupInformationNoCopy.DynamicBase = path;
 		}
+#endif // !NET_2_1
 
 #if NET_2_0
 		[Obsolete ("AppDomain.GetCurrentThreadId has been deprecated"
@@ -1102,7 +1123,7 @@ namespace System {
 		private Assembly DoAssemblyResolve (string name, bool refonly)
 		{
 			ResolveEventHandler del;
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 			if (refonly)
 				del = ReflectionOnlyAssemblyResolve;
 			else
@@ -1114,20 +1135,24 @@ namespace System {
 				return null;
 			
 			/* Prevent infinite recursion */
-			Hashtable ht = assembly_resolve_in_progress;
-			if (ht == null) {
-				ht = new Hashtable ();
-				assembly_resolve_in_progress = ht;
+			Hashtable ht;
+			if (refonly) {
+				ht = assembly_resolve_in_progress_refonly;
+				if (ht == null) {
+					ht = new Hashtable ();
+					assembly_resolve_in_progress_refonly = ht;
+				}
+			} else {
+				ht = assembly_resolve_in_progress;
+				if (ht == null) {
+					ht = new Hashtable ();
+					assembly_resolve_in_progress = ht;
+				}
 			}
 
-			Assembly ass = (Assembly) ht [name];
-#if NET_2_0
-			if (ass != null && (ass.ReflectionOnly == refonly))
+			string s = (string) ht [name];
+			if (s != null)
 				return null;
-#else
-			if (ass != null)
-				return null;
-#endif
 			ht [name] = name;
 			try {
 				Delegate[] invocation_list = del.GetInvocationList ();
@@ -1189,12 +1214,13 @@ namespace System {
 				DomainUnload(this, null);
 		}
 
+#if !NET_2_1
 		internal byte[] GetMarshalledDomainObjRef ()
 		{
 			ObjRef oref = RemotingServices.Marshal (AppDomain.CurrentDomain, null, typeof (AppDomain));
 			return CADSerializer.SerializeObject (oref).GetBuffer();
 		}
-
+#endif
 		internal void ProcessMessageInDomain (byte[] arrRequest, CADMethodCallMessage cadMsg,
 		                                      out byte[] arrResponse, out CADMethodReturnMessage cadMrm)
 		{
@@ -1214,6 +1240,7 @@ namespace System {
 			else
 				arrResponse = null;
 		}
+
 #pragma warning restore 169
 
 		// End of methods called from the runtime
@@ -1258,14 +1285,31 @@ namespace System {
 		public event UnhandledExceptionEventHandler UnhandledException;
 #endif
 
+#if NET_4_0 || BOOTSTRAP_NET_4_0
+		[MonoTODO]
+		public bool IsHomogenous {
+			get { return true; }
+		}
+#endif
+
 #if NET_2_0
+        #pragma warning disable 649
+		private AppDomainManager _domain_manager;
+        #pragma warning restore 649
+
+		// default is null
+		public AppDomainManager DomainManager {
+			get { return _domain_manager; }
+		}
+#endif
+
+#if NET_2_0 && !NET_2_1
 
 		public event ResolveEventHandler ReflectionOnlyAssemblyResolve;
 
         #pragma warning disable 649
 		private ActivationContext _activation;
 		private ApplicationIdentity _applicationIdentity;
-		private AppDomainManager _domain_manager;
         #pragma warning restore 649
 
 		// properties
@@ -1276,11 +1320,6 @@ namespace System {
 
 		public ApplicationIdentity ApplicationIdentity {
 			get { return _applicationIdentity; }
-		}
-
-		// default is null
-		public AppDomainManager DomainManager {
-			get { return _domain_manager; }
 		}
 
 		public int Id {
@@ -1349,7 +1388,15 @@ namespace System {
 		}
 #endif
 
-#if NET_1_1
+#if NET_2_1
+		public int ExecuteAssemblyByName (string assemblyName)
+		{
+			// critical code in SL that we're not calling in ML
+			throw new NotImplementedException ();
+		}
+#endif
+
+#if NET_1_1 && !NET_2_1
 		void _AppDomain.GetIDsOfNames ([In] ref Guid riid, IntPtr rgszNames, uint cNames, uint lcid, IntPtr rgDispId)
 		{
 			throw new NotImplementedException ();

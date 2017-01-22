@@ -141,13 +141,15 @@ namespace System.Windows.Forms {
 
 		internal void FlushQueue () {
 			CheckTimers (DateTime.UtcNow);
-			while (MessageQueue.Count > 0) {
-				object queueobj = MessageQueue.Dequeue ();
-				if (queueobj is GCHandle) {
-					XplatUIDriverSupport.ExecuteClientMessage((GCHandle)queueobj);
-				} else {
-					MSG msg = (MSG)queueobj;
-					NativeWindow.WndProc (msg.hwnd, msg.message, msg.wParam, msg.lParam);
+			lock (queuelock) {
+				while (MessageQueue.Count > 0) {
+					object queueobj = MessageQueue.Dequeue ();
+					if (queueobj is GCHandle) {
+						XplatUIDriverSupport.ExecuteClientMessage((GCHandle)queueobj);
+					} else {
+						MSG msg = (MSG)queueobj;
+						NativeWindow.WndProc (msg.hwnd, msg.message, msg.wParam, msg.lParam);
+					}
 				}
 			}
 		}
@@ -420,7 +422,7 @@ namespace System.Windows.Forms {
 				msg.message = Msg.WM_MOUSEHOVER;
 				msg.wParam = GetMousewParam (0);
 				msg.lParam = (IntPtr)((ushort)Hover.X << 16 | (ushort)Hover.X);
-				MessageQueue.Enqueue (msg);
+				EnqueueMessage (msg);
 			}
 		}
 		#endregion
@@ -736,7 +738,7 @@ namespace System.Windows.Forms {
 					MSG msg = new MSG ();
 					msg.message = Msg.WM_PAINT;
 					msg.hwnd = hwnd.Handle;
-					MessageQueue.Enqueue (msg);
+					EnqueueMessage (msg);
 					hwnd.expose_pending = true;
 				}
 			} else {
@@ -749,7 +751,7 @@ namespace System.Windows.Forms {
 					msg.wParam = hrgn == IntPtr.Zero ? (IntPtr)1 : hrgn;
 					msg.refobject = rgn;
 					msg.hwnd = hwnd.Handle;
-					MessageQueue.Enqueue (msg);
+					EnqueueMessage (msg);
 					hwnd.nc_expose_pending = true;
 
 				}
@@ -1098,6 +1100,17 @@ namespace System.Windows.Forms {
 		internal override IntPtr DefWndProc(ref Message msg) {
 			Hwnd hwnd = Hwnd.ObjectFromHandle (msg.HWnd);
 			switch ((Msg)msg.Msg) {
+				case Msg.WM_IME_COMPOSITION:
+					string s = KeyboardHandler.ComposedString;
+					foreach (char c in s)
+						SendMessage (msg.HWnd, Msg.WM_IME_CHAR, (IntPtr) c, msg.LParam);
+					break;
+				case Msg.WM_IME_CHAR:
+					// On Windows API it sends two WM_CHAR messages for each byte, but
+					// I wonder if it is worthy to emulate it (also no idea how to 
+					// reconstruct those bytes into chars).
+					SendMessage (msg.HWnd, Msg.WM_CHAR, msg.WParam, msg.LParam);
+					return IntPtr.Zero;
 				case Msg.WM_QUIT: {
 					if (WindowMapping [hwnd.Handle] != null)
 
@@ -1613,7 +1626,7 @@ namespace System.Windows.Forms {
 			msg.message = message;
 			msg.wParam = wParam;
 			msg.lParam = lParam;
-			MessageQueue.Enqueue (msg);
+			EnqueueMessage (msg);
 			return true;
 		}
 
@@ -1681,7 +1694,9 @@ namespace System.Windows.Forms {
 		[MonoTODO]
 		internal override void SendAsyncMethod (AsyncMethodData method) {
 			// Fake async
-			MessageQueue.Enqueue (GCHandle.Alloc (method));
+			lock (queuelock) {
+				MessageQueue.Enqueue (GCHandle.Alloc (method));
+			}
 		}
 
 		[MonoTODO]

@@ -28,23 +28,20 @@ using DbLinq.Util;
 using DbLinq.Data.Linq.Database;
 using System.Collections.Generic;
 
-#if MONO_STRICT
-using System.Data.Linq.Sql;
-using System.Data.Linq.Sugar.Expressions;
-#else
 using DbLinq.Data.Linq.Sql;
 using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
 
 #if MONO_STRICT
-namespace System.Data.Linq.Sugar
+using System.Data.Linq;
 #else
-namespace DbLinq.Data.Linq.Sugar
+using DbLinq.Data.Linq;
 #endif
+
+namespace DbLinq.Data.Linq.Sugar
 {
-    internal abstract class ParameterizedQuery : AbstractQuery
+    internal class ParameterizedQuery : AbstractQuery
     {
-        protected ParameterizedQuery(DataContext dataContext, SqlStatement sql, IList<ObjectInputParameterExpression> inputParameters)
+        public ParameterizedQuery(DataContext dataContext, SqlStatement sql, IList<ObjectInputParameterExpression> inputParameters)
             : base(dataContext, sql)
         {
             this.InputParameters = inputParameters;
@@ -55,17 +52,31 @@ namespace DbLinq.Data.Linq.Sugar
         /// </summary>
         public IList<ObjectInputParameterExpression> InputParameters { get; protected set; }
 
-        public override ITransactionalCommand GetCommand()
+        public ITransactionalCommand GetCommandTransactional(bool createTransaction)
         {
-            ITransactionalCommand transactionalCommand = base.GetCommand(true);
+            ITransactionalCommand command = base.GetCommand(createTransaction);
             foreach (var inputParameter in InputParameters)
             {
-                var dbParameter = transactionalCommand.Command.CreateParameter();
+                var dbParameter = command.Command.CreateParameter();
                 dbParameter.ParameterName = DataContext.Vendor.SqlProvider.GetParameterName(inputParameter.Alias);
-                dbParameter.SetValue(inputParameter.GetValue(Target), inputParameter.ValueType);
-                transactionalCommand.Command.Parameters.Add(dbParameter);
+                object value = NormalizeDbType(inputParameter.GetValue(Target));
+                dbParameter.SetValue(value, inputParameter.ValueType);
+                command.Command.Parameters.Add(dbParameter);
             }
-            return transactionalCommand;
+            return command;
+        }
+
+        public override ITransactionalCommand GetCommand()
+        {
+            return GetCommandTransactional(true);
+        }
+
+        private object NormalizeDbType(object value)
+        {
+            System.Data.Linq.Binary b = value as System.Data.Linq.Binary;
+            if (b != null)
+                return b.ToArray();
+            return value;
         }
 
         public object Target { get; set; }

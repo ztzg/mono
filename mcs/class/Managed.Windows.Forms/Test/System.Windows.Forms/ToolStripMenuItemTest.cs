@@ -163,6 +163,123 @@ namespace MonoTests.System.Windows.Forms
 			Assert.AreEqual (null, tsmi.ShortcutKeyDisplayString, "A5");
 		}
 		
+		[Test]
+		[NUnit.Framework.Category ("NotWorking")]
+		public void GetCurrentParent ()
+		{
+			ToolStripMenuItem tsmiFile = new ToolStripMenuItem ("File");
+			ToolStripMenuItem tsmiHelp = new ToolStripMenuItem ("Help");
+			ToolStripMenuItem tsmiQuit = new ToolStripMenuItem ("Quit");
+			ToolStripMenuItem tsmiAbout = new ToolStripMenuItem ("About");
+			tsmiFile.DropDownItems.Add (tsmiQuit);
+			tsmiHelp.DropDownItems.Add (tsmiAbout);
+			MenuStrip menu = new MenuStrip ();
+			menu.Items.Add (tsmiFile);
+			menu.Items.Add (tsmiHelp);
+			
+			ToolStrip parent = tsmiFile.GetCurrentParent ();
+			Assert.IsNotNull (parent, "A1");
+			Assert.AreEqual (parent.GetType ().Name, typeof (MenuStrip).Name, "A2");
+			Assert.AreEqual (parent, menu, "A3");
+			
+			//because it's not visible?:
+			Assert.IsNull (tsmiQuit.GetCurrentParent (), "A4");
+		}
+		
+		[Test]
+		public void Owner ()
+		{
+			ToolStripMenuItem tsmiFile = new ToolStripMenuItem ("File");
+			ToolStripMenuItem tsmiHelp = new ToolStripMenuItem ("Help");
+			ToolStripMenuItem tsmiQuit = new ToolStripMenuItem ("Quit");
+			ToolStripMenuItem tsmiNew = new ToolStripMenuItem ("New");
+			ToolStripMenuItem tsmiAbout = new ToolStripMenuItem ("About");
+			tsmiQuit.DropDownItems.Add (tsmiNew);
+			tsmiFile.DropDownItems.Add (tsmiQuit);
+			tsmiHelp.DropDownItems.Add (tsmiAbout);
+			MenuStrip menu = new MenuStrip ();
+			menu.Items.Add (tsmiFile);
+			menu.Items.Add (tsmiHelp);
+			
+			Assert.IsNotNull (tsmiFile.Owner);
+			Assert.AreEqual (tsmiFile.Owner.GetType().Name, typeof (MenuStrip).Name);
+			Assert.AreEqual (tsmiFile.Owner, menu);
+
+			Assert.IsNotNull (tsmiQuit.Owner);
+			Assert.AreEqual (tsmiQuit.Owner.GetType().Name, typeof (ToolStripDropDownMenu).Name);
+			Assert.AreEqual (tsmiQuit.Owner, tsmiFile.DropDown);
+		}
+		
+		[Test]
+		public void OwnerItem ()
+		{
+			ToolStripMenuItem tsmiFile = new ToolStripMenuItem ("File");
+			ToolStripMenuItem tsmiHelp = new ToolStripMenuItem ("Help");
+			ToolStripMenuItem tsmiQuit = new ToolStripMenuItem ("Quit");
+			ToolStripMenuItem tsmiNew = new ToolStripMenuItem ("New");
+			ToolStripMenuItem tsmiAbout = new ToolStripMenuItem ("About");
+			tsmiQuit.DropDownItems.Add (tsmiNew);
+			tsmiFile.DropDownItems.Add (tsmiQuit);
+			tsmiHelp.DropDownItems.Add (tsmiAbout);
+			MenuStrip menu = new MenuStrip ();
+			menu.Items.Add (tsmiFile);
+			menu.Items.Add (tsmiHelp);
+
+			Assert.IsNull (tsmiFile.OwnerItem);
+
+			Assert.IsNotNull (tsmiQuit.OwnerItem);
+			Assert.AreEqual (tsmiQuit.OwnerItem.GetType ().Name, typeof (ToolStripMenuItem).Name);
+			Assert.AreEqual (tsmiQuit.OwnerItem, tsmiFile);
+		}
+		
+		[Test]
+		public void ToolStripDropDownButton_SelectChild ()
+		{
+			ToolStripDropDownButton tsddb = new ToolStripDropDownButton ();
+			tsddb.DropDownClosed += Helper.FireEvent1;
+			tsddb.DropDownItemClicked += Helper.FireEvent2;
+			tsddb.DropDownOpened += Helper.FireEvent1;
+			tsddb.DropDownOpening += Helper.FireEvent1;
+			tsddb.Click += Helper.FireEvent1;
+
+			Helper item1 = new Helper ();
+			Helper item2 = new Helper ();
+
+			tsddb.DropDownItems.Add (item1);
+			tsddb.DropDownItems.Add (item2);
+			ToolStripDropDownButton_SelectChildVerify (item1);
+			ToolStrip ts = new ToolStrip ();
+			ts.Items.Add (tsddb);
+			ToolStripDropDownButton_SelectChildVerify (item2);
+		}
+		
+		private static void ToolStripDropDownButton_SelectChildVerify (Helper item)
+		{
+			Assert.IsNull (item.MyParent);
+			Assert.IsTrue (item.CanSelect);
+			Assert.IsFalse (item.Selected);
+			item.Select ();
+			Assert.IsTrue (item.Selected);
+			Assert.IsFalse (Helper.eventFired);
+		}
+		
+		private class Helper : ToolStripMenuItem
+		{
+			internal Helper () {
+				this.DropDownClosed += Helper.FireEvent1;
+				this.DropDownItemClicked += Helper.FireEvent2;
+				this.DropDownOpened += Helper.FireEvent1;
+				this.DropDownOpening += Helper.FireEvent1;
+				this.Click += Helper.FireEvent1;
+			}
+			
+			internal ToolStrip MyParent { get { return this.Parent; } }
+
+			internal static bool eventFired = false;
+			internal static void FireEvent1 (object o, EventArgs args) { eventFired = true; }
+			internal static void FireEvent2 (object o, ToolStripItemClickedEventArgs args) { FireEvent1 (null, null); }
+		}
+		
 		private class ExposeProtectedMethods : ToolStripMenuItem
 		{
 			public bool PublicProcessCmdKey (ref Message m, Keys keys)

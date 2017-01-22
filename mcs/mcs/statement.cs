@@ -27,7 +27,7 @@ namespace Mono.CSharp {
 		///   Resolves the statement, true means that all sub-statements
 		///   did resolve ok.
 		//  </summary>
-		public virtual bool Resolve (EmitContext ec)
+		public virtual bool Resolve (BlockContext ec)
 		{
 			return true;
 		}
@@ -36,7 +36,7 @@ namespace Mono.CSharp {
 		///   We already know that the statement is unreachable, but we still
 		///   need to resolve it to catch errors.
 		/// </summary>
-		public virtual bool ResolveUnreachable (EmitContext ec, bool warn)
+		public virtual bool ResolveUnreachable (BlockContext ec, bool warn)
 		{
 			//
 			// This conflicts with csc's way of doing this, but IMHO it's
@@ -48,7 +48,7 @@ namespace Mono.CSharp {
 			//
 
 			if (warn)
-				Report.Warning (162, 2, loc, "Unreachable code detected");
+				ec.Report.Warning (162, 2, loc, "Unreachable code detected");
 
 			ec.StartFlowBranching (FlowBranching.BranchingType.Block, loc);
 			bool ok = Resolve (ec);
@@ -62,25 +62,6 @@ namespace Mono.CSharp {
 		/// </summary>
 		protected abstract void DoEmit (EmitContext ec);
 
-		/// <summary>
-		///   Utility wrapper routine for Error, just to beautify the code
-		/// </summary>
-		public void Error (int error, string format, params object[] args)
-		{
-			Error (error, String.Format (format, args));
-		}
-
-		public void Error (int error, string s)
-		{
-			if (!loc.IsNull)
-				Report.Error (error, loc, s);
-			else
-				Report.Error (error, s);
-		}
-
-		/// <summary>
-		///   Return value indicates whether all code paths emitted return.
-		/// </summary>
 		public virtual void Emit (EmitContext ec)
 		{
 			ec.Mark (loc);
@@ -100,9 +81,9 @@ namespace Mono.CSharp {
 			return s;
 		}
 
-		public virtual Expression CreateExpressionTree (EmitContext ec)
+		public virtual Expression CreateExpressionTree (ResolveContext ec)
 		{
-			Report.Error (834, loc, "A lambda expression with statement body cannot be converted to an expresion tree");
+			ec.Report.Error (834, loc, "A lambda expression with statement body cannot be converted to an expresion tree");
 			return null;
 		}
 
@@ -116,82 +97,18 @@ namespace Mono.CSharp {
 		public abstract void MutateHoistedGenericType (AnonymousMethodStorey storey);
 	}
 
-	//
-	// This class is used during the Statement.Clone operation
-	// to remap objects that have been cloned.
-	//
-	// Since blocks are cloned by Block.Clone, we need a way for
-	// expressions that must reference the block to be cloned
-	// pointing to the new cloned block.
-	//
-	public class CloneContext {
-		Hashtable block_map = new Hashtable ();
-		Hashtable variable_map;
-		
-		public void AddBlockMap (Block from, Block to)
-		{
-			if (block_map.Contains (from))
-				return;
-			block_map [from] = to;
-		}
-		
-		public Block LookupBlock (Block from)
-		{
-			Block result = (Block) block_map [from];
-
-			if (result == null){
-				result = (Block) from.Clone (this);
-				block_map [from] = result;
-			}
-
-			return result;
-		}
-
-		///
-		/// Remaps block to cloned copy if one exists.
-		///
-		public Block RemapBlockCopy (Block from)
-		{
-			Block mapped_to = (Block)block_map[from];
-			if (mapped_to == null)
-				return from;
-
-			return mapped_to;
-		}
-
-		public void AddVariableMap (LocalInfo from, LocalInfo to)
-		{
-			if (variable_map == null)
-				variable_map = new Hashtable ();
-			
-			if (variable_map.Contains (from))
-				return;
-			variable_map [from] = to;
-		}
-		
-		public LocalInfo LookupVariable (LocalInfo from)
-		{
-			LocalInfo result = (LocalInfo) variable_map [from];
-
-			if (result == null)
-				throw new Exception ("LookupVariable: looking up a variable that has not been registered yet");
-
-			return result;
-		}
-	}
-	
 	public sealed class EmptyStatement : Statement {
 		
 		private EmptyStatement () {}
 		
 		public static readonly EmptyStatement Value = new EmptyStatement ();
-		
-		public override bool Resolve (EmitContext ec)
+
+		public override bool Resolve (BlockContext ec)
 		{
 			return true;
 		}
 
-		public override bool ResolveUnreachable (EmitContext ec, bool warn)
+		public override bool ResolveUnreachable (BlockContext ec, bool warn)
 		{
 			return true;
 		}
@@ -243,7 +160,7 @@ namespace Mono.CSharp {
 				FalseStatement.MutateHoistedGenericType (storey);
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			bool ok = true;
 
@@ -257,7 +174,7 @@ namespace Mono.CSharp {
 
 			Assign ass = expr as Assign;
 			if (ass != null && ass.Source is Constant) {
-				Report.Warning (665, 3, loc, "Assignment in conditional expression is always constant; did you mean to use == instead of = ?");
+				ec.Report.Warning (665, 3, loc, "Assignment in conditional expression is always constant; did you mean to use == instead of = ?");
 			}
 
 			//
@@ -372,7 +289,7 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			bool ok = true;
 
@@ -386,7 +303,7 @@ namespace Mono.CSharp {
 			ec.EndFlowBranching ();
 
 			if (ec.CurrentBranching.CurrentUsageVector.IsUnreachable && !was_unreachable)
-				Report.Warning (162, 2, expr.Location, "Unreachable code detected");
+				ec.Report.Warning (162, 2, expr.Location, "Unreachable code detected");
 
 			expr = Expression.ResolveBoolean (ec, expr, loc);
 			if (expr == null)
@@ -461,7 +378,7 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			bool ok = true;
 
@@ -590,7 +507,7 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			bool ok = true;
 
@@ -737,9 +654,9 @@ namespace Mono.CSharp {
 			loc = expr.Location;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			if (expr != null)
+			if (expr != null && expr.eclass == ExprClass.Invalid)
 				expr = expr.ResolveStatement (ec);
 			return expr != null;
 		}
@@ -771,14 +688,14 @@ namespace Mono.CSharp {
 	public abstract class ExitStatement : Statement
 	{
 		protected bool unwind_protect;
-		protected abstract bool DoResolve (EmitContext ec);
+		protected abstract bool DoResolve (BlockContext ec);
 
-		public virtual void Error_FinallyClause ()
+		public virtual void Error_FinallyClause (Report Report)
 		{
 			Report.Error (157, loc, "Control cannot leave the body of a finally clause");
 		}
 
-		public sealed override bool Resolve (EmitContext ec)
+		public sealed override bool Resolve (BlockContext ec)
 		{
 			if (!DoResolve (ec))
 				return false;
@@ -802,55 +719,48 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 		
-		protected override bool DoResolve (EmitContext ec)
+		protected override bool DoResolve (BlockContext ec)
 		{
 			if (Expr == null) {
 				if (ec.ReturnType == TypeManager.void_type)
 					return true;
 				
-				Error (126, "An object of a type convertible to `{0}' is required " +
-					   "for the return statement",
-					   TypeManager.CSharpName (ec.ReturnType));
+				ec.Report.Error (126, loc,
+					"An object of a type convertible to `{0}' is required for the return statement",
+					TypeManager.CSharpName (ec.ReturnType));
 				return false;
 			}
 
 			if (ec.CurrentBlock.Toplevel.IsIterator) {
-				Report.Error (1622, loc, "Cannot return a value from iterators. Use the yield return " +
+				ec.Report.Error (1622, loc, "Cannot return a value from iterators. Use the yield return " +
 						  "statement to return a value, or yield break to end the iteration");
 			}
 
 			AnonymousExpression am = ec.CurrentAnonymousMethod;
 			if (am == null && ec.ReturnType == TypeManager.void_type) {
-				MemberCore mc = ec.ResolveContext as MemberCore;
-				Report.Error (127, loc, "`{0}': A return keyword must not be followed by any expression when method returns void",
-					mc.GetSignatureForError ());
+				ec.Report.Error (127, loc, "`{0}': A return keyword must not be followed by any expression when method returns void",
+					ec.GetSignatureForError ());
 			}
 
 			Expr = Expr.Resolve (ec);
 			if (Expr == null)
 				return false;
 
+			if (ec.HasSet (ResolveContext.Options.InferReturnType)) {
+				ec.ReturnTypeInference.AddCommonTypeBound (Expr.Type);
+				return true;
+			}
+
 			if (Expr.Type != ec.ReturnType) {
-				if (ec.InferReturnType) {
-					//
-					// void cannot be used in contextual return
-					//
-					if (Expr.Type == TypeManager.void_type)
-						return false;
+				Expr = Convert.ImplicitConversionRequired (ec, Expr, ec.ReturnType, loc);
 
-					ec.ReturnType = Expr.Type;
-				} else {
-					Expr = Convert.ImplicitConversionRequired (
-						ec, Expr, ec.ReturnType, loc);
-
-					if (Expr == null) {
-						if (am != null) {
-							Report.Error (1662, loc,
-								"Cannot convert `{0}' to delegate type `{1}' because some of the return types in the block are not implicitly convertible to the delegate return type",
-								am.ContainerType, am.GetSignatureForError ());
-						}
-						return false;
+				if (Expr == null) {
+					if (am != null) {
+						ec.Report.Error (1662, loc,
+							"Cannot convert `{0}' to delegate type `{1}' because some of the return types in the block are not implicitly convertible to the delegate return type",
+							am.ContainerType, am.GetSignatureForError ());
 					}
+					return false;
 				}
 			}
 
@@ -891,13 +801,12 @@ namespace Mono.CSharp {
 		string target;
 		LabeledStatement label;
 		bool unwind_protect;
-		
-		public override bool Resolve (EmitContext ec)
+
+		public override bool Resolve (BlockContext ec)
 		{
-			int errors = Report.Errors;
 			unwind_protect = ec.CurrentBranching.AddGotoOrigin (ec.CurrentBranching.CurrentUsageVector, this);
 			ec.CurrentBranching.CurrentUsageVector.Goto ();
-			return errors == Report.Errors;
+			return true;
 		}
 		
 		public Goto (string label, Location l)
@@ -988,7 +897,7 @@ namespace Mono.CSharp {
 			// nothing to clone
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			// this flow-branching will be terminated when the surrounding block ends
 			ec.StartFlowBranching (this);
@@ -1029,23 +938,25 @@ namespace Mono.CSharp {
 			// nothing to clone
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			ec.CurrentBranching.CurrentUsageVector.Goto ();
+
+			if (ec.Switch == null) {
+				ec.Report.Error (153, loc, "A goto case is only valid inside a switch statement");
+				return false;
+			}
+
+			if (!ec.Switch.GotDefault) {
+				FlowBranchingBlock.Error_UnknownLabel (loc, "default", ec.Report);
+				return false;
+			}
+
 			return true;
 		}
 
 		protected override void DoEmit (EmitContext ec)
 		{
-			if (ec.Switch == null){
-				Report.Error (153, loc, "A goto case is only valid inside a switch statement");
-				return;
-			}
-
-			if (!ec.Switch.GotDefault){
-				FlowBranchingBlock.Error_UnknownLabel (loc, "default");
-				return;
-			}
 			ec.ig.Emit (OpCodes.Br, ec.Switch.DefaultTarget);
 		}
 
@@ -1067,10 +978,10 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			if (ec.Switch == null){
-				Report.Error (153, loc, "A goto case is only valid inside a switch statement");
+				ec.Report.Error (153, loc, "A goto case is only valid inside a switch statement");
 				return false;
 			}
 
@@ -1082,7 +993,7 @@ namespace Mono.CSharp {
 
 			Constant c = expr as Constant;
 			if (c == null) {
-				Error (150, "A constant value is expected");
+				ec.Report.Error (150, expr.Location, "A constant value is expected");
 				return false;
 			}
 
@@ -1094,7 +1005,7 @@ namespace Mono.CSharp {
 			}
 
 			if (!Convert.ImplicitStandardConversionExists (c, type))
-				Report.Warning (469, 2, loc,
+				ec.Report.Warning (469, 2, loc,
 					"The `goto case' value is not implicitly convertible to type `{0}'",
 					TypeManager.CSharpName (type));
 
@@ -1106,7 +1017,7 @@ namespace Mono.CSharp {
 
 			if (sl == null){
 				FlowBranchingBlock.Error_UnknownLabel (loc, "case " + 
-					(c.GetValue () == null ? "null" : val.ToString ()));
+					(c.GetValue () == null ? "null" : val.ToString ()), ec.Report);
 				return false;
 			}
 
@@ -1140,7 +1051,7 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			if (expr == null) {
 				ec.CurrentBranching.CurrentUsageVector.Goto ();
@@ -1153,14 +1064,11 @@ namespace Mono.CSharp {
 			if (expr == null)
 				return false;
 
-			Type t = expr.Type;
+			if (Convert.ImplicitConversionExists (ec, expr, TypeManager.exception_type))
+				expr = Convert.ImplicitConversion (ec, expr, TypeManager.exception_type, loc);
+			else
+				ec.Report.Error (155, expr.Location, "The type caught or thrown must be derived from System.Exception");
 
-			if ((t != TypeManager.exception_type) &&
-			    !TypeManager.IsSubclassOf (t, TypeManager.exception_type) &&
-			    t != TypeManager.null_type) {
-				Error (155, "The type caught or thrown must be derived from System.Exception");
-				return false;
-			}
 			return true;
 		}
 			
@@ -1199,12 +1107,11 @@ namespace Mono.CSharp {
 
 		bool unwind_protect;
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			int errors = Report.Errors;
 			unwind_protect = ec.CurrentBranching.AddBreakOrigin (ec.CurrentBranching.CurrentUsageVector, loc);
 			ec.CurrentBranching.CurrentUsageVector.Goto ();
-			return errors == Report.Errors;
+			return true;
 		}
 
 		protected override void DoEmit (EmitContext ec)
@@ -1231,12 +1138,11 @@ namespace Mono.CSharp {
 
 		bool unwind_protect;
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			int errors = Report.Errors;
 			unwind_protect = ec.CurrentBranching.AddContinueOrigin (ec.CurrentBranching.CurrentUsageVector, loc);
 			ec.CurrentBranching.CurrentUsageVector.Goto ();
-			return errors == Report.Errors;
+			return true;
 		}
 
 		protected override void DoEmit (EmitContext ec)
@@ -1329,7 +1235,7 @@ namespace Mono.CSharp {
 					//
 					builder = TypeManager.DeclareLocalPinned (ec.ig, VariableType);
 				else
-					builder = ec.ig.DeclareLocal (VariableType);
+					builder = ec.ig.DeclareLocal (TypeManager.TypeToReflectionType (VariableType));
 			}
 		}
 
@@ -1354,7 +1260,7 @@ namespace Mono.CSharp {
 				ec.DefineLocalVariable (Name, builder);
 		}
 
-		public bool IsThisAssigned (EmitContext ec)
+		public bool IsThisAssigned (BlockContext ec, Block block)
 		{
 			if (VariableInfo == null)
 				throw new Exception ();
@@ -1362,10 +1268,10 @@ namespace Mono.CSharp {
 			if (!ec.DoFlowAnalysis || ec.CurrentBranching.IsAssigned (VariableInfo))
 				return true;
 
-			return VariableInfo.TypeInfo.IsFullyInitialized (ec.CurrentBranching, VariableInfo, ec.loc);
+			return VariableInfo.TypeInfo.IsFullyInitialized (ec, VariableInfo, block.StartLocation);
 		}
 
-		public bool IsAssigned (EmitContext ec)
+		public bool IsAssigned (BlockContext ec)
 		{
 			if (VariableInfo == null)
 				throw new Exception ();
@@ -1373,7 +1279,7 @@ namespace Mono.CSharp {
 			return !ec.DoFlowAnalysis || ec.CurrentBranching.IsAssigned (VariableInfo);
 		}
 
-		public bool Resolve (EmitContext ec)
+		public bool Resolve (ResolveContext ec)
 		{
 			if (VariableType != null)
 				return true;
@@ -1388,12 +1294,12 @@ namespace Mono.CSharp {
 				return true;
 
 			if (VariableType.IsAbstract && VariableType.IsSealed) {
-				FieldBase.Error_VariableOfStaticClass (Location, Name, VariableType);
+				FieldBase.Error_VariableOfStaticClass (Location, Name, VariableType, ec.Report);
 				return false;
 			}
 
-			if (VariableType.IsPointer && !ec.InUnsafe)
-				Expression.UnsafeError (Location);
+			if (VariableType.IsPointer && !ec.IsUnsafe)
+				Expression.UnsafeError (ec, Location);
 
 			return true;
 		}
@@ -1662,9 +1568,9 @@ namespace Mono.CSharp {
 			EndLocation = loc;
 		}
 
-		protected static void Error_158 (string name, Location loc)
+		protected void Error_158 (string name, Location loc)
 		{
-			Report.Error (158, loc, "The label `{0}' shadows another label " +
+			Toplevel.Report.Error (158, loc, "The label `{0}' shadows another label " +
 				      "by the same name in a contained scope", name);
 		}
 
@@ -1688,8 +1594,8 @@ namespace Mono.CSharp {
 			while (cur != null) {
 				LabeledStatement s = cur.DoLookupLabel (name);
 				if (s != null) {
-					Report.SymbolRelatedToPreviousError (s.loc, s.Name);
-					Report.Error (140, target.loc, "The label `{0}' is a duplicate", name);
+					Toplevel.Report.SymbolRelatedToPreviousError (s.loc, s.Name);
+					Toplevel.Report.Error (140, target.loc, "The label `{0}' is a duplicate", name);
 					return false;
 				}
 
@@ -1711,7 +1617,7 @@ namespace Mono.CSharp {
 						if (s == null)
 							continue;
 
-						Report.SymbolRelatedToPreviousError (s.loc, s.Name);
+						Toplevel.Report.SymbolRelatedToPreviousError (s.loc, s.Name);
 						Error_158 (name, target.loc);
 						return false;
 					}
@@ -1783,8 +1689,8 @@ namespace Mono.CSharp {
 				// block, we violate the invariant meaning in a block.
 				//
 				if (b == this) {
-					Report.SymbolRelatedToPreviousError (kvi.Location, name);
-					Report.Error (135, loc, "`{0}' conflicts with a declaration in a child block", name);
+					Toplevel.Report.SymbolRelatedToPreviousError (kvi.Location, name);
+					Toplevel.Report.Error (135, loc, "`{0}' conflicts with a declaration in a child block", name);
 					return false;
 				}
 
@@ -1808,8 +1714,8 @@ namespace Mono.CSharp {
 				return true;
 
 			if (this is ToplevelBlock) {
-				Report.SymbolRelatedToPreviousError (kvi.Location, name);
-				e.Error_VariableIsUsedBeforeItIsDeclared (name);
+				Toplevel.Report.SymbolRelatedToPreviousError (kvi.Location, name);
+				e.Error_VariableIsUsedBeforeItIsDeclared (Toplevel.Report, name);
 				return false;
 			}
 
@@ -1817,7 +1723,7 @@ namespace Mono.CSharp {
 			// Even though we detected the error when the name is used, we
 			// treat it as if the variable declaration was in error.
 			//
-			Report.SymbolRelatedToPreviousError (loc, name);
+			Toplevel.Report.SymbolRelatedToPreviousError (loc, name);
 			Error_AlreadyDeclared (kvi.Location, name, "parent or current");
 			return false;
 		}
@@ -1826,7 +1732,7 @@ namespace Mono.CSharp {
 		{
 			LocalInfo vi = GetLocalInfo (name);
 			if (vi != null) {
-				Report.SymbolRelatedToPreviousError (vi.Location, name);
+				block.Report.SymbolRelatedToPreviousError (vi.Location, name);
 				if (Explicit == vi.Block.Explicit) {
 					Error_AlreadyDeclared (l, name, null);
 				} else {
@@ -1859,8 +1765,8 @@ namespace Mono.CSharp {
 			if (Toplevel.GenericMethod != null) {
 				foreach (TypeParameter tp in Toplevel.GenericMethod.CurrentTypeParameters) {
 					if (tp.Name == name) {
-						Report.SymbolRelatedToPreviousError (tp);
-						Error_AlreadyDeclaredTypeParameter (loc, name, "local variable");
+						Toplevel.Report.SymbolRelatedToPreviousError (tp);
+						Error_AlreadyDeclaredTypeParameter (Toplevel.Report, loc, name, "local variable");
 						return null;
 					}
 				}
@@ -1868,7 +1774,7 @@ namespace Mono.CSharp {
 
 			IKnownVariable kvi = Explicit.GetKnownVariable (name);
 			if (kvi != null) {
-				Report.SymbolRelatedToPreviousError (kvi.Location, name);
+				Toplevel.Report.SymbolRelatedToPreviousError (kvi.Location, name);
 				Error_AlreadyDeclared (l, name, "child");
 				return null;
 			}
@@ -1895,7 +1801,7 @@ namespace Mono.CSharp {
 				return;
 			}
 			
-			Report.Error (136, loc, "A local variable named `{0}' cannot be declared " +
+			Toplevel.Report.Error (136, loc, "A local variable named `{0}' cannot be declared " +
 				      "in this scope because it would give a different meaning " +
 				      "to `{0}', which is already used in a `{1}' scope " +
 				      "to denote something else", var, reason);
@@ -1903,13 +1809,13 @@ namespace Mono.CSharp {
 
 		protected virtual void Error_AlreadyDeclared (Location loc, string name)
 		{
-			Report.Error (128, loc,
+			Toplevel.Report.Error (128, loc,
 				"A local variable named `{0}' is already defined in this scope", name);
 		}
 					
-		public virtual void Error_AlreadyDeclaredTypeParameter (Location loc, string name, string conflict)
+		public virtual void Error_AlreadyDeclaredTypeParameter (Report r, Location loc, string name, string conflict)
 		{
-			Report.Error (412, loc, "The type parameter name `{0}' is the same as `{1}'",
+			r.Error (412, loc, "The type parameter name `{0}' is the same as `{1}'",
 				name, conflict);
 		}
 
@@ -2030,7 +1936,7 @@ namespace Mono.CSharp {
 			anonymous_children.Add (b);
 		}
 
-		void DoResolveConstants (EmitContext ec)
+		void DoResolveConstants (BlockContext ec)
 		{
 			if (constants == null)
 				return;
@@ -2045,7 +1951,7 @@ namespace Mono.CSharp {
 
 				if (variable_type == null) {
 					if (vi.Type is VarExpr)
-						Report.Error (822, vi.Type.Location, "An implicitly typed local variable cannot be a constant");
+						ec.Report.Error (822, vi.Type.Location, "An implicitly typed local variable cannot be a constant");
 
 					continue;
 				}
@@ -2060,13 +1966,13 @@ namespace Mono.CSharp {
 				constants.Remove (name);
 
 				if (!Const.IsConstantTypeValid (variable_type)) {
-					Const.Error_InvalidConstantType (variable_type, loc);
+					Const.Error_InvalidConstantType (variable_type, loc, ec.Report);
 					continue;
 				}
 
 				ec.CurrentBlock = this;
 				Expression e;
-				using (ec.With (EmitContext.Flags.ConstantCheckState, (flags & Flags.Unchecked) == 0)) {
+				using (ec.With (ResolveContext.Options.ConstantCheckState, (flags & Flags.Unchecked) == 0)) {
 					e = cv.Resolve (ec);
 				}
 				if (e == null)
@@ -2074,14 +1980,14 @@ namespace Mono.CSharp {
 
 				Constant ce = e as Constant;
 				if (ce == null) {
-					Const.Error_ExpressionMustBeConstant (vi.Location, name);
+					Const.Error_ExpressionMustBeConstant (vi.Location, name, ec.Report);
 					continue;
 				}
 
 				e = ce.ConvertImplicitly (variable_type);
 				if (e == null) {
 					if (TypeManager.IsReferenceType (variable_type))
-						Const.Error_ConstantCanBeInitializedWithNullOnly (variable_type, vi.Location, vi.Name);
+						Const.Error_ConstantCanBeInitializedWithNullOnly (variable_type, vi.Location, vi.Name, ec.Report);
 					else
 						ce.Error_ValueCannotBeConverted (ec, vi.Location, variable_type, false);
 					continue;
@@ -2092,13 +1998,13 @@ namespace Mono.CSharp {
 			}
 		}
 
-		protected void ResolveMeta (EmitContext ec, int offset)
+		protected void ResolveMeta (BlockContext ec, int offset)
 		{
 			Report.Debug (64, "BLOCK RESOLVE META", this, Parent);
 
 			// If some parent block was unsafe, we remain unsafe even if this block
 			// isn't explicitly marked as such.
-			using (ec.With (EmitContext.Flags.InUnsafe, ec.InUnsafe | Unsafe)) {
+			using (ec.With (ResolveContext.Options.UnsafeScope, ec.IsUnsafe | Unsafe)) {
 				flags |= Flags.VariablesInitialized;
 
 				if (variables != null) {
@@ -2141,9 +2047,9 @@ namespace Mono.CSharp {
 			}
 		}
 
-		void UsageWarning ()
+		void UsageWarning (BlockContext ec)
 		{
-			if (variables == null || Report.WarningLevel < 3)
+			if (variables == null || ec.Report.WarningLevel < 3)
 				return;
 
 			foreach (DictionaryEntry de in variables) {
@@ -2154,14 +2060,14 @@ namespace Mono.CSharp {
 
 					// vi.VariableInfo can be null for 'catch' variables
 					if (vi.VariableInfo != null && vi.VariableInfo.IsEverAssigned)
-						Report.Warning (219, 3, vi.Location, "The variable `{0}' is assigned but its value is never used", name);
+						ec.Report.Warning (219, 3, vi.Location, "The variable `{0}' is assigned but its value is never used", name);
 					else
-						Report.Warning (168, 3, vi.Location, "The variable `{0}' is declared but never used", name);
+						ec.Report.Warning (168, 3, vi.Location, "The variable `{0}' is declared but never used", name);
 				}
 			}
 		}
 
-		static void CheckPossibleMistakenEmptyStatement (Statement s)
+		static void CheckPossibleMistakenEmptyStatement (BlockContext ec, Statement s)
 		{
 			Statement body;
 
@@ -2190,20 +2096,28 @@ namespace Mono.CSharp {
 				return;
 
 			if (body == null || body is EmptyStatement)
-				Report.Warning (642, 3, s.loc, "Possible mistaken empty statement");
+				ec.Report.Warning (642, 3, s.loc, "Possible mistaken empty statement");
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			Block prev_block = ec.CurrentBlock;
 			bool ok = true;
 
-			int errors = Report.Errors;
+			int errors = ec.Report.Errors;
 
 			ec.CurrentBlock = this;
 			ec.StartFlowBranching (this);
 
 			Report.Debug (4, "RESOLVE BLOCK", StartLocation, ec.CurrentBranching);
+
+			//
+			// Compiler generated scope statements
+			//
+			if (scope_initializers != null) {
+				foreach (Statement s in scope_initializers)
+					s.Resolve (ec);
+			}
 
 			//
 			// This flag is used to notate nested statements as unreachable from the beginning of this block.
@@ -2215,10 +2129,9 @@ namespace Mono.CSharp {
 			for (int ix = 0; ix < statement_count; ix++){
 				Statement s = (Statement) statements [ix];
 				// Check possible empty statement (CS0642)
-				if (Report.WarningLevel >= 3 &&
-					ix + 1 < statement_count &&
-						statements [ix + 1] is ExplicitBlock)
-					CheckPossibleMistakenEmptyStatement (s);
+				if (ix + 1 < statement_count && ec.Report.WarningLevel >= 3 &&
+					statements [ix + 1] is ExplicitBlock)
+					CheckPossibleMistakenEmptyStatement (ec, s);
 
 				//
 				// Warn if we detect unreachable code.
@@ -2228,7 +2141,7 @@ namespace Mono.CSharp {
 						continue;
 
 					if (!unreachable_shown && !(s is LabeledStatement)) {
-						Report.Warning (162, 2, s.loc, "Unreachable code detected");
+						ec.Report.Warning (162, 2, s.loc, "Unreachable code detected");
 						unreachable_shown = true;
 					}
 
@@ -2280,25 +2193,25 @@ namespace Mono.CSharp {
 			if (this == Toplevel && !Toplevel.IsThisAssigned (ec) && !flow_unreachable)
 				ok = false;
 
-			if ((labels != null) && (Report.WarningLevel >= 2)) {
+			if ((labels != null) && (ec.Report.WarningLevel >= 2)) {
 				foreach (LabeledStatement label in labels.Values)
 					if (!label.HasBeenReferenced)
-						Report.Warning (164, 2, label.loc, "This label has not been referenced");
+						ec.Report.Warning (164, 2, label.loc, "This label has not been referenced");
 			}
 
-			if (ok && errors == Report.Errors)
-				UsageWarning ();
+			if (ok && errors == ec.Report.Errors)
+				UsageWarning (ec);
 
 			return ok;
 		}
 
-		public override bool ResolveUnreachable (EmitContext ec, bool warn)
+		public override bool ResolveUnreachable (BlockContext ec, bool warn)
 		{
 			unreachable_shown = true;
 			unreachable = true;
 
 			if (warn)
-				Report.Warning (162, 2, loc, "Unreachable code detected");
+				ec.Report.Warning (162, 2, loc, "Unreachable code detected");
 
 			ec.StartFlowBranching (FlowBranching.BranchingType.Block, loc);
 			bool ok = Resolve (ec);
@@ -2317,9 +2230,6 @@ namespace Mono.CSharp {
 
 		public override void Emit (EmitContext ec)
 		{
-			Block prev_block = ec.CurrentBlock;
-			ec.CurrentBlock = this;
-
 			if (scope_initializers != null)
 				EmitScopeInitializers (ec);
 
@@ -2328,15 +2238,13 @@ namespace Mono.CSharp {
 
 			if (SymbolWriter.HasSymbolWriter)
 				EmitSymbolInfo (ec);
-
-			ec.CurrentBlock = prev_block;
 		}
 
 		protected void EmitScopeInitializers (EmitContext ec)
 		{
 			SymbolWriter.OpenCompilerGeneratedBlock (ec.ig);
 
-			using (ec.Set (EmitContext.Flags.OmitDebuggingInfo)) {
+			using (ec.With (EmitContext.Options.OmitDebugInfo, true)) {
 				foreach (Statement s in scope_initializers)
 					s.Emit (ec);
 			}
@@ -2461,7 +2369,7 @@ namespace Mono.CSharp {
 		//
 		// Creates anonymous method storey in current block
 		//
-		public AnonymousMethodStorey CreateAnonymousMethodStorey (EmitContext ec)
+		public AnonymousMethodStorey CreateAnonymousMethodStorey (ResolveContext ec)
 		{
 			//
 			// When referencing a variable in iterator storey from children anonymous method
@@ -2477,13 +2385,13 @@ namespace Mono.CSharp {
 			    return ec.CurrentIterator.Storey;
 
 			if (am_storey == null) {
-				MemberBase mc = ec.ResolveContext as MemberBase;
+				MemberBase mc = ec.MemberContext as MemberBase;
 				GenericMethod gm = mc == null ? null : mc.GenericMethod;
 
 				//
 				// Creates anonymous method storey for this block
 				//
-				am_storey = new AnonymousMethodStorey (this, ec.TypeContainer, mc, gm, "AnonStorey");
+				am_storey = new AnonymousMethodStorey (this, ec.CurrentTypeDefinition, mc, gm, "AnonStorey");
 			}
 
 			return am_storey;
@@ -2632,17 +2540,16 @@ namespace Mono.CSharp {
 				this.block = block;
 			}
 
-			public override Expression CreateExpressionTree (EmitContext ec)
+			public override Expression CreateExpressionTree (ResolveContext ec)
 			{
 				throw new NotSupportedException ();
 			}
 
-			public override Expression DoResolve (EmitContext ec)
+			public override Expression DoResolve (ResolveContext ec)
 			{
 				if (child == null)
 					return null;
 				
-				block.ResolveMeta (ec, ParametersCompiled.EmptyReadOnlyParameters);
 				child = child.Resolve (ec);
 				if (child == null)
 					return null;
@@ -2668,18 +2575,30 @@ namespace Mono.CSharp {
 		}
 
 		GenericMethod generic;
-		FlowBranchingToplevel top_level_branching;
 		protected ParametersCompiled parameters;
 		ToplevelParameterInfo[] parameter_info;
 		LocalInfo this_variable;
+		bool resolved;
+		bool unreachable;
+		CompilerContext compiler;
 
 		public HoistedVariable HoistedThisVariable;
+
+		public bool Resolved {
+			get {
+				return resolved;
+			}
+		}
 
 		//
 		// The parameters for the block.
 		//
 		public ParametersCompiled Parameters {
 			get { return parameters; }
+		}
+
+		public Report Report {
+			get { return compiler.Report; }
 		}
 
 		public GenericMethod GenericMethod {
@@ -2690,32 +2609,33 @@ namespace Mono.CSharp {
 			get { return Parent == null ? null : Parent.Toplevel; }
 		}
 
-		public ToplevelBlock (Block parent, ParametersCompiled parameters, Location start) :
-			this (parent, (Flags) 0, parameters, start)
+		public ToplevelBlock (CompilerContext ctx, Block parent, ParametersCompiled parameters, Location start) :
+			this (ctx, parent, (Flags) 0, parameters, start)
 		{
 		}
 
-		public ToplevelBlock (Block parent, ParametersCompiled parameters, GenericMethod generic, Location start) :
-			this (parent, parameters, start)
+		public ToplevelBlock (CompilerContext ctx, Block parent, ParametersCompiled parameters, GenericMethod generic, Location start) :
+			this (ctx, parent, parameters, start)
 		{
 			this.generic = generic;
 		}
-		
-		public ToplevelBlock (ParametersCompiled parameters, Location start) :
-			this (null, (Flags) 0, parameters, start)
+
+		public ToplevelBlock (CompilerContext ctx, ParametersCompiled parameters, Location start) :
+			this (ctx, null, (Flags) 0, parameters, start)
 		{
 		}
 
-		ToplevelBlock (Flags flags, ParametersCompiled parameters, Location start) :
-			this (null, flags, parameters, start)
+		ToplevelBlock (CompilerContext ctx, Flags flags, ParametersCompiled parameters, Location start) :
+			this (ctx, null, flags, parameters, start)
 		{
 		}
 
 		// We use 'Parent' to hook up to the containing block, but don't want to register the current block as a child.
 		// So, we use a two-stage setup -- first pass a null parent to the base constructor, and then override 'Parent'.
-		public ToplevelBlock (Block parent, Flags flags, ParametersCompiled parameters, Location start) :
+		public ToplevelBlock (CompilerContext ctx, Block parent, Flags flags, ParametersCompiled parameters, Location start) :
 			base (null, flags, start, Location.Null)
 		{
+			this.compiler = ctx;
 			this.Toplevel = this;
 
 			this.parameters = parameters;
@@ -2727,8 +2647,8 @@ namespace Mono.CSharp {
 				ProcessParameters ();
 		}
 
-		public ToplevelBlock (Location loc)
-			: this (null, (Flags) 0, ParametersCompiled.EmptyReadOnlyParameters, loc)
+		public ToplevelBlock (CompilerContext ctx, Location loc)
+			: this (ctx, null, (Flags) 0, ParametersCompiled.EmptyReadOnlyParameters, loc)
 		{
 		}
 
@@ -2794,7 +2714,7 @@ namespace Mono.CSharp {
 			return true;
 		}
 
-		public override Expression CreateExpressionTree (EmitContext ec)
+		public override Expression CreateExpressionTree (ResolveContext ec)
 		{
 			if (statements.Count == 1) {
 				Expression expr = ((Statement) statements[0]).CreateExpressionTree (ec);
@@ -2824,10 +2744,6 @@ namespace Mono.CSharp {
 			IteratorStorey iterator_storey = new IteratorStorey (iterator);
 			source.am_storey = iterator_storey;
 			return iterator_storey;
-		}
-
-		public FlowBranchingToplevel TopLevelBranching {
-			get { return top_level_branching; }
 		}
 
 		//
@@ -2885,18 +2801,59 @@ namespace Mono.CSharp {
 			set { flags = value ? flags | Flags.IsIterator : flags & ~Flags.IsIterator; }
 		}
 
-		public bool IsThisAssigned (EmitContext ec)
+		public bool IsThisAssigned (BlockContext ec)
 		{
-			return this_variable == null || this_variable.IsThisAssigned (ec);
+			return this_variable == null || this_variable.IsThisAssigned (ec, this);
 		}
 
-		public bool ResolveMeta (EmitContext ec, ParametersCompiled ip)
+		public bool Resolve (FlowBranching parent, BlockContext rc, ParametersCompiled ip, IMethodData md)
 		{
-			int errors = Report.Errors;
-			int orig_count = parameters.Count;
-
-			if (top_level_branching != null)
+			if (resolved)
 				return true;
+
+			resolved = true;
+
+			try {
+				if (!ResolveMeta (rc, ip))
+					return false;
+
+				using (rc.With (ResolveContext.Options.DoFlowAnalysis, true)) {
+					FlowBranchingToplevel top_level = rc.StartFlowBranching (this, parent);
+
+					if (!Resolve (rc))
+						return false;
+
+					unreachable = top_level.End ();
+				}
+			} catch (Exception) {
+#if PRODUCTION
+				if (rc.CurrentBlock != null) {
+					ec.Report.Error (584, rc.CurrentBlock.StartLocation, "Internal compiler error: Phase Resolve");
+				} else {
+					ec.Report.Error (587, "Internal compiler error: Phase Resolve");
+				}
+#endif
+				throw;
+			}
+
+			if (rc.ReturnType != TypeManager.void_type && !unreachable) {
+				if (rc.CurrentAnonymousMethod == null) {
+					rc.Report.Error (161, md.Location, "`{0}': not all code paths return a value", md.GetSignatureForError ());
+					return false;
+				} else if (!rc.CurrentAnonymousMethod.IsIterator) {
+					rc.Report.Error (1643, rc.CurrentAnonymousMethod.Location, "Not all code paths return a value in anonymous method of type `{0}'",
+							  rc.CurrentAnonymousMethod.GetSignatureForError ());
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		bool ResolveMeta (BlockContext ec, ParametersCompiled ip)
+		{
+			int errors = ec.Report.Errors;
+			int orig_count = parameters.Count;
 
 			if (ip != null)
 				parameters = ip;
@@ -2920,9 +2877,7 @@ namespace Mono.CSharp {
 
 			ResolveMeta (ec, offset);
 
-			top_level_branching = ec.StartFlowBranching (this);
-
-			return Report.Errors == errors;
+			return ec.Report.Errors == errors;
 		}
 
 		// <summary>
@@ -2949,6 +2904,61 @@ namespace Mono.CSharp {
 			}
 		}
 
+		public override void Emit (EmitContext ec)
+		{
+			if (Report.Errors > 0)
+				return;
+
+#if PRODUCTION
+			try {
+#endif
+			EmitMeta (ec);
+
+			if (ec.HasReturnLabel)
+				ec.ReturnLabel = ec.ig.DefineLabel ();
+
+			base.Emit (ec);
+
+			ec.Mark (EndLocation);
+
+			if (ec.HasReturnLabel)
+				ec.ig.MarkLabel (ec.ReturnLabel);
+
+			if (ec.return_value != null) {
+				ec.ig.Emit (OpCodes.Ldloc, ec.return_value);
+				ec.ig.Emit (OpCodes.Ret);
+			} else {
+				//
+				// If `HasReturnLabel' is set, then we already emitted a
+				// jump to the end of the method, so we must emit a `ret'
+				// there.
+				//
+				// Unfortunately, System.Reflection.Emit automatically emits
+				// a leave to the end of a finally block.  This is a problem
+				// if no code is following the try/finally block since we may
+				// jump to a point after the end of the method.
+				// As a workaround, we're always creating a return label in
+				// this case.
+				//
+
+				if (ec.HasReturnLabel || !unreachable) {
+					if (ec.ReturnType != TypeManager.void_type)
+						ec.ig.Emit (OpCodes.Ldloc, ec.TemporaryReturn ());
+					ec.ig.Emit (OpCodes.Ret);
+				}
+			}
+
+#if PRODUCTION
+			} catch (Exception e){
+				Console.WriteLine ("Exception caught by the compiler while emitting:");
+				Console.WriteLine ("   Block that caused the problem begin at: " + block.loc);
+					
+				Console.WriteLine (e.GetType ().FullName + ": " + e.Message);
+				throw;
+			}
+#endif
+		}
+
 		public override void EmitMeta (EmitContext ec)
 		{
 			parameters.ResolveVariable ();
@@ -2967,12 +2977,6 @@ namespace Mono.CSharp {
 				SymbolWriter.DefineScopeVariable (ae.Storey.ID);
 
 			base.EmitSymbolInfo (ec);
-		}
-
-		public override void Emit (EmitContext ec)
-		{
-			base.Emit (ec);
-			ec.Mark (EndLocation);
 		}
 	}
 	
@@ -3035,7 +3039,7 @@ namespace Mono.CSharp {
 		// Resolves the expression, reduces it to a literal if possible
 		// and then converts it to the requested type.
 		//
-		public bool ResolveAndReduce (EmitContext ec, Type required_type, bool allow_nullable)
+		public bool ResolveAndReduce (ResolveContext ec, Type required_type, bool allow_nullable)
 		{	
 			Expression e = label.Resolve (ec);
 
@@ -3044,7 +3048,7 @@ namespace Mono.CSharp {
 
 			Constant c = e as Constant;
 			if (c == null){
-				Report.Error (150, loc, "A constant value is expected");
+				ec.Report.Error (150, loc, "A constant value is expected");
 				return false;
 			}
 
@@ -3066,7 +3070,7 @@ namespace Mono.CSharp {
 			return true;
 		}
 
-		public void Error_AlreadyOccurs (Type switch_type, SwitchLabel collision_with)
+		public void Error_AlreadyOccurs (ResolveContext ec, Type switch_type, SwitchLabel collision_with)
 		{
 			string label;
 			if (converted == null)
@@ -3076,8 +3080,8 @@ namespace Mono.CSharp {
 			else
 				label = converted.ToString ();
 			
-			Report.SymbolRelatedToPreviousError (collision_with.loc, null);
-			Report.Error (152, loc, "The label `case {0}:' already occurs in this switch statement", label);
+			ec.Report.SymbolRelatedToPreviousError (collision_with.loc, null);
+			ec.Report.Error (152, loc, "The label `case {0}:' already occurs in this switch statement", label);
 		}
 
 		public SwitchLabel Clone (CloneContext clonectx)
@@ -3177,7 +3181,7 @@ namespace Mono.CSharp {
 		// expression that includes any potential conversions to the
 		// integral types or to string.
 		//
-		Expression SwitchGoverningType (EmitContext ec, Expression expr)
+		Expression SwitchGoverningType (ResolveContext ec, Expression expr)
 		{
 			Type t = expr.Type;
 
@@ -3232,7 +3236,7 @@ namespace Mono.CSharp {
 					continue;
 
 				if (converted != null){
-					Report.ExtraInformation (loc, "(Ambiguous implicit user defined conversion in previous ");
+					ec.Report.ExtraInformation (loc, "(Ambiguous implicit user defined conversion in previous ");
 					return null;
 				}
 
@@ -3248,7 +3252,7 @@ namespace Mono.CSharp {
 		// It also returns a hashtable with the keys that we will later
 		// use to compute the switch tables
 		//
-		bool CheckSwitch (EmitContext ec)
+		bool CheckSwitch (ResolveContext ec)
 		{
 			bool error = false;
 			Elements = Sections.Count > 10 ? 
@@ -3259,7 +3263,7 @@ namespace Mono.CSharp {
 				foreach (SwitchLabel sl in ss.Labels){
 					if (sl.Label == null){
 						if (default_section != null){
-							sl.Error_AlreadyOccurs (SwitchType, (SwitchLabel)default_section.Labels [0]);
+							sl.Error_AlreadyOccurs (ec, SwitchType, (SwitchLabel)default_section.Labels [0]);
 							error = true;
 						}
 						default_section = ss;
@@ -3278,7 +3282,7 @@ namespace Mono.CSharp {
 					try {
 						Elements.Add (key, sl);
 					} catch (ArgumentException) {
-						sl.Error_AlreadyOccurs (SwitchType, (SwitchLabel)Elements [key]);
+						sl.Error_AlreadyOccurs (ec, SwitchType, (SwitchLabel)Elements [key]);
 						error = true;
 					}
 				}
@@ -3599,7 +3603,7 @@ namespace Mono.CSharp {
 			allowed_types = null;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			Expr = Expr.Resolve (ec);
 			if (Expr == null)
@@ -3616,7 +3620,9 @@ namespace Mono.CSharp {
 			}
 
 			if (new_expr == null){
-				Report.Error (151, loc, "A value of an integral type or string expected for switch");
+				ec.Report.Error (151, loc,
+					"A switch expression of type `{0}' cannot be converted to an integral type, bool, char, string, enum or nullable type",
+					TypeManager.CSharpName (Expr.Type));
 				return false;
 			}
 
@@ -3624,7 +3630,7 @@ namespace Mono.CSharp {
 			SwitchType = new_expr.Type;
 
 			if (RootContext.Version == LanguageVersion.ISO_1 && SwitchType == TypeManager.bool_type) {
-				Report.FeatureIsNotAvailable (loc, "switch expression of boolean type");
+				ec.Report.FeatureIsNotAvailable (loc, "switch expression of boolean type");
 				return false;
 			}
 
@@ -3694,7 +3700,7 @@ namespace Mono.CSharp {
 			return true;
 		}
 
-		void ResolveStringSwitchMap (EmitContext ec)
+		void ResolveStringSwitchMap (ResolveContext ec)
 		{
 			FullNamedExpression string_dictionary_type;
 			if (TypeManager.generic_ienumerable_type != null) {
@@ -3712,23 +3718,22 @@ namespace Mono.CSharp {
 				string_dictionary_type = new MemberAccess (system_collections_generic, "Hashtable", loc);
 			}
 
-			Field field = new Field (ec.TypeContainer, string_dictionary_type,
+			Field field = new Field (ec.CurrentTypeDefinition, string_dictionary_type,
 				Modifiers.STATIC | Modifiers.PRIVATE | Modifiers.COMPILER_GENERATED,
 				new MemberName (CompilerGeneratedClass.MakeName (null, "f", "switch$map", unique_counter++), loc), null);
 			if (!field.Define ())
 				return;
-			ec.TypeContainer.PartialContainer.AddField (field);
+			ec.CurrentTypeDefinition.PartialContainer.AddField (field);
 
 			ArrayList init = new ArrayList ();
 			int counter = 0;
 			Elements.Clear ();
 			string value = null;
 			foreach (SwitchSection section in Sections) {
+				int last_count = init.Count;
 				foreach (SwitchLabel sl in section.Labels) {
-					if (sl.Label == null || sl.Converted == SwitchLabel.NullStringCase) {
-						value = null;
+					if (sl.Label == null || sl.Converted == SwitchLabel.NullStringCase)
 						continue;
-					}
 
 					value = (string) sl.Converted;
 					ArrayList init_args = new ArrayList (2);
@@ -3737,15 +3742,18 @@ namespace Mono.CSharp {
 					init.Add (new CollectionElementInitializer (init_args, loc));
 				}
 
-				if (value == null)
+				//
+				// Don't add empty sections
+				//
+				if (last_count == init.Count)
 					continue;
 
 				Elements.Add (counter, section.Labels [0]);
 				++counter;
 			}
 
-			ArrayList args = new ArrayList (1);
-			args.Add (new Argument (new IntConstant (Sections.Count, loc)));
+			Arguments args = new Arguments (1);
+			args.Add (new Argument (new IntConstant (init.Count, loc)));
 			Expression initializer = new NewInitialize (string_dictionary_type, args,
 				new CollectionOrObjectInitializers (init, loc), loc);
 
@@ -3772,11 +3780,13 @@ namespace Mono.CSharp {
 
 			LocalTemporary string_switch_variable = new LocalTemporary (TypeManager.int32_type);
 
+			ResolveContext rc = new ResolveContext (ec.MemberContext);
+
 			if (TypeManager.generic_ienumerable_type != null) {
-				ArrayList get_value_args = new ArrayList (2);
+				Arguments get_value_args = new Arguments (2);
 				get_value_args.Add (new Argument (value));
 				get_value_args.Add (new Argument (string_switch_variable, Argument.AType.Out));
-				Expression get_item = new Invocation (new MemberAccess (switch_cache_field, "TryGetValue", loc), get_value_args).Resolve (ec);
+				Expression get_item = new Invocation (new MemberAccess (switch_cache_field, "TryGetValue", loc), get_value_args).Resolve (rc);
 				if (get_item == null)
 					return;
 
@@ -3785,10 +3795,10 @@ namespace Mono.CSharp {
 				//
 				get_item.EmitBranchable (ec, default_target, false);
 			} else {
-				ArrayList get_value_args = new ArrayList (1);
-				get_value_args.Add (value);
+				Arguments get_value_args = new Arguments (1);
+				get_value_args.Add (new Argument (value));
 
-				Expression get_item = new IndexerAccess (new ElementAccess (switch_cache_field, get_value_args), loc).Resolve (ec);
+				Expression get_item = new IndexerAccess (new ElementAccess (switch_cache_field, get_value_args), loc).Resolve (rc);
 				if (get_item == null)
 					return;
 
@@ -3797,7 +3807,7 @@ namespace Mono.CSharp {
 				ec.ig.Emit (OpCodes.Brfalse, default_target);
 
 				ExpressionStatement get_item_int = (ExpressionStatement) new SimpleAssign (string_switch_variable,
-					new Cast (new TypeExpression (TypeManager.int32_type, loc), get_item_object, loc)).Resolve (ec);
+					new Cast (new TypeExpression (TypeManager.int32_type, loc), get_item_object, loc)).Resolve (rc);
 
 				get_item_int.EmitStatement (ec);
 				get_item_object.Release (ec);
@@ -3902,6 +3912,7 @@ namespace Mono.CSharp {
 	public abstract class ExceptionStatement : ResumableStatement
 	{
 		bool code_follows;
+		Iterator iter;
 
 		protected abstract void EmitPreTryBody (EmitContext ec);
 		protected abstract void EmitTryBody (EmitContext ec);
@@ -3915,7 +3926,7 @@ namespace Mono.CSharp {
 
 			if (resume_points != null) {
 				IntConstant.EmitInt (ig, (int) Iterator.State.Running);
-				ig.Emit (OpCodes.Stloc, ec.CurrentIterator.CurrentPC);
+				ig.Emit (OpCodes.Stloc, iter.CurrentPC);
 			}
 
 			ig.BeginExceptionBlock ();
@@ -3925,7 +3936,7 @@ namespace Mono.CSharp {
 
 				// For normal control flow, we want to fall-through the Switch
 				// So, we use CurrentPC rather than the $PC field, and initialize it to an outside value above
-				ig.Emit (OpCodes.Ldloc, ec.CurrentIterator.CurrentPC);
+				ig.Emit (OpCodes.Ldloc, iter.CurrentPC);
 				IntConstant.EmitInt (ig, first_resume_pc);
 				ig.Emit (OpCodes.Sub);
 
@@ -3941,7 +3952,7 @@ namespace Mono.CSharp {
 
 			Label start_finally = ec.ig.DefineLabel ();
 			if (resume_points != null) {
-				ig.Emit (OpCodes.Ldloc, ec.CurrentIterator.SkipFinally);
+				ig.Emit (OpCodes.Ldloc, iter.SkipFinally);
 				ig.Emit (OpCodes.Brfalse_S, start_finally);
 				ig.Emit (OpCodes.Endfinally);
 			}
@@ -3957,13 +3968,15 @@ namespace Mono.CSharp {
 			code_follows = true;
 		}
 
-		protected void ResolveReachability (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			// System.Reflection.Emit automatically emits a 'leave' at the end of a try clause
 			// So, ensure there's some IL code after this statement.
 			if (!code_follows && resume_points == null && ec.CurrentBranching.CurrentUsageVector.IsUnreachable)
 				ec.NeedReturnLabel ();
 
+			iter = ec.CurrentIterator;
+			return true;
 		}
 
 		ArrayList resume_points;
@@ -4067,14 +4080,14 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			expr = expr.Resolve (ec);
 			if (expr == null)
 				return false;
 
 			if (!TypeManager.IsReferenceType (expr.Type)){
-				Report.Error (185, loc,
+				ec.Report.Error (185, loc,
 					      "`{0}' is not a reference type as required by the lock statement",
 					      TypeManager.CSharpName (expr.Type));
 				return false;
@@ -4084,7 +4097,7 @@ namespace Mono.CSharp {
 			bool ok = Statement.Resolve (ec);
 			ec.EndFlowBranching ();
 
-			ResolveReachability (ec);
+			ok &= base.Resolve (ec);
 
 			// Avoid creating libraries that reference the internal
 			// mcs NullType:
@@ -4096,7 +4109,7 @@ namespace Mono.CSharp {
 			temp.Resolve (ec);
 
 			if (TypeManager.void_monitor_enter_object == null || TypeManager.void_monitor_exit_object == null) {
-				Type monitor_type = TypeManager.CoreLookupType ("System.Threading", "Monitor", Kind.Class, true);
+				Type monitor_type = TypeManager.CoreLookupType (ec.Compiler, "System.Threading", "Monitor", Kind.Class, true);
 				TypeManager.void_monitor_enter_object = TypeManager.GetPredefinedMethod (
 					monitor_type, "Enter", loc, TypeManager.object_type);
 				TypeManager.void_monitor_exit_object = TypeManager.GetPredefinedMethod (
@@ -4151,15 +4164,15 @@ namespace Mono.CSharp {
 			b.Unchecked = true;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			using (ec.With (EmitContext.Flags.AllCheckStateFlags, false))
+			using (ec.With (ResolveContext.Options.AllCheckStateFlags, false))
 				return Block.Resolve (ec);
 		}
 		
 		protected override void DoEmit (EmitContext ec)
 		{
-			using (ec.With (EmitContext.Flags.AllCheckStateFlags, false))
+			using (ec.With (EmitContext.Options.AllCheckStateFlags, false))
 				Block.Emit (ec);
 		}
 
@@ -4185,15 +4198,15 @@ namespace Mono.CSharp {
 			b.Unchecked = false;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			using (ec.With (EmitContext.Flags.AllCheckStateFlags, true))
-			        return Block.Resolve (ec);
+			using (ec.With (ResolveContext.Options.AllCheckStateFlags, true))
+				return Block.Resolve (ec);
 		}
 
 		protected override void DoEmit (EmitContext ec)
 		{
-			using (ec.With (EmitContext.Flags.AllCheckStateFlags, true))
+			using (ec.With (EmitContext.Options.AllCheckStateFlags, true))
 				Block.Emit (ec);
 		}
 
@@ -4217,18 +4230,21 @@ namespace Mono.CSharp {
 		{
 			Block = b;
 			Block.Unsafe = true;
+			loc = b.StartLocation;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			using (ec.With (EmitContext.Flags.InUnsafe, true))
+			if (ec.CurrentIterator != null)
+				ec.Report.Error (1629, loc, "Unsafe code may not appear in iterators");
+
+			using (ec.Set (ResolveContext.Options.UnsafeScope))
 				return Block.Resolve (ec);
 		}
 		
 		protected override void DoEmit (EmitContext ec)
 		{
-			using (ec.With (EmitContext.Flags.InUnsafe, true))
-				Block.Emit (ec);
+			Block.Emit (ec);
 		}
 
 		public override void MutateHoistedGenericType (AnonymousMethodStorey storey)
@@ -4303,31 +4319,32 @@ namespace Mono.CSharp {
 				pinned_string.Pinned = true;
 			}
 
+			public StringEmitter Resolve (ResolveContext rc)
+			{
+				pinned_string.Resolve (rc);
+
+				if (TypeManager.int_get_offset_to_string_data == null) {
+					TypeManager.int_get_offset_to_string_data = TypeManager.GetPredefinedProperty (
+						TypeManager.runtime_helpers_type, "OffsetToStringData", pinned_string.Location, TypeManager.int32_type);
+				}
+
+				return this;
+			}
+
 			public override void Emit (EmitContext ec)
 			{
-				pinned_string.Resolve (ec);
 				pinned_string.ResolveVariable (ec);
 
 				converted.Emit (ec);
 				pinned_string.EmitAssign (ec);
 
-				PropertyInfo p = TypeManager.int_get_offset_to_string_data;
-				if (p == null) {
-					// TODO: Move to resolve
-					p = TypeManager.int_get_offset_to_string_data = TypeManager.GetPredefinedProperty (
-						TypeManager.runtime_helpers_type, "OffsetToStringData", pinned_string.Location, TypeManager.int32_type);
-
-					if (p == null)
-						return;
-				}
-
 				// TODO: Should use Binary::Add
 				pinned_string.Emit (ec);
 				ec.ig.Emit (OpCodes.Conv_I);
 
-				PropertyExpr pe = new PropertyExpr (pinned_string.VariableType, p, pinned_string.Location);
+				PropertyExpr pe = new PropertyExpr (pinned_string.VariableType, TypeManager.int_get_offset_to_string_data, pinned_string.Location);
 				//pe.InstanceExpression = pinned_string;
-				pe.Resolve (ec).Emit (ec);
+				pe.Resolve (new ResolveContext (ec.MemberContext)).Emit (ec);
 
 				ec.ig.Emit (OpCodes.Add);
 				vi.EmitAssign (ec);
@@ -4352,17 +4369,17 @@ namespace Mono.CSharp {
 			get { return statement; }
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			if (!ec.InUnsafe){
-				Expression.UnsafeError (loc);
+			if (!ec.IsUnsafe){
+				Expression.UnsafeError (ec, loc);
 				return false;
 			}
 			
 			TypeExpr texpr = type.ResolveAsContextualType (ec, false);
 			if (texpr == null) {
 				if (type is VarExpr)
-					Report.Error (821, type.Location, "A fixed statement cannot use an implicitly typed local variable");
+					ec.Report.Error (821, type.Location, "A fixed statement cannot use an implicitly typed local variable");
 
 				return false;
 			}
@@ -4372,7 +4389,7 @@ namespace Mono.CSharp {
 			data = new Emitter [declarators.Count];
 
 			if (!expr_type.IsPointer){
-				Report.Error (209, loc, "The type of locals declared in a fixed statement must be a pointer type");
+				ec.Report.Error (209, loc, "The type of locals declared in a fixed statement must be a pointer type");
 				return false;
 			}
 			
@@ -4396,13 +4413,14 @@ namespace Mono.CSharp {
 				//
 
 				if (e is Cast){
-					Report.Error (254, loc, "The right hand side of a fixed statement assignment may not be a cast expression");
+					ec.Report.Error (254, loc, "The right hand side of a fixed statement assignment may not be a cast expression");
 					return false;
 				}
 
-				ec.InFixedInitializer = true;
-				e = e.Resolve (ec);
-				ec.InFixedInitializer = false;
+				using (ec.Set (ResolveContext.Options.FixedInitializerScope)) {
+					e = e.Resolve (ec);
+				}
+
 				if (e == null)
 					return false;
 
@@ -4450,7 +4468,7 @@ namespace Mono.CSharp {
 				// Case 3: string
 				//
 				if (e.Type == TypeManager.string_type){
-					data [i] = new StringEmitter (e, vi, loc);
+					data [i] = new StringEmitter (e, vi, loc).Resolve (ec);
 					i++;
 					continue;
 				}
@@ -4473,7 +4491,7 @@ namespace Mono.CSharp {
 				}
 
 				if (data [i++] == null)
-					Report.Error (213, vi.Location, "You cannot use the fixed statement to take the address of an already fixed expression");
+					ec.Report.Error (213, vi.Location, "You cannot use the fixed statement to take the address of an already fixed expression");
 
 				e = Convert.ImplicitConversionRequired (ec, e, expr_type, loc);
 			}
@@ -4573,7 +4591,7 @@ namespace Mono.CSharp {
 			if (Name != null) {
 				// TODO: Move to resolve
 				LocalVariableReference lvr = new LocalVariableReference (Block, Name, loc);
-				lvr.Resolve (ec);
+				lvr.Resolve (new ResolveContext (ec.MemberContext));
 				
 #if GMCS_SOURCE
 				// Only to make verifier happy
@@ -4598,9 +4616,9 @@ namespace Mono.CSharp {
 			Block.Emit (ec);
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
-			using (ec.With (EmitContext.Flags.InCatch, true)) {
+			using (ec.With (ResolveContext.Options.CatchScope, true)) {
 				if (type_expr != null) {
 					TypeExpr te = type_expr.ResolveAsTypeTerminal (ec, false);
 					if (te == null)
@@ -4609,7 +4627,7 @@ namespace Mono.CSharp {
 					type = te.Type;
 
 					if (type != TypeManager.exception_type && !TypeManager.IsSubclassOf (type, TypeManager.exception_type)){
-						Error (155, "The type caught or thrown must be derived from System.Exception");
+						ec.Report.Error (155, loc, "The type caught or thrown must be derived from System.Exception");
 						return false;
 					}
 				} else
@@ -4659,7 +4677,7 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			bool ok = true;
 
@@ -4670,14 +4688,14 @@ namespace Mono.CSharp {
 
 			if (ok)
 				ec.CurrentBranching.CreateSibling (fini, FlowBranching.SiblingType.Finally);
-			using (ec.With (EmitContext.Flags.InFinally, true)) {
+			using (ec.With (ResolveContext.Options.FinallyScope, true)) {
 				if (!fini.Resolve (ec))
 					ok = false;
 			}
 
 			ec.EndFlowBranching ();
 
-			ResolveReachability (ec);
+			ok &= base.Resolve (ec);
 
 			return ok;
 		}
@@ -4722,24 +4740,18 @@ namespace Mono.CSharp {
 		{
 			this.Block = block;
 			this.Specific = catch_clauses;
-			this.General = null;
 			this.inside_try_finally = inside_try_finally;
 
-			for (int i = 0; i < catch_clauses.Count; ++i) {
-				Catch c = (Catch) catch_clauses [i];
-				if (c.IsGeneral) {
-					if (i != catch_clauses.Count - 1)
-						Report.Error (1017, c.loc, "Try statement already has an empty catch block");
-					this.General = c;
-					catch_clauses.RemoveAt (i);
-					i--;
-				}
+			Catch c = (Catch) catch_clauses [0];
+			if (c.IsGeneral) {
+				this.General = c;			
+				catch_clauses.RemoveAt (0);
 			}
 
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			bool ok = true;
 
@@ -4761,13 +4773,15 @@ namespace Mono.CSharp {
 					vi.VariableInfo = null;
 				}
 
-				if (!c.Resolve (ec))
+				if (!c.Resolve (ec)) {
 					ok = false;
+					continue;
+				}
 
 				Type resolved_type = c.CatchType;
 				for (int ii = 0; ii < last_index; ++ii) {
 					if (resolved_type == prev_catches [ii] || TypeManager.IsSubclassOf (resolved_type, prev_catches [ii])) {
-						Report.Error (160, c.loc,
+						ec.Report.Error (160, c.loc,
 							"A previous catch clause already catches all exceptions of this or a super type `{0}'",
 							TypeManager.CSharpName (prev_catches [ii]));
 						ok = false;
@@ -4781,7 +4795,7 @@ namespace Mono.CSharp {
 				if (CodeGen.Assembly.WrapNonExceptionThrows) {
 					foreach (Catch c in Specific){
 						if (c.CatchType == TypeManager.exception_type && PredefinedAttributes.Get.RuntimeCompatibility.IsDefined) {
-							Report.Warning (1058, 1, c.loc, "A previous catch clause already catches all exceptions. All non-exceptions thrown will be wrapped in a `System.Runtime.CompilerServices.RuntimeWrappedException'");
+							ec.Report.Warning (1058, 1, c.loc, "A previous catch clause already catches all exceptions. All non-exceptions thrown will be wrapped in a `System.Runtime.CompilerServices.RuntimeWrappedException'");
 						}
 					}
 				}
@@ -4867,7 +4881,7 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			expr = expr.Resolve (ec);
 			if (expr == null)
@@ -4877,7 +4891,7 @@ namespace Mono.CSharp {
 
 			if (!TypeManager.ImplementsInterface (expr_type, TypeManager.idisposable_type)) {
 				if (Convert.ImplicitConversion (ec, expr, TypeManager.idisposable_type, loc) == null) {
-					Using.Error_IsNotConvertibleToIDisposable (expr);
+					Using.Error_IsNotConvertibleToIDisposable (ec, expr);
 					return false;
 				}
 			}
@@ -4891,7 +4905,7 @@ namespace Mono.CSharp {
 
 			ec.EndFlowBranching ();
 
-			ResolveReachability (ec);
+			ok &= base.Resolve (ec);
 
 			if (TypeManager.void_dispose_void == null) {
 				TypeManager.void_dispose_void = TypeManager.GetPredefinedMethod (
@@ -4924,8 +4938,8 @@ namespace Mono.CSharp {
 				return;
 			}
 
-			Expression ml = Expression.MemberLookup (
-				ec.ContainerType, TypeManager.idisposable_type, expr_type,
+			Expression ml = Expression.MemberLookup (RootContext.ToplevelTypes.Compiler,
+				ec.CurrentType, TypeManager.idisposable_type, expr_type,
 				"Dispose", Location.Null);
 
 			if (!(ml is MethodGroupExpr)) {
@@ -4945,7 +4959,7 @@ namespace Mono.CSharp {
 			}
 
 			if (mi == null) {
-				Report.Error(-100, Mono.CSharp.Location.Null, "Internal error: No Dispose method which takes 0 parameters.");
+				RootContext.ToplevelTypes.Compiler.Report.Error(-100, Mono.CSharp.Location.Null, "Internal error: No Dispose method which takes 0 parameters.");
 				return;
 			}
 
@@ -4988,10 +5002,10 @@ namespace Mono.CSharp {
 			loc = l;
 		}
 
-		static public void Error_IsNotConvertibleToIDisposable (Expression expr)
+		static public void Error_IsNotConvertibleToIDisposable (BlockContext ec, Expression expr)
 		{
-			Report.SymbolRelatedToPreviousError (expr.Type);
-			Report.Error (1674, expr.Location, "`{0}': type used in a using statement must be implicitly convertible to `System.IDisposable'",
+			ec.Report.SymbolRelatedToPreviousError (expr.Type);
+			ec.Report.Error (1674, expr.Location, "`{0}': type used in a using statement must be implicitly convertible to `System.IDisposable'",
 				expr.GetSignatureForError ());
 		}
 
@@ -5016,7 +5030,7 @@ namespace Mono.CSharp {
 				ig.Emit (OpCodes.Brfalse, skip);
 			}
 
-			Invocation.EmitCall (ec, false, var, TypeManager.void_dispose_void, new ArrayList (0), loc);
+			Invocation.EmitCall (ec, false, var, TypeManager.void_dispose_void, null, loc);
 
 			if (emit_null_check)
 				ig.MarkLabel (skip);
@@ -5029,7 +5043,7 @@ namespace Mono.CSharp {
 			stmt.MutateHoistedGenericType (storey);
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			if (!ResolveVariable (ec))
 				return false;
@@ -5040,7 +5054,7 @@ namespace Mono.CSharp {
 
 			ec.EndFlowBranching ();
 
-			ResolveReachability (ec);
+			ok &= base.Resolve (ec);
 
 			if (TypeManager.void_dispose_void == null) {
 				TypeManager.void_dispose_void = TypeManager.GetPredefinedMethod (
@@ -5050,7 +5064,7 @@ namespace Mono.CSharp {
 			return ok;
 		}
 
-		bool ResolveVariable (EmitContext ec)
+		bool ResolveVariable (BlockContext ec)
 		{
 			assign = new SimpleAssign (var, init, loc);
 			assign = assign.ResolveStatement (ec);
@@ -5064,7 +5078,7 @@ namespace Mono.CSharp {
 
 			Expression e = Convert.ImplicitConversionStandard (ec, assign, TypeManager.idisposable_type, var.Location);
 			if (e == null) {
-				Error_IsNotConvertibleToIDisposable (var);
+				Error_IsNotConvertibleToIDisposable (ec, var);
 				return false;
 			}
 
@@ -5097,7 +5111,7 @@ namespace Mono.CSharp {
 				{
 				}
 
-				public void ResolveIncrement (EmitContext ec)
+				public void ResolveIncrement (BlockContext ec)
 				{
 					increment = new StatementExpression (new UnaryMutator (UnaryMutator.Mode.PostIncrement, this));
 					increment.Resolve (ec);
@@ -5142,13 +5156,13 @@ namespace Mono.CSharp {
 				throw new NotImplementedException ();
 			}
 
-			public override bool Resolve (EmitContext ec)
+			public override bool Resolve (BlockContext ec)
 			{
 				copy = new TemporaryVariable (for_each.expr.Type, loc);
 				copy.Resolve (ec);
 
 				int rank = length_exprs.Length;
-				ArrayList list = new ArrayList (rank);
+				Arguments list = new Arguments (rank);
 				for (int i = 0; i < rank; i++) {
 					counter [i] = new ArrayCounter (loc);
 					counter [i].ResolveIncrement (ec);					
@@ -5159,12 +5173,12 @@ namespace Mono.CSharp {
 						lengths [i] = new TemporaryVariable (TypeManager.int32_type, loc);
 						lengths [i].Resolve (ec);
 
-						ArrayList args = new ArrayList (1);
+						Arguments args = new Arguments (1);
 						args.Add (new Argument (new IntConstant (i, loc)));
 						length_exprs [i] = new Invocation (new MemberAccess (copy, "GetLength"), args).Resolve (ec);
 					}
 
-					list.Add (counter [i]);
+					list.Add (new Argument (counter [i]));
 				}
 
 				access = new ElementAccess (copy, list).Resolve (ec);
@@ -5191,7 +5205,7 @@ namespace Mono.CSharp {
 				ec.StartFlowBranching (FlowBranching.BranchingType.Loop, loc);
 				ec.CurrentBranching.CreateSibling ();
 
-				for_each.variable = for_each.variable.ResolveLValue (ec, conv, loc);
+				for_each.variable = for_each.variable.ResolveLValue (ec, conv);
 				if (for_each.variable == null)
 					ok = false;
 
@@ -5298,7 +5312,7 @@ namespace Mono.CSharp {
 					throw new NotImplementedException ();
 				}
 
-				public override bool Resolve (EmitContext ec)
+				public override bool Resolve (BlockContext ec)
 				{
 					current = current.Resolve (ec);
 					if (current == null)
@@ -5361,7 +5375,7 @@ namespace Mono.CSharp {
 				throw new NotImplementedException ();
 			}
 
-			bool GetEnumeratorFilter (EmitContext ec, MethodInfo mi)
+			bool GetEnumeratorFilter (ResolveContext ec, MethodInfo mi)
 			{
 				Type return_type = mi.ReturnType;
 
@@ -5403,7 +5417,7 @@ namespace Mono.CSharp {
 						enumerator_type = return_type;
 						if (!FetchGetCurrent (ec, return_type))
 							get_current = new PropertyExpr (
-								ec.ContainerType, TypeManager.ienumerator_getcurrent, loc);
+								ec.CurrentType, TypeManager.ienumerator_getcurrent, loc);
 						if (!FetchMoveNext (return_type))
 							move_next = TypeManager.bool_movenext_void;
 						return true;
@@ -5415,7 +5429,7 @@ namespace Mono.CSharp {
 						enumerator_type = return_type;
 						move_next = TypeManager.bool_movenext_void;
 						get_current = new PropertyExpr (
-							ec.ContainerType, TypeManager.ienumerator_getcurrent, loc);
+							ec.CurrentType, TypeManager.ienumerator_getcurrent, loc);
 						return true;
 					}
 				} else {
@@ -5425,7 +5439,7 @@ namespace Mono.CSharp {
 					//
 
 					if (TypeManager.HasElementType (return_type) || !FetchMoveNext (return_type) || !FetchGetCurrent (ec, return_type)) {
-						Report.Error (202, loc, "foreach statement requires that the return type `{0}' of `{1}' must have a suitable public MoveNext method and public Current property",
+						ec.Report.Error (202, loc, "foreach statement requires that the return type `{0}' of `{1}' must have a suitable public MoveNext method and public Current property",
 							TypeManager.CSharpName (return_type), TypeManager.CSharpSignature (mi));
 						return false;
 					}
@@ -5446,6 +5460,9 @@ namespace Mono.CSharp {
 					BindingFlags.Public | BindingFlags.Instance,
 					"MoveNext", null);
 
+				if (move_next_list == null)
+					return false;
+
 				foreach (MemberInfo m in move_next_list){
 					MethodInfo mi = (MethodInfo) m;
 				
@@ -5462,10 +5479,10 @@ namespace Mono.CSharp {
 			//
 			// Retrieves a `public T get_Current ()' method from the Type `t'
 			//
-			bool FetchGetCurrent (EmitContext ec, Type t)
+			bool FetchGetCurrent (ResolveContext ec, Type t)
 			{
-				PropertyExpr pe = Expression.MemberLookup (
-					ec.ContainerType, t, "Current", MemberTypes.Property,
+				PropertyExpr pe = Expression.MemberLookup (ec.Compiler,
+					ec.CurrentType, t, "Current", MemberTypes.Property,
 					Expression.AllBindingFlags, loc) as PropertyExpr;
 				if (pe == null)
 					return false;
@@ -5474,13 +5491,13 @@ namespace Mono.CSharp {
 				return true;
 			}
 
-			void Error_Enumerator ()
+			void Error_Enumerator (BlockContext ec)
 			{
 				if (enumerator_found) {
 					return;
 				}
 
-			    Report.Error (1579, loc,
+			    ec.Report.Error (1579, loc,
 					"foreach statement cannot operate on variables of type `{0}' because it does not contain a definition for `GetEnumerator' or is not accessible",
 					TypeManager.CSharpName (expr.Type));
 			}
@@ -5498,10 +5515,10 @@ namespace Mono.CSharp {
 				return base_method != m;
 			}
 
-			bool TryType (EmitContext ec, Type t)
+			bool TryType (ResolveContext ec, Type t)
 			{
-				MethodGroupExpr mg = Expression.MemberLookup (
-					ec.ContainerType, t, "GetEnumerator", MemberTypes.Method,
+				MethodGroupExpr mg = Expression.MemberLookup (ec.Compiler,
+					ec.CurrentType, t, "GetEnumerator", MemberTypes.Method,
 					Expression.AllBindingFlags, loc) as MethodGroupExpr;
 				if (mg == null)
 					return false;
@@ -5532,8 +5549,8 @@ namespace Mono.CSharp {
 								continue;
 
 							MethodBase mb = TypeManager.DropGenericMethodArguments (mi);
-							Report.SymbolRelatedToPreviousError (t);
-							Report.Error(1640, loc, "foreach statement cannot operate on variables of type `{0}' " +
+							ec.Report.SymbolRelatedToPreviousError (t);
+							ec.Report.Error(1640, loc, "foreach statement cannot operate on variables of type `{0}' " +
 								     "because it contains multiple implementation of `{1}'. Try casting to a specific implementation",
 								     TypeManager.CSharpName (t), TypeManager.CSharpSignature (mb));
 							return false;
@@ -5545,9 +5562,9 @@ namespace Mono.CSharp {
 							    TypeManager.ImplementsInterface (result.DeclaringType, mi.DeclaringType))
 								continue;
 
-							Report.SymbolRelatedToPreviousError (result);
-							Report.SymbolRelatedToPreviousError (mi);
-							Report.Warning (278, 2, loc, "`{0}' contains ambiguous implementation of `{1}' pattern. Method `{2}' is ambiguous with method `{3}'",
+							ec.Report.SymbolRelatedToPreviousError (result);
+							ec.Report.SymbolRelatedToPreviousError (mi);
+							ec.Report.Warning (278, 2, loc, "`{0}' contains ambiguous implementation of `{1}' pattern. Method `{2}' is ambiguous with method `{3}'",
 									TypeManager.CSharpName (t), "enumerable", TypeManager.CSharpSignature (result), TypeManager.CSharpSignature (mi));
 							return false;
 						}
@@ -5581,18 +5598,18 @@ namespace Mono.CSharp {
 				}
 
 				return false;
-			}		
+			}
 
-			bool ProbeCollectionType (EmitContext ec, Type t)
+			bool ProbeCollectionType (ResolveContext ec, Type t)
 			{
-				int errors = Report.Errors;
+				int errors = ec.Report.Errors;
 				for (Type tt = t; tt != null && tt != TypeManager.object_type;){
 					if (TryType (ec, tt))
 						return true;
 					tt = tt.BaseType;
 				}
 
-				if (Report.Errors > errors)
+				if (ec.Report.Errors > errors)
 					return false;
 
 				//
@@ -5607,12 +5624,12 @@ namespace Mono.CSharp {
 				return false;
 			}
 
-			public override bool Resolve (EmitContext ec)
+			public override bool Resolve (BlockContext ec)
 			{
 				enumerator_type = TypeManager.ienumerator_type;
 
 				if (!ProbeCollectionType (ec, expr.Type)) {
-					Error_Enumerator ();
+					Error_Enumerator (ec);
 					return false;
 				}
 
@@ -5679,7 +5696,7 @@ namespace Mono.CSharp {
 					throw new NotSupportedException ();
 				}
 
-				public override bool Resolve (EmitContext ec)
+				public override bool Resolve (BlockContext ec)
 				{
 					return parent.ResolveLoop (ec);
 				}
@@ -5712,7 +5729,7 @@ namespace Mono.CSharp {
 					throw new NotSupportedException ();
 				}
 
-				public override bool Resolve (EmitContext ec)
+				public override bool Resolve (BlockContext ec)
 				{
 					bool ok = true;
 
@@ -5723,7 +5740,7 @@ namespace Mono.CSharp {
 
 					ec.EndFlowBranching ();
 
-					ResolveReachability (ec);
+					ok &= base.Resolve (ec);
 
 					if (TypeManager.void_dispose_void == null) {
 						TypeManager.void_dispose_void = TypeManager.GetPredefinedMethod (
@@ -5767,7 +5784,7 @@ namespace Mono.CSharp {
 						ig.MarkLabel (call_dispose);
 					}
 
-					Invocation.EmitCall (ec, false, instance, TypeManager.void_dispose_void, new ArrayList (0), loc);
+					Invocation.EmitCall (ec, false, instance, TypeManager.void_dispose_void, null, loc);
 				}
 
 				public override void MutateHoistedGenericType (AnonymousMethodStorey storey)
@@ -5776,7 +5793,7 @@ namespace Mono.CSharp {
 				}
 			}
 
-			bool ResolveLoop (EmitContext ec)
+			bool ResolveLoop (BlockContext ec)
 			{
 				return loop.Resolve (ec);
 			}
@@ -5818,14 +5835,14 @@ namespace Mono.CSharp {
 			get { return statement; }
 		}
 
-		public override bool Resolve (EmitContext ec)
+		public override bool Resolve (BlockContext ec)
 		{
 			expr = expr.Resolve (ec);
 			if (expr == null)
 				return false;
 
 			if (expr.IsNull) {
-				Report.Error (186, loc, "Use of null is not valid in this context");
+				ec.Report.Error (186, loc, "Use of null is not valid in this context");
 				return false;
 			}
 
@@ -5835,7 +5852,7 @@ namespace Mono.CSharp {
 				statement = new ArrayForeach (this, expr.Type.GetArrayRank ());
 			} else {
 				if (expr.eclass == ExprClass.MethodGroup || expr is AnonymousMethodExpression) {
-					Report.Error (446, expr.Location, "Foreach statement cannot operate on a `{0}'",
+					ec.Report.Error (446, expr.Location, "Foreach statement cannot operate on a `{0}'",
 						expr.ExprClassName);
 					return false;
 				}

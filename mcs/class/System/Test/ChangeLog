@@ -1,3 +1,15 @@
+2009-05-14  Jonathan Pryor  <jpryor@novell.com>
+
+	* test-config-file: Revert the prior change, as this breaks 1.0
+	  profile testing.
+	* test-config-file-net-2.0: Added; config file to use when testing
+	  under the .NET 2.0+ profile, for #502944.
+
+2009-05-12  Jonathan Pryor  <jpryor@novell.com>
+
+	* test-config-file: Add a /configuration/system.diagnostics/source
+	  section to elicit the buggy behavior found in #502944.
+
 2008-12-09  Christian Hergert <christian.hergert@gmail.com>
 
 	* System.Diagnostics/CounterCreationDataTest.cs: New test to verify

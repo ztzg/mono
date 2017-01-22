@@ -53,7 +53,7 @@ using Id = System.Int32;
     namespace Test_NUnit_Sqlite
 #elif INGRES
     namespace Test_NUnit_Ingres
-#elif MSSQL && MONO_STRICT
+#elif MSSQL && L2SQL
     namespace Test_NUnit_MsSql_Strict
 #elif MSSQL
     namespace Test_NUnit_MsSql
@@ -80,6 +80,9 @@ SELECT o$.*
 FROM Employees AS e$
 LEFT OUTER JOIN Orders AS o$ ON o$.[EmployeeID] = e$.[EmployeeID]
          */
+#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+        [Explicit]
+#endif
         [Description("Subquery")]
         [Test]
         public void CQ2_Subquery()
@@ -91,6 +94,9 @@ LEFT OUTER JOIN Orders AS o$ ON o$.[EmployeeID] = e$.[EmployeeID]
             Assert.IsTrue(count > 0);
         }
 
+#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+        [Explicit]
+#endif
         [Description("Subquery with nested select")]
         [Test]
         public void CQ3_SubquerySelect()
@@ -101,6 +107,9 @@ LEFT OUTER JOIN Orders AS o$ ON o$.[EmployeeID] = e$.[EmployeeID]
             Assert.IsTrue(count > 0);
         }
 
+#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+        [Explicit]
+#endif
         [Description("Subquery with nested entityset")]
         [Test]
         public void CQ4_SubqueryNested()
@@ -111,6 +120,9 @@ LEFT OUTER JOIN Orders AS o$ ON o$.[EmployeeID] = e$.[EmployeeID]
             Assert.IsTrue(count > 0);
         }
 
+#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+        [Explicit]
+#endif
         [Description("Subquery with nested query")]
         [Test]
         public void CQ5_SubqueryNestedQuery()
@@ -123,8 +135,27 @@ LEFT OUTER JOIN Orders AS o$ ON o$.[EmployeeID] = e$.[EmployeeID]
                                r.OrderID).Contains(d.OrderID)
                     select d;
             var count = q.ToList().Count;
-            Assert.AreEqual(count,1 );
+            Assert.AreEqual(38, count);
         }
 
+
+        [Test]
+        public void QueryableContains01()
+        {
+            var db = CreateDB();
+            var q1 = db.OrderDetails.Where(o => o.Discount > 0).Select(o => o.OrderID);
+            var q = db.OrderDetails.Where(o => !q1.Contains(o.OrderID));
+            Assert.AreEqual(1110, q.Count());
+        }
+
+        [Test]
+        public void QueryableContains02()
+        {
+            var db = CreateDB();
+            DateTime t = DateTime.Parse("01/01/1950");
+            var q1 = db.Employees.Where(e => e.BirthDate.HasValue && e.BirthDate.Value > t).Select(e => e.EmployeeID);
+            var q = db.Orders.Where(o => o.EmployeeID.HasValue && !q1.Contains(o.EmployeeID.Value));
+            Assert.AreEqual(279, q.Count());
+        }
     }
 }

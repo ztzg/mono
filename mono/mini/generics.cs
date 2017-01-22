@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 class Tests {
 
@@ -31,9 +32,9 @@ class Tests {
 		}
 	}
 
-	static int Main ()
+	static int Main (string[] args)
 	{
-		return TestDriver.RunTests (typeof (Tests));
+		return TestDriver.RunTests (typeof (Tests), args);
 	}
 
 	public static int test_1_nullable_unbox ()
@@ -204,6 +205,7 @@ class Tests {
 		return 0;
 	}
 
+	[Category ("!FULLAOT")]
 	public static int test_0_generic_get_value_optimization_int () {
 		int[] x = new int[] {100, 200};
 
@@ -330,6 +332,8 @@ class Tests {
 		return 0;
 	}
 
+	// FIXME:
+	[Category ("!FULLAOT")]
     public static int test_0_generic_virtual_call_on_vtype_unbox () {
 		object o = new Object ();
         IFoo h = new Handler(o);
@@ -401,6 +405,10 @@ class Tests {
 		return 0;
 	}
 
+	// This cannot be made to work with full-aot, since there it is impossible to
+	// statically determine that Foo<string>.Bar <int> is needed, the code only
+	// references IFoo.Bar<int>
+	[Category ("!FULLAOT")]
 	public static int test_0_generic_virtual_on_interfaces () {
 		Foo<string>.count1 = 0;
 		Foo<string>.count2 = 0;
@@ -423,6 +431,55 @@ class Tests {
 		VirtualInterfaceCallFromGenericMethod<long> (f);
 
 		return 0;
+	}
+
+	//repro for #505375
+	[Category ("!FULLAOT")]
+	public static int test_2_cprop_bug () {
+		int idx = 0;
+		int a = 1;
+		var cmp = System.Collections.Generic.Comparer<int>.Default ;
+		if (cmp.Compare (a, 0) > 0)
+			a = 0;
+		do { idx++; } while (cmp.Compare (idx - 1, a) == 0);
+		return idx;
+	}
+
+	public class XElement {
+		public string Value {
+			get; set;
+		}
+	}
+
+	public static int test_0_fullaot_linq () {
+		var allWords = new XElement [] { new XElement { Value = "one" } };
+		var filteredWords = allWords.Where(kw => kw.Value.StartsWith("T"));
+		return filteredWords.Count ();
+	}
+
+	static int cctor_count = 0;
+
+    public abstract class Beta<TChanged> 
+    {		
+        static Beta()
+        {
+			cctor_count ++;
+        }
+    }   
+    
+    public class Gamma<T> : Beta<T> 
+    {   
+        static Gamma()
+        {
+        }
+    }
+
+	// #519336    
+	public static int test_2_generic_class_init_gshared_ctor () {
+		new Gamma<object>();
+		new Gamma<string>();
+
+		return cctor_count;
 	}
 
 	public static void VirtualInterfaceCallFromGenericMethod <T> (IFoo f) {

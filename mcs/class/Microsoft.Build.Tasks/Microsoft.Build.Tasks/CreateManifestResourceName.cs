@@ -45,6 +45,9 @@ namespace Microsoft.Build.Tasks {
 		
 		public override bool Execute ()
 		{
+			if (resourceFiles.Length == 0)
+				return true;
+
 			manifestResourceNames = new ITaskItem [resourceFiles.Length];
 			for (int i = 0; i < resourceFiles.Length; i ++) {
 				ITaskItem item = resourceFiles [i];
@@ -86,6 +89,37 @@ namespace Microsoft.Build.Tasks {
 			throw new NotImplementedException ();
 		}
 		
+		// No dependent file
+		internal static string GetResourceIdFromFileName (string fileName, string rootNamespace)
+		{
+			string culture = null;
+			if (String.Compare (Path.GetExtension (fileName), ".resx", true) == 0) {
+				fileName = Path.ChangeExtension (fileName, null);
+			} else {
+				string only_filename, extn;
+				if (AssignCulture.TrySplitResourceName (fileName, out only_filename, out culture, out extn)) {
+					//remove the culture from fileName
+					//foo.it.bmp -> foo.bmp
+					fileName = only_filename + "." + extn;
+				} else {
+					culture = null;
+				}
+			}
+
+			// spaces in folder name are changed to _, those in filename remain
+			string dirname = Path.GetDirectoryName (fileName) ?? String.Empty;
+			dirname = dirname.Replace (' ', '_');
+			fileName = Path.Combine (dirname, Path.GetFileName (fileName));
+			string rname = fileName.Replace ('/', '.').Replace ('\\', '.');
+
+			if (!String.IsNullOrEmpty (rootNamespace))
+				rname = rootNamespace + "." + rname;
+			if (culture == null)
+				return rname;
+			else
+				return Path.Combine (culture, rname);
+		}
+
 		protected abstract string CreateManifestName (string fileName,
 							      string linkFileName,
 							      string rootNamespace,

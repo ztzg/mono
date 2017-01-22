@@ -129,6 +129,8 @@ static GSList *loaded_assembly_bindings = NULL;
 
 static MonoAssembly*
 mono_assembly_invoke_search_hook_internal (MonoAssemblyName *aname, gboolean refonly, gboolean postload);
+static MonoBoolean
+mono_assembly_is_in_gac (const gchar *filanem);
 
 static gchar*
 encode_public_tok (const guchar *token, gint32 len)
@@ -157,7 +159,7 @@ encode_public_tok (const guchar *token, gint32 len)
 gboolean
 mono_public_tokens_are_equal (const unsigned char *pubt1, const unsigned char *pubt2)
 {
-	return g_strcasecmp ((char*)pubt1, (char*)pubt2) == 0;
+	return memcmp (pubt1, pubt2, 16) == 0;
 }
 
 static void
@@ -217,7 +219,7 @@ check_extra_gac_path_env (void) {
 
 	while (*splitted) {
 		if (**splitted && !g_file_test (*splitted, G_FILE_TEST_IS_DIR))
-			g_warning ("'%s' in MONO_GAC_PATH doesn't exist or has wrong permissions.", *splitted);
+			g_warning ("'%s' in MONO_GAC_PREFIX doesn't exist or has wrong permissions.", *splitted);
 
 		splitted++;
 	}
@@ -1266,7 +1268,10 @@ mono_assembly_open_full (const char *filename, MonoImageOpenStatus *status, gboo
 
 	mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY,
 			"Assembly Loader probing location: '%s'.", fname);
-	new_fname = mono_make_shadow_copy (fname);
+
+	new_fname = NULL;
+	if (!mono_assembly_is_in_gac (fname))
+		new_fname = mono_make_shadow_copy (fname);
 	if (new_fname && new_fname != fname) {
 		g_free (fname);
 		fname = new_fname;
@@ -1604,6 +1609,10 @@ parse_public_key (const gchar *key, gchar** pubkey)
 	bitlen = read32 (header + 12) >> 3;
 	if ((bitlen + 16 + 4) != pkeylen)
 		return FALSE;
+
+	/* parsing is OK and the public key itself is not requested back */
+	if (!pubkey)
+		return TRUE;
 		
 	/* Encode the size of the blob */
 	offset = 0;
@@ -1988,6 +1997,67 @@ mono_assembly_load_with_partial_name (const char *name, MonoImageOpenStatus *sta
 	mono_assembly_name_free (aname);
 
 	return res;
+}
+
+static MonoBoolean
+mono_assembly_is_in_gac (const gchar *filename)
+{
+	const gchar *rootdir;
+	gchar *gp;
+	gchar **paths;
+
+	if (filename == NULL)
+		return FALSE;
+
+	for (paths = extra_gac_paths; paths && *paths; paths++) {
+		if (strstr (*paths, filename) != *paths)
+			continue;
+
+		gp = (gchar *) (filename + strlen (*paths));
+		if (*gp != G_DIR_SEPARATOR)
+			continue;
+		gp++;
+		if (strncmp (gp, "lib", 3))
+			continue;
+		gp += 3;
+		if (*gp != G_DIR_SEPARATOR)
+			continue;
+		gp++;
+		if (strncmp (gp, "mono", 4))
+			continue;
+		gp += 4;
+		if (*gp != G_DIR_SEPARATOR)
+			continue;
+		gp++;
+		if (strncmp (gp, "gac", 3))
+			continue;
+		gp += 3;
+		if (*gp != G_DIR_SEPARATOR)
+			continue;
+
+		return TRUE;
+	}
+
+	rootdir = mono_assembly_getrootdir ();
+	if (strstr (filename, rootdir) != filename)
+		return FALSE;
+
+	gp = (gchar *) (filename + strlen (rootdir));
+	if (*gp != G_DIR_SEPARATOR)
+		return FALSE;
+	gp++;
+	if (strncmp (gp, "mono", 4))
+		return FALSE;
+	gp += 4;
+	if (*gp != G_DIR_SEPARATOR)
+		return FALSE;
+	gp++;
+	if (strncmp (gp, "gac", 3))
+		return FALSE;
+	gp += 3;
+	if (*gp != G_DIR_SEPARATOR)
+		return FALSE;
+	return TRUE;
 }
 
 static MonoImage*

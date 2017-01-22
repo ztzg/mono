@@ -153,7 +153,12 @@ namespace System.Web.UI
 								    HttpContext context)
 		{
 #if NET_2_0
-			return BuildManager.CreateInstanceFromVirtualPath (virtualPath, typeof (IHttpHandler)) as IHttpHandler;
+			bool isFake = false;
+
+			if (!String.IsNullOrEmpty (inputFile))
+				isFake = !inputFile.StartsWith (HttpRuntime.AppDomainAppPath);
+			
+			return BuildManager.CreateInstanceFromVirtualPath (new VirtualPath (virtualPath, inputFile, isFake), typeof (IHttpHandler)) as IHttpHandler;
 #else
 			PageParser pp = new PageParser (virtualPath, inputFile, context);
 			IHttpHandler h = (IHttpHandler) pp.GetCompiledInstance ();
@@ -316,7 +321,7 @@ namespace System.Web.UI
 			if (clientTarget != null) {
 				clientTarget = clientTarget.Trim ();
 #if NET_2_0
-				ClientTargetSection sec = (ClientTargetSection)WebConfigurationManager.GetWebApplicationSection ("system.web/clientTarget");
+				ClientTargetSection sec = GetConfigSection <ClientTargetSection> ("system.web/clientTarget");
 				ClientTarget ct = null;
 				
 				if ((ct = sec.ClientTargets [clientTarget]) == null)
@@ -387,11 +392,11 @@ namespace System.Web.UI
 		
 #if NET_2_0
 		internal override void AddDirective (string directive, Hashtable atts)
-		{			
+		{
 			bool isMasterType = String.Compare ("MasterType", directive, StringComparison.OrdinalIgnoreCase) == 0;
 			bool isPreviousPageType = isMasterType ? false : String.Compare ("PreviousPageType", directive,
 											 StringComparison.OrdinalIgnoreCase) == 0;
-			
+
 			string typeName = null;
 			string virtualPath = null;
 			Type type = null;

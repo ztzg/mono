@@ -27,18 +27,16 @@
 using System;
 using System.Reflection;
 using System.Collections.Generic;
-#if MONO_STRICT
-using System.Data.Linq.Identity;
-#else
 using DbLinq.Data.Linq.Identity;
-#endif
 using DbLinq.Util;
 
 #if MONO_STRICT
-namespace System.Data.Linq.Identity.Implementation
+using System.Data.Linq;
 #else
-namespace DbLinq.Data.Linq.Identity.Implementation
+using DbLinq.Data.Linq;
 #endif
+
+namespace DbLinq.Data.Linq.Identity.Implementation
 {
     /// <summary>
     /// IIdentityReader default implementation
@@ -57,19 +55,17 @@ namespace DbLinq.Data.Linq.Identity.Implementation
         /// <returns></returns>
         public IdentityKey GetIdentityKey(object entity)
         {
-            lock (keyMembers)
+            // no PK? --> null as identity (==we can not collect it)
+            if (keyMembers.Count == 0)
+                return null;
+            var keys = new List<object>();
+            foreach (var keyMember in keyMembers)
             {
-                // no PK? --> null as identity (==we can not collect it)
-                if (keyMembers.Count == 0)
-                    return null;
-                var keys = new List<object>();
-                foreach (var keyMember in keyMembers)
-                {
-                    var key = keyMember.GetMemberValue(entity);
+                var key = keyMember.GetMemberValue(entity);
+                if(key != null)
                     keys.Add(key);
-                }
-                return new IdentityKey(type, keys);
             }
+            return new IdentityKey(type, keys);
         }
 
         /// <summary>

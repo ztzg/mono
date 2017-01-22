@@ -174,7 +174,7 @@ namespace System.Globalization
 			get { return territory; }
 		}
 
-#if NET_2_0
+#if NET_2_0 && !NET_2_1
 		// FIXME: It is implemented, but would be hell slow.
 		[ComVisible (false)]
 		public CultureTypes CultureTypes {
@@ -402,6 +402,7 @@ namespace System.Globalization
 			return false;
 		}
 
+#if !NET_2_1
 		public static CultureInfo[] GetCultures(CultureTypes types)
 		{
 			bool neutral=((types & CultureTypes.NeutralCultures)!=0);
@@ -421,6 +422,7 @@ namespace System.Globalization
 
 			return infos;
 		}
+#endif
 
 		public override int GetHashCode()
 		{
@@ -619,6 +621,18 @@ namespace System.Globalization
 
 		bool ConstructInternalLocaleFromName (string locale)
 		{
+			// It is sort of hack to get those new pseudo-alias
+			// culture names that are not supported in good old
+			// Windows.
+			switch (locale) {
+			case "zh-hans":
+				locale = "zh-chs";
+				break;
+			case "zh-hant":
+				locale = "zh-cht";
+				break;
+			}
+
 			if (!construct_internal_locale_from_name (locale))
 				return false;
 			return true;

@@ -1,3 +1,128 @@
+2009-09-24  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* Dns_2_1.cs: New. Smaller version of Dns.cs that offers just
+	enough for DnsEndPoint support
+
+2009-09-24  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* DnsEndPoint_2_1.cs: Remove (now) unneeded method
+
+2009-07-16  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebHeaderCollection_2_1.cs: Seal type.
+
+2009-06-17  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebClient_2_1.cs: Fix BaseAddress and remove dual base[Address|
+	String] variables.
+
+2009-06-05  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebClient_2_1.cs: Make sure *CompletedEventArgs gets called 
+	even in case an exception occurs before the BeginGetResponse 
+	call. Adjust API for OpenReadCompletedEventArgs.
+
+2009-06-04  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebClient_2_1.cs: Remove the creation of threads and use the
+	async methods provided by WebRequest (and its friends). Use an
+	internal object to lock on (not this). Remove comments from the
+	original (mono) WebClient since the code has diverged so much.
+	Fix DRT#326 (hopefully others too or at least more than it breaks)
+
+2009-06-01  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* HttpWebRequest_2_1.cs: Avoid possible NRE while settings a
+	complete collection.
+	* WebResponse_2_1.cs: Use StringComparer.OrdinalIgnoreCase on 
+	the prefix Dictionary
+
+2009-05-26  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebClient_2_1.cs: Add internal WebHeaderCollection. Change
+	signature for OpenPolicyReadAsync to take an addtional object
+	* WebResponse_2_1.cs: Add internal WebHeaderCollection
+
+2009-05-22  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebClient_2_1.cs: Add an internal OpenPolicyReadAsync. Check 
+	result in ProcessResponse and throw if not Ok (200).
+	* WebRequest_2_1.cs: Add an internal overload to BeginGetResponse
+	from where we can handle downloading the policy.
+
+2009-05-14  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* DnsEndPoint_2_1.cs: Add method to return an IPEndPoint from a
+	DnsEndPoint that match the requested AddressFamily
+
+2009-05-12  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebHeaderCollection_2_1.cs: Headers are case insensitive but we
+	must keep them in their original form since AllKeys property will
+	report them that way and user code (like DRT#288) can depends on
+	this behavior.
+
+2009-05-11  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebHeaderCollection_2_1.cs: Headers are removed only in special
+	cases and never when the "this" property is used. Call ToLower
+	in SetHeader too in order to avoid typos.
+
+2009-05-11  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* HttpWebRequest_2_1.cs: Fix Accept and ContentType properties
+	to use, with special care, the Headers property
+	* WebHeaderCollection_2_1.cs (SetHeader): Add or remove header.
+
+2009-05-10  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* HttpWebRequest_2_1.cs: Move Headers property logic here (as 
+	shown by adding more unit tests)
+	* WebClient_2_1.cs: Add comment that Headers are not validated
+	there, but later.
+	* WebHeaderCollection_2_1.cs: Add a SetHeader method that can 
+	work around the normal validations that the "this" property
+	needs to do.
+
+2009-05-09  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WebHeaderCollection_2_1.cs: When associated with a WebRequest 
+	the header collection items needs to be validated since not all
+	headers will be valid. Part of fix for DRT#532
+
+2009-04-16  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* HttpWebRequest_2_1.cs: Rework the throwing of NIE so gui-compare
+	does not report them (since they are the "right" behavior)
+	* WebClient_2_1.cs: Fix BaseAddress property to return the URI to 
+	the XAP file. Implement protected GetWebRequest which will make an
+	absolute URI from a relative one (using BaseAddress). That remove
+	the need of the previous hack.
+	* WebRequest_2_1.cs: Remove previous hack
+
+2009-04-11  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* WebClient_2_1.cs: WebClient allows relative URI...
+	* WebRequest_2_1.cs: ...while WebRequest does not by default. 
+	Also uncomment a few checks for new test cases
+
+2009-04-11  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* DnsEndPoint_2_1.cs: Adjust exceptions wrt unit tests
+	* HttpWebRequest_2_1.cs: Fix Headers property wrt unit tests: 
+	* WebClient_2_1.cs: Fix some properties
+	* WebHeaderCollection_2_1.cs: Adjust exceptions wrt unit tests
+	* WebRequest_2_1.cs: Add RegisterPrefix functionality and add
+	missing checks (fix unit tests)
+
+2009-04-09  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* DnsEndPoint_2_1.cs: Fix header.
+	* HttpStatusCode_2_1.cs: New. SL2 (short) version of the enum
+	* HttpWebRequest_2_1.cs: Add missing members
+	* WebExceptionStatus_2_1.cs: New. SL2 (short) version of the enum
+	* WebHeaderCollection_2_1.cs: Implement S.C.IEnumerable
+
 2009-03-11  Rolf Bjarne Kvinge  <RKvinge@novell.com>
 
 	* WebClient_2_1.cs: OnOpenReadCompleted and OnDownloadStringCompleted:

@@ -456,7 +456,7 @@ void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 	return;
 }
 
-void mono_arch_nullify_plt_entry(guint8 *code)
+void mono_arch_nullify_plt_entry(guint8 *code, mgreg_t *regs)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -489,7 +489,7 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	return;
 }
 
-void mono_arch_patch_plt_entry(guint8 *code, guint8 *addr)
+void mono_arch_patch_plt_entry(guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
 	/* TODO - CV */
 	g_assert(0);

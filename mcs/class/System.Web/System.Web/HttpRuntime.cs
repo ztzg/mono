@@ -62,6 +62,8 @@ namespace System.Web {
 		static bool caseInsensitive;
 		static bool runningOnWindows;
 		static bool isunc;
+		static string monoVersion;
+		
 #if TARGET_J2EE
 		static QueueManager queue_manager { get { return _runtime._queue_manager; } }
 		static TraceManager trace_manager { get { return _runtime._trace_manager; } }
@@ -143,7 +145,8 @@ namespace System.Web {
 
 			if (runningOnWindows) {
 				caseInsensitive = true;
-				isunc = new Uri (AppDomainAppPath).IsUnc;
+				if (AppDomainAppPath != null)
+					isunc = new Uri (AppDomainAppPath).IsUnc;
 			} else {
 				string mono_iomap = Environment.GetEnvironmentVariable ("MONO_IOMAP");
 				if (mono_iomap != null) {
@@ -160,6 +163,17 @@ namespace System.Web {
 					}
 				}
 			}
+
+			Type monoRuntime = Type.GetType ("Mono.Runtime", false);
+			monoVersion = null;
+			if (monoRuntime != null) {
+				MethodInfo mi = monoRuntime.GetMethod ("GetDisplayName", BindingFlags.Static | BindingFlags.NonPublic);
+				if (mi != null)
+					monoVersion = mi.Invoke (null, new object [0]) as string;
+			}
+
+			if (monoVersion == null)
+				monoVersion = Environment.Version.ToString ();
 			
 #if !TARGET_J2EE
 			firstRun = true;
@@ -331,12 +345,18 @@ namespace System.Web {
 			// Remove all items from cache.
 		}
 
-		static void QueuePendingRequests ()
+		internal static HttpWorkerRequest QueuePendingRequest (bool started_internally)
 		{
-			HttpWorkerRequest request = queue_manager.GetNextRequest (null);
-			if (request == null)
-				return;
-			ThreadPool.QueueUserWorkItem (do_RealProcessRequest, request);
+			HttpWorkerRequest next = queue_manager.GetNextRequest (null);
+			if (next == null)
+				return null;
+
+			if (!started_internally) {
+				next.StartedInternally = true;
+				ThreadPool.QueueUserWorkItem (do_RealProcessRequest, next);
+				return null;
+			}
+			return next;
 		}
 
 #if !TARGET_J2EE
@@ -455,14 +475,24 @@ namespace System.Web {
 		
 		static void RealProcessRequest (object o)
 		{
+			HttpWorkerRequest req = (HttpWorkerRequest) o;
+			bool started_internally = req.StartedInternally;
+			do {
+				Process (req);
+				req = QueuePendingRequest (started_internally);
+			} while (started_internally && req != null);
+		}
+
+		static void Process (HttpWorkerRequest req)
+		{
 #if TARGET_J2EE
 			HttpContext context = HttpContext.Current;
 			if (context == null)
-				context = new HttpContext ((HttpWorkerRequest) o);
+				context = new HttpContext (req);
 			else
-				context.SetWorkerRequest ((HttpWorkerRequest) o);
+				context.SetWorkerRequest (req);
 #else
-			HttpContext context = new HttpContext ((HttpWorkerRequest) o);
+			HttpContext context = new HttpContext (req);
 #endif
 			HttpContext.Current = context;
 			bool error = false;
@@ -473,7 +503,7 @@ namespace System.Web {
 #endif
 				firstRun = false;
 				if (initialException != null) {
-					FinishWithException ((HttpWorkerRequest) o, new HttpException ("Initial exception", initialException));
+					FinishWithException (req, new HttpException ("Initial exception", initialException));
 					error = true;
 				}
 			}
@@ -492,7 +522,7 @@ namespace System.Web {
 				try {
 					app = HttpApplicationFactory.GetApplication (context);
 				} catch (Exception e) {
-					FinishWithException ((HttpWorkerRequest) o, new HttpException ("", e));
+					FinishWithException (req, new HttpException ("", e));
 					error = true;
 				}
 			}
@@ -531,8 +561,6 @@ namespace System.Web {
 
 				HttpApplicationFactory.Recycle (app);
 			}
-			
-			QueuePendingRequests ();
 		}
 		
 		//
@@ -554,6 +582,7 @@ namespace System.Web {
 			if (request == null)
 				return;
 
+			QueuePendingRequest (false);
 			RealProcessRequest (request);
 		}
 
@@ -716,10 +745,15 @@ namespace System.Web {
 					AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler (ResolveAssemblyHandler);
 				else
 					AppDomain.CurrentDomain.AssemblyResolve -= new ResolveEventHandler (ResolveAssemblyHandler);
+				assemblyMappingEnabled = enable;
 			}
 		}
 #endif // #if !TARGET_J2EE
 #endif
+		internal static string MonoVersion {
+			get { return monoVersion; }
+		}
+		
 		internal static bool RunningOnWindows {
 			get { return runningOnWindows; }
 		}
@@ -728,7 +762,24 @@ namespace System.Web {
 			get { return caseInsensitive; }
 		}
 
-        
+		internal static bool IsDebuggingEnabled {
+			get {
+#if NET_2_0
+				CompilationSection cs = WebConfigurationManager.GetSection ("system.web/compilation") as CompilationSection;
+				if (cs != null)
+					return cs.Debug;
+
+				return false;
+#else
+				try {
+					return CompilationConfiguration.GetInstance (HttpContext.Current).Debug;
+				} catch {
+					return false;
+				}
+#endif
+			}
+		}
+		
 		internal static TraceManager TraceManager {
 			get {
 				return trace_manager;

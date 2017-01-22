@@ -76,6 +76,7 @@ namespace System.Web.Compilation {
 
 		static int buildCount;
 		static bool is_precompiled;
+		//static bool updatable; unused
 		static Dictionary<string, PreCompilationData> precompiled;
 		
 		// This is here _only_ for the purpose of unit tests!
@@ -87,6 +88,10 @@ namespace System.Web.Compilation {
 		static ReaderWriterLock buildCacheLock;
 #endif
 		static ulong recursionDepth;
+
+		internal static bool IsPrecompiled {
+			get { return is_precompiled; }
+		}
 		
 		internal static event BuildManagerRemoveEntryEventHandler RemoveEntry {
 			add { events.AddHandler (buildManagerRemoveEntryEvent, value); }
@@ -144,19 +149,77 @@ namespace System.Web.Compilation {
 			recursionDepth = 0;
 
 			string appPath = HttpRuntime.AppDomainAppPath;
-			is_precompiled = String.IsNullOrEmpty (appPath) ? false : File.Exists (Path.Combine (appPath, "PrecompiledApp.config"));
-			if (is_precompiled) {
-				LoadPrecompilationInfo ();
-			}
+			string precomp_name = null;
+			is_precompiled = String.IsNullOrEmpty (appPath) ? false : File.Exists ((precomp_name = Path.Combine (appPath, "PrecompiledApp.config")));
+			if (is_precompiled)
+				is_precompiled = LoadPrecompilationInfo (precomp_name);
 			LoadVirtualPathsToIgnore ();
 		}
 
-		static void LoadPrecompilationInfo ()
+		// Deal with precompiled sites deployed in a different virtual path
+		static void FixVirtualPaths ()
 		{
-			string [] compiled = Directory.GetFiles (HttpRuntime.BinDirectory, "*.compiled");
-			foreach (string str in compiled) {
-				LoadCompiled (str);
+			if (precompiled == null)
+				return;
+			
+			string [] parts;
+			int skip = -1;
+			foreach (string vpath in precompiled.Keys) {
+				parts = vpath.Split ('/');
+				for (int i = 0; i < parts.Length; i++) {
+					if (String.IsNullOrEmpty (parts [i]))
+						continue;
+					string test_path = String.Join ("/", parts, i, parts.Length - i);
+					VirtualPath result = GetAbsoluteVirtualPath (test_path);
+					if (result != null && File.Exists (result.PhysicalPath)) {
+						skip = i - 1;
+						break;
+					}
+				}
 			}
+			string app_vpath = HttpRuntime.AppDomainAppVirtualPath;
+			if (skip == -1 || (skip == 0 && app_vpath == "/"))
+				return;
+
+			if (!app_vpath.EndsWith ("/"))
+				app_vpath = app_vpath + "/";
+			Dictionary<string, PreCompilationData> copy = new Dictionary<string, PreCompilationData> (precompiled);
+			precompiled.Clear ();
+			foreach (KeyValuePair<string,PreCompilationData> entry in copy) {
+				parts = entry.Key.Split ('/');
+				string new_path;
+				if (String.IsNullOrEmpty (parts [0]))
+					new_path = app_vpath + String.Join ("/", parts, skip + 1, parts.Length - skip - 1);
+				else
+					new_path = app_vpath + String.Join ("/", parts, skip, parts.Length - skip);
+				entry.Value.VirtualPath = new_path;
+				precompiled.Add (new_path, entry.Value);
+			}
+		}
+
+		static bool LoadPrecompilationInfo (string precomp_config)
+		{
+			using (XmlTextReader reader = new XmlTextReader (precomp_config)) {
+				reader.MoveToContent ();
+				if (reader.Name != "precompiledApp")
+					return false;
+
+				/* unused
+				if (reader.HasAttributes)
+					while (reader.MoveToNextAttribute ())
+						if (reader.Name == "updatable") {
+							updatable = (reader.Value == "true");
+							break;
+						}
+				*/
+			}
+
+			string [] compiled = Directory.GetFiles (HttpRuntime.BinDirectory, "*.compiled");
+			foreach (string str in compiled)
+				LoadCompiled (str);
+
+			FixVirtualPaths ();
+			return true;
 		}
 
 		static void LoadCompiled (string filename)
@@ -257,7 +320,7 @@ namespace System.Web.Compilation {
 			}
 
 			if (dothrow)
-				throw new HttpException (404, "The file '" + virtualPath + "' does not exist.");
+				throw new HttpException (404, "The file '" + virtualPath + "' does not exist.", virtualPath.Absolute);
 		}
 
 		static void Build (VirtualPath vp)
@@ -333,7 +396,7 @@ namespace System.Web.Compilation {
 					} catch (CompilationException ex) {
 						attempts--;
 						if (singleBuild)
-							throw;
+							throw new HttpException ("Single file build failed.", ex);
 						
 						if (attempts == 0) {
 							needMainVpBuild = true;
@@ -343,9 +406,9 @@ namespace System.Web.Compilation {
 						
 						CompilerResults results = ex.Results;
 						if (results == null)
-							throw;
+							throw new HttpException ("No results returned from failed compilation.", ex);
 						else
-							RemoveFailedAssemblies (ex, abuilder, group, results, debug);
+							RemoveFailedAssemblies (vpabsolute, ex, abuilder, group, results, debug);
 					}
 				}
 
@@ -373,7 +436,7 @@ namespace System.Web.Compilation {
 					// In theory this code is unreachable. If the recursive
 					// build of the main vp failed, then it should have thrown
 					// the build exception.
-					throw compilationError;
+					throw new HttpException ("Requested virtual path build failed.", compilationError);
 				}
 			}
 		}
@@ -408,6 +471,11 @@ namespace System.Web.Compilation {
 		
 		public static object CreateInstanceFromVirtualPath (string virtualPath, Type requiredBaseType)
 		{
+			return CreateInstanceFromVirtualPath (GetAbsoluteVirtualPath (virtualPath), requiredBaseType);
+		}
+
+		internal static object CreateInstanceFromVirtualPath (VirtualPath virtualPath, Type requiredBaseType)
+		{
 			if (requiredBaseType == null)
 				throw new NullReferenceException (); // This is what MS does, but
 								     // from somewhere else.
@@ -422,7 +490,7 @@ namespace System.Web.Compilation {
 
 			return Activator.CreateInstance (type, null);
 		}
-
+		
 		static void DescribeCompilationError (string format, CompilationException ex, params object[] parms)
 		{
 			StringBuilder sb = new StringBuilder ();
@@ -491,7 +559,7 @@ namespace System.Web.Compilation {
 					bp.GenerateCode (abuilder);
 				} catch (Exception ex) {
 					if (String.Compare (bvp, vpabsolute, stringComparer) == 0)
-						throw;
+						throw new HttpException ("Code generation failed.", ex);
 					if (failedBuildProviders == null)
 						failedBuildProviders = new List <BuildProvider> ();
 					failedBuildProviders.Add (bp);
@@ -573,10 +641,16 @@ namespace System.Web.Compilation {
 			if (!VirtualPathUtility.IsRooted (virtualPath)) {
 				HttpContext ctx = HttpContext.Current;
 				HttpRequest req = ctx != null ? ctx.Request : null;
+				
+				if (req != null) {
+					string fileDir = req.FilePath;
+					if (!String.IsNullOrEmpty (fileDir) && String.Compare (fileDir, "/", StringComparison.Ordinal) != 0)
+						fileDir = VirtualPathUtility.GetDirectory (fileDir);
+					else
+						fileDir = "/";
 
-				if (req != null)
-					vp = VirtualPathUtility.Combine (VirtualPathUtility.GetDirectory (req.FilePath), virtualPath);
-				else
+					vp = VirtualPathUtility.Combine (fileDir, virtualPath);
+				} else
 					throw new HttpException ("No context, cannot map paths.");
 			} else
 				vp = virtualPath;
@@ -640,7 +714,7 @@ namespace System.Web.Compilation {
 		static Type GetPrecompiledType (string virtualPath)
 		{
 			PreCompilationData pc_data;
-			if (precompiled.TryGetValue (virtualPath, out pc_data)) {
+			if (precompiled != null && precompiled.TryGetValue (virtualPath, out pc_data)) {
 				if (pc_data.Type == null) {
 					pc_data.Type = Type.GetType (pc_data.TypeName + ", " + pc_data.AssemblyFileName, true);
 				}
@@ -655,16 +729,20 @@ namespace System.Web.Compilation {
 			if (!is_precompiled)
 				return null;
 
-			Type apptype = GetPrecompiledType (HttpRuntime.AppDomainAppVirtualPath + "/Global.asax");
+			Type apptype = GetPrecompiledType (VirtualPathUtility.Combine (HttpRuntime.AppDomainAppVirtualPath, "Global.asax"));
 			if (apptype == null)
-				apptype = GetPrecompiledType (HttpRuntime.AppDomainAppVirtualPath + "/global.asax");
+				apptype = GetPrecompiledType (VirtualPathUtility.Combine (HttpRuntime.AppDomainAppVirtualPath , "global.asax"));
 			return apptype;
 		}
 
 		public static Assembly GetCompiledAssembly (string virtualPath)
 		{
-			VirtualPath vp = GetAbsoluteVirtualPath (virtualPath);
-			string vpabsolute = vp.Absolute;
+			return GetCompiledAssembly (GetAbsoluteVirtualPath (virtualPath));
+		}
+
+		internal static Assembly GetCompiledAssembly (VirtualPath virtualPath)
+		{
+			string vpabsolute = virtualPath.Absolute;
 			if (is_precompiled) {
 				Type type = GetPrecompiledType (vpabsolute);
 				if (type != null)
@@ -674,18 +752,22 @@ namespace System.Web.Compilation {
 			if (bmci != null)
 				return bmci.BuiltAssembly;
 
-			Build (vp);
+			Build (virtualPath);
 			bmci = GetCachedItem (vpabsolute);
 			if (bmci != null)
 				return bmci.BuiltAssembly;
 			
 			return null;
 		}
-
+		
 		public static Type GetCompiledType (string virtualPath)
 		{
-			VirtualPath vp = GetAbsoluteVirtualPath (virtualPath);
-			string vpabsolute = vp.Absolute;
+			return GetCompiledType (GetAbsoluteVirtualPath (virtualPath));
+		}
+
+		internal static Type GetCompiledType (VirtualPath virtualPath)
+		{
+			string vpabsolute = virtualPath.Absolute;
 			if (is_precompiled) {
 				Type type = GetPrecompiledType (vpabsolute);
 				if (type != null)
@@ -697,7 +779,7 @@ namespace System.Web.Compilation {
 				return bmci.Type;
 			}
 
-			Build (vp);
+			Build (virtualPath);
 			bmci = GetCachedItem (vpabsolute);
 			if (bmci != null) {
 				ReferenceAssemblyInCompilation (bmci);
@@ -709,13 +791,17 @@ namespace System.Web.Compilation {
 
 		public static string GetCompiledCustomString (string virtualPath)
 		{
-			VirtualPath vp = GetAbsoluteVirtualPath (virtualPath);
-			string vpabsolute = vp.Absolute;
+			return GetCompiledCustomString (GetAbsoluteVirtualPath (virtualPath));
+		}
+	
+		internal static string GetCompiledCustomString (VirtualPath virtualPath) 
+		{
+			string vpabsolute = virtualPath.Absolute;
 			BuildManagerCacheItem bmci = GetCachedItem (vpabsolute);
 			if (bmci != null)
 				return bmci.CompiledCustomString;
 			
-			Build (vp);
+			Build (virtualPath);
 			bmci = GetCachedItem (vpabsolute);
 			if (bmci != null)
 				return bmci.CompiledCustomString;
@@ -778,7 +864,7 @@ namespace System.Web.Compilation {
                         bool addAssembliesInBin = false;
                         foreach (AssemblyInfo info in compConfig.Assemblies) {
                                 if (info.Assembly == "*")
-                                        addAssembliesInBin = true;
+                                        addAssembliesInBin = is_precompiled ? false : true;
                                 else
                                         LoadAssembly (info, al);
                         }
@@ -788,8 +874,11 @@ namespace System.Web.Compilation {
 
 			foreach (string assLocation in WebConfigurationManager.ExtraAssemblies)
 				LoadAssembly (assLocation, al);
-			
-                        if (addAssembliesInBin)
+
+
+			// Precompiled sites unconditionally load all assemblies from bin/ (fix for
+			// bug #502016)
+			if (is_precompiled || addAssembliesInBin) {
 				foreach (string s in HttpApplication.BinDirectoryAssemblies) {
 					try {
 						LoadAssembly (s, al);
@@ -797,7 +886,8 @@ namespace System.Web.Compilation {
 						// ignore silently
 					}
 				}
-			
+			}
+				
 			return al;
 		}
 		
@@ -978,8 +1068,8 @@ namespace System.Web.Compilation {
 			referencedAssemblies.Add (bmci.BuiltAssembly);
 		}
 		
-		static void RemoveFailedAssemblies (CompilationException ex, AssemblyBuilder abuilder, BuildProviderGroup group,
-						    CompilerResults results, bool debug)
+		static void RemoveFailedAssemblies (string requestedVirtualPath, CompilationException ex, AssemblyBuilder abuilder,
+						    BuildProviderGroup group, CompilerResults results, bool debug)
 		{
 			StringBuilder sb;
 			string newline;
@@ -997,6 +1087,7 @@ namespace System.Web.Compilation {
 			BuildProvider bp;
 			HttpContext ctx = HttpContext.Current;
 			HttpRequest req = ctx != null ? ctx.Request : null;
+			bool rethrow = false;
 			
 			foreach (CompilerError error in results.Errors) {
 				bp = abuilder.GetBuildProviderForPhysicalFilePath (error.FileName);
@@ -1005,6 +1096,9 @@ namespace System.Web.Compilation {
 					if (bp == null)
 						continue;
 				}
+
+				if (String.Compare (bp.VirtualPath, requestedVirtualPath, StringComparison.Ordinal) == 0)
+					rethrow = true;
 
 				if (!failedBuildProviders.Contains (bp)) {
 					failedBuildProviders.Add (bp);
@@ -1025,6 +1119,9 @@ namespace System.Web.Compilation {
 				ShowDebugModeMessage (sb.ToString ());
 				sb = null;
 			}
+
+			if (rethrow)
+				throw new HttpException ("Compilation failed.", ex);
 		}
 		
 		static void SetCommonParameters (CompilationSection config, CompilerParameters p, Type compilerType, string language)

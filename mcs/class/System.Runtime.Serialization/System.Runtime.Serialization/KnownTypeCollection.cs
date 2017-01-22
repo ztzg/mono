@@ -266,34 +266,53 @@ namespace System.Runtime.Serialization
 			}
 		}
 
-		internal static bool IsPrimitiveType (QName qname)
+		internal static Type GetPrimitiveTypeFromName (string name)
 		{
-			/* FIXME: qname.Namespace ? */
-			switch (qname.Name) {
+			switch (name) {
 			case "anyURI":
+				return typeof (Uri);
 			case "boolean":
+				return typeof (bool);
 			case "base64Binary":
+				return typeof (byte []);
 			case "dateTime":
+				return typeof (DateTime);
 			case "duration":
+				return typeof (TimeSpan);
 			case "QName":
+				return typeof (QName);
 			case "decimal":
+				return typeof (decimal);
 			case "double":
+				return typeof (double);
 			case "float":
+				return typeof (float);
 			case "byte":
+				return typeof (sbyte);
 			case "short":
+				return typeof (short);
 			case "int":
+				return typeof (int);
 			case "long":
+				return typeof (long);
 			case "unsignedByte":
+				return typeof (byte);
 			case "unsignedShort":
+				return typeof (ushort);
 			case "unsignedInt":
+				return typeof (uint);
 			case "unsignedLong":
+				return typeof (ulong);
 			case "string":
+				return typeof (string);
 			case "anyType":
+				return typeof (object);
 			case "guid":
+				return typeof (Guid);
 			case "char":
-				return true;
+				return typeof (char);
 			default:
-				return false;
+				return null;
 			}
 		}
 
@@ -402,6 +421,18 @@ namespace System.Runtime.Serialization
 				if (qname == contracts [i].XmlName)
 					return contracts [i];
 			return null;
+		}
+
+		internal Type GetSerializedType (Type type)
+		{
+			Type element = GetCollectionElementType (type);
+			if (element == null)
+				return type;
+			QName name = GetQName (type);
+			var map = FindUserMap (name);
+			if (map != null)
+				return map.RuntimeType;
+			return type;
 		}
 
 		internal SerializationMap FindUserMap (Type type)
@@ -633,7 +664,7 @@ namespace System.Runtime.Serialization
 
 			TryRegister (element);
 
-			QName qname = GetCollectionContractQName (type) ?? GetCollectionQName (element);
+			QName qname = GetCollectionQName (element);
 
 			if (FindUserMap (qname) != null)
 				throw new InvalidOperationException (String.Format ("Failed to add type {0} to known type collection. There already is a registered type for XML name {1}", type, qname));
@@ -718,6 +749,13 @@ namespace System.Runtime.Serialization
 			SharedContractMap ret =
 				new SharedContractMap (type, qname, this);
 			contracts.Add (ret);
+
+			object [] attrs = type.GetCustomAttributes (typeof (KnownTypeAttribute), true);
+			for (int i = 0; i < attrs.Length; i++) {
+				KnownTypeAttribute kt = (KnownTypeAttribute) attrs [i];
+				TryRegister (kt.Type);
+			}
+
 			return ret;
 		}
 

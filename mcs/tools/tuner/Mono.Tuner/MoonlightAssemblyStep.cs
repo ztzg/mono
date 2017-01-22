@@ -41,7 +41,7 @@ namespace Mono.Tuner {
 
 		public void Process (LinkContext context)
 		{
-			ProcessPipeline (context.Pipeline);
+			CustomizePipeline (context.Pipeline);
 			ProcessAssemblies (context.GetAssemblies ());
 		}
 
@@ -51,7 +51,7 @@ namespace Mono.Tuner {
 				Annotations.SetAction (assembly, AssemblyAction.Link);
 		}
 
-		static void ProcessPipeline (Pipeline pipeline)
+		protected virtual void CustomizePipeline (Pipeline pipeline)
 		{
 			pipeline.RemoveStep (typeof (LoadI18nAssemblies));
 			pipeline.RemoveStep (typeof (BlacklistStep));

@@ -124,7 +124,7 @@ namespace System.Web.Compilation {
 				return ret.ToString ();
 			}
 
-			const int pragmaChecksumStaticCount = 21;
+			const int pragmaChecksumStaticCount = 23;
 			const int pragmaLineStaticCount = 8;
 			const int md5ChecksumCount = 32;
 			
@@ -134,7 +134,7 @@ namespace System.Web.Compilation {
 					pragmaLineStaticCount +
 					md5ChecksumCount +
 					(QuoteSnippetString (filename).Length * 2) +
-					(Environment.NewLine.Length * 4) +
+					(Environment.NewLine.Length * 3) +
 					BaseCompiler.HashMD5.ToString ("B").Length;
 			}
 			
@@ -143,12 +143,12 @@ namespace System.Web.Compilation {
 				string newline = Environment.NewLine;
 				var sb = new StringBuilder ();
 				
-				sb.AppendFormat ("#pragma checksum {0} {1} \"{2}\"{3}{3}",
+				sb.AppendFormat ("#pragma checksum {0} \"{1}\" \"{2}\"{3}{3}",
 						 QuoteSnippetString (filename),
 						 BaseCompiler.HashMD5.ToString ("B"),
 						 ChecksumToHex (checksum),
 						 newline);
-				sb.AppendFormat ("#line 1 {0}{1}{1}", QuoteSnippetString (filename), newline);
+				sb.AppendFormat ("#line 1 {0}{1}", QuoteSnippetString (filename), newline);
 
 				byte[] bytes = enc.GetBytes (sb.ToString ());
 				using (FileStream fs = new FileStream (path, FileMode.Open, FileAccess.Write)) {
@@ -176,7 +176,7 @@ namespace System.Web.Compilation {
 			{
 				return pragmaExternalSourceCount +
 					filename.Length +
-					(Environment.NewLine.Length * 2);
+					(Environment.NewLine.Length);
 			}
 			
 			public void DecorateFile (string path, string filename, MD5 checksum, Encoding enc)
@@ -184,7 +184,7 @@ namespace System.Web.Compilation {
 				string newline = Environment.NewLine;
 				var sb = new StringBuilder ();
 
-				sb.AppendFormat ("#ExternalSource(\"{0}\",1){1}{1}", filename, newline);
+				sb.AppendFormat ("#ExternalSource(\"{0}\",1){1}", filename, newline);
 				byte[] bytes = enc.GetBytes (sb.ToString ());
 				using (FileStream fs = new FileStream (path, FileMode.Open, FileAccess.Write)) {
 					fs.Seek (enc.GetPreamble ().Length, SeekOrigin.Begin);
@@ -759,6 +759,16 @@ namespace System.Web.Compilation {
 
 			if (units.Length == 0 && files.Count == 0 && resources.Count == 0 && options.EmbeddedResources.Count == 0)
 				return null;
+
+			if (options.IncludeDebugInformation) {
+				string compilerOptions = options.CompilerOptions;
+				if (String.IsNullOrEmpty (compilerOptions))
+					compilerOptions = "/d:DEBUG";
+				else if (compilerOptions.IndexOf ("d:DEBUG", StringComparison.OrdinalIgnoreCase) == -1)
+					compilerOptions += " /d:DEBUG";
+				
+				options.CompilerOptions = compilerOptions;
+			}
 			
 			string filename;
 			StreamWriter sw = null;

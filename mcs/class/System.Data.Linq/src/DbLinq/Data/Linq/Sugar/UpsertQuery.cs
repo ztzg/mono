@@ -25,19 +25,17 @@
 #endregion
 
 using System.Collections.Generic;
-#if MONO_STRICT
-using System.Data.Linq.Sql;
-using System.Data.Linq.Sugar.Expressions;
-#else
+
 using DbLinq.Data.Linq.Sql;
 using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
 
 #if MONO_STRICT
-namespace System.Data.Linq.Sugar
+using System.Data.Linq;
 #else
-namespace DbLinq.Data.Linq.Sugar
+using DbLinq.Data.Linq;
 #endif
+
+namespace DbLinq.Data.Linq.Sugar
 {
     internal class UpsertQuery : ParameterizedQuery
     {
@@ -47,15 +45,21 @@ namespace DbLinq.Data.Linq.Sugar
         public IList<ObjectOutputParameterExpression> OutputParameters { get; private set; }
 
         /// <summary>
+        /// Primary key parameters, to read out the instance in the case of IsDbGenerated and AutoSync parameters
+        /// </summary>
+        public IList<ObjectInputParameterExpression> PrimaryKeyParameters { get; private set; }
+
+        /// <summary>
         /// This statement returns the generated PKs
         /// </summary>
         public SqlStatement IdQuerySql { get; private set; }
 
         public UpsertQuery(DataContext dataContext, SqlStatement sql, SqlStatement idQuerySql, IList<ObjectInputParameterExpression> inputParameters,
-            IList<ObjectOutputParameterExpression> outputParameters)
+            IList<ObjectOutputParameterExpression> outputParameters, IList<ObjectInputParameterExpression> primaryKeyParameters)
             : base(dataContext, sql,inputParameters)
         {
             OutputParameters = outputParameters;
+            PrimaryKeyParameters = primaryKeyParameters;
             IdQuerySql = idQuerySql;
         }
     }

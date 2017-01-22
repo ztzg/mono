@@ -2045,9 +2045,9 @@ MonoInst* mono_arch_get_thread_intrinsic(MonoCompile* cfg)
  *             <- code points here
  */
 gpointer
-mono_arch_get_vcall_slot (guint8 *code_ptr, gpointer *regs, int *displacement)
+mono_arch_get_vcall_slot (guint8 *code, mgreg_t *regs, int *displacement)
 {
-	guint16 *code16 = (void *)code_ptr;
+	guint16 *code16 = (void *)code;
 	SH4IntRegister sh4_rW = sh4_r0;
 	SH4IntRegister sh4_rX = sh4_r0;
 	SH4IntRegister sh4_rY = sh4_r0;
@@ -2110,19 +2110,7 @@ mono_arch_get_vcall_slot (guint8 *code_ptr, gpointer *regs, int *displacement)
 
 	/* So far, so good! */
 	*displacement = index;
-	return regs[sh4_rY];
-}
-
-gpointer*
-mono_arch_get_vcall_slot_addr (guint8* code, gpointer *regs)
-{
-	gpointer vt;
-	int displacement;
-	vt = mono_arch_get_vcall_slot (code, regs, &displacement);
-	if (!vt)
-		return NULL;
-
-	return (gpointer*)((char*)vt + displacement);
+	return (gpointer)regs[sh4_rY];
 }
 
 /**
@@ -2134,7 +2122,7 @@ void mono_arch_init(void)
 	return;
 }
 
-void *mono_arch_instrument_epilog(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments)
+void *mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments, gboolean preserve_argument_registers)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -3930,16 +3918,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 		case OP_BR:
 			/* MD: br: len:16 */
-			if (inst->flags & MONO_INST_BRLABEL) {
-				type = MONO_PATCH_INFO_LABEL;
-				target = inst->inst_i0;
-				displace = inst->inst_i0->inst_c0;
-			}
-			else {
-				type = MONO_PATCH_INFO_BB;
-				target = inst->inst_target_bb;
-				displace = inst->inst_target_bb->native_offset;
-			}
+			type = MONO_PATCH_INFO_BB;
+			target = inst->inst_target_bb;
+			displace = inst->inst_target_bb->native_offset;
 
 			address = cfg->native_code + displace;
 
@@ -3972,11 +3953,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				type = MONO_PATCH_INFO_EXC;
 				target = inst->inst_p1;
 				displace = 0; /* Not used for exceptions. */
-			}
-			else if (inst->flags & MONO_INST_BRLABEL) {
-				type = MONO_PATCH_INFO_LABEL;
-				target = inst->inst_i0;
-				displace = inst->inst_i0->inst_c0;
 			}
 			else {
 				type = MONO_PATCH_INFO_BB;
@@ -4570,13 +4546,13 @@ mono_arch_get_this_arg_from_call (MonoGenericSharingContext *gsctx, MonoMethodSi
 }
 
 MonoMethod*
-mono_arch_find_imt_method (gpointer *regs, guint8 *code)
+mono_arch_find_imt_method (mgreg_t *regs, guint8 *code)
 {
 	return (MonoMethod*) regs [MONO_ARCH_IMT_REG];
 }
 
 MonoObject*
-mono_arch_find_this_argument (gpointer *regs, MonoMethod *method, MonoGenericSharingContext *gsctx)
+mono_arch_find_this_argument (mgreg_t *regs, MonoMethod *method, MonoGenericSharingContext *gsctx)
 {
 	return mono_arch_get_this_arg_from_call (gsctx, mono_method_signature (method), (gssize*)regs, NULL);
 }

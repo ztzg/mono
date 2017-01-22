@@ -29,6 +29,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Text;
 
 using Mono.Linker;
 using Mono.Linker.Steps;
@@ -44,7 +45,7 @@ namespace Mono.Tuner {
 			Method,
 		}
 
-		enum AttributeType {
+		protected enum AttributeType {
 			Critical,
 			SafeCritical,
 		}
@@ -54,7 +55,7 @@ namespace Mono.Tuner {
 
 		const string sec_attr_folder = "secattrs";
 
-		AssemblyDefinition _assembly;
+		protected AssemblyDefinition _assembly;
 
 		MethodDefinition _safe_critical_ctor;
 		MethodDefinition _critical_ctor;
@@ -63,8 +64,10 @@ namespace Mono.Tuner {
 
 		protected override bool ConditionToProcess ()
 		{
-			if (!Context.HasParameter (sec_attr_folder))
+			if (!Context.HasParameter (sec_attr_folder)) {
+				Console.Error.WriteLine ("Warning: no secattrs folder specified.");
 				return false;
+			}
 
 			data_folder = Context.GetParameter (sec_attr_folder);
 			return true;
@@ -79,8 +82,10 @@ namespace Mono.Tuner {
 				data_folder,
 				assembly.Name.Name + ".secattr");
 
-			if (!File.Exists (secattr_file))
+			if (!File.Exists (secattr_file)) {
+				Console.Error.WriteLine ("Warning: file '{0}' not found, skipping.", secattr_file);
 				return;
+			}
 
 			_assembly = assembly;
 
@@ -91,7 +96,7 @@ namespace Mono.Tuner {
 			ProcessSecurityAttributeFile (secattr_file);
 		}
 
-		void RemoveSecurityAttributes ()
+		protected void RemoveSecurityAttributes ()
 		{
 			foreach (TypeDefinition type in _assembly.MainModule.Types) {
 				RemoveSecurityAttributes (type);
@@ -203,7 +208,7 @@ namespace Mono.Tuner {
 			}
 		}
 
-		void AddCriticalAttribute (ICustomAttributeProvider provider)
+		protected void AddCriticalAttribute (ICustomAttributeProvider provider)
 		{
 			// a [SecurityCritical] replaces a [SecuritySafeCritical]
 			if (HasSecurityAttribute (provider, AttributeType.SafeCritical))
@@ -237,7 +242,7 @@ namespace Mono.Tuner {
 			}
 		}
 
-		static bool HasSecurityAttribute (ICustomAttributeProvider provider, AttributeType type)
+		protected static bool HasSecurityAttribute (ICustomAttributeProvider provider, AttributeType type)
 		{
 			if (!provider.HasCustomAttributes)
 				return false;
@@ -303,16 +308,51 @@ namespace Mono.Tuner {
 
 			return method_name.StartsWith (".c") ?
 				GetMethod (type.Constructors, signature) :
-				GetMethod (type.Methods.GetMethod (method_name), signature);
+				GetMethod (type.Methods, signature);
 		}
 
 		static MethodDefinition GetMethod (IEnumerable methods, string signature)
 		{
 			foreach (MethodDefinition method in methods)
-				if (method.ToString () == signature)
+				if (GetFullName (method) == signature)
 					return method;
 
 			return null;
+		}
+
+		static string GetFullName (MethodReference method)
+		{
+			int sentinel = method.GetSentinel ();
+
+			StringBuilder sb = new StringBuilder ();
+			sb.Append (method.ReturnType.ReturnType.FullName);
+			sb.Append (" ");
+			sb.Append (method.DeclaringType.FullName);
+			sb.Append ("::");
+			sb.Append (method.Name);
+			if (method.HasGenericParameters) {
+				sb.Append ("<");
+				for (int i = 0; i < method.GenericParameters.Count; i++ ) {
+					if (i > 0)
+						sb.Append (",");
+					sb.Append (method.GenericParameters [i].Name);
+				}
+				sb.Append (">");
+			}
+			sb.Append ("(");
+			if (method.HasParameters) {
+				for (int i = 0; i < method.Parameters.Count; i++) {
+					if (i > 0)
+						sb.Append (",");
+
+					if (i == sentinel)
+						sb.Append ("...,");
+
+					sb.Append (method.Parameters [i].ParameterType.FullName);
+				}
+			}
+			sb.Append (")");
+			return sb.ToString ();
 		}
 
 		static MethodDefinition GetDefaultConstructor (TypeDefinition type)
@@ -329,7 +369,11 @@ namespace Mono.Tuner {
 			if (_safe_critical_ctor != null)
 				return _safe_critical_ctor;
 
-			_safe_critical_ctor = GetDefaultConstructor (Context.GetType (_safe_critical));
+			TypeDefinition safe_critical_type = Context.GetType (_safe_critical);
+			if (safe_critical_type == null)
+				throw new InvalidOperationException (String.Format ("{0} type not found", _safe_critical));
+			
+			_safe_critical_ctor = GetDefaultConstructor (safe_critical_type);
 			return _safe_critical_ctor;
 		}
 
@@ -338,7 +382,11 @@ namespace Mono.Tuner {
 			if (_critical_ctor != null)
 				return _critical_ctor;
 
-			_critical_ctor = GetDefaultConstructor (Context.GetType (_critical));
+			TypeDefinition critical_type = Context.GetType (_critical);
+			if (critical_type == null)
+				throw new InvalidOperationException (String.Format ("{0} type not found", _critical));
+			
+			_critical_ctor = GetDefaultConstructor (critical_type);
 			return _critical_ctor;
 		}
 

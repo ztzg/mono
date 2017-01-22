@@ -194,6 +194,8 @@ namespace System.Collections.Generic
 
 		public void CopyTo (KeyValuePair<TKey,TValue>[] array, int arrayIndex)
 		{
+			if (Count == 0)
+				return;
 			if (array == null)
 				throw new ArgumentNullException ();
 			if (arrayIndex < 0 || array.Length <= arrayIndex)
@@ -331,6 +333,8 @@ namespace System.Collections.Generic
 
 		void ICollection.CopyTo (Array array, int index)
 		{
+			if (Count == 0)
+				return;
 			if (array == null)
 				throw new ArgumentNullException ();
 			if (index < 0 || array.Length <= index)
@@ -399,6 +403,8 @@ namespace System.Collections.Generic
 
 			public void CopyTo (TValue [] array, int arrayIndex)
 			{
+				if (Count == 0)
+					return;
 				if (array == null)
 					throw new ArgumentNullException ();
 				if (arrayIndex < 0 || array.Length <= arrayIndex)
@@ -434,6 +440,8 @@ namespace System.Collections.Generic
 		
 			void ICollection.CopyTo (Array array, int index)
 			{
+				if (Count == 0)
+					return;
 				if (array == null)
 					throw new ArgumentNullException ();
 				if (index < 0 || array.Length <= index)
@@ -461,18 +469,24 @@ namespace System.Collections.Generic
 			{
 				RBTree.NodeEnumerator host;
 
+				TValue current;
+
 				internal Enumerator (SortedDictionary<TKey,TValue> dic)
+					: this ()
 				{
 					host = dic.tree.GetEnumerator ();
 				}
 
 				public TValue Current {
-					get { return ((Node) host.Current).value; }
+					get { return current; }
 				}
 
 				public bool MoveNext ()
 				{
-					return host.MoveNext ();
+					if (!host.MoveNext ())
+						return false;
+					current = ((Node) host.Current).value;
+					return true;
 				}
 
 				public void Dispose ()
@@ -481,7 +495,10 @@ namespace System.Collections.Generic
 				}
 
 				object IEnumerator.Current {
-					get { return Current; }
+					get {
+						host.check_current ();
+						return current;
+					}
 				}
 
 				void IEnumerator.Reset ()
@@ -524,6 +541,8 @@ namespace System.Collections.Generic
 
 			public void CopyTo (TKey [] array, int arrayIndex)
 			{
+				if (Count == 0)
+					return;
 				if (array == null)
 					throw new ArgumentNullException ();
 				if (arrayIndex < 0 || array.Length <= arrayIndex)
@@ -554,6 +573,8 @@ namespace System.Collections.Generic
 
 			void ICollection.CopyTo (Array array, int index)
 			{
+				if (Count == 0)
+					return;
 				if (array == null)
 					throw new ArgumentNullException ();
 				if (index < 0 || array.Length <= index)
@@ -581,18 +602,24 @@ namespace System.Collections.Generic
 			{
 				RBTree.NodeEnumerator host;
 
+				TKey current;
+
 				internal Enumerator (SortedDictionary<TKey,TValue> dic)
+					: this ()
 				{
 					host = dic.tree.GetEnumerator ();
 				}
 
 				public TKey Current {
-					get { return ((Node) host.Current).key; }
+					get { return current; }
 				}
 
 				public bool MoveNext ()
 				{
-					return host.MoveNext ();
+					if (!host.MoveNext ())
+						return false;
+					current = ((Node) host.Current).key;
+					return true;
 				}
 
 				public void Dispose ()
@@ -601,7 +628,10 @@ namespace System.Collections.Generic
 				}
 
 				object IEnumerator.Current {
-					get { return Current; }
+					get {
+						host.check_current ();
+						return current;
+					}
 				}
 
 				void IEnumerator.Reset ()
@@ -615,18 +645,24 @@ namespace System.Collections.Generic
 		{
 			RBTree.NodeEnumerator host;
 
+			KeyValuePair<TKey, TValue> current;
+
 			internal Enumerator (SortedDictionary<TKey,TValue> dic)
+				: this ()
 			{
 				host = dic.tree.GetEnumerator ();
 			}
 
 			public KeyValuePair<TKey,TValue> Current {
-				get { return ((Node) host.Current).AsKV (); }
+				get { return current; }
 			}
 
 			public bool MoveNext ()
 			{
-				return host.MoveNext ();
+				if (!host.MoveNext ())
+					return false;
+				current = ((Node) host.Current).AsKV ();
+				return true;
 			}
 
 			public void Dispose ()
@@ -634,20 +670,27 @@ namespace System.Collections.Generic
 				host.Dispose ();
 			}
 
+			Node CurrentNode {
+				get {
+					host.check_current ();
+					return (Node) host.Current;
+				}
+			}
+
 			DictionaryEntry IDictionaryEnumerator.Entry {
-				get { return ((Node) host.Current).AsDE (); }
+				get { return CurrentNode.AsDE (); }
 			}
 
 			object IDictionaryEnumerator.Key {
-				get { return ((Node) host.Current).key; }
+				get { return CurrentNode.key; }
 			}
 
 			object IDictionaryEnumerator.Value {
-				get { return ((Node) host.Current).value; }
+				get { return CurrentNode.value; }
 			}
 
 			object IEnumerator.Current {
-				get { return ((Node) host.Current).AsDE (); }
+				get { return CurrentNode.AsDE (); }
 			}
 
 			void IEnumerator.Reset ()

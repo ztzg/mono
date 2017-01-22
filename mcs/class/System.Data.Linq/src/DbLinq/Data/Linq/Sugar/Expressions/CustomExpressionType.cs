@@ -24,16 +24,15 @@
 // 
 #endregion
 
-#if MONO_STRICT
-namespace System.Data.Linq.Sugar.Expressions
-#else
 namespace DbLinq.Data.Linq.Sugar.Expressions
-#endif
 {
     /// <summary>
     /// Those types are required by DbLinq internal expressions
     /// </summary>
-    internal enum CustomExpressionType
+#if !MONO_STRICT
+    public
+#endif
+    enum CustomExpressionType
     {
         Scope = 1000,
         MetaTable = 1010,

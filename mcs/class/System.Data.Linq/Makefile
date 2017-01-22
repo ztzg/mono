@@ -20,7 +20,9 @@ TEST_MCS_FLAGS = $(LIB_MCS_FLAGS)
 
 EXTRA_DISTFILES =
 
-ifneq (net_2_0, $(PROFILE))
+# This is a .NET 3.5+ assembly
+VALID_PROFILE := $(filter net_2_0 net_4_0, $(PROFILE))
+ifndef VALID_PROFILE
 LIBRARY_NAME = dummy-System.Data.Linq.dll
 NO_INSTALL = yes
 NO_SIGN_ASSEMBLY = yes
@@ -29,8 +31,29 @@ endif
 
 include ../../build/library.make
 
-dist-local: dist-default
+dist-local: dist-default dist-DbLinq
+
+dist-DbLinq:
 	find src -name '*.cs' -o -name '*.snk' -o -name '*.xml' -o -name '*.txt' > .files ; \
 	tar cTf .files - | (cd $(distdir); tar xf -) ; \
 	rm .files
+
+RSYNC_EXCLUDES = \
+	--exclude '*.cache'         \
+	--exclude '*.csproj.*.txt'  \
+	--exclude '*.dll'           \
+	--exclude '*.exe'           \
+	--exclude '*.force'         \
+	--exclude '*.pdb'           \
+	--exclude '*.pidb'          \
+	--exclude '*.suo'           \
+	--exclude '*.user'          \
+	--exclude '*.userprefs'     \
+	--exclude '*.usertasks'     \
+	--exclude '.svn' 
+
+update-dblinq:
+	rsync -avz $(RSYNC_EXCLUDES) $$HOME/Development/mono-HEAD/dblinq2007/src/ src/
+	rsync -avz $(RSYNC_EXCLUDES) $$HOME/Development/mono-HEAD/dblinq2007/tests/ tests/
+	rsync -avz $(RSYNC_EXCLUDES) $$HOME/Development/mono-HEAD/dblinq2007/examples/ examples/
 

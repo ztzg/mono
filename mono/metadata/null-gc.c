@@ -103,7 +103,7 @@ mono_gc_deregister_root (char* addr)
 }
 
 void
-mono_gc_weak_link_add (void **link_addr, MonoObject *obj)
+mono_gc_weak_link_add (void **link_addr, MonoObject *obj, gboolean track)
 {
 	*link_addr = obj;
 }
@@ -181,6 +181,11 @@ mono_gc_wbarrier_generic_store (gpointer ptr, MonoObject* value)
 }
 
 void
+mono_gc_wbarrier_generic_nostore (gpointer ptr)
+{
+}
+
+void
 mono_gc_wbarrier_value_copy (gpointer dest, gpointer src, int count, MonoClass *klass)
 {
 }
@@ -212,6 +217,32 @@ guint32
 mono_gc_get_managed_allocator_types (void)
 {
 	return 0;
+}
+
+void
+mono_gc_add_weak_track_handle (MonoObject *obj, guint32 gchandle)
+{
+}
+
+void
+mono_gc_change_weak_track_handle (MonoObject *old_obj, MonoObject *obj, guint32 gchandle)
+{
+}
+
+void
+mono_gc_remove_weak_track_handle (guint32 gchandle)
+{
+}
+
+GSList*
+mono_gc_remove_weak_track_object (MonoDomain *domain, MonoObject *obj)
+{
+	return NULL;
+}
+
+void
+mono_gc_clear_domain (MonoDomain *domain)
+{
 }
 
 #endif

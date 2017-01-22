@@ -541,17 +541,17 @@ namespace System.Windows.Forms
 			try {
 				if (current_item == null)
 					throw new ArgumentException ("button", "The button specified is not part of this toolbar");
-				OnButtonClick (new ToolBarButtonClickEventArgs (button));
+				PerformButtonClick (new ToolBarButtonClickEventArgs (button));
 			} finally {
 				current_item = previous_item;
 			}
 		}
 #endif
 		
-		protected virtual void OnButtonClick (ToolBarButtonClickEventArgs e)
+		void PerformButtonClick (ToolBarButtonClickEventArgs e)
 		{
-			if (e.Button.Style == ToolBarButtonStyle.ToggleButton ||
-			    e.Button.Style == ToolBarButtonStyle.DropDownButton) {
+			// Only change pushed for ToogleButton
+			if (e.Button.Style == ToolBarButtonStyle.ToggleButton) {
 				if (! e.Button.Pushed)
 					e.Button.Pushed = true;
 				else
@@ -565,7 +565,11 @@ namespace System.Windows.Forms
 			button_for_focus = current_item.Button;
 			button_for_focus.UIAHasFocus = true;
 #endif
-			
+			OnButtonClick (e);
+		}
+
+		protected virtual void OnButtonClick (ToolBarButtonClickEventArgs e)
+		{			
 			ToolBarButtonClickEventHandler eh = (ToolBarButtonClickEventHandler)(Events [ButtonClickEvent]);
 			if (eh != null)
 				eh (this, e);
@@ -580,10 +584,13 @@ namespace System.Windows.Forms
 			if (e.Button.DropDownMenu == null)
 				return;
 
-			ToolBarItem item = current_item;
+			ShowDropDownMenu (current_item);
+		}
 
+		internal void ShowDropDownMenu (ToolBarItem item)
+		{
 			Point loc = new Point (item.Rectangle.X + 1, item.Rectangle.Bottom + 1);
-			((ContextMenu) e.Button.DropDownMenu).Show (this, loc);
+			((ContextMenu) item.Button.DropDownMenu).Show (this, loc);
 
 			item.DDPressed = false;
 			item.Hilight = false;
@@ -648,7 +655,7 @@ namespace System.Windows.Forms
 		{
 			if (msg.Msg == (int)Msg.WM_KEYDOWN) {
 				Keys key_data = (Keys)msg.WParam.ToInt32();
-				if (HandleKeyDown (key_data))
+				if (HandleKeyDown (ref msg, key_data))
 					return true;
 			} 
 			return base.InternalPreProcessMessage (ref msg);
@@ -657,6 +664,22 @@ namespace System.Windows.Forms
 		#endregion Protected Methods
 
 		#region Private Methods
+		internal int CurrentItem {
+			get {
+				return Array.IndexOf (items, current_item);
+			}
+			set {
+				if (current_item != null)
+					current_item.Hilight = false;
+
+				current_item = value == -1 ? null : items [value];
+
+				if (current_item != null)
+					current_item.Hilight = true;
+			}
+
+		}
+
 		private void FocusChanged (object sender, EventArgs args)
 		{
 #if NET_2_0
@@ -688,10 +711,14 @@ namespace System.Windows.Forms
 			}
 		}
 
-		private bool HandleKeyDown (Keys key_data)
+		private bool HandleKeyDown (ref Message msg, Keys key_data)
 		{
 			if (Appearance != ToolBarAppearance.Flat || Buttons.Count == 0)
 				return false;
+
+			// Handle the key as needed if the current item is a dropdownbutton.
+			if (HandleKeyOnDropDown (ref msg, key_data))
+				return true;
 
 			switch (key_data) {
 				case Keys.Left:
@@ -702,9 +729,39 @@ namespace System.Windows.Forms
 				case Keys.Down:
 					HighlightButton (1);
 					return true;
-				default:
-					return false;
+				case Keys.Enter:
+				case Keys.Space:
+					if (current_item != null) {
+						OnButtonClick (new ToolBarButtonClickEventArgs (current_item.Button));
+						return true;
+					}
+					break;
 			}
+
+			return false;
+		}
+
+		bool HandleKeyOnDropDown (ref Message msg, Keys key_data)
+		{
+			if (current_item == null || current_item.Button.Style != ToolBarButtonStyle.DropDownButton ||
+					current_item.Button.DropDownMenu == null)
+				return false;
+
+			Menu dropdown_menu = current_item.Button.DropDownMenu;
+
+			if (dropdown_menu.Tracker.active) {
+				dropdown_menu.ProcessCmdKey (ref msg, key_data);
+				return true; // always true if the menu is active
+			}
+
+			if (key_data == Keys.Up || key_data == Keys.Down) {
+				current_item.DDPressed = true;
+				current_item.Invalidate ();
+				OnButtonDropDown (new ToolBarButtonClickEventArgs (current_item.Button));
+				return true;
+			}
+
+			return false;
 		}
 
 		void HighlightButton (int offset)
@@ -734,7 +791,9 @@ namespace System.Windows.Forms
 
 			if (curr_item != null)
 				curr_item.Hilight = false;
-			(enabled [next] as ToolBarItem).Hilight = true;
+
+			current_item = enabled [next] as ToolBarItem;
+			current_item.Hilight = true;
 		}
 
 		private void ToolBar_BackgroundImageChanged (object sender, EventArgs args)
@@ -812,7 +871,7 @@ namespace System.Windows.Forms
 					// Fire a ButtonClick
 					current_item = item;
 					if ((item.Pressed) && ((me.Button & MouseButtons.Left) == MouseButtons.Left))
-						OnButtonClick (new ToolBarButtonClickEventArgs (item.Button));
+						PerformButtonClick (new ToolBarButtonClickEventArgs (item.Button));
 				} else if (item.Pressed) {
 					item.Pressed = false;
 					item.Invalidate ();

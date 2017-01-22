@@ -26,12 +26,11 @@
 
 using System;
 using System.Data;
+using System.Data.Linq;
 
 namespace DbLinq.Util
 {
-#if MONO_STRICT
-    internal
-#else
+#if !MONO_STRICT
     public
 #endif
     static class IDbDataParameterExtensions
@@ -44,10 +43,23 @@ namespace DbLinq.Util
                     dbParameter.Value = TypeConvert.GetDefault(type.GetNullableType());
                 else if (type.IsValueType)
                     dbParameter.Value = TypeConvert.GetDefault(type);
+                else
+                {
+                    DbType? dbType = GetDbType(type);
+                    if (dbType.HasValue)
+                        dbParameter.DbType = dbType.Value;
+                }
                 dbParameter.Value = DBNull.Value;
             }
             else
                 dbParameter.Value = value;
+        }
+
+        private static DbType? GetDbType(Type type)
+        {
+            if (type == typeof(Binary))
+                return DbType.Binary;
+            return null;
         }
 
         public static void SetValue<T>(this IDbDataParameter dbParameter, T value)

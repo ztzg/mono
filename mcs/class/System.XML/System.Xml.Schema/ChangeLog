@@ -1,3 +1,43 @@
+2009-05-19  Jonas Larsson <jonas.larsson@manodo.se> 
+
+	* XmlSchemaUtil.cs, BuiltInDatatype.cs, XmlSchemaComplexType.cs:
+	  Introduced new MS compatibility option by environment variable,
+	  for bug #502115.
+
+2009-05-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaGroupRef.cs : when getting optimized particle, reset was
+	  incomplete. Patch by Jonas Larsson. Fixed bug #502168.
+
+2009-05-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaComplexType.cs : make complex content type work like .NET
+	  does. Patch by Jonas Larsson. Fixed bug #501814.
+
+2009-05-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaComplexType.cs : do not forget to clear attributes
+	  before Compile(). Patch by Jonas Larsson. Fixed bug #501763.
+
+2009-05-07  Jonas Larsson <jonas.larsson@manodo.se> 
+
+	* XmlAtomicValue.cs : support more type conversion. fixed bug #501666.
+
+2009-04-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaValidator.cs : quick fix for bug #496205. Reset xsi:type
+	  and endelement.
+
+2009-04-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSchemaValidator.cs, BuiltInDatatype.cs, XmlAtomicValue.cs:
+	  use xsd-supported version of XmlQualifiedName.Parse().
+	  Fixed bug #496192.
+
+2009-04-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* XmlSchema_2_1.cs: Add internal fields needed by S.R.S.dll
+
 2009-03-17  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlSchemaValidator.cs : check identity constraints on default or

@@ -24,23 +24,18 @@
 // 
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-#if MONO_STRICT
-using System.Data.Linq.Sql;
-#else
+
 using DbLinq.Data.Linq.Sql;
-#endif
 using DbLinq.Util;
 using DbLinq.Vendor.Implementation;
-using System;
 
 namespace DbLinq.Firebird
 {
-#if MONO_STRICT
-    internal
-#else
+#if !MONO_STRICT
     public
 #endif
     class FirebirdSqlProvider : SqlProvider
@@ -99,7 +94,7 @@ namespace DbLinq.Firebird
             return select.Replace("SELECT", stmt, true);
         }
 
-        public override SqlStatement GetInsertIds(IList<SqlStatement> outputParameters, IList<SqlStatement> outputExpressions)
+        public override SqlStatement GetInsertIds(SqlStatement table, IList<SqlStatement> autoPKColumn, IList<SqlStatement> inputPKColumns, IList<SqlStatement> inputPKValues, IList<SqlStatement> outputColumns, IList<SqlStatement> outputParameters, IList<SqlStatement> outputExpressions)
         {
             // no parameters? no need to get them back
             if (outputParameters.Count == 0)

@@ -30,22 +30,16 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 
-#if MONO_STRICT
-using System.Data.Linq.Sql;
-using System.Data.Linq.Sugar.Expressions;
-#else
+using DbLinq.Data.Linq.Database;
 using DbLinq.Data.Linq.Sql;
 using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
-
-using DbLinq.Data.Linq.Database;
 using DbLinq.Util;
 
 #if MONO_STRICT
-namespace System.Data.Linq.Sugar.Implementation
-#else
-namespace DbLinq.Data.Linq.Sugar.Implementation
+using System.Data.Linq;
 #endif
+
+namespace DbLinq.Data.Linq.Sugar.Implementation
 {
     internal class QueryRunner : IQueryRunner
     {
@@ -59,40 +53,43 @@ namespace DbLinq.Data.Linq.Sugar.Implementation
         {
             var rowObjectCreator = selectQuery.GetRowObjectCreator<T>();
 
+            IList<T> results = new List<T>();
+
             // handle the special case where the query is empty, meaning we don't need the DB
             if (string.IsNullOrEmpty(selectQuery.Sql.ToString()))
             {
-                yield return rowObjectCreator(null, null);
-                yield break;
+                results.Add(rowObjectCreator(null, null));
             }
-
-            using (var dbCommand = selectQuery.GetCommand())
+            else
             {
-
-                // write query to log
-                selectQuery.DataContext.WriteLog(dbCommand.Command);
-
-                using (var reader = dbCommand.Command.ExecuteReader())
+                using (var dbCommand = selectQuery.GetCommand())
                 {
-                    while (reader.Read())
+                    // write query to log
+                    selectQuery.DataContext.WriteLog(dbCommand.Command);
+
+                    using (var reader = dbCommand.Command.ExecuteReader())
                     {
-                        // someone told me one day this could happen (in SQLite)
-                        if (reader.FieldCount == 0)
-                            continue;
-
-                        var row = rowObjectCreator(reader, selectQuery.DataContext._MappingContext);
-                        // the conditions to register and watch an entity are:
-                        // - not null (can this happen?)
-                        // - registered in the model
-                        if (row != null && selectQuery.DataContext.Mapping.GetTable(row.GetType()) != null)
+                        while (reader.Read())
                         {
-                            row = (T)selectQuery.DataContext.Register(row);
-                        }
+                            // someone told me one day this could happen (in SQLite)
+                            if (reader.FieldCount == 0)
+                                continue;
 
-                        yield return row;
+                            var row = rowObjectCreator(reader, selectQuery.DataContext._MappingContext);
+                            // the conditions to register and watch an entity are:
+                            // - not null (can this happen?)
+                            // - registered in the model
+                            if (row != null && selectQuery.DataContext.ObjectTrackingEnabled && 
+                                    selectQuery.DataContext.Mapping.GetTable(row.GetType()) != null)
+                            {
+                                row = (T)selectQuery.DataContext.Register(row);
+                            }
+                            results.Add(row);
+                        }
                     }
                 }
             }
+            return results;
         }
 
         /// <summary>
@@ -228,27 +225,27 @@ namespace DbLinq.Data.Linq.Sugar.Implementation
                 // the second reads output parameters
                 if (!string.IsNullOrEmpty(insertQuery.IdQuerySql.ToString()))
                 {
-                    var outputCommand = dbCommand.Command.Connection.CreateCommand();
+                    var outputCommandTransaction = new ParameterizedQuery(dataContext, insertQuery.IdQuerySql, insertQuery.PrimaryKeyParameters);
+                    outputCommandTransaction.Target = target;
+
+                    var outputCommand = outputCommandTransaction.GetCommandTransactional(false);
 
                     // then run commands
-                    outputCommand.Transaction = dbCommand.Command.Transaction;
-                    outputCommand.CommandText = insertQuery.IdQuerySql.ToString();
+                    outputCommand.Command.Transaction = dbCommand.Command.Transaction;
 
                     // log second command
-                    dataContext.WriteLog(outputCommand);
+                    dataContext.WriteLog(outputCommand.Command);
 
-                    using (var dataReader = outputCommand.ExecuteReader())
+                    using (var dataReader = outputCommand.Command.ExecuteReader())
                     {
-                        // TODO: check if this is needed
-                        dataReader.Read();
+                        if (! dataReader.Read())
+                            throw new InvalidOperationException("Could not retrieve data for inserted row on " + target.GetType());
 
-                        for (int outputParameterIndex = 0;
-                             outputParameterIndex < insertQuery.OutputParameters.Count;
-                             outputParameterIndex++)
+                        int outputParameterIndex = 0;
+                        for (IEnumerator<ObjectOutputParameterExpression> output = insertQuery.OutputParameters.GetEnumerator(); output.MoveNext(); ++outputParameterIndex)
                         {
-                            var outputParameter = insertQuery.OutputParameters[outputParameterIndex];
                             var outputDbParameter = dataReader.GetValue(outputParameterIndex);
-                            SetOutputParameterValue(target, outputParameter, outputDbParameter);
+                            SetOutputParameterValue(target, output.Current, outputDbParameter);
                         }
                     }
                 }

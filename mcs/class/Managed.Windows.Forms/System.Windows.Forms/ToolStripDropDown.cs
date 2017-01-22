@@ -232,9 +232,12 @@ namespace System.Windows.Forms
 			get { return this.owner_item; }
 			set { this.owner_item = value; 
 				
-				if (this.owner_item != null)
+				if (this.owner_item != null) {
 					if (this.owner_item.Owner != null && this.owner_item.Owner.RenderMode != ToolStripRenderMode.ManagerRenderMode)
 						this.Renderer = this.owner_item.Owner.Renderer;
+
+					Font = owner_item.Font;
+				}
 			}
 		}
 
@@ -613,7 +616,7 @@ namespace System.Windows.Forms
 					height = 22;
 
 				tsi.SetBounds (new Rectangle (x, y, preferred_size.Width, height));
-				y += tsi.Height + tsi.Margin.Bottom;
+				y += height + tsi.Margin.Bottom;
 			}
 
 			this.Size = new Size (widest, y + this.Padding.Bottom);
@@ -652,6 +655,14 @@ namespace System.Windows.Forms
 		protected override void OnVisibleChanged (EventArgs e)
 		{
 			base.OnVisibleChanged (e);
+
+			if (owner_item != null && owner_item is ToolStripDropDownItem) {
+				ToolStripDropDownItem dropdown_owner = (ToolStripDropDownItem)owner_item;
+				if (Visible)
+					dropdown_owner.OnDropDownOpened (EventArgs.Empty);
+				else
+					dropdown_owner.OnDropDownClosed (EventArgs.Empty);
+			}
 		}
 
 		[EditorBrowsable (EditorBrowsableState.Advanced)]

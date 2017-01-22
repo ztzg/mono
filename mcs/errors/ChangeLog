@@ -1,3 +1,17 @@
+2009-06-18  Raja R Harinath  <harinath@hurrynot.org>
+
+	* Makefile (run-test-local): Make parallel-make safe.
+
+2009-06-17 Marek Safar <marek.safar@gmail.com>
+
+	* Makefile: Keep at least one target usable for me.
+
+2009-06-16  Raja R Harinath  <harinath@hurrynot.org>
+
+	Improve profile test coverage
+	* Makefile (test-local): Empty out.
+	(run-test-local): Remove $(TEST_SUPPORT_FILES).
+
 2009-02-06  Scott Peterson  <lunchtimemama@gmail.com>
 
 	This patch is contributed under the MIT/X11 license.

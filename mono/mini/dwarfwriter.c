@@ -8,6 +8,8 @@
  */
 
 #include "config.h"
+
+#if !defined(DISABLE_AOT) && !defined(DISABLE_JIT)
 #include "dwarfwriter.h"
 
 #include <sys/types.h>
@@ -32,11 +34,15 @@ struct _MonoDwarfWriter
 {
 	MonoImageWriter *w;
 	GHashTable *class_to_die, *class_to_vtype_die, *class_to_pointer_die;
+	GHashTable *class_to_reference_die;
 	int fde_index, tdie_index, line_number_file_index, line_number_dir_index;
 	GHashTable *file_to_index, *dir_to_index;
 	FILE *il_file;
 	int il_file_line_index, loclist_index;
 	GSList *cie_program;
+	FILE *fp;
+	const char *temp_prefix;
+	gboolean emit_line, appending;
 };
 
 /*
@@ -45,14 +51,34 @@ struct _MonoDwarfWriter
  *   Create a DWARF writer object. WRITER is the underlying image writer this 
  * writer will emit to. IL_FILE is the file where IL code will be dumped to for
  * methods which have no line number info. It can be NULL.
+ * If APPENDING is TRUE, the output file will be in assembleable state after each
+ * call to the _emit_ functions. This is used for XDEBUG. If APPENDING is FALSE,
+ * a separate mono_dwarf_writer_close () call is needed to finish the emission of
+ * debug information.
  */
 MonoDwarfWriter*
-mono_dwarf_writer_create (MonoImageWriter *writer, FILE *il_file)
+mono_dwarf_writer_create (MonoImageWriter *writer, FILE *il_file, gboolean appending)
 {
 	MonoDwarfWriter *w = g_new0 (MonoDwarfWriter, 1);
 	
+	/*
+	 * The appending flag is needed because we use subsections to order things in 
+	 * the debug info, and:
+	 * - apple's assembler doesn't support them
+	 * - the binary writer has problems with subsections+alignment
+	 * So instead of subsections, we use the _close () function in AOT mode,
+	 * which writes out things in order.
+	 */
+
 	w->w = writer;
 	w->il_file = il_file;
+	w->appending = appending;
+
+	if (appending)
+		g_assert (img_writer_subsections_supported (w->w));
+
+	w->fp = img_writer_get_fp (w->w);
+	w->temp_prefix = img_writer_get_temp_label_prefix (w->w);
 
 	return w;
 }
@@ -272,7 +298,8 @@ emit_cie (MonoDwarfWriter *w)
 	emit_alignment (w, 8);
 
 	/* Emit a CIE */
-	emit_symbol_diff (w, ".Lcie0_end", ".", -4); /* length */
+	emit_symbol_diff (w, ".Lcie0_end", ".Lcie0_start", 0); /* length */
+	emit_label (w, ".Lcie0_start");
 	emit_int32 (w, 0xffffffff); /* CIE id */
 	emit_byte (w, 3); /* version */
 	emit_string (w, ""); /* augmention */
@@ -303,15 +330,18 @@ static void
 emit_fde (MonoDwarfWriter *w, int fde_index, char *start_symbol, char *end_symbol,
 		  guint8 *code, guint32 code_size, GSList *unwind_ops, gboolean use_cie)
 {
-	char symbol [128];
+	char symbol1 [128];
+	char symbol2 [128];
 	GSList *l;
 	guint8 *uw_info;
 	guint32 uw_info_len;
 
 	emit_section_change (w, ".debug_frame", 0);
 
-	sprintf (symbol, ".Lfde%d_end", fde_index);
-	emit_symbol_diff (w, symbol, ".", -4); /* length */
+	sprintf (symbol1, ".Lfde%d_start", fde_index);
+	sprintf (symbol2, ".Lfde%d_end", fde_index);
+	emit_symbol_diff (w, symbol2, symbol1, 0); /* length */
+	emit_label (w, symbol1);
 	emit_int32 (w, 0); /* CIE_pointer */
 	if (start_symbol) {
 		emit_pointer (w, start_symbol); /* initial_location */
@@ -344,9 +374,8 @@ emit_fde (MonoDwarfWriter *w, int fde_index, char *start_symbol, char *end_symbo
 	emit_bytes (w, uw_info, uw_info_len);
 	g_free (uw_info);
 
-	emit_alignment (w, sizeof (gpointer));
-	sprintf (symbol, ".Lfde%d_end", fde_index);
-	emit_label (w, symbol);
+	emit_alignment (w, sizeof (mgreg_t));
+	emit_label (w, symbol2);
 }
 
 /* Abbrevations */
@@ -363,7 +392,10 @@ emit_fde (MonoDwarfWriter *w, int fde_index, char *start_symbol, char *end_symbo
 #define ABBREV_VARIABLE 11
 #define ABBREV_VARIABLE_LOCLIST 12
 #define ABBREV_POINTER_TYPE 13
-#define ABBREV_PARAM_LOCLIST 14
+#define ABBREV_REFERENCE_TYPE 14
+#define ABBREV_PARAM_LOCLIST 15
+#define ABBREV_INHERITANCE 16
+#define ABBREV_STRUCT_TYPE_NOCHILDREN 17
 
 static int compile_unit_attr [] = {
 	DW_AT_producer     ,DW_FORM_string,
@@ -420,6 +452,10 @@ static int pointer_type_attr [] = {
 	DW_AT_type,        DW_FORM_ref4,
 };
 
+static int reference_type_attr [] = {
+	DW_AT_type,        DW_FORM_ref4,
+};
+
 static int enum_type_attr [] = {
 	DW_AT_name,        DW_FORM_string,
 	DW_AT_byte_size,   DW_FORM_udata,
@@ -445,6 +481,11 @@ static int variable_loclist_attr [] = {
 	DW_AT_name,     DW_FORM_string,
 	DW_AT_type,     DW_FORM_ref4,
 	DW_AT_location, DW_FORM_data4
+};
+ 
+static int inheritance_attr [] = {
+	DW_AT_type,        DW_FORM_ref4,
+	DW_AT_data_member_location, DW_FORM_block1
 };
 
 typedef struct DwarfBasicType {
@@ -547,14 +588,6 @@ emit_line_number_file_name (MonoDwarfWriter *w, const char *name,
 static void
 emit_line_number_info_begin (MonoDwarfWriter *w)
 {
-	if (!w->il_file) {
-		/* FIXME: This doesn't seem to work with !xdebug */
-		emit_section_change (w, ".debug_line", 0);
-		emit_label (w, ".Ldebug_line_start");
-		emit_label (w, ".Ldebug_line_section_start");
-		return;
-	}
-
 	/* Line number info header */
 	/* 
 	 * GAS seems to emit its own data to the end of the first subsection, so we use
@@ -615,11 +648,33 @@ emit_line_number_info_begin (MonoDwarfWriter *w)
 	emit_label (w, ".Ldebug_line_end");
 }
 
+/*
+ * Some assemblers like apple's do not support subsections, so we can't place
+ * .Ldebug_info_end at the end of the section using subsections. Instead, we 
+ * define it every time something gets added to the .debug_info section.
+ * The apple assember seems to use the last definition.
+ */
+static void
+emit_debug_info_end (MonoDwarfWriter *w)
+{
+	/* This doesn't seem to work/required with recent iphone sdk versions */
+#if 0
+	if (!img_writer_subsections_supported (w->w))
+		fprintf (w->fp, "\n.set %sdebug_info_end,.\n", w->temp_prefix);
+#endif
+}
+
 void
 mono_dwarf_writer_emit_base_info (MonoDwarfWriter *w, GSList *base_unwind_program)
 {
 	char *s, *build_info;
 	int i;
+
+	if (!img_writer_subsections_supported (w->w))
+		/* Can't emit line number info without subsections */
+		w->emit_line = FALSE;
+	else
+		w->emit_line = TRUE;
 
 	w->cie_program = base_unwind_program;
 
@@ -635,6 +690,8 @@ mono_dwarf_writer_emit_base_info (MonoDwarfWriter *w, GSList *base_unwind_progra
 	emit_dwarf_abbrev (w, ABBREV_BASE_TYPE, DW_TAG_base_type, FALSE, 
 					   base_type_attr, G_N_ELEMENTS (base_type_attr));
 	emit_dwarf_abbrev (w, ABBREV_STRUCT_TYPE, DW_TAG_class_type, TRUE, 
+					   struct_type_attr, G_N_ELEMENTS (struct_type_attr));
+	emit_dwarf_abbrev (w, ABBREV_STRUCT_TYPE_NOCHILDREN, DW_TAG_class_type, FALSE, 
 					   struct_type_attr, G_N_ELEMENTS (struct_type_attr));
 	emit_dwarf_abbrev (w, ABBREV_DATA_MEMBER, DW_TAG_member, FALSE, 
 					   data_member_attr, G_N_ELEMENTS (data_member_attr));
@@ -652,20 +709,27 @@ mono_dwarf_writer_emit_base_info (MonoDwarfWriter *w, GSList *base_unwind_progra
 					   variable_loclist_attr, G_N_ELEMENTS (variable_loclist_attr));
 	emit_dwarf_abbrev (w, ABBREV_POINTER_TYPE, DW_TAG_pointer_type, FALSE,
 					   pointer_type_attr, G_N_ELEMENTS (pointer_type_attr));
+	emit_dwarf_abbrev (w, ABBREV_REFERENCE_TYPE, DW_TAG_reference_type, FALSE,
+					   reference_type_attr, G_N_ELEMENTS (reference_type_attr));
+	emit_dwarf_abbrev (w, ABBREV_INHERITANCE, DW_TAG_inheritance, FALSE,
+					   inheritance_attr, G_N_ELEMENTS (inheritance_attr));
 	emit_byte (w, 0);
 
 	emit_section_change (w, ".debug_info", 0);
 	emit_label (w, ".Ldebug_info_start");
-	emit_symbol_diff (w, ".Ldebug_info_end", ".", -4); /* length */
+	emit_symbol_diff (w, ".Ldebug_info_end", ".Ldebug_info_begin", 0); /* length */
+	emit_label (w, ".Ldebug_info_begin");
 	emit_int16 (w, 0x2); /* DWARF version 2 */
 	emit_int32 (w, 0); /* .debug_abbrev offset */
 	emit_byte (w, sizeof (gpointer)); /* address size */
 
-	/* Emit this into a separate section so it gets placed at the end */
-	emit_section_change (w, ".debug_info", 1);
-	emit_int32 (w, 0); /* close everything */
-	emit_label (w, ".Ldebug_info_end");
-	emit_section_change (w, ".debug_info", 0);
+	if (img_writer_subsections_supported (w->w) && w->appending) {
+		/* Emit this into a separate section so it gets placed at the end */
+		emit_section_change (w, ".debug_info", 1);
+		emit_byte (w, 0); /* close COMPILE_UNIT */
+		emit_label (w, ".Ldebug_info_end");
+		emit_section_change (w, ".debug_info", 0);
+	}
 
 	/* Compilation unit */
 	emit_uleb128 (w, ABBREV_COMPILE_UNIT);
@@ -691,27 +755,50 @@ mono_dwarf_writer_emit_base_info (MonoDwarfWriter *w, GSList *base_unwind_progra
 		emit_string (w, basic_types [i].name);
 	}
 
+	emit_debug_info_end (w);
+
 	/* debug_loc section */
 	emit_section_change (w, ".debug_loc", 0);
 	emit_label (w, ".Ldebug_loc_start");
 
 	/* debug_line section */
+	/*
+	 * We emit some info even if emit_line is FALSE, as the
+	 * apple linker seems to require a .debug_line section.
+	 */
 	emit_line_number_info_begin (w);
 
 	emit_cie (w);
 }
 
+/*
+ * mono_dwarf_writer_close:
+ *
+ *   Finalize the emitted debugging info.
+ */
+void
+mono_dwarf_writer_close (MonoDwarfWriter *w)
+{
+	if (!w->appending) {
+		emit_section_change (w, ".debug_info", 0);
+		emit_byte (w, 0); /* close COMPILE_UNIT */
+		emit_label (w, ".Ldebug_info_end");
+	}
+}
+
+static const char* emit_type (MonoDwarfWriter *w, MonoType *t);
+
 /* Returns the local symbol pointing to the emitted debug info */
 static char*
 emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 {
-	char *die, *pointer_die;
-	char *full_name;
+	char *die, *pointer_die, *reference_die;
+	char *full_name, *p;
 	gpointer iter;
 	MonoClassField *field;
 	const char *fdie;
 	int k;
-	gboolean emit_namespace = FALSE;
+	gboolean emit_namespace = FALSE, has_children;
 	GHashTable *cache;
 
 	// FIXME: Appdomains
@@ -721,6 +808,8 @@ emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 		w->class_to_vtype_die = g_hash_table_new (NULL, NULL);
 	if (!w->class_to_pointer_die)
 		w->class_to_pointer_die = g_hash_table_new (NULL, NULL);
+	if (!w->class_to_reference_die)
+		w->class_to_reference_die = g_hash_table_new (NULL, NULL);
 
 	if (vtype)
 		cache = w->class_to_vtype_die;
@@ -731,7 +820,7 @@ emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 	if (die)
 		return die;
 
-	if (!((klass->byval_arg.type == MONO_TYPE_CLASS) || klass->enumtype || (klass->byval_arg.type == MONO_TYPE_VALUETYPE && vtype)))
+	if (!((klass->byval_arg.type == MONO_TYPE_CLASS) || (klass->byval_arg.type == MONO_TYPE_OBJECT) || klass->byval_arg.type == MONO_TYPE_GENERICINST || klass->enumtype || (klass->byval_arg.type == MONO_TYPE_VALUETYPE && vtype)))
 		return NULL;
 
 	/*
@@ -747,12 +836,27 @@ emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 	}
 
 	full_name = g_strdup_printf ("%s%s%s", klass->name_space, klass->name_space ? "." : "", klass->name);
+	/* 
+	 * gdb doesn't support namespaces for non-C++ dwarf objects, so use _
+	 * to separate components.
+	 */
+	for (p = full_name; *p; p ++)
+		if (*p == '.')
+			*p = '_';
 
 	die = g_strdup_printf (".LTDIE_%d", w->tdie_index);
-	emit_label (w, die);
+	pointer_die = g_strdup_printf (".LTDIE_%d_POINTER", w->tdie_index);
+	reference_die = g_strdup_printf (".LTDIE_%d_REFERENCE", w->tdie_index);
+	w->tdie_index ++;
+
+	g_hash_table_insert (w->class_to_pointer_die, klass, pointer_die);
+	g_hash_table_insert (w->class_to_reference_die, klass, reference_die);
+	g_hash_table_insert (cache, klass, die);
 
 	if (klass->enumtype) {
 		int size = mono_class_value_size (mono_class_from_mono_type (mono_class_enum_basetype (klass)), NULL);
+
+		emit_label (w, die);
 
 		emit_uleb128 (w, ABBREV_ENUM_TYPE);
 		emit_string (w, full_name);
@@ -811,26 +915,55 @@ emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 				g_assert_not_reached ();
 			}
 		}
+
+		has_children = TRUE;
 	} else {
-		emit_uleb128 (w, ABBREV_STRUCT_TYPE);
+		guint8 buf [128];
+		guint8 *p;
+		char *parent_die;
+
+		if (klass->parent)
+			parent_die = emit_class_dwarf_info (w, klass->parent, FALSE);
+		else
+			parent_die = NULL;
+
+		/* Emit field types */
+		iter = NULL;
+		while ((field = mono_class_get_fields (klass, &iter))) {
+			if (field->type->attrs & FIELD_ATTRIBUTE_STATIC)
+				continue;
+
+			emit_type (w, field->type);
+		}
+
+		iter = NULL;
+		has_children = parent_die || mono_class_get_fields (klass, &iter);
+
+		emit_label (w, die);
+
+		emit_uleb128 (w, has_children ? ABBREV_STRUCT_TYPE : ABBREV_STRUCT_TYPE_NOCHILDREN);
 		emit_string (w, full_name);
 		emit_uleb128 (w, klass->instance_size);
+
+		if (parent_die) {
+			emit_uleb128 (w, ABBREV_INHERITANCE);
+			emit_symbol_diff (w, parent_die, ".Ldebug_info_start", 0);
+
+			p = buf;
+			*p ++= DW_OP_plus_uconst;
+			encode_uleb128 (0, p, &p);
+			emit_byte (w, p - buf);
+			emit_bytes (w, buf, p - buf);
+		}
 
 		/* Emit fields */
 		iter = NULL;
 		while ((field = mono_class_get_fields (klass, &iter))) {
-			guint8 buf [128];
-			guint8 *p;
-
 			if (field->type->attrs & FIELD_ATTRIBUTE_STATIC)
 				continue;
 
-			for (k = 0; k < G_N_ELEMENTS (basic_types); ++k)
-				if (basic_types [k].type == field->type->type)
-					break;
-			if (k < G_N_ELEMENTS (basic_types) && field->type->type != MONO_TYPE_SZARRAY && field->type->type != MONO_TYPE_CLASS) {
-				fdie = basic_types [k].die_name;
-
+			fdie = emit_type (w, field->type);
+			if (fdie) {
 				emit_uleb128 (w, ABBREV_DATA_MEMBER);
 				emit_string (w, field->name);
 				emit_symbol_diff (w, fdie, ".Ldebug_info_start", 0);
@@ -849,7 +982,8 @@ emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 	}
 
 	/* Type end */
-	emit_uleb128 (w, 0x0);
+	if (has_children)
+		emit_uleb128 (w, 0x0);
 
 	/* Add a typedef, so we can reference the type without a 'struct' in gdb */
 	emit_uleb128 (w, ABBREV_TYPEDEF);
@@ -857,23 +991,24 @@ emit_class_dwarf_info (MonoDwarfWriter *w, MonoClass *klass, gboolean vtype)
 	emit_symbol_diff (w, die, ".Ldebug_info_start", 0);
 
 	/* Add a pointer type */
-	pointer_die = g_strdup_printf (".LTDIE_%d_POINTER", w->tdie_index);
 	emit_label (w, pointer_die);
 
 	emit_uleb128 (w, ABBREV_POINTER_TYPE);
 	emit_symbol_diff (w, die, ".Ldebug_info_start", 0);
 
-	g_hash_table_insert (w->class_to_pointer_die, klass, pointer_die);
+	/* Add a reference type */
+	emit_label (w, reference_die);
+
+	emit_uleb128 (w, ABBREV_REFERENCE_TYPE);
+	emit_symbol_diff (w, die, ".Ldebug_info_start", 0);
 
 	g_free (full_name);
-	w->tdie_index ++;
 
 	if (emit_namespace) {
 		/* Namespace end */
 		emit_uleb128 (w, 0x0);
 	}
 
-	g_hash_table_insert (cache, klass, die);
 	return die;
 }
 
@@ -890,6 +1025,10 @@ emit_type (MonoDwarfWriter *w, MonoType *t)
 			if (tdie)
 				return g_hash_table_lookup (w->class_to_pointer_die, klass);
 		}
+		else {
+			tdie = emit_class_dwarf_info (w, klass, FALSE);
+			/* Should return a pointer type to a reference */
+		}
 		// FIXME:
 		t = &mono_defaults.int_class->byval_arg;
 	}
@@ -901,6 +1040,10 @@ emit_type (MonoDwarfWriter *w, MonoType *t)
 	else {
 		switch (t->type) {
 		case MONO_TYPE_CLASS:
+			emit_class_dwarf_info (w, klass, FALSE);
+			tdie = g_hash_table_lookup (w->class_to_reference_die, klass);
+			//tdie = ".LDIE_OBJECT";
+			break;
 		case MONO_TYPE_ARRAY:
 			tdie = ".LDIE_OBJECT";
 			break;
@@ -909,6 +1052,14 @@ emit_type (MonoDwarfWriter *w, MonoType *t)
 				tdie = emit_class_dwarf_info (w, klass, FALSE);
 			else
 				tdie = ".LDIE_I4";
+			break;
+		case MONO_TYPE_GENERICINST:
+			if (!MONO_TYPE_ISSTRUCT (t)) {
+				emit_class_dwarf_info (w, klass, FALSE);
+				tdie = g_hash_table_lookup (w->class_to_reference_die, klass);
+			} else {
+				tdie = ".LDIE_I4";
+			}
 			break;
 		default:
 			tdie = ".LDIE_I4";
@@ -1162,8 +1313,10 @@ compare_lne (MonoDebugLineNumberEntry *a, MonoDebugLineNumberEntry *b)
 }
 
 static void
-emit_line_number_info (MonoDwarfWriter *w, MonoMethod *method, guint8 *code,
-					   guint32 code_size, MonoDebugMethodJitInfo *debug_info)
+emit_line_number_info (MonoDwarfWriter *w, MonoMethod *method, 
+					   char *start_symbol, char *end_symbol,
+					   guint8 *code, guint32 code_size,
+					   MonoDebugMethodJitInfo *debug_info)
 {
 	guint32 prev_line = 0;
 	guint32 prev_native_offset = 0;
@@ -1176,13 +1329,14 @@ emit_line_number_info (MonoDwarfWriter *w, MonoMethod *method, guint8 *code,
 	GArray *ln_array;
 	int *native_to_il_offset = NULL;
 
-	if (!code)
-		// FIXME: The set_address op below only works with xdebug
+	if (!w->emit_line)
 		return;
 
 	minfo = mono_debug_lookup_method (method);
 
 	/* Compute the native->IL offset mapping */
+
+	g_assert (code_size);
 
 #ifndef _EGLIB_MAJOR
 	ln_array = g_array_sized_new (FALSE, FALSE, sizeof (MonoDebugLineNumberEntry), 
@@ -1254,7 +1408,10 @@ emit_line_number_info (MonoDwarfWriter *w, MonoMethod *method, guint8 *code,
 				emit_byte (w, 0);
 				emit_byte (w, sizeof (gpointer) + 1);
 				emit_byte (w, DW_LNE_set_address);
-				emit_pointer_value (w, code);
+				if (start_symbol)
+					emit_pointer_unaligned (w, start_symbol);
+				else
+					emit_pointer_value (w, code);
 
 				/* 
 				 * The prolog+initlocals region does not have a line number, this
@@ -1301,7 +1458,7 @@ emit_line_number_info (MonoDwarfWriter *w, MonoMethod *method, guint8 *code,
 		emit_byte (w, 0);
 		emit_byte (w, 1);
 		emit_byte (w, DW_LNE_end_sequence);
-	} else if (code) {
+	} else if (!start_symbol) {
 		/* No debug info, XDEBUG mode */
 		char *name, *dis;
 		const guint8 *ip = header->code;
@@ -1427,7 +1584,10 @@ mono_dwarf_writer_emit_method (MonoDwarfWriter *w, MonoCompile *cfg, MonoMethod 
 		MonoType *t;
 
 		if (i == 0 && sig->hasthis) {
-			t = &method->klass->this_arg;
+			if (method->klass->valuetype)
+				t = &method->klass->this_arg;
+			else
+				t = &method->klass->byval_arg;
 		} else {
 			t = sig->params [i - sig->hasthis];
 		}
@@ -1478,7 +1638,7 @@ mono_dwarf_writer_emit_method (MonoDwarfWriter *w, MonoCompile *cfg, MonoMethod 
 			if (method->klass->valuetype)
 				t = &method->klass->this_arg;
 			else
-				t = &mono_defaults.object_class->byval_arg;
+				t = &method->klass->byval_arg;
 			pname = "this";
 		} else {
 			t = sig->params [i - sig->hasthis];
@@ -1571,13 +1731,18 @@ mono_dwarf_writer_emit_method (MonoDwarfWriter *w, MonoCompile *cfg, MonoMethod 
 
 	emit_line (w);
 
+	emit_debug_info_end (w);
+
 	/* Emit unwind info */
-	emit_fde (w, w->fde_index, start_symbol, end_symbol, code, code_size, unwind_info, TRUE);
-	w->fde_index ++;
+	if (unwind_info) {
+		emit_fde (w, w->fde_index, start_symbol, end_symbol, code, code_size, unwind_info, TRUE);
+		w->fde_index ++;
+	}
 
 	/* Emit line number info */
-	if (code && debug_info)
-		emit_line_number_info (w, method, code, code_size, debug_info);
+	/* != could happen when using --regression */
+	if (debug_info && (debug_info->code_start == code))
+		emit_line_number_info (w, method, start_symbol, end_symbol, code, code_size, debug_info);
 
 	emit_line (w);
 }
@@ -1600,7 +1765,10 @@ mono_dwarf_writer_emit_trampoline (MonoDwarfWriter *w, const char *tramp_name, c
 	/* Subprogram end */
 	emit_uleb128 (w, 0x0);
 
+	emit_debug_info_end (w);
+
 	/* Emit unwind info */
 	emit_fde (w, w->fde_index, start_symbol, end_symbol, code, code_size, unwind_info, FALSE);
 	w->fde_index ++;
 }
+#endif /* End of: !defined(DISABLE_AOT) && !defined(DISABLE_JIT) */

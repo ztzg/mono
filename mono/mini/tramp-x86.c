@@ -57,6 +57,27 @@ mono_arch_get_unbox_trampoline (MonoGenericSharingContext *gsctx, MonoMethod *m,
 	return start;
 }
 
+gpointer
+mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericContext *mrgctx, gpointer addr)
+{
+	guint8 *code, *start;
+	int buf_len;
+
+	MonoDomain *domain = mono_domain_get ();
+
+	buf_len = 10;
+
+	start = code = mono_domain_code_reserve (domain, buf_len);
+
+	x86_mov_reg_imm (code, MONO_ARCH_RGCTX_REG, mrgctx);
+	x86_jump_code (code, addr);
+	g_assert ((code - start) <= buf_len);
+
+	mono_arch_flush_icache (start, code - start);
+
+	return start;
+}
+
 void
 mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 {
@@ -98,7 +119,7 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 }
 
 void
-mono_arch_patch_plt_entry (guint8 *code, guint8 *addr)
+mono_arch_patch_plt_entry (guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
 	/* A PLT entry: jmp <DISP> */
 	g_assert (code [0] == 0xe9);
@@ -108,7 +129,7 @@ mono_arch_patch_plt_entry (guint8 *code, guint8 *addr)
 }
 
 void
-mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
+mono_arch_nullify_class_init_trampoline (guint8 *code, mgreg_t *regs)
 {
 	guint8 buf [16];
 	gboolean can_write = mono_breakpoint_clean_code (NULL, code, 6, buf, sizeof (buf));
@@ -153,7 +174,7 @@ mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
 		/* call *<OFFSET>(<REG>) -> Call made from AOT code */
 		gpointer *vtable_slot;
 
-		vtable_slot = mono_arch_get_vcall_slot_addr (code + 5, (gpointer*)regs);
+		vtable_slot = mono_get_vcall_slot_addr (code + 5, regs);
 		g_assert (vtable_slot);
 
 		*vtable_slot = nullified_class_init_trampoline;
@@ -165,7 +186,7 @@ mono_arch_nullify_class_init_trampoline (guint8 *code, gssize *regs)
 }
 
 void
-mono_arch_nullify_plt_entry (guint8 *code)
+mono_arch_nullify_plt_entry (guint8 *code, mgreg_t *regs)
 {
 	if (!mono_running_on_valgrind ()) {
 		guint32 ops;
@@ -312,9 +333,12 @@ mono_arch_create_trampoline_code (MonoTrampolineType tramp_type)
 
 	/* Check for thread interruption */
 	/* This is not perf critical code so no need to check the interrupt flag */
+	/* Align the stack on osx */
+	x86_alu_reg_imm (buf, X86_SUB, X86_ESP, 3 * 4);
 	x86_push_reg (buf, X86_EAX);
 	x86_call_code (buf, (guint8*)mono_thread_force_interruption_checkpoint);
 	x86_pop_reg (buf, X86_EAX);
+	x86_alu_reg_imm (buf, X86_ADD, X86_ESP, 3 * 4);
 
 	/* Restore LMF */
 
@@ -431,7 +455,7 @@ mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot)
 	mrgctx = MONO_RGCTX_SLOT_IS_MRGCTX (slot);
 	index = MONO_RGCTX_SLOT_INDEX (slot);
 	if (mrgctx)
-		index += sizeof (MonoMethodRuntimeGenericContext) / sizeof (gpointer);
+		index += MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT / sizeof (gpointer);
 	for (depth = 0; ; ++depth) {
 		int size = mono_class_rgctx_get_array_size (depth, mrgctx);
 
@@ -461,7 +485,7 @@ mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot)
 	for (i = 0; i < depth; ++i) {
 		/* load ptr to next array */
 		if (mrgctx && i == 0)
-			x86_mov_reg_membase (buf, X86_EAX, X86_EAX, sizeof (MonoMethodRuntimeGenericContext), 4);
+			x86_mov_reg_membase (buf, X86_EAX, X86_EAX, MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT, 4);
 		else
 			x86_mov_reg_membase (buf, X86_EAX, X86_EAX, 0, 4);
 		/* is the ptr null? */

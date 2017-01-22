@@ -120,12 +120,10 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_EMULATE_LCONV_TO_R8_UN 1
 #define MONO_ARCH_EMULATE_FREM 1
 #define MONO_ARCH_NEED_DIV_CHECK 1
-#define MONO_ARCH_ENABLE_EMIT_STATE_OPT 1
 #define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION 1
-#define MONO_ARCH_HAVE_CREATE_TRAMPOLINE_FROM_TOKEN 1
 #define MONO_ARCH_HAVE_IMT 1
 #define MONO_ARCH_IMT_REG sparc_g1
-#define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
+#define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 
 #ifdef SPARCV9
 #define MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS
@@ -178,7 +176,7 @@ static void * __builtin_frame_address(int depth)
 
 gboolean mono_sparc_is_virtual_call (guint32 *code);
 
-gpointer* mono_sparc_get_vcall_slot_addr (guint32 *code, gpointer *regs);
+gpointer* mono_sparc_get_vcall_slot_addr (guint32 *code, mgreg_t *regs);
 
 void mono_sparc_flushw (void);
 

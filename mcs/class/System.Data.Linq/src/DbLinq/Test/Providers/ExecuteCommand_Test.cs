@@ -47,7 +47,7 @@ using nwind;
     namespace Test_NUnit_Sqlite
 #elif INGRES
     namespace Test_NUnit_Ingres
-#elif MSSQL && MONO_STRICT
+#elif MSSQL && L2SQL
     namespace Test_NUnit_MsSql_Strict
 #elif MSSQL
     namespace Test_NUnit_MsSql
@@ -58,19 +58,27 @@ using nwind;
     [TestFixture]
     public class ExecuteCommand_Test : TestBase
     {
+#if !DEBUG && (MSSQL && L2SQL)
+        // DataContext.ExecuteScalar() working with 'SELECT COUNT(*)' is a DbLinq extension.
+        // Exclude from Linq2Sql comparison tests.
+        [Explicit]
+#endif
         [Test]
         public void A2_ProductsTableHasEntries()
         {
             Northwind db = CreateDB();
-            //string sql = "SELECT count(*) FROM Northwind.Products";
-            int result = db.ExecuteCommand("SELECT count(*) FROM Products");
-            //long iResult = base.ExecuteScalar(sql);
+            int result = db.ExecuteCommand("SELECT count(*) FROM \"Products\"");
             Assert.Greater(result, 0, "Expecting some rows in Products table, got:" + result);
         }
 
         /// <summary>
         /// like above, but includes one parameter.
         /// </summary>
+#if !DEBUG && (MSSQL && L2SQL)
+        // DataContext.ExecuteScalar() working with 'SELECT COUNT(*)' is a DbLinq extension.
+        // Exclude from Linq2Sql comparison tests.
+        [Explicit]
+#endif
         [Test]
         public void A3_ProductCount_Param()
         {

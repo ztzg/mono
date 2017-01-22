@@ -41,12 +41,16 @@ namespace System {
 		static object lock_object = new object ();
 		static Hashtable table;
 
-		private string scheme_name;
+		internal string scheme_name;
 		private int default_port;
 
 		// Regexp from RFC 2396
+#if NET_2_1
+		readonly static Regex uri_regex = new Regex (@"^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?");
+#else
 		// Groups:    				        12            3  4          5       6  7        8 9
 		readonly static Regex uri_regex = new Regex (@"^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?", RegexOptions.Compiled);
+#endif
 
 		// Groups:				         12         3    4 5
 		readonly static Regex auth_regex = new Regex (@"^(([^@]+)@)?(.*?)(:([0-9]+))?$");
@@ -71,7 +75,7 @@ namespace System {
 			string scheme = scheme_name;
 			int dp = default_port;
 
-			if (scheme == null) {
+			if ((scheme == null) || (scheme == "*")) {
 				scheme = m.Groups [2].Value;
 				dp = Uri.GetDefaultPort (scheme);
 			} else if (String.Compare (scheme, m.Groups [2].Value, true) != 0) {
@@ -152,7 +156,7 @@ namespace System {
 		protected internal virtual void InitializeAndValidate (Uri uri, out UriFormatException parsingError)
 		{
 			// bad boy, it should check null arguments.
-			if (uri.Scheme != scheme_name)
+			if ((uri.Scheme != scheme_name) && (scheme_name != "*"))
 				// Here .NET seems to return "The Authority/Host could not be parsed", but it does not make sense.
 				parsingError = new UriFormatException ("The argument Uri's scheme does not match");
 			else

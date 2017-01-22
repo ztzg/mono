@@ -307,14 +307,20 @@ get_generic_context_from_stack_frame (MonoJitInfo *ji, gpointer generic_info)
 		class = generic_info;
 	}
 
-	if (class->generic_class || class->generic_container)
-		context.class_inst = mini_class_get_context (class)->class_inst;
-
 	g_assert (!ji->method->klass->generic_container);
 	if (ji->method->klass->generic_class)
 		method_container_class = ji->method->klass->generic_class->container_class;
 	else
 		method_container_class = ji->method->klass;
+
+	/* class might refer to a subclass of ji->method's class */
+	while (class->generic_class && class->generic_class->container_class != method_container_class) {
+		class = class->parent;
+		g_assert (class);
+	}
+
+	if (class->generic_class || class->generic_container)
+		context.class_inst = mini_class_get_context (class)->class_inst;
 
 	if (class->generic_class)
 		g_assert (mono_class_has_parent_and_ignore_generics (class->generic_class->container_class, method_container_class));
@@ -329,7 +335,7 @@ get_method_from_stack_frame (MonoJitInfo *ji, gpointer generic_info)
 {
 	MonoGenericContext context;
 	MonoMethod *method;
-
+	
 	if (!ji->has_generic_jit_info || !mono_jit_info_get_generic_jit_info (ji)->has_this)
 		return ji->method;
 	context = get_generic_context_from_stack_frame (ji, generic_info);
@@ -620,7 +626,7 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 
 	actual_method = get_method_from_stack_frame (ji, get_generic_info_from_stack_frame (ji, &ji_ctx));
 
-	*method = mono_method_get_object (domain, actual_method, NULL);
+	mono_gc_wbarrier_generic_store (method, (MonoObject*) mono_method_get_object (domain, actual_method, NULL));
 
 	location = mono_debug_lookup_source_location (ji->method, *native_offset, domain);
 	if (location)
@@ -630,7 +636,7 @@ ves_icall_get_frame_info (gint32 skip, MonoBoolean need_file_info,
 
 	if (need_file_info) {
 		if (location) {
-			*file = mono_string_new (domain, location->source_file);
+			mono_gc_wbarrier_generic_store (file, (MonoObject*) mono_string_new (domain, location->source_file));
 			*line = location->row;
 			*column = location->column;
 		} else {
@@ -845,6 +851,34 @@ get_exception_catch_class (MonoJitExceptionInfo *ei, MonoJitInfo *ji, MonoContex
 	return catch_class;
 }
 
+/*
+ * mini_jit_info_table_find:
+ *
+ *   Same as mono_jit_info_table_find, but search all the domains of the current thread
+ * if ADDR is not found in DOMAIN.
+ */
+MonoJitInfo*
+mini_jit_info_table_find (MonoDomain *domain, char *addr)
+{
+	MonoJitInfo *ji;
+	MonoThread *t = mono_thread_current ();
+	GSList *l;
+
+	ji = mono_jit_info_table_find (domain, addr);
+	if (ji)
+		return ji;
+
+	for (l = t->appdomain_refs; l; l = l->next) {
+		if (l->data != domain) {
+			ji = mono_jit_info_table_find ((MonoDomain*)l->data, addr);
+			if (ji)
+				return ji;
+		}
+	}
+
+	return NULL;
+}
+
 /**
  * mono_handle_exception_internal:
  * @ctx: saved processor state
@@ -854,7 +888,7 @@ get_exception_catch_class (MonoJitExceptionInfo *ei, MonoJitInfo *ji, MonoContex
  * the first filter clause which caught the exception.
  */
 static gboolean
-mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer original_ip, gboolean test_only, gint32 *out_filter_idx)
+mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer original_ip, gboolean test_only, gint32 *out_filter_idx, MonoJitInfo **out_ji)
 {
 	MonoDomain *domain = mono_domain_get ();
 	MonoJitInfo *ji, rji;
@@ -921,9 +955,9 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 	if (!test_only) {
 		MonoContext ctx_cp = *ctx;
 		if (mono_trace_is_enabled ())
-			g_print ("EXCEPTION handling: %s\n", mono_object_class (obj)->name);
+			g_print ("[%p:] EXCEPTION handling: %s\n", (void*)GetCurrentThreadId (), mono_object_class (obj)->name);
 		mono_profiler_exception_thrown (obj);
-		if (!mono_handle_exception_internal (&ctx_cp, obj, original_ip, TRUE, &first_filter_idx)) {
+		if (!mono_handle_exception_internal (&ctx_cp, obj, original_ip, TRUE, &first_filter_idx, out_ji)) {
 			if (mono_break_on_exc)
 				G_BREAKPOINT ();
 			// FIXME: This runs managed code so it might cause another stack overflow when
@@ -934,6 +968,8 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 
 	if (out_filter_idx)
 		*out_filter_idx = -1;
+	if (out_ji)
+		*out_ji = NULL;
 	filter_idx = 0;
 	initial_ctx = *ctx;
 	memset (&rji, 0, sizeof (rji));
@@ -1018,12 +1054,14 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 						}
 
 						if (ei->flags == MONO_EXCEPTION_CLAUSE_FILTER) {
-							// mono_debugger_call_exception_handler (ei->data.filter, MONO_CONTEXT_GET_SP (ctx), obj);
 							if (test_only) {
 								mono_perfcounters->exceptions_filters++;
+								mono_debugger_call_exception_handler (ei->data.filter, MONO_CONTEXT_GET_SP (ctx), obj);
 								filtered = call_filter (ctx, ei->data.filter);
 								if (filtered && out_filter_idx)
 									*out_filter_idx = filter_idx;
+								if (out_ji)
+									*out_ji = ji;
 							}
 							else {
 								/* 
@@ -1078,6 +1116,7 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 							mono_profiler_exception_clause_handler (ji->method, ei->flags, i);
 							mono_debugger_call_exception_handler (ei->handler_start, MONO_CONTEXT_GET_SP (ctx), obj);
 							mono_perfcounters->exceptions_finallys++;
+							*(mono_get_lmf_addr ()) = lmf;
 							call_filter (ctx, ei->handler_start);
 						}
 						
@@ -1112,6 +1151,72 @@ mono_handle_exception_internal (MonoContext *ctx, gpointer obj, gpointer origina
 	}
 
 	g_assert_not_reached ();
+}
+
+/*
+ * mono_debugger_handle_exception:
+ *
+ *  Notify the debugger about exceptions.  Returns TRUE if the debugger wants us to stop
+ *  at the exception and FALSE to resume with the normal exception handling.
+ *
+ *  The arch code is responsible to setup @ctx in a way that MONO_CONTEXT_GET_IP () and
+ *  MONO_CONTEXT_GET_SP () point to the throw instruction; ie. before executing the
+ *  `callq throw' instruction.
+ */
+gboolean
+mono_debugger_handle_exception (MonoContext *ctx, MonoObject *obj)
+{
+	MonoDebuggerExceptionAction action;
+
+	if (!mono_debug_using_mono_debugger ())
+		return FALSE;
+
+	if (!obj) {
+		MonoException *ex = mono_get_exception_null_reference ();
+		MONO_OBJECT_SETREF (ex, message, mono_string_new (mono_domain_get (), "Object reference not set to an instance of an object"));
+		obj = (MonoObject *)ex;
+	}
+
+	action = _mono_debugger_throw_exception (MONO_CONTEXT_GET_IP (ctx), MONO_CONTEXT_GET_SP (ctx), obj);
+
+	if (action == MONO_DEBUGGER_EXCEPTION_ACTION_STOP) {
+		/*
+		 * The debugger wants us to stop on the `throw' instruction.
+		 * By the time we get here, it already inserted a breakpoint there.
+		 */
+		return TRUE;
+	} else if (action == MONO_DEBUGGER_EXCEPTION_ACTION_STOP_UNHANDLED) {
+		MonoContext ctx_cp = *ctx;
+		MonoJitInfo *ji = NULL;
+		gboolean ret;
+
+		/*
+		 * The debugger wants us to stop only if this exception is user-unhandled.
+		 */
+
+		ret = mono_handle_exception_internal (&ctx_cp, obj, MONO_CONTEXT_GET_IP (ctx), TRUE, NULL, &ji);
+		if (ret && (ji != NULL) && (ji->method->wrapper_type == MONO_WRAPPER_RUNTIME_INVOKE)) {
+			/*
+			 * The exception is handled in a runtime-invoke wrapper, that means that it's unhandled
+			 * inside the method being invoked, so we handle it like a user-unhandled exception.
+			 */
+			ret = FALSE;
+		}
+
+		if (!ret) {
+			/*
+			 * The exception is user-unhandled - tell the debugger to stop.
+			 */
+			return _mono_debugger_unhandled_exception (MONO_CONTEXT_GET_IP (ctx), MONO_CONTEXT_GET_SP (ctx), obj);
+		}
+
+		/*
+		 * The exception is catched somewhere - resume with the normal exception handling and don't
+		 * stop in the debugger.
+		 */
+	}
+
+	return FALSE;
 }
 
 /**
@@ -1167,7 +1272,7 @@ mono_handle_exception (MonoContext *ctx, gpointer obj, gpointer original_ip, gbo
 {
 	if (!test_only)
 		mono_perfcounters->exceptions_thrown++;
-	return mono_handle_exception_internal (ctx, obj, original_ip, test_only, NULL);
+	return mono_handle_exception_internal (ctx, obj, original_ip, test_only, NULL, NULL);
 }
 
 #ifdef MONO_ARCH_SIGSEGV_ON_ALTSTACK
@@ -1299,7 +1404,7 @@ restore_stack_protection (void)
 }
 
 gpointer
-mono_altstack_restore_prot (gssize *regs, guint8 *code, gpointer *tramp_data, guint8* tramp)
+mono_altstack_restore_prot (mgreg_t *regs, guint8 *code, gpointer *tramp_data, guint8* tramp)
 {
 	void (*func)(void) = (gpointer)tramp_data;
 	func ();
@@ -1450,8 +1555,6 @@ mono_handle_native_sigsegv (int signal, void *ctx)
 		int res;
 		int stdout_pipe [2] = { -1, -1 };
 		pid_t pid;
-		const char *argv [16];
-		char buf1 [128];
 		int status;
 		char buffer [1024];
 
@@ -1463,7 +1566,8 @@ mono_handle_native_sigsegv (int signal, void *ctx)
 		 * glibc fork acquires some locks, so if the crash happened inside malloc/free,
 		 * it will deadlock. Call the syscall directly instead.
 		 */
-		pid = syscall (SYS_fork);
+		pid = mono_runtime_syscall_fork ();
+
 		if (pid == 0) {
 			close (stdout_pipe [0]);
 			dup2 (stdout_pipe [1], STDOUT_FILENO);
@@ -1471,23 +1575,9 @@ mono_handle_native_sigsegv (int signal, void *ctx)
 			for (i = getdtablesize () - 1; i >= 3; i--)
 				close (i);
 
-			argv [0] = g_find_program_in_path ("gdb");
-			if (argv [0] == NULL) {
+			if (!mono_gdb_render_native_backtraces ())
 				close (STDOUT_FILENO);
-				exit (1);
-			}
 
-			argv [1] = "-ex";
-			sprintf (buf1, "attach %ld", (long)getpid ());
-			argv [2] = buf1;
-			argv [3] = "--ex";
-			argv [4] = "info threads";
-			argv [5] = "--ex";
-			argv [6] = "thread apply all bt";
-			argv [7] = "--batch";
-			argv [8] = 0;
-
-			execv (argv [0], (char**)argv);
 			exit (1);
 		}
 
@@ -1582,7 +1672,7 @@ mono_print_thread_dump (void *sigctx)
 	printf ("\t<Stack traces in thread dumps not supported on this platform>\n");
 #endif
 
-	fprintf (stdout, text->str);
+	fprintf (stdout, "%s", text->str);
 	g_string_free (text, TRUE);
 	fflush (stdout);
 }

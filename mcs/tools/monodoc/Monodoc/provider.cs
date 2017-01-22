@@ -26,6 +26,9 @@ using ICSharpCode.SharpZipLib.Zip;
 
 using Monodoc.Lucene.Net.Index;
 using Monodoc.Lucene.Net.Analysis.Standard;
+
+using Mono.Documentation;
+
 /// <summary>
 ///    This tree is populated by the documentation providers, or populated
 ///    from a binary encoding of the tree.  The format of the tree is designed
@@ -331,12 +334,12 @@ public class Node : IComparable {
 	public static void PrintTree (Node node)
 	{
 		Indent ();
-		Console.WriteLine ("{0},{1}", node.Element, node.Caption);
-		if (node.Nodes == null)
+		Console.WriteLine ("{0},{1}\t[PublicUrl: {2}]", node.Element, node.Caption, node.PublicUrl);
+		if (node.Nodes.Count == 0)
 			return;
 
 		indent++;
-		foreach (Node n in node.nodes)
+		foreach (Node n in node.Nodes)
 			PrintTree (n);
 		indent--;
 	}
@@ -364,6 +367,14 @@ public class Node : IComparable {
 					return parent.URL + "/" + element;
 			} else
 				return element;
+		}
+	}
+
+	public string PublicUrl {
+		get {
+			return tree.HelpSource != null
+				? tree.HelpSource.GetPublicUrl (URL)
+				: URL;
 		}
 	}
 
@@ -422,6 +433,9 @@ public class HelpSource {
 
 	public static bool FullHtml = true;
 
+	// should only be enabled by ASP.NET webdoc
+	public static bool UseWebdocCache;
+
 	//
 	// The unique ID for this HelpSource.
 	//
@@ -429,12 +443,18 @@ public class HelpSource {
 	DateTime zipFileWriteTime;
 	string name;
 	TraceLevel trace_level = TraceLevel.Warning;
+	bool nozip;
+	string base_dir;
 
 	public HelpSource (string base_filename, bool create)
 	{
 		this.name = Path.GetFileName (base_filename);
 		tree_filename = base_filename + ".tree";
 		zip_filename = base_filename + ".zip";
+		base_dir = XmlDocUtils.GetCacheDirectory (base_filename);
+		if (UseWebdocCache && !create && Directory.Exists (base_dir)) {
+			nozip = true;
+		}
 
 		if (create)
 			SetupForOutput ();
@@ -485,6 +505,13 @@ public class HelpSource {
 	/// </summary>
 	public virtual Stream GetHelpStream (string id)
 	{
+		if (nozip) {
+			string path = XmlDocUtils.GetCachedFileName (base_dir, id);
+			if (File.Exists (path))
+				return File.OpenRead (path);
+			return null;
+		}
+
 		if (zip_file == null)
 			zip_file = new ZipFile (zip_filename);
 
@@ -507,6 +534,12 @@ public class HelpSource {
 	
 	public XmlReader GetHelpXml (string id)
 	{
+		if (nozip) {
+			Stream s = File.OpenRead (XmlDocUtils.GetCachedFileName (base_dir, id));
+			string url = "monodoc:///" + SourceID + "@" + System.Web.HttpUtility.UrlEncode (id) + "@";
+			return new XmlTextReader (url, s);
+		}
+
 		if (zip_file == null)
 			zip_file = new ZipFile (zip_filename);
 
@@ -521,6 +554,15 @@ public class HelpSource {
 	
 	public virtual XmlDocument GetHelpXmlWithChanges (string id)
 	{
+		if (nozip) {
+			Stream s = File.OpenRead (XmlDocUtils.GetCachedFileName (base_dir, id));
+			string url = "monodoc:///" + SourceID + "@" + System.Web.HttpUtility.UrlEncode (id) + "@";
+			XmlReader r = new XmlTextReader (url, s);
+			XmlDocument ret = new XmlDocument ();
+			ret.Load (r);
+			return ret;
+		}
+
 		if (zip_file == null)
 			zip_file = new ZipFile (zip_filename);
 
@@ -668,11 +710,26 @@ public class HelpSource {
 	{
 		throw new NotImplementedException ();
 	}
+
+	public virtual string GetPublicUrl (string id)
+	{
+		return id;
+	}
 	
 	public virtual string GetText (string url, out Node n)
 	{
 		n = null;
 		return null;
+	}
+
+	protected string GetCachedText (string url)
+	{
+		if (!nozip)
+			return null;
+		string file = XmlDocUtils.GetCachedFileName (base_dir, url);
+		if (!File.Exists (file))
+			return null;
+		return File.OpenText (file).ReadToEnd ();
 	}
 
 	public virtual Stream GetImage (string url)
@@ -791,19 +848,7 @@ public class RootTree : Tree {
 	
 	public static RootTree LoadTree ()
 	{
-		string basedir;
-		string myPath = System.Reflection.Assembly.GetExecutingAssembly ().Location;
-		string cfgFile = myPath + ".config";
-		if (!File.Exists (cfgFile)) {
-			basedir = ".";
-			return LoadTree (basedir);
-		}
-		
-		XmlDocument d = new XmlDocument ();
-		d.Load (cfgFile);
-		basedir = d.SelectSingleNode ("config/path").Attributes ["docsPath"].Value;
-		
-		return LoadTree (basedir);
+		return LoadTree (null);
 	}
 	
 	//
@@ -811,6 +856,18 @@ public class RootTree : Tree {
 	//
 	public static RootTree LoadTree (string basedir)
 	{
+		if (basedir == null) {
+			string myPath = System.Reflection.Assembly.GetExecutingAssembly ().Location;
+			string cfgFile = myPath + ".config";
+			if (!File.Exists (cfgFile)) {
+				basedir = ".";
+			}
+			else {
+				XmlDocument d = new XmlDocument ();
+				d.Load (cfgFile);
+				basedir = d.SelectSingleNode ("config/path").Attributes ["docsPath"].Value;
+			}
+		}
 		XmlDocument doc = new XmlDocument ();
 
 		RootTree root = new RootTree ();
@@ -836,14 +893,40 @@ public class RootTree : Tree {
 		//
 		// Load the sources
 		//
-		string sources_dir = Path.Combine (basedir, "sources");
+		root.AddSource (Path.Combine (basedir, "sources"));
 		
+		foreach (string path in UncompiledHelpSources) {
+			EcmaUncompiledHelpSource hs = new EcmaUncompiledHelpSource(path);
+			hs.RootTree = root;
+			root.help_sources.Add (hs);
+			string epath = "extra-help-source-" + hs.Name;
+			Node hsn = root.CreateNode (hs.Name, "root:/" + epath);
+			root.name_to_hs [epath] = hs;
+			hsn.EnsureNodes ();
+			foreach (Node n in hs.Tree.Nodes){
+				hsn.AddNode (n);
+			}
+		}
+		
+		// Clean the tree
+		PurgeNode(root);
+
+		root.Sort ();
+
+		return root;
+	}
+
+	public void AddSource (string sources_dir)
+	{
+		Node third_party = LookupEntryPoint ("various") ?? this;
+
 		string [] files = Directory.GetFiles (sources_dir);
+
 		foreach (string file in files){
 			if (!file.EndsWith (".source"))
 				continue;
 
-			doc = new XmlDocument ();
+			XmlDocument doc = new XmlDocument ();
 			try {
 				doc.Load (file);
 			} catch {
@@ -853,7 +936,7 @@ public class RootTree : Tree {
 
 			XmlNodeList extra_nodes = doc.SelectNodes ("/monodoc/node");
 			if (extra_nodes.Count > 0)
-				root.Populate (third_party, extra_nodes);
+				Populate (third_party, extra_nodes);
 
 			XmlNodeList sources = doc.SelectNodes ("/monodoc/source");
 			if (sources == null){
@@ -884,11 +967,11 @@ public class RootTree : Tree {
 				HelpSource hs = GetHelpSource (provider, basefilepath);
 				if (hs == null)
 					continue;
-				hs.RootTree = root;
-				root.help_sources.Add (hs);
-				root.name_to_hs [path] = hs;
+				hs.RootTree = this;
+				help_sources.Add (hs);
+				name_to_hs [path] = hs;
 
-				Node parent = root.LookupEntryPoint (path);
+				Node parent = LookupEntryPoint (path);
 				if (parent == null){
 					Console.Error.WriteLine ("node `{0}' is not defined on the documentation map", path);
 					parent = third_party;
@@ -900,26 +983,6 @@ public class RootTree : Tree {
 				parent.Sort ();
 			}
 		}
-		
-		foreach (string path in UncompiledHelpSources) {
-			EcmaUncompiledHelpSource hs = new EcmaUncompiledHelpSource(path);
-			hs.RootTree = root;
-			root.help_sources.Add (hs);
-			string epath = "extra-help-source-" + hs.Name;
-			Node hsn = root.CreateNode (hs.Name, "root:/" + epath);
-			root.name_to_hs [epath] = hs;
-			hsn.EnsureNodes ();
-			foreach (Node n in hs.Tree.Nodes){
-				hsn.AddNode (n);
-			}
-		}
-		
-		// Clean the tree
-		PurgeNode(root);
-
-		root.Sort ();
-
-		return root;
 	}
 	
 	// Delete nodes which does not have documentaiton (source)
@@ -953,9 +1016,21 @@ public class RootTree : Tree {
 		
 		return purge;
 	}
-					
+
+	public static string[] GetSupportedFormats ()
+	{
+		return new string[]{
+			"ecma", 
+			"ecmaspec", 
+			"error", 
+			"hb", 
+			"man", 
+			"simple", 
+			"xhtml"
+		};
+	}
 	
-	static HelpSource GetHelpSource (string provider, string basefilepath)
+	public static HelpSource GetHelpSource (string provider, string basefilepath)
 	{
 		try {
 			switch (provider){
@@ -965,7 +1040,7 @@ public class RootTree : Tree {
 				return new EcmaUncompiledHelpSource (basefilepath);
 			case "monohb":
 				return new MonoHBHelpSource(basefilepath, false);
-			case "xhtml":
+			case "xhtml": case "hb":
 				return new XhtmlHelpSource (basefilepath, false);
 			case "man":
 				return new ManHelpSource (basefilepath, false);
@@ -988,7 +1063,33 @@ public class RootTree : Tree {
 			return null;
 		}
 	}
-		
+
+	public static Provider GetProvider (string provider, params string[] basefilepaths)
+	{
+		switch (provider) {
+		case "addins":
+			return new AddinsProvider (basefilepaths [0]);
+		case "ecma": {
+			EcmaProvider p = new EcmaProvider ();
+			foreach (string d in basefilepaths)
+				p.AddDirectory (d);
+			return p;
+		}
+		case "ecmaspec":
+			return new EcmaSpecProvider (basefilepaths [0]);
+		case "error":
+			return new ErrorProvider (basefilepaths [0]);
+		case "man":
+			return new ManProvider (basefilepaths);
+		case "simple":
+			return new SimpleProvider (basefilepaths [0]);
+		case "xhtml":
+		case "hb":
+			return new XhtmlProvider (basefilepaths [0]);
+		default:
+			throw new NotSupportedException (provider);
+		}
+	}
 
 	//
 	// Maintains the name to node mapping

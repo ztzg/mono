@@ -48,6 +48,7 @@ namespace System.ServiceModel.Dispatcher
 		bool suppress_audio_failure = true;
 		bool completes_tx_on_close, ignore_tx_msg_props, inpersonate;
 		bool release_tx_complete;
+		bool validate_must_understand = true;
 		ClientRuntime callback_client_runtime;
 		ConcurrencyMode concurrency_mode;
 		InstanceContext instance_context;
@@ -80,11 +81,8 @@ namespace System.ServiceModel.Dispatcher
 		internal DispatchRuntime (EndpointDispatcher dispatcher)
 		{
 			endpoint_dispatcher = dispatcher;
-			// FIXME: is this really created at any time?
-			callback_client_runtime = new ClientRuntime (this);
 			unhandled_dispatch_oper = new DispatchOperation (
 				this, "*", "*", "*");
-			instance_context_provider = new DefaultInstanceContextProvider ();
 		}
 
 		public AuditLogLocation SecurityAuditLogLocation {
@@ -110,9 +108,21 @@ namespace System.ServiceModel.Dispatcher
 			get { return endpoint_dispatcher; }
 		}
 
-		[MonoTODO] // needs update when we can explore Duplex channels.
+		// FIXME: this is somewhat compromized solution to workaround
+		// an issue that this runtime-creation-logic could result in
+		// an infinite loop on callback instatiation between 
+		// ClientRuntime, but so far it works by this property...
+		internal bool HasCallbackRuntime {
+			get { return callback_client_runtime != null; }
+		}
+
 		public ClientRuntime CallbackClientRuntime {
-			get { return callback_client_runtime; }
+			get {
+				if (callback_client_runtime == null)
+					callback_client_runtime = new ClientRuntime (EndpointDispatcher.ContractName, EndpointDispatcher.ContractNamespace);
+				return callback_client_runtime;
+			}
+			internal set { callback_client_runtime = value; }
 		}
 
 		public ReadOnlyCollection<IAuthorizationPolicy> ExternalAuthorizationPolicies {
@@ -220,6 +230,11 @@ namespace System.ServiceModel.Dispatcher
 		public DispatchOperation UnhandledDispatchOperation {
 			get { return unhandled_dispatch_oper; }
 			set { unhandled_dispatch_oper = value; }
+		}
+
+		public bool ValidateMustUnderstand {
+			get { return validate_must_understand; }
+			set { validate_must_understand = value; }
 		}
 	}
 }

@@ -1,3 +1,81 @@
+2009-09-04  Jonathan Pryor  <jpryor@novell.com>
+
+	* Makefile: Also rsync dblinq2007/examples sources.
+	* build/DbLinq.Sqlite_test_mono_strict.dll.sources: Added; .sources
+	  file to build build/DbLinq.Sqlite_test_mono_strict.dll, the
+	  "end-to-end" unit tests for SQLite using Mono.Data.Sqlite.
+	* build/Makefile: Added; builds all "end-to-end" unit tests.
+	* examples/**/*: Sync with DbLinq r1217; includes sources needed for
+	  end-to-end tests located in 'build'.
+
+2009-09-04  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*: Sync with DbLinq r1217.  This removes a slew of
+	  FieldAccessExceptions when running the DbLinq unit tests.
+
+2009-09-02  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*: Sync with DbLinq r1216.  This fixes the
+	  ../../tools/sqlmetal build.
+
+2009-09-02  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*: Sync with DbLinq r1214.  This integrates several
+	  performance patches from Zoltan Varga, and adds a
+	  DataContextSubclass(string) constructor to sqlmetal output.
+
+2009-06-25  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*: Sync with DbLinq r1200.  Among other fixes, this fixes an
+	  issue where AttributeMappingSource.GetModel().GetTables() would 
+	  return duplicate types, which was unexpected by Marek Habersack.
+
+2009-06-19  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*, tests/**/*: Sync with DbLinq r1180.  Gets unit tests into
+	  a state (i.e. no release tests fail within NUnit), fixes several
+	  bugs, massive code cleanup (#if removal), EntitySet<T> fixes,
+	  removes some locale dependency issues, predicate building,
+	  performance improvements, and likely more.  Remove src/VisualMetal;
+	  it's no longer used.
+	* Makefile (update-dblinq): Exclude more files so that there's less
+	  "garbage" files to review on the next update.
+
+2009-05-14  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/DbLinq/Data/Linq/Sugar/Implementation/QueryCache.cs: Temporarily
+	  disable QueryCache.GetFromSelectCache(), as the cache keeps breaking
+	  for currently undiagnosed reasons.  With this disabled, NerdDinner
+	  seems to work properly.
+
+2009-05-14  Jonathan Pryor  <jpryor@novell.com>
+
+	* Makefile: Add 'update-dblinq' target, which copies files from my
+	  dblinq checkout into src.
+	* System.Data.Linq.dll.sources, System.Data.Linq_test.dll.sources: Add
+	  additional files.
+	* src/**/*: Flush; syncs to DbLinq r1073, greatly improves object
+	  tracking support, more tests....
+
+2009-04-24  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*: Add missing files (doh!).  Fixes the build.
+
+2009-04-24  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/**/*: Flush; syncs to DbLinq r1053.  Adds
+	  DataContext(string,MappingSource) support, the beginnings of object
+	  tracking, more tests...
+
+2009-04-08  Jonathan Pryor  <jpryor@novell.com>
+
+	* **/* (svn:ignore): Ignore generated files and directories.
+	* src/**/*: Flush; syncs to DbLinq r1043.
+
+2009-03-31  Jonathan Pryor  <jpryor@novell.com>
+
+	* Makefile: Remove make warning about overriding dist-local.
+
 2009-03-30  Jonathan Pryor  <jpryor@novell.com>
 
 	* System.Data.Linq.dll.sources: Remove

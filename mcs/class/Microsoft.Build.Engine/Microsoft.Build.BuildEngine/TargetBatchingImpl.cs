@@ -176,12 +176,12 @@ namespace Microsoft.Build.BuildEngine {
 				return true;
 
 			Expression e = new Expression ();
-			e.Parse (inputs, true);
-			inputFiles = (ITaskItem[]) e.ConvertTo (project, typeof (ITaskItem[]));
+			e.Parse (inputs, ParseOptions.AllowItemsNoMetadataAndSplit);
+			inputFiles = (ITaskItem[]) e.ConvertTo (project, typeof (ITaskItem[]), ExpressionOptions.ExpandItemRefs);
 
 			e = new Expression ();
-			e.Parse (outputs, true);
-			outputFiles = (ITaskItem[]) e.ConvertTo (project, typeof (ITaskItem[]));
+			e.Parse (outputs, ParseOptions.AllowItemsNoMetadataAndSplit);
+			outputFiles = (ITaskItem[]) e.ConvertTo (project, typeof (ITaskItem[]), ExpressionOptions.ExpandItemRefs);
 
 			if (inputFiles == null || inputFiles.Length == 0)
 				return false;

@@ -27,24 +27,20 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq.Expressions;
-#if MONO_STRICT
-using System.Data.Linq.Sugar.ExpressionMutator;
-#else
-using DbLinq.Data.Linq.Sugar.ExpressionMutator;
-#endif
 
-#if MONO_STRICT
-namespace System.Data.Linq.Sugar.Expressions
-#else
+using DbLinq.Data.Linq.Sugar.ExpressionMutator;
+
 namespace DbLinq.Data.Linq.Sugar.Expressions
-#endif
 {
     /// <summary>
     /// A GroupExpression holds a grouped result
     /// It is usually transparent, except for return value, where it mutates the type to IGrouping
     /// </summary>
     [DebuggerDisplay("GroupExpression")]
-    internal class GroupExpression : MutableExpression
+#if !MONO_STRICT
+    public
+#endif
+    class GroupExpression : MutableExpression
     {
         public const ExpressionType ExpressionType = (ExpressionType)CustomExpressionType.Group;
 

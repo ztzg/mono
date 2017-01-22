@@ -1,3 +1,339 @@
+2009-09-24  Zoltan Varga  <vargaz@gmail.com>
+
+	* Type.cs: Initialize the Missing field.
+
+2009-09-22  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Environment.cs: Remove imperative CAS environment
+	permission checks under NET_2_1
+
+2009-09-21 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Console.cs: mark methods/properties that only work on windows.
+	Fixes bug #540593.
+
+2009-09-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* AppDomain.cs: Remove use of IPrincipal, Evidence and
+	PermissionSet types for NET_2_1
+
+2009-09-20  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Activator.cs: Remove COM related method for NET_2_1
+	* AppDomain.cs: Remove extra methods and properties for NET_2_1
+	* AppDomainSetup.cs: Remove some properties for NET_2_1
+
+2009-09-20  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* AppDomain.cs, Environment.cs: Remove imperative CAS file IO
+	permission checks under NET_2_1
+
+2009-09-20  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* AppDomainManager.cs: Remove NET_2_1 defines
+	* AppDomainManager_2_1.cs: New. NET_2_1 specific implementation
+
+2009-09-04  Miguel de Icaza  <miguel@novell.com>
+
+	* TermInfoDriver.cs: Handle a few more key combinations.
+
+2009-08-14  Miguel de Icaza  <miguel@novell.com>
+
+	* TermInfoDriver.cs (GetCursorPosition): Before we probe the
+	terminal for the cursor location, read all the pending console
+	input into our internal buffer and then send the cursor location
+	request.
+
+2009-08-26  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* TimeSpan.cs: Fix parsing when seconds are not specified.
+
+2009-08-14  Marek Safar  <marek.safar@gmail.com>
+
+	* Type.cs: Made IsClass work under compiler context.
+
+2009-08-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* ResolveEventArgs.cs: Add net 4.0 RequestingAssembly property.
+
+2009-08-11  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* Funcs.cs:
+	* Action.cs:
+	* AggregateException.cs: Add BOOTSTRAP_NET_4_0.
+
+2009-08-07  Marek Safar  <marek.safar@gmail.com>
+
+	* AppDomain.cs: IsHomogenous always returns true for now.
+
+2009-08-06 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Environment.cs: Bump corlib version.
+
+2009-08-04 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Environment.cs: Bump corlib version.
+
+2009-08-03  Zoltan Varga  <vargaz@gmail.com>
+
+	* Environment.cs: Bump corlib version.
+
+2009-07-30  Marek Safar  <marek.safar@gmail.com>
+
+	* AppDomain.cs: Implemented 2.0 CreateDomain.
+
+2009-07-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	Type.cs (MakeArrayType): Handle one-dym multidimensional array
+	created with Type::MakeArrayType (1).
+
+2009-07-28  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Type.cs (FindMembers): Fix the ordering of returned members
+	to method, ctor, property, event, field and nested type.
+
+2009-07-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Array.cs: empty arrays just return -1 in LastIndexOf().
+
+2009-07-27  Miguel de Icaza  <miguel@novell.com>
+
+	* Value types implementing IConvertible.ToType now throw an
+	ArgumentNullException if they are passed a null as the
+	"targetType" argument.
+
+	This code can not be put directly in the Convert.ToType method, as
+	this method is used by Convert.ToType (object o, TypeCode tc)
+	which uses null as a target to throw a different kind of error
+	(InvalidCastException).
+
+	Fixes a few more bugs in the Silverlight BCL test suite.
+
+	Additionally, the parameter type has been renamed.
+
+2009-07-26  Miguel de Icaza  <miguel@novell.com>
+
+	* Type.cs: (GetMember) call directly the worker method, instead of
+	calling through an intermediary.
+
+	(GetMember, full): throw if the name is null.
+
+2009-07-19  Robert Jordan  <robertj@gmx.net>
+
+	* __ComObject.cs: Factor out Initialize method and expose it to
+	ComInteropProxy. Fixes bug #520437.
+
+2009-07-14  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Attribute.cs (GetCustomAttributes): Pass typeof(Attribute)
+	to GetCustomAttributes to match MS.
+
+	* MonoCustomAttrs.cs (GetCustomAttributesBase): Do proper
+	checking of which types are handled by the runtime.
+
+	* MonoCustomAttrs.cs (IsDefined): Same.
+
+	Fixes #521885.
+
+2009-07-14  Zoltan Varga  <vargaz@gmail.com>
+
+	* Environment.cs: Bump corlib version.
+
+2009-07-07  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Type.cs (IsUserType): Only TypeDelegator and types
+	outside of corlib are unhandled usertypes.
+
+2009-07-02  Marek Safar  <marek.safar@gmail.com>
+
+	* Type.cs, AppDomain.cs: 4.0 bits.
+
+2009-06-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* DateTime.cs: if the DateTimeOffset is out of bounds, let Parse
+	report the error. Fix stupid harmless typo.
+	* DateTimeOffset.cs: report error if the UTC date/time is out of
+	bounds.
+
+2009-06-25  Miguel de Icaza  <miguel@novell.com>
+
+	* Array.cs: IList.this needs to throw IndexOutOfRangeException
+	when the index is invalid, not ArgumentOutOfRangeException.
+
+	* Int32.cs: Do not crash if the FormatProvider returns a null
+	value on the call to GetFormat (Type).
+
+	Validate the NumberStyles, passes Int/Int32Parse2.exe
+
+	Fix regression introduced in 2005, we need to throw
+	ArgumentNullException on Parse.
+
+2009-06-25  Miguel de Icaza  <miguel@novell.com>
+
+	* Int32.cs: Fix regression introduced in 2005, we need to throw
+	ArgumentNullException on Parse.
+
+2009-06-23 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* DateTime.cs: ignore MinValue to avoid DateTimeOffset ctor throwing
+	when adjusting for TZ.
+
+2009-06-22  Miguel de Icaza  <miguel@novell.com>
+
+	* String.cs: In Silverlight the whitespace characters 0x202f and
+	0x205f are considered for Trim and Split purposes. 
+
+2009-06-21  Marek Safar  <marek.safar@gmail.com>
+
+	* Tuples.cs: Add Equals, GetHashCode.
+
+2009-06-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* IntPtr.cs (.ctor): Disable the check in the long ctor until we
+	can figure out how to do it properly.
+
+2009-06-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* IntPtr.cs (.ctor): Allow long values whose 31th bit is set.
+
+2009-06-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* DateTime.cs: quick fix for the 1.x build.
+
+2009-06-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* AppDomainSetup.cs: update attribute.
+	* TermInfoDriver.cs: ensure we are initialized in CheckWindowDimensions().
+	* DateTimeOffset.cs: Implement Parse().
+	* DateTime.cs: add 'zzz' to the list of default time formats. Return a
+	DateTimeOffset from _DoParse. Fixed the offset minutes when the
+	timezone is specified as a negative one.
+	* Console.cs: updates for MoveBufferArea().
+	* AppDomainManager.cs: implement EntryAssembly.
+	* AppDomain.cs: update attribute.
+
+2009-06-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Environment.cs : bump corlib version.
+
+2009-06-12  Bill Holmes  <billholmes54@gmail.com>
+
+	* Variant.cs (GetValue):  Changing the bool case to use the short value.  
+	  This is to avoid junk in the high word.
+
+	Contributed under MIT/X11 license.
+
+2009-06-10  Marek Safar  <marek.safar@gmail.com>
+
+	* Predicate.cs, Action.cs, Funcs.cs, Comparison.cs, IComparable.cs,
+	Converter.cs, EventHandler.cs: Add type variance.
+	
+	* InvalidTimeZoneException.cs,
+	TimeZoneNotFoundException.cs: New file.
+
+2009-05-27  Zoltan Varga  <vargaz@gmail.com>
+
+	* AppDomain.cs (DoAssemblyResolve): Fix recursion detection. Fixes #507003.
+
+2009-05-26  Mark Probst  <mark.probst@gmail.com>
+
+	* Thread.cs: Don't set the execution context when creating a
+	thread because the _ec member is thread static and we set the
+	wrong one.  It's now set by the runtime.  We just provide the
+	correct one.
+
+	* Environment.cs: Bump corlib version.
+
+2009-05-22  Zoltan Varga  <vargaz@gmail.com>
+
+	* Tuple.cs Tuples.cs: New files.
+
+	* Lazy.cs LazyExecutionMode.cs Funcs.cs: New files.
+
+2009-05-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Type.cs: (GetInterfaceMap) 'this' can't be an interface itself.
+	Fixed bug #503728.
+
+2009-05-03 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* TermInfoDriver.cs: replace Peek with DataAvailable.
+
+2009-05-02  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Console.cs: Remove Windows-specific p/invokes and SSC code
+	from the NET_2_1 build.
+
+2009-05-01  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* AppDomainManager.cs: Fix base class for NET_2_1 and implement
+	CheckSecuritySettings (added in 2.0SP and part of SL API)
+
+2009-04-29 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Enum.cs: return the value as an enum of the right type.
+
+2009-04-28 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Enum.cs: avoid exceptions from ToObject and use Try* instead.
+
+2009-04-25  Miguel de Icaza  <miguel@novell.com>
+
+	* TermInfoDriver.cs: Use the new StreamReader.DataAvailable to
+	load all the data that was added into the `stdin' stream when we
+	did the `Read'.
+
+2009-04-24  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Environment.cs: #ifdef out code that use the registry for the 
+	NET_2_1 profile and some other properties (2) that added
+	[SecuritySafeCritical] methods to audit inside Moonlight.
+
+2009-04-21  Mark Probst  <mark.probst@gmail.com>
+
+	* Environment.cs: Bump corlib version.
+
+2009-04-21  Miguel de Icaza  <miguel@novell.com>
+
+	* TermInfoDriver.cs: Prevent race condition if two threads try to
+	initialize the Console at the same time. 
+
+	What happens is that inited is set, and elsewhere we try to
+	dereference native_terminal_size before it is set.
+
+	* Reduce code size by using a table instead of manually making a
+	few hundred calls.
+	
+2009-04-20  Miguel de Icaza  <miguel@novell.com>
+
+	* Enum.cs (MonoEnumInfo): Compare bytes, shorts, ints and longs as
+	unsigned values as specified and to fix 371559, from the bug:
+
+		So the actual difference is that MSFT's Enum.GetValues
+		orders the members as unsigned even when the underlying
+		type is int.  See the following.  Perhaps that's what's
+		being implied by "binary values" in that Enum.GetValues
+		MSDN quote above.
+
+2009-04-18  Mark Probst  <mark.probst@gmail.com>
+
+	* NumberFormatter.cs: Keep the current thread's number formatter
+	as a ThreadStatic member.
+
+2009-04-18  Mark Probst  <mark.probst@gmail.com>
+
+	* Environment.cs: Bump corlib version.
+
+2009-04-12 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* GCNotificationStatus.cs: new enum.
+
+2009-04-10  Zoltan Varga  <vargaz@gmail.com>
+
+	* Array.cs: Make some of the InternalArray methods non-generic to cut down
+	on the number of instantiations. Add implementation for 
+	ICollection:IsReadOnly.
+
 2009-03-26  Jb Evain  <jbevain@novell.com>
 
 	* Delegate.cs (CreateDelegate): Support for delegates

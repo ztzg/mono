@@ -34,10 +34,19 @@ using DbMetal;
 
 namespace DbMetal.Schema
 {
-    public class TableAlias
+#if !MONO_STRICT
+    public
+#endif
+    class TableAlias
     {
         public class Renamings : INameAliases
         {
+            [XmlAttribute("Name")]
+            public string Name { get; set; }
+
+            [XmlAttribute("Class")]
+            public string Class { get; set; }
+
             [XmlElement("Renaming")]
             public readonly List<Renaming> Arr = new List<Renaming>();
 
@@ -63,7 +72,27 @@ namespace DbMetal.Schema
 
             public string GetColumnForcedType(string column, string table, string schema)
             {
-                return GetAlias(column);
+                return null;
+            }
+
+            public bool? GetColumnGenerated(string column, string table, string schema)
+            {
+                return null;
+            }
+
+            public DbLinq.Schema.Dbml.AutoSync? GetColumnAutoSync(string column, string table, string schema)
+            {
+                return null;
+            }
+
+            public string GetDatabaseNameAlias(string databaseName)
+            {
+                return Name;
+            }
+
+            public string GetClassNameAlias(string className)
+            {
+                return Class;
             }
         }
 

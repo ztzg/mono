@@ -27,20 +27,16 @@
 using System;
 using System.Diagnostics;
 using System.Linq.Expressions;
-#if MONO_STRICT
-using System.Data.Linq.Sugar.Expressions;
-#else
-using DbLinq.Data.Linq.Sugar.Expressions;
-#endif
 
-#if MONO_STRICT
-namespace System.Data.Linq.Sugar.Expressions
-#else
+using DbLinq.Data.Linq.Sugar.Expressions;
+
 namespace DbLinq.Data.Linq.Sugar.Expressions
-#endif
 {
     [DebuggerDisplay("ObjectInputParameterExpression")]
-    internal class ObjectInputParameterExpression : MutableExpression
+#if !MONO_STRICT
+    public
+#endif
+    class ObjectInputParameterExpression : MutableExpression
     {
         public const ExpressionType ExpressionType = (ExpressionType)CustomExpressionType.ObjectInputParameter;
 

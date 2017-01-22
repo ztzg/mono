@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <signal.h>
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
@@ -274,6 +273,9 @@ mono_debug_symfile_lookup_location (MonoDebugMethodInfo *minfo, guint32 offset)
 #define DW_LNE_end_sequence 1
 #define DW_LNE_MONO_negate_is_hidden 0x40
 
+#define DW_LNE_MONO__extensions_start 0x40
+#define DW_LNE_MONO__extensions_end 0x7f
+
 	if ((symfile = minfo->handle->symfile) == NULL)
 		return NULL;
 
@@ -308,6 +310,9 @@ mono_debug_symfile_lookup_location (MonoDebugMethodInfo *minfo, guint32 offset)
 				break;
 			} else if (opcode == DW_LNE_MONO_negate_is_hidden) {
 				;
+			} else if ((opcode >= DW_LNE_MONO__extensions_start) &&
+				   (opcode <= DW_LNE_MONO__extensions_end)) {
+				; // reserved for future extensions
 			} else {
 				g_warning ("Unknown extended opcode %x in LNT", opcode);
 			}

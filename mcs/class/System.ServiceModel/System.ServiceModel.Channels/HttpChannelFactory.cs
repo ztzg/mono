@@ -36,19 +36,18 @@ using System.Text;
 
 namespace System.ServiceModel.Channels
 {
-	internal class HttpChannelFactory<TChannel> : ChannelFactoryBase<TChannel>
+	internal class HttpChannelFactory<TChannel> : TransportChannelFactoryBase<TChannel>
 	{
 		// not sure if they are required.
-		HttpTransportBindingElement source;
 		MessageEncoder encoder;
 
 		public HttpChannelFactory (HttpTransportBindingElement source, BindingContext ctx)
+			: base (source, ctx)
 		{
-			this.source = source;
 			foreach (BindingElement be in ctx.RemainingBindingElements) {
 				MessageEncodingBindingElement mbe = be as MessageEncodingBindingElement;
 				if (mbe != null) {
-					encoder = mbe.CreateMessageEncoderFactory ().Encoder;
+					encoder = CreateEncoder<TChannel> (mbe);
 					break;
 				}
 			}
@@ -65,8 +64,12 @@ namespace System.ServiceModel.Channels
 		{
 			ThrowIfDisposedOrNotOpen ();
 
-			if (source.Scheme != address.Uri.Scheme)
+			if (Source.Scheme != address.Uri.Scheme)
 				throw new ArgumentException (String.Format ("Argument EndpointAddress has unsupported URI scheme: {0}", address.Uri.Scheme));
+
+			if (MessageEncoder.MessageVersion.Addressing.Equals (AddressingVersion.None) &&
+			    via != null && !address.Uri.Equals (via))
+				throw new ArgumentException (String.Format ("The endpoint address '{0}' and via uri '{1}' must match when the corresponding binding has addressing version in the message version value as None.", address.Uri, via));
 
 			Type t = typeof (TChannel);
 			if (t == typeof (IRequestChannel))
@@ -77,15 +80,21 @@ namespace System.ServiceModel.Channels
 			throw new InvalidOperationException (String.Format ("channel type {0} is not supported.", typeof (TChannel).Name));
 		}
 
+		Action<TimeSpan> open_delegate;
+
 		protected override IAsyncResult OnBeginOpen (TimeSpan timeout,
 			AsyncCallback callback, object state)
 		{
-			throw new NotImplementedException ();
+			if (open_delegate == null)
+				open_delegate = new Action<TimeSpan> (OnOpen);
+			return open_delegate.BeginInvoke (timeout, callback, state);
 		}
 
 		protected override void OnEndOpen (IAsyncResult result)
 		{
-			throw new NotImplementedException ();
+			if (open_delegate == null)
+				throw new InvalidOperationException ("Async open operation has not started");
+			open_delegate.EndInvoke (result);
 		}
 
 		protected override void OnOpen (TimeSpan timeout)

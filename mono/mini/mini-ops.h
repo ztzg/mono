@@ -20,6 +20,7 @@ MINI_OP(OP_ARG,		"arg", NONE, NONE, NONE)
 MINI_OP(OP_ARGLIST,	"oparglist", NONE, IREG, NONE)
 MINI_OP(OP_OUTARG_VT,	"outarg_vt", NONE, VREG, NONE)
 MINI_OP(OP_OUTARG_VTRETADDR, "outarg_vtretaddr", IREG, NONE, NONE)
+MINI_OP(OP_SETRET,	"setret", NONE, IREG, NONE)
 MINI_OP(OP_SETFRET,	"setfret", FREG, FREG, NONE)
 MINI_OP(OP_SETLRET,	"setlret", NONE, IREG, IREG)
 MINI_OP(OP_LOCALLOC, "localloc", IREG, IREG, NONE)
@@ -50,6 +51,7 @@ MINI_OP(OP_VCALL_MEMBASE,	"vcall_membase", VREG, IREG, NONE)
 MINI_OP(OP_VCALL2, 	"vcall2", NONE, NONE, NONE)
 MINI_OP(OP_VCALL2_REG,	"vcall2_reg", NONE, IREG, NONE)
 MINI_OP(OP_VCALL2_MEMBASE,	"vcall2_membase", NONE, IREG, NONE)
+MINI_OP(OP_DYN_CALL, "dyn_call", NONE, IREG, IREG)
 
 MINI_OP(OP_ICONST,	"iconst", IREG, NONE, NONE)
 MINI_OP(OP_I8CONST,	"i8const", LREG, NONE, NONE)
@@ -72,7 +74,7 @@ MINI_OP(OP_STOREI8_MEMBASE_REG, "storei8_membase_reg", IREG, IREG, NONE)
 MINI_OP(OP_STORER4_MEMBASE_REG, "storer4_membase_reg", IREG, FREG, NONE)
 MINI_OP(OP_STORER8_MEMBASE_REG, "storer8_membase_reg", IREG, FREG, NONE)
 
-#ifdef MONO_ARCH_SUPPORT_SIMD_INTRINSICS
+#if defined(TARGET_X86) || defined(TARGET_AMD64)
 MINI_OP(OP_STOREX_MEMBASE_REG, "storex_membase_reg", IREG, XREG, NONE)
 MINI_OP(OP_STOREX_ALIGNED_MEMBASE_REG,     "storex_aligned_membase_reg", IREG, XREG, NONE)
 MINI_OP(OP_STOREX_NTA_MEMBASE_REG,     "storex_nta_membase_reg", IREG, XREG, NONE)
@@ -100,7 +102,7 @@ MINI_OP(OP_LOADR8_MEMBASE,"loadr8_membase", FREG, IREG, NONE)
 
 MINI_OP(OP_LOADX_MEMBASE, 			"loadx_membase", XREG, IREG, NONE)
 
-#ifdef MONO_ARCH_SUPPORT_SIMD_INTRINSICS
+#if defined(TARGET_X86) || defined(TARGET_AMD64)
 MINI_OP(OP_LOADX_ALIGNED_MEMBASE,  "loadx_aligned_membase", XREG, IREG, NONE)
 #endif
 
@@ -127,7 +129,6 @@ MINI_OP(OP_STOREI8_MEMINDEX,"storei8_memindex", IREG, IREG, IREG)
 MINI_OP(OP_STORER4_MEMINDEX,"storer4_memindex", IREG, IREG, IREG)
 MINI_OP(OP_STORER8_MEMINDEX,"storer8_memindex", IREG, IREG, IREG)
 
-MINI_OP(OP_LOADR8_SPILL_MEMBASE,"loadr8_spill_membase", NONE, NONE, NONE)
 MINI_OP(OP_LOAD_MEM,"load_mem", IREG, NONE, NONE)
 MINI_OP(OP_LOADU1_MEM,"loadu1_mem", IREG, NONE, NONE)
 MINI_OP(OP_LOADU2_MEM,"loadu2_mem", IREG, NONE, NONE)
@@ -479,13 +480,13 @@ MINI_OP(OP_FCGT_UN,"float_cgt_un", IREG, FREG, FREG)
 MINI_OP(OP_FCLT,   "float_clt", IREG, FREG, FREG)
 MINI_OP(OP_FCLT_UN,"float_clt_un", IREG, FREG, FREG)
 
-MINI_OP(OP_FCEQ_MEMBASE,   "float_ceq_membase", NONE, NONE, NONE)
-MINI_OP(OP_FCGT_MEMBASE,   "float_cgt_membase", NONE, NONE, NONE)
-MINI_OP(OP_FCGT_UN_MEMBASE,"float_cgt_un_membase", NONE, NONE, NONE)
-MINI_OP(OP_FCLT_MEMBASE,   "float_clt_membase", NONE, NONE, NONE)
-MINI_OP(OP_FCLT_UN_MEMBASE,"float_clt_un_membase", NONE, NONE, NONE)
+MINI_OP(OP_FCEQ_MEMBASE,   "float_ceq_membase", IREG, FREG, IREG)
+MINI_OP(OP_FCGT_MEMBASE,   "float_cgt_membase", IREG, FREG, IREG)
+MINI_OP(OP_FCGT_UN_MEMBASE,"float_cgt_un_membase", IREG, FREG, IREG)
+MINI_OP(OP_FCLT_MEMBASE,   "float_clt_membase", IREG, FREG, IREG)
+MINI_OP(OP_FCLT_UN_MEMBASE,"float_clt_un_membase", IREG, FREG, IREG)
 
-MINI_OP(OP_FCONV_TO_U,	"float_conv_to_u", NONE, NONE, NONE)
+MINI_OP(OP_FCONV_TO_U,	"float_conv_to_u", IREG, FREG, NONE)
 MINI_OP(OP_CKFINITE, "ckfinite", FREG, FREG, NONE)
 
 /* Return the low 32 bits of a double vreg */
@@ -507,8 +508,8 @@ MINI_OP(OP_ENDFILTER,  "endfilter", NONE, IREG, NONE)
 MINI_OP(OP_ENDFINALLY,  "endfinally", NONE, NONE, NONE)
 
 /* inline (long)int * (long)int */
-MINI_OP(OP_BIGMUL, "bigmul", NONE, NONE, NONE)
-MINI_OP(OP_BIGMUL_UN, "bigmul_un", NONE, NONE, NONE)
+MINI_OP(OP_BIGMUL, "bigmul", LREG, IREG, IREG)
+MINI_OP(OP_BIGMUL_UN, "bigmul_un", LREG, IREG, IREG)
 MINI_OP(OP_IMIN_UN, "int_min_un", IREG, IREG, IREG)
 MINI_OP(OP_IMAX_UN, "int_max_un", IREG, IREG, IREG)
 MINI_OP(OP_LMIN_UN, "long_min_un", LREG, LREG, LREG)
@@ -539,6 +540,7 @@ MINI_OP(OP_ZEXT_I1,  "zext_i1", IREG, IREG, NONE)
 MINI_OP(OP_ZEXT_I2,  "zext_i2", IREG, IREG, NONE)
 MINI_OP(OP_ZEXT_I4,  "zext_i4", LREG, IREG, NONE)
 MINI_OP(OP_CNE,      "cne", NONE, NONE, NONE)
+MINI_OP(OP_TRUNC_I4, "trunc_i4", IREG, LREG, NONE)
 /* to implement the upper half of long32 add and sub */
 MINI_OP(OP_ADD_OVF_CARRY,   "add_ovf_carry", IREG, IREG, IREG)
 MINI_OP(OP_SUB_OVF_CARRY,   "sub_ovf_carry", IREG, IREG, IREG)
@@ -578,7 +580,7 @@ MINI_OP(OP_NOT_NULL, "not_null", NONE, IREG, NONE)
 
 /* SIMD opcodes. */
 
-#ifdef MONO_ARCH_SUPPORT_SIMD_INTRINSICS
+#if defined(TARGET_X86) || defined(TARGET_AMD64)
 
 MINI_OP(OP_ADDPS, "addps", XREG, XREG, XREG)
 MINI_OP(OP_DIVPS, "divps", XREG, XREG, XREG)
@@ -620,6 +622,8 @@ MINI_OP(OP_HADDPD, "haddpd", XREG, XREG, XREG)
 MINI_OP(OP_HSUBPD, "hsubpd", XREG, XREG, XREG)
 MINI_OP(OP_ADDSUBPD, "addsubpd", XREG, XREG, XREG)
 MINI_OP(OP_DUPPD, "duppd", XREG, XREG, NONE)
+
+MINI_OP(OP_SQRTPD, "sqrtpd", XREG, XREG, NONE)
 
 MINI_OP(OP_EXTRACT_MASK, "extract_mask", IREG, XREG, NONE)
 
@@ -846,7 +850,7 @@ MINI_OP(OP_LIVERANGE_START, "liverange_start", NONE, NONE, NONE)
 MINI_OP(OP_LIVERANGE_END, "liverange_end", NONE, NONE, NONE)
 
 /* Arch specific opcodes */
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(TARGET_X86) || defined(TARGET_AMD64)
 MINI_OP(OP_X86_TEST_NULL,          "x86_test_null", NONE, IREG, NONE)
 MINI_OP(OP_X86_COMPARE_MEMBASE_REG,"x86_compare_membase_reg", NONE, IREG, IREG)
 MINI_OP(OP_X86_COMPARE_MEMBASE_IMM,"x86_compare_membase_imm", NONE, IREG, NONE)
@@ -892,8 +896,8 @@ MINI_OP(OP_X86_SETNE_MEMBASE,      "x86_setne_membase", NONE, IREG, NONE)
 MINI_OP(OP_X86_FXCH,               "x86_fxch", NONE, NONE, NONE)
 #endif
 
-#if defined(__x86_64__)
-MINI_OP(OP_AMD64_TEST_NULL,              "amd64_test_null", NONE, NONE, NONE)
+#if defined(TARGET_AMD64)
+MINI_OP(OP_AMD64_TEST_NULL,              "amd64_test_null", NONE, IREG, NONE)
 MINI_OP(OP_AMD64_SET_XMMREG_R4,          "amd64_set_xmmreg_r4", FREG, FREG, NONE)
 MINI_OP(OP_AMD64_SET_XMMREG_R8,          "amd64_set_xmmreg_r8", FREG, FREG, NONE)
 MINI_OP(OP_AMD64_ICOMPARE_MEMBASE_REG,   "amd64_icompare_membase_reg", NONE, IREG, IREG)
@@ -917,24 +921,24 @@ MINI_OP(OP_AMD64_OR_MEMBASE_IMM,         "amd64_or_membase_imm", NONE, IREG, NON
 MINI_OP(OP_AMD64_XOR_MEMBASE_IMM,        "amd64_xor_membase_imm", NONE, IREG, NONE)
 MINI_OP(OP_AMD64_MUL_MEMBASE_IMM,        "amd64_mul_membase_imm", NONE, IREG, NONE)
 
-MINI_OP(OP_AMD64_ADD_REG_MEMBASE,        "amd64_add_reg_membase", NONE, IREG, IREG)
-MINI_OP(OP_AMD64_SUB_REG_MEMBASE,        "amd64_sub_reg_membase", NONE, IREG, IREG)
+MINI_OP(OP_AMD64_ADD_REG_MEMBASE,        "amd64_add_reg_membase", IREG, IREG, IREG)
+MINI_OP(OP_AMD64_SUB_REG_MEMBASE,        "amd64_sub_reg_membase", IREG, IREG, IREG)
 MINI_OP(OP_AMD64_AND_REG_MEMBASE,        "amd64_and_reg_membase", IREG, IREG, IREG)
 MINI_OP(OP_AMD64_OR_REG_MEMBASE,         "amd64_or_reg_membase", IREG, IREG, IREG)
 MINI_OP(OP_AMD64_XOR_REG_MEMBASE,        "amd64_xor_reg_membase", IREG, IREG, IREG)
-MINI_OP(OP_AMD64_MUL_REG_MEMBASE,        "amd64_mul_reg_membase", NONE, IREG, IREG)
+MINI_OP(OP_AMD64_MUL_REG_MEMBASE,        "amd64_mul_reg_membase", IREG, IREG, IREG)
 
 MINI_OP(OP_AMD64_LOADI8_MEMINDEX,        "amd64_loadi8_memindex", IREG, IREG, IREG)
 MINI_OP(OP_AMD64_SAVE_SP_TO_LMF,         "amd64_save_sp_to_lmf", NONE, NONE, NONE)
 #endif
 
-#if  defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__)
+#if  defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__) || defined(TARGET_POWERPC)
 MINI_OP(OP_PPC_SUBFIC,             "ppc_subfic", IREG, IREG, NONE)
 MINI_OP(OP_PPC_SUBFZE,             "ppc_subfze", IREG, IREG, NONE)
 MINI_OP(OP_CHECK_FINITE,           "ppc_check_finite", NONE, IREG, NONE)
 #endif
 
-#if defined(__arm__)
+#if defined(TARGET_ARM)
 MINI_OP(OP_ARM_RSBS_IMM,            "arm_rsbs_imm", IREG, IREG, NONE)
 MINI_OP(OP_ARM_RSC_IMM,             "arm_rsc_imm", IREG, IREG, NONE)
 #endif
@@ -1286,4 +1290,9 @@ MINI_OP(OP_SH4_VOIDCALL_VIRT_REG,	"sh4_voidcall_virt_reg",	NONE, IREG, IREG)
 MINI_OP(OP_SH4_CALL_VIRT_REG,		"sh4_call_virt_reg",		IREG, IREG, IREG)
 MINI_OP(OP_SH4_FCALL_VIRT_REG,		"sh4_fcall_virt_reg",		FREG, IREG, IREG)
 MINI_OP(OP_SH4_LCALL_VIRT_REG,		"sh4_lcall_virt_reg",		LREG, IREG, IREG)
+#endif
+
+/* Same as OUTARG_VT, but has a dreg */
+#ifdef ENABLE_LLVM
+MINI_OP(OP_LLVM_OUTARG_VT,	"llvm_outarg_vt", IREG, VREG, NONE)
 #endif

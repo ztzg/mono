@@ -1,3 +1,55 @@
+2009-09-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlAttributeCollectionTests.cs : add test for bug #508296 by
+	  Tom Hindle.
+
+2009-08-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextReaderTests.cs : added test for null nametable in parser
+	  context.
+
+2009-07-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlNamespaceManagerTests.cs : add test for bug #514015.
+
+2009-07-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextReaderTests.cs : added test for bug #523971 by Hib Eris.
+
+2009-06-26  Robert Jordan  <robertj@gmx.net>
+
+	* *.cs: Upgrade to new NUnit style.
+
+2009-05-22  Gert Driesen  <drieseng@users.sourceforge.net>
+
+	* XmlResolverTest.cs: Fix ResolveUri test on Windows when current
+	directory is not on C drive.
+
+2009-05-12  Jonas Larsson  <jonas.larsson@manodo.se>
+
+	* XmlValidatingReaderTests.cs : test for bug #502168
+
+2009-05-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlValidatingReaderTests.cs : test for bug #501814 by Jonas
+	  Larsson.
+
+2009-05-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdValidatingReaderTest.cs : test for bug #501763 by Jonas Larsson.
+
+2009-04-28  Sebastien Pouliot  <sebastien@ximian.com> 
+
+	* XmlReaderCommonTests.cs: Add test case for an empty string url
+
+2009-04-28  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* XmlResolverTest.cs: New. Unit tests for base features.
+
+2009-04-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlAttributeCollectionTests.cs : added test for bug #496022.
+
 2009-03-16  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlParserContextTests.cs : added test for bug #484519.

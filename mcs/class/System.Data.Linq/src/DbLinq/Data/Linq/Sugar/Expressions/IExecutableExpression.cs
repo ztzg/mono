@@ -24,13 +24,12 @@
 // 
 #endregion
 
-#if MONO_STRICT
-namespace System.Data.Linq.Sugar.Expressions
-#else
 namespace DbLinq.Data.Linq.Sugar.Expressions
-#endif
 {
-    internal interface IExecutableExpression
+#if !MONO_STRICT
+    public
+#endif
+    interface IExecutableExpression
     {
         /// <summary>
         /// Evaluates the expression value

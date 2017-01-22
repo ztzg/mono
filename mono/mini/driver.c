@@ -341,6 +341,9 @@ mini_regression (MonoImage *image, int verbose, int *total_run)
 	TestMethod func;
 	GTimer *timer = g_timer_new ();
 	MonoDomain *domain = mono_domain_get ();
+	guint32 exclude = 0;
+
+	mono_arch_cpu_optimizazions (&exclude);
 
 	if (mini_stats_fd) {
 		fprintf (mini_stats_fd, "$stattitle = \'Mono Benchmark Results (various optimizations)\';\n");
@@ -365,7 +368,9 @@ mini_regression (MonoImage *image, int verbose, int *total_run)
 
 	/* load the metadata */
 	for (i = 0; i < mono_image_get_table_rows (image, MONO_TABLE_METHOD); ++i) {
-       	        method = mono_get_method (image, MONO_TOKEN_METHOD_DEF | (i + 1), NULL);
+		method = mono_get_method (image, MONO_TOKEN_METHOD_DEF | (i + 1), NULL);
+		if (!method)
+			continue;
 		mono_class_init (method->klass);
 
 		if (!strncmp (method->name, "test_", 5) && mini_stats_fd) {
@@ -381,7 +386,7 @@ mini_regression (MonoImage *image, int verbose, int *total_run)
 	for (opt = 0; opt < G_N_ELEMENTS (opt_sets); ++opt) {
 		double elapsed, comp_time, start_time;
 
-		opt_flags = opt_sets [opt];
+		opt_flags = opt_sets [opt] & ~exclude;
 		mono_set_defaults (verbose, opt_flags);
 		n = opt_descr (opt_flags);
 		g_print ("Test run: image=%s, opts=%s\n", mono_image_get_filename (image), n);
@@ -399,7 +404,9 @@ mini_regression (MonoImage *image, int verbose, int *total_run)
 		if (mini_stats_fd)
 			fprintf (mini_stats_fd, "[");
 		for (i = 0; i < mono_image_get_table_rows (image, MONO_TABLE_METHOD); ++i) {
-        	        method = mono_get_method (image, MONO_TOKEN_METHOD_DEF | (i + 1), NULL);
+			method = mono_get_method (image, MONO_TOKEN_METHOD_DEF | (i + 1), NULL);
+			if (!method)
+				continue;
 			if (strncmp (method->name, "test_", 5) == 0) {
 				expected = atoi (method->name + 5);
 				run++;
@@ -946,6 +953,17 @@ static void main_thread_handler (gpointer user_data)
 				fprintf (stderr, "Can not open image %s\n", main_args->argv [i]);
 				exit (1);
 			}
+			/* Check that the assembly loaded matches the filename */
+			{
+				MonoImageOpenStatus status;
+				MonoImage *img;
+
+				img = mono_image_open (main_args->argv [i], &status);
+				if (img && strcmp (img->name, assembly->image->name)) {
+					fprintf (stderr, "Error: Loaded assembly '%s' doesn't match original file name '%s'. Set MONO_PATH to the assembly's location.\n", assembly->image->name, img->name);
+					exit (1);
+				}
+			}
 			res = mono_compile_assembly (assembly, main_args->opts, main_args->aot_options);
 			if (res != 0) {
 				fprintf (stderr, "AOT of image %s failed.\n", main_args->argv [i]);
@@ -1120,7 +1138,7 @@ mini_trace_usage (void)
 		 "    M:Type:Method        Specifies a method\n"
 		 "    N:Namespace          Specifies a namespace\n"
 		 "    T:Type               Specifies a type\n"
-		 "    +EXPR                Includes expression\n"
+		 "    EXPR                 Includes expression\n"
 		 "    -EXPR                Excludes expression\n"
 		 "    EXPR,EXPR            Multiple expressions\n"
 		 "    disabled             Don't print any output until toggled via SIGUSR2\n");
@@ -1488,6 +1506,13 @@ mono_main (int argc, char* argv[])
 	if (getenv ("MONO_XDEBUG"))
 		enable_debugging = TRUE;
 
+#ifdef MONO_CROSS_COMPILE
+       if (!mono_compile_aot) {
+		   fprintf (stderr, "This mono runtime is compiled for cross-compiling. Only the --aot option is supported.");
+		   exit (1);
+       }
+#endif
+
 	if ((action == DO_EXEC) && mono_debug_using_mono_debugger ())
 		action = DO_DEBUGGER;
 
@@ -1522,13 +1547,19 @@ mono_main (int argc, char* argv[])
 
 #ifdef MONO_DEBUGGER_SUPPORTED
 		mono_debug_init (MONO_DEBUG_FORMAT_DEBUGGER);
-		mono_debugger_init ();
 #else
 		g_print ("The Mono Debugger is not supported on this platform.\n");
 		return 1;
 #endif
 	} else if (enable_debugging)
 		mono_debug_init (MONO_DEBUG_FORMAT_MONO);
+
+#ifdef MONO_DEBUGGER_SUPPORTED
+	if (enable_debugging) {
+		if ((opt & MONO_OPT_GSHARED) == 0)
+			mini_debugger_set_attach_ok ();
+	}
+#endif
 
 	mono_set_defaults (mini_verbose, opt);
 	mono_setup_vtable_in_class_init = FALSE;
@@ -1686,7 +1717,7 @@ mono_main (int argc, char* argv[])
 			exit (1);
 		}
 
-		mono_debugger_main (domain, assembly, argc - i, argv + i);
+		mini_debugger_main (domain, assembly, argc - i, argv + i);
 		mini_cleanup (domain);
 		return 0;
 #else
@@ -1837,6 +1868,12 @@ void
 mono_jit_cleanup (MonoDomain *domain)
 {
 	mini_cleanup (domain);
+}
+
+void
+mono_jit_set_aot_only (gboolean val)
+{
+	mono_aot_only = val;
 }
 
 /**

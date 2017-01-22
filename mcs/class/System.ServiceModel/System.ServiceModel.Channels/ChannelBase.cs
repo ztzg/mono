@@ -64,14 +64,14 @@ namespace System.ServiceModel.Channels
 			get { return manager; }
 		}
 
-		[MonoTODO]
 		public virtual T GetProperty<T> () where T : class
 		{
-			throw new NotImplementedException ();
+			return null;
 		}
 
 		protected override void OnClosed ()
 		{
+			base.OnClosed ();
 		}
 
 		TimeSpan IDefaultCommunicationTimeouts.CloseTimeout {

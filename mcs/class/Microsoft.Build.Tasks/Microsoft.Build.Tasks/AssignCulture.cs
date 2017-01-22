@@ -51,6 +51,9 @@ namespace Microsoft.Build.Tasks {
 		
 		public override bool Execute ()
 		{
+			if (files.Length == 0)
+				return true;
+
 			List<ITaskItem> all_files = new List<ITaskItem> ();
 			List<ITaskItem> with_culture = new List<ITaskItem> ();
 			List<ITaskItem> no_culture = new List<ITaskItem> ();
@@ -148,8 +151,10 @@ namespace Microsoft.Build.Tasks {
 				return false;
 
 			culture = fname.Substring (culture_dot + 1, last_dot - culture_dot - 1);
-			if (!CultureNamesTable.ContainsKey (culture))
+			if (!CultureNamesTable.ContainsKey (culture)) {
+				culture = null;
 				return false;
+			}
 
 			only_filename = fname.Substring (0, culture_dot);
 			extn = fname.Substring (last_dot + 1);

@@ -4,7 +4,7 @@
 // Author:
 //	Atsushi Enomoto  <atsushi@ximian.com>
 //
-// Copyright (C) 2008 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2008,2009 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -35,6 +35,7 @@ using System.ServiceModel.Channels;
 using System.ServiceModel.Dispatcher;
 using System.ServiceModel.Web;
 using System.Text;
+using System.Xml;
 
 namespace System.ServiceModel.Description
 {
@@ -78,6 +79,21 @@ namespace System.ServiceModel.Description
 
 		public WebAttributeInfo Info {
 			get { return info; }
+		}
+
+		public WebMessageBodyStyle BodyStyle {
+			get { return info.IsBodyStyleSetExplicitly ? info.BodyStyle : behavior.DefaultBodyStyle; }
+		}
+
+		public bool IsResponseBodyWrapped {
+			get {
+				switch (BodyStyle) {
+				case WebMessageBodyStyle.Wrapped:
+				case WebMessageBodyStyle.WrappedResponse:
+					return true;
+				}
+				return false;
+			}
 		}
 
 		public OperationDescription Operation {
@@ -124,11 +140,47 @@ namespace System.ServiceModel.Description
 			throw new SystemException ("INTERNAL ERROR: no corresponding message description for the specified direction: " + dir);
 		}
 
+		protected XmlObjectSerializer GetSerializer (WebContentFormat msgfmt)
+		{
+			switch (msgfmt) {
+			case WebContentFormat.Xml:
+				if (IsResponseBodyWrapped)
+					return GetSerializer (ref xml_serializer, p => new DataContractSerializer (p.Type, p.Name, p.Namespace));
+				else
+					return GetSerializer (ref xml_serializer, p => new DataContractSerializer (p.Type));
+				break;
+			case WebContentFormat.Json:
+				if (IsResponseBodyWrapped)
+					return GetSerializer (ref json_serializer, p => new DataContractJsonSerializer (p.Type, p.Name));
+				else
+					return GetSerializer (ref json_serializer, p => new DataContractJsonSerializer (p.Type));
+				break;
+			default:
+				throw new NotImplementedException ();
+			}
+		}
+
+		XmlObjectSerializer xml_serializer, json_serializer;
+
+		XmlObjectSerializer GetSerializer (ref XmlObjectSerializer serializer, Func<MessagePartDescription,XmlObjectSerializer> f)
+		{
+			if (serializer == null) {
+				MessageDescription md = GetMessageDescription (MessageDirection.Output);
+				serializer = f (md.Body.ReturnValue);
+			}
+			return serializer;
+		}
+
 		internal class RequestClientFormatter : WebClientMessageFormatter
 		{
 			public RequestClientFormatter (OperationDescription operation, ServiceEndpoint endpoint, QueryStringConverter converter, WebHttpBehavior behavior)
 				: base (operation, endpoint, converter, behavior)
 			{
+			}
+
+			public override object DeserializeReply (Message message, object [] parameters)
+			{
+				throw new NotSupportedException ();
 			}
 		}
 
@@ -138,6 +190,11 @@ namespace System.ServiceModel.Description
 				: base (operation, endpoint, converter, behavior)
 			{
 			}
+
+			public override Message SerializeRequest (MessageVersion messageVersion, object [] parameters)
+			{
+				throw new NotSupportedException ();
+			}
 		}
 
 		internal class RequestDispatchFormatter : WebDispatchMessageFormatter
@@ -146,6 +203,11 @@ namespace System.ServiceModel.Description
 				: base (operation, endpoint, converter, behavior)
 			{
 			}
+
+			public override Message SerializeReply (MessageVersion messageVersion, object [] parameters, object result)
+			{
+				throw new NotSupportedException ();
+			}
 		}
 
 		internal class ReplyDispatchFormatter : WebDispatchMessageFormatter
@@ -153,6 +215,11 @@ namespace System.ServiceModel.Description
 			public ReplyDispatchFormatter (OperationDescription operation, ServiceEndpoint endpoint, QueryStringConverter converter, WebHttpBehavior behavior)
 				: base (operation, endpoint, converter, behavior)
 			{
+			}
+
+			public override void DeserializeRequest (Message message, object [] parameters)
+			{
+				throw new NotSupportedException ();
 			}
 		}
 
@@ -163,7 +230,7 @@ namespace System.ServiceModel.Description
 			{
 			}
 
-			public Message SerializeRequest (MessageVersion messageVersion, object [] parameters)
+			public virtual Message SerializeRequest (MessageVersion messageVersion, object [] parameters)
 			{
 				if (parameters == null)
 					throw new ArgumentNullException ("parameters");
@@ -194,6 +261,10 @@ namespace System.ServiceModel.Description
 
 				var hp = new HttpRequestMessageProperty ();
 				hp.Method = Info.Method;
+
+				// FIXME: isn't it always null?
+				if (WebOperationContext.Current != null)
+					WebOperationContext.Current.OutgoingRequest.Apply (hp);
 				// FIXME: set hp.SuppressEntityBody for some cases.
 				ret.Properties.Add (HttpRequestMessageProperty.Name, hp);
 
@@ -203,7 +274,7 @@ namespace System.ServiceModel.Description
 				return ret;
 			}
 
-			public object DeserializeReply (Message message, object [] parameters)
+			public virtual object DeserializeReply (Message message, object [] parameters)
 			{
 				if (parameters == null)
 					throw new ArgumentNullException ("parameters");
@@ -213,24 +284,54 @@ namespace System.ServiceModel.Description
 				if (!message.Properties.ContainsKey (pname))
 					throw new SystemException ("INTERNAL ERROR: it expects WebBodyFormatMessageProperty existence");
 				var wp = (WebBodyFormatMessageProperty) message.Properties [pname];
-				MessageDescription md = GetMessageDescription (MessageDirection.Output);
 
-				XmlObjectSerializer serializer = null;
-				switch (wp.Format) {
-				case WebContentFormat.Xml:
-					serializer = new DataContractSerializer (md.Body.ReturnValue.Type);
-					break;
-				case WebContentFormat.Json:
-					serializer = new DataContractJsonSerializer (md.Body.ReturnValue.Type);
-					break;
-				case WebContentFormat.Raw:
-				default:
-					throw new NotImplementedException ();
-				}
+				var serializer = GetSerializer (wp.Format);
 
 				// FIXME: handle ref/out parameters
 
-				return serializer.ReadObject (message.GetReaderAtBodyContents (), false);
+				var md = GetMessageDescription (MessageDirection.Output);
+
+				var reader = message.GetReaderAtBodyContents ();
+
+				if (IsResponseBodyWrapped && md.Body.WrapperName != null)
+					reader.ReadStartElement (md.Body.WrapperName, md.Body.WrapperNamespace);
+
+				var ret = serializer.ReadObject (reader, false);
+
+				if (IsResponseBodyWrapped && md.Body.WrapperName != null)
+					reader.ReadEndElement ();
+
+				return ret;
+			}
+		}
+
+		internal class WrappedBodyWriter : BodyWriter
+		{
+			public WrappedBodyWriter (object value, XmlObjectSerializer serializer, string name, string ns)
+				: base (true)
+			{
+				this.name = name;
+				this.ns = ns;
+				this.value = value;
+				this.serializer = serializer;
+			}
+
+			string name, ns;
+			object value;
+			XmlObjectSerializer serializer;
+
+			protected override BodyWriter OnCreateBufferedCopy (int maxBufferSize)
+			{
+				return new WrappedBodyWriter (value, serializer, name, ns);
+			}
+
+			protected override void OnWriteBodyContents (XmlDictionaryWriter writer)
+			{
+				if (name != null)
+					writer.WriteStartElement (name, ns);
+				serializer.WriteObject (writer, value);
+				if (name != null)
+					writer.WriteEndElement ();
 			}
 		}
 
@@ -241,7 +342,7 @@ namespace System.ServiceModel.Description
 			{
 			}
 
-			public Message SerializeReply (MessageVersion messageVersion, object [] parameters, object result)
+			public virtual Message SerializeReply (MessageVersion messageVersion, object [] parameters, object result)
 			{
 				try {
 					return SerializeReplyCore (messageVersion, parameters, result);
@@ -271,18 +372,21 @@ namespace System.ServiceModel.Description
 				XmlObjectSerializer serializer = null;
 				switch (msgfmt) {
 				case WebMessageFormat.Xml:
-					serializer = new DataContractSerializer (md.Body.ReturnValue.Type);
+					serializer = GetSerializer (WebContentFormat.Xml);
 					mediaType = "application/xml";
 					break;
 				case WebMessageFormat.Json:
-					serializer = new DataContractJsonSerializer (md.Body.ReturnValue.Type);
+					serializer = GetSerializer (WebContentFormat.Json);
 					mediaType = "application/json";
 					break;
 				}
 
 				// FIXME: serialize ref/out parameters as well.
 
-				Message ret = Message.CreateMessage (MessageVersion.None, null, result, serializer);
+				string name = IsResponseBodyWrapped ? md.Body.WrapperName : null;
+				string ns = IsResponseBodyWrapped ? md.Body.WrapperNamespace : null;
+
+				Message ret = Message.CreateMessage (MessageVersion.None, null, new WrappedBodyWriter (result, serializer, name, ns));
 
 				// Message properties
 
@@ -302,7 +406,7 @@ namespace System.ServiceModel.Description
 				return ret;
 			}
 
-			public void DeserializeRequest (Message message, object [] parameters)
+			public virtual void DeserializeRequest (Message message, object [] parameters)
 			{
 				if (parameters == null)
 					throw new ArgumentNullException ("parameters");

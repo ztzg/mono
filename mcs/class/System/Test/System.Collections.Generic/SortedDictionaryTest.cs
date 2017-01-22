@@ -249,6 +249,30 @@ namespace MonoTests.System.Collections.Generic
 		}
 
 		[Test]
+		public void CopyTo ()
+		{
+			SortedDictionary<int,string> d =
+				new SortedDictionary<int,string> ();			
+			d.Add (1, "A");			
+			KeyValuePair <int, string> [] array =
+				new KeyValuePair <int, string> [d.Count];
+			d.CopyTo (array, 0);
+			Assert.AreEqual (1, array.Length);
+			Assert.AreEqual (1, array [0].Key);
+			Assert.AreEqual ("A", array [0].Value);
+			
+			d = new SortedDictionary<int,string> ();			
+			array = new KeyValuePair <int, string> [d.Count];
+			d.CopyTo (array, 0);
+			Assert.AreEqual (0, array.Length);
+			
+			ICollection c = new SortedDictionary<int,string> ();
+			array = new KeyValuePair <int, string> [c.Count];
+			c.CopyTo (array, 0);
+			Assert.AreEqual (0, array.Length);
+		}
+
+		[Test]
 		[ExpectedException (typeof (ArgumentNullException))]
 		public void IDictionaryAddKeyNull ()
 		{
@@ -311,6 +335,24 @@ namespace MonoTests.System.Collections.Generic
 			col.Remove (1);
 		}
 
+		[Test]		
+		public void KeysICollectionCopyTo ()
+		{
+			SortedDictionary<int,string> d = new SortedDictionary<int, string> ();
+			d.Add (1, "A");
+			ICollection<int> col = d.Keys;
+			int[] array = new int [col.Count];
+			col.CopyTo (array, 0);
+			Assert.AreEqual (1, array.Length);
+			Assert.AreEqual (1, array [0]);
+			
+			// Bug #497720
+			d = new SortedDictionary<int, string> ();			
+			col = d.Keys;
+			array = new int [col.Count];
+			col.CopyTo (array, 0);
+		}
+		
 		[Test]
 		[ExpectedException (typeof (NotSupportedException))]
 		public void ValuesICollectionAdd ()
@@ -339,6 +381,23 @@ namespace MonoTests.System.Collections.Generic
 			d.Add (1, "A");
 			ICollection<string> col = d.Values;
 			col.Remove ("A");
+		}
+
+		[Test]		
+		public void ValuesICollectionCopyTo ()
+		{
+			SortedDictionary<int,string> d = new SortedDictionary<int,string> ();
+			d.Add (1, "A");
+			ICollection<string> col = d.Values;
+			string[] array = new string [col.Count];
+			col.CopyTo (array, 0);
+			Assert.AreEqual (1, array.Length);
+			Assert.AreEqual ("A", array [0]);
+			
+			d = new SortedDictionary<int,string> ();			
+			col = d.Values;
+			array = new string [col.Count];
+			col.CopyTo (array, 0);
 		}
 
 		[Test]
@@ -403,6 +462,108 @@ namespace MonoTests.System.Collections.Generic
 			IEnumerator e = d.Values.GetEnumerator ();
 			d.Add (4, "D");
 			e.MoveNext ();
+		}
+
+
+		delegate void D ();
+		bool Throws (D d)
+		{
+			try {
+				d ();
+				return false;
+			} catch {
+				return true;
+			}
+		}
+
+		[Test]
+		// based on #491858, #517415
+		public void Enumerator_Current ()
+		{
+			var e1 = new SortedDictionary<int,int>.Enumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e1.Current; }));
+
+			var d = new SortedDictionary<int,int> ();
+			var e2 = d.GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+
+			var e3 = ((IEnumerable<KeyValuePair<int,int>>) d).GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+
+			var e4 = ((IEnumerable) d).GetEnumerator ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			e4.MoveNext ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			((IDisposable) e4).Dispose ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+		}
+
+		[Test]
+		// based on #491858, #517415
+		public void KeyEnumerator_Current ()
+		{
+			var e1 = new SortedDictionary<int,int>.KeyCollection.Enumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e1.Current; }));
+
+			var d = new SortedDictionary<int,int> ().Keys;
+			var e2 = d.GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+
+			var e3 = ((IEnumerable<int>) d).GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+
+			var e4 = ((IEnumerable) d).GetEnumerator ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			e4.MoveNext ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			((IDisposable) e4).Dispose ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+		}
+
+		[Test]
+		// based on #491858, #517415
+		public void ValueEnumerator_Current ()
+		{
+			var e1 = new SortedDictionary<int,int>.ValueCollection.Enumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e1.Current; }));
+
+			var d = new SortedDictionary<int,int> ().Values;
+			var e2 = d.GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+			e2.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e2.Current; }));
+
+			var e3 = ((IEnumerable<int>) d).GetEnumerator ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.MoveNext ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+			e3.Dispose ();
+			Assert.IsFalse (Throws (delegate { var x = e3.Current; }));
+
+			var e4 = ((IEnumerable) d).GetEnumerator ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			e4.MoveNext ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
+			((IDisposable) e4).Dispose ();
+			Assert.IsTrue (Throws (delegate { var x = e4.Current; }));
 		}
 	}
 

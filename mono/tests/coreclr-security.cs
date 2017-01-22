@@ -149,6 +149,30 @@ public delegate void MethodDelegate ();
 
 public delegate Object InvokeDelegate (Object obj, Object[] parms);
 
+// the 0.1% case from http://blogs.msdn.com/shawnfa/archive/2007/05/11/silverlight-security-iii-inheritance.aspx
+public class TransparentClassWithSafeCriticalDefaultConstructor {
+
+	[SecuritySafeCritical]
+	public TransparentClassWithSafeCriticalDefaultConstructor ()
+	{
+	}
+}
+
+public class TransparentInheritFromSafeCriticalDefaultConstructor : TransparentClassWithSafeCriticalDefaultConstructor {
+
+	public TransparentInheritFromSafeCriticalDefaultConstructor ()
+	{
+	}
+}
+
+public class SafeInheritFromSafeCriticalDefaultConstructor : TransparentClassWithSafeCriticalDefaultConstructor {
+
+	[SecuritySafeCritical]
+	public SafeInheritFromSafeCriticalDefaultConstructor ()
+	{
+	}
+}
+
 public class Test
 {
 	static bool haveError = false;
@@ -248,6 +272,68 @@ public class Test
 
 	[DllImport ("/lib64/libc.so.6")]
 	static extern int getpid ();
+
+
+	static void ArraysCreatedByTransparentCaller ()
+	{
+		// Transparent creating an array of a Critical type
+		// using Class[] (rank == 1) throws a TypeLoadException on SL2 - but that looks like a bug
+		// reported as https://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=490406
+		CClass[] c_array = new CClass [0];
+		// Transparent creating an array of a SafeCritical type
+		SCClass[] sc_array = new SCClass [0];
+
+		// Transparent creating a multidimentional array of a Critical type
+		CClass[,] c_multi = new CClass [0,0];
+		// Transparent creating a multidimentional array of a SafeCritical type
+		SCClass[,] sc_multi = new SCClass [0,0];
+
+		// Transparent creating a jagged array of a Critical type
+		CClass[][] c_jagged = new CClass [0][];
+		// Transparent creating a jagged array of a Critical type
+		SCClass[][] sc_jagged = new SCClass [0][];
+	}
+
+	[SecuritySafeCritical]
+	static void ArraysCreatedBySafeCriticalCaller ()
+	{
+		// SafeCritical creating an array of a Critical type
+		CClass[] c_array = new CClass [0];
+		// SafeCritical creating an array of a SafeCritical type
+		SCClass[] sc_array = new SCClass [0];
+
+		// SafeCritical creating a multidimentional array of a Critical type
+		CClass[,] c_multi = new CClass [0,0];
+		// SafeCritical creating a multidimentional array of a SafeCritical type
+		SCClass[,] sc_multi = new SCClass [0,0];
+
+		// SafeCritical creating a jagged array of a Critical type
+		CClass[][] c_jagged = new CClass [0][];
+		// SafeCritical creating a jagged array of a Critical type
+		SCClass[][] sc_jagged = new SCClass [0][];
+
+		// Transparent Main could not call a critical method by itself
+		ArraysCreatedByCriticalCaller ();
+	}
+
+	[SecurityCritical]
+	static void ArraysCreatedByCriticalCaller ()
+	{
+		// Critical creating an array of a Critical type
+		CClass[] c_array = new CClass [0];
+		// Critical creating an array of a SafeCritical type
+		SCClass[] sc_array = new SCClass [0];
+
+		// Critical creating a multidimentional array of a Critical type
+		CClass[,] c_multi = new CClass [0,0];
+		// Critical creating a multidimentional array of a SafeCritical type
+		SCClass[,] sc_multi = new SCClass [0,0];
+
+		// Critical creating a jagged array of a Critical type
+		CClass[][] c_jagged = new CClass [0][];
+		// Critical creating a jagged array of a Critical type
+		SCClass[][] sc_jagged = new SCClass [0][];
+	}
 
 	public static int Main ()
 	{
@@ -373,11 +459,22 @@ public class Test
 		} catch (TypeLoadException) {
 		}
 
-		//Console.WriteLine ("ok");
+		new TransparentClassWithSafeCriticalDefaultConstructor ();
+		try {
+			new TransparentInheritFromSafeCriticalDefaultConstructor ();
+		} catch (TypeLoadException) {
+		}
+		new SafeInheritFromSafeCriticalDefaultConstructor ();
+
+		// arrays creation tests
+		ArraysCreatedByTransparentCaller ();
+		ArraysCreatedBySafeCriticalCaller ();
+		// the above also calls ArraysCreatedBySafeCriticalCaller since (Transparent) Main cannot call it directly
 
 		if (haveError)
 			return 1;
 
+//		Console.WriteLine ("ok");
 		return 0;
 	}
 }

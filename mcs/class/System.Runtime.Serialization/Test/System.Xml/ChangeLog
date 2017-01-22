@@ -1,3 +1,36 @@
+2009-07-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlSimpleDictionaryWriterTest.cs : test WriteNode() to not skip more
+	  than two nodes in an element.
+
+2009-06-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlBinaryDictionaryReaderTest.cs : verify that end element has
+	  non-empty local name.
+
+2009-05-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlBinaryDictionaryWriterTest.cs : added test for failing duplicate
+	  namespace declaration in the same element context.
+
+2009-05-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlBinaryDictionaryWriterTest.cs : added test for writing xml/xmlns
+	  attributes with null namespace.
+
+2009-05-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlBinaryDictionaryReaderTest.cs : added test for utf16 chars.
+
+2009-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlBinaryWriterSession.cs : added test to verify that session is
+	  actually used in binary dictionary writer.
+
+2009-04-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlMtomDictionaryWriterTest.cs : new.
+
 2009-03-31  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlBinaryDictionaryReaderTest.cs: make tests more doubtful on

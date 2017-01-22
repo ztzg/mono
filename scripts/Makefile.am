@@ -22,6 +22,7 @@ endif
 
 COMPAT_1_0_SUFFIX=1$(SCRIPT_SUFFIX)
 COMPAT_2_0_SUFFIX=2$(SCRIPT_SUFFIX)
+COMPAT_4_0_SUFFIX=4$(SCRIPT_SUFFIX)
 
 bin_SCRIPTS = \
 	$(scripts_1_0)		\
@@ -34,8 +35,12 @@ bin_SCRIPTS = \
 	$(scripts_rpmhelpers)	\
 	$(MDOC_SUBCOMMANDS)	\
 	$(MDOC_COMPAT)		\
-	mod			\
+	mod$(SCRIPT_SUFFIX)	\
 	mono-test-install
+
+if INSTALL_4_0
+bin_SCRIPTS += $(scripts_4_0)
+endif
 
 scripts_1_0_compat = \
 	al1$(SCRIPT_SUFFIX)			\
@@ -62,7 +67,6 @@ scripts_1_0 = \
 	macpack$(SCRIPT_SUFFIX)			\
 	mcs$(SCRIPT_SUFFIX)			\
 	mjs$(SCRIPT_SUFFIX)			\
-	monolinker$(SCRIPT_SUFFIX)		\
 	mono-cil-strip$(SCRIPT_SUFFIX)		\
 	mozroots$(SCRIPT_SUFFIX)		\
 	permview$(SCRIPT_SUFFIX)		\
@@ -87,10 +91,12 @@ scripts_2_0 = \
 	mconfig$(SCRIPT_SUFFIX)			\
 	mkbundle2$(SCRIPT_SUFFIX)		\
 	mdoc$(SCRIPT_SUFFIX)                    \
+	monolinker$(SCRIPT_SUFFIX)		\
 	mono-api-info$(SCRIPT_SUFFIX) 		\
 	mono-shlib-cop$(SCRIPT_SUFFIX) 		\
 	monop2$(SCRIPT_SUFFIX) 			\
 	resgen2$(SCRIPT_SUFFIX)			\
+	pdb2mdb$(SCRIPT_SUFFIX)			\
 	wsdl2$(SCRIPT_SUFFIX)			\
 	xsd2$(SCRIPT_SUFFIX)			\
 	mono-xmltool$(SCRIPT_SUFFIX)		\
@@ -99,6 +105,9 @@ scripts_2_0 = \
 	sqlsharp$(SCRIPT_SUFFIX)		\
 	svcutil$(SCRIPT_SUFFIX)			\
 	xbuild$(SCRIPT_SUFFIX)
+
+scripts_4_0 = \
+	dmcs$(SCRIPT_SUFFIX)
 
 MDOC_SUBCOMMANDS = \
 	mdoc-assemble \
@@ -134,7 +143,7 @@ scripts_service = mono-service mono-service2
 scripts_nunit = nunit-console$(SCRIPT_SUFFIX) nunit-console2$(SCRIPT_SUFFIX)
 scripts_rpmhelpers = mono-find-provides mono-find-requires
 
-CLEANFILES = $(scripts_1_0) $(scripts_1_0_umask) $(scripts_2_0) $(scripts_defaults) $(scripts_1_0_compat) mono-service mono-service2 nunit-console nunit-console2 mono-find-provides mono-find-requires mod $(MDOC_SUBCOMMANDS)
+CLEANFILES = $(scripts_1_0) $(scripts_1_0_umask) $(scripts_2_0) $(scripts_defaults) $(scripts_1_0_compat) $(scripts_4_0) mono-service mono-service2 nunit-console nunit-console2 mono-find-provides mono-find-requires mod $(MDOC_SUBCOMMANDS)
 DISTCLEANFILES = $(pkgconfig_DATA) $(scripts_rpmhelpers)
 
 EXTRA_DIST =			\
@@ -182,6 +191,7 @@ REWRITE_DEBUG = $(REWRITE_COMMON) -e 's,@''mono_interp@,$(mono_interp) --debug,g
 REWRITE1 = $(REWRITE) -e 's,@''framework_version@,1.0,g'
 REWRITE2 = $(REWRITE) -e 's,@''framework_version@,2.0,g'
 REWRITE2_1 = $(REWRITE) -e 's,@''framework_version@,2.1,g'
+REWRITE4 = $(REWRITE) -e 's,@''framework_version@,4.0,g'
 REWRITE1_DEBUG = $(REWRITE_DEBUG) -e 's,@''framework_version@,1.0,g'
 REWRITE2_DEBUG = $(REWRITE_DEBUG) -e 's,@''framework_version@,2.0,g'
 
@@ -202,6 +212,7 @@ nunit-console2$(SCRIPT_SUFFIX): $(SCRIPT_IN) Makefile
 	$(REWRITE2_DEBUG) -e 's,@''exe_name@,nunit-console,g' $(srcdir)/$(SCRIPT_IN) | $(FILTER) > $@.tmp
 	mv $@.tmp $@
 
+#FIXME: this is not the correct rule for mod.bat.
 mod$(SCRIPT_SUFFIX): mod.in Makefile
 	$(REWRITE1) -e "s,@""exe_name@,mod,g" $(srcdir)/mod.in > $@.tmp
 	mv $@.tmp $@
@@ -210,6 +221,7 @@ $(scripts_1_0): $(SCRIPT_IN) Makefile
 	$(REWRITE1) -e 's,@''exe_name@,$@,g' $(srcdir)/$(SCRIPT_IN) | $(FILTER) > $@.tmp
 	mv $@.tmp $@
 
+#FIXME: this is not the correct rule for bat files.
 $(scripts_1_0_umask): script_umask.in Makefile
 	$(REWRITE1) -e 's,@''exe_name@,$@,g' $(srcdir)/script_umask.in > $@.tmp
 	mv $@.tmp $@
@@ -225,6 +237,11 @@ $(scripts_defaults): $(SCRIPT_IN) Makefile
 $(scripts_2_0): $(SCRIPT_IN) Makefile
 	n=`echo $@ | sed 's,$(COMPAT_2_0_SUFFIX)$$,,'`; \
 	$(REWRITE2) -e "s,@""exe_name@,$$n,g" $(srcdir)/$(SCRIPT_IN) | $(FILTER) > $@.tmp
+	mv $@.tmp $@
+
+$(scripts_4_0): $(SCRIPT_IN) Makefile
+	n=`echo $@ | sed 's,$(COMPAT_4_0_SUFFIX)$$,,'`; \
+	$(REWRITE4) -e "s,@""exe_name@,$$n,g" $(srcdir)/$(SCRIPT_IN) | $(FILTER) > $@.tmp
 	mv $@.tmp $@
 
 $(MDOC_SUBCOMMANDS): Makefile

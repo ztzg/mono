@@ -47,6 +47,10 @@ namespace Microsoft.Build.Tasks {
 		
 		public override bool Execute ()
 		{
+			if (files == null || files.Length == 0)
+				//nothing to do
+				return true;
+
 			assignedFiles = new ITaskItem [files.Length];
 			for (int i = 0; i < files.Length; i ++) {
 				string file = files [i].ItemSpec;
@@ -54,9 +58,18 @@ namespace Microsoft.Build.Tasks {
 				//FIXME: Hack!
 				string normalized_root = Path.GetFullPath (rootFolder);
 
+				// cur dir should already be set to
+				// the project dir
+				file = Path.GetFullPath (file);
+
 				if (file.StartsWith (normalized_root)) {
 					afile = Path.GetFullPath (file).Substring (
 							normalized_root.Length);
+					// skip over "root/"
+					if (afile [0] == '\\' ||
+						afile [0] == '/')
+						afile = afile.Substring (1);
+
 				} else {
 					afile = Path.GetFileName (file);
 				}

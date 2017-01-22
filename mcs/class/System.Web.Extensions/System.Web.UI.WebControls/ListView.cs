@@ -768,9 +768,6 @@ namespace System.Web.UI.WebControls
 		{
 			object itemCount = ViewState ["_!ItemCount"];
 			if (itemCount != null) {
-				if (RequiresDataBinding)
-					EnsureDataBound ();
-
 				int c = (int)itemCount;
 				if (c >= 0) {
 					// Fake data - we only need to make sure
@@ -779,7 +776,8 @@ namespace System.Web.UI.WebControls
 					object[] data = new object [c];
 					CreateChildControls (data, false);
 				}
-			}
+			} else if (RequiresDataBinding)
+				EnsureDataBound ();
 			
 			base.CreateChildControls ();
 		}
@@ -814,11 +812,13 @@ namespace System.Web.UI.WebControls
 				}
 
 				pagedDataSource.TotalRowCount = totalRowCount;
+				_totalRowCount = totalRowCount;
 				DataKeyArray.Clear ();
 			} else {
 				if (!(dataSource is ICollection))
 					throw new InvalidOperationException ("dataSource does not implement the ICollection interface and dataBinding is false.");
 				pagedDataSource.TotalRowCount = 0;
+				_totalRowCount = -1;
 			}
 
 			pagedDataSource.StartRowIndex = StartRowIndex;
@@ -831,19 +831,19 @@ namespace System.Web.UI.WebControls
 					retList = CreateItemsWithoutGroups (pagedDataSource, dataBinding, InsertItemPosition, DataKeyArray);
 				else
 					retList = CreateItemsInGroups (pagedDataSource, dataBinding, InsertItemPosition, DataKeyArray);
-				
+
 				if (retList == null || retList.Count == 0)
 					emptySet = true;
 
-				if (haveDataToPage)
+				if (haveDataToPage) {
 					// Data source has paged data for us, so we must use its total row
 					// count
-					_totalRowCount = pagedDataSource.DataSourceCount;
-				else if (!emptySet)
+					_totalRowCount = pagedDataSource.TotalRowCount;
+				} else if (!emptySet && _totalRowCount > -1)
 					_totalRowCount = retList.Count;
-				else
+				else if (_totalRowCount > -1)
 					_totalRowCount = 0;
-
+				
 				OnTotalRowCountAvailable (new PageEventArgs (_startRowIndex, _maximumRows, _totalRowCount));
 			} else
 				emptySet = true;
@@ -1416,6 +1416,8 @@ namespace System.Web.UI.WebControls
 				_sortDirection = (SortDirection)o;
 			if ((o = state [CSTATE_SORTEXPRESSION]) != null)
 				_sortExpression = (string)o;
+			
+			OnTotalRowCountAvailable (new PageEventArgs (_startRowIndex, _maximumRows, _totalRowCount));
 		}
 	
 		protected override void LoadViewState (object savedState)
@@ -2002,10 +2004,13 @@ namespace System.Web.UI.WebControls
 				if (databind) {
 					var args = new PagePropertiesChangingEventArgs (startRowIndex, maximumRows);
 					OnPagePropertiesChanging (args);
+					_startRowIndex = args.StartRowIndex;
+					_maximumRows = args.MaximumRows;
+					
+				} else {
+					_startRowIndex = startRowIndex;
+					_maximumRows = maximumRows;
 				}
-
-				_startRowIndex = startRowIndex;
-				_maximumRows = maximumRows;
 
 				if (databind)
 					OnPagePropertiesChanged (EventArgs.Empty);

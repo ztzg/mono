@@ -108,6 +108,12 @@ namespace DbLinqTest {
         }
 
         [Test, ExpectedException(typeof(ArgumentException))]
+        public void Ctor_ConnectionString_DbLinqConnectionType_Empty2()
+        {
+            new DataContext("DbLinqConnectionType=;");
+        }
+
+        [Test, ExpectedException(typeof(ArgumentException))]
         public void Ctor_ConnectionString_DbLinqConnectionType_Invalid()
         {
             new DataContext("DbLinqConnectionType=InvalidType, DoesNotExist");
@@ -125,6 +131,52 @@ namespace DbLinqTest {
             new DataContext("DbLinqProvider=DbLinq.Sqlite.dll");
         }
 
+        [Test, ExpectedException(typeof(ArgumentNullException))]
+        public void Ctor_FileOrServerOrConnectionIsNull()
+        {
+            MappingSource mapping = new AttributeMappingSource();
+            string fileOrServerOrConnection = null;
+            new DataContext(fileOrServerOrConnection, mapping);
+        }
+
+        [Test, ExpectedException(typeof(ArgumentNullException))]
+        public void Ctor_MappingIsNull()
+        {
+            MappingSource mapping = null;
+            string fileOrServerOrConnection = null;
+            new DataContext("", mapping);
+        }
+
+#if L2SQL
+        // DbLinqProvider/etc. obviously aren't removed under L2SQL
+        [ExpectedException(typeof(ArgumentException))]
+#endif
+        [Test]
+        public void Ctor_ConnectionString_ExtraParameters_Munging()
+        {
+            DataContext ctx = new DataContext("Server=localhost;User id=test;Database=test;DbLinqProvider=Sqlite;DbLinqConnectionType=Mono.Data.Sqlite.SqliteConnection, Mono.Data.Sqlite");
+            Assert.AreEqual(-1, ctx.Connection.ConnectionString.IndexOf("DbLinqProvider"));
+            Assert.AreEqual(-1, ctx.Connection.ConnectionString.IndexOf("DbLinqConnectionType"));
+        }
+        
+#if !L2SQL
+        [Test, ExpectedException(typeof(NotImplementedException))]
+        public void Ctor_FileOrServerOrConnectionIsFilename()
+        {
+            MappingSource mapping = new AttributeMappingSource();
+            string fileOrServerOrConnection = typeof(DataContextTest).Assembly.Location;
+            new DataContext(fileOrServerOrConnection, mapping);
+        }
+
+        [Test, ExpectedException(typeof(NotImplementedException))]
+        public void Ctor_FileOrServerOrConnectionIsServer()
+        {
+            MappingSource mapping = new AttributeMappingSource();
+            string fileOrServerOrConnection = "ThisIsAssumedToBeAServerName";
+            new DataContext(fileOrServerOrConnection, mapping);
+        }
+#endif
+
         [Test]
         public void Connection()
         {
@@ -132,7 +184,7 @@ namespace DbLinqTest {
             DataContext dc = new DataContext(connection);
             Assert.AreEqual(connection, dc.Connection);
 
-#if !MONO_STRICT
+#if !L2SQL
             dc = new DataContext (new DummyConnection());
             Assert.AreEqual(null, dc.Connection);
 #endif

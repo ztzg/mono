@@ -273,7 +273,7 @@ namespace System.Windows.Forms {
 		}
 
 #if NET_2_0
-		[MonoTODO ("Saves the value and raises event, but needs actual implementation call")]
+		[MonoTODO ("RTL not supported")]
 		[Localizable (true)]
 		[DefaultValue (false)]
 		public virtual bool RightToLeftLayout {
@@ -337,6 +337,7 @@ namespace System.Windows.Forms {
 					return;
 
 #endif
+				Focus ();
 				int old_index = selected_index;
 				int new_index = value;
 
@@ -1261,7 +1262,7 @@ namespace System.Windows.Forms {
 			if (SizeMode == TabSizeMode.Fixed) {
 				width = item_size.Width;
 			} else {			
-				width = MeasureStringWidth (DeviceContext, page.Text, Font);
+				width = MeasureStringWidth (DeviceContext, page.Text, page.Font);
 				width += (Padding.X * 2) + 2;
 
 				if (ImageList != null && page.ImageIndex >= 0 && page.ImageIndex < ImageList.Images.Count) {
@@ -1684,9 +1685,14 @@ namespace System.Windows.Forms {
 				// We don't want to raise SelectedIndexChanged until after we
 				// have removed from the collection, so TabCount will be
 				// correct for the user.
-				if (change_index && Count > 0)
-					owner.SelectedIndex--;
-				else if (change_index) {
+				if (change_index && Count > 0) {
+					// Clear the selected index internally, to avoid trying to access the previous
+					// selected tab when setting the new one - this is what .net seems to do
+					int prev_selected_index = owner.SelectedIndex;
+					owner.selected_index = -1;
+
+					owner.SelectedIndex = --prev_selected_index;
+				} else if (change_index) {
 					owner.selected_index = -1;
 					owner.OnSelectedIndexChanged (EventArgs.Empty);
 				} else

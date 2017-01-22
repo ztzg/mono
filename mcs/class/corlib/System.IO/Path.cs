@@ -285,9 +285,11 @@ namespace System.IO {
 		public static string GetFullPath (string path)
 		{
 			string fullpath = InsecureGetFullPath (path);
+#if !NET_2_1
 			if (SecurityManager.SecurityEnabled) {
 				new FileIOPermission (FileIOPermissionAccess.PathDiscovery, fullpath).Demand ();
 			}
+#endif
 			return fullpath;
 		}
 
@@ -667,7 +669,7 @@ namespace System.IO {
 			for (int i = 0; i < dirs.Length; i++) {
 				// WIN32 path components must be trimmed
 				if (Environment.IsRunningOnWindows)
-					dirs[i] = dirs[i].Trim ();
+					dirs[i] = dirs[i].TrimEnd ();
 				
 				if (dirs[i] == "." || (i != 0 && dirs[i].Length == 0))
 					continue;

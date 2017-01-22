@@ -383,7 +383,7 @@ mono_ssa_compute (MonoCompile *cfg)
 		MonoInst *var = cfg->varinfo [i];
 
 #if SIZEOF_REGISTER == 4
-		if (var->type == STACK_I8)
+		if (var->type == STACK_I8 && !COMPILE_LLVM (cfg))
 			continue;
 #endif
 		if (var->flags & (MONO_INST_VOLATILE|MONO_INST_INDIRECT))
@@ -407,7 +407,7 @@ mono_ssa_compute (MonoCompile *cfg)
 
 			/* fixme: create pruned SSA? we would need liveness information for that */
 
-			if (bb == cfg->bb_exit)
+			if (bb == cfg->bb_exit && !COMPILE_LLVM (cfg))
 				continue;
 
 			if ((cfg->comp_done & MONO_COMP_LIVENESS) && !mono_bitset_test_fast (bb->live_in_set, i)) {
@@ -472,6 +472,8 @@ mono_ssa_compute (MonoCompile *cfg)
 	mono_ssa_rename_vars (cfg, cfg->num_varinfo, cfg->bb_entry, originals, stack, lvreg_stack, lvreg_defined, stack_history, stack_history_size);
 	g_free (stack_history);
 	g_free (originals);
+	g_free (lvreg_stack);
+	g_free (lvreg_defined);
 
 	if (cfg->verbose_level >= 4)
 		printf ("\nEND COMPUTE SSA.\n\n");

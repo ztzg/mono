@@ -4,13 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Linq.Expressions;
 
-#if MONO_STRICT
-namespace System.Data.Linq.Sugar.Expressions
-#else
 namespace DbLinq.Data.Linq.Sugar.Expressions
-#endif
 {
-    internal class StartIndexOffsetExpression : MutableExpression
+#if !MONO_STRICT
+    public
+#endif
+    class StartIndexOffsetExpression : MutableExpression
     {
         public const ExpressionType ExpressionType = (ExpressionType)CustomExpressionType.StartIndexOffset;
         public bool StartsAtOne{get; private set;}

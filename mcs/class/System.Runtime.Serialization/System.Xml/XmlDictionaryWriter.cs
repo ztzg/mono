@@ -82,25 +82,23 @@ namespace System.Xml
 		{
 			return new XmlSimpleDictionaryWriter (writer);
 		}
-
-		[MonoTODO]
+#if !NET_2_1
 		public static XmlDictionaryWriter CreateMtomWriter (
 			Stream stream, Encoding encoding, int maxSizeInBytes,
 			string startInfo)
 		{
 			return CreateMtomWriter (stream, encoding,
-				maxSizeInBytes, startInfo, null, null, false, false);
+				maxSizeInBytes, startInfo, Guid.NewGuid () + "id=1", "http://tempuri.org/0/" + DateTime.Now.Ticks, true, false);
 		}
 
-		[MonoTODO]
 		public static XmlDictionaryWriter CreateMtomWriter (
 			Stream stream, Encoding encoding, int maxSizeInBytes,
 			string startInfo, string boundary, string startUri,
 			bool writeMessageHeaders, bool ownsStream)
 		{
-			throw new NotImplementedException ();
+			return new XmlMtomDictionaryWriter (stream, encoding, maxSizeInBytes, startInfo, boundary, startUri, writeMessageHeaders, ownsStream);
 		}
-
+#endif
 		public static XmlDictionaryWriter CreateTextWriter (
 			Stream stream)
 		{
@@ -210,8 +208,19 @@ namespace System.Xml
 					}
 					reader.MoveToElement ();
 				}
+				if (reader.IsEmptyElement)
+					WriteEndElement ();
+				else {
+					int depth = reader.Depth;
+					reader.Read ();
+					if (reader.NodeType != XmlNodeType.EndElement) {
+						do {
+							WriteNode (reader, defattr);
+						} while (depth < reader.Depth);
+					}
+					WriteFullEndElement ();
+				}
 				reader.Read ();
-				WriteNode (reader, defattr);
 				break;
 			case XmlNodeType.Attribute:
 			case XmlNodeType.Text:
@@ -247,7 +256,6 @@ namespace System.Xml
 			WriteEndAttribute ();
 		}
 
-		[MonoTODO ("make use of dictionary reader optimization")]
 		public override void WriteNode (XmlReader reader, bool defattr)
 		{
 			if (reader == null)

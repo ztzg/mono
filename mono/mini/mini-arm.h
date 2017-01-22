@@ -4,7 +4,7 @@
 #include <mono/arch/arm/arm-codegen.h>
 #include <glib.h>
 
-#if defined(ARM_FPU_NONE) || defined(ARM_FPU_VFP) || defined(__ARM_EABI__)
+#if defined(ARM_FPU_NONE) || (defined(__ARM_EABI__) && !defined(ARM_FPU_VFP))
 #define MONO_ARCH_SOFT_FLOAT 1
 #endif
 
@@ -54,7 +54,12 @@
 #define MONO_ARCH_CALLEE_REGS ((1<<ARMREG_R0) | (1<<ARMREG_R1) | (1<<ARMREG_R2) | (1<<ARMREG_R3) | (1<<ARMREG_IP))
 #define MONO_ARCH_CALLEE_SAVED_REGS ((1<<ARMREG_V1) | (1<<ARMREG_V2) | (1<<ARMREG_V3) | (1<<ARMREG_V4) | (1<<ARMREG_V5) | (1<<ARMREG_V6) | (1<<ARMREG_V7))
 
+#ifdef ARM_FPU_VFP
+/* Every double precision vfp register, d0/d1 is reserved for a scratch reg */
+#define MONO_ARCH_CALLEE_FREGS 0x55555550
+#else
 #define MONO_ARCH_CALLEE_FREGS 0xf
+#endif
 #define MONO_ARCH_CALLEE_SAVED_FREGS 0
 
 #define MONO_ARCH_USE_FPSTACK FALSE
@@ -136,9 +141,7 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_NEED_DIV_CHECK 1
 
 #define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION 1
-#define MONO_ARCH_HAVE_CREATE_TRAMPOLINE_FROM_TOKEN
 #define MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE
-#define MONO_ARCH_COMMON_VTABLE_TRAMPOLINE 1
 #define MONO_ARCH_HAVE_XP_UNWIND 1
 
 #define ARM_NUM_REG_ARGS (ARM_LAST_ARG_REG-ARM_FIRST_ARG_REG+1)
@@ -146,8 +149,14 @@ typedef struct MonoCompileArch {
 
 #define MONO_ARCH_HAVE_FULL_AOT_TRAMPOLINES 1
 #define MONO_ARCH_HAVE_IMT 1
+#define MONO_ARCH_HAVE_STATIC_RGCTX_TRAMPOLINE 1
+#define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 
 #define MONO_ARCH_AOT_SUPPORTED 1
+
+#define MONO_ARCH_GSHARED_SUPPORTED 1
+#define MONO_ARCH_DYN_CALL_SUPPORTED 1
+#define MONO_ARCH_DYN_CALL_PARAM_AREA 24
 
 /* ARM doesn't have too many registers, so we have to use a callee saved one */
 #define MONO_ARCH_RGCTX_REG ARMREG_V5

@@ -55,35 +55,31 @@ namespace System.Xml
 
 		internal class StreamSource : ISource
 		{
-			BinaryReader stream;
-			int position;
+			BinaryReader reader;
 
 			public StreamSource (Stream stream)
 			{
-				this.stream = new BinaryReader (stream);
+				this.reader = new BinaryReader (stream);
 			}
 
 			public int Position {
-				get { return position - 1; }
+				get { return (int) reader.BaseStream.Position; }
 			}
 
 			public BinaryReader Reader {
-				get { return stream; }
+				get { return reader; }
 			}
 
 			public int ReadByte ()
 			{
-				if (stream.PeekChar () < 0)
+				if (reader.PeekChar () < 0)
 					return -1;
-				position++;
-				return stream.ReadByte ();
+				return reader.ReadByte ();
 			}
 
 			public int Read (byte [] data, int offset, int count)
 			{
-				int ret = stream.Read (data, offset, count);
-				position += ret;
-				return ret;
+				return reader.Read (data, offset, count);
 			}
 		}
 
@@ -103,6 +99,7 @@ namespace System.Xml
 			public string Prefix;
 			public XmlDictionaryString DictLocalName;
 			public XmlDictionaryString DictNS;
+			public XmlDictionaryString DictValue; // BF.TextIndex
 			public XmlNodeType NodeType;
 			public object TypedValue;
 			public byte ValueType;
@@ -135,7 +132,7 @@ namespace System.Xml
 
 			public string Name {
 				get {
-					if (name == null)
+					if (name.Length == 0)
 						name = Prefix.Length > 0 ?
 							String.Concat (Prefix, ":", LocalName) :
 							LocalName;
@@ -143,10 +140,8 @@ namespace System.Xml
 				}
 			}
 
-			public string Value {
+			public virtual string Value {
 				get {
-					if (BF.AttrString <= ValueType && ValueType <= BF.PrefixNAttrIndexEnd)
-						return value; // attribute
 					switch (ValueType) {
 					case 0:
 					case BF.Comment:
@@ -158,9 +153,16 @@ namespace System.Xml
 					case BF.Utf16_16:
 					case BF.Utf16_32:
 						return value;
+					case BF.TextIndex:
+						return DictValue.Value;
 					case BF.Zero:
+						return "0";
 					case BF.One:
-						return XmlConvert.ToString ((int) TypedValue);
+						return "1";
+					case BF.BoolTrue:
+						return "true";
+					case BF.BoolFalse:
+						return "false";
 					case BF.Int8:
 						return XmlConvert.ToString ((byte) TypedValue);
 					case BF.Int16:
@@ -206,14 +208,23 @@ namespace System.Xml
 
 		class AttrNodeInfo : NodeInfo
 		{
+			public AttrNodeInfo (XmlBinaryDictionaryReader owner)
+			{
+				this.owner = owner;
+			}
+
+			XmlBinaryDictionaryReader owner;
 			public int ValueIndex;
-			public int NSIndex;
 
 			public override void Reset ()
 			{
 				base.Reset ();
 				ValueIndex = -1;
 				NodeType = XmlNodeType.Attribute;
+			}
+
+			public override string Value {
+				get { return owner.attr_values [ValueIndex].Value; }
 			}
 		}
 
@@ -298,6 +309,7 @@ namespace System.Xml
 
 			current = node = new NodeInfo ();
 			current.Reset ();
+			node_stack.Add (node);
 		}
 
 		public override int AttributeCount {
@@ -317,7 +329,7 @@ namespace System.Xml
 		}
 
 		public override bool HasValue {
-			get { return current.Value.Length > 0; }
+			get { return Value.Length > 0; }
 		}
 
 		public override bool IsEmptyElement {
@@ -335,6 +347,10 @@ namespace System.Xml
 		// looks like it may return attribute's name even if it is on its value node.
 		public override string LocalName {
 			get { return current_attr >= 0 ? attributes [current_attr].LocalName : current.LocalName; }
+		}
+
+		public override string Name {
+			get { return current_attr >= 0 ? attributes [current_attr].Name : current.Name; }
 		}
 
 		public override string NamespaceURI {
@@ -372,7 +388,7 @@ namespace System.Xml
 
 		public override string GetAttribute (string name)
 		{
-			for (int i = 0; i < attributes.Count; i++)
+			for (int i = 0; i < attr_count; i++)
 				if (attributes [i].Name == name)
 					return attributes [i].Value;
 			return null;
@@ -380,7 +396,7 @@ namespace System.Xml
 
 		public override string GetAttribute (string localName, string ns)
 		{
-			for (int i = 0; i < attributes.Count; i++)
+			for (int i = 0; i < attr_count; i++)
 				if (attributes [i].LocalName == localName &&
 					attributes [i].NS == ns)
 					return attributes [i].Value;
@@ -402,6 +418,17 @@ namespace System.Xml
 		{
 			return context.NamespaceManager.LookupNamespace (
 				NameTable.Get (prefix));
+		}
+
+		public override bool IsArray (out Type type)
+		{
+			if (array_state == XmlNodeType.Element) {
+				type = GetArrayType (array_item_type);
+				return true;
+			} else {
+				type = null;
+				return false;
+			}
 		}
 
 		public override bool MoveToElement ()
@@ -476,14 +503,6 @@ namespace System.Xml
 				return true;
 			}
 			// Actually there is no case for attribute whose value is split to more than two nodes. We could simplify the node structure.
-			/*
-			for (int i = start; i < end; i++) {
-				if (current == attr_values [i] && i + 1 < end) {
-					current = attr_values [i + 1];
-					return true;
-				}
-			}
-			*/
 			return false;
 		}
 
@@ -506,25 +525,28 @@ namespace System.Xml
 
 			// clear.
 			state = ReadState.Interactive;
+			MoveToElement ();
 			attr_count = 0;
 			attr_value_count = 0;
 			ns_slot = 0;
-			current = node;
 
 			if (node.NodeType == XmlNodeType.Element) {
 				// push element scope
-				depth++;
-				if (node_stack.Count <= depth) {
-					node_stack.Add (node);
+				if (node_stack.Count <= ++depth) {
+					if (depth == quota.MaxDepth)
+						throw new XmlException (String.Format ("Binary XML stream quota exceeded. Depth must be less than {0}", quota.MaxDepth));
 					node = new NodeInfo ();
+					node_stack.Add (node);
+				} else {
+					node = node_stack [depth]; // reuse
+					node.Reset ();
 				}
-				else
-					node = node_stack [depth];
-				current = node;
 			}
+			current = node;
 
 			if (is_next_end_element) {
 				is_next_end_element = false;
+				node.Reset ();
 				ProcessEndElement ();
 				return true;
 			}
@@ -591,6 +613,8 @@ namespace System.Xml
 					throw new XmlException ("The stream has ended where the array item type is expected");
 				array_item_type = (byte) ident;
 				array_item_remaining = ReadVariantSize ();
+				if (array_item_remaining > quota.MaxArrayLength)
+					throw new Exception (String.Format ("Binary xml stream exceeded max array length quota. Items are {0} and should be less than quota.MaxArrayLength", quota.MaxArrayLength));
 				array_state = XmlNodeType.Element;
 				break;
 
@@ -626,20 +650,35 @@ namespace System.Xml
 
 		void VerifyValidArrayItemType (int ident)
 		{
+			if (GetArrayType (ident) == null)
+				throw new XmlException (String.Format ("Unexpected array item type {0:X} in hexadecimal", ident));
+		}
+		
+		Type GetArrayType (int ident)
+		{
 			switch (ident) {
 			case BF.Bool:
+				return typeof (bool);
 			case BF.Int16:
+				return typeof (short);
 			case BF.Int32:
+				return typeof (int);
 			case BF.Int64:
+				return typeof (long);
 			case BF.Single:
+				return typeof (float);
 			case BF.Double:
+				return typeof (double);
 			case BF.Decimal:
+				return typeof (decimal);
 			case BF.DateTime:
+				return typeof (DateTime);
 			case BF.TimeSpan:
+				return typeof (TimeSpan);
 			case BF.Guid:
-				return;
+				return typeof (Guid);
 			}
-			throw new XmlException (String.Format ("Unexpected array item type {0:X} in hexadecimal", ident));
+			return null;
 		}
 
 		private void ProcessEndElement ()
@@ -726,7 +765,7 @@ namespace System.Xml
 		private void ReadAttribute (byte ident)
 		{
 			if (attributes.Count == attr_count)
-				attributes.Add (new AttrNodeInfo ());
+				attributes.Add (new AttrNodeInfo (this));
 			AttrNodeInfo a = attributes [attr_count++];
 			a.Reset ();
 			a.Position = source.Position;
@@ -748,12 +787,12 @@ namespace System.Xml
 				goto case BF.AttrIndex;
 			default:
 				if (BF.PrefixNAttrStringStart <= ident && ident <= BF.PrefixNAttrStringEnd) {
-					a.Prefix = ((char) ('a' + ident)).ToString ();
+					a.Prefix = ((char) ('a' + ident - BF.PrefixNAttrStringStart)).ToString ();
 					a.LocalName = ReadUTF8 ();
 					break;
 				}
 				else if (BF.PrefixNAttrIndexStart <= ident && ident <= BF.PrefixNAttrIndexEnd) {
-					a.Prefix = ((char) ('a' + ident)).ToString ();
+					a.Prefix = ((char) ('a' + ident - BF.PrefixNAttrIndexStart)).ToString ();
 					a.DictLocalName = ReadDictName ();
 					break;
 				}
@@ -764,8 +803,16 @@ namespace System.Xml
 
 		private void ReadNamespace (byte ident)
 		{
+			// create attrubute slot.
+			if (attributes.Count == attr_count)
+				attributes.Add (new AttrNodeInfo (this));
+			AttrNodeInfo a = attributes [attr_count++];
+			a.Reset ();
+			a.Position = source.Position;
+
 			string prefix = null, ns = null;
-				XmlDictionaryString dns;
+			XmlDictionaryString dns = null;
+
 			switch (ident) {
 			case BF.DefaultNSString:
 				prefix = String.Empty;
@@ -788,6 +835,20 @@ namespace System.Xml
 				ns = dns.Value;
 				break;
 			}
+
+			// fill attribute slot.
+			a.Prefix = prefix.Length > 0 ? "xmlns" : String.Empty;
+			a.LocalName = prefix.Length > 0 ? prefix : "xmlns";
+			a.NS = "http://www.w3.org/2000/xmlns/";
+			a.ValueIndex = attr_value_count;
+			if (attr_value_count == attr_values.Count)
+				attr_values.Add (new NodeInfo (true));
+			NodeInfo v = attr_values [attr_value_count++];
+			v.Reset ();
+			v.Value = ns;
+			v.ValueType = BF.Chars8;
+			v.NodeType = XmlNodeType.Text;
+
 			ns_store.Add (new QName (prefix, ns));
 			context.NamespaceManager.AddNamespace (prefix, ns);
 		}
@@ -795,17 +856,14 @@ namespace System.Xml
 		private void ReadAttributeValueBinary (AttrNodeInfo a)
 		{
 			a.ValueIndex = attr_value_count;
-			do {
-				if (attr_value_count == attr_values.Count)
-					attr_values.Add (new NodeInfo (true));
-				NodeInfo v = attr_values [attr_value_count++];
-				v.Reset ();
-				int ident = ReadByteOrError ();
-				is_next_end_element = ident > 0x80 && (ident & 1) == 1;
-				ident -= is_next_end_element ? 1 : 0;
-				if (!ReadTextOrValue ((byte) ident, v, true) || is_next_end_element)
-					break;
-			} while (true);
+			if (attr_value_count == attr_values.Count)
+				attr_values.Add (new NodeInfo (true));
+			NodeInfo v = attr_values [attr_value_count++];
+			v.Reset ();
+			int ident = ReadByteOrError ();
+			bool end = ident > 0x80 && (ident & 1) == 1;
+			ident -= end ? 1 : 0;
+			ReadTextOrValue ((byte) ident, v, true);
 		}
 
 		private bool ReadTextOrValue (byte ident, NodeInfo node, bool canSkip)
@@ -863,7 +921,7 @@ namespace System.Xml
 					(ident == BF.Bytes8) ? source.Reader.ReadByte () :
 					(ident == BF.Bytes16) ? source.Reader.ReadUInt16 () :
 					source.Reader.ReadInt32 ();
-				byte [] base64 = new byte [size];
+				byte [] base64 = Alloc (size);
 				source.Reader.Read (base64, 0, base64.Length);
 				node.TypedValue = base64;
 				break;
@@ -888,16 +946,20 @@ namespace System.Xml
 			case BF.Utf16_32:
 				Encoding enc = ident <= BF.Chars32 ? Encoding.UTF8 : Encoding.Unicode;
 				size =
-					(ident == BF.Chars8) ? source.Reader.ReadByte () :
-					(ident == BF.Chars16) ? source.Reader.ReadUInt16 () :
+					(ident == BF.Chars8 || ident == BF.Utf16_8) ? source.Reader.ReadByte () :
+					(ident == BF.Chars16 || ident == BF.Utf16_16) ? source.Reader.ReadUInt16 () :
 					source.Reader.ReadInt32 ();
-				byte [] bytes = new byte [size];
+				byte [] bytes = Alloc (size);
 				source.Reader.Read (bytes, 0, size);
 				node.Value = enc.GetString (bytes, 0, size);
 				node.NodeType = XmlNodeType.Text;
 				break;
 			case BF.EmptyText:
 				node.Value = String.Empty;
+				node.NodeType = XmlNodeType.Text;
+				break;
+			case BF.TextIndex:
+				node.DictValue = ReadDictName ();
 				node.NodeType = XmlNodeType.Text;
 				break;
 			default:
@@ -907,6 +969,13 @@ namespace System.Xml
 				return false;
 			}
 			return true;
+		}
+
+		byte [] Alloc (int size)
+		{
+			if (size > quota.MaxStringContentLength || size < 0)
+				throw new XmlException (String.Format ("Text content buffer exceeds the quota limitation at {2}. {0} bytes and should be less than {1} bytes", size, quota.MaxStringContentLength, source.Position));
+			return new byte [size];
 		}
 
 		private int ReadVariantSize ()
@@ -932,7 +1001,7 @@ namespace System.Xml
 				return String.Empty;
 			if (tmp_buffer.Length < size) {
 				int extlen = tmp_buffer.Length * 2;
-				tmp_buffer = new byte [size < extlen ? extlen : size];
+				tmp_buffer = Alloc (size < extlen ? extlen : size);
 			}
 			size = source.Read (tmp_buffer, 0, size);
 			return utf8enc.GetString (tmp_buffer, 0, size);
@@ -985,7 +1054,7 @@ namespace System.Xml
 
 		public override string ReadContentAsString ()
 		{
-			string value = Value;
+			string value = String.Empty;
 			do {
 				switch (NodeType) {
 				case XmlNodeType.Element:
@@ -1076,7 +1145,7 @@ namespace System.Xml
 					ret = (byte []) node.TypedValue;
 				else {
 					byte [] tmp = (byte []) node.TypedValue;
-					byte [] tmp2 = new byte [ret.Length + tmp.Length];
+					byte [] tmp2 = Alloc (ret.Length + tmp.Length);
 					Array.Copy (ret, tmp2, ret.Length);
 					Array.Copy (tmp, 0, tmp2, ret.Length, tmp.Length);
 					ret = tmp2;

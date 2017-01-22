@@ -39,6 +39,7 @@ namespace Mono.Documentation {
 				{ "assemble",         new MDocAssembler () },
 				{ "dump-tree",        new MDocTreeDumper () },
 				{ "export-html",      new MDocToHtmlConverter () },
+				{ "export-html-webdoc",   new MDocExportWebdocHtml () },
 				{ "export-msxdoc",    new MDocToMSXDocConverter () },
 				{ "help",             new MDocHelpCommand (this) },
 				{ "update",           new MDocUpdater () },
@@ -57,7 +58,7 @@ namespace Mono.Documentation {
 			List<string> extra = p.Parse (args);
 
 			if (showVersion) {
-				Console.WriteLine ("mdoc 0.1.0");
+				Console.WriteLine ("mdoc {0}", Consts.MonoVersion);
 				return;
 			}
 			if (extra.Count == 0) {

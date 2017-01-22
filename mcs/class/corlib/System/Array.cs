@@ -56,9 +56,20 @@ namespace System
 		}
 
 #if NET_2_0
-		internal int InternalArray__ICollection_get_Count<T> ()
+		/*
+		 * These methods are used to implement the implicit generic interfaces 
+		 * implemented by arrays in NET 2.0.
+		 * Only make those methods generic which really need it, to avoid
+		 * creating useless instantiations.
+		 */
+		internal int InternalArray__ICollection_get_Count ()
 		{
 			return Length;
+		}
+
+		internal bool InternalArray__ICollection_get_IsReadOnly ()
+		{
+			return true;
 		}
 
 		internal IEnumerator<T> InternalArray__IEnumerable_GetEnumerator<T> ()
@@ -66,7 +77,7 @@ namespace System
 			return new InternalEnumerator<T> (this);
 		}
 
-		internal void InternalArray__ICollection_Clear<T> ()
+		internal void InternalArray__ICollection_Clear ()
 		{
 			throw new NotSupportedException ("Collection is read-only");
 		}
@@ -131,7 +142,7 @@ namespace System
 			throw new NotSupportedException ("Collection is read-only");
 		}
 
-		internal void InternalArray__RemoveAt<T> (int index)
+		internal void InternalArray__RemoveAt (int index)
 		{
 			throw new NotSupportedException ("Collection is read-only");
 		}
@@ -289,12 +300,12 @@ namespace System
 		object IList.this [int index] {
 			get {
 				if (unchecked ((uint) index) >= unchecked ((uint) Length))
-					throw new ArgumentOutOfRangeException ("index");
+					throw new IndexOutOfRangeException ("index");
 				return GetValueImpl (index);
 			} 
 			set {
 				if (unchecked ((uint) index) >= unchecked ((uint) Length))
-					throw new ArgumentOutOfRangeException ("index");
+					throw new IndexOutOfRangeException ("index");
 				SetValueImpl (value, index);
 			}
 		}
@@ -1120,8 +1131,13 @@ namespace System
 			if (array.Rank > 1)
 				throw new RankException (Locale.GetText ("Only single dimension arrays are supported."));
 
-			if (count < 0 || startIndex < array.GetLowerBound (0) ||
-				startIndex > array.GetUpperBound (0) ||	startIndex - count + 1 < array.GetLowerBound (0))
+			int lb = array.GetLowerBound (0);
+			// Empty arrays do not throw ArgumentOutOfRangeException
+			if (array.Length == 0)
+				return lb - 1;
+
+			if (count < 0 || startIndex < lb ||
+				startIndex > array.GetUpperBound (0) ||	startIndex - count + 1 < lb)
 				throw new ArgumentOutOfRangeException ();
 
 			for (int i = startIndex; i >= startIndex - count + 1; i--) {
@@ -1129,7 +1145,7 @@ namespace System
 					return i;
 			}
 
-			return array.GetLowerBound (0) - 1;
+			return lb - 1;
 		}
 
 #if !BOOTSTRAP_WITH_OLDLIB

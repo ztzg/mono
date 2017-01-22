@@ -14,14 +14,14 @@ using System.Runtime.InteropServices;
 namespace MonoTests.System.Runtime.InteropServices
 {
 	[TestFixture]
-	public class GCHandleTest : Assertion
+	public class GCHandleTest
 	{
 		static GCHandle handle;
 
 		[Test]
 		public void DefaultZeroValue ()
 		{
-			AssertEquals (false, handle.IsAllocated);
+			Assert.AreEqual (false, handle.IsAllocated);
 		}
 
 		[Test]
@@ -29,6 +29,12 @@ namespace MonoTests.System.Runtime.InteropServices
 		{
 			IntPtr ptr = (IntPtr)GCHandle.Alloc(null);
 			GCHandle gch = (GCHandle)ptr;
+		}
+
+		[Test]
+		public void AllocNullWeakTrack ()
+		{
+			GCHandle gch = GCHandle.Alloc(null, GCHandleType.WeakTrackResurrection);
 		}
 
 		[Test]
@@ -76,7 +82,7 @@ namespace MonoTests.System.Runtime.InteropServices
 			GCHandle handle = GCHandle.Alloc (null, GCHandleType.Pinned);
 			try {
 				IntPtr ptr = handle.AddrOfPinnedObject();
-				AssertEquals (new IntPtr (0), ptr);
+				Assert.AreEqual (new IntPtr (0), ptr);
 			}
 			finally {
 				handle.Free();

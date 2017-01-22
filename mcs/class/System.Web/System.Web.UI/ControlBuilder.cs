@@ -39,6 +39,8 @@ using System.Web.Configuration;
 using System.IO;
 using System.Web.UI.WebControls;
 
+using _Location = System.Web.Compilation.Location;
+
 namespace System.Web.UI {
 
 	// CAS
@@ -142,6 +144,13 @@ namespace System.Web.UI {
 			set { method = value; }
 		}
 
+#if NET_2_0
+		internal CodeMemberMethod DataBindingMethod {
+			get;
+			set;
+		}
+#endif
+			
 		internal CodeStatementCollection MethodStatements {
 			get { return methodStatements; }
 			set { methodStatements = value; }
@@ -162,7 +171,7 @@ namespace System.Web.UI {
 
 		internal ILocation Location {
 			get { return location; }
-			set { location = value; }
+			set { location = new _Location (value); }
 		}
 	
 		internal ArrayList OtherTags {
@@ -218,6 +227,15 @@ namespace System.Web.UI {
 			}
 		}
 
+		internal bool IsNamingContainer {
+			get {
+				if (type == null)
+					return false;
+
+				return typeof (INamingContainer).IsAssignableFrom (type);
+			}
+		}
+		
 		ControlBuilder MyNamingContainer {
 			get {
 				if (myNamingContainer == null) {
@@ -317,7 +335,7 @@ namespace System.Web.UI {
 		
 		internal RootBuilder Root {
 			get {
-				if (GetType () == typeof (RootBuilder))
+				if (typeof (RootBuilder).IsAssignableFrom (GetType ()))
 					return (RootBuilder) this;
 
 				return (RootBuilder) parentBuilder.Root;
@@ -618,7 +636,7 @@ namespace System.Web.UI {
 		{
 			this.parser = parser;
 			if (parser != null)
-				this.location = parser.Location;
+				this.Location = parser.Location;
 
 			this.parentBuilder = parentBuilder;
 			this.type = type;
@@ -694,10 +712,17 @@ namespace System.Web.UI {
 						// builder call.
 						defaultPropertyBuilder = null;
 						childBuilder = CreatePropertyBuilder (tagid, parser, atts);
-					} else
-						childBuilder = defaultPropertyBuilder.CreateSubBuilder (tagid, atts,
-													null, parser,
-													location);
+					} else {
+						Type ct = ControlType;
+						MemberInfo[] mems = ct != null ? ct.GetMember (tagid, MemberTypes.Property, FlagsNoCase) : null;
+						PropertyInfo prop = mems != null && mems.Length > 0 ? mems [0] as PropertyInfo : null;
+
+						if (prop != null && typeof (ITemplate).IsAssignableFrom (prop.PropertyType)) {
+							childBuilder = CreatePropertyBuilder (tagid, parser, atts);
+							defaultPropertyBuilder = null;
+						} else
+							childBuilder = defaultPropertyBuilder.CreateSubBuilder (tagid, atts, null, parser, location);
+					}
 				}
 
 				return childBuilder;
@@ -754,14 +779,13 @@ namespace System.Web.UI {
 			return CreateInstance ();
 		}
 		
-		[MonoTODO]
 		public virtual void ProcessGeneratedCode(CodeCompileUnit codeCompileUnit,
-			CodeTypeDeclaration baseType,
-			CodeTypeDeclaration derivedType,
-			CodeMemberMethod buildMethod,
-			CodeMemberMethod dataBindingMethod)
+							 CodeTypeDeclaration baseType,
+							 CodeTypeDeclaration derivedType,
+							 CodeMemberMethod buildMethod,
+							 CodeMemberMethod dataBindingMethod)
 		{
-			throw new NotImplementedException ();
+			// nothing to do
 		}
 
 		internal void ResetState()

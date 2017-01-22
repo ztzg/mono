@@ -44,6 +44,7 @@ namespace Microsoft.Build.Tasks {
 		bool		rebaseOutputs;
 		bool		runEachTargetSeparately;
 		bool		stopOnFirstFailure;
+		bool		buildInParallel;
 		ITaskItem []	targetOutputs;
 		string []	targets;
 	
@@ -53,6 +54,9 @@ namespace Microsoft.Build.Tasks {
 
 		public override bool Execute ()
 		{
+			if (projects.Length == 0)
+				return true;
+
 			string filename;
 			bool result = true;
 			stopOnFirstFailure = false;
@@ -60,20 +64,39 @@ namespace Microsoft.Build.Tasks {
 			string currentDirectory = Environment.CurrentDirectory;
 			Hashtable outputs;
 		
+			Dictionary<string, string> global_properties = SplitPropertiesToDictionary ();
+			Dictionary<string, ITaskItem> projectsByFileName = new Dictionary<string, ITaskItem> ();
+
 			foreach (ITaskItem project in projects) {
 				filename = project.GetMetadata ("FullPath");
+				if (!File.Exists (filename)) {
+					Log.LogError ("Could not find the project file '{0}'", filename);
+					if (stopOnFirstFailure)
+						break;
+
+					continue;
+				}
 
 				Directory.SetCurrentDirectory (Path.GetDirectoryName (filename));
 				outputs = new Hashtable ();
 
-				Dictionary<string, string> global_properties = SplitPropertiesToDictionary ();
 				result = BuildEngine.BuildProjectFile (filename, targets, global_properties, outputs);
 
 				if (result) {
+					// Metadata from the first item for the project file is copied
+					ITaskItem first_item;
+					if (!projectsByFileName.TryGetValue (filename, out first_item))
+						projectsByFileName [filename] = first_item = project;
+
 					foreach (DictionaryEntry de in outputs) {
 						ITaskItem [] array = (ITaskItem []) de.Value;
 						foreach (ITaskItem item in array) {
+							// copy the metadata from original @project to here
+							// CopyMetadataTo does _not_ overwrite
+							first_item.CopyMetadataTo (item);
+
 							outputItems.Add (item);
+
 							//FIXME: Correctly rebase output paths to be relative to the
 							//	 calling project
 							//if (rebaseOutputs)
@@ -132,6 +155,11 @@ namespace Microsoft.Build.Tasks {
 		public string [] Targets {
 			get { return targets; }
 			set { targets = value; }
+		}
+
+		public bool BuildInParallel {
+			get { return buildInParallel; }
+			set { buildInParallel = value; }
 		}
 
 		Dictionary<string, string> SplitPropertiesToDictionary ()

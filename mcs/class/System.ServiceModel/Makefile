@@ -12,6 +12,7 @@ LIB_MCS_FLAGS = \
 		/unsafe \
 	        /r:System.dll \
 	        /r:System.Xml.dll \
+		/r:System.Core.dll \
 	        /r:System.Runtime.Serialization.dll \
 		$(RESOURCE_FILES:%=/resource:%)
 
@@ -29,8 +30,8 @@ LIB_MCS_FLAGS += /d:NET_3_0 	\
 			/r:Mono.Security.dll
 endif
 
-ifeq (2.1, $(FRAMEWORK_VERSION))
-LIB_MCS_FLAGS += /r:System.Net /r:System.Core /r:System.Xml.Linq
+ifeq (net_2_1_raw, $(PROFILE))
+LIB_MCS_FLAGS += /r:System.Net
 endif
 
 TEST_MCS_FLAGS = $(LIB_MCS_FLAGS)
@@ -46,7 +47,7 @@ EXTRA_DISTFILES = $(RESOURCE_FILES) $(TEST_EXTRA_FILES)
 # Useful for debugging under Visual Studio 2005
 # NO_SIGN_ASSEMBLY = yes
 
-VALID_PROFILE := $(filter net_2_0 net_2_1_raw, $(PROFILE))
+VALID_PROFILE := $(filter 2.0 2.1 4.0, $(FRAMEWORK_VERSION))
 ifndef VALID_PROFILE
 LIBRARY_NAME = dummy-System.ServiceModel.dll
 NO_INSTALL = yes
