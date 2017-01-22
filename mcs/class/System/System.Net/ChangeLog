@@ -1,3 +1,289 @@
+2010-07-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* ServicePointManager.cs: Add special validation for Moonlight
+	* WebConnection.cs: Change a define to NET_2_1
+
+2010-07-16 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebClient.cs: ignore values set in CachePolicy and
+	UseDefaultCredentials instead of throwing NIEX.
+
+2010-07-14 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* IPAddress.cs: allow values out of range as MS does.
+
+2010-07-08 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebClient.cs: handle compressed streams when automatic decompression
+	is turned on by a class derived from WebClient.
+
+2010-07-01  Marek Habersack  <mhabersack@novell.com>
+
+	* WebRequest.cs: DefaultCachePolicy and CachePolicy return a
+	NoCacheNoStore policy in all cases now. Workaround for bug #583934
+
+2010-06-29  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* ServicePointManager.cs: Remove NET_2_0 defines around 
+	RemoteCertificateValidationCallback
+
+2010-06-28 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* IPAddress.cs: verify the last IPv4 digit too.
+	Fixes bug #612135.
+
+2010-06-16 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebRequest.cs: DELETE allows an entity body.
+	Fixes bug #614483.
+
+2010-06-15 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebRequest.cs: 307 does not change request method.
+
+2010-06-11 Jonathan Chambers  <joncham@gmail.com>
+
+	* HttpListenerRequest.cs: Assign default value to variable before using.
+
+2010-05-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpDataStream.cs:
+	* FtpWebRequest.cs: properly close the data connection even when
+	nothing is read from it. Refixes bug #598908.
+
+2010-04-23 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpDataStream.cs:
+	* FtpWebRequest.cs: use streams instead of sockets as soon as
+	possible. Correctly initialize the control connection when SSL
+	is used and protect the data connection by default.
+	Fixes bug #598908.
+
+2010-04-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ChunkStream.cs: ignore chunk extensions when reading the chunk
+	size. Fixes bug #597556.
+
+2010-04-15 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebRequest.cs: set content length to -1 on redirect. Reset
+	'FinishedReading' on redirects. Fixes bug #593596.
+
+2010-04-08 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ServicePointManager.cs: obtain the SubjectAltName extension the
+	right way. Fixes bug #594110.
+
+2010-03-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebRequest.cs: when PreAuthenticate is true, don't remove the
+	existing authorization related headers until we know we have a
+	replacement. Fixes bug #591633.
+
+2010-03-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ServicePointManager.cs: errors parsing the certificate don't prevent
+	calling the callback now. Exceptions thrown parsing the certificate
+	are printed to stderr in case they are library errors.
+
+2010-03-21 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebClient.cs: fix handling of query string, whether it comes from
+	the address used or is part of the QueryString.
+
+2010-03-20  Miguel de Icaza  <miguel@novell.com>
+
+	* WebConnection.cs: Drop pre-2.0 and pre-1.1 support, and remove
+	warnings. 
+
+	* WebClient.cs: Drop the pre-2.0 support
+
+2010-03-19  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* AuthenticationManager.cs: Internal type for Moonlight.
+	Add BasicClient, DigestClient, NtlmClient for NET_2_1 since
+	this applies to both monotouch and moonlight (client stack).
+	Removed unneeded NET_2_0 defines
+	* CookieContainer.cs: For Moonlight it needs to be internal in 
+	System.dll and public in System.Net.dll. Removed unneeded NET_2_0
+	defines
+	* HttpContinueDelegate.cs: Internal type for Moonlight.
+	* HttpRequestCreator.cs: Remove a MOONLIGHT define
+	* HttpStatusCode.cs: For Moonlight it needs to be internal in 
+	System.dll and public in System.Net.dll
+	* HttpWebRequest.cs: Internal type for Moonlight. Change S.Config
+	to NET_2_1 defines (applies to both monotouch and moonlight).
+	Removed unneeded NET_2_0 and NET_1_1 defines
+	* HttpWebResponse.cs: Internal type for Moonlight. Removed 
+	unneeded NET_2_0 defines
+	* IAuthenticationModule.cs: Internal type for Moonlight.
+	* ICertificatePolicy.cs: Internal type for Moonlight.
+	* ICredentialPolicy.cs: Internal type for Moonlight. Removed 
+	unneeded NET_2_0 defines
+	* IWebRequestCreate.cs: For Moonlight it needs to be internal in 
+	System.dll and public in System.Net.dll
+	* ServicePoint.cs: Internal type for Moonlight. Change S.Config
+	to NET_2_1 defines (applies to both monotouch and moonlight)
+	* ServicePointManager.cs: Remove a MOONLIGHT define
+	* WebException.cs: For Moonlight it needs to be internal in 
+	System.dll and public in System.Net.dll. Removed unneeded NET_2_0
+	defines
+	* WebHeaderCollection.cs: Internal type for Moonlight. Removed 
+	unneeded NET_2_0 defines
+	* WebRequest.cs: Internal type for Moonlight. Change S.Config
+	to NET_2_1 defines (applies to both monotouch and moonlight)
+	* WebResponse.cs: Internal type for Moonlight. Removed unneeded
+	NET_2_0 defines
+
+2010-03-18 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* FtpWebResponse.cs:
+	* FtpWebRequest.cs: for non-data operations, make sure we send the
+	QUIT command upon completion when KeepAlive is false.
+	Fixes bug #589305.
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* Dns.cs, HttpRequestCreator.cs, ServicePoint.cs: use MOONLIGHT
+	symbol to disambiguate MonoTouch and Moonlight code.
+
+2010-03-11 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ServicePointManager.cs: perform the entire chain validation here.
+
+2010-03-09 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpConnection.cs: set the right position when a CR is found.
+	Fixes bug #577891.
+
+2010-03-09 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpListener.cs:
+	* HttpListenerRequest.cs:
+	* ListenerAsyncResult.cs:
+	* HttpConnection.cs: make sure there is no pending input when reusing
+	the connection.
+
+2010-03-08 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpListenerContext.cs: split the auth header in 2 parts.
+	* HttpListener.cs: backported SelectAuthenticationScheme and
+	added new InternalEndGetContext used for connections that require
+	authentication.
+	* ListenerAsyncResult.cs: allow this object to be just a forwarder
+	when nesting connections for authentication purposes.
+	Fixes bug #585455.
+
+2010-03-06 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebClient.cs: fix for UploadStringAsync(). Closes bug #577818.
+	Patch by Atsushi.
+
+2010-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerContext.cs : WWW-Authenticate header should not be
+	  limited to Basic.
+
+2010-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerContext.cs : The header line here is already trimmed
+	  "Authorization:" , so do not try to remove it.
+
+2010-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListener.cs, ListenerAsyncResult.cs : fix authentication
+	  scheme selection mismatch.
+
+2010-03-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerContext.cs, HttpListener.cs :
+	  support AuthenticationSchemeSelectorDelegate.
+
+2010-03-01  Miguel de Icaza  <miguel@novell.com>
+
+	* WebHeaderCollection.cs: Apply 2 year old patch from Yves Bastide
+	that fixes the keys casing in the collection; Fixes 325491
+
+2010-03-01 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConnection.cs: attach a validation callback to the new
+	event in Mono.Security.
+	* ServicePointManager.cs: added a new ValidationHelper
+	class that takes care of building the certificate chain and perform
+	all the check that were done in Mono.Security before. This way the 2.0
+	server certificate validation callback can get all the data it needs.
+
+	Fixes bug #584050.
+
+2010-01-29  Mike Kestner <mkestner@novell.com>
+
+	* HttpUtility.cs: port more of the methods from System.Web file.
+	* WebUtility.cs: new 4.0 class.
+
+2010-01-21  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* IPEndPoint.cs: When throwing an ArgumentException in Create()
+	because of a mismatch in the address family, use a more informative
+	message. Patch by Juho Vaha-Herttu<juhovh@iki.fi>.
+	Fixes #505105.
+
+2010-01-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* CookieContainer.cs: Fix to cloning and expiration. Patch
+	by Tom Philpot <tom.philpot@logos.com>
+
+2010-01-13 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpWebRequest.cs: when the server returns several different
+	authentication methods, pick the one that works.
+	Fixes bug #562043.
+
+2010-01-12  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* NetworkCredential.cs: Fix properties to never return null.
+
+2009-12-24  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Cookie.cs: Re-work ToString to be useable in more cases. Fix
+	some issues found by Gendarme.
+	* CookieContainer.cs: Fix all NonWorking (and new) unit tests.
+	Implement removing oldest cookies when limits are reached.
+	* CookieCollection.cs: Move to generics internally. Fix sort to 
+	be closer to MS implementation (but still not 100% identical).
+	Fix some issues found by Gendarme.
+
+2009-12-21 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConnectionGroup.cs:
+	* ServicePoint.cs: implemented CloseConnectionGroup().
+
+2009-12-04  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* System.Net/DnsEndPoint.cs: Moved from System.Net (where the
+	type resides in Moonlight) so it's available for 4.0
+
+2009-11-30  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* CookieCollection.cs: Seal inner CookieCollectionPathComparer
+	* IPAddress.cs: Avoid multiple casts in Equals
+	* SocketAddress.cs: Avoid multiple casts in Equals
+	[Found using Gendarme]
+
+2009-10-23  Alexandre Gomes  <alexmipego@gmail.com>
+
+	* WebClient.cs: Fixed GetWebRequest overriding problems, bug: 
+	  https://bugzilla.novell.com/show_bug.cgi?id=549580
+	  
+2009-10-17 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* WebConnectionStream.cs: add 3 missing DoCallback() calls in
+	EndRead/EndWrite.
+
+2009-09-29 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* EndPointListener.cs: fix matching a listener in presence of a query
+	string or anchor.
+
 2009-09-15 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* HttpListenerRequest.cs: add the right status code.
@@ -201,7 +487,7 @@
 	Clear the ip_to_endpoints hashtable if there are no more prefixes
 	listening on that address.
 
-2009-06-16 Andrés G. Aragoneses <aaragoneses@novell.com>
+2009-06-16 Andres G. Aragoneses <aaragoneses@novell.com>
 
 	* WebConnection.cs: propagate the exception to the request.
 	* WebException.cs: new internal ctor.

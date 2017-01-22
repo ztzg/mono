@@ -82,7 +82,7 @@ typedef struct MonoContext {
 typedef struct MonoCompileArch {
 	gint32 lmf_offset;
 	gint32 localloc_offset;
-	gint32 float_spill_slot_offset;
+	void *float_spill_slot;
 } MonoCompileArch;
 
 #define MONO_CONTEXT_SET_IP(ctx,eip) do { (ctx)->ip = (gpointer)(eip); } while (0); 
@@ -100,14 +100,7 @@ typedef struct MonoCompileArch {
 		MONO_CONTEXT_SET_SP ((ctx), __builtin_frame_address (0));	\
 	} while (0)
 
-#ifndef __linux__
-/* 
- * Can't use sigaction on sparc/linux, since it doesn't support SA_SIGINFO. Instead, we
- * have to use the obsolete sigcontext parameter:
- * http://www.ussg.iu.edu/hypermail/linux/kernel/0110.3/1531.html.
- */
 #define MONO_ARCH_USE_SIGACTION 1
-#endif
 
 #ifdef HAVE_WORKING_SIGALTSTACK
 /*#define MONO_ARCH_SIGSEGV_ON_ALTSTACK*/
@@ -120,7 +113,6 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_EMULATE_LCONV_TO_R8_UN 1
 #define MONO_ARCH_EMULATE_FREM 1
 #define MONO_ARCH_NEED_DIV_CHECK 1
-#define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION 1
 #define MONO_ARCH_HAVE_IMT 1
 #define MONO_ARCH_IMT_REG sparc_g1
 #define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
@@ -128,6 +120,8 @@ typedef struct MonoCompileArch {
 #ifdef SPARCV9
 #define MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS
 #endif
+
+#define MONO_ARCH_THIS_AS_FIRST_ARG 1
 
 #ifndef __GNUC__
 /* assume Sun compiler if not GCC */

@@ -32,8 +32,7 @@ mono_bb_is_fall_through (MonoCompile *cfg, MonoBasicBlock *bb)
 MonoInst *
 mono_branch_optimize_exception_target (MonoCompile *cfg, MonoBasicBlock *bb, const char * exname)
 {
-	MonoMethod *method = cfg->method;
-	MonoMethodHeader *header = mono_method_get_header (method);
+	MonoMethodHeader *header = cfg->header;
 	MonoExceptionClause *clause;
 	MonoClass *exclass;
 	int i;
@@ -94,6 +93,9 @@ mono_branch_optimize_exception_target (MonoCompile *cfg, MonoBasicBlock *bb, con
 						return jump;
 					} 
 
+					return NULL;
+				} else {
+					/* Branching to an outer clause could skip inner clauses */
 					return NULL;
 				}
 			} else {
@@ -532,6 +534,13 @@ mono_if_conversion (MonoCompile *cfg)
 			if (cfg->ret && ins1->dreg == cfg->ret->dreg)
 				continue;
 
+			if (!(cfg->opt & MONO_OPT_DEADCE))
+				/* 
+				 * It is possible that dreg is never set before, so we can't use
+				 * it as an sreg of the cmov instruction (#582322).
+				 */
+				continue;
+
 			if (cfg->verbose_level > 2) {
 				printf ("\tBranch -> CMove optimization (2) in BB%d on\n", bb->block_num);
 				printf ("\t\t"); mono_print_ins (compare);
@@ -745,7 +754,8 @@ mono_if_conversion (MonoCompile *cfg)
 		mono_handle_global_vregs (cfg);
 		if (cfg->opt & (MONO_OPT_CONSPROP | MONO_OPT_COPYPROP))
 			mono_local_cprop (cfg);
-		mono_local_deadce (cfg);
+		if (cfg->opt & MONO_OPT_DEADCE)
+			mono_local_deadce (cfg);
 	}
 #endif
 }
@@ -1419,7 +1429,7 @@ mono_optimize_branches (MonoCompile *cfg)
 				}
 
 				if (bb->last_ins && MONO_IS_COND_BRANCH_NOFP (bb->last_ins)) {
-					if (bb->last_ins->inst_false_bb && bb->last_ins->inst_false_bb->out_of_line && (bb->region == bb->last_ins->inst_false_bb->region)) {
+					if (bb->last_ins->inst_false_bb && bb->last_ins->inst_false_bb->out_of_line && (bb->region == bb->last_ins->inst_false_bb->region) && !cfg->disable_out_of_line_bblocks) {
 						/* Reverse the branch */
 						bb->last_ins->opcode = mono_reverse_branch_op (bb->last_ins->opcode);
 						bbn = bb->last_ins->inst_false_bb;

@@ -1,3 +1,137 @@
+2010-07-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ClientCredentialsSecurityTokenManagerTest.cs : add utility .ctor.
+
+2010-06-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* EndpointAddressTest.cs : add more ReadFrom() tests.
+
+2010-06-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostTest.cs : improved endpoint tests and enabled them.
+
+2010-06-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostTest.cs : fix AddServiceEndpoint tests to make sense.
+	  They are mostly not working. Enable working one.
+
+2010-06-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CallbackBehaviorAttributeTest.cs : added test for bug #567672
+	  ('IsOneWay=false' case).
+
+2010-06-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CallbackBehaviorAttributeTest.cs : test recent changes on operation
+	  descriptions, message directions, client operations and so on.
+
+2010-05-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CallbackBehaviorAttributeTest.cs : fix assertion label.
+
+2010-04-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* FaultContractAttributeTest.cs : new test.
+
+2010-04-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostBaseTest.cs : enable RunDestinationUnreachableTest()
+	  and add another case for different addressing version.
+
+2010-03-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* EndpointIdentityTest.cs, EndpointAddress10Test.cs :
+	  enable working tests.
+
+2010-03-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostBaseTest.cs : add not-working ActionNotFound test by
+	  Matt Dargavel.
+
+2010-03-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Constants.cs : copied from the lib itself.
+
+2010-02-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostBaseTest.cs : on unixy filesystems "/foobar"
+	  is parsed as an absolute URI.
+
+2010-02-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NetTcpBindingTest.cs : port 808 is not generally available
+	  for non-privileged users.
+
+2010-01-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactory_1Test.cs : added a couple of error check tests for
+	  constructors and CreateChannel() overloads.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostTest.cs : add a few more comments.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CallbackBehaviorAttributeTest.cs : enable the test again.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NetTcpBindingTest.cs : enabled connection tests again, as they
+	  got working again (and more importantly, they don't block).
+	* CallbackBehaviorAttributeTest.cs : on the other hand, disabled
+	  a test so far. It is the only active test && the blocker now.
+
+2010-01-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NetTcpBindingTest.cs : disable connection tests, with analyzed
+	  reason why it's blocking, for each.
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* EndpointAddressBuilderTest.cs : add usage example test.
+
+2010-01-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CallbackBehaviorAttributeTest.cs : added callback example from
+	  bug #567672.
+
+2010-01-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostBaseTest.cs : another mannerless test here.
+
+2010-01-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NetTcpBindingTest.cs : enable some tests and added streamed mode
+	  test. Commented on these changes.
+
+2010-01-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactory_1Test.cs : ignore another couple of blocking tests.
+
+2009-12-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* WSHttpBindingTest.cs : leave non-working test to get fixed later.
+
+2009-12-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BasicHttpBindingTest.cs : added transport security related tests.
+
+2009-12-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NetTcpBindingTest.cs :
+	  I have to disable a lot of connective tests that somehow blocks
+	  test runs. No idea why it started to happen though.
+
+2009-10-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ServiceHostBaseTest.cs : add test for checking non-mex contract
+	  existence.
+
+2009-10-07  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* OperationContextTest.cs: Add test case for OperationContext.Current
+
 2009-09-04  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* ServiceHostBaseTest.cs : a few more base address test.

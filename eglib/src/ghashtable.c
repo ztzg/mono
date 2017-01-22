@@ -133,6 +133,51 @@ g_hash_table_new_full (GHashFunc hash_func, GEqualFunc key_equal_func,
 	return hash;
 }
 
+#if 0
+static void
+dump_hash_table (GHashTable *hash)
+{
+	int i;
+
+	for (i = 0; i < hash->table_size; i++) {
+		Slot *s;
+
+		for (s = hash->table [i]; s != NULL; s = s->next){
+			guint hashcode = (*hash->hash_func) (s->key);
+			guint slot = (hashcode) % hash->table_size;
+			printf ("key %p hash %x on slot %d correct slot %d tb size %d\n", s->key, hashcode, i, slot, hash->table_size);
+		}
+	}
+}
+#endif
+
+#ifdef SANITY_CHECK
+static void
+sanity_check (GHashTable *hash)
+{
+	int i;
+
+	for (i = 0; i < hash->table_size; i++) {
+		Slot *s;
+
+		for (s = hash->table [i]; s != NULL; s = s->next){
+			guint hashcode = (*hash->hash_func) (s->key);
+			guint slot = (hashcode) % hash->table_size;
+			if (slot != i) {
+				dump_hashcode_func = 1;
+				hashcode = (*hash->hash_func) (s->key);
+				dump_hashcode_func = 0;
+				g_error ("Key %p (bucket %d) on invalid bucket %d (hashcode %x) (tb size %d)", s->key, slot, i, hashcode, hash->table_size);
+			}
+		}
+	}
+}
+#else
+
+#define sanity_check(HASH) do {}while(0)
+
+#endif
+
 static void
 do_rehash (GHashTable *hash)
 {
@@ -172,6 +217,7 @@ rehash (GHashTable *hash)
 	if (!(diff * 0.75 > hash->table_size * 2))
 		return;
 	do_rehash (hash);
+	sanity_check (hash);
 }
 
 void
@@ -182,6 +228,7 @@ g_hash_table_insert_replace (GHashTable *hash, gpointer key, gpointer value, gbo
 	GEqualFunc equal;
 	
 	g_return_if_fail (hash != NULL);
+	sanity_check (hash);
 
 	equal = hash->key_equal_func;
 	if (hash->in_use >= hash->threshold)
@@ -198,6 +245,7 @@ g_hash_table_insert_replace (GHashTable *hash, gpointer key, gpointer value, gbo
 			if (hash->value_destroy_func != NULL)
 				(*hash->value_destroy_func) (s->value);
 			s->value = value;
+			sanity_check (hash);
 			return;
 		}
 	}
@@ -207,6 +255,7 @@ g_hash_table_insert_replace (GHashTable *hash, gpointer key, gpointer value, gbo
 	s->next = hash->table [hashcode];
 	hash->table [hashcode] = s;
 	hash->in_use++;
+	sanity_check (hash);
 }
 
 guint
@@ -236,6 +285,7 @@ g_hash_table_lookup_extended (GHashTable *hash, gconstpointer key, gpointer *ori
 	guint hashcode;
 	
 	g_return_val_if_fail (hash != NULL, FALSE);
+	sanity_check (hash);
 	equal = hash->key_equal_func;
 
 	hashcode = ((*hash->hash_func) (key)) % hash->table_size;
@@ -292,6 +342,7 @@ g_hash_table_remove (GHashTable *hash, gconstpointer key)
 	guint hashcode;
 	
 	g_return_val_if_fail (hash != NULL, FALSE);
+	sanity_check (hash);
 	equal = hash->key_equal_func;
 
 	hashcode = ((*hash->hash_func)(key)) % hash->table_size;
@@ -308,10 +359,12 @@ g_hash_table_remove (GHashTable *hash, gconstpointer key)
 				last->next = s->next;
 			g_free (s);
 			hash->in_use--;
+			sanity_check (hash);
 			return TRUE;
 		}
 		last = s;
 	}
+	sanity_check (hash);
 	return FALSE;
 }
 
@@ -324,6 +377,7 @@ g_hash_table_foreach_remove (GHashTable *hash, GHRFunc func, gpointer user_data)
 	g_return_val_if_fail (hash != NULL, 0);
 	g_return_val_if_fail (func != NULL, 0);
 
+	sanity_check (hash);
 	for (i = 0; i < hash->table_size; i++){
 		Slot *s, *last;
 
@@ -353,6 +407,7 @@ g_hash_table_foreach_remove (GHashTable *hash, GHRFunc func, gpointer user_data)
 			}
 		}
 	}
+	sanity_check (hash);
 	if (count > 0)
 		rehash (hash);
 	return count;
@@ -367,6 +422,7 @@ g_hash_table_foreach_steal (GHashTable *hash, GHRFunc func, gpointer user_data)
 	g_return_val_if_fail (hash != NULL, 0);
 	g_return_val_if_fail (func != NULL, 0);
 
+	sanity_check (hash);
 	for (i = 0; i < hash->table_size; i++){
 		Slot *s, *last;
 
@@ -392,6 +448,7 @@ g_hash_table_foreach_steal (GHashTable *hash, GHRFunc func, gpointer user_data)
 			}
 		}
 	}
+	sanity_check (hash);
 	if (count > 0)
 		rehash (hash);
 	return count;
@@ -420,6 +477,27 @@ g_hash_table_destroy (GHashTable *hash)
 	g_free (hash->table);
 	
 	g_free (hash);
+}
+
+void
+g_hash_table_print_stats (GHashTable *table)
+{
+	int i, max_chain_index, chain_size, max_chain_size;
+	Slot *node;
+
+	max_chain_size = 0;
+	max_chain_index = -1;
+	for (i = 0; i < table->table_size; i++) {
+		chain_size = 0;
+		for (node = table->table [i]; node; node = node->next)
+			chain_size ++;
+		if (chain_size > max_chain_size) {
+			max_chain_size = chain_size;
+			max_chain_index = i;
+		}
+	}
+
+	printf ("Size: %d Table Size: %d Max Chain Length: %d at %d\n", table->in_use, table->table_size, max_chain_size, max_chain_index);
 }
 
 gboolean

@@ -1,3 +1,90 @@
+2010-04-28  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (OTHER_LIB_MCS_FLAGS): added a reference to
+	System.Web.ApplicationServices in the 4.0 profile.
+
+2010-04-07  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile: moved App_* test resources to separate variables -
+	whatever is contained in those variables is preprocessed before
+	embedding as resource to include appropriate resource name prefix
+	(App_Code/, App_GlobalResources/ for now). This is used in WebTest
+	to automatically populate the relevant directories when running
+	the test suite.
+
+2010-02-18  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug377703_1.aspx,
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug377703_2.aspx and
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug578770.aspx
+
+2010-02-12  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (EXTRA_DISTFILES): ignore .svn directories
+
+2010-02-11  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web_test.dll.sources: added
+	mainsoft/NunitWeb/NunitWeb/TestRoleProvider.cs
+
+2010-01-19  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/App_GlobalResources/Resource1.resx
+	and
+	Test/mainsoft/NunitWebResources/TagWithExpressionWithinAttribute.aspx
+
+2010-01-15  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/ChangePasswordContainer_FindControl.aspx
+
+2010-01-14  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web_standalone_test.dll.sources,
+	standalone-runner-support.dll.sources: added
+
+	* Makefile: Added targets to build and run standalone tests.
+	Added standalone tests and test tools to EXTRA_DISTFILES
+
+2009-12-18  Marek Habersack  <mhabersack@novell.com>
+
+	* System.Web_test.dll.sources: added
+	mainsoft/NunitWeb/NunitWeb/Tests/Author.cs
+	mainsoft/NunitWeb/NunitWeb/Tests/AuthorConverter.cs
+	mainsoft/NunitWeb/NunitWeb/Tests/Book.cs
+	mainsoft/NunitWeb/NunitWeb/Tests/BookType.cs
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/StateFormatter_CorrectConverter.aspx
+	Test/mainsoft/NunitWebResources/StateFormatter_CollectionConverter.aspx
+	Test/mainsoft/NunitWebResources/StateFormatter_CollectionConverter.aspx.cs
+
+2009-12-14  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/NestedParserFileText.aspx
+
+2009-11-13  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (TEST_RESOURCE_FILES): added
+	Test/mainsoft/NunitWebResources/TableSections_Bug551666.aspx
+	Test/mainsoft/NunitWebResources/TableSections_Bug551666.aspx.cs
+
+2009-10-19  Marek Habersack  <mhabersack@novell.com>
+
+	* ASPState.sql: added - schema for the SQL session state server
+	database.
+
+2009-10-06  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile: added PIPELINE_TIMER define
+
+2009-10-05  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile ($(build_lib)): fixed a typo in dependency macro
+
 2009-09-07  Marek Habersack  <mhabersack@novell.com>
 
 	* Makefile (TEST_RESOURCE_FILES): added

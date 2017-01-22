@@ -30,22 +30,24 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 using System;
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace System.Collections.Generic {
 	[Serializable]
+	[DebuggerDisplay ("{value}", Name="[{key}]")]	
 	public struct KeyValuePair<TKey,TValue> {
 		private TKey key;
 		private TValue value;
 
 		public TKey Key {
 			get { return key; }
+			private set { key = value; }
 		}
 
 		public TValue Value {
 			get { return value; }
+			private set { this.value = value; }
 		}
 		
 		public KeyValuePair (TKey key, TValue value)
@@ -60,4 +62,3 @@ namespace System.Collections.Generic {
 		}
 	}
 }
-#endif

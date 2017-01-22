@@ -1,3 +1,243 @@
+2010-07-16  Marek Habersack  <mhabersack@novell.com>
+
+	* FolderLevelBuildProviderAppliesTo.cs,
+	FolderLevelBuildProviderAppliesToAttribute.cs: added
+
+2010-07-02  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: added support for ClientIDMode 4.0
+	property
+
+	* PageCompiler.cs, UserControlCompiler.cs: AddStatementsToInitTop
+	must call the base implementation.
+
+2010-06-15  Marek Habersack  <mhabersack@novell.com>
+
+	* ResourceExpressionBuilder.cs: cast the return value of
+	GetLocalResourceObject to appropriate type. Fixes bug #607766
+
+	* TemplateControlCompiler.cs: made CreateConvertToCall internal
+	static, so that it can be used from ResourceExpressionBuilder
+
+2010-06-05  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: expression evaluation results are
+	wrapped in a Convert.ConvertTo* call or a typecast.
+
+	* RouteValueExpressionBuilder.cs: implemented
+
+	* RouteUrlExpressionBuilder.cs: added missing custom attributes
+
+2010-06-01  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: added new virtual method, 
+	AddStatementsToInitMethodBottom and renamed
+	AddStatementsToInitMethod to AddStatementsToInitMethodTop.
+
+	* PageCompiler.cs: code to set Meta{Description,Keywords}
+	properties, if present.
+
+2010-05-19  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: IsDirective, IsExpression and
+	IsDataBound methods moved to System.Web.UI.BaseParser.
+	Made CompileExpression and GetFieldOrProperty methods internal.
+
+	* PageCompiler.cs: check several of the Page directive attributes
+	for expressions. Fixes bug #603532
+
+	* AspGenerator.cs, TagAttributes.cs: use IDictionary instead of
+	Hashtable
+
+2010-05-17  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildProvider.cs: implemented a 4.0 method RegisterBuildProvider
+
+	* BuildManager.cs: separated dynamically registered assemblies
+	store from the referenced assemblies cache.
+
+2010-05-16  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: do not cache referenced assemblies until it's
+	safe.
+
+2010-05-15  Marek Habersack  <mhabersack@novell.com>
+
+	* RouteValueExpressionBuilder.cs: added
+
+	* RouteUrlExpressionBuilder.cs: implemented
+
+2010-05-12  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: implemented a 4.0 feature - pre-application
+	start methods.
+
+2010-05-07  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: implemented 4.0 methods {Create,Read}CacheFile.
+	Fixed signature of the GetVirtualPathDependencies method.
+	Implemented 4.0 methods GetGlobalAsaxType, AddReferencedAssembly,
+	GetObjectFactory, GetCachedBuildDependencySet and properties
+	BatchCompilationEnabled, TargetFramework
+
+2010-04-29  Marek Habersack  <mhabersack@novell.com>
+
+	* AppResourcesAssemblyBuilder.cs: when running on windows,
+	SetAlPath must return al.exe path with a trailing space, or
+	otherwise the process won't start. Fixes bug #600691
+
+2010-04-12  Marek Habersack  <mhabersack@novell.com>
+
+	* PageCompiler.cs: if EnableViewStateMac is set in the page
+	source, generate relevant code.
+
+2010-03-17  Marek Habersack  <mhabersack@novell.com>
+
+	* AspGenerator.cs, AspParser.cs, TemplateControlCompiler.cs, TagType.cs, CodeRenderBuilder.cs: implemented the new <%: %> 4.0 html-encoded code render expression.
+
+2010-03-06  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: AssignPropertyForResources localizes
+	a property even if the Localized attribute is absent. If the
+	attribute is present, it checks its IsLocalizable property to
+	decide if localization should be performed. Fixes bug #585933
+
+2010-03-04  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: do less work in the static constructor
+
+2010-02-27  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: count only builds of updated files before
+	unloading the app domain. Fixes bug #581459
+
+2010-02-19  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: GetConverterForMember now completely
+	relies on TypeDescriptor and description providers to retrieve
+	converter for a property. Fixes bug #578586
+	If UrlPropertyAttribute is found for a member,
+	GetExpressionFromString uses the preconverted value, if any, as
+	parameter to HandleUrlProperty.
+
+2010-02-11  Marek Habersack  <mhabersack@novell.com>
+
+	* AppResourcesCompiler.cs: explicitly dispose all the streams and
+	readers+writers in CompileResource.
+
+2010-02-04  Marek Habersack  <mhabersack@novell.com>
+
+	* PreservationFile.cs: updated the BuildResulTypeCode enum
+
+	* BuildManager.cs: LoadCompiled now adds all the assemblies built
+	from the App_Code directory to the BuildManager.CodeAssemblies
+	collection. Fixes bug #576810
+
+2010-01-19  Marek Habersack  <mhabersack@novell.com>
+
+	* AspGenerator.cs: modified the runatServer regex to correctly
+	match embedded server tags which end in a sequence like: "%>"/>
+	Fixes bug #568631
+
+2010-01-06  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManagerDirectoryBuilder.cs: AddVirtualDir properly caches
+	processed directories to prevent endless loops. Fixes bug #568366
+	Patch from Hubert FONGARNAND <informatique.internet@fiducial.fr>,
+	thanks!
+
+2010-01-05  Marek Habersack  <mhabersack@novell.com>
+
+	* PageCompiler.cs: improved CreatePropertyAssign, it doesn't
+	always use CodePrimitiveExpression now.
+
+	* BuildManager.cs: in GenerateAssembly, if compilation fails for
+	the requested path and exception thrown is of type
+	CompilationException or ParseException, do not wrap it in
+	HttpException, just rethrow.
+
+	* AppResourcesCompiler.cs: the culture files dictionary is
+	case-insensitive now. Otherwise culture files with culture name
+	cased differently will cause overlapped i/o on response files
+	while building satellite assemblies and, in effect, compilation
+	will fail.
+
+2009-12-14  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: RemoveFailedAssemblies ignores warnings to
+	avoid throwing exceptions when the requested virtual path
+	compilation produces warnings and no errors. Fixes bug #561723 
+
+	* AspParser.cs: PlainText should calculate the boundaries of
+	text using character offset, not line offset. Fixes bug #562286
+	InternalLineOffset and Internal properties need not exist.
+
+	* AspGenerator.cs: AspParser inner parser constructor takes 5
+	parameters now - accepts character offset of the current outer
+	parser's position.
+
+2009-12-08  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: GetConverterForMember looks up
+	member type converters using type description providers in
+	addition to custom attributes.
+	Result of GenerateInstance isn't cast to the target type if the
+	type isn't public.
+
+2009-11-13  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateBuildProvider.cs: if directive has empty string as a
+	value and it represents a path, do not create a VirtualPath.
+
+2009-11-10  Marek Habersack  <mhabersack@novell.com>
+
+	* BaseCompiler.cs: parser.Imports is a Dictionary <>/Hashtable
+	now.
+
+	* AspComponentFoundry.cs: system.web/pages section is not confined
+	to the top-level web.config
+
+2009-11-03  Marek Habersack  <mhabersack@novell.com>
+
+	* AppResourcesCompiler.cs: put default culture resources in a
+	separate collection, exposed by the DefaultCultureFiles property.
+
+	* AppResourcesAssemblyBuilder.cs: compile the default assembly
+	before the satellite ones. Use the default assembly as template
+	for generation of the satellite ones.
+
+2009-10-22  Marek Habersack  <mhabersack@novell.com>
+
+	* WsdlBuildProvider.cs: a different way to generate code from
+	wsdl. Code is generated in the top-level namespace to match .NET
+
+2009-10-12  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: make sure to construct correct physical path
+	for every precompiled key in FixVirtualPaths. Fixes bug #546053
+
+2009-09-30 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* BuildManager.cs: load/set the global resources assembly for
+	precompiled and merged sites correctly.
+
+2009-09-30  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildManager.cs: if precompilation file contains virtual path
+	with trailing slash (e.g. for themes), remove the slash. Fixes bug
+	#541271
+
+2009-09-28  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlCompiler.cs: ResourceProviderHasObject calls
+	HttpContext.GetResourceProvider with the current file's path, not
+	current request's. Fixes situations when localized control lives
+	in a master page or user control. Fixes bug #542484
+
+	* BaseCompiler.cs: introduced a helper property InputVirtualPath
+	which returns a VirtualPath object for the current control's
+	virtual path.
+
 2009-09-22  Marek Habersack  <mhabersack@novell.com>
 
 	* TemplateControlCompiler.cs: ResourceProviderHasObject needs to

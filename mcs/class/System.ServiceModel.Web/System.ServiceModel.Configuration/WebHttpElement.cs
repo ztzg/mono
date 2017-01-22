@@ -46,7 +46,6 @@ using System.Xml;
 
 namespace System.ServiceModel.Configuration
 {
-	[MonoTODO]
 	public sealed partial class WebHttpElement
 		 : BehaviorExtensionElement
 	{
@@ -69,7 +68,7 @@ namespace System.ServiceModel.Configuration
 		}
 
 		public override Type BehaviorType {
-			get { return (Type) base [behavior_type]; }
+			get { return typeof (WebHttpBehavior); }
 		}
 
 		protected internal override object CreateBehavior ()

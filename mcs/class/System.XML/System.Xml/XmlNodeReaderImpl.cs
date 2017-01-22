@@ -161,7 +161,7 @@ namespace System.Xml
 			}
 		}
 
-#if !NET_2_1 || MONOTOUCH
+#if !MOONLIGHT
 		public override bool HasValue {
 			get {
 				if (current == null)
@@ -471,14 +471,17 @@ namespace System.Xml
 		public IDictionary<string, string> GetNamespacesInScope (XmlNamespaceScope scope)
 		{
 			IDictionary<string, string> table = new Dictionary<string, string> ();
-			XmlNode n = current;
+			XmlNode n = current ?? startNode;
 			do {
 				if (n.NodeType == XmlNodeType.Document)
 					break;
-				for (int i = 0; i < current.Attributes.Count; i++) {
-					XmlAttribute a = current.Attributes [i];
-					if (a.NamespaceURI == XmlNamespaceManager.XmlnsXmlns)
-						table.Add (a.Prefix == XmlNamespaceManager.PrefixXmlns ? a.LocalName : String.Empty, a.Value);
+				for (int i = 0; i < n.Attributes.Count; i++) {
+					XmlAttribute a = n.Attributes [i];
+					if (a.NamespaceURI == XmlNamespaceManager.XmlnsXmlns) {
+						string key = a.Prefix == XmlNamespaceManager.PrefixXmlns ? a.LocalName : String.Empty;
+						if (!table.ContainsKey (key))
+							table.Add (key, a.Value);
+					}
 				}
 				if (scope == XmlNamespaceScope.Local)
 					return table;
@@ -664,15 +667,21 @@ namespace System.Xml
 			if (current == null)
 				return false;
 
-			if (current.NodeType != XmlNodeType.Attribute)
-				return MoveToFirstAttribute ();
-			else
+			XmlNode anode = current;
+			if (current.NodeType != XmlNodeType.Attribute) {
+				// then it's either an attribute child or anything on the tree.
+				if (current.ParentNode == null ||  // document, or non-tree node
+				    current.ParentNode.NodeType != XmlNodeType.Attribute) // not an attr value
+					return MoveToFirstAttribute ();
+				anode = current.ParentNode;
+			}
+
 			{
-				XmlAttributeCollection ac = ((XmlAttribute) current).OwnerElement.Attributes;
+				XmlAttributeCollection ac = ((XmlAttribute) anode).OwnerElement.Attributes;
 				for (int i=0; i<ac.Count-1; i++)
 				{
 					XmlAttribute attr = ac [i];
-					if (attr == current)
+					if (attr == anode)
 					{
 						i++;
 						if (i == ac.Count)
@@ -810,7 +819,7 @@ namespace System.Xml
 			return base.ReadString ();
 		}
 
-#if !NET_2_1 || MONOTOUCH
+#if !MOONLIGHT
 		public override void ResolveEntity ()
 		{
 			throw new NotSupportedException ("Should not happen.");

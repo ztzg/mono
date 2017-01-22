@@ -1,4 +1,4 @@
-﻿#region MIT license
+#region MIT license
 // 
 // MIT license
 //
@@ -72,7 +72,7 @@ namespace DbLinq.PostgreSql
         
         protected override SqlStatement GetLiteralDateDiff(SqlStatement dateA, SqlStatement dateB)
         {
-            return string.Format("(EXTRACT(EPOCH FROM ({0}-{1})::interval)*1000)", dateA, dateB);
+            return string.Format("(EXTRACT(EPOCH FROM ({0})::timestamp)-EXTRACT(EPOCH FROM ({1})::timestamp))*1000", dateA, dateB);
         }
                  
         protected override SqlStatement GetLiteralEqual(SqlStatement a, SqlStatement b)
@@ -129,6 +129,7 @@ namespace DbLinq.PostgreSql
 
             {typeof(DateTime),"timestamp"},
             //{typeof(Guid),"uniqueidentifier"}
+            {typeof(byte[]),"bytea"},
         };
 
         public override SqlStatement GetLiteralConvert(SqlStatement a, Type type)
@@ -143,16 +144,6 @@ namespace DbLinq.PostgreSql
                 sqlTypeName = type.Name;
 
             return string.Format("({0})::{1}", a, sqlTypeName);
-        }
-
-        /// <summary>
-        /// In PostgreSQL an insensitive name is lowercase
-        /// </summary>
-        /// <param name="dbName"></param>
-        /// <returns></returns>
-        protected override bool IsNameCaseSafe(string dbName)
-        {
-            return dbName == dbName.ToLower();
         }
     }
 }

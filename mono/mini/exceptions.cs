@@ -2529,5 +2529,96 @@ class Tests {
         catch {
         }
     }
+
+	private static void do_raise () {
+		throw new System.Exception ();
+	}
+
+	private static int int_func (int i) {
+		return i;
+	}
+
+	// #559876
+	public static int test_8_local_deadce_causes () {
+      int myb = 4;
+  
+      try {
+        myb = int_func (8);
+        do_raise();
+        myb = int_func (2);
+      } catch (System.Exception) {
+		  return myb;
+	  }
+	  return 0;
+	}
+
+	public static int test_0_except_opt_two_clauses () {
+		int size;
+		size = -1;
+		uint ui = (uint)size;
+		try {
+			checked {
+				uint v = ui * (uint)4;
+			}
+		} catch (OverflowException e) {
+			return 0;
+		} catch (Exception) {
+			return 1;
+		}
+
+		return 2;
+	}
+
+    class Child
+    {
+        public virtual long Method()
+        {
+            throw new Exception();
+        }
+    }
+
+	/* #612206 */
+	public static int test_100_long_vars_in_clauses_initlocals_opt () {
+		Child c = new Child();
+		long value = 100; 
+		try {
+			value = c.Method();
+		}
+		catch {}
+		return (int)value;
+	}
+
+	class A {
+		public object AnObj;
+	}
+
+	public static void DoSomething (ref object o) {
+	}
+
+	public static int test_0_ldflda_null () {
+		A a = null;
+
+		try {
+			DoSomething (ref a.AnObj);
+		} catch (NullReferenceException) {
+			return 0;
+		}
+
+		return 1;
+	}
+
+	unsafe struct Foo
+	{
+		public int i;
+
+		public static Foo* pFoo;
+	}
+
+	/* MS.NET doesn't seem to throw in this case */
+	public unsafe static int test_0_ldflda_null_pointer () {
+		int* pi = &Foo.pFoo->i;
+
+		return 0;
+	}
 }
 

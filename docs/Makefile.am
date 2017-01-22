@@ -13,7 +13,6 @@ ASSEMBLED_DOCS = \
 
 EXTRA_DIST = \
 	abc-removal.txt		\
-	AgilityPack.dll		\
 	api-style.css		\
 	assembly-bundle		\
 	check-exports		\
@@ -68,31 +67,33 @@ EXTRA_DIST = \
 dist-hook:
 	$(mkdir_p)  $(distdir)/sources
 	$(mkdir_p)  $(distdir)/svgs
+	$(mkdir_p)  $(distdir)/HtmlAgilityPack
 	cp sources/*  $(distdir)/sources
 	cp svgs/*     $(distdir)/svgs
+	cp HtmlAgilityPack/*     $(distdir)/HtmlAgilityPack
 
 clean-local:
 	-rm -Rf $(srcdir)/html
-	-rm -f $(srcdir)/deploy/* $(srcdir)/convert.exe*
+	-rm -f $(srcdir)/deploy/* $(srcdir)/convert.exe* $(srcdir)/AgilityPack.dll*
 	-cd $(srcdir) && rm -f $(ASSEMBLED_DOCS)
 
 monoapi.zip: monoapi.tree
 	@test -f $@ || { rm -f $(srcdir)/monoapi.tree && $(MAKE) monoapi.tree; }
-monoapi.tree: docs.make Makefile.am toc.xml $(srcdir)/deploy/.stamp
-	cd $(srcdir) && cp api-style.css deploy
+monoapi.tree: docs.make Makefile.am toc.xml $(srcdir)/deploy/.stamp perms
+	cd $(srcdir) && cp -f api-style.css deploy
 	cd $(srcdir) && $(MAKE) -f docs.make topdir=$(mcs_topdir_from_srcdir) $@
 
 mono-tools.zip: mono-tools.tree
 	@test -f $@ || { rm -f $(srcdir)/mono-tools.tree && $(MAKE) mono-tools.tree; }
-mono-tools.tree: docs.make Makefile.am $(srcdir)/deploy/.stamp
+mono-tools.tree: docs.make Makefile.am $(srcdir)/deploy/.stamp perms
 	cd $(srcdir) && $(MAKE) -f docs.make topdir=$(mcs_topdir_from_srcdir) $@
 
-mono-file-formats.zip: mono-file-formats.tree
+mono-file-formats.zip: mono-file-formats.tree perms
 	@test -f $@ || { rm -f $(srcdir)/mono-file-formats.tree && $(MAKE) mono-file-formats.tree; }
 mono-file-formats.tree: docs.make Makefile.am $(srcdir)/deploy/.stamp
 	cd $(srcdir) && $(MAKE) -f docs.make topdir=$(mcs_topdir_from_srcdir) $@
 
-$(srcdir)/deploy/.stamp: convert.exe Makefile.am
+$(srcdir)/deploy/.stamp: convert.exe Makefile.am perms
 	$(mkdir_p) $(srcdir)/html
 	runtimedir=`cd ../runtime && pwd`; export runtimedir; \
 	cd $(srcdir) && MONO_PATH=$(mcs_topdir_from_srcdir)/class/lib/net_2_0 perl ./exdoc -h . ../mono/*/*.c
@@ -100,6 +101,13 @@ $(srcdir)/deploy/.stamp: convert.exe Makefile.am
 
 extract: $(srcdir)/deploy/.stamp
 
-convert.exe: convert.cs AgilityPack.dll
-	cd $(srcdir) && $(MAKE) PROFILE=net_1_1 -f docs.make topdir=$(mcs_topdir_from_srcdir) convert.exe
+convert.exe: convert.cs AgilityPack.dll perms
+	cd $(srcdir) && $(MAKE) PROFILE=net_2_0 -f docs.make topdir=$(mcs_topdir_from_srcdir) convert.exe
+
+AgilityPack.dll: perms
+	cd $(srcdir) && $(MAKE) PROFILE=net_2_0 -f docs.make topdir=$(mcs_topdir_from_srcdir) AgilityPack.dll
+
+.PHONY: perms
+perms:
+	-@test -w $(srcdir) || chmod a+w $(srcdir)
 

@@ -35,7 +35,6 @@ using nwind;
     [TestFixture]
     public class Join : TestBase
     {
-
         [Test(Description = "This sample uses foreign key navigation in the from clause to select all orders for customers in London")]
         public void LinqToSqlJoin01()
         {
@@ -119,6 +118,9 @@ using nwind;
             }
         }
 
+#if !DEBUG && POSTGRES
+        [Explicit]
+#endif
         [Test(Description = "GroupJoin - Two-way join. This sample explictly joins two tables and projects results from both tables.")]
         public void LinqToSqlJoin05()
         {
@@ -133,6 +135,9 @@ using nwind;
 
         }
 
+#if !DEBUG && POSTGRES
+        [Explicit]
+#endif
         [Test(Description = "GroupJoin - Three-way join. This sample explictly joins three tables and projects results from each of them.")]
         public void LinqToSqlJoin06()
         {
@@ -147,7 +152,7 @@ using nwind;
             Assert.IsTrue(list.Count > 0);
         }
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupJoin - LEFT OUTER JOIN. This sample shows how to get LEFT OUTER JOIN by using DefaultIfEmpty(). The DefaultIfEmpty() method returns null when there is no Order for the Employee.")]
@@ -164,7 +169,7 @@ using nwind;
             Assert.IsTrue(list.Count > 0);
         }
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupJoin - Projected let assignment. This sample projects a 'let' expression resulting from a join.")]
@@ -182,7 +187,7 @@ using nwind;
             Assert.IsTrue(list.Count > 0);
         }
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupJoin - Composite Key.This sample shows a join with a composite key.")]

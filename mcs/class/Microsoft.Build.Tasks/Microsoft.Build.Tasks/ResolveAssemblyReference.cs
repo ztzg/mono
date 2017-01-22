@@ -78,6 +78,7 @@ namespace Microsoft.Build.Tasks {
 		List<ITaskItem> tempResolvedFiles;
 		List<PrimaryReference> primaryReferences;
 		Dictionary<string, string> alreadyScannedAssemblyNames;
+		Dictionary<string, string> conflictWarningsCache;
 
 		//FIXME: construct and use a graph of the dependencies, useful across projects
 
@@ -107,6 +108,7 @@ namespace Microsoft.Build.Tasks {
 
 			primaryReferences = new List<PrimaryReference> ();
 			assemblyNameToResolvedRef = new Dictionary<string, ResolvedReference> ();
+			conflictWarningsCache = new Dictionary<string, string> ();
 
 			ResolveAssemblies ();
 			ResolveAssemblyFiles ();
@@ -135,6 +137,7 @@ namespace Microsoft.Build.Tasks {
 			alreadyScannedAssemblyNames.Clear ();
 			primaryReferences.Clear ();
 			assemblyNameToResolvedRef.Clear ();
+			conflictWarningsCache.Clear ();
 			dependency_search_paths = null;
 
 			return true;
@@ -151,12 +154,15 @@ namespace Microsoft.Build.Tasks {
 					continue;
 				}
 
-				Log.LogMessage (MessageImportance.Low, "Primary Reference {0}", item.ItemSpec);
-				ResolvedReference resolved_ref = ResolveReference (item, searchPaths);
+				LogWithPrecedingNewLine (MessageImportance.Low, "Primary Reference {0}", item.ItemSpec);
+				ResolvedReference resolved_ref = ResolveReference (item, searchPaths, true);
 				if (resolved_ref == null) {
-					Log.LogWarning ("\tReference '{0}' not resolved", item.ItemSpec);
-					assembly_resolver.LogSearchLoggerMessages ();
+					Log.LogWarning ("Reference '{0}' not resolved", item.ItemSpec);
+					assembly_resolver.LogSearchLoggerMessages (MessageImportance.Normal);
 				} else {
+					if (Environment.GetEnvironmentVariable ("XBUILD_LOG_REFERENCE_RESOLVER") != null)
+						assembly_resolver.LogSearchLoggerMessages (MessageImportance.Low);
+
 					Log.LogMessage (MessageImportance.Low,
 							"\tReference {0} resolved to {1}. CopyLocal = {2}",
 							item.ItemSpec, resolved_ref.TaskItem,
@@ -167,7 +173,8 @@ namespace Microsoft.Build.Tasks {
 							resolved_ref.FoundInSearchPathAsString);
 
 					if (TryAddNewReference (tempResolvedFiles, resolved_ref) &&
-						!IsFromGacOrTargetFramework (resolved_ref)) {
+						!IsFromGacOrTargetFramework (resolved_ref) &&
+						resolved_ref.FoundInSearchPath != SearchPath.PkgConfig) {
 						primaryReferences.Add (new PrimaryReference (
 								resolved_ref.TaskItem,
 								resolved_ref.TaskItem.GetMetadata ("CopyLocal")));
@@ -177,7 +184,7 @@ namespace Microsoft.Build.Tasks {
 		}
 
 		// Use @search_paths to resolve the reference
-		ResolvedReference ResolveReference (ITaskItem item, IEnumerable<string> search_paths)
+		ResolvedReference ResolveReference (ITaskItem item, IEnumerable<string> search_paths, bool set_copy_local)
 		{
 			ResolvedReference resolved = null;
 			bool specific_version;
@@ -217,14 +224,15 @@ namespace Microsoft.Build.Tasks {
 				} else {
 					resolved = assembly_resolver.FindInDirectory (
 							item, spath,
-							allowedAssemblyExtensions ?? default_assembly_extensions);
+							allowedAssemblyExtensions ?? default_assembly_extensions,
+							specific_version);
 				}
 
 				if (resolved != null)
 					break;
 			}
 
-			if (resolved != null)
+			if (resolved != null && set_copy_local)
 				SetCopyLocal (resolved.TaskItem, resolved.CopyLocal.ToString ());
 
 			return resolved;
@@ -235,10 +243,13 @@ namespace Microsoft.Build.Tasks {
 			specific_version = true;
 			string value = item.GetMetadata ("SpecificVersion");
 			if (String.IsNullOrEmpty (value)) {
-				AssemblyName name = new AssemblyName (item.ItemSpec);
+				//AssemblyName name = new AssemblyName (item.ItemSpec);
 				// If SpecificVersion is not specified, then
 				// it is true if the Include is a strong name else false
-				specific_version = assembly_resolver.IsStrongNamed (name);
+				//specific_version = assembly_resolver.IsStrongNamed (name);
+
+				// msbuild seems to just look for a ',' in the name :/
+				specific_version = item.ItemSpec.IndexOf (',') >= 0;
 				return true;
 			}
 
@@ -260,21 +271,24 @@ namespace Microsoft.Build.Tasks {
 				assembly_resolver.ResetSearchLogger ();
 
 				if (!File.Exists (item.ItemSpec)) {
-					Log.LogMessage (MessageImportance.Low,
+					LogWithPrecedingNewLine (MessageImportance.Low,
 							"Primary Reference from AssemblyFiles {0}, file not found. Ignoring",
 							item.ItemSpec);
 					continue;
 				}
 
-				Log.LogMessage (MessageImportance.Low, "Primary Reference from AssemblyFiles {0}", item.ItemSpec);
+				LogWithPrecedingNewLine (MessageImportance.Low, "Primary Reference from AssemblyFiles {0}", item.ItemSpec);
 				string copy_local;
 
 				AssemblyName aname = assembly_resolver.GetAssemblyNameFromFile (item.ItemSpec);
 				if (aname == null) {
-					Log.LogWarning ("\tReference '{0}' not resolved", item.ItemSpec);
-					assembly_resolver.LogSearchLoggerMessages ();
+					Log.LogWarning ("Reference '{0}' not resolved", item.ItemSpec);
+					assembly_resolver.LogSearchLoggerMessages (MessageImportance.Normal);
 					continue;
 				}
+
+				if (Environment.GetEnvironmentVariable ("XBUILD_LOG_REFERENCE_RESOLVER") != null)
+					assembly_resolver.LogSearchLoggerMessages (MessageImportance.Low);
 
 				ResolvedReference rr = assembly_resolver.GetResolvedReference (item, item.ItemSpec, aname, true,
 						SearchPath.RawFileName);
@@ -289,7 +303,8 @@ namespace Microsoft.Build.Tasks {
 				FindAndAddRelatedFiles (item.ItemSpec, copy_local);
 				FindAndAddSatellites (item.ItemSpec, copy_local);
 
-				if (FindDependencies && !IsFromGacOrTargetFramework (rr))
+				if (FindDependencies && !IsFromGacOrTargetFramework (rr) &&
+						rr.FoundInSearchPath != SearchPath.PkgConfig)
 					primaryReferences.Add (new PrimaryReference (item, copy_local));
 			}
 		}
@@ -319,7 +334,8 @@ namespace Microsoft.Build.Tasks {
 					ResolvedReference resolved_ref = ResolveDependencyByAssemblyName (
 							aname, asm.FullName, parent_copy_local);
 
-					if (resolved_ref != null && !IsFromGacOrTargetFramework (resolved_ref))
+					if (resolved_ref != null && !IsFromGacOrTargetFramework (resolved_ref)
+							&& resolved_ref.FoundInSearchPath != SearchPath.PkgConfig)
 						dependencies.Enqueue (resolved_ref.TaskItem.ItemSpec);
 				}
 				alreadyScannedAssemblyNames.Add (asm.FullName, String.Empty);
@@ -337,15 +353,17 @@ namespace Microsoft.Build.Tasks {
 			if (TryGetResolvedReferenceByAssemblyName (aname, false, out resolved_ref))
 				return resolved_ref;
 
-			Log.LogMessage (MessageImportance.Low, "Dependency {0}", aname);
+			LogWithPrecedingNewLine (MessageImportance.Low, "Dependency {0}", aname);
 			Log.LogMessage (MessageImportance.Low, "\tRequired by {0}", parent_asm_name);
 
 			ITaskItem item = new TaskItem (aname.FullName);
 			item.SetMetadata ("SpecificVersion", "false");
-			resolved_ref = ResolveReference (item, dependency_search_paths);
+			resolved_ref = ResolveReference (item, dependency_search_paths, false);
 
-			string copy_local = "false";
 			if (resolved_ref != null) {
+				if (Environment.GetEnvironmentVariable ("XBUILD_LOG_REFERENCE_RESOLVER") != null)
+						assembly_resolver.LogSearchLoggerMessages (MessageImportance.Low);
+
 				Log.LogMessage (MessageImportance.Low, "\tReference {0} resolved to {1}.",
 					aname, resolved_ref.TaskItem.ItemSpec);
 
@@ -355,11 +373,11 @@ namespace Microsoft.Build.Tasks {
 
 				if (resolved_ref.FoundInSearchPath == SearchPath.Directory) {
 					// override CopyLocal with parent's val
-					resolved_ref.TaskItem.SetMetadata ("CopyLocal", parent_copy_local);
+					SetCopyLocal (resolved_ref.TaskItem, parent_copy_local);
 
 					Log.LogMessage (MessageImportance.Low,
 							"\tThis is CopyLocal {0} as parent item has this value",
-							copy_local);
+							parent_copy_local);
 
 					if (TryAddNewReference (tempResolvedFiles, resolved_ref)) {
 						FindAndAddRelatedFiles (resolved_ref.TaskItem.ItemSpec, parent_copy_local);
@@ -368,15 +386,14 @@ namespace Microsoft.Build.Tasks {
 				} else {
 					//gac or tgtfmwk
 					Log.LogMessage (MessageImportance.Low,
-							"\tThis is CopyLocal {0} as it is in the gac," +
-							"target framework directory or provided by a package.",
-							copy_local);
+							"\tThis is CopyLocal false as it is in the gac," +
+							"target framework directory or provided by a package.");
 
 					TryAddNewReference (tempResolvedFiles, resolved_ref);
 				}
 			} else {
-				Log.LogWarning ("\tReference '{0}' not resolved", aname);
-				assembly_resolver.LogSearchLoggerMessages ();
+				Log.LogWarning ("Reference '{0}' not resolved", aname);
+				assembly_resolver.LogSearchLoggerMessages (MessageImportance.Normal);
 			}
 
 			return resolved_ref;
@@ -456,7 +473,7 @@ namespace Microsoft.Build.Tasks {
 				return false;
 
 			// match for full name
-			if (AssemblyResolver.AssemblyNamesCompatible (key_aname, found_ref.AssemblyName, true))
+			if (AssemblyResolver.AssemblyNamesCompatible (key_aname, found_ref.AssemblyName, true, false))
 				// exact match, so its already there, dont add anything
 				return true;
 
@@ -478,25 +495,26 @@ namespace Microsoft.Build.Tasks {
 			assembly_resolver.LogSearchMessage ("Choosing '{0}' as it is a primary reference.",
 					found_ref.AssemblyName.FullName);
 
-			Log.LogWarning ("Found a conflict between : '{0}' and '{1}'. Using '{0}' reference.",
-					found_ref.AssemblyName.FullName,
-					key_aname.FullName);
+			LogConflictWarning (found_ref.AssemblyName.FullName, key_aname.FullName);
 
 			return true;
 		}
 
-		bool IsCopyLocal (ITaskItem item)
+		void LogWithPrecedingNewLine (MessageImportance importance, string format, params object [] args)
 		{
-			return Boolean.Parse (item.GetMetadata ("CopyLocal"));
+			Log.LogMessage (importance, String.Empty);
+			Log.LogMessage (importance, format, args);
 		}
 
-		bool IsFromTargetFramework (string filename)
+		// conflict b/w @main and @conflicting, picking @main
+		void LogConflictWarning (string main, string conflicting)
 		{
-			foreach (string fpath in targetFrameworkDirectories)
-				if (filename.StartsWith (fpath))
-					return true;
-
-			return false;
+			string key = main + ":" + conflicting;
+			if (!conflictWarningsCache.ContainsKey (key)) {
+				Log.LogWarning ("Found a conflict between : '{0}' and '{1}'. Using '{0}' reference.",
+						main, conflicting);
+				conflictWarningsCache [key] = key;
+			}
 		}
 
 		bool IsFromGacOrTargetFramework (ResolvedReference rr)

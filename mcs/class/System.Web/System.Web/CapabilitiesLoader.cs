@@ -8,7 +8,7 @@
 // Authors:
 //   Gonzalo Paniagua Javier (gonzalo@ximian.com)
 //
-// (c) 2003 Novell, Inc. (http://www.novell.com)
+// (c) 2003-2009 Novell, Inc. (http://www.novell.com)
 //
 
 //
@@ -39,6 +39,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Web.Configuration;
+using System.Web.Util;
 
 namespace System.Web
 {
@@ -109,7 +110,7 @@ namespace System.Web
 			((ArrayList) tbl ["browsers"]).Add (tbl["browser"]);
 
 			foreach (string key in data.Keys)
-				tbl [key.ToLower (CultureInfo.InvariantCulture).Trim ()] = data [key];
+				tbl [key.ToLower (Helpers.InvariantCulture).Trim ()] = data [key];
 			
 			return tbl;
 		}
@@ -141,7 +142,7 @@ namespace System.Web
 				if (text [0] != expression [0] ||
 				    String.Compare (text, 1, expression, 1,
 				    		    text.Length - 1, false,
-						    CultureInfo.InvariantCulture) != 0) {
+						    Helpers.InvariantCulture) != 0) {
 					return false;
 				}
 				expression = expression.Substring (text.Length);
@@ -256,8 +257,6 @@ namespace System.Web
 			defaultCaps.Add ("win16", "False");
 			defaultCaps.Add ("win32", "False");
 			defaultCaps.Add ("win64", "False");
-
-#if NET_2_0
 			defaultCaps.Add ("adapters", new Hashtable ());
 			defaultCaps.Add ("cancombineformsindeck", "False");
 			defaultCaps.Add ("caninitiatevoicecall", "False");
@@ -340,7 +339,6 @@ namespace System.Web
 			defaultCaps.Add ("supportsuncheck", "True");
 			defaultCaps.Add ("supportsxmlhttp", "False");
 			defaultCaps.Add ("type", "Unknown");
-#endif
 		}
 		
 		public static Hashtable GetCapabilities (string userAgent)
@@ -488,7 +486,7 @@ namespace System.Web
 			
 			while ((str = input.ReadLine ()) != null && str.Length != 0) {
 				keyvalue = str.Split (eq, 2);
-				key = keyvalue [0].ToLower (CultureInfo.InvariantCulture).Trim ();
+				key = keyvalue [0].ToLower (Helpers.InvariantCulture).Trim ();
 				if (key.Length == 0)
 					continue;
 				data.Add (key, keyvalue [1]);

@@ -31,6 +31,7 @@ using System;
 using System.Collections;
 using System.Collections.Specialized;
 using System.IO;
+using System.Text;
 
 namespace Mono.XBuild.Utilities {
 
@@ -66,34 +67,39 @@ namespace Mono.XBuild.Utilities {
 		{
 			return reservedMetadataHash.Contains (metadataName);
 		}
-		
+
 		public static string GetReservedMetadata (string itemSpec,
-						   string metadataName)
+						   string metadataName, IDictionary metadata)
 		{
 			if (metadataName == null)
 				throw new ArgumentNullException ();
+
+			if (String.IsNullOrEmpty (itemSpec))
+				return String.Empty;
 		
 			switch (metadataName.ToLower ()) {
 			case "fullpath":
 				return Path.GetFullPath (itemSpec);
 			case "rootdir":
-				return Path.GetPathRoot (itemSpec);
+				if (Path.IsPathRooted (itemSpec))
+					return Path.GetPathRoot (itemSpec);
+				else
+					return Path.GetPathRoot (Environment.CurrentDirectory);
 			case "filename":
 				return Path.GetFileNameWithoutExtension (itemSpec);
 			case "extension":
 				return Path.GetExtension (itemSpec);
-			case "relativedir": {
-				string dir = Path.GetDirectoryName (itemSpec);
-				if (dir.Length > 0)
-					return dir + "\\";
-				else
-					return dir;
-			}
+			case "relativedir":
+				return WithTrailingSlash (AbsoluteToRelativePath (Environment.CurrentDirectory, Path.GetDirectoryName (itemSpec)));
 			case "directory":
-				return Path.GetDirectoryName (Path.GetFullPath (itemSpec));
+				string fullpath = Path.GetFullPath (itemSpec);
+				return WithTrailingSlash (
+					 Path.GetDirectoryName (fullpath).Substring (Path.GetPathRoot (fullpath).Length));
 			case "recursivedir":
-				// FIXME: how to handle this?
-				return String.Empty;
+				if (metadata != null && metadata.Contains ("RecursiveDir"))
+					return (string)metadata ["RecursiveDir"];
+				else
+					return String.Empty;
 			case "identity":
 				return Path.Combine (Path.GetDirectoryName (itemSpec), Path.GetFileName (itemSpec));
 			case "modifiedtime":
@@ -120,6 +126,58 @@ namespace Mono.XBuild.Utilities {
 			default:
 				throw new ArgumentException ("Invalid reserved metadata name");
 			}
+		}
+
+		static string WithTrailingSlash (string path)
+		{
+			if (String.IsNullOrEmpty (path))
+				return String.Empty;
+
+			if (path.Length > 0)
+				return path + Path.DirectorySeparatorChar;
+			else
+				return path;
+		}
+
+		readonly static char[] separators = { Path.DirectorySeparatorChar, Path.VolumeSeparatorChar, Path.AltDirectorySeparatorChar };
+		static string AbsoluteToRelativePath (string baseDirectoryPath, string absPath)
+		{
+			if (!Path.IsPathRooted (absPath))
+				return absPath;
+
+			absPath           = Path.GetFullPath (absPath);
+			baseDirectoryPath = Path.GetFullPath (baseDirectoryPath.TrimEnd (Path.DirectorySeparatorChar));
+
+			string[] bPath = baseDirectoryPath.Split (separators);
+			string[] aPath = absPath.Split (separators);
+			int indx = 0;
+
+			for (; indx < System.Math.Min (bPath.Length, aPath.Length); indx++) {
+				if (!bPath[indx].Equals(aPath[indx]))
+					break;
+			}
+
+			if (indx == 0) 
+				return absPath;
+
+			StringBuilder result = new StringBuilder ();
+
+			for (int i = indx; i < bPath.Length; i++) {
+				result.Append ("..");
+				if (i + 1 < bPath.Length || aPath.Length - indx > 0)
+					result.Append (Path.DirectorySeparatorChar);
+			}
+
+
+			result.Append (String.Join(Path.DirectorySeparatorChar.ToString(), aPath, indx, aPath.Length - indx));
+			if (result.Length == 0)
+				return ".";
+			return result.ToString ();
+		}
+
+		static string RelativeToAbsolutePath (string baseDirectoryPath, string relPath)
+		{
+			return Path.GetFullPath (Path.Combine (baseDirectoryPath, relPath));
 		}
 	}
 }

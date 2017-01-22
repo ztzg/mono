@@ -50,10 +50,13 @@ namespace System.ServiceModel.Dispatcher
 		int max_fault_size = 0x10000; // FIXME: not verified.
 
 		// .ctor() for Clients
-		internal ClientRuntime (string name, string ns)
+		internal ClientRuntime (string name, string ns, object callbackDispatchRuntime)
 		{
 			contract_name = name;
 			contract_ns = ns;
+#if !NET_2_1
+			CallbackDispatchRuntime = (DispatchRuntime) callbackDispatchRuntime ?? new DispatchRuntime (null, this);
+#endif
 		}
 
 		public Type CallbackClientType { get; set; }
@@ -85,9 +88,15 @@ namespace System.ServiceModel.Dispatcher
 			get { return inspectors; }
 		}
 
+#if NET_2_1
+		public KeyedCollection<string,ClientOperation> Operations {
+			get { return operations; }
+		}
+#else
 		public SynchronizedKeyedCollection<string,ClientOperation> Operations {
 			get { return operations; }
 		}
+#endif
 
 		public bool ManualAddressing {
 			get { return manual_addressing; }

@@ -36,9 +36,7 @@ namespace System.Runtime.CompilerServices {
 	[Serializable]
 	[AttributeUsage (AttributeTargets.Field | AttributeTargets.Parameter,
 			 Inherited=false)]
-#if NET_2_0
 	[ComVisible(true)]
-#endif
 	public sealed class DateTimeConstantAttribute : CustomConstantAttribute
 	{
 		long ticks;
@@ -46,6 +44,10 @@ namespace System.Runtime.CompilerServices {
 		public DateTimeConstantAttribute (long ticks)
 		{
 			this.ticks = ticks;
+		}
+
+		internal long Ticks {
+			get { return ticks; }
 		}
 
 		public override object Value {

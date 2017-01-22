@@ -28,13 +28,12 @@
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 namespace System.Reflection
 {
-#if NET_2_0
 	[ComVisible (true)]
 	[ComDefaultInterfaceAttribute (typeof (_ParameterInfo))]
-#endif
 	[Serializable]
 	[ClassInterfaceAttribute (ClassInterfaceType.None)]
 	public class ParameterInfo : ICustomAttributeProvider, _ParameterInfo {
@@ -46,6 +45,7 @@ namespace System.Reflection
 		protected int PositionImpl;
 		protected ParameterAttributes AttrsImpl;
 		private UnmanagedMarshal marshalAs;
+		//ParameterInfo parent;
 
 		protected ParameterInfo () {
 		}
@@ -62,6 +62,30 @@ namespace System.Reflection
 				this.PositionImpl = position - 1;
 				this.AttrsImpl = ParameterAttributes.None;
 			}
+		}
+
+		/*FIXME this constructor looks very broken in the position parameter*/
+		internal ParameterInfo (ParameterInfo pinfo, Type type, MemberInfo member, int position) {
+			this.ClassImpl = type;
+			this.MemberImpl = member;
+			if (pinfo != null) {
+				this.NameImpl = pinfo.Name;
+				this.PositionImpl = pinfo.Position - 1;	// ParameterInfo.Position is zero-based
+				this.AttrsImpl = (ParameterAttributes) pinfo.Attributes;
+			} else {
+				this.NameImpl = null;
+				this.PositionImpl = position - 1;
+				this.AttrsImpl = ParameterAttributes.None;
+			}
+		}
+
+		internal ParameterInfo (ParameterInfo pinfo, MemberInfo member) {
+			this.ClassImpl = pinfo.ParameterType;
+			this.MemberImpl = member;
+			this.NameImpl = pinfo.Name;
+			this.PositionImpl = pinfo.Position;
+			this.AttrsImpl = pinfo.Attributes;
+			//this.parent = pinfo;
 		}
 
 		/* to build a ParameterInfo for the return type of a method */
@@ -105,58 +129,43 @@ namespace System.Reflection
 					DecimalConstantAttribute[] attrs = (DecimalConstantAttribute[])GetCustomAttributes (typeof (DecimalConstantAttribute), false);
 					if (attrs.Length > 0)
 						return attrs [0].Value;
-				}					
+				} else if (ClassImpl == typeof (DateTime)) {
+					/* default values for DateTime are encoded using a custom attribute */
+					DateTimeConstantAttribute[] attrs = (DateTimeConstantAttribute[])GetCustomAttributes (typeof (DateTimeConstantAttribute), false);
+					if (attrs.Length > 0)
+						return new DateTime (attrs [0].Ticks);
+				}
 				return DefaultValueImpl;
 			}
 		}
 
 		public bool IsIn {
 			get {
-#if NET_2_0
 				return (Attributes & ParameterAttributes.In) != 0;
-#else
-				return (AttrsImpl & ParameterAttributes.In) != 0;
-#endif
 			}
 		}
 
 		public bool IsLcid {
 			get {
-#if NET_2_0
 				return (Attributes & ParameterAttributes.Lcid) != 0;
-#else
-				return (AttrsImpl & ParameterAttributes.Lcid) != 0;
-#endif
 			}
 		}
 
 		public bool IsOptional {
 			get {
-#if NET_2_0
 				return (Attributes & ParameterAttributes.Optional) != 0;
-#else
-				return (AttrsImpl & ParameterAttributes.Optional) != 0;
-#endif
 			}
 		}
 
 		public bool IsOut {
 			get {
-#if NET_2_0
 				return (Attributes & ParameterAttributes.Out) != 0;
-#else
-				return (AttrsImpl & ParameterAttributes.Out) != 0;
-#endif
 			}
 		}
 
 		public bool IsRetval {
 			get {
-#if NET_2_0
 				return (Attributes & ParameterAttributes.Retval) != 0;
-#else
-				return (AttrsImpl & ParameterAttributes.Retval) != 0;
-#endif
 			}
 		}
 
@@ -172,14 +181,23 @@ namespace System.Reflection
 			get {return PositionImpl;}
 		}
 
-#if NET_2_0 || BOOTSTRAP_NET_2_0
-		public
-#else
-		internal
-#endif
-		extern int MetadataToken {
-			[MethodImplAttribute (MethodImplOptions.InternalCall)]
-			get;
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		extern int GetMetadataToken ();
+
+		public int MetadataToken {
+			get {
+				if (MemberImpl is PropertyInfo) {
+					PropertyInfo prop = (PropertyInfo)MemberImpl;
+					MethodInfo mi = prop.GetGetMethod (true);
+					if (mi == null)
+						mi = prop.GetSetMethod (true);
+					/*TODO expose and use a GetParametersNoCopy()*/
+					return mi.GetParameters () [PositionImpl].MetadataToken;
+				} else if (MemberImpl is MethodBase) {
+					return GetMetadataToken ();
+				}
+				throw new ArgumentException ("Can't produce MetadataToken for member of type " + MemberImpl.GetType ());
+			}
 		}
 
 		public virtual object[] GetCustomAttributes (bool inherit)
@@ -226,8 +244,6 @@ namespace System.Reflection
 			return attrs;
 		}			
 
-#if NET_2_0 || BOOTSTRAP_NET_2_0
-
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		extern Type[] GetTypeModifiers (bool optional);
 
@@ -245,15 +261,19 @@ namespace System.Reflection
 			return types;
 		}
 
-		[MonoTODO]
 		public virtual object RawDefaultValue {
 			get {
-				throw new NotImplementedException ();
+				/*FIXME right now DefaultValue doesn't throw for reflection-only assemblies. Change this once the former is fixed.*/
+				return DefaultValue;
 			}
+		}
+
+#if NET_4_0
+		public virtual IList<CustomAttributeData> GetCustomAttributesData () {
+			return CustomAttributeData.GetCustomAttributes (this);
 		}
 #endif
 
-#if NET_1_1
 		void _ParameterInfo.GetIDsOfNames ([In] ref Guid riid, IntPtr rgszNames, uint cNames, uint lcid, IntPtr rgDispId)
 		{
 			throw new NotImplementedException ();
@@ -274,6 +294,5 @@ namespace System.Reflection
 		{
 			throw new NotImplementedException ();
 		}
-#endif
 	}
 }

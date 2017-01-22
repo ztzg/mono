@@ -139,7 +139,7 @@ using DbLinq.Data.Linq;
             Assert.IsTrue(q1.Count > 0);
         }
 
-#if !DEBUG && (SQLITE || MSSQL)
+#if !DEBUG && (SQLITE || POSTGRES || MSSQL)
         // L2SQL: System.InvalidOperationException : The type 'Test_NUnit_MsSql_Strict.ReadTests_Join+Northwind1+ExtendedOrder' is not mapped as a Table.
         [Explicit]
 #endif
@@ -161,7 +161,7 @@ using DbLinq.Data.Linq;
 
 
 
-#if !DEBUG && (SQLITE || MSSQL)
+#if !DEBUG && (SQLITE || POSTGRES || MSSQL)
         // L2SQL: System.InvalidOperationException : The type 'Test_NUnit_MsSql_Strict.ReadTests_Join+Northwind1+ExtendedOrder' is not mapped as a Table.
         [Explicit]
 #endif
@@ -181,7 +181,7 @@ using DbLinq.Data.Linq;
             Assert.IsTrue(list.Count > 0);
         }
 
-#if !DEBUG && (SQLITE || MSSQL)
+#if !DEBUG && (SQLITE || POSTGRES || MSSQL)
         // L2SQL: System.InvalidOperationException : The type 'Test_NUnit_MsSql_Strict.ReadTests_Join+Northwind1+ExtendedOrder' is not mapped as a Table.
         [Explicit]
 #endif
@@ -314,7 +314,7 @@ using DbLinq.Data.Linq;
             var l = custOderInfos.ToList();
         }
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test]

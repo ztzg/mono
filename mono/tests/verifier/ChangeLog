@@ -1,3 +1,73 @@
+2010-07-30 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile: Fix build.
+
+2010-07-12 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_generic_arg_satisty_constraint_compat_check.cs:
+	Regression test for #621599.
+
+2010-07-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_deep_nested_type_visibility.cs: Regression test
+	for #619300.
+
+2010-06-02 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* invalid_generic_constraints_with_loop.il:
+	* valid_dependent_generic_constraint_and_boxing.il:
+		Regression tests for #610625.
+
+2010-04-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_switch_with_value_on_stack.il: New test.
+
+2010-04-09 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	valid_call_to_virtual_method_on_sealed_class.il: New test.
+
+2010-04-07 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_store_of_uint_to_int_array.il: Regression test
+	for #555950.
+
+2010-04-05 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* unverifiable_ginst_dont_reduce_to_gparam_with_constraint.il: Regression test
+	for #587849.
+
+2010-03-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* invalid_branch_in_between_prefix_and_instruction.il:
+	* invalid_empty_filter_block.il:
+	* make_endfilter_test.sh
+	* make_endfinally_test.sh: Silence which when gsed is not found.
+
+2010-02-04 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* make_endfilter_test.sh: Fix this test to not have a throw that make some of the
+	endfilter unreachable.
+
+2010-02-04 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* invalid_branch_in_between_prefix_and_instruction.il:
+	* invalid_empty_filter_block.il:
+	* make_endfilter_test.sh
+	* make_endfinally_test.sh: Bunch of OSX and test fixes.
+
+2010-01-28 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* Makefile, *.sh, *.il: Change status of a bunch of a tests to reflect the metadata
+	verifier. First pass into making the test suite works under OSX.
+
+2010-01-08 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* valid_iface_with_variant_constraint.cs: Constraints can be variant.
+
+2009-12-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* invalid_try_catch_with_zero_max_stack.il: Regression test for bug #562320.
+
 2009-08-17 Rodrigo Kumpera  <rkumpera@novell.com>
 
 	* valid_generic_type_definition_on_boxing_position.cs: Valid encoding of GTD on

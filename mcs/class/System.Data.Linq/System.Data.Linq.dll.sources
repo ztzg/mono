@@ -2,6 +2,7 @@
 ../../build/common/Locale.cs
 ../../build/common/MonoTODOAttribute.cs
 src/DbLinq.Firebird/FirebirdDataContext.cs
+src/DbLinq.Firebird/FirebirdExpressionTranslator.cs
 src/DbLinq.Firebird/FirebirdSchemaLoader.Columns.cs
 src/DbLinq.Firebird/FirebirdSchemaLoader.Constraints.cs
 src/DbLinq.Firebird/FirebirdSchemaLoader.cs
@@ -17,7 +18,7 @@ src/DbLinq.Ingres/IngresSchemaLoader.StoredProcedures.cs
 src/DbLinq.Ingres/IngresSchemaLoader.Tables.cs
 src/DbLinq.Ingres/IngresSqlProvider.cs
 src/DbLinq.Ingres/IngresVendor.cs
-src/DbLinq.MySql/MysqlDataContext.cs
+src/DbLinq.MySql/MySqlDataContext.cs
 src/DbLinq.MySql/MySqlSchemaLoader.Columns.cs
 src/DbLinq.MySql/MySqlSchemaLoader.Constraints.cs
 src/DbLinq.MySql/MySqlSchemaLoader.cs
@@ -51,6 +52,7 @@ src/DbLinq.Sqlite/SqliteSqlProvider.cs
 src/DbLinq.Sqlite/SqliteVendor.cs
 src/DbLinq.SqlServer/SqlServerDataContext.cs
 src/DbLinq.SqlServer/SqlServerExpressionTranslator.cs
+src/DbLinq.SqlServer/SqlServerSchemaLoader.cs
 src/DbLinq.SqlServer/SqlServerSqlProvider.cs
 src/DbLinq.SqlServer/SqlServerTypeConversions.cs
 src/DbLinq.SqlServer/SqlServerVendor.cs
@@ -220,6 +222,7 @@ src/DbLinq/Schema/Dbml/Adapter/EnumType.cs
 src/DbLinq/Schema/Dbml/Adapter/INamedType.cs
 src/DbLinq/Schema/Dbml/Adapter/ISimpleList.cs
 src/DbLinq/Schema/Dbml/Adapter/SpecifiedPropertyUpdater.cs
+src/DbLinq/Schema/Dbml/DatabaseSerializer.cs
 src/DbLinq/Schema/Dbml/DbmlSchema.Adapter.cs
 src/DbLinq/Schema/Dbml/DbmlSchema.cs
 src/DbLinq/Schema/Dbml/DbmlSerializer.cs
@@ -298,6 +301,7 @@ src/DbLinq/Util/ThreadSafeDictionary.cs
 src/DbLinq/Util/TypeConvert.cs
 src/DbLinq/Util/TypeExtensions.cs
 src/DbLinq/Util/TypeLoader.cs
+src/DbLinq/Vendor/DbSchemaLoader.cs
 src/DbLinq/Vendor/IDataName.cs
 src/DbLinq/Vendor/IDataTableColumn.cs
 src/DbLinq/Vendor/IDataType.cs

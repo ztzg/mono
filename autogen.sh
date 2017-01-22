@@ -120,7 +120,7 @@ if grep "^AM_CONFIG_HEADER" configure.in >/dev/null; then
 fi
 
 echo "Running automake --gnu $am_opt ..."
-automake --add-missing --gnu $am_opt ||
+automake --add-missing --gnu -Wno-portability $am_opt ||
   { echo "**Error**: automake failed."; exit 1; }
 echo "Running autoconf ..."
 autoconf || { echo "**Error**: autoconf failed."; exit 1; }
@@ -129,6 +129,12 @@ if test -d $srcdir/libgc; then
   echo Running libgc/autogen.sh ...
   (cd $srcdir/libgc ; NOCONFIGURE=1 ./autogen.sh "$@")
   echo Done running libgc/autogen.sh ...
+fi
+
+if test -d $srcdir/eglib; then
+  echo Running eglib/autogen.sh ...
+  (cd $srcdir/eglib ; NOCONFIGURE=1 ./autogen.sh "$@")
+  echo Done running eglib/autogen.sh ...
 fi
 
 

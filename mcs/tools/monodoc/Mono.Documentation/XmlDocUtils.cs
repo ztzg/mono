@@ -133,12 +133,17 @@ namespace Mono.Documentation {
 		{
 			yield return "System.Object";
 			yield return GetEscapedPath (type, "Type/@FullName");
+
+			Hashtable h = new Hashtable ();
+			GetInterfaces (h, type, loader);
+
 			string s = GetEscapedPath (type, "Type/Base/BaseTypeName");
 			if (s != null) {
 				yield return s;
 				XmlDocument d;
 				string p = s;
 				while (s != null && (d = loader (s)) != null) {
+					GetInterfaces (h, d, loader);
 					s = GetEscapedPath (d, "Type/Base/BaseTypeName");
 					if (p == s)
 						break;
@@ -146,8 +151,6 @@ namespace Mono.Documentation {
 				}
 			}
 
-			Hashtable h = new Hashtable ();
-			GetInterfaces (h, type, loader);
 			foreach (object o in h.Keys)
 				yield return o.ToString ();
 		}
@@ -167,9 +170,14 @@ namespace Mono.Documentation {
 				string tk = "T:" + t;
 				if (!ifaces.ContainsKey (tk)) {
 					ifaces.Add (tk, null);
-					XmlDocument d = loader (t);
-					if (d != null)
-						GetInterfaces (ifaces, d, loader);
+					try {
+						XmlDocument d = loader (t);
+						if (d != null)
+							GetInterfaces (ifaces, d, loader);
+					}
+					catch (FileNotFoundException e) {
+						// ignore; interface documentation couldn't be found.
+					}
 				}
 			}
 		}

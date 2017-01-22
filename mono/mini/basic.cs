@@ -195,6 +195,11 @@ class Tests {
 		return b % 1;
 	}
 
+	public static int test_0_rem_imm_0_neg () {
+		int b = -2;
+		return b % 1;
+	}
+
 	public static int test_4_rem_big_imm () {
 		int b = 10004;
 		return b % 10000;
@@ -1235,8 +1240,9 @@ class Tests {
 
 		// Avoid cfolding this
 		i = 0;
-		for (int j = 0; j < 1234567; ++j)
+		for (int j = 0; j < 567; ++j)
 			i ++;
+		i += 1234000;
 		if ((i / 2) != 617283)
 			return 1;
 		if ((i / 4) != 308641)
@@ -1248,8 +1254,9 @@ class Tests {
 
 		// Avoid cfolding this
 		i = 0;
-		for (int j = 0; j < 1234567; ++j)
+		for (int j = 0; j < 567; ++j)
 			i --;
+		i -= 1234000;
 		if ((i / 2) != -617283)
 			return 5;
 		if ((i / 4) != -308641)
@@ -1347,4 +1354,11 @@ class Tests {
 		return 0;
 	}
 
+	public static unsafe int test_0_ishr_sign_extend_cfold () {
+		int i = 32768;
+		int j = i << 16;
+		int k = j >> 16;
+
+		return k == -32768 ? 0 : 1;
+	}
 }

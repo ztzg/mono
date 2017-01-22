@@ -1,3 +1,18 @@
+2010-03-20  Marek Habersack  <mhabersack@novell.com>
+
+	* XmlSiteMapProviderTest.cs: AreEqual should have expected result first
+	and actual next - swapped parameters in RootNode_2_OnLoad
+
+2009-11-16  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpContext.cs: added some tests for RewritePath
+
+2009-11-09  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpCookieTest.cs: added test for bug #553063
+
+	* HttpCookieCollectionTest.cs: added test for bug #553150
+
 2009-09-07  Marek Habersack  <mhabersack@novell.com>
 
 	* XmlSiteMapProviderTest.cs: added

@@ -4,15 +4,10 @@
 #
 
 #
-# This is a mono support mode for a python-enabled gdb:
-# http://sourceware.org/gdb/wiki/PythonGdb
+# This is a mono support mode for gdb 7.0 and later
 # Usage:
-# - copy/symlink this file, plus mono-gdbinit to the directory where the mono 
-#   executable lives.
-# - run mono under gdb, or attach to a mono process using gdb
-# - Type 'xdb' in gdb to load/reload the debugging info emitted by the runtime.
-# - The debug info is emitted to a file called xdb.s in the current working directory.
-#   When attaching to a mono process, make sure you are in the same directory.
+# - copy/symlink this file to the directory where the mono executable lives.
+# - run mono under gdb, or attach to a mono process started with --debug=gdb using gdb.
 #
 
 import os
@@ -108,8 +103,11 @@ class ObjectPrinter:
             class_name = obj ['vtable'].dereference ()['klass'].dereference ()['name'].string ()
             if class_name [-2:len(class_name)] == "[]":
                 return {}.__iter__ ()
-            gdb_type = gdb.lookup_type ("struct %s_%s" % (class_ns.replace (".", "_"), class_name))
-            return self._iterator(obj.cast (gdb_type))
+            try:
+                gdb_type = gdb.lookup_type ("struct %s_%s" % (class_ns.replace (".", "_"), class_name))
+                return self._iterator(obj.cast (gdb_type))
+            except:
+                return {}.__iter__ ()
         except:
             print sys.exc_info ()[0]
             print sys.exc_info ()[1]
@@ -163,14 +161,124 @@ class MonoClassPrinter:
     def __init__(self, val):
         self.val = val
 
-    def to_string(self):
+    def to_string_inner(self, add_quotes):
         if int(self.val.cast (gdb.lookup_type ("guint64"))) == 0:
             return "0x0"
         klass = self.val.dereference ()
         class_name = stringify_class_name (klass ["name_space"].string (), klass ["name"].string ())
-        return "\"%s\"" % (class_name)
+        if add_quotes:
+            return "\"%s\"" % (class_name)
+        else:
+            return class_name
         # This returns more info but requires calling into the inferior
         #return "\"%s\"" % (gdb.parse_and_eval ("mono_type_full_name (&((MonoClass*)%s)->byval_arg)" % (str (int ((self.val).cast (gdb.lookup_type ("guint64")))))))
+
+    def to_string(self):
+        try:
+            return self.to_string_inner (True)
+        except:
+            #print sys.exc_info ()[0]
+            #print sys.exc_info ()[1]
+            return str(self.val.cast (gdb.lookup_type ("gpointer")))
+
+class MonoGenericInstPrinter:
+    "Print a MonoGenericInst structure"
+
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        inst = self.val.dereference ()
+        inst_len = inst ["type_argc"]
+        inst_args = inst ["type_argv"]
+        inst_str = ""
+        for i in range(0, inst_len):
+            print inst_args
+            type_printer = MonoTypePrinter (inst_args [i])
+            if i > 0:
+                inst_str = inst_str + ", "
+            inst_str = inst_str + type_printer.to_string ()
+        return inst_str
+
+class MonoGenericClassPrinter:
+    "Print a MonoGenericClass structure"
+
+    def __init__(self, val):
+        self.val = val
+
+    def to_string_inner(self):
+        gclass = self.val.dereference ()
+        container_str = str(gclass ["container_class"])
+        class_inst = gclass ["context"]["class_inst"]
+        class_inst_str = ""
+        if int(class_inst.cast (gdb.lookup_type ("guint64"))) != 0:
+            class_inst_str  = str(class_inst)
+        method_inst = gclass ["context"]["method_inst"]
+        method_inst_str = ""
+        if int(method_inst.cast (gdb.lookup_type ("guint64"))) != 0:
+            method_inst_str  = str(method_inst)
+        return "%s, [%s], [%s]>" % (container_str, class_inst_str, method_inst_str)
+
+    def to_string(self):
+        try:
+            return self.to_string_inner ()
+        except:
+            #print sys.exc_info ()[0]
+            #print sys.exc_info ()[1]
+            return str(self.val.cast (gdb.lookup_type ("gpointer")))
+
+class MonoTypePrinter:
+    "Print a MonoType structure"
+
+    def __init__(self, val):
+        self.val = val
+
+    def to_string_inner(self, csharp):
+        try:
+            t = self.val.dereference ()
+
+            kind = str (t ["type"]).replace ("MONO_TYPE_", "").lower ()
+            info = ""
+
+            if kind == "class":
+                p = MonoClassPrinter(t ["data"]["klass"])
+                info = p.to_string ()
+            elif kind == "genericinst":
+                info = str(t ["data"]["generic_class"])
+
+            if info != "":
+                return "{%s, %s}" % (kind, info)
+            else:
+                return "{%s}" % (kind)
+        except:
+            #print sys.exc_info ()[0]
+            #print sys.exc_info ()[1]
+            return str(self.val.cast (gdb.lookup_type ("gpointer")))
+
+    def to_string(self):
+        return self.to_string_inner (False)
+
+class MonoMethodRgctxPrinter:
+    "Print a MonoMethodRgctx structure"
+
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        rgctx = self.val.dereference ()
+        klass = rgctx ["class_vtable"].dereference () ["klass"]
+        klass_printer = MonoClassPrinter (klass)
+        inst = rgctx ["method_inst"].dereference ()
+        inst_len = inst ["type_argc"]
+        inst_args = inst ["type_argv"]
+        inst_str = ""
+        for i in range(0, inst_len):
+            print inst_args
+            type_printer = MonoTypePrinter (inst_args [i])
+            if i > 0:
+                inst_str = inst_str + ", "
+            inst_str = inst_str + type_printer.to_string ()
+        return "MRGCTX[%s, [%s]]" % (klass_printer.to_string(), inst_str)
 
 def lookup_pretty_printer(val):
     t = str (val.type)
@@ -184,6 +292,14 @@ def lookup_pretty_printer(val):
         return MonoMethodPrinter (val)
     if t == "MonoClass *":
         return MonoClassPrinter (val)
+    if t == "MonoType *":
+        return MonoTypePrinter (val)
+    if t == "MonoGenericInst *":
+        return MonoGenericInstPrinter (val)
+    if t == "MonoGenericClass *":
+        return MonoGenericClassPrinter (val)
+    if t == "MonoMethodRuntimeGenericContext *":
+        return MonoMethodRgctxPrinter (val)
     return None
 
 def register_csharp_printers(obj):
@@ -194,54 +310,21 @@ def register_csharp_printers(obj):
 
     obj.pretty_printers.append (lookup_pretty_printer)
 
-register_csharp_printers (gdb.current_objfile())
-
-class MonoSupport(object):
-
-    def __init__(self):
-        self.s_size = 0
-
-    def run_hook(self):
-        if os.access ("xdb.s", os.F_OK):
-            os.remove ("xdb.s")
-        gdb.execute ("set environment MONO_XDEBUG 1")
-        
-    def stop_hook(self):
-        # Called when the program is stopped
-        # Need to recompile+reload the xdb.s file if needed
-        # FIXME: Need to detect half-written files created when the child is
-        # interrupted while executing the xdb.s writing code
-        # FIXME: Handle appdomain unload
-        if os.access ("xdb.s", os.F_OK):
-            new_size = os.stat ("xdb.s").st_size
-            if new_size > self.s_size:
-                sofile = "xdb.so"
-                gdb.execute ("shell as -o xdb.o xdb.s && ld -shared -o %s xdb.o" % sofile)
-                # FIXME: This prints messages which couldn't be turned off
-                gdb.execute ("add-symbol-file %s 0" % sofile)
-                self.s_size = new_size
-
-class RunHook (gdb.Command):
+# This command will flush the debugging info collected by the runtime
+class XdbCommand (gdb.Command):
     def __init__ (self):
-        super (RunHook, self).__init__ ("hook-run", gdb.COMMAND_NONE,
-                                        gdb.COMPLETE_COMMAND, pre_hook_of="run")
+        super (XdbCommand, self).__init__ ("xdb", gdb.COMMAND_NONE,
+                                           gdb.COMPLETE_COMMAND)
 
     def invoke(self, arg, from_tty):
-        mono_support.run_hook ()
+        gdb.execute ("call mono_xdebug_flush ()")
+
+register_csharp_printers (gdb.current_objfile())
+
+XdbCommand ()
+
+gdb.execute ("set environment MONO_XDEBUG gdb")
 
 print "Mono support loaded."
 
-mono_support = MonoSupport ()
 
-# This depends on the changes in gdb-python.diff to work
-#RunHook ()
-
-# Register our hooks
-# This currently cannot be done from python code
-
-exec_file = gdb.current_objfile ().filename
-# FIXME: Is there a way to detect symbolic links ?
-if os.stat (exec_file).st_size != os.lstat (exec_file).st_size:
-    exec_file = os.readlink (exec_file)
-exec_dir = os.path.dirname (exec_file)
-gdb.execute ("source %s/%s-gdbinit" % (exec_dir, os.path.basename (exec_file)))

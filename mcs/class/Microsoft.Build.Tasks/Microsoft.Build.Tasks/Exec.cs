@@ -48,6 +48,7 @@ namespace Microsoft.Build.Tasks {
 		string		stdErrEncoding;
 		string		stdOutEncoding;
 		string		workingDirectory;
+		string scriptFile;
 		
 		public Exec ()
 		{
@@ -56,11 +57,17 @@ namespace Microsoft.Build.Tasks {
 		
 		protected internal override void AddCommandLineCommands (CommandLineBuilderExtension commandLine)
 		{
+			if (IsRunningOnWindows)
+				commandLine.AppendSwitch ("/q /c");
+
 			if (!String.IsNullOrEmpty (command)) {
-				string[] commandTable = command.Split (null, 2);
-				string arguments = String.Empty;
-				if (commandTable.Length == 2)
-					commandLine.AppendSwitch (commandTable [1]);
+				scriptFile = Path.GetTempFileName ();
+				if (IsRunningOnWindows)
+					scriptFile = scriptFile + ".bat";
+				using (StreamWriter sw = new StreamWriter (scriptFile)) {
+					sw.Write (command);
+				}
+				commandLine.AppendFileNameIfNotNull (scriptFile);
 			}
 			base.AddCommandLineCommands (commandLine);
 		}
@@ -69,13 +76,18 @@ namespace Microsoft.Build.Tasks {
 						    string responseFileCommands,
 						    string commandLineCommands)
 		{
-			return base.ExecuteTool (pathToTool, responseFileCommands, commandLineCommands);
+			try {
+				return base.ExecuteTool (pathToTool, responseFileCommands, commandLineCommands);
+			} finally {
+				if (scriptFile != null)
+					DeleteTempFile (scriptFile);
+			}
 		}
 
 		[MonoTODO]
 		protected override string GenerateFullPathToTool ()
 		{
-			return command.Split (null, 2) [0];
+			return IsRunningOnWindows ? "cmd.exe" : "sh";
 		}
 		
 		protected override string GetWorkingDirectory ()
@@ -85,6 +97,9 @@ namespace Microsoft.Build.Tasks {
 		
 		protected override bool HandleTaskExecutionErrors ()
 		{
+			if (ExitCode != 0)
+				Log.LogError ("Command '{0}' exited with code: {1}.", Command, ExitCode);
+
 			return ExitCode == 0 || ignoreExitCode;
 		}
 		
@@ -97,6 +112,7 @@ namespace Microsoft.Build.Tasks {
 		[MonoTODO]
 		protected override void LogToolCommand (string message)
 		{
+			Log.LogMessage (MessageImportance.Normal, "Executing: " + command);
 		}
 		
 		protected override void LogEventsFromTextOutput (string singleLine, MessageImportance importance)
@@ -113,7 +129,11 @@ namespace Microsoft.Build.Tasks {
 		[Required]
 		public string Command {
 			get { return command; }
-			set { command = value; }
+			set {
+				command = value;
+				if (Path.DirectorySeparatorChar == '/')
+					command = command.Replace ("\r\n", "\n");
+			}
 		}
 
 		public bool IgnoreExitCode {
@@ -166,6 +186,14 @@ namespace Microsoft.Build.Tasks {
 			get { return workingDirectory; }
 			set { workingDirectory = value; }
 		}
+
+		static bool IsRunningOnWindows {
+			get {
+				PlatformID pid = Environment.OSVersion.Platform;
+				return ((int) pid != 128 && (int) pid != 4 && (int) pid != 6);
+			}
+		}
+
 	}
 }
 

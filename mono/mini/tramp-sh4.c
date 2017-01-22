@@ -32,7 +32,7 @@
 #include "mini.h"
 #include "mono/arch/sh4/sh4-codegen.h"
 
-gpointer mono_arch_create_rgctx_lazy_fetch_trampoline(guint32 slot)
+gpointer mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot, MonoTrampInfo **info, gboolean aot)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -168,7 +168,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
  * #endif
  * }
  */
-guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
+guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type, MonoTrampInfo **info, gboolean aot)
 {
 	int i = 0;
 	guint8 *code   = NULL;
@@ -177,6 +177,10 @@ guchar *mono_arch_create_trampoline_code(MonoTrampolineType trampoline_type)
 	guint8 *patch2 = NULL;
 
 	SH4_EXTRA_DEBUG("args => %d", trampoline_type);
+
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
 #define TRAMPOLINE_SIZE 220
 

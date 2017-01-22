@@ -27,8 +27,12 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if (NET_2_0||BOOTSTRAP_NET_2_0) && !NET_2_1
+#if !NET_2_1
+
+//
+// Defining this writes the output to console.log
 //#define DEBUG
+
 using System.Collections;
 using System.IO;
 using System.Text;
@@ -359,8 +363,10 @@ namespace System {
 				break;
 			case ConsoleKey.Tab:
 				int n = 8 - (cursorLeft % 8);
-				for (int i = 0; i < n; i++)
+				for (int i = 0; i < n; i++){
 					IncrementX ();
+				}
+				WriteConsole ("\t");
 				break;
 			case ConsoleKey.Clear:
 				WriteConsole (clear);
@@ -472,7 +478,7 @@ namespace System {
 			int b;
 
 			// First, get any data in the input buffer.  Merely reduces the likelyhood of getting an error
-			int inqueue = ConsoleDriver.InternalKeyAvailable (1000);
+			int inqueue = ConsoleDriver.InternalKeyAvailable (0);
 			while (inqueue-- > 0){
 				b = stdin.Read ();
 				AddToBuffer (b);
@@ -713,15 +719,14 @@ namespace System {
 			}
 		}
 
+		//
+		// Requries that caller calls Init () if not !inited.
+		//
 		unsafe void CheckWindowDimensions ()
 		{
-			if (!inited)
-				Init ();
-
-			if (terminal_size == *native_terminal_size)
+			if (native_terminal_size == null || terminal_size == *native_terminal_size)
 				return;
 
-			terminal_size = *native_terminal_size;
 			if (*native_terminal_size == -1){
 				int c = reader.Get (TermInfoNumbers.Columns);
 				if (c != 0)
@@ -731,6 +736,7 @@ namespace System {
 				if (c != 0)
 					windowHeight = c;
 			} else {
+				terminal_size = *native_terminal_size;
 				windowWidth = terminal_size >> 16;
 				windowHeight = terminal_size & 0xffff;
 			}
@@ -1208,9 +1214,7 @@ namespace System {
 				Init ();
 			}
 
-			if (bufferWidth == 0)
-				CheckWindowDimensions ();
-
+			CheckWindowDimensions ();
 			if (left < 0 || left >= bufferWidth)
 				throw new ArgumentOutOfRangeException ("left", "Value must be positive and below the buffer width.");
 

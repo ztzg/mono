@@ -47,6 +47,7 @@ namespace Microsoft.Build.Utilities
 		{
 			if (taskInstance != null)
 				this.buildEngine = taskInstance.BuildEngine;
+			taskName = null;
 		}
 
 		[MonoTODO]
@@ -101,7 +102,7 @@ namespace Microsoft.Build.Utilities
 				throw new ArgumentNullException ("message");
 				
 			BuildErrorEventArgs beea = new BuildErrorEventArgs (
-				null, null, null, 0, 0, 0, 0, FormatString (message, messageArgs),
+				null, null, buildEngine.ProjectFileOfTaskNode, 0, 0, 0, 0, FormatString (message, messageArgs),
 				helpKeywordPrefix, null);
 			buildEngine.LogErrorEvent (beea);
 			hasLoggedErrors = true;
@@ -149,7 +150,7 @@ namespace Microsoft.Build.Utilities
 			if (showStackTrace == true)
 				sb.Append (e.StackTrace);
 			BuildErrorEventArgs beea = new BuildErrorEventArgs (
-				null, null, null, 0, 0, 0, 0, sb.ToString (),
+				null, null, buildEngine.ProjectFileOfTaskNode, 0, 0, 0, 0, sb.ToString (),
 				e.HelpLink, e.Source);
 			buildEngine.LogErrorEvent (beea);
 			hasLoggedErrors = true;
@@ -220,10 +221,7 @@ namespace Microsoft.Build.Utilities
 			if (message == null)
 				throw new ArgumentNullException ("message");
 		
-			BuildMessageEventArgs bmea = new BuildMessageEventArgs (
-				FormatString (message, messageArgs), helpKeywordPrefix,
-				null, importance);
-			buildEngine.LogMessageEvent (bmea);
+			LogMessageFromText (FormatString (message, messageArgs), importance);
 		}
 
 		public void LogMessageFromResources (string messageResourceName,
@@ -276,13 +274,18 @@ namespace Microsoft.Build.Utilities
 				stream.Close ();
 			}
 		}
-		
-		[MonoTODO]
+
 		public bool LogMessageFromText (string lineOfText,
 						MessageImportance importance)
 		{
 			if (lineOfText == null)
 				throw new ArgumentNullException ("lineOfText");
+
+			BuildMessageEventArgs bmea = new BuildMessageEventArgs (
+				lineOfText, helpKeywordPrefix,
+				null, importance);
+			buildEngine.LogMessageEvent (bmea);
+
 			return true;
 		}
 
@@ -291,7 +294,7 @@ namespace Microsoft.Build.Utilities
 		{
 			// FIXME: what about all the parameters?
 			BuildWarningEventArgs bwea = new BuildWarningEventArgs (
-				null, null, null, 0, 0, 0, 0, FormatString (message, messageArgs),
+				null, null, buildEngine.ProjectFileOfTaskNode, 0, 0, 0, 0, FormatString (message, messageArgs),
 				helpKeywordPrefix, null);
 			buildEngine.LogWarningEvent (bwea);
 		}

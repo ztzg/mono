@@ -6,7 +6,7 @@
 //	Gonzalo Paniagua Javier (gonzalo@ximian.com)
 //
 // (C) 2002 Ximian, Inc. (http://www.ximian.com)
-// Copyright (C) 2005 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2005-2010 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -33,6 +33,7 @@ using System.IO;
 using System.Security.Permissions;
 using System.Web.Compilation;
 using System.Web.Configuration;
+using System.Globalization;
 using System.Web.Util;
 
 namespace System.Web.UI
@@ -46,9 +47,6 @@ namespace System.Web.UI
 		string baseDir;
 		string baseVDir;
 		ILocation location;
-#if !NET_2_0
-		CompilationConfiguration compilationConfig;
-#endif
 
 		internal string MapPath (string path)
 		{
@@ -71,7 +69,7 @@ namespace System.Web.UI
 			return Path.Combine (BaseDir, path);
 		}
 
-		internal bool GetBool (Hashtable hash, string key, bool deflt)
+		internal bool GetBool (IDictionary hash, string key, bool deflt)
 		{
 			string val = hash [key] as string;
 			if (val == null)
@@ -80,15 +78,15 @@ namespace System.Web.UI
 			hash.Remove (key);
 
 			bool result = false;
-			if (String.Compare (val, "true", true) == 0)
+			if (String.Compare (val, "true", true, Helpers.InvariantCulture) == 0)
 				result = true;
-			else if (String.Compare (val, "false", true) != 0)
+			else if (String.Compare (val, "false", true, Helpers.InvariantCulture) != 0)
 				ThrowParseException ("Invalid value for " + key);
 
 			return result;
 		}
 
-		internal static string GetString (Hashtable hash, string key, string deflt)
+		internal static string GetString (IDictionary hash, string key, string deflt)
 		{
 			string val = hash [key] as string;
 			if (val == null)
@@ -96,8 +94,44 @@ namespace System.Web.UI
 
 			hash.Remove (key);
 			return val;
-		}		
+		}
 
+		internal static bool IsDirective (string value, char directiveChar)
+		{
+			if (value == null || value == String.Empty)
+				return false;
+			
+			value = value.Trim ();
+			if (!StrUtils.StartsWith (value, "<%") || !StrUtils.EndsWith (value, "%>"))
+				return false;
+
+			int dcIndex = value.IndexOf (directiveChar, 2);
+			if (dcIndex == -1)
+				return false;
+
+			if (dcIndex == 2)
+				return true;
+			dcIndex--;
+			
+			while (dcIndex >= 2) {
+				if (!Char.IsWhiteSpace (value [dcIndex]))
+					return false;
+				dcIndex--;
+			}
+
+			return true;
+		}
+		
+		internal static bool IsDataBound (string value)
+		{
+			return IsDirective (value, '#');
+		}
+
+		internal static bool IsExpression (string value)
+		{
+			return IsDirective (value, '$');
+		}
+		
 		internal void ThrowParseException (string message, params object[] parms)
 		{
 			if (parms == null)
@@ -107,7 +141,10 @@ namespace System.Web.UI
 		
 		internal void ThrowParseException (string message, Exception inner, params object[] parms)
 		{
-			throw new ParseException (location, String.Format (message, parms), inner);
+			if (parms == null || parms.Length == 0)
+				throw new ParseException (location, message, inner);
+			else
+				throw new ParseException (location, String.Format (message, parms), inner);
 		}
 
 		internal void ThrowParseFileNotFound (string path, params object[] parms)
@@ -150,13 +187,12 @@ namespace System.Web.UI
 			}
 		}
 
-#if NET_2_0
 		internal TSection GetConfigSection <TSection> (string section) where TSection: global::System.Configuration.ConfigurationSection
 		{
 			VirtualPath vpath = VirtualPath;
 			string vp = vpath != null ? vpath.Absolute : null;
 			if (vp == null)
-				return WebConfigurationManager.GetWebApplicationSection (section) as TSection;
+				return WebConfigurationManager.GetSection (section) as TSection;
 			else
 				return WebConfigurationManager.GetSection (section, vp) as TSection;
 		}
@@ -169,17 +205,6 @@ namespace System.Web.UI
 		internal CompilationSection CompilationConfig {
 			get { return GetConfigSection <CompilationSection> ("system.web/compilation"); }
 		}
-
-#else
-		internal CompilationConfiguration CompilationConfig {
-			get {
-				if (compilationConfig == null)
-					compilationConfig = CompilationConfiguration.GetInstance (context);
-
-				return compilationConfig;
-			}
-		}
-#endif
 	}
 }
 

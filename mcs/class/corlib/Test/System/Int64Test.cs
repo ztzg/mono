@@ -309,6 +309,16 @@ public class Int64Test
 	} catch (Exception e) {
 		Assert.IsTrue(typeof(OverflowException) == e.GetType(), "#20");
 	}
+
+	// Pass a DateTimeFormatInfo, it is unable to format
+	// numbers, but we should not crash
+	
+	Int64.Parse ("123", new DateTimeFormatInfo ());
+	
+	Assert.AreEqual (734561, Int64.Parse ("734561\0"), "#21");
+	Assert.AreEqual (734561, Int64.Parse ("734561\0\0\0    \0"), "#22");
+	Assert.AreEqual (734561, Int64.Parse ("734561\0\0\0    "), "#23");
+	Assert.AreEqual (734561, Int64.Parse ("734561\0\0\0"), "#24");
     }
 
 	[Test]

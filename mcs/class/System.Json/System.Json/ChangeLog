@@ -1,3 +1,48 @@
+2010-03-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : moved to Sys.SM.Web/Sys.R.S.Json.
+
+2010-03-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonValue.cs : use Sys.SM.Web.dll's JavaScriptObjectDeserializer
+	  for silverlight sdk / moonlight compatibility.
+	* JsonReader.cs : renamed to JavaScriptReader (for disambiguation in
+	  Sys.SM.Web.dll). Now it is native-type based and used by the above
+	  deserializer.
+
+2010-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonValue.cs : fix string escaping, it was giving wrong output
+	  after \" and \\.
+
+2010-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : line endings after a value should not result in
+	  a parse error.
+	* JsonObject.cs : duplicate object key "SHOULD" not be used, but
+	  they are not rejected. So, make it a bit sloppy.
+
+2010-01-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : oops, added previous change to wrong position.
+
+2010-01-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : It seems it can either return int, long or decimal
+	  depending on the value. Users cannot really predict what type of
+	  the primitive value can be returned and casts to specific types
+	  very likely fail. doh.
+
+2010-01-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : use decimal instead of int to parse decimal part
+	  of numeric value. It can parse bigger value than int now (like
+	  tweet id).
+
+2009-10-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* JsonReader.cs : \uXXXX parser was totally wrong, giving wrong #.
+
 2009-09-22  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* JsonValue.cs, JsonReader.cs, JsonPrimitive.cs :

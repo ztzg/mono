@@ -49,6 +49,7 @@ namespace System.Web.UI.WebControls {
 	[DefaultPropertyAttribute ("SelectQuery")]
 	[DesignerAttribute ("System.Web.UI.Design.WebControls.SqlDataSourceDesigner, " + Consts.AssemblySystem_Design, "System.ComponentModel.Design.IDesigner")]
 	[DefaultEventAttribute ("Selecting")]
+	[ToolboxBitmap ("")]
 	public class SqlDataSource : DataSourceControl {
 
 		static readonly string [] emptyNames = new string [] { "DefaultView" };
@@ -130,6 +131,7 @@ namespace System.Web.UI.WebControls {
 
 		protected internal override void OnInit (EventArgs e)
 		{
+			base.OnInit (e);
 			Page.LoadComplete += OnPageLoadComplete;
 		}
 
@@ -239,6 +241,9 @@ namespace System.Web.UI.WebControls {
 		// LAME SPEC: the event is raised on setting only when the old value is different
 		// from the new one
 		string connectionString = String.Empty;
+#if NET_4_0
+		[MergableProperty (false)]
+#endif
 		[EditorAttribute ("System.Web.UI.Design.WebControls.SqlDataSourceConnectionStringEditor, " + Consts.AssemblySystem_Design, "System.Drawing.Design.UITypeEditor, " + Consts.AssemblySystem_Drawing)]
 		[DefaultValueAttribute ("")]
 		public virtual string ConnectionString {
@@ -364,6 +369,7 @@ namespace System.Web.UI.WebControls {
 			set { sqlCacheDependency = value; }
 		}
 
+		[TypeConverter ("System.Web.UI.DataSourceCacheDurationConverter")]
 		[DefaultValue (0)]
 		public virtual int CacheDuration {
 			get { return cacheDuration; }

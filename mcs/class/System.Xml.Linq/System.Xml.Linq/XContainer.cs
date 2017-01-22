@@ -205,14 +205,24 @@ namespace System.Xml.Linq
 
 		public void ReplaceNodes (object content)
 		{
+			// First, it creates a snapshot copy, then removes the contents, and then adds the copy. http://msdn.microsoft.com/en-us/library/system.xml.linq.xcontainer.replacenodes.aspx
+
+			if (FirstNode == null) {
+				Add (content);
+				return;
+			}
+
+			var l = new List<object> ();
+			foreach (var obj in XUtil.ExpandArray (content))
+				l.Add (obj);
+
 			RemoveNodes ();
-			Add (content);
+			Add (l);
 		}
 
 		public void ReplaceNodes (params object [] content)
 		{
-			RemoveNodes ();
-			Add (content);
+			ReplaceNodes ((object) content);
 		}
 	}
 }

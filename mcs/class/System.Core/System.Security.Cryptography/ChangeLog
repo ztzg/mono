@@ -1,3 +1,12 @@
+2010-03-18  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Aes.cs: Build here before NET_4_0 (or MOONLIGHT) otherwise 
+	build only if compiled from mscorlib.dll
+
+2009-11-12  Jb Evain  <jbevain@novell.com>
+
+	* Aes.cs: avoid using an hardcoded assembly version for System.Core.
+
 2009-07-20  Sebastien Pouliot  <sebastien@ximian.com>
 
 	* Aes.cs: Use the fully qualified name since this is not a type known

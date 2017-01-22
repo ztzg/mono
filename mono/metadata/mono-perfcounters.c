@@ -12,16 +12,31 @@
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#if defined (__OpenBSD__)
+#include <sys/param.h>
+#endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
+#if defined (__NetBSD__) || defined (__APPLE__)
+#include <sys/sysctl.h>
+#endif
 #include "metadata/mono-perfcounters.h"
 #include "metadata/appdomain.h"
+#include "metadata/object-internals.h"
 /* for mono_stats */
 #include "metadata/class-internals.h"
 #include "utils/mono-time.h"
 #include "utils/mono-mmap.h"
 #include "utils/mono-proclib.h"
+#include "utils/mono-networkinterfaces.h"
+#include "utils/mono-error-internals.h"
 #include <mono/io-layer/io-layer.h>
 
 /* map of CounterSample.cs */
@@ -98,6 +113,7 @@ enum {
 	ThreadInstance,
 	CPUInstance,
 	MonoInstance,
+	NetworkInterfaceInstance,
 	CustomInstance
 };
 
@@ -283,6 +299,11 @@ struct _ImplVtable {
 };
 
 typedef struct {
+	int id;
+	char *name;
+} NetworkVtableArg;
+
+typedef struct {
 	ImplVtable vtable;
 	MonoPerfCounters *counters;
 	int pid;
@@ -369,6 +390,60 @@ predef_cleanup (ImplVtable *vtable)
 	}
 	unref_pid_unlocked (vt->pid);
 	perfctr_unlock ();
+}
+
+static guint64
+mono_determine_physical_ram_size (void)
+{
+#if defined (TARGET_WIN32)
+	MEMORYSTATUSEX memstat;
+
+	memstat.dwLength = sizeof (memstat);
+	GlobalMemoryStatusEx (&memstat);
+	return (guint64)memstat.ullTotalPhys;
+#elif defined (__NetBSD__) || defined (__APPLE__)
+#ifdef __NetBSD__
+	unsigned long value;
+#else
+	guint64 value;
+#endif
+	int mib[2] = {
+		CTL_HW,
+#ifdef __NetBSD__
+		HW_PHYSMEM
+#else
+		HW_MEMSIZE
+#endif
+	};
+	size_t size_sys = sizeof (value);
+
+	sysctl (mib, 2, &value, &size_sys, NULL, 0);
+	if (value == 0)
+		return 134217728;
+
+	return (guint64)value;
+#elif defined (HAVE_SYSCONF)
+	guint64 page_size = 0, num_pages = 0;
+
+	/* sysconf works on most *NIX operating systems, if your system doesn't have it or if it
+	 * reports invalid values, please add your OS specific code below. */
+#ifdef _SC_PAGESIZE
+	page_size = (guint64)sysconf (_SC_PAGESIZE);
+#endif
+
+#ifdef _SC_PHYS_PAGES
+	num_pages = (guint64)sysconf (_SC_PHYS_PAGES);
+#endif
+
+	if (!page_size || !num_pages) {
+		g_warning ("Your operating system's sysconf (3) function doesn't correctly report physical memory size!");
+		return 134217728;
+	}
+
+	return page_size * num_pages;
+#else
+	return 134217728;
+#endif
 }
 
 void
@@ -686,6 +761,74 @@ cpu_get_impl (MonoString* counter, MonoString* instance, int *type, MonoBoolean 
 }
 
 static MonoBoolean
+get_network_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounterSample *sample)
+{
+	MonoNetworkError error = MONO_NETWORK_ERROR_OTHER;
+	NetworkVtableArg *narg = (NetworkVtableArg*) vtable->arg;
+	if (!only_value) {
+		fill_sample (sample);
+	}
+
+	sample->counterType = predef_counters [predef_categories [CATEGORY_NETWORK].first_counter + narg->id].type;
+	switch (narg->id) {
+	case COUNTER_NETWORK_BYTESRECSEC:
+		sample->rawValue = mono_network_get_data (narg->name, MONO_NETWORK_BYTESREC, &error);
+		break;
+	case COUNTER_NETWORK_BYTESSENTSEC:
+		sample->rawValue = mono_network_get_data (narg->name, MONO_NETWORK_BYTESSENT, &error);
+		break;
+	case COUNTER_NETWORK_BYTESTOTALSEC:
+		sample->rawValue = mono_network_get_data (narg->name, MONO_NETWORK_BYTESTOTAL, &error);
+		break;
+	}
+
+	if (error == MONO_NETWORK_ERROR_NONE)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+static void
+network_cleanup (ImplVtable *vtable)
+{
+	NetworkVtableArg *narg;
+
+	if (vtable == NULL)
+		return;
+
+	narg = vtable->arg;
+	if (narg == NULL)
+		return;
+
+	g_free (narg->name);
+	narg->name = NULL;
+	g_free (narg);
+	vtable->arg = NULL;
+}
+
+static void*
+network_get_impl (MonoString* counter, MonoString* instance, int *type, MonoBoolean *custom)
+{
+	const CounterDesc *cdesc;
+	NetworkVtableArg *narg;
+	ImplVtable *vtable;
+	char *instance_name;
+
+	*custom = FALSE;
+	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_NETWORK], counter))) {
+		instance_name = mono_string_to_utf8 (instance);
+		narg = g_new0 (NetworkVtableArg, 1);
+		narg->id = cdesc->id;
+		narg->name = instance_name;
+		*type = cdesc->type;
+		vtable = create_vtable (narg, get_network_counter, NULL);
+		vtable->cleanup = network_cleanup;
+		return vtable;
+	}
+	return NULL;
+}
+
+static MonoBoolean
 get_process_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounterSample *sample)
 {
 	int id = GPOINTER_TO_INT (vtable->arg);
@@ -751,6 +894,9 @@ mono_mem_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounterSample 
 	switch (id) {
 	case COUNTER_MEM_NUM_OBJECTS:
 		sample->rawValue = mono_stats.new_object_count;
+		return TRUE;
+	case COUNTER_MEM_PHYS_TOTAL:
+		sample->rawValue = mono_determine_physical_ram_size ();;
 		return TRUE;
 	}
 	return FALSE;
@@ -844,6 +990,22 @@ predef_writable_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounter
 			return TRUE;
 		}
 		break;
+	case CATEGORY_THREADPOOL:
+		switch (id) {
+		case COUNTER_THREADPOOL_WORKITEMS:
+			sample->rawValue = mono_perfcounters->threadpool_workitems;
+			return TRUE;
+		case COUNTER_THREADPOOL_IOWORKITEMS:
+			sample->rawValue = mono_perfcounters->threadpool_ioworkitems;
+			return TRUE;
+		case COUNTER_THREADPOOL_THREADS:
+			sample->rawValue = mono_perfcounters->threadpool_threads;
+			return TRUE;
+		case COUNTER_THREADPOOL_IOTHREADS:
+			sample->rawValue = mono_perfcounters->threadpool_iothreads;
+			return TRUE;
+		}
+		break;
 	}
 	return FALSE;
 }
@@ -851,7 +1013,8 @@ predef_writable_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounter
 static gint64
 predef_writable_update (ImplVtable *vtable, MonoBoolean do_incr, gint64 value)
 {
-	guint32 *ptr = NULL;
+	guint32 *volatile ptr = NULL;
+	gint64 *volatile ptr64 = NULL;
 	int cat_id = GPOINTER_TO_INT (vtable->arg);
 	int id = cat_id >> 16;
 	cat_id &= 0xffff;
@@ -862,15 +1025,44 @@ predef_writable_update (ImplVtable *vtable, MonoBoolean do_incr, gint64 value)
 		case COUNTER_ASPNET_REQ_TOTAL: ptr = &mono_perfcounters->aspnet_requests; break;
 		}
 		break;
+	case CATEGORY_THREADPOOL:
+		switch (id) {
+		case COUNTER_THREADPOOL_WORKITEMS: ptr64 = (gint64 *) &mono_perfcounters->threadpool_workitems; break;
+		case COUNTER_THREADPOOL_IOWORKITEMS: ptr64 = (gint64 *) &mono_perfcounters->threadpool_ioworkitems; break;
+		case COUNTER_THREADPOOL_THREADS: ptr = &mono_perfcounters->threadpool_threads; break;
+		case COUNTER_THREADPOOL_IOTHREADS: ptr = &mono_perfcounters->threadpool_iothreads; break;
+		}
+		break;
 	}
 	if (ptr) {
 		if (do_incr) {
-			/* FIXME: we need to do this atomically */
+			if (value == 1)
+				return InterlockedIncrement ((gint32 *) ptr); /* FIXME: sign */
+			if (value == -1)
+				return InterlockedDecrement ((gint32 *) ptr); /* FIXME: sign */
+
 			*ptr += value;
 			return *ptr;
 		}
 		/* this can be non-atomic */
 		*ptr = value;
+		return value;
+	} else if (ptr64) {
+		if (do_incr) {
+			/* FIXME: we need to do this atomically */
+			/* No InterlockedIncrement64() yet */
+			/*
+			if (value == 1)
+				return InterlockedIncrement64 (ptr);
+			if (value == -1)
+				return InterlockedDecrement64 (ptr);
+			*/
+
+			*ptr64 += value;
+			return *ptr64;
+		}
+		/* this can be non-atomic */
+		*ptr64 = value;
 		return value;
 	}
 	return 0;
@@ -1033,6 +1225,8 @@ mono_perfcounter_get_impl (MonoString* category, MonoString* counter, MonoString
 		return process_get_impl (counter, instance, type, custom);
 	case CATEGORY_MONO_MEM:
 		return mono_mem_get_impl (counter, instance, type, custom);
+	case CATEGORY_NETWORK:
+		return network_get_impl (counter, instance, type, custom);
 	case CATEGORY_JIT:
 	case CATEGORY_EXC:
 	case CATEGORY_GC:
@@ -1042,6 +1236,7 @@ mono_perfcounter_get_impl (MonoString* category, MonoString* counter, MonoString
 	case CATEGORY_INTEROP:
 	case CATEGORY_SECURITY:
 	case CATEGORY_ASPNET:
+	case CATEGORY_THREADPOOL:
 		return predef_writable_get_impl (cdesc->id, counter, instance, type, custom);
 	}
 	return NULL;
@@ -1158,27 +1353,37 @@ typedef struct {
 MonoBoolean
 mono_perfcounter_create (MonoString *category, MonoString *help, int type, MonoArray *items)
 {
+	MonoError error;
 	int result = FALSE;
 	int i, size;
 	int num_counters = mono_array_length (items);
 	int counters_data_size;
-	char *name;
-	char *chelp;
-	char **counter_info;
+	char *name = NULL;
+	char *chelp = NULL;
+	char **counter_info = NULL;
 	unsigned char *ptr;
 	char *p;
 	SharedCategory *cat;
 
 	/* FIXME: ensure there isn't a category created already */
-	name = mono_string_to_utf8 (category);
-	chelp = mono_string_to_utf8 (help);
+	mono_error_init (&error);
+	name = mono_string_to_utf8_checked (category, &error);
+	if (!mono_error_ok (&error))
+		goto failure;
+	chelp = mono_string_to_utf8_checked (help, &error);
+	if (!mono_error_ok (&error))
+		goto failure;
 	counter_info = g_new0 (char*, num_counters * 2);
 	/* calculate the size we need structure size + name/help + 2 0 string terminators */
 	size = G_STRUCT_OFFSET (SharedCategory, name) + strlen (name) + strlen (chelp) + 2;
 	for (i = 0; i < num_counters; ++i) {
 		CounterCreationData *data = mono_array_get (items, CounterCreationData*, i);
-		counter_info [i * 2] = mono_string_to_utf8 (data->name);
-		counter_info [i * 2 + 1] = mono_string_to_utf8 (data->help);
+		counter_info [i * 2] = mono_string_to_utf8_checked (data->name, &error);
+		if (!mono_error_ok (&error))
+			goto failure;
+		counter_info [i * 2 + 1] = mono_string_to_utf8_checked (data->help, &error);
+		if (!mono_error_ok (&error))
+			goto failure;
 		size += sizeof (SharedCounter) + 1; /* 1 is for the help 0 terminator */
 	}
 	for (i = 0; i < num_counters * 2; ++i) {
@@ -1223,12 +1428,15 @@ mono_perfcounter_create (MonoString *category, MonoString *help, int type, MonoA
 	perfctr_unlock ();
 	result = TRUE;
 failure:
-	for (i = 0; i < num_counters * 2; ++i) {
-		g_free (counter_info [i]);
+	if (counter_info) {
+		for (i = 0; i < num_counters * 2; ++i) {
+			g_free (counter_info [i]);
+		}
+		g_free (counter_info);
 	}
-	g_free (counter_info);
 	g_free (name);
 	g_free (chelp);
+	mono_error_cleanup (&error);
 	return result;
 }
 
@@ -1343,6 +1551,20 @@ get_string_array (void **array, int count, gboolean is_process)
 }
 
 static MonoArray*
+get_string_array_of_strings (void **array, int count)
+{
+	int i;
+	MonoDomain *domain = mono_domain_get ();
+	MonoArray * res = mono_array_new (mono_domain_get (), mono_get_string_class (), count);
+	for (i = 0; i < count; ++i) {
+		char* p = array[i];
+		mono_array_setref (res, i, mono_string_new (domain, p));
+	}
+
+	return res;
+}
+
+static MonoArray*
 get_mono_instances (void)
 {
 	int count = 64;
@@ -1366,12 +1588,14 @@ get_cpu_instances (void)
 	void **buf = NULL;
 	int i, count;
 	MonoArray *array;
-	count = mono_cpu_count ();
+
+	count = mono_cpu_count () + 1; /* +1 for "_Total" */
 	buf = g_new (void*, count);
 	for (i = 0; i < count; ++i)
-		buf [i] = GINT_TO_POINTER (i);
+		buf [i] = GINT_TO_POINTER (i - 1); /* -1 => _Total */
 	array = get_string_array (buf, count, FALSE);
 	g_free (buf);
+	mono_array_setref (array, 0, mono_string_new (mono_domain_get (), "_Total"));
 	return array;
 }
 
@@ -1385,6 +1609,19 @@ get_processes_instances (void)
 		return get_string_array (NULL, 0, FALSE);
 	array = get_string_array (buf, count, TRUE);
 	g_free (buf);
+	return array;
+}
+
+static MonoArray*
+get_networkinterface_instances (void)
+{
+	MonoArray *array;
+	int count = 0;
+	void **buf = mono_networkinterface_list (&count);
+	if (!buf)
+		return get_string_array_of_strings (NULL, 0);
+	array = get_string_array_of_strings (buf, count);
+	g_strfreev ((char **) buf);
 	return array;
 }
 
@@ -1425,6 +1662,8 @@ mono_perfcounter_instance_names (MonoString *category, MonoString *machine)
 		return get_cpu_instances ();
 	case ProcessInstance:
 		return get_processes_instances ();
+	case NetworkInterfaceInstance:
+		return get_networkinterface_instances ();
 	case ThreadInstance:
 	default:
 		return mono_array_new (mono_domain_get (), mono_get_string_class (), 0);

@@ -41,14 +41,13 @@ namespace System.CodeDom
 	{
 		private CodeTypeReferenceCollection implementationTypes;
 		private CodeParameterDeclarationExpressionCollection parameters;
-		private CodeTypeReference privateImplementationType;
+		private CodeTypeReference privateImplements;
 		private CodeTypeReference returnType;
 		private CodeStatementCollection statements;
-		private CodeAttributeDeclarationCollection returnTypeCustomAttributes;
+		private CodeAttributeDeclarationCollection returnAttributes;
+		//int populated;
 
-#if NET_2_0
 		CodeTypeParameterCollection typeParameters;
-#endif
 		//
 		// Constructors
 		//
@@ -83,10 +82,10 @@ namespace System.CodeDom
 
 		public CodeTypeReference PrivateImplementationType {
 			get {
-				return privateImplementationType;
+				return privateImplements;
 			}
 			set {
-				privateImplementationType = value;
+				privateImplements = value;
 			}
 		}
 
@@ -114,14 +113,13 @@ namespace System.CodeDom
 
 		public CodeAttributeDeclarationCollection ReturnTypeCustomAttributes {
 			get {
-				if ( returnTypeCustomAttributes == null )
-					returnTypeCustomAttributes = new CodeAttributeDeclarationCollection();
+				if ( returnAttributes == null )
+					returnAttributes = new CodeAttributeDeclarationCollection();
 				
-				return returnTypeCustomAttributes;
+				return returnAttributes;
 			}
 		}
 
-#if NET_2_0
 		[ComVisible (false)]
 		public CodeTypeParameterCollection TypeParameters {
 			get {
@@ -130,7 +128,6 @@ namespace System.CodeDom
 				return typeParameters;
 			}
 		}
-#endif
 
 		//
 		// Events

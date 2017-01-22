@@ -277,6 +277,9 @@ using Id = System.Int32;
             }
         }
 
+#if !DEBUG && POSTGRES
+        [Explicit]
+#endif
         [Test]
         public void F12_ConcatString_2()
         {
@@ -373,6 +376,9 @@ using Id = System.Int32;
             Assert.IsTrue(list.Count > 0);
         }
 
+#if !DEBUG && POSTGRES
+        [Explicit]
+#endif
         [Test(Description = "byte[] test")]
         public void F18_ByteArrayAssignmentTest()
         {
@@ -615,7 +621,7 @@ using Id = System.Int32;
             //int productCount = q.Count();
 
             var products = from p in db.Products
-                           where ids.Contains(p.ProductID)
+                           where ids.Contains((Id) p.ProductID)
                            select p;
 
             Assert.AreEqual(3, products.Count());

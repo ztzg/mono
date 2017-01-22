@@ -12,6 +12,7 @@
 #include "mono/metadata/opcodes.h"
 #include "mono/metadata/metadata-internals.h"
 #include "mono/metadata/class-internals.h"
+#include "mono/metadata/object-internals.h"
 #include "mono/metadata/mono-endian.h"
 #include "mono/metadata/debug-helpers.h"
 #include "mono/metadata/tabledefs.h"
@@ -84,6 +85,31 @@ append_class_name (GString *res, MonoClass *class, gboolean include_namespace)
 	if (include_namespace && *(class->name_space))
 		g_string_append_printf (res, "%s.", class->name_space);
 	g_string_append_printf (res, "%s", class->name);
+}
+
+static MonoClass*
+find_system_class (const char *name)
+{
+	if (!strcmp (name, "void")) 
+		return mono_defaults.void_class;
+	else if (!strcmp (name, "char")) return mono_defaults.char_class;
+	else if (!strcmp (name, "bool")) return mono_defaults.boolean_class;
+	else if (!strcmp (name, "byte")) return mono_defaults.byte_class;
+	else if (!strcmp (name, "sbyte")) return mono_defaults.sbyte_class;
+	else if (!strcmp (name, "uint16")) return mono_defaults.uint16_class;
+	else if (!strcmp (name, "int16")) return mono_defaults.int16_class;
+	else if (!strcmp (name, "uint")) return mono_defaults.uint32_class;
+	else if (!strcmp (name, "int")) return mono_defaults.int32_class;
+	else if (!strcmp (name, "ulong")) return mono_defaults.uint64_class;
+	else if (!strcmp (name, "long")) return mono_defaults.int64_class;
+	else if (!strcmp (name, "uintptr")) return mono_defaults.uint_class;
+	else if (!strcmp (name, "intptr")) return mono_defaults.int_class;
+	else if (!strcmp (name, "single")) return mono_defaults.single_class;
+	else if (!strcmp (name, "double")) return mono_defaults.double_class;
+	else if (!strcmp (name, "string")) return mono_defaults.string_class;
+	else if (!strcmp (name, "object")) return mono_defaults.object_class;
+	else
+		return NULL;
 }
 
 void
@@ -181,6 +207,9 @@ mono_type_get_desc (GString *res, MonoType *type, gboolean include_namespace)
 			g_string_append (res, "<unknown>");
 		}
 		break;
+	case MONO_TYPE_TYPEDBYREF:
+		g_string_append (res, "typedbyref");
+		break;
 	default:
 		break;
 	}
@@ -192,14 +221,10 @@ char*
 mono_type_full_name (MonoType *type)
 {
 	GString *str;
-	char *res;
 
 	str = g_string_new ("");
 	mono_type_get_desc (str, type, TRUE);
-
-	res = g_strdup (str->str);
-	g_string_free (str, TRUE);
-	return res;
+	return g_string_free (str, FALSE);
 }
 
 char*
@@ -207,7 +232,12 @@ mono_signature_get_desc (MonoMethodSignature *sig, gboolean include_namespace)
 {
 	int i;
 	char *result;
-	GString *res = g_string_new ("");
+	GString *res;
+
+	if (!sig)
+		return g_strdup ("<invalid signature>");
+
+	res = g_string_new ("");
 
 	for (i = 0; i < sig->param_count; ++i) {
 		if (i > 0)
@@ -280,6 +310,9 @@ mono_method_desc_new (const char *name, gboolean include_namespace)
 	class_nspace = g_strdup (name);
 	use_args = strchr (class_nspace, '(');
 	if (use_args) {
+		/* Allow a ' ' between the method name and the signature */
+		if (use_args > class_nspace && use_args [-1] == ' ')
+			use_args [-1] = 0;
 		*use_args++ = 0;
 		end = strchr (use_args, ')');
 		if (!end) {
@@ -462,6 +495,13 @@ mono_method_desc_search_in_image (MonoMethodDesc *desc, MonoImage *image)
 	MonoMethod *method;
 	int i;
 
+	/* Handle short names for system classes */
+	if (!desc->namespace && image == mono_defaults.corlib) {
+		klass = find_system_class (desc->klass);
+		if (klass)
+			return mono_method_desc_search_in_class (desc, klass);
+	}
+
 	if (desc->namespace && desc->klass) {
 		klass = mono_class_from_name (image, desc->namespace, desc->klass);
 		if (!klass)
@@ -531,6 +571,7 @@ dis_one (GString *str, MonoDisHelper *dh, MonoMethod *method, const unsigned cha
 		const char *blob;
 		char *s;
 		size_t len2;
+		char *blob2 = NULL;
 
 		if (!method->klass->image->dynamic) {
 			token = read32 (ip);
@@ -539,22 +580,32 @@ dis_one (GString *str, MonoDisHelper *dh, MonoMethod *method, const unsigned cha
 			len2 = mono_metadata_decode_blob_size (blob, &blob);
 			len2 >>= 1;
 
+#ifdef NO_UNALIGNED_ACCESS
+			/* The blob might not be 2 byte aligned */
+			blob2 = g_malloc ((len2 * 2) + 1);
+			memcpy (blob2, blob, len2 * 2);
+#else
+			blob2 = (char*)blob;
+#endif
+
 #if G_BYTE_ORDER != G_LITTLE_ENDIAN
 			{
-				guint16 *buf = g_new (guint16, len2);
+				guint16 *buf = g_new (guint16, len2 + 1);
 				int i;
 
 				for (i = 0; i < len2; ++i)
-					buf [i] = GUINT16_FROM_LE (((guint16*)blob) [i]);
+					buf [i] = GUINT16_FROM_LE (((guint16*)blob2) [i]);
 				s = g_utf16_to_utf8 (buf, len2, NULL, NULL, NULL);
 				g_free (buf);
 			}
 #else
-				s = g_utf16_to_utf8 ((gunichar2*)blob, len2, NULL, NULL, NULL);
+				s = g_utf16_to_utf8 ((gunichar2*)blob2, len2, NULL, NULL, NULL);
 #endif
 
 			g_string_append_printf (str, "\"%s\"", s);
 			g_free (s);
+			if (blob != blob2)
+				g_free (blob2);
 		}
 		ip += 4;
 		break;
@@ -633,6 +684,7 @@ dis_one (GString *str, MonoDisHelper *dh, MonoMethod *method, const unsigned cha
 	if (dh->newline)
 		g_string_append (str, dh->newline);
 
+	mono_metadata_free_mh (header);
 	return ip;
 }
 
@@ -792,7 +844,7 @@ mono_object_describe (MonoObject *obj)
 		MonoArray *array = (MonoArray*)obj;
 		sep = print_name_space (klass);
 		g_print ("%s%s", sep, klass->name);
-		g_print (" at %p, rank: %d, length: %d\n", obj, klass->rank, mono_array_length (array));
+		g_print (" at %p, rank: %d, length: %d\n", obj, klass->rank, (int)mono_array_length (array));
 	} else {
 		sep = print_name_space (klass);
 		g_print ("%s%s", sep, klass->name);

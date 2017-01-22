@@ -40,12 +40,11 @@ using Mono.Globalization.Unicode;
 
 namespace System.Globalization
 {
-#if NET_2_0
-	[ComVisible (true)]
-#endif
 	[Serializable]
-	public class CompareInfo : IDeserializationCallback
-	{
+#if !MOONLIGHT
+	[ComVisible (true)]
+	public class CompareInfo : IDeserializationCallback {
+
 		static readonly bool useManagedCollation =
 			Environment.internalGetEnvironmentVariable ("MONO_DISABLE_MANAGED_COLLATION")
 			!= "yes" && MSCompatUnicodeTable.IsReady;
@@ -53,6 +52,63 @@ namespace System.Globalization
 		internal static bool UseManagedCollation {
 			get { return useManagedCollation; }
 		}
+
+		void IDeserializationCallback.OnDeserialization(object sender)
+		{
+			if (UseManagedCollation) {
+				collator = new SimpleCollator (new CultureInfo (culture));
+			} else {
+				/* This will build the ICU collator, and store
+				 * the pointer in ICU_collator
+				 */
+				try {
+					this.construct_compareinfo (icu_name);
+				} catch {
+				//	ICU_collator=IntPtr.Zero;
+				}
+			}
+		}
+
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern void construct_compareinfo (string locale);
+
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern void free_internal_collator ();
+
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern int internal_compare (string str1, int offset1,
+						     int length1, string str2,
+						     int offset2, int length2,
+						     CompareOptions options);
+
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern void assign_sortkey (object key, string source,
+						    CompareOptions options);
+
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern int internal_index (string source, int sindex,
+						   int count, char value,
+						   CompareOptions options,
+						   bool first);
+
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		private extern int internal_index (string source, int sindex,
+						   int count, string value,
+						   CompareOptions options,
+						   bool first);
+
+#else
+	public class CompareInfo {
+		internal static bool UseManagedCollation {
+			get { return true; }
+		}
+#endif
+		const CompareOptions ValidCompareOptions_NoStringSort =
+			CompareOptions.None | CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace |
+			CompareOptions.IgnoreSymbols | CompareOptions.IgnoreKanaType | CompareOptions.IgnoreWidth |
+			CompareOptions.OrdinalIgnoreCase | CompareOptions.Ordinal;
+
+		const CompareOptions ValidCompareOptions = ValidCompareOptions_NoStringSort | CompareOptions.StringSort;
 
 		// Keep in synch with MonoCompareInfo in the runtime. 
 		private int culture;
@@ -63,9 +119,7 @@ namespace System.Globalization
 
 #pragma warning disable 169		
 		private int win32LCID;	// Unused, but MS.NET serializes this
-#if NET_2_0
 		private string m_name; // Unused, but MS.NET serializes this
-#endif
 #pragma warning restore 169
 
 		[NonSerialized]
@@ -81,9 +135,6 @@ namespace System.Globalization
 		/* Hide the .ctor() */
 		CompareInfo() {}
 		
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private extern void construct_compareinfo (string locale);
-		
 		internal CompareInfo (CultureInfo ci)
 		{
 			this.culture = ci.LCID;
@@ -98,25 +149,21 @@ namespace System.Globalization
 					}
 				}
 			} else {
+#if !MOONLIGHT
 				this.icu_name = ci.IcuName;
 				this.construct_compareinfo (icu_name);
+#endif
 			}
 		}
-		
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private extern void free_internal_collator ();
 
 		~CompareInfo ()
 		{
+#if !MOONLIGHT
 			free_internal_collator ();
+#endif
 		}
 
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private extern int internal_compare (string str1, int offset1,
-						     int length1, string str2,
-						     int offset2, int length2,
-						     CompareOptions options);
-
+#if !MOONLIGHT
 		private int internal_compare_managed (string str1, int offset1,
 						int length1, string str2,
 						int offset2, int length2,
@@ -137,29 +184,27 @@ namespace System.Globalization
 				internal_compare (str1, offset1, length1,
 				str2, offset2, length2, options);
 		}
-
+#else
+		private int internal_compare_switch (string str1, int offset1,
+						int length1, string str2,
+						int offset2, int length2,
+						CompareOptions options)
+		{
+			return collator.Compare (str1, offset1, length1,
+				str2, offset2, length2, options);
+		}
+#endif
 		public virtual int Compare (string string1, string string2)
 		{
-			if (string1 == null) {
-				if (string2 == null)
-					return 0;
-				return -1;
-			}
-			if (string2 == null)
-				return 1;
-				
-			/* Short cut... */
-			if(string1.Length == 0 && string2.Length == 0)
-				return(0);
-
-			return(internal_compare_switch (string1, 0, string1.Length,
-						 string2, 0, string2.Length,
-						 CompareOptions.None));
+			return Compare (string1, string2, CompareOptions.None);
 		}
 
 		public virtual int Compare (string string1, string string2,
 					    CompareOptions options)
 		{
+			if ((options & ValidCompareOptions) != options)
+				throw new ArgumentException ("options");
+
 			if (string1 == null) {
 				if (string2 == null)
 					return 0;
@@ -180,46 +225,16 @@ namespace System.Globalization
 		public virtual int Compare (string string1, int offset1,
 					    string string2, int offset2)
 		{
-			if (string1 == null) {
-				if (string2 == null)
-					return 0;
-				return -1;
-			}
-			if (string2 == null)
-				return 1;
-
-			/* Not in the spec, but ms does these short
-			 * cuts before checking the offsets (breaking
-			 * the offset >= string length specified check
-			 * in the process...)
-			 */
-			if ((string1.Length == 0 || offset1 == string1.Length) &&
-				(string2.Length == 0 || offset2 == string2.Length))
-				return(0);
-
-			if(offset1 < 0 || offset2 < 0) {
-				throw new ArgumentOutOfRangeException ("Offsets must not be less than zero");
-			}
-			
-			if(offset1 > string1.Length) {
-				throw new ArgumentOutOfRangeException ("Offset1 is greater than or equal to the length of string1");
-			}
-			
-			if(offset2 > string2.Length) {
-				throw new ArgumentOutOfRangeException ("Offset2 is greater than or equal to the length of string2");
-			}
-			
-			return(internal_compare_switch (string1, offset1,
-						 string1.Length-offset1,
-						 string2, offset2,
-						 string2.Length-offset2,
-						 CompareOptions.None));
+			return Compare (string1, offset1, string2, offset2, CompareOptions.None);
 		}
 
 		public virtual int Compare (string string1, int offset1,
 					    string string2, int offset2,
 					    CompareOptions options)
 		{
+			if ((options & ValidCompareOptions) != options)
+				throw new ArgumentException ("options");
+
 			if (string1 == null) {
 				if (string2 == null)
 					return 0;
@@ -252,7 +267,7 @@ namespace System.Globalization
 			return(internal_compare_switch (string1, offset1,
 						 string1.Length-offset1,
 						 string2, offset2,
-						 string2.Length-offset1,
+						 string2.Length-offset2,
 						 options));
 		}
 
@@ -260,51 +275,7 @@ namespace System.Globalization
 					    int length1, string string2,
 					    int offset2, int length2)
 		{
-			if (string1 == null) {
-				if (string2 == null)
-					return 0;
-				return -1;
-			}
-			if (string2 == null)
-				return 1;
-
-			/* Not in the spec, but ms does these short
-			 * cuts before checking the offsets (breaking
-			 * the offset >= string length specified check
-			 * in the process...)
-			 */
-			if((string1.Length == 0 ||
-				offset1 == string1.Length ||
-				length1 == 0) &&
-				(string2.Length == 0 ||
-				offset2 == string2.Length ||
-				length2 == 0))
-				return(0);
-
-			if(offset1 < 0 || length1 < 0 ||
-			   offset2 < 0 || length2 < 0) {
-				throw new ArgumentOutOfRangeException ("Offsets and lengths must not be less than zero");
-			}
-			
-			if(offset1 > string1.Length) {
-				throw new ArgumentOutOfRangeException ("Offset1 is greater than or equal to the length of string1");
-			}
-			
-			if(offset2 > string2.Length) {
-				throw new ArgumentOutOfRangeException ("Offset2 is greater than or equal to the length of string2");
-			}
-			
-			if(length1 > string1.Length-offset1) {
-				throw new ArgumentOutOfRangeException ("Length1 is greater than the number of characters from offset1 to the end of string1");
-			}
-			
-			if(length2 > string2.Length-offset2) {
-				throw new ArgumentOutOfRangeException ("Length2 is greater than the number of characters from offset2 to the end of string2");
-			}
-			
-			return(internal_compare_switch (string1, offset1, length1,
-						 string2, offset2, length2,
-						 CompareOptions.None));
+			return Compare (string1, offset1, length1, string2, offset2, length2, CompareOptions.None);
 		}
 
 		public virtual int Compare (string string1, int offset1,
@@ -312,6 +283,9 @@ namespace System.Globalization
 					    int offset2, int length2,
 					    CompareOptions options)
 		{
+			if ((options & ValidCompareOptions) != options)
+				throw new ArgumentException ("options");
+
 			if (string1 == null) {
 				if (string2 == null)
 					return 0;
@@ -421,10 +395,6 @@ namespace System.Globalization
 		{
 			return(LCID);
 		}
-
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private extern void assign_sortkey (object key, string source,
-						    CompareOptions options);
 		
 		public virtual SortKey GetSortKey(string source)
 		{
@@ -434,13 +404,12 @@ namespace System.Globalization
 		public virtual SortKey GetSortKey(string source,
 						  CompareOptions options)
 		{
-#if NET_2_0
 			switch (options) {
 			case CompareOptions.Ordinal:
 			case CompareOptions.OrdinalIgnoreCase:
 				throw new ArgumentException ("Now allowed CompareOptions.", "options");
 			}
-#endif
+#if !MOONLIGHT
 			if (UseManagedCollation)
 				return collator.GetSortKey (source, options);
 			SortKey key=new SortKey (culture, source, options);
@@ -452,6 +421,9 @@ namespace System.Globalization
 			assign_sortkey (key, source, options);
 			
 			return(key);
+#else
+			return collator.GetSortKey (source, options);
+#endif
 		}
 
 		public virtual int IndexOf (string source, char value)
@@ -526,12 +498,7 @@ namespace System.Globalization
 					CompareOptions.None));
 		}
 
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private extern int internal_index (string source, int sindex,
-						   int count, char value,
-						   CompareOptions options,
-						   bool first);
-
+#if !MOONLIGHT
 		private int internal_index_managed (string s, int sindex,
 			int count, char c, CompareOptions opt,
 			bool first)
@@ -553,6 +520,16 @@ namespace System.Globalization
 				internal_index_managed (s, sindex, count, c, opt, first) :
 				internal_index (s, sindex, count, c, opt, first);
 		}
+#else
+		private int internal_index_switch (string s, int sindex,
+			int count, char c, CompareOptions opt,
+			bool first)
+		{
+			return first ?
+				collator.IndexOf (s, c, sindex, count, opt) :
+				collator.LastIndexOf (s, c, sindex, count, opt);
+		}
+#endif
 
 		public virtual int IndexOf (string source, char value,
 					    int startIndex, int count,
@@ -567,9 +544,8 @@ namespace System.Globalization
 			if(count<0 || (source.Length - startIndex) < count) {
 				throw new ArgumentOutOfRangeException ("count");
 			}
-			if((options & CompareOptions.StringSort)!=0) {
-				throw new ArgumentException ("StringSort is not a valid CompareOption for this method");
-			}
+			if ((options & ValidCompareOptions_NoStringSort) != options)
+				throw new ArgumentException ("options");
 			
 			if(count==0) {
 				return(-1);
@@ -591,12 +567,7 @@ namespace System.Globalization
 			}
 		}
 
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private extern int internal_index (string source, int sindex,
-						   int count, string value,
-						   CompareOptions options,
-						   bool first);
-
+#if !MOONLIGHT
 		private int internal_index_managed (string s1, int sindex,
 			int count, string s2, CompareOptions opt,
 			bool first)
@@ -618,6 +589,16 @@ namespace System.Globalization
 				internal_index_managed (s1, sindex, count, s2, opt, first) :
 				internal_index (s1, sindex, count, s2, opt, first);
 		}
+#else
+		private int internal_index_switch (string s1, int sindex,
+			int count, string s2, CompareOptions opt,
+			bool first)
+		{
+			return first ?
+				collator.IndexOf (s1, s2, sindex, count, opt) :
+				collator.LastIndexOf (s1, s2, sindex, count, opt);
+		}
+#endif
 
 		public virtual int IndexOf (string source, string value,
 					    int startIndex, int count,
@@ -635,8 +616,10 @@ namespace System.Globalization
 			if(count<0 || (source.Length - startIndex) < count) {
 				throw new ArgumentOutOfRangeException ("count");
 			}
+			if ((options & ValidCompareOptions_NoStringSort) != options)
+				throw new ArgumentException ("options");
 			if(value.Length==0) {
-				return(0);
+				return(startIndex);
 			}
 			if(count==0) {
 				return(-1);
@@ -660,6 +643,9 @@ namespace System.Globalization
 			if(prefix == null) {
 				throw new ArgumentNullException("prefix");
 			}
+
+			if ((options & ValidCompareOptions_NoStringSort) != options)
+				throw new ArgumentException ("options");
 
 			if (UseManagedCollation)
 				return collator.IsPrefix (source, prefix, options);
@@ -687,6 +673,9 @@ namespace System.Globalization
 			if(suffix == null) {
 				throw new ArgumentNullException("suffix");
 			}
+
+			if ((options & ValidCompareOptions_NoStringSort) != options)
+				throw new ArgumentException ("options");
 
 			if (UseManagedCollation)
 				return collator.IsSuffix (source, suffix, options);
@@ -788,9 +777,8 @@ namespace System.Globalization
 			if(count < 0 || (startIndex - count) < -1) {
 				throw new ArgumentOutOfRangeException("count");
 			}
-			if((options & CompareOptions.StringSort)!=0) {
-				throw new ArgumentException ("StringSort is not a valid CompareOption for this method");
-			}
+			if ((options & ValidCompareOptions_NoStringSort) != options)
+				throw new ArgumentException ("options");
 			
 			if(count==0) {
 				return(-1);
@@ -828,6 +816,8 @@ namespace System.Globalization
 			if(count < 0 || (startIndex - count) < -1) {
 				throw new ArgumentOutOfRangeException("count");
 			}
+			if ((options & ValidCompareOptions_NoStringSort) != options)
+				throw new ArgumentException ("options");
 			if(count == 0) {
 				return(-1);
 			}
@@ -841,7 +831,6 @@ namespace System.Globalization
 					       value, options, false));
 		}
 
-#if NET_2_0
 		[ComVisible (false)]
 		public static bool IsSortable (char ch)
 		{
@@ -853,27 +842,10 @@ namespace System.Globalization
 		{
 			return MSCompatUnicodeTable.IsSortable (text);
 		}
-#endif
 
 		public override string ToString()
 		{
 			return("CompareInfo - "+culture);
-		}
-
-		void IDeserializationCallback.OnDeserialization(object sender)
-		{
-			if (UseManagedCollation) {
-				collator = new SimpleCollator (new CultureInfo (culture));
-			} else {
-				/* This will build the ICU collator, and store
-				 * the pointer in ICU_collator
-				 */
-				try {
-					this.construct_compareinfo (icu_name);
-				} catch {
-				//	ICU_collator=IntPtr.Zero;
-				}
-			}
 		}
 
 		/* LAMESPEC: not mentioned in the spec, but corcompare
@@ -887,11 +859,9 @@ namespace System.Globalization
 			}
 		}
 
-#if NET_2_0
 		[ComVisible (false)]
 		public virtual string Name {
 			get { return icu_name; }
 		}
-#endif
 	}
 }

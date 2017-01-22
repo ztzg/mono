@@ -37,16 +37,12 @@ using System.Runtime.InteropServices;
 
 namespace System.Globalization
 {
-#if NET_2_0
 	[System.Runtime.InteropServices.ComVisible (true)]
-#endif
 	[Serializable]
 	public class CultureInfo : ICloneable, IFormatProvider
 	{
 		static volatile CultureInfo invariant_culture_info;
-#if NET_2_0		
 		static object shared_table_lock = new object ();
-#endif		
 		internal static int BootstrapCultureID;
 
 		const int NumOptionalCalendars = 5;
@@ -174,7 +170,7 @@ namespace System.Globalization
 			get { return territory; }
 		}
 
-#if NET_2_0 && !NET_2_1
+#if !NET_2_1
 		// FIXME: It is implemented, but would be hell slow.
 		[ComVisible (false)]
 		public CultureTypes CultureTypes {
@@ -270,6 +266,12 @@ namespace System.Globalization
 
 		public virtual string Name {
 			get {
+#if MOONLIGHT
+				if (m_name == "zh-CHS")
+					return "zh-Hans";
+				if (m_name == "zh-CHT")
+					return "zh-Hant";
+#endif
 				return(m_name);
 			}
 		}
@@ -320,14 +322,14 @@ namespace System.Globalization
 			}
 		}
 
-		public unsafe virtual TextInfo TextInfo
+		public virtual TextInfo TextInfo
 		{
 			get {
 				if (textInfo == null) {
 					if (!constructed) Construct ();
 					lock (this) {
 						if(textInfo == null) {
-							textInfo = new TextInfo (this, cultureID, textinfo_data, m_isReadOnly);
+							textInfo = CreateTextInfo (m_isReadOnly);
 						}
 					}
 				}
@@ -402,7 +404,7 @@ namespace System.Globalization
 			return false;
 		}
 
-#if !NET_2_1
+#if !MOONLIGHT
 		public static CultureInfo[] GetCultures(CultureTypes types)
 		{
 			bool neutral=((types & CultureTypes.NeutralCultures)!=0);
@@ -415,9 +417,6 @@ namespace System.Globalization
 			// since it must not be read-only
 			if (neutral && infos.Length > 0 && infos [0] == null) {
 				infos [0] = (CultureInfo) InvariantCulture.Clone ();
-#if ONLY_1_1
-				infos [0].m_useUserOverride = true;
-#endif
 			}
 
 			return infos;
@@ -444,11 +443,9 @@ namespace System.Globalization
 					new_ci.numInfo = NumberFormatInfo.ReadOnly (new_ci.numInfo);
 				if (new_ci.dateTimeInfo != null)
 					new_ci.dateTimeInfo = DateTimeFormatInfo.ReadOnly (new_ci.dateTimeInfo);
-#if NET_2_0
 				// TextInfo doesn't have a ReadOnly method in 1.1...
 				if (new_ci.textInfo != null)
 					new_ci.textInfo = TextInfo.ReadOnly (new_ci.textInfo);
-#endif
 				return(new_ci);
 			}
 		}
@@ -497,12 +494,14 @@ namespace System.Globalization
 
 		internal void CheckNeutral ()
 		{
+#if !MOONLIGHT
 			if (IsNeutralCulture) {
 				throw new NotSupportedException ("Culture \"" + m_name + "\" is " +
 						"a neutral culture. It can not be used in formatting " +
 						"and parsing and therefore cannot be set as the thread's " +
 						"current culture.");
 			}
+#endif
 		}
 
 		public virtual NumberFormatInfo NumberFormat {
@@ -584,11 +583,7 @@ namespace System.Globalization
 
 		public static CultureInfo InstalledUICulture
 		{
-#if NET_2_0
 			get { return GetCultureInfo (BootstrapCultureID); }
-#else
-			get { return new CultureInfo (BootstrapCultureID); }
-#endif
 		}
 		public bool IsReadOnly 
 		{
@@ -624,6 +619,10 @@ namespace System.Globalization
 			// It is sort of hack to get those new pseudo-alias
 			// culture names that are not supported in good old
 			// Windows.
+#if MOONLIGHT
+			if (locale == "zh-chs" || locale == "zh-cht")
+				return false;
+#endif
 			switch (locale) {
 			case "zh-hans":
 				locale = "zh-chs";
@@ -685,7 +684,7 @@ namespace System.Globalization
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static bool internal_is_lcid_neutral (int lcid, out bool is_neutral);
 
-		private unsafe void ConstructInvariant (bool read_only)
+		private void ConstructInvariant (bool read_only)
 		{
 			cultureID = InvariantCultureId;
 
@@ -699,7 +698,7 @@ namespace System.Globalization
 				dateTimeInfo = (DateTimeFormatInfo) dateTimeInfo.Clone ();
 			}
 
-			textInfo=new TextInfo (this, cultureID, this.textinfo_data,read_only);
+			textInfo = CreateTextInfo (read_only);
 
 			m_name=String.Empty;
 			displayname=
@@ -709,6 +708,11 @@ namespace System.Globalization
 			iso2lang="iv";
 			icu_name="en_US_POSIX";
 			win3lang="IVL";
+		}
+
+		private unsafe TextInfo CreateTextInfo (bool readOnly)
+		{
+			return new TextInfo (this, cultureID, this.textinfo_data, readOnly);
 		}
 
 		public CultureInfo (int culture) : this (culture, true) {}
@@ -767,7 +771,6 @@ namespace System.Globalization
 		// current locale so we can initialize the object without
 		// doing any member initialization
 		private CultureInfo () { constructed = true; }
-#if NET_2_0
 		static Hashtable shared_by_number, shared_by_name;
 		
 		static void insert_into_shared_tables (CultureInfo c)
@@ -839,7 +842,6 @@ namespace System.Globalization
 				return GetCultureInfo (name);
 			}
 		}
-#endif
 
 		// used in runtime (icall.c) to construct CultureInfo for
 		// AssemblyName of assemblies
@@ -850,18 +852,9 @@ namespace System.Globalization
 
 			bool invariant = name.Length == 0;
 			if (reference) {
-#if NET_2_0
 				use_user_override = invariant ? false : true;
-#else
-				use_user_override = true;
-#endif
 				read_only = false;
 			} else {
-#if ONLY_1_1
-				/* Short circuit the invariant culture */
-				if (invariant)
-					return CultureInfo.InvariantCulture;
-#endif
 				read_only = false;
 				use_user_override = invariant ? false : true;
 			}

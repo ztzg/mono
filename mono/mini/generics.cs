@@ -405,6 +405,18 @@ class Tests {
 		return 0;
 	}
 
+	struct S<T> {}
+
+	public static int test_0_inline_infinite_polymorphic_recursion () {
+           f<int>(0);
+
+		   return 0;
+	}
+
+	private static void f<T>(int i) {
+		if(i==42) f<S<T>>(i);
+	}
+
 	// This cannot be made to work with full-aot, since there it is impossible to
 	// statically determine that Foo<string>.Bar <int> is needed, the code only
 	// references IFoo.Bar<int>
@@ -445,6 +457,22 @@ class Tests {
 		return idx;
 	}
 
+	enum MyEnumUlong : ulong {
+		Value_2 = 2
+	}
+
+	public static int test_0_regress_550964_constrained_enum_long () {
+        MyEnumUlong a = MyEnumUlong.Value_2;
+        MyEnumUlong b = MyEnumUlong.Value_2;
+
+        return Pan (a, b) ? 0 : 1;
+	}
+
+    static bool Pan<T> (T a, T b)
+    {
+        return a.Equals (b);
+    }
+
 	public class XElement {
 		public string Value {
 			get; set;
@@ -455,6 +483,24 @@ class Tests {
 		var allWords = new XElement [] { new XElement { Value = "one" } };
 		var filteredWords = allWords.Where(kw => kw.Value.StartsWith("T"));
 		return filteredWords.Count ();
+	}
+
+	public static int test_0_fullaot_comparer_t () {
+		var l = new SortedList <TimeSpan, int> ();
+		return l.Count;
+	}
+
+	static void enumerate<T> (IEnumerable<T> arr) {
+		foreach (var o in arr)
+			;
+		int c = ((ICollection<T>)arr).Count;
+	}
+
+	/* Test that treating arrays as generic collections works with full-aot */
+	public static int test_0_fullaot_array_wrappers () {
+		Tests[] arr = new Tests [10];
+		enumerate<Tests> (arr);
+		return 0;
 	}
 
 	static int cctor_count = 0;
@@ -481,6 +527,144 @@ class Tests {
 
 		return cctor_count;
 	}
+
+	static int cctor_count2 = 0;
+
+	class ServiceController<T> {
+		static ServiceController () {
+			cctor_count2 ++;
+		}
+
+		public ServiceController () {
+		}
+	}
+
+	static ServiceController<T> Create<T>() {
+		return new ServiceController<T>();
+	}
+
+	// #631409
+	public static int test_2_generic_class_init_gshared_ctor_from_gshared () {
+		Create<object> ();
+		Create<string> ();
+
+		return cctor_count2;
+	}
+
+	public static Type get_type<T> () {
+		return typeof (T);
+	}
+
+	public static int test_0_gshared_delegate_rgctx () {
+		Func<Type> t = new Func<Type> (get_type<string>);
+
+		if (t () == typeof (string))
+			return 0;
+		else
+			return 1;
+	}
+
+	// Creating a delegate from a generic method from gshared code
+	public static int test_0_gshared_delegate_from_gshared () {
+		if (gshared_delegate_from_gshared <object> () != 0)
+			return 1;
+		if (gshared_delegate_from_gshared <string> () != 0)
+			return 2;
+		return 0;
+	}
+
+	public static int gshared_delegate_from_gshared <T> () {
+		Func<Type> t = new Func<Type> (get_type<T>);
+
+		return t () == typeof (T) ? 0 : 1;
+	}
+
+	public static int test_0_marshalbyref_call_from_gshared_virt_elim () {
+		/* Calling a virtual method from gshared code which is changed to a nonvirt call */
+		Class1<object> o = new Class1<object> ();
+		o.Do (new Class2<object> ());
+		return 0;
+	}
+
+	class Pair<TKey, TValue> {
+		public static KeyValuePair<TKey, TValue> make_pair (TKey key, TValue value)
+			{
+				return new KeyValuePair<TKey, TValue> (key, value);
+			}
+
+		public delegate TRet Transform<TRet> (TKey key, TValue value);
+	}
+
+	public static int test_0_bug_620864 () {
+		var d = new Pair<string, Type>.Transform<KeyValuePair<string, Type>> (Pair<string, Type>.make_pair);
+
+		var p = d ("FOO", typeof (int));
+		if (p.Key != "FOO" || p.Value != typeof (int))
+			return 1;
+
+		return 0;
+	}
+
+	public static int test_0_partial_sharing () {
+		if (PartialShared1 (new List<string> (), 1) != typeof (string))
+			return 1;
+		if (PartialShared1 (new List<Tests> (), 1) != typeof (Tests))
+			return 2;
+		if (PartialShared2 (new List<string> (), 1) != typeof (int))
+			return 3;
+		if (PartialShared2 (new List<Tests> (), 1) != typeof (int))
+			return 4;
+		return 0;
+	}
+
+	public static int test_6_partial_sharing_linq () {
+		var messages = new List<Message> ();
+
+		messages.Add (new Message () { MessageID = 5 });
+		messages.Add (new Message () { MessageID = 6 });
+
+		return messages.Max(i => i.MessageID);
+	}
+
+	public static int test_0_partial_shared_method_in_nonshared_class () {
+		var c = new Class1<double> ();
+		return (c.Foo<string> (5).GetType () == typeof (Class1<string>)) ? 0 : 1;
+	}
+
+	class Message {
+		public int MessageID {
+			get; set;
+		}
+	}
+
+	public static Type PartialShared1<T, K> (List<T> list, K k) {
+		return typeof (T);
+	}
+
+	public static Type PartialShared2<T, K> (List<T> list, K k) {
+		return typeof (K);
+	}
+
+    public class Class1<T> {
+		public virtual void Do (Class2<T> t) {
+			t.Foo ();
+		}
+
+		public virtual object Foo<U> (T t) {
+			return new Class1<U> ();
+		}
+	}
+
+	public interface IFace1<T> {
+		void Foo ();
+	}
+
+	public class Class2<T> : MarshalByRefObject, IFace1<T> {
+		public void Foo () {
+		}
+	}
+
+
 
 	public static void VirtualInterfaceCallFromGenericMethod <T> (IFoo f) {
 		f.Bar <T> ();

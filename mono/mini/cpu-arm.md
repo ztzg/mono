@@ -53,12 +53,13 @@ break: len:4
 jmp: len:92
 br: len:4
 switch: src1:i len:8
+seq_point: len:38
 
 throw: src1:i len:24
 rethrow: src1:i len:20
 start_handler: len:20
 endfinally: len:20
-call_handler: len:12
+call_handler: len:12 clob:c
 endfilter: src1:i len:16
 
 ckfinite: dest:f src1:f len:64
@@ -253,7 +254,7 @@ arm_rsbs_imm: dest:i src1:i len:4
 arm_rsc_imm: dest:i src1:i len:4
 
 # Linear IR opcodes
-dummy_use: len:0
+dummy_use: src1:i len:0
 dummy_store: len:0
 not_reached: len:0
 not_null: src1:i len:0

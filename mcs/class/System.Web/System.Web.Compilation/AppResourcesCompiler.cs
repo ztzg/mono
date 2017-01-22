@@ -28,7 +28,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_2_0
+
 using System;
 using System.CodeDom;
 using System.CodeDom.Compiler;
@@ -210,13 +210,13 @@ namespace System.Web.Compilation
 		}
 		
 		const string cachePrefix = "@@LocalResourcesAssemblies";
-		public const string DefaultCultureKey = ".:!DefaultCulture!:.";
 		
 		bool isGlobal;
 		AppResourceFilesCollection files;
 		string tempDirectory;
 		string virtualPath;
 		Dictionary <string, List <string>> cultureFiles;
+		List <string> defaultCultureFiles;
 		
 		string TempDirectory {
 			get {
@@ -230,6 +230,10 @@ namespace System.Web.Compilation
 			get { return cultureFiles; }
 		}
 
+		public List <string> DefaultCultureFiles {
+			get { return defaultCultureFiles; }
+		}
+		
 		static AppResourcesCompiler ()
 		{
 			if (!BuildManager.IsPrecompiled)
@@ -274,7 +278,7 @@ namespace System.Web.Compilation
 		{
 			this.isGlobal = true;
 			this.files = new AppResourceFilesCollection (context);
-			this.cultureFiles = new Dictionary <string, List <string>> ();
+			this.cultureFiles = new Dictionary <string, List <string>> (StringComparer.OrdinalIgnoreCase);
 		}
 
 		public AppResourcesCompiler (string virtualPath)
@@ -283,7 +287,7 @@ namespace System.Web.Compilation
 			this.virtualPath = virtualPath;
 			this.isGlobal = false;
 			this.files = new AppResourceFilesCollection (HttpContext.Current.Request.MapPath (virtualPath));
-			this.cultureFiles = new Dictionary <string, List <string>> ();
+			this.cultureFiles = new Dictionary <string, List <string>> (StringComparer.OrdinalIgnoreCase);
 		}
 
 		static Assembly LoadAssembly (string asmPath)
@@ -458,16 +462,20 @@ namespace System.Web.Compilation
 				resfile = arfi.Info.FullName;
 			if (!String.IsNullOrEmpty (resfile)) {
 				string culture = IsFileCultureValid (resfile);
-				if (culture == null)
-					culture = DefaultCultureKey;
-				
 				List <string> cfiles;
-				if (cultureFiles.ContainsKey (culture))
-					cfiles = cultureFiles [culture];
-				else {
-					cfiles = new List <string> (1);
-					cultureFiles [culture] = cfiles;
+				if (culture != null) {
+					if (cultureFiles.ContainsKey (culture))
+						cfiles = cultureFiles [culture];
+					else {
+						cfiles = new List <string> (1);
+						cultureFiles [culture] = cfiles;
+					}
+				} else {
+					if (defaultCultureFiles == null)
+						defaultCultureFiles = new List <string> ();
+					cfiles = defaultCultureFiles;
 				}
+				
 				cfiles.Add (resfile);
 			}
 				
@@ -828,13 +836,13 @@ namespace System.Web.Compilation
 				throw new HttpException ("Failed to compile resource file", ex);
 			} finally {
 				if (reader != null)
-					reader.Close ();
-				else if (source != null)
-					source.Close ();
+					reader.Dispose ();
+				if (source != null)
+					source.Dispose ();
 				if (writer != null)
-					writer.Close ();
-				else if (destination != null)
-					destination.Close ();
+					writer.Dispose ();
+				if (destination != null)
+					destination.Dispose ();
 			}
 			
 			return resource;
@@ -866,4 +874,4 @@ namespace System.Web.Compilation
 		}
 	};
 };
-#endif
+

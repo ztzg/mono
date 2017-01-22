@@ -123,8 +123,9 @@ namespace MonoTests.SystemWeb.Framework
 		/// <seealso cref="MonoTests.SystemWeb.Framework.Response.Body"/>
 		public string Run ()
 		{
+#if !DOTNET
 			SystemWebTestShim.BuildManager.SuppressDebugModeMessages ();
-
+#endif
 			if (Request.Url == null)
 				Request.Url = Invoker.GetDefaultUrl ();
 			_unloadHandler.StartingRequest();
@@ -302,48 +303,89 @@ namespace MonoTests.SystemWeb.Framework
 		/// <example><code>CopyResource (GetType (), "Default.skin", "App_Themes/Black/Default.skin");</code></example>
 		public static void CopyResource (Type type, string resourceName, string targetUrl)
 		{
+			if (type == null)
+				throw new ArgumentNullException ("type");
 #if !TARGET_JVM
-			EnsureWorkingDirectories ();
-			EnsureDirectoryExists (Path.Combine (baseDir,
-				Path.GetDirectoryName (targetUrl)));
-			string targetFile = Path.Combine (baseDir, targetUrl);
 			using (Stream source = type.Assembly.GetManifestResourceStream (resourceName)) {
 				if (source == null)
 					throw new ArgumentException ("resource not found: " + resourceName, "resourceName");
 				byte[] array = new byte[source.Length];
 				source.Read (array, 0, array.Length);
+				CopyBinary (array, targetUrl);
+			}
+#endif
+		}
 
-				if (File.Exists(targetFile)) {
-					using (FileStream existing = File.OpenRead(targetFile)) {
-						bool equal = false;
-						if (array.Length == existing.Length) {
-							byte[] existingArray = new byte[array.Length];
-							existing.Read (existingArray, 0, existingArray.Length);
-							
-							equal = true;
-							for (int i = 0; i < array.Length; i ++) {
-								if (array[i] != existingArray[i]) {
-									equal = false;
-									break;
-								}
+		public static void CopyPrefixedResources (Type type, string namePrefix, string targetDir)
+		{
+			if (type == null)
+				throw new ArgumentNullException ("type");
+			
+			string[] manifestResources = type.Assembly.GetManifestResourceNames ();
+			if (manifestResources == null || manifestResources.Length == 0)
+				return;
+
+			foreach (string resource in manifestResources) {
+				if (resource == null || resource.Length == 0)
+					continue;
+				
+				if (!resource.StartsWith (namePrefix))
+					continue;
+				 
+				// The Replace part is for VisualStudio which compiles .resx files despite them being marked as
+				// embedded resources, which breaks the tests.
+				CopyResource (type, resource, Path.Combine (targetDir, resource.Substring (namePrefix.Length).Replace (".remove_extension", String.Empty)));
+			}
+		}
+		
+		/// <summary>
+		/// Copy a chunk of data as a file into the web application.
+		/// </summary>
+		/// <param name="sourceArray">The array that contains the data to be written.</param>
+		/// <param name="targetUrl">The URL where the data will be available.</param>
+		/// <returns>The target filename where the data was stored.</returns>
+		/// <example><code>CopyBinary (System.Text.Encoding.UTF8.GetBytes ("Hello"), "App_Data/Greeting.txt");</code></example>
+		public static string CopyBinary (byte[] sourceArray, string targetUrl)
+		{
+#if TARGET_JVM
+			return null;
+#else
+			EnsureWorkingDirectories ();
+			EnsureDirectoryExists (Path.Combine (baseDir, Path.GetDirectoryName (targetUrl)));
+			string targetFile = Path.Combine (baseDir, targetUrl);
+
+			if (File.Exists(targetFile)) {
+				using (FileStream existing = File.OpenRead(targetFile)) {
+					bool equal = false;
+					if (sourceArray.Length == existing.Length) {
+						byte[] existingArray = new byte[sourceArray.Length];
+						existing.Read (existingArray, 0, existingArray.Length);
+						
+						equal = true;
+						for (int i = 0; i < sourceArray.Length; i ++) {
+							if (sourceArray[i] != existingArray[i]) {
+								equal = false;
+								break;
 							}
 						}
-						
-						if (equal) {
-							existing.Close ();
-							File.SetLastWriteTime (targetFile, DateTime.Now);
-							return;
-						}
-						
 					}
 					
-					CheckDomainIsDown ();
+					if (equal) {
+						existing.Close ();
+						File.SetLastWriteTime (targetFile, DateTime.Now);
+						return targetFile;
+					}
+					
 				}
-
-				using (FileStream target = new FileStream (targetFile, FileMode.Create)) {
-					target.Write (array, 0, array.Length);
-				}
+				
+				CheckDomainIsDown ();
 			}
+
+			using (FileStream target = new FileStream (targetFile, FileMode.Create)) {
+				target.Write (sourceArray, 0, sourceArray.Length);
+			}
+
+			return targetFile;
 #endif
 		}
 
@@ -371,9 +413,30 @@ namespace MonoTests.SystemWeb.Framework
 			return;
 #else
 			host = AppDomain.CurrentDomain.GetData (HOST_INSTANCE_NAME) as MyHost;
+			if (host == null)
+				SetupHosting ();
+#endif
+		}
+		
+		public static void SetupHosting ()
+		{
+			SetupHosting (null);
+		}
+		
+		public static void SetupHosting (WebTestResourcesSetupAttribute.SetupHandler resHandler)
+		{
+#if !TARGET_JVM
+			if (host == null)
+				host = AppDomain.CurrentDomain.GetData (HOST_INSTANCE_NAME) as MyHost;
+#endif
 			if (host != null)
-				return;
-			WebTestResourcesSetupAttribute.SetupHandler resHandler = CheckResourcesSetupHandler ();
+				CleanApp ();
+#if TARGET_JVM
+			host = new MyHost ();
+			return;
+#else
+			if (resHandler == null)
+				resHandler = CheckResourcesSetupHandler ();
 			if (resHandler == null)
 				CopyResources ();
 			else
@@ -530,37 +593,29 @@ namespace MonoTests.SystemWeb.Framework
 			Directory.CreateDirectory (binDir);
 		}
 
-		private static void CopyResources ()
+		public static void CopyResources ()
 		{
-			CopyResource (typeof (WebTest), "My.ashx", "My.ashx");
-			CopyResource (typeof (WebTest), "Global.asax", "Global.asax");
-#if VISUAL_STUDIO
-			CopyResource (typeof (WebTest),
-				"MonoTests.SystemWeb.Framework.Resources.Web.config",
-				"Web.config");
-			CopyResource (typeof (WebTest),
-				"MonoTests.SystemWeb.Framework.Resources.MyPage.aspx",
-				"MyPage.aspx");
-			CopyResource (typeof (WebTest),
-				"MonoTests.SystemWeb.Framework.Resources.MyPage.aspx.cs",
-				"MyPage.aspx.cs");
-			CopyResource (typeof (WebTest),
-				"MonoTests.SystemWeb.Framework.Resources.MyPageWithMaster.aspx",
-				"MyPageWithMaster.aspx");
-			CopyResource (typeof (WebTest),
-				"MonoTests.SystemWeb.Framework.Resources.My.master",
-				"My.master");
-#else
+			Type myself = typeof (WebTest);
+			
+			CopyResource (myself, "My.ashx", "My.ashx");
+			CopyResource (myself, "Global.asax", "Global.asax");
 #if NET_2_0
-			CopyResource (typeof (WebTest), "Web.mono.config", "Web.config");
+#if INSIDE_SYSTEM_WEB || DOTNET
+			CopyPrefixedResources (myself, "App_GlobalResources/", "App_GlobalResources");
+			CopyPrefixedResources (myself, "App_Code/", "App_Code");
+#endif
+#if DOTNET
+			CopyResource (myself, "Web.config", "Web.config");
 #else
-			CopyResource (typeof (WebTest), "Web.mono.config.1.1", "Web.config");
+			CopyResource (myself, "Web.mono.config", "Web.config");
 #endif
-			CopyResource (typeof (WebTest), "MyPage.aspx", "MyPage.aspx");
-			CopyResource (typeof (WebTest), "MyPage.aspx.cs", "MyPage.aspx.cs");
-			CopyResource (typeof (WebTest), "MyPageWithMaster.aspx", "MyPageWithMaster.aspx");
-			CopyResource (typeof (WebTest), "My.master", "My.master");
+#else
+			CopyResource (myself, "Web.mono.config.1.1", "Web.config");
 #endif
+			CopyResource (myself, "MyPage.aspx", "MyPage.aspx");
+			CopyResource (myself, "MyPage.aspx.cs", "MyPage.aspx.cs");
+			CopyResource (myself, "MyPageWithMaster.aspx", "MyPageWithMaster.aspx");
+			CopyResource (myself, "My.master", "My.master");
 		}
 #endif
 	}

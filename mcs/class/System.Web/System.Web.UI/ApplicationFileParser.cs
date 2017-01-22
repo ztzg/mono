@@ -5,7 +5,7 @@
 //	Gonzalo Paniagua Javier (gonzalo@ximian.com)
 //
 // (C) 2002,2003 Ximian, Inc (http://www.ximian.com)
-// (c) 2004 Novell, Inc. (http://www.novell.com)
+// (c) 2004-2010 Novell, Inc. (http://www.novell.com)
 //
 
 //
@@ -30,30 +30,27 @@
 //
 using System;
 using System.Collections;
+using System.Globalization;
 using System.IO;
 using System.Web;
 using System.Web.Compilation;
+using System.Web.Util;
 
 namespace System.Web.UI
 {
 	sealed class ApplicationFileParser : TemplateParser
 	{
 		static ArrayList dependencies;
-#if NET_2_0
 		TextReader reader;
-#endif
 		
 		public ApplicationFileParser (string fname, HttpContext context)
 		{
 			InputFile = fname;
 			Context = context;
-#if NET_2_0
 			VirtualPath = new VirtualPath ("/" + Path.GetFileName (fname));
-#endif
 			LoadConfigDefaults ();
 		}
 
-#if NET_2_0
 		internal ApplicationFileParser (VirtualPath virtualPath, TextReader reader, HttpContext context)
 			: this (virtualPath, null, reader, context)
 		{
@@ -73,9 +70,8 @@ namespace System.Web.UI
 			SetBaseType (null);
 			LoadConfigDefaults ();
 		}
-#endif
 		
-		protected override Type CompileIntoType ()
+		internal override Type CompileIntoType ()
 		{
 			return GlobalAsaxCompiler.CompileApplicationType (this);
 		}
@@ -89,11 +85,11 @@ namespace System.Web.UI
 			return type;
 		}
 
-		internal override void AddDirective (string directive, Hashtable atts)
+		internal override void AddDirective (string directive, IDictionary atts)
 		{
-			if (String.Compare (directive, "application", true) != 0 &&
-			    String.Compare (directive, "Import", true) != 0 &&
-			    String.Compare (directive, "Assembly", true) != 0)
+			if (String.Compare (directive, "application", true, Helpers.InvariantCulture) != 0 &&
+			    String.Compare (directive, "Import", true, Helpers.InvariantCulture) != 0 &&
+			    String.Compare (directive, "Assembly", true, Helpers.InvariantCulture) != 0)
 				ThrowParseException ("Invalid directive: " + directive);
 
 			base.AddDirective (directive, atts);
@@ -102,7 +98,17 @@ namespace System.Web.UI
 		internal static ArrayList FileDependencies {
 			get { return dependencies; }
 		}		
+#if NET_4_0
+		internal override Type DefaultBaseType {
+			get {
+				Type ret = PageParser.DefaultApplicationBaseType;
+				if (ret == null)
+					return base.DefaultBaseType;
 
+				return ret;
+			}
+		}
+#endif
 		internal override string DefaultBaseTypeName {
 			get { return "System.Web.HttpApplication"; }
 		}
@@ -115,12 +121,10 @@ namespace System.Web.UI
 			get { return Context.Request.ApplicationPath; }
 		}
 		
-#if NET_2_0
-		 internal override TextReader Reader {
+		internal override TextReader Reader {
                         get { return reader; }
                         set { reader = value; }
                 }
-#endif
 	}
 
 }

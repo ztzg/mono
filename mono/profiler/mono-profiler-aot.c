@@ -19,6 +19,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <glib.h>
 #include <sys/stat.h>
 
 struct _MonoProfiler {
@@ -41,11 +42,14 @@ foreach_method (gpointer data, gpointer user_data)
 {
 	ForeachData *udata = (ForeachData*)user_data;
 	MonoMethod *method = (MonoMethod*)data;
+	char *name;
 
 	if (!mono_method_get_token (method) || mono_class_get_image (mono_method_get_class (method)) != udata->image)
 		return;
 
-	fprintf (udata->outfile, "%d\n", mono_method_get_token (method));
+	name = mono_method_full_name (method, TRUE);
+	fprintf (udata->outfile, "%s\n", name);
+	g_free (name);
 }
 
 static void
@@ -62,7 +66,7 @@ output_image (gpointer key, gpointer value, gpointer user_data)
 	tmp = g_strdup_printf ("%s/.mono/aot-profile-data", g_get_home_dir ());
 
 	if (!g_file_test (tmp, G_FILE_TEST_IS_DIR)) {
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 		err = mkdir (tmp);
 #else
 		err = mkdir (tmp, 0777);
@@ -75,7 +79,7 @@ output_image (gpointer key, gpointer value, gpointer user_data)
 
 	i = 0;
 	while (TRUE) {
-		outfile_name = g_strdup_printf ("%s/%s-%s-%d", tmp, mono_image_get_name (image), mono_image_get_guid (image), i);
+		outfile_name = g_strdup_printf ("%s/%s-%d", tmp, mono_image_get_name (image), i);
 
 		if (!g_file_test (outfile_name, G_FILE_TEST_IS_REGULAR))
 			break;
@@ -88,7 +92,7 @@ output_image (gpointer key, gpointer value, gpointer user_data)
 	outfile = fopen (outfile_name, "w+");
 	g_assert (outfile);
 
-	fprintf (outfile, "#VER:%d\n", 1);
+	fprintf (outfile, "#VER:%d\n", 2);
 
 	data.prof = prof;
 	data.outfile = outfile;

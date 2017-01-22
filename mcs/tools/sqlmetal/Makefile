@@ -22,14 +22,18 @@ SQLMETAL_RESOURCES = \
 	$(dbmetal_src)/Language/FrenchWords.txt  \
 	$(dbmetal_src)/Language/GermanWords.txt
 
+SQLMETAL_TEST_FILES = \
+	Test/AssemblyInfo.cs
+
 EXTRA_DISTFILES = \
-	$(SQLMETAL_RESOURCES)
+	$(SQLMETAL_RESOURCES) \
+	$(SQLMETAL_TEST_FILES)
 
 PROGRAM = sqlmetal.exe
 
 $(PROGRAM) : Makefile $(SQLMETAL_RESOURCES)
 
-#HAS_NUNIT_TEST = yes
+HAS_NUNIT_TEST = yes
 
 include ../../build/executable.make
 

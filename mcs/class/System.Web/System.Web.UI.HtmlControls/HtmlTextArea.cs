@@ -4,7 +4,7 @@
 // Author:
 //	Sebastien Pouliot  <sebastien@ximian.com>
 //
-// Copyright (C) 2005 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2005-2010 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -30,18 +30,17 @@ using System.ComponentModel;
 using System.Collections.Specialized;
 using System.Globalization;
 using System.Security.Permissions;
+using System.Web.Util;
 
-namespace System.Web.UI.HtmlControls {
-
+namespace System.Web.UI.HtmlControls
+{
 	// CAS
 	[AspNetHostingPermission (SecurityAction.LinkDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	[AspNetHostingPermission (SecurityAction.InheritanceDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	// attributes
 	[DefaultEvent ("ServerChange")]
 	[ValidationProperty ("Value")]
-#if NET_2_0
 	[SupportsEventValidation]
-#endif
 	public class HtmlTextArea : HtmlContainerControl, IPostBackDataHandler 
 	{
 		static readonly object serverChangeEvent = new object ();
@@ -50,7 +49,6 @@ namespace System.Web.UI.HtmlControls {
 			: base ("textarea")
 		{
 		}
-
 
 		[DefaultValue ("")]
 		[DesignerSerializationVisibility (DesignerSerializationVisibility.Hidden)]
@@ -65,7 +63,7 @@ namespace System.Web.UI.HtmlControls {
 				if (value == -1)
 					Attributes.Remove ("cols");
 				else
-					Attributes ["cols"] = value.ToString (CultureInfo.InvariantCulture);
+					Attributes ["cols"] = value.ToString (Helpers.InvariantCulture);
 			}
 		}
 
@@ -91,7 +89,7 @@ namespace System.Web.UI.HtmlControls {
 				if (value == -1)
 					Attributes.Remove ("rows");
 				else
-					Attributes ["rows"] = value.ToString (CultureInfo.InvariantCulture);
+					Attributes ["rows"] = value.ToString (Helpers.InvariantCulture);
 			}
 		}
 
@@ -113,20 +111,14 @@ namespace System.Web.UI.HtmlControls {
 			base.AddParsedSubObject (obj);
 		}
 
-#if NET_2_0
-		protected internal
-#else		
-		protected
-#endif		
-		override void OnPreRender (EventArgs e)
+		protected internal override void OnPreRender (EventArgs e)
 		{
 			base.OnPreRender (e);
 
-			if (Page != null && !Disabled) {
-				Page.RegisterRequiresPostBack (this);
-#if NET_2_0
-				Page.RegisterEnabledControl (this);
-#endif
+			Page page = Page;
+			if (page != null && !Disabled) {
+				page.RegisterRequiresPostBack (this);
+				page.RegisterEnabledControl (this);
 			}
 		}
 
@@ -139,17 +131,15 @@ namespace System.Web.UI.HtmlControls {
 
 		protected override void RenderAttributes (HtmlTextWriter writer)
 		{
-#if NET_2_0
-			if (Page != null)
-				Page.ClientScript.RegisterForEventValidation (UniqueID);
-#endif
-			if (Attributes ["name"] == null) {
+			Page page = Page;
+			if (page != null)
+				page.ClientScript.RegisterForEventValidation (UniqueID);
+			
+			if (Attributes ["name"] == null)
 				writer.WriteAttribute ("name", Name);
-			}
 			base.RenderAttributes (writer);
 		}
 
-#if NET_2_0
 		protected virtual bool LoadPostData (string postDataKey, NameValueCollection postCollection)
 		{
 			return DefaultLoadPostData (postDataKey, postCollection);
@@ -160,7 +150,6 @@ namespace System.Web.UI.HtmlControls {
 			ValidateEvent (UniqueID, String.Empty);
 			OnServerChange (EventArgs.Empty);
 		}
-#endif
 
 		internal bool DefaultLoadPostData (string postDataKey, NameValueCollection postCollection)
 		{
@@ -174,22 +163,13 @@ namespace System.Web.UI.HtmlControls {
 
 		bool IPostBackDataHandler.LoadPostData (string postDataKey, NameValueCollection postCollection)
 		{
-#if NET_2_0
 			return LoadPostData (postDataKey, postCollection);
-#else
-			return DefaultLoadPostData (postDataKey, postCollection);
-#endif
 		}
 
 		void IPostBackDataHandler.RaisePostDataChangedEvent ()
 		{
-#if NET_2_0
 			RaisePostDataChangedEvent ();
-#else
-			OnServerChange (EventArgs.Empty);
-#endif
 		}
-
 
 		[WebSysDescription("")]
 		[WebCategory("Action")]

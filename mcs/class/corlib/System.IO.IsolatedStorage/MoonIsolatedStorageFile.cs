@@ -28,7 +28,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_2_1 && !MONOTOUCH
+#if MOONLIGHT
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -100,6 +100,13 @@ namespace System.IO.IsolatedStorage {
 			throw new IsolatedStorageException ();
 		}
 		
+		public static bool IsEnabled {
+			get {
+				Console.WriteLine ("NIEX: System.IO.IsolatedStorage.IsolatedStorageFile:get_IsEnabled");
+				throw new NotImplementedException ();
+			}
+		}
+
 		public void CreateDirectory (string dir)
 		{
 			PreCheck ();
@@ -171,6 +178,16 @@ namespace System.IO.IsolatedStorage {
 			return paths;
 		}
 
+		private void CheckSearchPattern (string searchPattern)
+		{
+			if (searchPattern == null)
+				throw new ArgumentNullException ("searchPattern");
+			if (searchPattern.Length == 0)
+				throw new IsolatedStorageException ("searchPattern");
+			if (searchPattern.IndexOfAny (Path.GetInvalidPathChars ()) != -1)
+				throw new ArgumentException ("searchPattern");
+		}
+
 		public string [] GetDirectoryNames ()
 		{
 			return HideAppDirs (Directory.GetDirectories (basedir));
@@ -178,10 +195,30 @@ namespace System.IO.IsolatedStorage {
 
 		public string [] GetDirectoryNames (string searchPattern)
 		{
-			if (searchPattern.IndexOf ('/') != -1)
-				throw new IsolatedStorageException ();
-			
-			return HideAppDirs (Directory.GetDirectories (basedir, searchPattern));
+			CheckSearchPattern (searchPattern);
+
+			// note: IsolatedStorageFile accept a "dir/file" pattern which is not allowed by DirectoryInfo
+			// so we need to split them to get the right results
+			string path = Path.GetDirectoryName (searchPattern);
+			string pattern = Path.GetFileName (searchPattern);
+			string [] afi = null;
+
+			if (path == null || path.Length == 0) {
+				return HideAppDirs (Directory.GetDirectories (basedir, searchPattern));
+			} else {
+				// we're looking for a single result, identical to path (no pattern here)
+				// we're also looking for something under the current path (not outside isolated storage)
+
+				string [] subdirs = Directory.GetDirectories (basedir, path);
+				if (subdirs.Length != 1 || subdirs [0].IndexOf (basedir) < 0)
+					throw new IsolatedStorageException ();
+
+				DirectoryInfo dir = new DirectoryInfo (subdirs [0]);
+				if (dir.Name != path)
+					throw new IsolatedStorageException ();
+
+				return GetNames (dir.GetDirectories (pattern));
+			}
 		}
 
 		public string [] GetFileNames ()
@@ -191,8 +228,7 @@ namespace System.IO.IsolatedStorage {
 
 		public string [] GetFileNames (string searchPattern)
 		{
-			if (searchPattern == null)
-				throw new ArgumentNullException ("searchPattern");
+			CheckSearchPattern (searchPattern);
 
 			// note: IsolatedStorageFile accept a "dir/file" pattern which is not allowed by DirectoryInfo
 			// so we need to split them to get the right results

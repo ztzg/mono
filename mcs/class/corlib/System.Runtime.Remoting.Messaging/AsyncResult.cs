@@ -36,9 +36,7 @@ using System.Runtime.CompilerServices;
 
 namespace System.Runtime.Remoting.Messaging {
 
-#if NET_2_0
-	[System.Runtime.InteropServices.ComVisible (true)]
-#endif
+[System.Runtime.InteropServices.ComVisible (true)]
 public class AsyncResult : IAsyncResult, IMessageSink {
 
 #pragma warning disable 169, 414, 649
@@ -53,17 +51,28 @@ public class AsyncResult : IAsyncResult, IMessageSink {
 	object async_callback;
 	ExecutionContext current;
 	ExecutionContext original;
+	long add_time;
 #pragma warning restore 169, 414, 649
 
 	// not part of MonoAsyncResult...
 	MonoMethodMessage call_message;
+#pragma warning disable 0414
 	IMessageCtrl message_ctrl;
+#pragma warning restore
 	IMessage reply_message;
 	
 	internal AsyncResult ()
 	{
 	}
-	
+
+	internal AsyncResult (WaitCallback cb, object state, bool capture_context)
+	{
+		async_state = state;
+		async_delegate = cb;
+		if (capture_context)
+			current = ExecutionContext.Capture ();
+	}
+
 	public virtual object AsyncState
 	{
 		get {
@@ -142,6 +151,11 @@ public class AsyncResult : IAsyncResult, IMessageSink {
 
 	internal IMessage EndInvoke ()
 	{
+		lock (this) {
+			if (completed)
+				return reply_message;
+		}
+
 		AsyncWaitHandle.WaitOne ();
 		return reply_message;
 	}
@@ -152,7 +166,8 @@ public class AsyncResult : IAsyncResult, IMessageSink {
 
 		lock (this) {
 			completed = true;
-			((ManualResetEvent) AsyncWaitHandle).Set ();
+			if (handle != null)
+				((ManualResetEvent) AsyncWaitHandle).Set ();
 		}
 		
 		if (async_callback != null) {

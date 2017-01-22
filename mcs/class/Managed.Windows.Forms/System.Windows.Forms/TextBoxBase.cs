@@ -487,7 +487,12 @@ namespace System.Windows.Forms
 		[EditorBrowsable(EditorBrowsableState.Advanced)]
 		public int PreferredHeight {
 			get {
-				return Font.Height + (BorderStyle == BorderStyle.None ? 0 : 7);
+				if (BorderStyle != BorderStyle.None)
+					return Font.Height + 7;
+
+				// usually in borderless mode the top margin is 0, but
+				// try to access it, in case it was set manually, as ToolStrip* controls do
+				return Font.Height + TopMargin;
 			}
 		}
 
@@ -661,6 +666,8 @@ namespace System.Windows.Forms
 					ScrollToCaret ();
 				} else {
 					document.Empty();
+
+					document.SetSelectionToCaret (true);
 					if (IsHandleCreated)
 						CalculateDocument ();
 				}
@@ -1592,7 +1599,7 @@ namespace System.Windows.Forms
 						OnTextChanged(EventArgs.Empty);
 
 					} else {
-						XplatUI.AudibleAlert();
+						XplatUI.AudibleAlert(AlertType.Default);
 					}
 					return;
 				} else if (ch == 8) {

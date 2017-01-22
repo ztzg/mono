@@ -28,18 +28,18 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 using System.Collections;
 using System.Collections.Specialized;
+using System.Data;
 using System.Text;
 using System.ComponentModel;
 using System.Reflection;
 
-namespace System.Web.UI.WebControls {
-
+namespace System.Web.UI.WebControls
+{
 	[DefaultPropertyAttribute ("ControlID")]
-	public class ControlParameter : Parameter {
-
+	public class ControlParameter : Parameter
+	{
 		public ControlParameter () : base ()
 		{
 		}
@@ -66,13 +66,23 @@ namespace System.Web.UI.WebControls {
 			ControlID = controlID;
 			PropertyName = propertyName;
 		}
+
+		public ControlParameter (string name, DbType dbType, string controlID, string propertyName) : base (name, dbType)
+		{
+			ControlID = controlID;
+			PropertyName = propertyName;
+		}
 		
 		protected override Parameter Clone ()
 		{
 			return new ControlParameter (this);
 		}
-		
-		protected override object Evaluate (HttpContext ctx, Control control)
+#if NET_4_0
+		protected internal
+#else
+		protected
+#endif
+		override object Evaluate (HttpContext ctx, Control control)
 		{
 			if (control == null)
 				return null;
@@ -111,7 +121,7 @@ namespace System.Web.UI.WebControls {
 		[DefaultValueAttribute ("")]
 		[IDReferencePropertyAttribute (typeof(System.Web.UI.Control))]
 		public string ControlID {
-			get { return ViewState.GetString ("ControlID", ""); }
+			get { return ViewState.GetString ("ControlID", String.Empty); }
 			set {
 				if (ControlID != value) {
 					ViewState ["ControlID"] = value;
@@ -124,7 +134,7 @@ namespace System.Web.UI.WebControls {
 		[TypeConverterAttribute (typeof (ControlPropertyNameConverter))]
 		[WebCategoryAttribute ("Control")]
 		public string PropertyName {
-			get { return ViewState.GetString ("PropertyName", ""); }
+			get { return ViewState.GetString ("PropertyName", String.Empty); }
 			set {
 				
 				if (PropertyName != value) {
@@ -135,5 +145,5 @@ namespace System.Web.UI.WebControls {
 		}
 	}
 }
-#endif
+
 

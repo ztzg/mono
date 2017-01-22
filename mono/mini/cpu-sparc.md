@@ -182,7 +182,7 @@ float_cgt_un: dest:i src1:f src2:f len:64
 float_clt: dest:i src1:f src2:f len:64
 float_clt_un: dest:i src1:f src2:f len:64
 float_conv_to_u: dest:i src1:f len:64
-call_handler: len:64
+call_handler: len:64 clob:c
 aot_const: dest:i len:64
 adc: dest:i src1:i src2:i len:4
 addcc: dest:i src1:i src2:i len:4
@@ -289,7 +289,7 @@ relaxed_nop: len:0
 
 # Linear IR opcodes
 nop: len:0
-dummy_use: len:0
+dummy_use: src1:i len:0
 dummy_store: len:0
 not_reached: len:0
 not_null: src1:i len:0

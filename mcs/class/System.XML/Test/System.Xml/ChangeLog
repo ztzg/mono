@@ -1,3 +1,106 @@
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : remove NotWorking everywhere.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : add a bit more assertions.
+	  Remove NotWorking from some tests.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : more notes and assertions.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : more notes and tests.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : refine failure conditions.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : add test matrix for understanding things.
+	  Make those test names consistent. Mark as NotWorking.
+
+2010-06-29  Andreia Gaita  <avidigal@novell.com>
+
+	* XmlWriterTests.cs : added tests for bug #607967.
+
+2010-06-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextReaderTests.cs : added test for bug #608391.
+
+2010-04-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDocumentTests.cs : add test for bug #598953.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderCommonTests.cs : added test for ReadElementContentAs() for
+	  qname, with default namespace.
+
+2010-01-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderCommonTests.cs : added test for bug #543332.
+
+2010-01-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTest.cs : test convert TimeSpan.MinValue to string.
+	  Patch by Tiaan Geldenhuys.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : add test for ToString(TimeSpan) with small
+	  ticks.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : add test for ToTimeSpan() with spaces.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : add test for ToDateTimeOffset() with date
+	  string with spaces.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : added commented-out tests for the remaining
+	  parse tests by Tiaan Geldenhuys for XLinq, with the reason why.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : float parse should do the same. Fix NaN test.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : another double parse test for string with
+	  spaces, for string constants such as NaN.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : add double parse test for string with spaces.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriterTests.cs : added a corner case test for empty string handling
+	  difference between XmlTextWriter and XmlWriter.Create().
+
+2009-11-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvertTests.cs : add test for DateTimeOffset roundtrip.
+
+2009-11-13  Andreia Gaita  <avidigal@novell.com>
+
+	* XmlTextReaderTests.cs: Added ParsingWithNSMgrSubclass test to check
+	r146175 fix (chained namespace lookups using XmlNamespaceManager
+	subclasses)
+
+2009-11-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlNodeReaderTests.cs : added test for bug #550379.
+
 2009-09-15  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlAttributeCollectionTests.cs : add test for bug #508296 by

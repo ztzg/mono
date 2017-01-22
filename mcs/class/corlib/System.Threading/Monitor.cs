@@ -32,24 +32,14 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.Remoting.Contexts;
-
-#if NET_2_0
 using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
-#endif
 
 namespace System.Threading
 {
-#if NET_2_0
 	[ComVisible (true)]
 	public static class Monitor
 	{
-#else
-	public sealed class Monitor
-	{
-		private Monitor () {}
-#endif
-
 		// Grabs the mutex on object 'obj', with a maximum
 		// wait time 'ms' but doesn't block - if it can't get
 		// the lock it returns false, true if it can
@@ -63,9 +53,7 @@ namespace System.Threading
 		public extern static void Enter(object obj);
 
 		// Releases the mutex on object 'obj'
-#if NET_2_0
 		[ReliabilityContractAttribute (Consistency.WillNotCorruptState, Cer.Success)]
-#endif
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		public extern static void Exit(object obj);
 
@@ -105,61 +93,34 @@ namespace System.Threading
 			Monitor_pulse_all(obj);
 		}
 
-		public static bool TryEnter(object obj) {
-			if(obj==null) {
-				throw new ArgumentNullException("obj");
-			}
-			//if(obj.GetType().IsValueType==true) {
-			//	throw new ArgumentException("Value type");
-			//}
-			
-			return(Monitor_try_enter(obj, 0));
+		public static bool TryEnter (object obj)
+		{
+			return TryEnter (obj, 0);
 		}
 
-		public static bool TryEnter(object obj, int millisecondsTimeout) {
-			if(obj==null) {
-				throw new ArgumentNullException("obj");
-			}
-			//if(obj.GetType().IsValueType==true) {
-			//	throw new ArgumentException("Value type");
-			//}
+		public static bool TryEnter (object obj, int millisecondsTimeout)
+		{
+			if (obj == null)
+				throw new ArgumentNullException ("obj");
 
-			// LAMESPEC: should throw an exception when ms<0, but
-			// Timeout.Infinite is -1
-			if(millisecondsTimeout == Timeout.Infinite) {
-				Enter(obj);
-				return(true);
+			if (millisecondsTimeout == Timeout.Infinite) {
+				Enter (obj);
+				return true;
 			}
+
+			if (millisecondsTimeout < 0)
+				throw new ArgumentException ("negative value for millisecondsTimeout", "millisecondsTimeout");
 			
-			if(millisecondsTimeout<0) {
-				throw new ArgumentException("millisecondsTimeout", "negative value for millisecondsTimeout");
-			}
-			
-			return(Monitor_try_enter(obj, millisecondsTimeout));
+			return Monitor_try_enter (obj, millisecondsTimeout);
 		}
 
-		public static bool TryEnter(object obj, TimeSpan timeout) {
-			if(obj==null) {
-				throw new ArgumentNullException("obj");
-			}
-			//if(obj.GetType().IsValueType==true) {
-			//	throw new ArgumentException("Value type");
-			//}
-
-			// LAMESPEC: should throw an exception when ms<0, but
-			// Timeout.Infinite is -1
-			int ms=Convert.ToInt32(timeout.TotalMilliseconds);
+		public static bool TryEnter (object obj, TimeSpan timeout)
+		{
+			long ms = (long) timeout.TotalMilliseconds;
+			if (ms < Timeout.Infinite || ms > Int32.MaxValue)
+				throw new ArgumentOutOfRangeException ("timeout", "timeout out of range");
 			
-			if(ms == Timeout.Infinite) {
-				Enter(obj);
-				return(true);
-			}
-
-			if(ms < 0 || ms > Int32.MaxValue) {
-				throw new ArgumentOutOfRangeException("timeout", "timeout out of range");
-			}
-			
-			return(Monitor_try_enter(obj, ms));
+			return TryEnter (obj, (int) ms);
 		}
 
 		// Waits for a signal on object 'obj' with maximum
@@ -168,45 +129,32 @@ namespace System.Threading
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		private extern static bool Monitor_wait(object obj, int ms);
 
-		public static bool Wait(object obj) {
-			if(obj==null) {
-				throw new ArgumentNullException("obj");
-			}
-			if(Monitor_test_synchronised(obj)==false) {
-				throw new SynchronizationLockException("Object is not synchronized");
-			}
-
-			return(Monitor_wait(obj, Timeout.Infinite));
+		public static bool Wait (object obj)
+		{
+			return Wait (obj, Timeout.Infinite);
 		}
 
-		public static bool Wait(object obj, int millisecondsTimeout) {
-			if(obj==null) {
-				throw new ArgumentNullException("obj");
-			}
-			if(Monitor_test_synchronised(obj)==false) {
-				throw new SynchronizationLockException("Object is not synchronized");
-			}
-			if (millisecondsTimeout < 0 && millisecondsTimeout != Timeout.Infinite)
+		public static bool Wait (object obj, int millisecondsTimeout)
+		{
+			if (obj == null)
+				throw new ArgumentNullException ("obj");
+
+			if (millisecondsTimeout < Timeout.Infinite)
 				throw new ArgumentOutOfRangeException ("millisecondsTimeout", "timeout out of range");
 
-			return(Monitor_wait(obj, millisecondsTimeout));
+			if (!Monitor_test_synchronised (obj))
+				throw new SynchronizationLockException ("Object is not synchronized");
+
+			return Monitor_wait (obj, millisecondsTimeout);
 		}
 
-		public static bool Wait(object obj, TimeSpan timeout) {
-			if(obj==null) {
-				throw new ArgumentNullException("obj");
-			}
-			// LAMESPEC: says to throw ArgumentException too
-			int ms=Convert.ToInt32(timeout.TotalMilliseconds);
-			
-			if((ms < 0 && ms != Timeout.Infinite) || ms > Int32.MaxValue) {
-				throw new ArgumentOutOfRangeException("timeout", "timeout out of range");
-			}
-			if(Monitor_test_synchronised(obj)==false) {
-				throw new SynchronizationLockException("Object is not synchronized");
-			}
+		public static bool Wait (object obj, TimeSpan timeout)
+		{
+			long ms = (long) timeout.TotalMilliseconds;
+			if (ms < Timeout.Infinite || ms > Int32.MaxValue)
+				throw new ArgumentOutOfRangeException ("timeout", "timeout out of range");
 
-			return(Monitor_wait(obj, ms));
+			return Wait (obj, (int) ms);
 		}
 
 		public static bool Wait(object obj, int millisecondsTimeout, bool exitContext) {
@@ -228,5 +176,19 @@ namespace System.Threading
 				if (exitContext) SynchronizationAttribute.EnterContext ();
 			}
 		}
+
+#if NET_4_0 || MOONLIGHT
+		public static void Enter (object obj, ref bool lockTaken)
+		{
+			if (obj == null)
+				throw new ArgumentNullException ("obj");
+			if (lockTaken)
+				throw new ArgumentException ("lockTaken");
+
+			Enter (obj);
+			// if Enter throws then lockTaken will be false
+			lockTaken = true;
+		}
+#endif
 	}
 }

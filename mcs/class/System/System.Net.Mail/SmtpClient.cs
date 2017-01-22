@@ -83,23 +83,18 @@ namespace System.Net.Mail {
 		BackgroundWorker worker;
 		object user_async_state;
 
-		// ESMTP state
 		[Flags]
 		enum AuthMechs {
 			None        = 0,
-			CramMD5     = 0x01,
-			DigestMD5   = 0x02,
-			GssAPI      = 0x04,
-			Kerberos4   = 0x08,
-			Login       = 0x10,
-			Plain       = 0x20,
+			Login       = 0x01,
+			Plain       = 0x02,
 		}
 
 		class CancellationException : Exception
 		{
 		}
 
-		AuthMechs authMechs = AuthMechs.None;
+		AuthMechs authMechs;
 		Mutex mutex = new Mutex ();
 
 		#endregion // Fields
@@ -123,6 +118,11 @@ namespace System.Net.Mail {
 			if (cfg != null) {
 				this.host = cfg.Network.Host;
 				this.port = cfg.Network.Port;
+				TargetName = cfg.Network.TargetName;
+				if (this.TargetName == null)
+					TargetName = "SMTPSVC/" + (host != null ? host : "");
+
+				
 				if (cfg.Network.UserName != null) {
 					string password = String.Empty;
 
@@ -135,6 +135,9 @@ namespace System.Net.Mail {
 				if (cfg.From != null)
 					defaultFrom = new MailAddress (cfg.From);
 			}
+#else
+			// Just to eliminate the warning, this codepath does not end up in production.
+			defaultFrom = null;
 #endif
 
 			if (!String.IsNullOrEmpty (host))
@@ -158,6 +161,11 @@ namespace System.Net.Mail {
 			}
 		}
 #endif
+
+#if NET_4_0
+		public
+#endif
+		string TargetName { get; set; }
 
 		public ICredentialsByHost Credentials {
 			get { return credentials; }
@@ -405,7 +413,6 @@ namespace System.Net.Mail {
 
 		void ParseExtensions (string extens)
 		{
-			char[] delims = new char [1] { ' ' };
 			string[] parts = extens.Split ('\n');
 
 			foreach (string part in parts) {
@@ -414,22 +421,19 @@ namespace System.Net.Mail {
 
 				string start = part.Substring (4);
 				if (start.StartsWith ("AUTH ", StringComparison.Ordinal)) {
-					string[] options = start.Split (delims);
+					string[] options = start.Split (' ');
 					for (int k = 1; k < options.Length; k++) {
 						string option = options[k].Trim();
+						// GSSAPI, KERBEROS_V4, NTLM not supported
 						switch (option) {
+						/*
 						case "CRAM-MD5":
 							authMechs |= AuthMechs.CramMD5;
 							break;
 						case "DIGEST-MD5":
 							authMechs |= AuthMechs.DigestMD5;
 							break;
-						case "GSSAPI":
-							authMechs |= AuthMechs.GssAPI;
-							break;
-						case "KERBEROS_V4":
-							authMechs |= AuthMechs.Kerberos4;
-							break;
+						*/
 						case "LOGIN":
 							authMechs |= AuthMechs.Login;
 							break;
@@ -514,16 +518,18 @@ namespace System.Net.Mail {
 			try {
 				writer = new StreamWriter(filename);
 
+				// FIXME: See how Microsoft fixed the bug about envelope senders, and how it actually represents the info in .eml file headers
+				// 	  For all we know, defaultFrom may be the envelope sender
+				// For now, we are no worse than some versions of .NET
 				MailAddress from = message.From;
-
 				if (from == null)
 					from = defaultFrom;
 				
 				SendHeader (HeaderName.Date, DateTime.Now.ToString ("ddd, dd MMM yyyy HH':'mm':'ss zzz", DateTimeFormatInfo.InvariantInfo));
-				SendHeader (HeaderName.From, from.ToString ());
-				SendHeader (HeaderName.To, message.To.ToString ());
+				SendHeader (HeaderName.From, EncodeAddress(from));
+				SendHeader (HeaderName.To, EncodeAddresses(message.To));
 				if (message.CC.Count > 0)
-					SendHeader (HeaderName.Cc, message.CC.ToString ());
+					SendHeader (HeaderName.Cc, EncodeAddresses(message.CC));
 				SendHeader (HeaderName.Subject, EncodeSubjectRFC2047 (message));
 
 				foreach (string s in message.Headers.AllKeys)
@@ -592,14 +598,16 @@ namespace System.Net.Mail {
 			
 			if (authMechs != AuthMechs.None)
 				Authenticate ();
-			
-			MailAddress from = message.From;
 
-			if (from == null)
-				from = defaultFrom;
+			// The envelope sender: use 'Sender:' in preference of 'From:'
+			MailAddress sender = message.Sender;
+			if (sender == null)
+				sender = message.From;
+			if (sender == null)
+				sender = defaultFrom;
 			
 			// MAIL FROM:
-			status = SendCommand ("MAIL FROM:<" + from.Address + '>');
+			status = SendCommand ("MAIL FROM:<" + sender.Address + '>');
 			if (IsError (status)) {
 				throw new SmtpException (status.StatusCode, status.Description);
 			}
@@ -645,6 +653,10 @@ namespace System.Net.Mail {
 			dt = dt.Remove (dt.Length - 3, 1);
 			SendHeader (HeaderName.Date, dt);
 
+			MailAddress from = message.From;
+			if (from == null)
+				from = defaultFrom;
+
 			SendHeader (HeaderName.From, EncodeAddress (from));
 			SendHeader (HeaderName.To, EncodeAddresses (message.To));
 			if (message.CC.Count > 0)
@@ -669,12 +681,17 @@ namespace System.Net.Mail {
 			SendHeader ("Priority", v);
 			if (message.Sender != null)
 				SendHeader ("Sender", EncodeAddress (message.Sender));
-			if (message.ReplyTo != null)
-				SendHeader ("ReplyTo", EncodeAddress (message.ReplyTo));
-			
+			if (message.ReplyToList.Count > 0)
+				SendHeader ("Reply-To", EncodeAddresses (message.ReplyToList));
+
+#if NET_4_0
+			foreach (string s in message.Headers.AllKeys)
+				SendHeader (s, ContentType.EncodeSubjectRFC2047 (message.Headers [s], message.HeadersEncoding));
+#else
 			foreach (string s in message.Headers.AllKeys)
 				SendHeader (s, message.Headers [s]);
-
+#endif
+	
 			AddPriorityHeader (message);
 
 			boundaryIndex = 0;
@@ -749,6 +766,7 @@ namespace System.Net.Mail {
 					Send (message);
 				} catch (Exception ex) {
 					ea.Result = ex;
+					throw ex;
 				}
 			};
 			worker.WorkerSupportsCancellation = true;
@@ -880,8 +898,10 @@ try {
 					alt_boundary = GenerateBoundary ();
 					contentType = new ContentType ("multipart/related");
 					contentType.Boundary = alt_boundary;
-					contentType.Parameters ["type"] = "application/octet-stream";
+					
+					contentType.Parameters ["type"] = av.ContentType.ToString ();
 					StartSection (inner_boundary, contentType);
+					StartSection (alt_boundary, av.ContentType, av.TransferEncoding);
 				} else {
 					contentType = new ContentType (av.ContentType.ToString ());
 					StartSection (inner_boundary, contentType, av.TransferEncoding);
@@ -929,8 +949,7 @@ try {
 		private void SendLinkedResources (MailMessage message, LinkedResourceCollection resources, string boundary)
 		{
 			foreach (LinkedResource lr in resources) {
-				ContentType contentType = new ContentType (lr.ContentType.ToString ());
-				StartSection (boundary, contentType, lr.TransferEncoding);
+				StartSection (boundary, lr.ContentType, lr.TransferEncoding, lr);
 
 				switch (lr.TransferEncoding) {
 				case TransferEncoding.Base64:
@@ -1017,6 +1036,18 @@ try {
 			SendData (String.Format ("--{0}", section));
 			SendHeader ("content-type", sectionContentType.ToString ());
 			SendHeader ("content-transfer-encoding", GetTransferEncodingName (transferEncoding));
+			SendData (string.Empty);
+		}
+
+		private void StartSection(string section, ContentType sectionContentType, TransferEncoding transferEncoding, LinkedResource lr)
+		{
+			SendData (String.Format("--{0}", section));
+			SendHeader ("content-type", sectionContentType.ToString ());
+			SendHeader ("content-transfer-encoding", GetTransferEncodingName (transferEncoding));
+
+			if (lr.ContentId != null && lr.ContentId.Length > 0)
+				SendHeader("content-ID", "<" + lr.ContentId + ">");
+
 			SendData (string.Empty);
 		}
 
@@ -1138,25 +1169,53 @@ try {
 			Authenticate (user, pass);
 		}
 
-		void Authenticate (string Username, string Password)
+		void CheckStatus (SmtpResponse status, int i)
 		{
-			// FIXME: use the proper AuthMech
-			SmtpResponse status = SendCommand ("AUTH LOGIN");
-			if (((int) status.StatusCode) != 334) {
+			if (((int) status.StatusCode) != i)
 				throw new SmtpException (status.StatusCode, status.Description);
-			}
+		}
 
-			status = SendCommand (Convert.ToBase64String (Encoding.ASCII.GetBytes (Username)));
-			if (((int) status.StatusCode) != 334) {
+		void ThrowIfError (SmtpResponse status)
+		{
+			if (IsError (status))
 				throw new SmtpException (status.StatusCode, status.Description);
-			}
+		}
 
-			status = SendCommand (Convert.ToBase64String (Encoding.ASCII.GetBytes (Password)));
-			if (IsError (status)) {
-				throw new SmtpException (status.StatusCode, status.Description);
+		void Authenticate (string user, string password)
+		{
+			if (authMechs == AuthMechs.None)
+				return;
+
+			SmtpResponse status;
+			/*
+			if ((authMechs & AuthMechs.DigestMD5) != 0) {
+				status = SendCommand ("AUTH DIGEST-MD5");
+				CheckStatus (status, 334);
+				string challenge = Encoding.ASCII.GetString (Convert.FromBase64String (status.Description.Substring (4)));
+				Console.WriteLine ("CHALLENGE: {0}", challenge);
+				DigestSession session = new DigestSession ();
+				session.Parse (false, challenge);
+				string response = session.Authenticate (this, user, password);
+				status = SendCommand (Convert.ToBase64String (Encoding.UTF8.GetBytes (response)));
+				CheckStatus (status, 235);
+			} else */
+			if ((authMechs & AuthMechs.Login) != 0) {
+				status = SendCommand ("AUTH LOGIN");
+				CheckStatus (status, 334);
+				status = SendCommand (Convert.ToBase64String (Encoding.UTF8.GetBytes (user)));
+				CheckStatus (status, 334);
+				status = SendCommand (Convert.ToBase64String (Encoding.UTF8.GetBytes (password)));
+				CheckStatus (status, 235);
+			} else if ((authMechs & AuthMechs.Plain) != 0) {
+				string s = String.Format ("\0{0}\0{1}", user, password);
+				s = Convert.ToBase64String (Encoding.UTF8.GetBytes (s));
+				status = SendCommand ("AUTH PLAIN " + s);
+				CheckStatus (status, 235);
+			} else {
+				throw new SmtpException ("AUTH types PLAIN, LOGIN not supported by the server");
 			}
 		}
-		
+
 		#endregion // Methods
 		
 		// The HeaderName struct is used to store constant string values representing mail headers.

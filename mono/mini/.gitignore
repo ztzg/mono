@@ -1,8 +1,10 @@
 /Makefile
 /Makefile.in
 /*.o
+/*.so
 /*.exe
 /*.dll
+/*.mdb
 /*.lo
 /*.loT
 /*.la
@@ -20,6 +22,7 @@
 /monow
 /cpu-sparc.h
 /cpu-s390.h
+/cpu-x86.h
 /.hidden
 /semantic.cache
 /.project
@@ -27,3 +30,6 @@
 /iltests.il
 /version.h
 /buildver.h
+/TAGS
+/mono-sgen
+

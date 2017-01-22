@@ -1,3 +1,90 @@
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: move back Mvc2.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: add S.R.DurableInstancing dir to 4.0.
+
+2010-04-28  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (common_dirs): added System.Web.ApplicationServices
+
+2010-04-14  Ankit Jain  <jankit@novell.com>
+
+	* Makefile: Add Moonlight.Build.Tasks to net_2_0_dirs and
+	net_3_5_dirs.
+	* Moonlight.Build.Tasks: New.
+
+2010-04-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : add 4.0 System.Xaml.
+
+2010-03-16  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* Makefile: Add System.Xml.Serialization to the Moonlight build.
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: rename the net_2_1 profile to moonlight.
+
+2010-03-15  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (net_2_0_dirs): added System.Web.Mvc2
+
+2010-03-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : build Sys.Json after Sys.SM.Web.
+
+2010-03-10  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Makefile: For NET_2_1 build System.XML before System.Net
+
+2010-01-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile : added System.ServiceModel.Routing (4.0).
+
+2009-12-15  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Add System.Core to 2.1 bootstrap.
+
+2009-12-07  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Add System.Core to basic.
+
+2009-11-26  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Add Mono.CSharp.
+
+2009-11-09  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: dist dlr subdirs.
+
+2009-11-07  Zoltan Varga  <vargaz@gmail.com>
+
+	* Makefile (net_2_0_dirs): Add System.Data.Services.
+
+2009-11-02  Zoltan Varga  <vargaz@gmail.com>
+
+	* Makefile: Add Mono.Debugger.Soft.
+
+2009-10-30  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Add System.Windows.Forms.DataVisualization
+
+2009-10-14  Jonathan Pryor  <jpryor@novell.com>
+
+	* Makefile: Add Mono.Data.Tds, System.Transactions, System.Data, and
+	  Mono.Data.Sqlite to the MonoTouch build.
+
+2009-10-08  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: build the i18n assemblies on MonoTouch.
+
+2009-10-01  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Updated a copy of monolite.
+
 2009-09-24  Marek Safar  <marek.safar@gmail.com>
 
 	* Makefile: Removed System.Json from net_4_0 profile.

@@ -104,7 +104,7 @@ static int array_size = 16;
 static __thread gsize tls_pthread_self MONO_TLS_FAST;
 #endif
 
-#ifndef PLATFORM_WIN32
+#ifndef HOST_WIN32
 #ifdef HAVE_KW_THREAD
 #define GetCurrentThreadId() tls_pthread_self
 #else
@@ -125,7 +125,14 @@ mono_monitor_init (void)
 void
 mono_monitor_cleanup (void)
 {
+	MonitorArray *marray, *next = NULL;
+
 	/*DeleteCriticalSection (&monitor_mutex);*/
+
+	for (marray = monitor_allocated; marray; marray = next) {
+		next = marray->next;
+		g_free (marray);
+	}
 }
 
 /*
@@ -136,7 +143,7 @@ mono_monitor_cleanup (void)
 void
 mono_monitor_init_tls (void)
 {
-#if !defined(PLATFORM_WIN32) && defined(HAVE_KW_THREAD)
+#if !defined(HOST_WIN32) && defined(HAVE_KW_THREAD)
 	tls_pthread_self = pthread_self ();
 #endif
 }
@@ -237,6 +244,14 @@ mon_new (gsize id)
 			for (i = 0; i < marray->num_monitors; ++i) {
 				if (marray->monitors [i].data == NULL) {
 					new = &marray->monitors [i];
+					if (new->wait_list) {
+						/* Orphaned events left by aborted threads */
+						while (new->wait_list) {
+							LOCK_DEBUG (g_message (G_GNUC_PRETTY_FUNCTION ": (%d): Closing orphaned event %d", GetCurrentThreadId (), new->wait_list->data));
+							CloseHandle (new->wait_list->data);
+							new->wait_list = g_slist_remove (new->wait_list, new->wait_list->data);
+						}
+					}
 					new->data = monitor_freelist;
 					monitor_freelist = new;
 				}
@@ -384,7 +399,7 @@ mono_monitor_try_enter_internal (MonoObject *obj, guint32 ms, gboolean allow_int
 	guint32 then = 0, now, delta;
 	guint32 waitms;
 	guint32 ret;
-	MonoThread *thread;
+	MonoInternalThread *thread;
 
 	LOCK_DEBUG (g_message("%s: (%d) Trying to lock object %p (%d ms)", __func__, id, obj, ms));
 
@@ -582,7 +597,7 @@ retry_contended:
 
 	mono_perfcounters->thread_queue_len++;
 	mono_perfcounters->thread_queue_max++;
-	thread = mono_thread_current ();
+	thread = mono_thread_internal_current ();
 
 	mono_thread_set_state (thread, ThreadState_WaitSleepJoin);
 
@@ -623,7 +638,7 @@ retry_contended:
 		}
 	} else {
 		if (ret == WAIT_TIMEOUT || (ret == WAIT_IO_COMPLETION && !allow_interruption)) {
-			if (ret == WAIT_IO_COMPLETION && (mono_thread_test_state (mono_thread_current (), (ThreadState_StopRequested|ThreadState_SuspendRequested)))) {
+			if (ret == WAIT_IO_COMPLETION && (mono_thread_test_state (mono_thread_internal_current (), (ThreadState_StopRequested|ThreadState_SuspendRequested)))) {
 				/* 
 				 * We have to obey a stop/suspend request even if 
 				 * allow_interruption is FALSE to avoid hangs at shutdown.
@@ -839,7 +854,7 @@ mono_monitor_get_fast_enter_method (MonoMethod *monitor_enter_method)
 	mono_mb_emit_byte (mb, MONO_CUSTOM_PREFIX);
 	mono_mb_emit_byte (mb, CEE_MONO_TLS);
 	mono_mb_emit_i4 (mb, thread_tls_offset);
-	mono_mb_emit_icon (mb, G_STRUCT_OFFSET (MonoThread, tid));
+	mono_mb_emit_icon (mb, G_STRUCT_OFFSET (MonoInternalThread, tid));
 	mono_mb_emit_byte (mb, CEE_ADD);
 	mono_mb_emit_byte (mb, CEE_LDIND_I);
 	mono_mb_emit_stloc (mb, tid_loc);
@@ -980,7 +995,7 @@ mono_monitor_get_fast_exit_method (MonoMethod *monitor_exit_method)
 	mono_mb_emit_byte (mb, MONO_CUSTOM_PREFIX);
 	mono_mb_emit_byte (mb, CEE_MONO_TLS);
 	mono_mb_emit_i4 (mb, thread_tls_offset);
-	mono_mb_emit_icon (mb, G_STRUCT_OFFSET (MonoThread, tid));
+	mono_mb_emit_icon (mb, G_STRUCT_OFFSET (MonoInternalThread, tid));
 	mono_mb_emit_byte (mb, CEE_ADD);
 	mono_mb_emit_byte (mb, CEE_LDIND_I);
 	owned_branch = mono_mb_emit_short_branch (mb, CEE_BEQ_S);
@@ -1276,7 +1291,7 @@ ves_icall_System_Threading_Monitor_Monitor_wait (MonoObject *obj, guint32 ms)
 	guint32 ret;
 	gboolean success = FALSE;
 	gint32 regain;
-	MonoThread *thread = mono_thread_current ();
+	MonoInternalThread *thread = mono_thread_internal_current ();
 
 	LOCK_DEBUG (g_message ("%s: (%d) Trying to wait for %p with timeout %dms", __func__, GetCurrentThreadId (), obj, ms));
 	
@@ -1339,7 +1354,14 @@ ves_icall_System_Threading_Monitor_Monitor_wait (MonoObject *obj, guint32 ms)
 	mono_thread_clr_state (thread, ThreadState_WaitSleepJoin);
 	
 	if (mono_thread_interruption_requested ()) {
-		CloseHandle (event);
+		/* 
+		 * Can't remove the event from wait_list, since the monitor is not locked by
+		 * us. So leave it there, mon_new () will delete it when the mon structure
+		 * is placed on the free list.
+		 * FIXME: The caller expects to hold the lock after the wait returns, but it
+		 * doesn't happen in this case:
+		 * http://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=97268
+		 */
 		return FALSE;
 	}
 

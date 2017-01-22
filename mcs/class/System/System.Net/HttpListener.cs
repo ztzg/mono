@@ -64,7 +64,6 @@ namespace System.Net {
 			}
 		}
 
-		//TODO: when is this called?
 		public AuthenticationSchemeSelector AuthenticationSchemeSelectorDelegate {
 			get { return auth_selector; }
 			set {
@@ -217,10 +216,16 @@ namespace System.Net {
 			}
 
 			HttpListenerContext context = ares.GetContext ();
-			if (auth_schemes != AuthenticationSchemes.Anonymous) {
-				context.ParseAuthentication ();
-			}
+			context.ParseAuthentication (SelectAuthenticationScheme (context));
 			return context; // This will throw on error.
+		}
+
+		internal AuthenticationSchemes SelectAuthenticationScheme (HttpListenerContext context)
+		{
+			if (AuthenticationSchemeSelectorDelegate != null)
+				return AuthenticationSchemeSelectorDelegate (context.Request);
+			else
+				return auth_schemes;
 		}
 
 		public HttpListenerContext GetContext ()

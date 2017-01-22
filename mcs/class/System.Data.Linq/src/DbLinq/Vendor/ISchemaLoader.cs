@@ -39,11 +39,7 @@ namespace DbLinq.Vendor
         /// <summary>
         /// Underlying vendor
         /// </summary>
-        IVendor Vendor { get; }
-        /// <summary>
-        /// Vendor typed DataContext type
-        /// </summary>
-        System.Type DataContextType { get; }
+        IVendor Vendor { get; set; }
         /// <summary>
         /// Connection used to read schema
         /// </summary>
@@ -66,12 +62,5 @@ namespace DbLinq.Vendor
         /// <returns></returns>
         Database Load(string databaseName, INameAliases nameAliases, NameFormat nameFormat,
             bool loadStoredProcedures, string contextNamespace, string entityNamespace);
-
-        /// <summary>
-        /// Checks all names in DBML schema, 
-        /// and enquotes the ones where a casing problem could occur
-        /// </summary>
-        /// <param name="schema"></param>
-        void CheckNamesSafety(Database schema);
     }
 }

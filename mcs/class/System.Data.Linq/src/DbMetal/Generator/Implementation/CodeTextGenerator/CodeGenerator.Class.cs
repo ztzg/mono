@@ -48,7 +48,13 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
     {
         protected virtual void WriteClasses(CodeWriter writer, Database schema, GenerationContext context)
         {
-            foreach (var table in schema.Tables)
+            IEnumerable<Table> tables = schema.Tables;
+
+            var types = context.Parameters.GenerateTypes;
+            if (types.Count > 0)
+                tables = tables.Where(t => types.Contains(t.Type.Name));
+
+            foreach (var table in tables)
                 WriteClass(writer, table, schema, context);
         }
 
@@ -70,16 +76,15 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
 
             var tableAttribute = NewAttributeDefinition<TableAttribute>();
             tableAttribute["Name"] = table.Name;
-            //using (WriteAttributes(writer, context.Parameters.EntityExposedAttributes))
-            using (WriteAttributes(writer, GetAttributeNames(context, context.Parameters.EntityExposedAttributes)))
             using (writer.WriteAttribute(tableAttribute))
             using (writer.WriteClass(specifications,
-                                     table.Type.Name, entityBase, context.Parameters.EntityImplementedInterfaces))
+                                     table.Type.Name, entityBase, context.Parameters.EntityInterfaces))
             {
                 WriteClassHeader(writer, table, context);
                 WriteCustomTypes(writer, table, schema, context);
+                WriteClassExtensibilityDeclarations(writer, table, context);
                 WriteClassProperties(writer, table, context);
-                if (context.Parameters.GenerateEqualsAndHash)
+                if (context.Parameters.GenerateEqualsHash)
                     WriteClassEqualsAndHash(writer, table, context);
                 WriteClassChildren(writer, table, schema, context);
                 WriteClassParents(writer, table, schema, context);
@@ -112,13 +117,12 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                         var member = writer.GetVariableExpression(primaryKey.Storage);
                         string primaryKeyHashCode = writer.GetMethodCallExpression(writer.GetMemberExpression(member, "GetHashCode"));
                         if (primaryKey.CanBeNull
-                        || primaryKey.ExtendedType == null
                         || GetType(primaryKey.Type, false).IsClass) // this patch to ensure that even if DB does not allow nulls,
                         // our in-memory object won't generate a fault
                         {
                             var isNullExpression = writer.GetEqualExpression(member, writer.GetNullExpression());
                             var nullExpression = writer.GetLiteralValue(0);
-                            primaryKeyHashCode = writer.GetTernaryExpression(isNullExpression, nullExpression, primaryKeyHashCode);
+                            primaryKeyHashCode = "(" + writer.GetTernaryExpression(isNullExpression, nullExpression, primaryKeyHashCode) + ")";
                         }
                         if (string.IsNullOrEmpty(hashCode))
                             hashCode = primaryKeyHashCode;
@@ -147,9 +151,14 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                     foreach (var primaryKey in primaryKeys)
                     {
                         var member = writer.GetVariableExpression(primaryKey.Storage);
-                        string primaryKeyTest = writer.GetMethodCallExpression(writer.GetMemberExpression(writer.GetLiteralType(typeof(object)), "Equals"),
-                                                                               member,
-                                                                               writer.GetMemberExpression(other, member));
+                        string primaryKeyTest = writer.GetMethodCallExpression(
+                                writer.GetMemberExpression(
+                                    writer.GetMemberExpression(
+                                        writer.GetGenericName("System.Collections.Generic.EqualityComparer", primaryKey.Type),
+                                        "Default"),
+                                    "Equals"),
+                                member,
+                                writer.GetMemberExpression(other, member));
                         if (string.IsNullOrEmpty(andExpression))
                             andExpression = primaryKeyTest;
                         else
@@ -171,6 +180,19 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
         {
             foreach (IImplementation implementation in context.Implementations())
                 implementation.WriteClassHeader(writer, table, context);
+        }
+
+        protected virtual void WriteClassExtensibilityDeclarations(CodeWriter writer, Table table, GenerationContext context)
+        {
+            using (writer.WriteRegion("Extensibility Method Definitions"))
+            {
+                writer.WriteLine("partial void OnCreated();");
+                foreach (var c in table.Type.Columns)
+                {
+                    writer.WriteLine("partial void On{0}Changed();", c.Member);
+                    writer.WriteLine("partial void On{0}Changing({1} value);", c.Member, GetTypeOrExtendedType(writer, c));
+                }
+            }
         }
 
         /// <summary>
@@ -249,7 +271,7 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
         /// <param name="context"></param>
         /// <param name="attributes"></param>
         /// <returns></returns>
-        protected virtual string[] GetAttributeNames(GenerationContext context, string[] attributes)
+        protected virtual string[] GetAttributeNames(GenerationContext context, IEnumerable<string> attributes)
         {
             return (from a in attributes select GetName(a)).ToArray();
         }
@@ -305,7 +327,7 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                 specifications |= GetSpecificationDefinition(property.Modifier);
 
             //using (WriteAttributes(writer, context.Parameters.MemberExposedAttributes))
-            using (WriteAttributes(writer, GetAttributeNames(context, context.Parameters.MemberExposedAttributes)))
+            using (WriteAttributes(writer, GetAttributeNames(context, context.Parameters.MemberAttributes)))
             using (writer.WriteAttribute(NewAttributeDefinition<DebuggerNonUserCodeAttribute>()))
             using (writer.WriteAttribute(column))
             using (writer.WriteProperty(specifications, property.Member, GetTypeOrExtendedType(writer, property)))
@@ -772,6 +794,7 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                         )
                     ));
                 }
+                writer.WriteLine(writer.GetStatement(writer.GetMethodCallExpression("OnCreated")));
             }
         }
     }

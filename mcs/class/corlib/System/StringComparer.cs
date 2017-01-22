@@ -27,8 +27,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
-
 using System.Collections;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -145,7 +143,7 @@ namespace System
 	}
 
 	[Serializable]
-	class CultureAwareComparer : StringComparer
+	sealed class CultureAwareComparer : StringComparer
 	{
 		readonly bool _ignoreCase;
 		readonly CompareInfo _compareInfo;
@@ -180,7 +178,7 @@ namespace System
 	}
 
 	[Serializable]
-	internal class OrdinalComparer : StringComparer
+	internal sealed class OrdinalComparer : StringComparer
 	{
 		readonly bool _ignoreCase;
 
@@ -207,6 +205,9 @@ namespace System
 
 		public override int GetHashCode (string s)
 		{
+			if (s == null)
+				throw new ArgumentNullException ("s");
+
 			if (_ignoreCase)
 				return s.GetCaseInsensitiveHashCode ();
 			else
@@ -214,5 +215,3 @@ namespace System
 		}
 	}
 }
-
-#endif

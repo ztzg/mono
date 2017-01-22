@@ -1,4 +1,4 @@
-if(PLATFORM_WIN32)
+if(HOST_WIN32)
 ###win32_sources = \
 ###	console-win32.c
 
@@ -33,7 +33,7 @@ set(unix_sources
 
 set(platform_sources ${unix_sources})
 
-endif(PLATFORM_WIN32)
+endif(HOST_WIN32)
 
 ###bin_PROGRAMS = pedump
 
@@ -158,6 +158,8 @@ set(libmonoruntime_la_SOURCES
 	security-manager.h
 	sgen-gc.c	
 	sgen-gc.h	
+	sgen-archdep.h
+	sgen-scan-object.h
 	string-icalls.c 
 	string-icalls.h 
 	sysmath.h	

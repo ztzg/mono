@@ -90,8 +90,12 @@ restore_context (MonoContext *ctx)
  * Returns a pointer to a method which restores a previously saved sigcontext.
  */
 gpointer
-mono_arch_get_restore_context (void)
+mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
 {
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
+
 	return restore_context;
 }
 
@@ -216,8 +220,12 @@ call_filter (MonoContext *ctx, gpointer ip)
  * @exc object in this case).
  */
 gpointer
-mono_arch_get_call_filter (void)
+mono_arch_get_call_filter (MonoTrampInfo **info, gboolean aot)
 {
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
+
 	/* Initialize the real filter non-lazily */
 	get_real_call_filter ();
 
@@ -256,7 +264,7 @@ throw_exception (MonoObject *exc, guint64 rethrow)
 		res = unw_get_reg (&ctx.cursor, UNW_IA64_SP, &sp);
 		g_assert (res == 0);
 
-		ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)ip);
+		ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)ip, NULL);
 
 		//printf ("UN: %s %lx %lx\n", ji ? ji->method->name : "", ip, sp);
 
@@ -354,56 +362,24 @@ get_throw_trampoline (gboolean rethrow)
  * signature: void (*func) (MonoException *exc); 
  *
  */
-gpointer 
-mono_arch_get_throw_exception (void)
+gpointer
+mono_arch_get_throw_exception (MonoTrampInfo **info, gboolean aot)
 {
-	static guint8* start;
-	static gboolean inited = FALSE;
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
-	if (inited)
-		return start;
-
-	start = get_throw_trampoline (FALSE);
-
-	inited = TRUE;
-
-	return start;
+	return get_throw_trampoline (FALSE);
 }
 
-gpointer 
-mono_arch_get_rethrow_exception (void)
+gpointer
+mono_arch_get_rethrow_exception (MonoTrampInfo **info, gboolean aot)
 {
-	static guint8* start;
-	static gboolean inited = FALSE;
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
-	if (inited)
-		return start;
-
-	start = get_throw_trampoline (TRUE);
-
-	inited = TRUE;
-
-	return start;
-}
-
-gpointer 
-mono_arch_get_throw_exception_by_name (void)
-{	
-	guint8* start;
-	Ia64CodegenState code;
-
-	start = mono_global_codeman_reserve (64);
-
-	/* Not used on ia64 */
-	ia64_codegen_init (code, start);
-	ia64_break_i (code, 1001);
-	ia64_codegen_close (code);
-
-	g_assert ((code.buf - start) <= 256);
-
-	mono_arch_flush_icache (start, code.buf - start);
-
-	return start;
+	return get_throw_trampoline (TRUE);
 }
 
 /**
@@ -416,8 +392,8 @@ mono_arch_get_throw_exception_by_name (void)
  * to get the IP of the throw. Passing the offset has the advantage that it 
  * needs no relocations in the caller.
  */
-gpointer 
-mono_arch_get_throw_corlib_exception (void)
+gpointer
+mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8* res;
 	static gboolean inited = FALSE;
@@ -427,6 +403,10 @@ mono_arch_get_throw_corlib_exception (void)
 	Ia64CodegenState code;
 	unw_dyn_info_t *di;
 	unw_dyn_region_info_t *r_pro;
+
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
 	if (inited)
 		return res;
@@ -535,7 +515,7 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInf
 		if (prev_ji && ((guint8*)ip > (guint8*)prev_ji->code_start && ((guint8*)ip < ((guint8*)prev_ji->code_start) + prev_ji->code_size)))
 			ji = prev_ji;
 		else
-			ji = mini_jit_info_table_find (domain, (gpointer)ip);
+			ji = mini_jit_info_table_find (domain, (gpointer)ip, NULL);
 
 		if (managed)
 			*managed = FALSE;
@@ -611,7 +591,7 @@ mono_arch_handle_exception (void *sigctx, gpointer obj, gboolean test_only)
 		res = unw_get_reg (&ctx.cursor, UNW_IA64_IP, &ip);
 		g_assert (res == 0);
 
-		ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)ip);
+		ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)ip, NULL);
 
 		if (ji)
 			break;

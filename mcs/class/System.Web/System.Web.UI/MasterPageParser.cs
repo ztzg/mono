@@ -4,7 +4,7 @@
 // Authors:
 //   Lluis Sanchez Gual (lluis@novell.com)
 //
-// (C) 2005 Novell, Inc.
+// (C) 2005-2010 Novell, Inc.
 //
 
 //
@@ -27,8 +27,6 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-
-#if NET_2_0
 
 using System;
 using System.Collections;
@@ -90,12 +88,12 @@ namespace System.Web.UI
 			mp.MasterPageFile = MasterPageFile;
 		}
 
-		internal override void AddDirective (string directive, Hashtable atts)
+		internal override void AddDirective (string directive, IDictionary atts)
 		{
-			if (String.Compare ("MasterType", directive, true) == 0) {
+			if (String.Compare ("MasterType", directive, StringComparison.OrdinalIgnoreCase) == 0) {
 				PageParserFilter pfilter = PageParserFilter;
 				if (pfilter != null)
-					pfilter.PreprocessDirective (directive.ToLower (CultureInfo.InvariantCulture), atts);
+					pfilter.PreprocessDirective (directive.ToLowerInvariant (), atts);
 				
 				string type = GetString (atts, "TypeName", null);
 				if (type != null) {
@@ -148,5 +146,3 @@ namespace System.Web.UI
 		}
 	}
 }
-
-#endif

@@ -201,37 +201,43 @@ namespace System.Web.Services.Protocols
 		{
 			get { return logicalMethods; }
 		}
-		
+
 		internal TypeStubInfo GetTypeStub (string protocolName)
 		{
 			lock (this)
 			{
 				switch (protocolName)
 				{
-					case "Soap": 
-						if (soapProtocol == null) soapProtocol = CreateTypeStubInfo (typeof(SoapTypeStubInfo));
-						return soapProtocol;
-#if NET_2_0
-					case "Soap12": 
-						if (soap12Protocol == null) soap12Protocol = CreateTypeStubInfo (typeof(Soap12TypeStubInfo));
-						return soap12Protocol;
+				case "Soap": 
+					if (soapProtocol == null){
+						soapProtocol = new SoapTypeStubInfo (this);
+						soapProtocol.Initialize ();
+					}
+					return soapProtocol;
+					
+				case "Soap12": 
+					if (soap12Protocol == null){
+						soap12Protocol = new Soap12TypeStubInfo (this);
+						soap12Protocol.Initialize ();
+					}
+					return soap12Protocol;
+#if !MONOTOUCH
+				case "HttpGet":
+					if (httpGetProtocol == null){
+						httpGetProtocol = new HttpGetTypeStubInfo (this);
+						httpGetProtocol.Initialize ();
+					}
+					return httpGetProtocol;
+				case "HttpPost":
+					if (httpPostProtocol == null){
+						httpPostProtocol = new HttpPostTypeStubInfo (this);
+						httpPostProtocol.Initialize ();
+					}
+					return httpPostProtocol;
 #endif
-					case "HttpGet":
-						if (httpGetProtocol == null) httpGetProtocol = CreateTypeStubInfo (typeof(HttpGetTypeStubInfo));
-						return httpGetProtocol;
-					case "HttpPost":
-						if (httpPostProtocol == null) httpPostProtocol = CreateTypeStubInfo (typeof(HttpPostTypeStubInfo));
-						return httpPostProtocol;
 				}
+				throw new InvalidOperationException ("Protocol " + protocolName + " not supported");
 			}
-			throw new InvalidOperationException ("Protocol " + protocolName + " not supported");
-		}
-		
-		TypeStubInfo CreateTypeStubInfo (Type type)
-		{
-			TypeStubInfo tsi = (TypeStubInfo) Activator.CreateInstance (type, new object[] {this});
-			tsi.Initialize ();
-			return tsi;
 		}
 		
 		internal string GetWebServiceLiteralNamespace (string baseNamespace)

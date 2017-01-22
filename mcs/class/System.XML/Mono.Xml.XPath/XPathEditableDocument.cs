@@ -206,7 +206,20 @@ namespace Mono.Xml.XPath
 
 		public override void WriteRaw (string raw)
 		{
-			throw new NotSupportedException ();
+			XmlReader reader = new XmlTextReader(new System.IO.StringReader(raw));
+			WriteRaw(reader);
+		}
+
+		private void WriteRaw(XmlReader reader)
+		{
+			if (reader != null && reader.NodeType == XmlNodeType.Element)
+			{
+				WriteStartElement (reader.Prefix, reader.LocalName, reader.NamespaceURI);
+				WriteAttributes (reader, true);
+				WriteRaw (reader.ReadSubtree ());
+				WriteEndElement ();
+
+			}
 		}
 
 		public override void WriteSurrogateCharEntity (char msb, char lsb)
@@ -253,7 +266,10 @@ namespace Mono.Xml.XPath
 
 		public override void WriteEndAttribute ()
 		{
-			XmlElement element = current as XmlElement;
+			// when the writer is for AppendChild() and the root 
+			// node is element, it allows to write attributes
+			// (IMHO incorrectly: isn't it append "child" ???)
+			XmlElement element = (current as XmlElement) ?? (nextSibling == null ? parent as XmlElement : null);
 			if (state != WriteState.Attribute || element == null)
 				throw new InvalidOperationException ("Current state is not inside attribute. Cannot close attribute.");
 			element.SetAttributeNode (attribute);

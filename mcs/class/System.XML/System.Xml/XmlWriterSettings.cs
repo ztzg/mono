@@ -61,6 +61,15 @@ namespace System.Xml
 			return (XmlWriterSettings) MemberwiseClone ();
 		}
 
+		// This might better be rewrite to "examine two settings and return the existing one or new one if required".
+		internal void MergeFrom (XmlWriterSettings other)
+		{
+			CloseOutput |= other.CloseOutput;
+			OmitXmlDeclaration |= other.OmitXmlDeclaration;
+			if (ConformanceLevel == ConformanceLevel.Auto)
+				ConformanceLevel = other.ConformanceLevel;
+		}
+
 		public void Reset ()
 		{
 			checkCharacters = true;
@@ -145,10 +154,13 @@ namespace System.Xml
 			get { return outputMethod; }
 			//set { outputMethod = value; }
 		}
-#if NET_2_1 && !MONOTOUCH
-		[MonoTODO]
-		public NamespaceHandling NamespaceHandling { get; set; }
+
+#if MOONLIGHT || NET_4_0
+		public
+#else
+		internal
 #endif
+		NamespaceHandling NamespaceHandling { get; set; }
 	}
 }
 

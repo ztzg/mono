@@ -16,8 +16,7 @@ namespace Mono.CSharp
 	using System;
 	using System.Reflection;
 	using System.Reflection.Emit;
-	using System.Collections;
-	using System.Collections.Specialized;
+	using System.Collections.Generic;
 	using System.IO;
 	using System.Text;
 	using System.Globalization;
@@ -39,27 +38,27 @@ namespace Mono.CSharp
 		//
 		// Assemblies references to be linked.   Initialized with
 		// mscorlib.dll here.
-		ArrayList references;
+		List<string> references;
 
 		//
 		// If any of these fail, we ignore the problem.  This is so
 		// that we can list all the assemblies in Windows and not fail
 		// if they are missing on Linux.
 		//
-		ArrayList soft_references;
+		List<string> soft_references;
 
 		// 
 		// External aliases for assemblies.
 		//
-		Hashtable external_aliases;
+		Dictionary<string, string> external_aliases;
 
 		//
 		// Modules to be linked
 		//
-		ArrayList modules;
+		List<string> modules;
 
 		// Lookup paths
-		static ArrayList link_paths;
+		List<string> link_paths;
 
 		// Whether we want to only run the tokenizer
 		bool tokenize;
@@ -69,6 +68,7 @@ namespace Mono.CSharp
 		bool want_debugging_support;
 		bool parse_only;
 		bool timestamps;
+		internal int fatal_errors;
 		
 		//
 		// Whether to load the initial config file (what CSC.RSP has by default)
@@ -97,7 +97,7 @@ namespace Mono.CSharp
 		//
 		Encoding encoding;
 
-		readonly CompilerContext ctx;
+		internal readonly CompilerContext ctx;
 
 		static readonly char[] argument_value_separator = new char [] { ';', ',' };
 
@@ -114,7 +114,7 @@ namespace Mono.CSharp
 
 		public static Driver Create (string[] args, bool require_files, ReportPrinter printer)
 		{
-			Driver d = new Driver (new CompilerContext (new Report (printer)));
+			Driver d = new Driver (new CompilerContext (new ReflectionMetaImporter (), new Report (printer)));
 
 			if (!d.ParseArguments (args, require_files))
 				return null;
@@ -203,30 +203,25 @@ namespace Mono.CSharp
 
 			reader.Position = 0;
 			Parse (reader, file);
+			reader.Dispose ();
 			input.Close ();
 		}	
 		
 		void Parse (SeekableStreamReader reader, CompilationUnit file)
 		{
 			CSharpParser parser = new CSharpParser (reader, file, ctx);
-			try {
-				parser.parse ();
-			} catch (Exception ex) {
-				Report.Error(589, parser.Lexer.Location,
-					"Compilation aborted in file `{0}', {1}", file.Name, ex);
-			}
+			parser.parse ();
 		}
 
 		static void OtherFlags ()
 		{
 			Console.WriteLine (
 				"Other flags in the compiler\n" +
-				"   --fatal            Makes errors fatal\n" +
+				"   --fatal[=COUNT]    Makes errors after COUNT fatal\n" +
+				"   --lint             Enhanced warnings\n" +
 				"   --parse            Only parses the source file\n" +
-				"   --typetest         Tests the tokenizer's built-in type parser\n" +
 				"   --stacktrace       Shows stack trace at error location\n" +
 				"   --timestamp        Displays time stamps of various compiler events\n" +
-				"   --expect-error X   Expect that error X will be encountered\n" +
 				"   -v                 Verbose parsing (for debugging the parser)\n" + 
 				"   --mcs-debug X      Sets MCS debugging level to X\n");
 		}
@@ -303,10 +298,12 @@ namespace Mono.CSharp
 		public static int Main (string[] args)
 		{
 			Location.InEmacs = Environment.GetEnvironmentVariable ("EMACS") == "t";
-
-			Driver d = Driver.Create (args, true, new ConsoleReportPrinter ());
+			var crp = new ConsoleReportPrinter ();
+			Driver d = Driver.Create (args, true, crp);
 			if (d == null)
 				return 1;
+
+			crp.Fatal = d.fatal_errors;
 
 			if (d.Compile () && d.Report.Errors == 0) {
 				if (d.Report.Warnings > 0) {
@@ -487,8 +484,8 @@ namespace Mono.CSharp
 			foreach (string r in references)
 				LoadAssembly (r, false);
 
-			foreach (DictionaryEntry entry in external_aliases)
-				LoadAssembly ((string) entry.Value, (string) entry.Key, false);
+			foreach (var entry in external_aliases)
+				LoadAssembly (entry.Value, entry.Key, false);
 				
 			GlobalRootNamespace.Instance.ComputeNamespaces (ctx);
 		}
@@ -496,7 +493,7 @@ namespace Mono.CSharp
 		static string [] LoadArgs (string file)
 		{
 			StreamReader f;
-			ArrayList args = new ArrayList ();
+			var args = new List<string> ();
 			string line;
 			try {
 				f = new StreamReader (file);
@@ -536,10 +533,7 @@ namespace Mono.CSharp
 				}
 			}
 
-			string [] ret_value = new string [args.Count];
-			args.CopyTo (ret_value, 0);
-
-			return ret_value;
+			return args.ToArray ();
 		}
 
 		//
@@ -592,13 +586,13 @@ namespace Mono.CSharp
 
 		bool ParseArguments (string[] args, bool require_files)
 		{
-			references = new ArrayList ();
-			external_aliases = new Hashtable ();
-			soft_references = new ArrayList ();
-			modules = new ArrayList (2);
-			link_paths = new ArrayList ();
+			references = new List<string> ();
+			external_aliases = new Dictionary<string, string> ();
+			soft_references = new List<string> ();
+			modules = new List<string> (2);
+			link_paths = new List<string> ();
 
-			ArrayList response_file_list = null;
+			List<string> response_file_list = null;
 			bool parsing_options = true;
 
 			for (int i = 0; i < args.Length; i++) {
@@ -611,7 +605,7 @@ namespace Mono.CSharp
 					string response_file = arg.Substring (1);
 
 					if (response_file_list == null)
-						response_file_list = new ArrayList ();
+						response_file_list = new List<string> ();
 
 					if (response_file_list.Contains (response_file)) {
 						Report.Error (
@@ -695,12 +689,12 @@ namespace Mono.CSharp
 		{
 			Location.Initialize ();
 
-			ArrayList cu = Location.SourceFiles;
+			var cu = Location.SourceFiles;
 			for (int i = 0; i < cu.Count; ++i) {
 				if (tokenize) {
-					tokenize_file ((CompilationUnit) cu [i], ctx);
+					tokenize_file (cu [i], ctx);
 				} else {
-					Parse ((CompilationUnit) cu [i]);
+					Parse (cu [i]);
 				}
 			}
 		}
@@ -988,14 +982,14 @@ namespace Mono.CSharp
 				}
 				link_paths.Add (args [++i]);
 				return true;
+
+			case "--lint":
+				RootContext.EnhancedWarnings = true;
+				return true;
 				
 			case "--nostdlib":
 				Report.Warning (-29, 1, "Compatibility: Use -nostdlib instead of --nostdlib");
 				RootContext.StdLib = false;
-				return true;
-				
-			case "--fatal":
-				Report.Fatal = true;
 				return true;
 				
 			case "--nowarn":
@@ -1068,6 +1062,17 @@ namespace Mono.CSharp
 				Report.Warning (-29, 1, "Compatibility: Use -noconfig option instead of --noconfig");
 				load_default_config = false;
 				return true;
+
+			default:
+				if (arg.StartsWith ("--fatal")){
+					if (arg.StartsWith ("--fatal=")){
+						if (!Int32.TryParse (arg.Substring (8), out fatal_errors))
+							fatal_errors = 1;
+					} else
+						fatal_errors = 1;
+					return true;
+				}
+				break;
 			}
 
 			return false;
@@ -1181,6 +1186,7 @@ namespace Mono.CSharp
 				RootContext.Optimize = false;
 				return true;
 
+			// TODO: Not supported by csc 3.5+
 			case "/incremental":
 			case "/incremental+":
 			case "/incremental-":
@@ -1446,7 +1452,6 @@ namespace Mono.CSharp
 				return true;
 
 			case "/platform":
-#if GMCS_SOURCE
 				switch (value.ToLower (CultureInfo.InvariantCulture)) {
 				case "anycpu":
 					RootContext.Platform = Platform.AnyCPU;
@@ -1464,7 +1469,7 @@ namespace Mono.CSharp
 					Report.Error (1672, "Invalid platform type for -platform. Valid options are `anycpu', `x86', `x64' or `itanium'");
 					break;
 				}
-#endif
+
 				return true;
 
 				// We just ignore this.
@@ -1529,13 +1534,10 @@ namespace Mono.CSharp
 				switch (value.ToLower (CultureInfo.InvariantCulture)) {
 				case "iso-1":
 					RootContext.Version = LanguageVersion.ISO_1;
-					return true;
-					
+					return true;	
 				case "default":
 					RootContext.Version = LanguageVersion.Default;
-#if GMCS_SOURCE					
 					RootContext.AddConditional ("__V2__");
-#endif
 					return true;
 				case "iso-2":
 					RootContext.Version = LanguageVersion.ISO_2;
@@ -1647,7 +1649,8 @@ namespace Mono.CSharp
 		public bool Compile ()
 		{
 			// TODO: Should be passed to parser as an argument
-			RootContext.ToplevelTypes = new ModuleContainer (ctx, RootContext.Unsafe);
+			RootContext.ToplevelTypes = new ModuleCompiled (ctx, RootContext.Unsafe);
+			var ctypes = TypeManager.InitCoreTypes ();
 
 			Parse ();
 			if (Report.Errors > 0)
@@ -1700,6 +1703,7 @@ namespace Mono.CSharp
 			if (timestamps)
 				ShowTime ("Loading references");
 
+			ctx.MetaImporter.Initialize ();
 			LoadReferences ();
 			
 			if (modules.Count > 0) {
@@ -1710,7 +1714,7 @@ namespace Mono.CSharp
 			if (timestamps)
 				ShowTime ("References loaded");
 			
-			if (!TypeManager.InitCoreTypes (ctx) || Report.Errors > 0)
+			if (!TypeManager.InitCoreTypes (ctx, ctypes))
 				return false;
 
 			TypeManager.InitOptionalCoreTypes (ctx);
@@ -1729,8 +1733,7 @@ namespace Mono.CSharp
 				return false;
 			if (timestamps)
 				ShowTime ("Populate tree");
-			if (!RootContext.StdLib)
-				RootContext.BootCorlib_PopulateCoreTypes ();
+
 			RootContext.PopulateTypes ();
 
 			if (Report.Errors == 0 &&
@@ -1753,7 +1756,6 @@ namespace Mono.CSharp
 			if (RootContext.VerifyClsCompliance) {
 				if (CodeGen.Assembly.IsClsCompliant) {
 					AttributeTester.VerifyModulesClsCompliance (ctx);
-					TypeManager.LoadAllImportedTypes ();
 				}
 			}
 			if (Report.Errors > 0)
@@ -1876,28 +1878,13 @@ namespace Mono.CSharp
 	{
 		interface IResource
 		{
-			void Emit ();
+			void Emit (CompilerContext cc);
 			string FileName { get; }
 		}
 
 		class EmbededResource : IResource
 		{
 			static MethodInfo embed_res;
-
-			static EmbededResource () {
-				Type[] argst = new Type [] { 
-											   typeof (string), typeof (string), typeof (ResourceAttributes)
-										   };
-
-				embed_res = typeof (AssemblyBuilder).GetMethod (
-					"EmbedResourceFile", BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,
-					null, CallingConventions.Any, argst, null);
-				
-				if (embed_res == null) {
-					RootContext.ToplevelTypes.Compiler.Report.RuntimeMissingSupport (Location.Null, "Resource embedding");
-				}
-			}
-
 			readonly object[] args;
 
 			public EmbededResource (string name, string file, bool isPrivate)
@@ -1908,8 +1895,22 @@ namespace Mono.CSharp
 				args [2] = isPrivate ? ResourceAttributes.Private : ResourceAttributes.Public;
 			}
 
-			public void Emit()
+			public void Emit (CompilerContext cc)
 			{
+				if (embed_res == null) {
+					var argst = new [] {
+						typeof (string), typeof (string), typeof (ResourceAttributes)
+					};
+
+					embed_res = typeof (AssemblyBuilder).GetMethod (
+						"EmbedResourceFile", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+						null, CallingConventions.Any, argst, null);
+
+					if (embed_res == null) {
+						cc.Report.RuntimeMissingSupport (Location.Null, "Resource embedding");
+					}
+				}
+
 				embed_res.Invoke (CodeGen.Assembly.Builder, args);
 			}
 
@@ -1933,7 +1934,7 @@ namespace Mono.CSharp
 				this.attribute = isPrivate ? ResourceAttributes.Private : ResourceAttributes.Public;
 			}
 
-			public void Emit ()
+			public void Emit (CompilerContext cc)
 			{
 				CodeGen.Assembly.Builder.AddResourceFile (name, Path.GetFileName(file), attribute);
 			}
@@ -1946,7 +1947,7 @@ namespace Mono.CSharp
 		}
 
 
-		IDictionary embedded_resources = new HybridDictionary ();
+		Dictionary<string, IResource> embedded_resources = new Dictionary<string, IResource> ();
 		readonly CompilerContext ctx;
 
 		public Resources (CompilerContext ctx)
@@ -1961,7 +1962,7 @@ namespace Mono.CSharp
 
 		public void Add (bool embeded, string file, string name, bool isPrivate)
 		{
-			if (embedded_resources.Contains (name)) {
+			if (embedded_resources.ContainsKey (name)) {
 				ctx.Report.Error (1508, "The resource identifier `{0}' has already been used in this assembly", name);
 				return;
 			}
@@ -1980,7 +1981,7 @@ namespace Mono.CSharp
 					continue;
 				}
 				
-				r.Emit ();
+				r.Emit (ctx);
 			}
 		}
 	}
@@ -2022,19 +2023,30 @@ namespace Mono.CSharp
 		public static void Reset (bool full_flag)
 		{
 			Driver.Reset ();
-			RootContext.Reset (full_flag);
+			CSharpParser.yacc_verbose_flag = 0;
 			Location.Reset ();
+
+			if (!full_flag)
+				return;
+
+			RootContext.Reset (full_flag);
 			TypeManager.Reset ();
 			PredefinedAttributes.Reset ();
-			TypeHandle.Reset ();
+			ArrayContainer.Reset ();
+			ReferenceContainer.Reset ();
+			PointerContainer.Reset ();
+			Parameter.Reset ();
 
-			if (full_flag)
-				GlobalRootNamespace.Reset ();
+			GlobalRootNamespace.Reset ();
+			Unary.Reset ();
+			Binary.Reset ();
+			ConstantFold.Reset ();
+			CastFromDecimal.Reset ();
+			StringConcat.Reset ();
 			
 			NamespaceEntry.Reset ();
 			CodeGen.Reset ();
 			Attribute.Reset ();
-			AttributeTester.Reset ();
 			AnonymousTypeClass.Reset ();
 			AnonymousMethodBody.Reset ();
 			AnonymousMethodStorey.Reset ();
@@ -2043,7 +2055,6 @@ namespace Mono.CSharp
 			Linq.QueryBlock.TransparentParameter.Reset ();
 			Convert.Reset ();
 			TypeInfo.Reset ();
-			DynamicExpressionStatement.Reset ();
 		}
 	}
 }

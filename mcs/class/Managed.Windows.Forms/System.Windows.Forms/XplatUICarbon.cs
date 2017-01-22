@@ -791,8 +791,11 @@ namespace System.Windows.Forms {
 			ActiveWindow = handle;
 		}
 
-		internal override void AudibleAlert() {
-			throw new NotImplementedException();
+		internal override void AudibleAlert(AlertType alert) {
+			AlertSoundPlay ();
+		}
+
+		internal override void BeginMoveResize (IntPtr handle) {
 		}
 
 		internal override void CaretVisible (IntPtr hwnd, bool visible) {
@@ -1356,8 +1359,9 @@ namespace System.Windows.Forms {
 				ReleaseEvent (evtRef);
 			}
 			
+			object queueobj;
+			loop:
 			lock (queuelock) {
-				loop:
 
 				if (MessageQueue.Count <= 0) {
 					if (Idle != null) 
@@ -1379,13 +1383,13 @@ namespace System.Windows.Forms {
 					msg.message = Msg.WM_ENTERIDLE;
 					return GetMessageResult;
 				}
-				object queueobj = MessageQueue.Dequeue ();
-				if (queueobj is GCHandle) {
-					XplatUIDriverSupport.ExecuteClientMessage((GCHandle)queueobj);
-					goto loop;
-				} else {
-					msg = (MSG)queueobj;
-				}
+				queueobj = MessageQueue.Dequeue ();
+			}
+			if (queueobj is GCHandle) {
+				XplatUIDriverSupport.ExecuteClientMessage((GCHandle)queueobj);
+				goto loop;
+			} else {
+				msg = (MSG)queueobj;
 			}
 			return GetMessageResult;
 		}
@@ -1533,7 +1537,11 @@ namespace System.Windows.Forms {
 				clip_region.MakeEmpty();
 
 				foreach (Rectangle r in hwnd.ClipRectangles) {
-					clip_region.Union (r);
+					/* Expand the region slightly.
+					 * See bug 464464.
+					 */
+					Rectangle r2 = Rectangle.FromLTRB (r.Left, r.Top, r.Right, r.Bottom + 1);
+					clip_region.Union (r2);
 				}
 
 				if (hwnd.UserClip != null) {
@@ -2369,6 +2377,9 @@ namespace System.Windows.Forms {
 		[DllImport("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
 		extern static short GetMBarHeight ();
 		
+		[DllImport("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
+		extern static void AlertSoundPlay ();
+
 		#region Cursor imports
 		[DllImport("/System/Library/Frameworks/Carbon.framework/Versions/Current/Carbon")]
 		extern static Carbon.HIRect CGDisplayBounds (IntPtr displayID);

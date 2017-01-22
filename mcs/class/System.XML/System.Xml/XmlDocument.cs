@@ -52,6 +52,8 @@ namespace System.Xml
 	public class XmlDocument : XmlNode, IHasXmlChildNode
 	{
 		#region Fields
+		static readonly Type [] optimal_create_types = new Type [] {typeof (string), typeof (string), typeof (string)};
+		bool optimal_create_element, optimal_create_attribute;
 
 		XmlNameTable nameTable;
 		string baseURI = String.Empty;
@@ -100,6 +102,10 @@ namespace System.Xml
 			nameCache = new XmlNameEntryCache (nameTable);
 			AddDefaultNameTableKeys ();
 			resolver = new XmlUrlResolver ();
+			
+			Type type = GetType ();
+			optimal_create_element = type.GetMethod ("CreateElement", optimal_create_types).DeclaringType == typeof (XmlDocument);
+			optimal_create_attribute = type.GetMethod ("CreateAttribute", optimal_create_types).DeclaringType == typeof (XmlDocument);
 		}
 		#endregion
 
@@ -327,15 +333,18 @@ namespace System.Xml
 
 		public virtual XmlAttribute CreateAttribute (string prefix, string localName, string namespaceURI)
 		{
-			return CreateAttribute (prefix, localName, namespaceURI, false, true);
+			if ((localName == null) || (localName == String.Empty))
+				throw new ArgumentException ("The attribute local name cannot be empty.");
+
+			return new XmlAttribute (prefix, localName, namespaceURI, this, false, true);
 		}
 
 		internal XmlAttribute CreateAttribute (string prefix, string localName, string namespaceURI, bool atomizedNames, bool checkNamespace)
 		{
-			if ((localName == null) || (localName == String.Empty))
-				throw new ArgumentException ("The attribute local name cannot be empty.");
-
-			return new XmlAttribute (prefix, localName, namespaceURI, this, atomizedNames, checkNamespace);
+			if (optimal_create_attribute)
+				return new XmlAttribute (prefix, localName, namespaceURI, this, atomizedNames, checkNamespace);
+			else
+				return CreateAttribute (prefix, localName, namespaceURI);
 		}
 
 		public virtual XmlCDataSection CreateCDataSection (string data)
@@ -394,12 +403,27 @@ namespace System.Xml
 			string localName,
 			string namespaceURI)
 		{
-			if ((localName == null) || (localName == String.Empty))
-				throw new ArgumentException ("The local name for elements or attributes cannot be null or an empty string.");
 			// LAMESPEC: MS.NET has a weird behavior that they can Load() from XmlTextReader 
 			// whose Namespaces = false, but their CreateElement() never allows qualified name.
 			// I leave it as it is.
 			return new XmlElement (prefix != null ? prefix : String.Empty, localName, namespaceURI != null ? namespaceURI : String.Empty, this, false);
+		}
+
+		internal XmlElement CreateElement (
+			string prefix,
+			string localName,
+			string namespaceURI,
+			bool nameAtomized)
+		{
+			if ((localName == null) || (localName == String.Empty))
+				throw new ArgumentException ("The local name for elements or attributes cannot be null or an empty string.");
+			if (optimal_create_element)
+				// LAMESPEC: MS.NET has a weird behavior that they can Load() from XmlTextReader 
+				// whose Namespaces = false, but their CreateElement() never allows qualified name.
+				// I leave it as it is.
+				return new XmlElement (prefix != null ? prefix : String.Empty, localName, namespaceURI != null ? namespaceURI : String.Empty, this, nameAtomized);
+			else
+				return CreateElement (prefix, localName, namespaceURI);
 		}
 
 		public virtual XmlEntityReference CreateEntityReference (string name)
@@ -710,7 +734,7 @@ namespace System.Xml
 						break;
 					if (preserveWhitespace || n.NodeType != XmlNodeType.Whitespace)
 						AppendChild (n, false);
-				} while (true);
+				} while (xmlReader.NodeType != XmlNodeType.EndElement);
 #if NET_2_0
 				if (xmlReader.Settings != null)
 					schemas = xmlReader.Settings.Schemas;
@@ -801,7 +825,7 @@ namespace System.Xml
 			XmlAttribute attribute = CreateAttribute (reader.Prefix, reader.LocalName, reader.NamespaceURI);
 #if NET_2_0
 			if (reader.SchemaInfo != null)
-				SchemaInfo = new XmlSchemaInfo (reader.SchemaInfo);
+				SchemaInfo = reader.SchemaInfo;
 #endif
 			bool isDefault = reader.IsDefault;
 
@@ -852,7 +876,7 @@ namespace System.Xml
 			case ReadState.Initial:
 #if NET_2_0
 				if (reader.SchemaInfo != null)
-					this.SchemaInfo = new XmlSchemaInfo (reader.SchemaInfo);
+					SchemaInfo = reader.SchemaInfo;
 #endif
 				reader.Read ();
 				break;
@@ -880,10 +904,10 @@ namespace System.Xml
 				break;
 
 			case XmlNodeType.Element:
-				XmlElement element = CreateElement (reader.Prefix, reader.LocalName, reader.NamespaceURI);
+				XmlElement element = CreateElement (reader.Prefix, reader.LocalName, reader.NamespaceURI, reader.NameTable == this.NameTable);
 #if NET_2_0
 				if (reader.SchemaInfo != null)
-					SchemaInfo = new XmlSchemaInfo (reader.SchemaInfo);
+					SchemaInfo = reader.SchemaInfo;
 #endif
 				element.IsEmpty = reader.IsEmptyElement;
 

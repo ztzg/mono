@@ -1,3 +1,249 @@
+2010-07-30  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add 4.0 standard endpoint types.
+
+2010-07-12  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: remove SecurityHandler.cs
+
+2010-07-12  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  move MessageSecurityBindingSupport.cs too.
+
+2010-07-12  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: moved bunch of security internal
+	  classes to System.ServiceModel.Channels.Security directory.
+
+2010-07-12  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Dummy_2_1.cs : add internal namespaces.
+	* System.ServiceModel.dll.sources: add SecurityReplyChannel.cs
+
+2010-07-05  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources :
+	  renamed new HTTP channel listener implementation sources, and
+	  removed old sources.
+
+2010-06-28  Astushi Enomoto  <atsushi@ximian.com>
+
+	* HTTP_listener_notes.txt : updated, things became much better.
+
+2010-06-24  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources :
+	  add new HTTP channel listener implementation sources.
+
+	  Old sources will be kept for a while, won't entirely vanish as
+	  ASP.NET support will live there.
+
+2010-05-28  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources : remove old code from winfx beta.
+
+2010-04-28  Marek Habersack  <mhabersack@novell.com>
+
+	* Makefile (LIB_MCS_FLAGS): added a reference to
+	System.Web.ApplicationServices in the 4.0 profile.
+
+2010-04-23  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Http_listener_notes.txt: update comment, as I have fixed one issue
+	  with lengthy explanation.
+
+2010-04-21  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Http_listener_notes.txt: more comment.
+
+2010-04-20  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Http_listener_notes.txt: added explanation on *why* it is SO hard
+	  to solve.
+
+2010-04-05  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources : add some new config types and
+	  ChannelTerminatedException.cs.
+
+2010-04-02  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources : add some new fault tests.
+
+2010-03-24  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources : move back all the Features tests
+	  that were once disabled (now we can handle mannerless tests).
+
+2010-03-19  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources : remove unused class.
+	* HTTP_listener_notes.txt : add some more comments.
+
+2010-03-18  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources :
+	  Add Constants.cs and XPathMessageContextTest.cs.
+
+2010-03-18  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources : added some missing types.
+
+2010-03-17  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources :
+	  add MetadataExchangeBindingsTest.cs.
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* net_2_1_*.dll.sources: rename to moonlight_*.dll.sources.
+
+2010-03-15  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_4_0_System.ServiceModel.dll.sources:
+	  more types from Sys.SM.Web.dll in 4.0 profile here.
+
+2010-03-15  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Dummy_2_1.cs : added cosmetic silverlight sdk compatibility stuff.
+
+2010-03-11  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources,
+	  net_2_1_raw_System.ServiceModel.dll.sources:
+	  added XmlName.cs.
+
+2010-02-19  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: enable USE_DATA_CONTRACT_IMPORTER as
+	  memorabilia.hardrock now works. (Will be removed when I remove
+	  relevant code.)
+
+2010-02-10  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: sigh, just disable it. make dist is somehow broken.
+
+2010-02-10  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: does extra dist fail to accept *.xml ?
+
+2010-02-10  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: add test xml files to extra dist.
+
+2010-02-08  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources:
+	  renamed MetadataBundle.cs to MetadataSet.cs.
+
+2010-02-05  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Dummy_2_1.cs : remove AuthenticationSchemes. It blocks MT support.
+
+2010-02-04  Astushi Enomoto  <atsushi@ximian.com>
+
+	* Dummy.cs, net_2_1_raw_System.ServiceModel.dll.sources : add some
+	  classes out of dummy, for monotouch (hidden in 2.1 profile).
+
+2010-02-04  Astushi Enomoto  <atsushi@ximian.com>
+
+	* HTTP_listener_notes.txt: Fixed some wrong description, simplified
+	  some, and updated some.
+
+2010-02-04  Astushi Enomoto  <atsushi@ximian.com>
+
+	* HTTP_listener_notes.txt: some notes updated.
+
+2010-02-03  Astushi Enomoto  <atsushi@ximian.com>
+
+	* HTTP_listener_notes.txt: I couldn't help but write about it to
+	  not keep myself confused by this complicated stuff.
+
+2010-01-20  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources: move back some FeatureBased
+	  tests.
+
+2010-01-18  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources : added new security version types.
+
+2010-01-15  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add SL config loader here
+	  for easy debugging under 2.0 profile.
+
+2010-01-13  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources :
+	  add EndpointAddressBuilder.cs.
+
+2010-01-13  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources :
+	  add FaultContractInfo.cs.
+
+2010-01-13  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources :
+	  add HttpCookieContainerBindingElement.cs.
+
+2010-01-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources : ended up to remove
+	  *all* mannerless serialization tests.
+
+2010-01-06  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources : ended up to remove
+	  mannerless tests that block other tests.
+
+2009-12-03  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources:
+	  added HttpsTransportBindingElementTest.cs.
+
+2009-11-26  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources : fix file name case,
+	  which was not caught on windows.
+
+2009-11-25  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_raw_System.ServiceModel.dll.sources, Dummy_2_1.cs:
+	  reflected a couple of SL3 updates.
+
+2009-11-17  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_System.ServiceModel.dll.sources :
+	  add binary message encoder support.
+
+2009-11-12  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_4_0_System.ServiceModel.dll.sources : 4.0 dll contains
+	  syndication stuff (moved from Sys.SM.Web.dll).
+
+2009-10-07  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_System.ServiceModel.dll.sources :
+	  add IHttpCookieContainer.cs.
+
+2009-10-02  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel.dll.sources: add VirtualPathExtension.cs.
+
+2009-10-01  Astushi Enomoto  <atsushi@ximian.com>
+
+	* System.ServiceModel_test.dll.sources:
+	  add ServiceContractGeneratorTest.cs.
+
+2009-09-26  Astushi Enomoto  <atsushi@ximian.com>
+
+	* net_2_1_System.ServiceModel.dll.sources :
+	  added Http[Request|Response]MessageProperty.cs. Looks like our
+	  status pages are based on old 2.0 profile.
+
 2009-09-15  Astushi Enomoto  <atsushi@ximian.com>
 
 	* System.ServiceModel.dll.sources: remove WebServiceHelper.cs.

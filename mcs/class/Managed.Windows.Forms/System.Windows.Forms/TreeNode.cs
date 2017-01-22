@@ -148,7 +148,10 @@ namespace System.Windows.Forms
 		#region ICloneable Members
 		public virtual object Clone()
 		{
-			TreeNode tn = new TreeNode (text, image_index, selected_image_index);
+			TreeNode tn = (TreeNode)Activator.CreateInstance (GetType ());
+			tn.Text = text;
+			tn.image_index = image_index;
+			tn.selected_image_index = selected_image_index;
 			if (nodes != null) {
 				foreach (TreeNode child in nodes)
 					tn.Nodes.Add ((TreeNode)child.Clone ());
@@ -1072,11 +1075,8 @@ namespace System.Windows.Forms
 			TreeView tv = TreeView;
 			if (tv == null)
 				return;
-				
-			// Use actual TreeView width to invalidate total prev/new area
-			Rectangle bounds = Bounds;
-			bounds.Width = tv.ClientSize.Width;
-			tv.Invalidate (bounds);
+
+			tv.UpdateNode (this);
 		}
 
 		internal void InvalidateWidth ()

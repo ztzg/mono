@@ -1,6 +1,8 @@
 /Makefile.in
 /Makefile
 /*.stdout
+/*.stderr
+/*.aotlog
 /.deps
 /.libs
 /libtest.la
@@ -11,6 +13,7 @@
 /semantic.cache
 /*.exe
 /*.stderr
+/*.aotlog
 /*.dll
 /*.mdb
 /*.o
@@ -20,3 +23,6 @@
 /imt_big_iface_test.cs
 /bin
 /page.aspx
+/tests-config
+/TAGS
+/runtime-invoke.gen.cs

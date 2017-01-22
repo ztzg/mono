@@ -166,6 +166,7 @@ namespace MonoTests.System.ServiceModel
 			b.HttpHelpPageEnabled = false;						
 
 			h.Open ();
+			try {
 			Assert.AreEqual (h.ChannelDispatchers.Count, 1);
 			ChannelDispatcher channelDispatcher =  h.ChannelDispatchers[0] as ChannelDispatcher;
 			Assert.IsNotNull (channelDispatcher, "#1");
@@ -175,7 +176,9 @@ namespace MonoTests.System.ServiceModel
 			Assert.IsTrue (filter.Address.Equals (new EndpointAddress ("http://localhost:8080/address")), "#4");
 			Assert.IsFalse (filter.IncludeHostNameInComparison, "#5");
 			Assert.IsTrue (channelDispatcher.Endpoints [0].ContractFilter is MatchAllMessageFilter, "#6");
+			} finally {
 			h.Close ();
+			}
 		}
 
 		[Test]
@@ -286,7 +289,7 @@ namespace MonoTests.System.ServiceModel
 			var host = new ServiceHost (typeof (AllActions),
 				new Uri ("http://localhost:37564"));
 			var se = host.AddServiceEndpoint (typeof (AllActions),
-				new BasicHttpBinding (), "/foobar");
+				new BasicHttpBinding (), "foobar");
 			Assert.AreEqual ("http://localhost:37564/foobar", se.Address.Uri.AbsoluteUri, "#1");
 			Assert.AreEqual ("http://localhost:37564/foobar", se.ListenUri.AbsoluteUri, "#2");
 		}
@@ -301,6 +304,85 @@ namespace MonoTests.System.ServiceModel
 			Assert.AreEqual ("http://localhost:37564/", se.Address.Uri.AbsoluteUri, "#1");
 			Assert.AreEqual ("http://localhost:37564/", se.ListenUri.AbsoluteUri, "#2");
 		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))]
+		public void AddServiceEndpointOnlyMex ()
+		{
+			var host = new ServiceHost (typeof (AllActions),
+				new Uri ("http://localhost:37564"));
+			host.Description.Behaviors.Add (new ServiceMetadataBehavior ());
+			host.AddServiceEndpoint ("IMetadataExchange",
+				new BasicHttpBinding (), "/wsdl");
+			host.Open ();
+			try {
+				// to make sure that throwing IOE from here does not count.
+				host.Close ();
+			} catch {
+			}
+			Assert.Fail ("should not open");
+		}
+
+		[Test]
+		public void RunDestinationUnreachableTest ()
+		{
+			RunDestinationUnreachableTest ("BasicHttp", new BasicHttpBinding ());
+		}
+
+		[Test]
+		public void RunDestinationUnreachableTest2 ()
+		{
+			RunDestinationUnreachableTest ("CustomSoap12", new CustomBinding (new HttpTransportBindingElement ()));
+		}
+
+		void RunDestinationUnreachableTest (string label, Binding binding)
+		{
+			string address = "http://localhost:37564/";
+			var host = OpenHost (address, binding);
+			
+			try {
+				var client = new DestinationUnreachableClient (binding, address);
+				client.NotImplementedOperation ();
+				Assert.Fail (label + " ActionNotSupportedException is expected");
+			} catch (ActionNotSupportedException) {
+				// catching it instead of ExpectedException to distinguish errors at service side.
+			} finally {
+				host.Close ();
+			}
+		}
+		
+		ServiceHost OpenHost (string address, Binding binding)
+		{
+			var baseAddresses = new Uri[] { new Uri(address) };
+
+			var host = new ServiceHost (typeof (DummyService), baseAddresses);
+			host.AddServiceEndpoint (typeof (IDummyService), binding, new Uri ("", UriKind.Relative));
+			host.Open ();
+			return host;
+		}
+
+#if NET_4_0
+		[Test]
+		public void AddServiceEndpoint_Directly ()
+		{
+			var host = new ServiceHost (typeof (DummyService));
+			var address = new EndpointAddress ("http://localhost:8080");
+			var binding = new BasicHttpBinding ();
+			var contract = ContractDescription.GetContract (typeof (IDummyService));
+			host.AddServiceEndpoint (new ServiceEndpoint (contract, binding, address));
+		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))]
+		public void AddServiceEndpoint_Directly_ContractMismatch ()
+		{
+			var host = new ServiceHost (typeof (DummyService));
+			var address = new EndpointAddress ("http://localhost:8080");
+			var binding = new BasicHttpBinding ();
+			var contract = ContractDescription.GetContract (typeof (INotImplementedService));
+			host.AddServiceEndpoint (new ServiceEndpoint (contract, binding, address));
+		}
+#endif
 
 		#region helpers
 
@@ -585,7 +667,39 @@ namespace MonoTests.System.ServiceModel
 
 			#endregion
 		}
-		#endregion
 
+		[ServiceContract]
+		public interface IDummyService
+		{
+			[OperationContract]
+			void DummyOperation ();
+		}
+		public class DummyService : IDummyService
+		{
+			public void DummyOperation ()
+			{
+				// Do nothing
+			}
+		}
+		[ServiceContract]
+		public interface INotImplementedService
+		{
+			[OperationContract]
+			void NotImplementedOperation ();
+		}
+		public class DestinationUnreachableClient : ClientBase<INotImplementedService>, INotImplementedService
+		{
+			public void NotImplementedOperation ()
+			{
+				Channel.NotImplementedOperation ();
+			}
+		
+			public DestinationUnreachableClient (Binding binding, string address) 
+				: base (binding, new EndpointAddress (address))
+			{
+			}
+		}
+
+		#endregion
 	}
 }

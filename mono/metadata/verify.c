@@ -23,6 +23,9 @@
 #include <mono/metadata/security-manager.h>
 #include <mono/metadata/security-core-clr.h>
 #include <mono/metadata/tokentype.h>
+#include <mono/metadata/mono-basic-block.h>
+#include <mono/utils/mono-counters.h>
+#include <mono/utils/monobitset.h>
 #include <string.h>
 #include <signal.h>
 #include <ctype.h>
@@ -113,6 +116,19 @@ enum {
 				(__ctx)->valid = 0; \
 		} \
 	} while (0)
+
+#define CHECK_ADD4_OVERFLOW_UN(a, b) ((guint32)(0xFFFFFFFFU) - (guint32)(b) < (guint32)(a))
+#define CHECK_ADD8_OVERFLOW_UN(a, b) ((guint64)(0xFFFFFFFFFFFFFFFFUL) - (guint64)(b) < (guint64)(a))
+
+#if SIZEOF_VOID_P == 4
+#define CHECK_ADDP_OVERFLOW_UN(a,b) CHECK_ADD4_OVERFLOW_UN(a, b)
+#else
+#define CHECK_ADDP_OVERFLOW_UN(a,b) CHECK_ADD8_OVERFLOW_UN(a, b)
+#endif
+
+#define ADDP_IS_GREATER_OR_OVF(a, b, c) (((a) + (b) > (c)) || CHECK_ADDP_OVERFLOW_UN (a, b))
+#define ADD_IS_GREATER_OR_OVF(a, b, c) (((a) + (b) > (c)) || CHECK_ADD4_OVERFLOW_UN (a, b))
+
 /*Flags to be used with ILCodeDesc::flags */
 enum {
 	/*Instruction has not been processed.*/
@@ -148,7 +164,7 @@ typedef struct {
 
 typedef struct {
 	ILStackDesc *stack;
-	guint16 size;
+	guint16 size, max_size;
 	guint16 flags;
 } ILCodeDesc;
 
@@ -281,6 +297,51 @@ enum {
 };
 //////////////////////////////////////////////////////////////////
 
+#ifdef ENABLE_VERIFIER_STATS
+
+#define MEM_ALLOC(amt) do { allocated_memory += (amt); working_set += (amt); } while (0)
+#define MEM_FREE(amt) do { working_set -= (amt); } while (0)
+
+static int allocated_memory;
+static int working_set;
+static int max_allocated_memory;
+static int max_working_set;
+static int total_allocated_memory;
+
+static void
+finish_collect_stats (void)
+{
+	max_allocated_memory = MAX (max_allocated_memory, allocated_memory);
+	max_working_set = MAX (max_working_set, working_set);
+	total_allocated_memory += allocated_memory;
+	allocated_memory = working_set = 0;
+}
+
+static void
+init_verifier_stats (void)
+{
+	static gboolean inited;
+	if (!inited) {
+		inited = TRUE;
+		mono_counters_register ("Maximum memory allocated during verification", MONO_COUNTER_METADATA | MONO_COUNTER_INT, &max_allocated_memory);
+		mono_counters_register ("Maximum memory used during verification", MONO_COUNTER_METADATA | MONO_COUNTER_INT, &max_working_set);
+		mono_counters_register ("Total memory allocated for verification", MONO_COUNTER_METADATA | MONO_COUNTER_INT, &total_allocated_memory);
+	}
+}
+
+#else
+
+#define MEM_ALLOC(amt) do {} while (0)
+#define MEM_FREE(amt) do { } while (0)
+
+#define finish_collect_stats()
+#define init_verifier_stats()
+
+#endif
+
+
+//////////////////////////////////////////////////////////////////
+
 
 /*Token validation macros and functions */
 #define IS_MEMBER_REF(token) (mono_metadata_token_table (token) == MONO_TABLE_MEMBERREF)
@@ -310,6 +371,8 @@ static MonoType *
 mono_type_create_fnptr_from_mono_method (VerifyContext *ctx, MonoMethod *method)
 {
 	MonoType *res = g_new0 (MonoType, 1);
+	MEM_ALLOC (sizeof (MonoType));
+
 	//FIXME use mono_method_get_signature_full
 	res->data.method = mono_method_signature (method);
 	res->type = MONO_TYPE_FNPTR;
@@ -372,7 +435,7 @@ mono_type_get_underlying_type_any (MonoType *type)
 	return type;
 }
 
-static const char*
+static G_GNUC_UNUSED const char*
 mono_type_get_stack_name (MonoType *type)
 {
 	return type_names [get_stack_type (type) & TYPE_MASK];
@@ -396,31 +459,17 @@ mono_class_has_default_constructor (MonoClass *klass)
 	int i;
 
 	mono_class_setup_methods (klass);
+	if (klass->exception_type)
+		return FALSE;
 
 	for (i = 0; i < klass->method.count; ++i) {
 		method = klass->methods [i];
 		if (mono_method_is_constructor (method) &&
+			mono_method_signature (method) &&
 			mono_method_signature (method)->param_count == 0 &&
 			(method->flags & METHOD_ATTRIBUTE_MEMBER_ACCESS_MASK) == METHOD_ATTRIBUTE_PUBLIC)
 			return TRUE;
 	}
-	return FALSE;
-}
-
-static gboolean
-mono_class_interface_implements_interface (MonoClass *candidate, MonoClass *iface)
-{
-	int i;
-	do {
-		if (candidate == iface)
-			return TRUE;
-		mono_class_setup_interfaces (candidate);
-		for (i = 0; i < candidate->interface_count; ++i) {
-			if (candidate->interfaces [i] == iface || mono_class_interface_implements_interface (candidate->interfaces [i], iface))
-				return TRUE;
-		}
-		candidate = candidate->parent;
-	} while (candidate);
 	return FALSE;
 }
 
@@ -465,53 +514,22 @@ mono_type_is_valid_type_in_context (MonoType *type, MonoGenericContext *context)
 static MonoType*
 verifier_inflate_type (VerifyContext *ctx, MonoType *type, MonoGenericContext *context)
 {
-	if (!mono_type_is_valid_type_in_context (type, context))
+	MonoError error;
+	MonoType *result;
+
+	result = mono_class_inflate_generic_type_checked (type, context, &error);
+	if (!mono_error_ok (&error)) {
+		mono_error_cleanup (&error);
 		return NULL;
-	return mono_class_inflate_generic_type (type, context);
-}
-/*
- * Test if @candidate is a subtype of @target using the minimal possible information
- * TODO move the code for non finished TypeBuilders to here.
- */
-static gboolean
-mono_class_is_constraint_compatible (MonoClass *candidate, MonoClass *target)
-{
-	if (candidate == target)
-		return TRUE;
-	if (target == mono_defaults.object_class)
-			return TRUE;
-
-	//setup_supertypes don't mono_class_init anything
-	mono_class_setup_supertypes (candidate);
-	mono_class_setup_supertypes (target);
-
-	if (mono_class_has_parent (candidate, target))
-		return TRUE;
-
-	//if target is not a supertype it must be an interface
-	if (!MONO_CLASS_IS_INTERFACE (target))
-			return FALSE;
-
-	if (candidate->image->dynamic && !candidate->wastypebuilder) {
-		MonoReflectionTypeBuilder *tb = candidate->reflection_info;
-		int j;
-		if (tb->interfaces) {
-			for (j = mono_array_length (tb->interfaces) - 1; j >= 0; --j) {
-				MonoReflectionType *iface = mono_array_get (tb->interfaces, MonoReflectionType*, j);
-				MonoClass *ifaceClass = mono_class_from_mono_type (iface->type);
-				if (mono_class_is_constraint_compatible (ifaceClass, target)) {
-					return TRUE;
-				}
-			}
-		}
-		return FALSE;
 	}
-	return mono_class_interface_implements_interface (candidate, target);
+	return result;
 }
+
 
 static gboolean
 is_valid_generic_instantiation (MonoGenericContainer *gc, MonoGenericContext *context, MonoGenericInst *ginst)
 {
+	MonoError error;
 	int i;
 
 	if (ginst->type_argc != gc->type_argc)
@@ -554,11 +572,15 @@ is_valid_generic_instantiation (MonoGenericContainer *gc, MonoGenericContext *co
 			MonoClass *ctr = *constraints;
 			MonoType *inflated;
 
-			inflated = mono_class_inflate_generic_type (&ctr->byval_arg, context);
+			inflated = mono_class_inflate_generic_type_checked (&ctr->byval_arg, context, &error);
+			if (!mono_error_ok (&error)) {
+				mono_error_cleanup (&error);
+				return FALSE;
+			}
 			ctr = mono_class_from_mono_type (inflated);
 			mono_metadata_free_type (inflated);
 
-			if (!mono_class_is_constraint_compatible (paramClass, ctr))
+			if (!mono_class_is_assignable_from_slow (ctr, paramClass))
 				return FALSE;
 		}
 	}
@@ -571,7 +593,7 @@ is_valid_generic_instantiation (MonoGenericContainer *gc, MonoGenericContext *co
  * This means that @candidate constraints are a super set of @target constaints
  */
 static gboolean
-mono_generic_param_is_constraint_compatible (VerifyContext *ctx, MonoGenericParam *target, MonoGenericParam *candidate, MonoGenericContext *context)
+mono_generic_param_is_constraint_compatible (VerifyContext *ctx, MonoGenericParam *target, MonoGenericParam *candidate, MonoClass *candidate_param_class, MonoGenericContext *context)
 {
 	MonoGenericParamInfo *tinfo = mono_generic_param_info (target);
 	MonoGenericParamInfo *cinfo = mono_generic_param_info (candidate);
@@ -583,8 +605,6 @@ mono_generic_param_is_constraint_compatible (VerifyContext *ctx, MonoGenericPara
 
 	if (tinfo->constraints) {
 		MonoClass **target_class, **candidate_class;
-		if (!cinfo->constraints)
-			return FALSE;
 		for (target_class = tinfo->constraints; *target_class; ++target_class) {
 			MonoClass *tc;
 			MonoType *inflated = verifier_inflate_type (ctx, &(*target_class)->byval_arg, context);
@@ -592,6 +612,16 @@ mono_generic_param_is_constraint_compatible (VerifyContext *ctx, MonoGenericPara
 				return FALSE;
 			tc = mono_class_from_mono_type (inflated);
 			mono_metadata_free_type (inflated);
+
+			/*
+			 * A constraint from @target might inflate into @candidate itself and in that case we don't need
+			 * check it's constraints since it satisfy the constraint by itself.
+			 */
+			if (mono_metadata_type_equal (&tc->byval_arg, &candidate_param_class->byval_arg))
+				continue;
+
+			if (!cinfo->constraints)
+				return FALSE;
 
 			for (candidate_class = cinfo->constraints; *candidate_class; ++candidate_class) {
 				MonoClass *cc;
@@ -669,6 +699,7 @@ generic_arguments_respect_constraints (VerifyContext *ctx, MonoGenericContainer 
 		MonoType *type = ginst->type_argv [i];
 		MonoGenericParam *target = mono_generic_container_get_param (gc, i);
 		MonoGenericParam *candidate;
+		MonoClass *candidate_class;
 
 		if (!mono_type_is_generic_argument (type))
 			continue;
@@ -677,8 +708,9 @@ generic_arguments_respect_constraints (VerifyContext *ctx, MonoGenericContainer 
 			return FALSE;
 
 		candidate = verifier_get_generic_param_from_type (ctx, type);
+		candidate_class = mono_class_from_mono_type (type);
 
-		if (!mono_generic_param_is_constraint_compatible (ctx, target, candidate, context))
+		if (!mono_generic_param_is_constraint_compatible (ctx, target, candidate, candidate_class, context))
 			return FALSE;
 	}
 	return TRUE;
@@ -756,6 +788,7 @@ mono_type_is_valid_in_context (VerifyContext *ctx, MonoType *type)
 			ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Invalid generic instantiation of type %s.%s at 0x%04x", klass->name_space, klass->name, ctx->ip_offset), MONO_EXCEPTION_TYPE_LOAD);
 		else
 			ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Could not load type %s.%s at 0x%04x", klass->name_space, klass->name, ctx->ip_offset), MONO_EXCEPTION_TYPE_LOAD);
+		mono_loader_clear_error ();
 		return FALSE;
 	}
 
@@ -813,8 +846,9 @@ verifier_load_field (VerifyContext *ctx, int token, MonoClass **out_klass, const
 	}
 
 	field = mono_field_from_token (ctx->image, token, &klass, ctx->generic_context);
-	if (!field || !field->parent || !klass) {
+	if (!field || !field->parent || !klass || mono_loader_get_last_error ()) {
 		ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Cannot load field from token 0x%08x for %s at 0x%04x", token, opcode, ctx->ip_offset), MONO_EXCEPTION_BAD_IMAGE);
+		mono_loader_clear_error ();
 		return NULL;
 	}
 
@@ -836,8 +870,9 @@ verifier_load_method (VerifyContext *ctx, int token, const char *opcode) {
 
 	method = mono_get_method_full (ctx->image, token, NULL, ctx->generic_context);
 
-	if (!method) {
+	if (!method || mono_loader_get_last_error ()) {
 		ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Cannot load method from token 0x%08x for %s at 0x%04x", token, opcode, ctx->ip_offset), MONO_EXCEPTION_BAD_IMAGE);
+		mono_loader_clear_error ();
 		return NULL;
 	}
 	
@@ -858,8 +893,9 @@ verifier_load_type (VerifyContext *ctx, int token, const char *opcode) {
 
 	type = mono_type_get_full (ctx->image, token, ctx->generic_context);
 
-	if (!type) {
+	if (!type || mono_loader_get_last_error ()) {
 		ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Cannot load type from token 0x%08x for %s at 0x%04x", token, opcode, ctx->ip_offset), MONO_EXCEPTION_BAD_IMAGE);
+		mono_loader_clear_error ();
 		return NULL;
 	}
 
@@ -965,17 +1001,29 @@ stack_slot_stack_type_full_name (ILStackDesc *value)
 {
 	GString *str = g_string_new ("");
 	char *result;
+	gboolean has_pred = FALSE, first = TRUE;
 
 	if ((value->stype & TYPE_MASK) != value->stype) {
-		gboolean first = TRUE;
 		g_string_append(str, "[");
 		APPEND_WITH_PREDICATE (stack_slot_is_this_pointer, "this");
 		APPEND_WITH_PREDICATE (stack_slot_is_boxed_value, "boxed");
 		APPEND_WITH_PREDICATE (stack_slot_is_null_literal, "null");
 		APPEND_WITH_PREDICATE (stack_slot_is_managed_mutability_pointer, "cmmp");
 		APPEND_WITH_PREDICATE (stack_slot_is_managed_pointer, "mp");
-		g_string_append(str, "] ");
+		has_pred = TRUE;
 	}
+
+	if (mono_type_is_generic_argument (value->type) && !stack_slot_is_boxed_value (value)) {
+		if (!has_pred)
+			g_string_append(str, "[");
+		if (!first)
+			g_string_append (str, ", ");
+		g_string_append (str, "unboxed");
+		has_pred = TRUE;
+	}
+
+	if (has_pred)
+		g_string_append(str, "] ");
 
 	g_string_append (str, stack_slot_get_name (value));
 	result = str->str;
@@ -1024,625 +1072,6 @@ mono_free_verify_list (GSList *list)
 		vinfo->info.message = (msg);	\
 		(list) = g_slist_prepend ((list), vinfo);	\
 	} while (0)
-
-static const char
-valid_cultures[][9] = {
-	"ar-SA", "ar-IQ", "ar-EG", "ar-LY",
-	"ar-DZ", "ar-MA", "ar-TN", "ar-OM",
-	"ar-YE", "ar-SY", "ar-JO", "ar-LB",
-	"ar-KW", "ar-AE", "ar-BH", "ar-QA",
-	"bg-BG", "ca-ES", "zh-TW", "zh-CN",
-	"zh-HK", "zh-SG", "zh-MO", "cs-CZ",
-	"da-DK", "de-DE", "de-CH", "de-AT",
-	"de-LU", "de-LI", "el-GR", "en-US",
-	"en-GB", "en-AU", "en-CA", "en-NZ",
-	"en-IE", "en-ZA", "en-JM", "en-CB",
-	"en-BZ", "en-TT", "en-ZW", "en-PH",
-	"es-ES-Ts", "es-MX", "es-ES-Is", "es-GT",
-	"es-CR", "es-PA", "es-DO", "es-VE",
-	"es-CO", "es-PE", "es-AR", "es-EC",
-	"es-CL", "es-UY", "es-PY", "es-BO",
-	"es-SV", "es-HN", "es-NI", "es-PR",
-	"Fi-FI", "fr-FR", "fr-BE", "fr-CA",
-	"Fr-CH", "fr-LU", "fr-MC", "he-IL",
-	"hu-HU", "is-IS", "it-IT", "it-CH",
-	"Ja-JP", "ko-KR", "nl-NL", "nl-BE",
-	"nb-NO", "nn-NO", "pl-PL", "pt-BR",
-	"pt-PT", "ro-RO", "ru-RU", "hr-HR",
-	"Lt-sr-SP", "Cy-sr-SP", "sk-SK", "sq-AL",
-	"sv-SE", "sv-FI", "th-TH", "tr-TR",
-	"ur-PK", "id-ID", "uk-UA", "be-BY",
-	"sl-SI", "et-EE", "lv-LV", "lt-LT",
-	"fa-IR", "vi-VN", "hy-AM", "Lt-az-AZ",
-	"Cy-az-AZ",
-	"eu-ES", "mk-MK", "af-ZA",
-	"ka-GE", "fo-FO", "hi-IN", "ms-MY",
-	"ms-BN", "kk-KZ", "ky-KZ", "sw-KE",
-	"Lt-uz-UZ", "Cy-uz-UZ", "tt-TA", "pa-IN",
-	"gu-IN", "ta-IN", "te-IN", "kn-IN",
-	"mr-IN", "sa-IN", "mn-MN", "gl-ES",
-	"kok-IN", "syr-SY", "div-MV"
-};
-
-static int
-is_valid_culture (const char *cname)
-{
-	int i;
-	int found;
-
-	found = *cname == 0;
-	for (i = 0; i < G_N_ELEMENTS (valid_cultures); ++i) {
-		if (g_ascii_strcasecmp (valid_cultures [i], cname)) {
-			found = 1;
-			break;
-		}
-	}
-	return found;
-}
-
-static int
-is_valid_assembly_flags (guint32 flags) {
-	/* Metadata: 22.1.2 */
-	flags &= ~(0x8000 | 0x4000); /* ignore reserved bits 0x0030? */
-	return ((flags == 1) || (flags == 0));
-}
-
-static int
-is_valid_blob (MonoImage *image, guint32 blob_index, int notnull)
-{
-	guint32 size;
-	const char *p, *blob_end;
-
-	if (blob_index >= image->heap_blob.size)
-		return 0;
-	p = mono_metadata_blob_heap (image, blob_index);
-	size = mono_metadata_decode_blob_size (p, &blob_end);
-	if (blob_index + size + (blob_end-p) > image->heap_blob.size)
-		return 0;
-	if (notnull && !size)
-		return 0;
-	return 1;
-}
-
-static const char*
-is_valid_string (MonoImage *image, guint32 str_index, int notnull)
-{
-	const char *p, *blob_end, *res;
-
-	if (str_index >= image->heap_strings.size)
-		return NULL;
-	res = p = mono_metadata_string_heap (image, str_index);
-	blob_end = mono_metadata_string_heap (image, image->heap_strings.size - 1);
-	if (notnull && !*p)
-		return 0;
-	/* 
-	 * FIXME: should check it's a valid utf8 string, too.
-	 */
-	while (p <= blob_end) {
-		if (!*p)
-			return res;
-		++p;
-	}
-	return *p? NULL: res;
-}
-
-static int
-is_valid_cls_ident (const char *p)
-{
-	/*
-	 * FIXME: we need the full unicode glib support for this.
-	 * Check: http://www.unicode.org/unicode/reports/tr15/Identifier.java
-	 * We do the lame thing for now.
-	 */
-	if (!isalpha (*p))
-		return 0;
-	++p;
-	while (*p) {
-		if (!isalnum (*p) && *p != '_')
-			return 0;
-		++p;
-	}
-	return 1;
-}
-
-static int
-is_valid_filename (const char *p)
-{
-	if (!*p)
-		return 0;
-	return strpbrk (p, "\\//:")? 0: 1;
-}
-
-static GSList*
-verify_assembly_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_ASSEMBLY];
-	guint32 cols [MONO_ASSEMBLY_SIZE];
-	const char *p;
-
-	if (level & MONO_VERIFY_ERROR) {
-		if (t->rows > 1)
-			ADD_ERROR (list, g_strdup ("Assembly table may only have 0 or 1 rows"));
-		mono_metadata_decode_row (t, 0, cols, MONO_ASSEMBLY_SIZE);
-
-		switch (cols [MONO_ASSEMBLY_HASH_ALG]) {
-		case ASSEMBLY_HASH_NONE:
-		case ASSEMBLY_HASH_MD5:
-		case ASSEMBLY_HASH_SHA1:
-			break;
-		default:
-			ADD_ERROR (list, g_strdup_printf ("Hash algorithm 0x%x unknown", cols [MONO_ASSEMBLY_HASH_ALG]));
-		}
-
-		if (!is_valid_assembly_flags (cols [MONO_ASSEMBLY_FLAGS]))
-			ADD_ERROR (list, g_strdup_printf ("Invalid flags in assembly: 0x%x", cols [MONO_ASSEMBLY_FLAGS]));
-
-		if (!is_valid_blob (image, cols [MONO_ASSEMBLY_PUBLIC_KEY], FALSE))
-			ADD_ERROR (list, g_strdup ("Assembly public key is an invalid index"));
-
-		if (!(p = is_valid_string (image, cols [MONO_ASSEMBLY_NAME], TRUE))) {
-			ADD_ERROR (list, g_strdup ("Assembly name is invalid"));
-		} else {
-			if (strpbrk (p, ":\\/."))
-				ADD_ERROR (list, g_strdup_printf ("Assembly name `%s' contains invalid chars", p));
-		}
-
-		if (!(p = is_valid_string (image, cols [MONO_ASSEMBLY_CULTURE], FALSE))) {
-			ADD_ERROR (list, g_strdup ("Assembly culture is an invalid index"));
-		} else {
-			if (!is_valid_culture (p))
-				ADD_ERROR (list, g_strdup_printf ("Assembly culture `%s' is invalid", p));
-		}
-	}
-	return list;
-}
-
-static GSList*
-verify_assemblyref_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_ASSEMBLYREF];
-	guint32 cols [MONO_ASSEMBLYREF_SIZE];
-	const char *p;
-	int i;
-
-	if (level & MONO_VERIFY_ERROR) {
-		for (i = 0; i < t->rows; ++i) {
-			mono_metadata_decode_row (t, i, cols, MONO_ASSEMBLYREF_SIZE);
-			if (!is_valid_assembly_flags (cols [MONO_ASSEMBLYREF_FLAGS]))
-				ADD_ERROR (list, g_strdup_printf ("Invalid flags in assemblyref row %d: 0x%x", i + 1, cols [MONO_ASSEMBLY_FLAGS]));
-
-			if (!is_valid_blob (image, cols [MONO_ASSEMBLYREF_PUBLIC_KEY], FALSE))
-				ADD_ERROR (list, g_strdup_printf ("AssemblyRef public key in row %d is an invalid index", i + 1));
-
-			if (!(p = is_valid_string (image, cols [MONO_ASSEMBLYREF_CULTURE], FALSE))) {
-				ADD_ERROR (list, g_strdup_printf ("AssemblyRef culture in row %d is invalid", i + 1));
-			} else {
-				if (!is_valid_culture (p))
-					ADD_ERROR (list, g_strdup_printf ("AssemblyRef culture `%s' in row %d is invalid", p, i + 1));
-			}
-
-			if (cols [MONO_ASSEMBLYREF_HASH_VALUE] && !is_valid_blob (image, cols [MONO_ASSEMBLYREF_HASH_VALUE], TRUE))
-				ADD_ERROR (list, g_strdup_printf ("AssemblyRef hash value in row %d is invalid or not null and empty", i + 1));
-		}
-	}
-	if (level & MONO_VERIFY_WARNING) {
-		/* check for duplicated rows */
-		for (i = 0; i < t->rows; ++i) {
-		}
-	}
-	return list;
-}
-
-static GSList*
-verify_class_layout_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_CLASSLAYOUT];
-	MonoTableInfo *tdef = &image->tables [MONO_TABLE_TYPEDEF];
-	guint32 cols [MONO_CLASS_LAYOUT_SIZE];
-	guint32 value, i;
-
-	if (level & MONO_VERIFY_ERROR) {
-		for (i = 0; i < t->rows; ++i) {
-			mono_metadata_decode_row (t, i, cols, MONO_CLASS_LAYOUT_SIZE);
-
-			if (cols [MONO_CLASS_LAYOUT_PARENT] > tdef->rows || !cols [MONO_CLASS_LAYOUT_PARENT]) {
-				ADD_ERROR (list, g_strdup_printf ("Parent in class layout is invalid in row %d", i + 1));
-			} else {
-				value = mono_metadata_decode_row_col (tdef, cols [MONO_CLASS_LAYOUT_PARENT] - 1, MONO_TYPEDEF_FLAGS);
-				if (value & TYPE_ATTRIBUTE_INTERFACE)
-					ADD_ERROR (list, g_strdup_printf ("Parent in class layout row %d is an interface", i + 1));
-				if (value & TYPE_ATTRIBUTE_AUTO_LAYOUT)
-					ADD_ERROR (list, g_strdup_printf ("Parent in class layout row %d is AutoLayout", i + 1));
-				if (value & TYPE_ATTRIBUTE_SEQUENTIAL_LAYOUT) {
-					switch (cols [MONO_CLASS_LAYOUT_PACKING_SIZE]) {
-					case 0: case 1: case 2: case 4: case 8: case 16:
-					case 32: case 64: case 128: break;
-					default:
-						ADD_ERROR (list, g_strdup_printf ("Packing size %d in class layout row %d is invalid", cols [MONO_CLASS_LAYOUT_PACKING_SIZE], i + 1));
-					}
-				} else if (value & TYPE_ATTRIBUTE_EXPLICIT_LAYOUT) {
-					/*
-					 * FIXME: LAMESPEC: it claims it must be 0 (it's 1, instead).
-					if (cols [MONO_CLASS_LAYOUT_PACKING_SIZE])
-						ADD_ERROR (list, g_strdup_printf ("Packing size %d in class layout row %d is invalid with explicit layout", cols [MONO_CLASS_LAYOUT_PACKING_SIZE], i + 1));
-					*/
-				}
-				/*
-				 * FIXME: we need to check that if class size != 0, 
-				 * it needs to be greater than the class calculated size.
-				 * If parent is a valuetype it also needs to be smaller than
-				 * 1 MByte (0x100000 bytes).
-				 * To do both these checks we need to load the referenced 
-				 * assemblies, though (the spec claims we didn't have to, bah).
-				 */
-				/* 
-				 * We need to check that the parent types have the same layout 
-				 * type as well.
-				 */
-			}
-		}
-	}
-
-	return list;
-}
-
-static GSList*
-verify_constant_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_CONSTANT];
-	guint32 cols [MONO_CONSTANT_SIZE];
-	guint32 value, i;
-	GHashTable *dups = g_hash_table_new (NULL, NULL);
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_CONSTANT_SIZE);
-
-		if (level & MONO_VERIFY_ERROR)
-			if (g_hash_table_lookup (dups, GUINT_TO_POINTER (cols [MONO_CONSTANT_PARENT])))
-				ADD_ERROR (list, g_strdup_printf ("Parent 0x%08x is duplicated in Constant row %d", cols [MONO_CONSTANT_PARENT], i + 1));
-		g_hash_table_insert (dups, GUINT_TO_POINTER (cols [MONO_CONSTANT_PARENT]),
-				GUINT_TO_POINTER (cols [MONO_CONSTANT_PARENT]));
-
-		switch (cols [MONO_CONSTANT_TYPE]) {
-		case MONO_TYPE_U1: /* LAMESPEC: it says I1...*/
-		case MONO_TYPE_U2:
-		case MONO_TYPE_U4:
-		case MONO_TYPE_U8:
-			if (level & MONO_VERIFY_CLS)
-				ADD_WARN (list, MONO_VERIFY_CLS, g_strdup_printf ("Type 0x%x not CLS compliant in Constant row %d", cols [MONO_CONSTANT_TYPE], i + 1));
-		case MONO_TYPE_BOOLEAN:
-		case MONO_TYPE_CHAR:
-		case MONO_TYPE_I1:
-		case MONO_TYPE_I2:
-		case MONO_TYPE_I4:
-		case MONO_TYPE_I8:
-		case MONO_TYPE_R4:
-		case MONO_TYPE_R8:
-		case MONO_TYPE_STRING:
-		case MONO_TYPE_CLASS:
-			break;
-		default:
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Type 0x%x is invalid in Constant row %d", cols [MONO_CONSTANT_TYPE], i + 1));
-		}
-		if (level & MONO_VERIFY_ERROR) {
-			value = cols [MONO_CONSTANT_PARENT] >> MONO_HASCONSTANT_BITS;
-			switch (cols [MONO_CONSTANT_PARENT] & MONO_HASCONSTANT_MASK) {
-			case MONO_HASCONSTANT_FIEDDEF:
-				if (value > image->tables [MONO_TABLE_FIELD].rows)
-					ADD_ERROR (list, g_strdup_printf ("Parent (field) is invalid in Constant row %d", i + 1));
-				break;
-			case MONO_HASCONSTANT_PARAM:
-				if (value > image->tables [MONO_TABLE_PARAM].rows)
-					ADD_ERROR (list, g_strdup_printf ("Parent (param) is invalid in Constant row %d", i + 1));
-				break;
-			case MONO_HASCONSTANT_PROPERTY:
-				if (value > image->tables [MONO_TABLE_PROPERTY].rows)
-					ADD_ERROR (list, g_strdup_printf ("Parent (property) is invalid in Constant row %d", i + 1));
-				break;
-			default:
-				ADD_ERROR (list, g_strdup_printf ("Parent is invalid in Constant row %d", i + 1));
-				break;
-			}
-		}
-		if (level & MONO_VERIFY_CLS) {
-			/* 
-			 * FIXME: verify types is consistent with the enum type
-			 * is parent is an enum.
-			 */
-		}
-	}
-	g_hash_table_destroy (dups);
-	return list;
-}
-
-static GSList*
-verify_event_map_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_EVENTMAP];
-	guint32 cols [MONO_EVENT_MAP_SIZE];
-	guint32 i, last_event;
-	GHashTable *dups = g_hash_table_new (NULL, NULL);
-
-	last_event = 0;
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_EVENT_MAP_SIZE);
-		if (level & MONO_VERIFY_ERROR)
-			if (g_hash_table_lookup (dups, GUINT_TO_POINTER (cols [MONO_EVENT_MAP_PARENT])))
-				ADD_ERROR (list, g_strdup_printf ("Parent 0x%08x is duplicated in Event Map row %d", cols [MONO_EVENT_MAP_PARENT], i + 1));
-		g_hash_table_insert (dups, GUINT_TO_POINTER (cols [MONO_EVENT_MAP_PARENT]),
-				GUINT_TO_POINTER (cols [MONO_EVENT_MAP_PARENT]));
-		if (level & MONO_VERIFY_ERROR) {
-			if (cols [MONO_EVENT_MAP_PARENT] > image->tables [MONO_TABLE_TYPEDEF].rows)
-				ADD_ERROR (list, g_strdup_printf ("Parent 0x%08x is invalid in Event Map row %d", cols [MONO_EVENT_MAP_PARENT], i + 1));
-			if (cols [MONO_EVENT_MAP_EVENTLIST] > image->tables [MONO_TABLE_EVENT].rows)
-				ADD_ERROR (list, g_strdup_printf ("EventList 0x%08x is invalid in Event Map row %d", cols [MONO_EVENT_MAP_EVENTLIST], i + 1));
-
-			if (cols [MONO_EVENT_MAP_EVENTLIST] <= last_event)
-				ADD_ERROR (list, g_strdup_printf ("EventList overlap in Event Map row %d", i + 1));
-			last_event = cols [MONO_EVENT_MAP_EVENTLIST];
-		}
-	}
-
-	g_hash_table_destroy (dups);
-	return list;
-}
-
-static GSList*
-verify_event_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_EVENT];
-	guint32 cols [MONO_EVENT_SIZE];
-	const char *p;
-	guint32 value, i;
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_EVENT_SIZE);
-
-		if (cols [MONO_EVENT_FLAGS] & ~(EVENT_SPECIALNAME|EVENT_RTSPECIALNAME)) {
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Flags 0x%04x invalid in Event row %d", cols [MONO_EVENT_FLAGS], i + 1));
-		}
-		if (!(p = is_valid_string (image, cols [MONO_EVENT_NAME], TRUE))) {
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Invalid name in Event row %d", i + 1));
-		} else {
-			if (level & MONO_VERIFY_CLS) {
-				if (!is_valid_cls_ident (p))
-					ADD_WARN (list, MONO_VERIFY_CLS, g_strdup_printf ("Invalid CLS name '%s` in Event row %d", p, i + 1));
-			}
-		}
-
-		if (level & MONO_VERIFY_ERROR && cols [MONO_EVENT_TYPE]) {
-			value = cols [MONO_EVENT_TYPE] >> MONO_TYPEDEFORREF_BITS;
-			switch (cols [MONO_EVENT_TYPE] & MONO_TYPEDEFORREF_MASK) {
-			case MONO_TYPEDEFORREF_TYPEDEF:
-				if (!value || value > image->tables [MONO_TABLE_TYPEDEF].rows)
-					ADD_ERROR (list, g_strdup_printf ("Type invalid in Event row %d", i + 1));
-				break;
-			case MONO_TYPEDEFORREF_TYPEREF:
-				if (!value || value > image->tables [MONO_TABLE_TYPEREF].rows)
-					ADD_ERROR (list, g_strdup_printf ("Type invalid in Event row %d", i + 1));
-				break;
-			case MONO_TYPEDEFORREF_TYPESPEC:
-				if (!value || value > image->tables [MONO_TABLE_TYPESPEC].rows)
-					ADD_ERROR (list, g_strdup_printf ("Type invalid in Event row %d", i + 1));
-				break;
-			default:
-				ADD_ERROR (list, g_strdup_printf ("Type invalid in Event row %d", i + 1));
-			}
-		}
-		/*
-		 * FIXME: check that there is 1 add and remove row in methodsemantics
-		 * and 0 or 1 raise and 0 or more other (maybe it's better to check for 
-		 * these while checking methodsemantics).
-		 * check for duplicated names for the same type [ERROR]
-		 * check for CLS duplicate names for the same type [CLS]
-		 */
-	}
-	return list;
-}
-
-static GSList*
-verify_field_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_FIELD];
-	guint32 cols [MONO_FIELD_SIZE];
-	const char *p;
-	guint32 i, flags;
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_FIELD_SIZE);
-		/*
-		 * Check this field has only one owner and that the owner is not 
-		 * an interface (done in verify_typedef_table() )
-		 */
-		flags = cols [MONO_FIELD_FLAGS];
-		switch (flags & FIELD_ATTRIBUTE_FIELD_ACCESS_MASK) {
-		case FIELD_ATTRIBUTE_COMPILER_CONTROLLED:
-		case FIELD_ATTRIBUTE_PRIVATE:
-		case FIELD_ATTRIBUTE_FAM_AND_ASSEM:
-		case FIELD_ATTRIBUTE_ASSEMBLY:
-		case FIELD_ATTRIBUTE_FAMILY:
-		case FIELD_ATTRIBUTE_FAM_OR_ASSEM:
-		case FIELD_ATTRIBUTE_PUBLIC:
-			break;
-		default:
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Invalid access mask in Field row %d", i + 1));
-			break;
-		}
-		if (level & MONO_VERIFY_ERROR) {
-			if ((flags & FIELD_ATTRIBUTE_LITERAL) && (flags & FIELD_ATTRIBUTE_INIT_ONLY))
-				ADD_ERROR (list, g_strdup_printf ("Literal and InitOnly cannot be both set in Field row %d", i + 1));
-			if ((flags & FIELD_ATTRIBUTE_LITERAL) && !(flags & FIELD_ATTRIBUTE_STATIC))
-				ADD_ERROR (list, g_strdup_printf ("Literal needs also Static set in Field row %d", i + 1));
-			if ((flags & FIELD_ATTRIBUTE_RT_SPECIAL_NAME) && !(flags & FIELD_ATTRIBUTE_SPECIAL_NAME))
-				ADD_ERROR (list, g_strdup_printf ("RTSpecialName needs also SpecialName set in Field row %d", i + 1));
-			/*
-			 * FIXME: check there is only one owner in the respective table.
-			 * if (flags & FIELD_ATTRIBUTE_HAS_FIELD_MARSHAL)
-			 * if (flags & FIELD_ATTRIBUTE_HAS_DEFAULT)
-			 * if (flags & FIELD_ATTRIBUTE_HAS_FIELD_RVA)
-			 */
-		}
-		if (!(p = is_valid_string (image, cols [MONO_FIELD_NAME], TRUE))) {
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Invalid name in Field row %d", i + 1));
-		} else {
-			if (level & MONO_VERIFY_CLS) {
-				if (!is_valid_cls_ident (p))
-					ADD_WARN (list, MONO_VERIFY_CLS, g_strdup_printf ("Invalid CLS name '%s` in Field row %d", p, i + 1));
-			}
-		}
-		/*
-		 * check signature.
-		 * if owner is module needs to be static, access mask needs to be compilercontrolled,
-		 * public or private (not allowed in cls mode).
-		 * if owner is an enum ...
-		 */
-
-
-	}
-	return list;
-}
-
-static GSList*
-verify_file_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_FILE];
-	guint32 cols [MONO_FILE_SIZE];
-	const char *p;
-	guint32 i;
-	GHashTable *dups = g_hash_table_new (g_str_hash, g_str_equal);
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_FILE_SIZE);
-		if (level & MONO_VERIFY_ERROR) {
-			if (cols [MONO_FILE_FLAGS] != FILE_CONTAINS_METADATA && cols [MONO_FILE_FLAGS] != FILE_CONTAINS_NO_METADATA)
-				ADD_ERROR (list, g_strdup_printf ("Invalid flags in File row %d", i + 1));
-			if (!is_valid_blob (image, cols [MONO_FILE_HASH_VALUE], TRUE))
-				ADD_ERROR (list, g_strdup_printf ("File hash value in row %d is invalid or not null and empty", i + 1));
-		}
-		if (!(p = is_valid_string (image, cols [MONO_FILE_NAME], TRUE))) {
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Invalid name in File row %d", i + 1));
-		} else {
-			if (level & MONO_VERIFY_ERROR) {
-				if (!is_valid_filename (p))
-					ADD_ERROR (list, g_strdup_printf ("Invalid name '%s` in File row %d", p, i + 1));
-				else if (g_hash_table_lookup (dups, p)) {
-					ADD_ERROR (list, g_strdup_printf ("Duplicate name '%s` in File row %d", p, i + 1));
-				}
-				g_hash_table_insert (dups, (gpointer)p, (gpointer)p);
-			}
-		}
-		/*
-		 * FIXME: I don't understand what this means:
-		 * If this module contains a row in the Assembly table (that is, if this module "holds the manifest") 
-		 * then there shall not be any row in the File table for this module - i.e., no self-reference  [ERROR]
-		 */
-
-	}
-	if (level & MONO_VERIFY_WARNING) {
-		if (!t->rows && image->tables [MONO_TABLE_EXPORTEDTYPE].rows)
-			ADD_WARN (list, MONO_VERIFY_WARNING, g_strdup ("ExportedType table should be empty if File table is empty"));
-	}
-	g_hash_table_destroy (dups);
-	return list;
-}
-
-static GSList*
-verify_moduleref_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_MODULEREF];
-	MonoTableInfo *tfile = &image->tables [MONO_TABLE_FILE];
-	guint32 cols [MONO_MODULEREF_SIZE];
-	const char *p, *pf;
-	guint32 found, i, j, value;
-	GHashTable *dups = g_hash_table_new (g_str_hash, g_str_equal);
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_MODULEREF_SIZE);
-		if (!(p = is_valid_string (image, cols [MONO_MODULEREF_NAME], TRUE))) {
-			if (level & MONO_VERIFY_ERROR)
-				ADD_ERROR (list, g_strdup_printf ("Invalid name in ModuleRef row %d", i + 1));
-		} else {
-			if (level & MONO_VERIFY_ERROR) {
-				if (!is_valid_filename (p))
-					ADD_ERROR (list, g_strdup_printf ("Invalid name '%s` in ModuleRef row %d", p, i + 1));
-				else if (g_hash_table_lookup (dups, p)) {
-					ADD_WARN (list, MONO_VERIFY_WARNING, g_strdup_printf ("Duplicate name '%s` in ModuleRef row %d", p, i + 1));
-					g_hash_table_insert (dups, (gpointer)p, (gpointer)p);
-					found = 0;
-					for (j = 0; j < tfile->rows; ++j) {
-						value = mono_metadata_decode_row_col (tfile, j, MONO_FILE_NAME);
-						if ((pf = is_valid_string (image, value, TRUE)))
-							if (strcmp (p, pf) == 0) {
-								found = 1;
-								break;
-							}
-					}
-					if (!found)
-						ADD_ERROR (list, g_strdup_printf ("Name '%s` in ModuleRef row %d doesn't have a match in File table", p, i + 1));
-				}
-			}
-		}
-	}
-	g_hash_table_destroy (dups);
-	return list;
-}
-
-static GSList*
-verify_standalonesig_table (MonoImage *image, GSList *list, int level)
-{
-	MonoTableInfo *t = &image->tables [MONO_TABLE_STANDALONESIG];
-	guint32 cols [MONO_STAND_ALONE_SIGNATURE_SIZE];
-	const char *p;
-	guint32 i;
-
-	for (i = 0; i < t->rows; ++i) {
-		mono_metadata_decode_row (t, i, cols, MONO_STAND_ALONE_SIGNATURE_SIZE);
-		if (level & MONO_VERIFY_ERROR) {
-			if (!is_valid_blob (image, cols [MONO_STAND_ALONE_SIGNATURE], TRUE)) {
-				ADD_ERROR (list, g_strdup_printf ("Signature is invalid in StandAloneSig row %d", i + 1));
-			} else {
-				p = mono_metadata_blob_heap (image, cols [MONO_STAND_ALONE_SIGNATURE]);
-				/* FIXME: check it's a valid locals or method sig.*/
-			}
-		}
-	}
-	return list;
-}
-
-GSList*
-mono_image_verify_tables (MonoImage *image, int level)
-{
-	GSList *error_list = NULL;
-
-	error_list = verify_assembly_table (image, error_list, level);
-	/* 
-	 * AssemblyOS, AssemblyProcessor, AssemblyRefOs and
-	 * AssemblyRefProcessor should be ignored, 
-	 * though we may want to emit a warning, since it should not 
-	 * be present in a PE file.
-	 */
-	error_list = verify_assemblyref_table (image, error_list, level);
-	error_list = verify_class_layout_table (image, error_list, level);
-	error_list = verify_constant_table (image, error_list, level);
-	/*
-	 * cutom attribute, declsecurity 
-	 */
-	error_list = verify_event_map_table (image, error_list, level);
-	error_list = verify_event_table (image, error_list, level);
-	error_list = verify_field_table (image, error_list, level);
-	error_list = verify_file_table (image, error_list, level);
-	error_list = verify_moduleref_table (image, error_list, level);
-	error_list = verify_standalonesig_table (image, error_list, level);
-
-	return g_slist_reverse (error_list);
-}
 
 #define ADD_INVALID(list,msg)	\
 	do {	\
@@ -1938,21 +1367,52 @@ mono_type_from_stack_slot (ILStackDesc *slot)
 /*Stack manipulation code*/
 
 static void
+ensure_stack_size (ILCodeDesc *stack, int required)
+{
+	int new_size = 8;
+	ILStackDesc *tmp;
+
+	if (required < stack->max_size)
+		return;
+
+	/* We don't have to worry about the exponential growth since stack_copy prune unused space */
+	new_size = MAX (8, MAX (required, stack->max_size * 2));
+
+	g_assert (new_size >= stack->size);
+	g_assert (new_size >= required);
+
+	tmp = g_new0 (ILStackDesc, new_size);
+	MEM_ALLOC (sizeof (ILStackDesc) * new_size);
+
+	if (stack->stack) {
+		if (stack->size)
+			memcpy (tmp, stack->stack, stack->size * sizeof (ILStackDesc));
+		g_free (stack->stack);
+		MEM_FREE (sizeof (ILStackDesc) * stack->max_size);
+	}
+
+	stack->stack = tmp;
+	stack->max_size = new_size;
+}
+
+static void
 stack_init (VerifyContext *ctx, ILCodeDesc *state) 
 {
 	if (state->flags & IL_CODE_FLAG_STACK_INITED)
 		return;
-	state->size = 0;
+	state->size = state->max_size = 0;
 	state->flags |= IL_CODE_FLAG_STACK_INITED;
-	if (!state->stack)
-		state->stack = g_new0 (ILStackDesc, ctx->max_stack);
 }
 
 static void
 stack_copy (ILCodeDesc *to, ILCodeDesc *from)
 {
+	ensure_stack_size (to, from->size);
 	to->size = from->size;
-	memcpy (to->stack, from->stack, sizeof (ILStackDesc) * from->size);
+
+	/*stack copy happens at merge points, which have small stacks*/
+	if (from->size)
+		memcpy (to->stack, from->stack, sizeof (ILStackDesc) * from->size);
 }
 
 static void
@@ -2005,10 +1465,14 @@ check_unverifiable_type (VerifyContext *ctx, MonoType *type)
 	return 1;
 }
 
-
 static ILStackDesc *
 stack_push (VerifyContext *ctx)
 {
+	g_assert (ctx->eval.size < ctx->max_stack);
+	g_assert (ctx->eval.size <= ctx->eval.max_size);
+
+	ensure_stack_size (&ctx->eval, ctx->eval.size + 1);
+
 	return & ctx->eval.stack [ctx->eval.size++];
 }
 
@@ -2024,7 +1488,9 @@ stack_push_val (VerifyContext *ctx, int stype, MonoType *type)
 static ILStackDesc *
 stack_pop (VerifyContext *ctx)
 {
-	ILStackDesc *ret = ctx->eval.stack + --ctx->eval.size;
+	ILStackDesc *ret;
+	g_assert (ctx->eval.size > 0);	
+	ret = ctx->eval.stack + --ctx->eval.size;
 	if ((ret->stype & UNINIT_THIS_MASK) == UNINIT_THIS_MASK)
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Found use of uninitialized 'this ptr' ref at 0x%04x", ctx->ip_offset));
 	return ret;
@@ -2036,7 +1502,16 @@ stack_pop (VerifyContext *ctx)
 static ILStackDesc *
 stack_pop_safe (VerifyContext *ctx)
 {
+	g_assert (ctx->eval.size > 0);
 	return ctx->eval.stack + --ctx->eval.size;
+}
+
+/*Positive number distance from stack top. [0] is stack top, [1] is the one below*/
+static ILStackDesc*
+stack_peek (VerifyContext *ctx, int distance)
+{
+	g_assert (ctx->eval.size - distance > 0);
+	return ctx->eval.stack + (ctx->eval.size - 1 - distance);
 }
 
 static ILStackDesc *
@@ -2334,15 +1809,6 @@ handle_enum:
 	case MONO_TYPE_ARRAY:
 		return TYPE_COMPLEX | mask;
 
-	case MONO_TYPE_GENERICINST:
-		if (mono_type_is_enum_type (type)) {
-			type = mono_type_get_underlying_type_any (type);
-			type_kind = type->type;
-			goto handle_enum;
-		} else {
-			return TYPE_COMPLEX | mask;
-		}
-
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
 		return TYPE_I8 | mask;
@@ -2351,9 +1817,12 @@ handle_enum:
 	case MONO_TYPE_R8:
 		return TYPE_R8 | mask;
 
+	case MONO_TYPE_GENERICINST:
 	case MONO_TYPE_VALUETYPE:
 		if (mono_type_is_enum_type (type)) {
 			type = mono_type_get_underlying_type_any (type);
+			if (!type)
+				return FALSE;
 			type_kind = type->type;
 			goto handle_enum;
 		} else {
@@ -2361,9 +1830,7 @@ handle_enum:
 		}
 
 	default:
-		VERIFIER_DEBUG ( printf ("unknown type %02x in eval stack type\n", type->type); );
-		g_assert_not_reached ();
-		return 0;
+		return TYPE_INV;
 	}
 }
 
@@ -2415,16 +1882,6 @@ handle_enum:
 		stack->stype = TYPE_COMPLEX | mask;
 		break;
 		
-	case MONO_TYPE_GENERICINST:
-		if (mono_type_is_enum_type (type)) {
-			type = mono_type_get_underlying_type_any (type);
-			type_kind = type->type;
-			goto handle_enum;
-		} else {
-			stack->stype = TYPE_COMPLEX | mask;
-			break;
-		}
-
 	case MONO_TYPE_I8:
 	case MONO_TYPE_U8:
 		stack->stype = TYPE_I8 | mask;
@@ -2433,9 +1890,15 @@ handle_enum:
 	case MONO_TYPE_R8:
 		stack->stype = TYPE_R8 | mask;
 		break;
+	case MONO_TYPE_GENERICINST:
 	case MONO_TYPE_VALUETYPE:
 		if (mono_type_is_enum_type (type)) {
-			type = mono_type_get_underlying_type_any (type);
+			MonoType *utype = mono_type_get_underlying_type_any (type);
+			if (!utype) {
+				ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Could not resolve underlying type of %x at %d", type->type, ctx->ip_offset));
+				return FALSE;
+			}
+			type = utype;
 			type_kind = type->type;
 			goto handle_enum;
 		} else {
@@ -2459,8 +1922,24 @@ handle_enum:
 static void
 init_stack_with_value_at_exception_boundary (VerifyContext *ctx, ILCodeDesc *code, MonoClass *klass)
 {
-	MonoType *type = mono_class_inflate_generic_type (&klass->byval_arg, ctx->generic_context);
+	MonoError error;
+	MonoType *type = mono_class_inflate_generic_type_checked (&klass->byval_arg, ctx->generic_context, &error);
+
+	if (!mono_error_ok (&error)) {
+		char *name = mono_type_get_full_name (klass);
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Invalid class %s used for exception", name));
+		g_free (name);
+		mono_error_cleanup (&error);
+		return;
+	}
+
+	if (!ctx->max_stack) {
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Stack overflow at 0x%04x", ctx->ip_offset));
+		return;
+	}
+
 	stack_init (ctx, code);
+	ensure_stack_size (code, 1);
 	set_stack_value (ctx, code->stack, type, FALSE);
 	ctx->exception_types = g_slist_prepend (ctx->exception_types, type);
 	code->size = 1;
@@ -2558,8 +2037,17 @@ handle_enum:
 		MonoClass *candidate_klass;
 		if (mono_type_is_enum_type (target)) {
 			target = mono_type_get_underlying_type_any (target);
+			if (!target)
+				return FALSE;
 			goto handle_enum;
 		}
+		/*
+		 * VAR / MVAR compatibility must be checked by verify_stack_type_compatibility
+		 * to take boxing status into account.
+		 */
+		if (mono_type_is_generic_argument (original_candidate))
+			return FALSE;
+
 		target_klass = mono_class_from_mono_type (target);
 		candidate_klass = mono_class_from_mono_type (candidate);
 		if (mono_class_is_nullable (target_klass)) {
@@ -2581,6 +2069,10 @@ handle_enum:
 		 */
 		if (mono_type_is_generic_argument (original_candidate))
 			return FALSE;
+
+		if (candidate->type == MONO_TYPE_VALUETYPE)
+			return FALSE;
+
 		/* If candidate is an enum it should return true for System.Enum and supertypes.
 		 * That's why here we use the original type and not the underlying type.
 		 */ 
@@ -2595,8 +2087,9 @@ handle_enum:
 		if (candidate->type != MONO_TYPE_SZARRAY)
 			return FALSE;
 
-		left = mono_class_from_mono_type (target)->element_class;
-		right = mono_class_from_mono_type (candidate)->element_class;
+		left = mono_class_from_mono_type (target);
+		right = mono_class_from_mono_type (candidate);
+
 		return mono_class_is_assignable_from (left, right);
 	}
 
@@ -2609,13 +2102,20 @@ handle_enum:
 		return candidate->type == MONO_TYPE_TYPEDBYREF;
 
 	case MONO_TYPE_VALUETYPE: {
-		MonoClass *target_klass  = mono_class_from_mono_type (target);
-		MonoClass *candidate_klass = mono_class_from_mono_type (candidate);
+		MonoClass *target_klass;
+		MonoClass *candidate_klass;
 
+		if (candidate->type == MONO_TYPE_CLASS)
+			return FALSE;
+
+		target_klass = mono_class_from_mono_type (target);
+		candidate_klass = mono_class_from_mono_type (candidate);
 		if (target_klass == candidate_klass)
 			return TRUE;
 		if (mono_type_is_enum_type (target)) {
 			target = mono_type_get_underlying_type_any (target);
+			if (!target)
+				return FALSE;
 			goto handle_enum;
 		}
 		return FALSE;
@@ -2671,6 +2171,30 @@ get_generic_param (VerifyContext *ctx, MonoType *param)
 	return ctx->generic_context->method_inst->type_argv [param_num]->data.generic_param;
 	
 }
+
+static gboolean
+recursive_boxed_constraint_type_check (VerifyContext *ctx, MonoType *type, MonoClass *constraint_class, int recursion_level)
+{
+	MonoType *constraint_type = &constraint_class->byval_arg;
+	if (recursion_level <= 0)
+		return FALSE;
+
+	if (verify_type_compatibility_full (ctx, type, mono_type_get_type_byval (constraint_type), FALSE))
+		return TRUE;
+
+	if (mono_type_is_generic_argument (constraint_type)) {
+		MonoGenericParam *param = get_generic_param (ctx, constraint_type);
+		MonoClass **class;
+		if (!param)
+			return FALSE;
+		for (class = mono_generic_param_info (param)->constraints; class && *class; ++class) {
+			if (recursive_boxed_constraint_type_check (ctx, type, *class, recursion_level - 1))
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 /*
  * is_compatible_boxed_valuetype:
  * 
@@ -2693,8 +2217,12 @@ is_compatible_boxed_valuetype (VerifyContext *ctx, MonoType *type, MonoType *can
 	if (mono_type_is_generic_argument (candidate)) {
 		MonoGenericParam *param = get_generic_param (ctx, candidate);
 		MonoClass **class;
+		if (!param)
+			return FALSE;
+
 		for (class = mono_generic_param_info (param)->constraints; class && *class; ++class) {
-			if (verify_type_compatibility_full (ctx, type, mono_type_get_type_byval (& (*class)->byval_arg), FALSE))
+			/*256 should be enough since there can't be more than 255 generic arguments.*/
+			if (recursive_boxed_constraint_type_check (ctx, type, *class, 256))
 				return TRUE;
 		}
 	}
@@ -2922,6 +2450,20 @@ verify_delegate_compatibility (VerifyContext *ctx, MonoClass *delegate, ILStackD
 	invoke = mono_get_delegate_invoke (delegate);
 	method = funptr->method;
 
+	if (!method || !mono_method_signature (method)) {
+		char *name = mono_type_get_full_name (delegate);
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Invalid method on stack to create delegate %s construction at 0x%04x", name, ctx->ip_offset));
+		g_free (name);
+		return;
+	}
+
+	if (!invoke || !mono_method_signature (invoke)) {
+		char *name = mono_type_get_full_name (delegate);
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Delegate type %s with bad Invoke method at 0x%04x", name, ctx->ip_offset));
+		g_free (name);
+		return;
+	}
+
 	is_static_ldftn = (ip_offset > 5 && IS_LOAD_FUN_PTR (CEE_LDFTN)) && method->flags & METHOD_ATTRIBUTE_STATIC;
 
 	if (is_static_ldftn)
@@ -2957,11 +2499,16 @@ verify_delegate_compatibility (VerifyContext *ctx, MonoClass *delegate, ILStackD
 
 	//general tests
 	if (is_first_arg_bound) {
-		if (!verify_stack_type_compatibility_full (ctx, mono_method_signature (method)->params [0], value, FALSE, TRUE))
+		if (mono_method_signature (method)->param_count == 0 || !verify_stack_type_compatibility_full (ctx, mono_method_signature (method)->params [0], value, FALSE, TRUE))
 			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("This object not compatible with function pointer for delegate creation at 0x%04x", ctx->ip_offset));
 	} else {
-		if (!verify_stack_type_compatibility_full (ctx, &method->klass->byval_arg, value, FALSE, TRUE) && !stack_slot_is_null_literal (value))
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("This object not compatible with function pointer for delegate creation at 0x%04x", ctx->ip_offset));
+		if (method->flags & METHOD_ATTRIBUTE_STATIC) {
+			if (!stack_slot_is_null_literal (value) && !is_first_arg_bound)
+				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Non-null this args used with static function for delegate creation at 0x%04x", ctx->ip_offset));
+		} else {
+			if (!verify_stack_type_compatibility_full (ctx, &method->klass->byval_arg, value, FALSE, TRUE) && !stack_slot_is_null_literal (value))
+				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("This object not compatible with function pointer for delegate creation at 0x%04x", ctx->ip_offset));
+		}
 	}
 
 	if (stack_slot_get_type (value) != TYPE_COMPLEX)
@@ -3055,10 +2602,15 @@ store_local (VerifyContext *ctx, guint32 arg)
 	if (check_underflow (ctx, 1)) {
 		value = stack_pop(ctx);
 		if (!verify_stack_type_compatibility (ctx, ctx->locals [arg], value)) {
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible type [%s], type [%s] was expected in local store at 0x%04x",
-					stack_slot_get_name (value),
-					mono_type_get_stack_name (ctx->locals [arg]),
-					ctx->ip_offset));	
+			char *expected = mono_type_full_name (ctx->locals [arg]);
+			char *found = stack_slot_full_name (value);
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible type '%s' on stack cannot be stored to local %d with type '%s' at 0x%04x",
+					found,
+					arg,
+					expected,
+					ctx->ip_offset));
+			g_free (expected);
+			g_free (found);	
 		}
 	}
 }
@@ -3328,7 +2880,7 @@ do_invoke_method (VerifyContext *ctx, int method_token, gboolean virtual)
 		if (method->flags & METHOD_ATTRIBUTE_ABSTRACT) 
 			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot use call with an abstract method at 0x%04x", ctx->ip_offset));
 		
-		if ((method->flags & METHOD_ATTRIBUTE_VIRTUAL) && !(method->flags & METHOD_ATTRIBUTE_FINAL)) {
+		if ((method->flags & METHOD_ATTRIBUTE_VIRTUAL) && !(method->flags & METHOD_ATTRIBUTE_FINAL) && !(method->klass->flags & TYPE_ATTRIBUTE_SEALED)) {
 			virt_check_this = TRUE;
 			ctx->code [ctx->ip_offset].flags |= IL_CODE_CALL_NONFINAL_VIRTUAL;
 		}
@@ -3336,6 +2888,13 @@ do_invoke_method (VerifyContext *ctx, int method_token, gboolean virtual)
 
 	if (!(sig = mono_method_get_signature_full (method, ctx->image, method_token, ctx->generic_context)))
 		sig = mono_method_get_signature (method, ctx->image, method_token);
+
+	if (!sig) {
+		char *name = mono_type_get_full_name (method->klass);
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Could not resolve signature of %s:%s at 0x%04x", name, method->name, ctx->ip_offset));
+		g_free (name);
+		return;
+	}
 
 	param_count = sig->param_count + sig->hasthis;
 	if (!check_underflow (ctx, param_count))
@@ -3386,7 +2945,7 @@ do_invoke_method (VerifyContext *ctx, int method_token, gboolean virtual)
 		copy.stype &= ~POINTER_MASK;
 
 		if (virt_check_this && !stack_slot_is_this_pointer (value) && !(method->klass->valuetype || stack_slot_is_boxed_value (value)))
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot call a non-final virtual method from an objet diferent thant the this pointer at 0x%04x", ctx->ip_offset));
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot use the call opcode with a non-final virtual method on an object diferent thant the this pointer at 0x%04x", ctx->ip_offset));
 
 		if (constrained && virtual) {
 			if (!stack_slot_is_managed_pointer (value))
@@ -3407,8 +2966,16 @@ do_invoke_method (VerifyContext *ctx, int method_token, gboolean virtual)
 			if (method->klass->valuetype && (stack_slot_is_boxed_value (value) || !stack_slot_is_managed_pointer (value)))
 				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot use a boxed or literal valuetype to call a valuetype method at 0x%04x", ctx->ip_offset));
 		}
-		if (!verify_stack_type_compatibility (ctx, type, &copy))
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible this argument on stack with method signature at 0x%04x", ctx->ip_offset));
+		if (!verify_stack_type_compatibility (ctx, type, &copy)) {
+			char *expected = mono_type_full_name (type);
+			char *effective = stack_slot_full_name (&copy);
+			char *method_name = mono_method_full_name (method, TRUE);
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible this argument on stack with method signature expected '%s' but got '%s' for a call to '%s' at 0x%04x",
+					expected, effective, method_name, ctx->ip_offset));
+			g_free (method_name);
+			g_free (effective);
+			g_free (expected);
+		}
 
 		if (!IS_SKIP_VISIBILITY (ctx) && !mono_method_can_access_method_full (ctx->method, method, mono_class_from_mono_type (value->type))) {
 			char *name = mono_method_full_name (method, TRUE);
@@ -3447,6 +3014,8 @@ do_push_static_field (VerifyContext *ctx, int token, gboolean take_addr)
 {
 	MonoClassField *field;
 	MonoClass *klass;
+	if (!check_overflow (ctx))
+		return;
 	if (!take_addr)
 		CLEAR_PREFIX (ctx, PREFIX_VOLATILE);
 
@@ -3496,8 +3065,14 @@ do_store_static_field (VerifyContext *ctx, int token) {
 	if (!IS_SKIP_VISIBILITY (ctx) && !mono_method_can_access_field_full (ctx->method, field, NULL))
 		CODE_NOT_VERIFIABLE2 (ctx, g_strdup_printf ("Type at stack is not accessible at 0x%04x", ctx->ip_offset), MONO_EXCEPTION_FIELD_ACCESS);
 
-	if (!verify_stack_type_compatibility (ctx, field->type, value))
-		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible type %s in static field store at 0x%04x", stack_slot_get_name (value), ctx->ip_offset));	
+	if (!verify_stack_type_compatibility (ctx, field->type, value)) {
+		char *stack_name = stack_slot_full_name (value);
+		char *field_name = mono_type_full_name (field->type);
+		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Incompatible type in static field store expected '%s' but found '%s' at 0x%04x",
+				field_name, stack_name, ctx->ip_offset));
+		g_free (field_name);
+		g_free (stack_name);
+	}
 }
 
 static gboolean
@@ -3537,8 +3112,13 @@ check_is_valid_type_for_field_ops (VerifyContext *ctx, int token, ILStackDesc *o
 		if (field->parent->valuetype && stack_slot_is_boxed_value (obj))
 			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Type at stack is a boxed valuetype and is not compatible to reference the field at 0x%04x", ctx->ip_offset));
 
-		if (!stack_slot_is_null_literal (obj) && !verify_stack_type_compatibility_full (ctx, &field->parent->byval_arg, obj, TRUE, FALSE))
-			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Type at stack is not compatible to reference the field at 0x%04x", ctx->ip_offset));
+		if (!stack_slot_is_null_literal (obj) && !verify_stack_type_compatibility_full (ctx, &field->parent->byval_arg, obj, TRUE, FALSE)) {
+			char *found = stack_slot_full_name (obj);
+			char *expected = mono_type_full_name (&field->parent->byval_arg);
+			CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Expected type '%s' but found '%s' referencing the 'this' argument at 0x%04x", expected, found, ctx->ip_offset));
+			g_free (found);
+			g_free (expected);
+		}
 
 		if (!IS_SKIP_VISIBILITY (ctx) && !mono_method_can_access_field_full (ctx->method, field, mono_class_from_mono_type (obj->type)))
 			CODE_NOT_VERIFIABLE2 (ctx, g_strdup_printf ("Type at stack is not accessible at 0x%04x", ctx->ip_offset), MONO_EXCEPTION_FIELD_ACCESS);
@@ -3742,6 +3322,25 @@ do_load_token (VerifyContext *ctx, int token)
 	MonoClass *handle_class;
 	if (!check_overflow (ctx))
 		return;
+
+	switch (token & 0xff000000) {
+	case MONO_TOKEN_TYPE_DEF:
+	case MONO_TOKEN_TYPE_REF:
+	case MONO_TOKEN_TYPE_SPEC:
+	case MONO_TOKEN_FIELD_DEF:
+	case MONO_TOKEN_METHOD_DEF:
+	case MONO_TOKEN_METHOD_SPEC:
+	case MONO_TOKEN_MEMBER_REF:
+		if (!token_bounds_check (ctx->image, token)) {
+			ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Table index out of range 0x%x for token %x for ldtoken at 0x%04x", mono_metadata_token_index (token), token, ctx->ip_offset));
+			return;
+		}
+		break;
+	default:
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Invalid table 0x%x for token 0x%x for ldtoken at 0x%04x", mono_metadata_token_table (token), token, ctx->ip_offset));
+		return;
+	}
+
 	handle = mono_ldtoken (ctx->image, token, &handle_class, ctx->generic_context);
 	if (!handle) {
 		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Invalid token 0x%x for ldtoken at 0x%04x", token, ctx->ip_offset));
@@ -3815,8 +3414,13 @@ do_stobj (VerifyContext *ctx, int token)
 	if (stack_slot_is_boxed_value (src) && !MONO_TYPE_IS_REFERENCE (src->type) && !MONO_TYPE_IS_REFERENCE (type))
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot use stobj with a boxed source value that is not a reference type at 0x%04x", ctx->ip_offset));
 
-	if (!verify_stack_type_compatibility (ctx, type, src))
-		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Token and source types of stobj don't match at 0x%04x", ctx->ip_offset));
+	if (!verify_stack_type_compatibility (ctx, type, src)) {
+		char *type_name = mono_type_full_name (type);
+		char *src_name = stack_slot_full_name (src);
+		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Token '%s' and source '%s' of stobj don't match ' at 0x%04x", type_name, src_name, ctx->ip_offset));
+		g_free (type_name);
+		g_free (src_name);
+	}
 
 	if (!verify_type_compatibility (ctx, mono_type_get_type_byval (dest->type), type))
 		CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Destination and token types of stobj don't match at 0x%04x", ctx->ip_offset));
@@ -3917,6 +3521,11 @@ do_newobj (VerifyContext *ctx, int token)
 
 	//FIXME use mono_method_get_signature_full
 	sig = mono_method_signature (method);
+	if (!sig) {
+		ADD_VERIFY_ERROR (ctx, g_strdup_printf ("Invalid constructor signature to newobj at 0x%04x", ctx->ip_offset));
+		return;
+	}
+
 	if (!check_underflow (ctx, sig->param_count))
 		return;
 
@@ -4520,12 +4129,15 @@ do_localloc (VerifyContext *ctx)
 static void
 do_ldstr (VerifyContext *ctx, guint32 token)
 {
+	GSList *error = NULL;
 	if (mono_metadata_token_code (token) != MONO_TOKEN_STRING) {
 		ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Invalid string token %x at 0x%04x", token, ctx->ip_offset), MONO_EXCEPTION_BAD_IMAGE);
 		return;
 	}
 
-	if (!ctx->image->dynamic && mono_metadata_token_index (token) >= ctx->image->heap_us.size) {
+	if (!ctx->image->dynamic && !mono_verifier_verify_string_signature (ctx->image, mono_metadata_token_index (token), &error)) {
+		if (error)
+			ctx->list = g_slist_concat (ctx->list, error);
 		ADD_VERIFY_ERROR2 (ctx, g_strdup_printf ("Invalid string index %x at 0x%04x", token, ctx->ip_offset), MONO_EXCEPTION_BAD_IMAGE);
 		return;
 	}
@@ -4625,6 +4237,7 @@ do_ckfinite (VerifyContext *ctx)
 static void
 merge_stacks (VerifyContext *ctx, ILCodeDesc *from, ILCodeDesc *to, gboolean start, gboolean external) 
 {
+	MonoError error;
 	int i, j, k;
 	stack_init (ctx, to);
 
@@ -4691,7 +4304,12 @@ merge_stacks (VerifyContext *ctx, ILCodeDesc *from, ILCodeDesc *to, gboolean sta
 				}
 			}
 
-			mono_class_setup_interfaces (old_class);
+			mono_class_setup_interfaces (old_class, &error);
+			if (!mono_error_ok (&error)) {
+				CODE_NOT_VERIFIABLE (ctx, g_strdup_printf ("Cannot merge stacks due to a TypeLoadException %s at 0x%04x", mono_error_get_message (&error), ctx->ip_offset));
+				mono_error_cleanup (&error);
+				goto end_verify;
+			}
 			for (j = 0; j < old_class->interface_count; ++j) {
 				for (k = 0; k < new_class->interface_count; ++k) {
 					if (mono_metadata_type_equal (&old_class->interfaces [j]->byval_arg, &new_class->interfaces [k]->byval_arg)) {
@@ -4823,10 +4441,24 @@ verify_clause_relationship (VerifyContext *ctx, MonoExceptionClause *clause, Mon
 }
 
 #define code_bounds_check(size) \
-	if (ip + size > end) {\
+	if (ADDP_IS_GREATER_OR_OVF (ip, size, end)) {\
 		ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Code overrun starting with 0x%x at 0x%04x", *ip, ctx.ip_offset)); \
 		break; \
 	} \
+
+static gboolean
+mono_opcode_is_prefix (int op)
+{
+	switch (op) {
+	case MONO_CEE_UNALIGNED_:
+	case MONO_CEE_VOLATILE_:
+	case MONO_CEE_TAIL_:
+	case MONO_CEE_CONSTRAINED_:
+	case MONO_CEE_READONLY_:
+		return TRUE;
+	}
+	return FALSE;
+}
 
 /*
  * FIXME: need to distinguish between valid and verifiable.
@@ -4836,8 +4468,11 @@ verify_clause_relationship (VerifyContext *ctx, MonoExceptionClause *clause, Mon
 GSList*
 mono_method_verify (MonoMethod *method, int level)
 {
-	const unsigned char *ip;
+	MonoError error;
+	const unsigned char *ip, *code_start;
 	const unsigned char *end;
+	MonoSimpleBasicBlock *bb = NULL, *original_bb = NULL;
+
 	int i, n, need_merge = 0, start = 0;
 	guint token, ip_offset = 0, prefix = 0;
 	MonoGenericContext *generic_context = NULL;
@@ -4845,6 +4480,8 @@ mono_method_verify (MonoMethod *method, int level)
 	VerifyContext ctx;
 	GSList *tmp;
 	VERIFIER_DEBUG ( printf ("Verify IL for method %s %s %s\n",  method->klass->name_space,  method->klass->name, method->name); );
+
+	init_verifier_stats ();
 
 	if (method->iflags & (METHOD_IMPL_ATTRIBUTE_INTERNAL_CALL | METHOD_IMPL_ATTRIBUTE_RUNTIME) ||
 			(method->flags & (METHOD_ATTRIBUTE_PINVOKE_IMPL | METHOD_ATTRIBUTE_ABSTRACT))) {
@@ -4857,15 +4494,18 @@ mono_method_verify (MonoMethod *method, int level)
 	ctx.signature = mono_method_signature (method);
 	if (!ctx.signature) {
 		ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Could not decode method signature"));
+
+		finish_collect_stats ();
 		return ctx.list;
 	}
 	ctx.header = mono_method_get_header (method);
 	if (!ctx.header) {
 		ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Could not decode method header"));
+		finish_collect_stats ();
 		return ctx.list;
 	}
 	ctx.method = method;
-	ip = ctx.header->code;
+	code_start = ip = ctx.header->code;
 	end = ip + ctx.header->code_size;
 	ctx.image = image = method->klass->image;
 
@@ -4877,17 +4517,20 @@ mono_method_verify (MonoMethod *method, int level)
 
 	ctx.code = g_new (ILCodeDesc, ctx.header->code_size);
 	ctx.code_size = ctx.header->code_size;
+	MEM_ALLOC (sizeof (ILCodeDesc) * ctx.header->code_size);
 
 	memset(ctx.code, 0, sizeof (ILCodeDesc) * ctx.header->code_size);
 
-
 	ctx.num_locals = ctx.header->num_locals;
 	ctx.locals = g_memdup (ctx.header->locals, sizeof (MonoType*) * ctx.header->num_locals);
+	MEM_ALLOC (sizeof (MonoType*) * ctx.header->num_locals);
 
 	if (ctx.num_locals > 0 && !ctx.header->init_locals)
 		CODE_NOT_VERIFIABLE (&ctx, g_strdup_printf ("Method with locals variable but without init locals set"));
 
 	ctx.params = g_new (MonoType*, ctx.max_args);
+	MEM_ALLOC (sizeof (MonoType*) * ctx.max_args);
+
 	if (ctx.signature->hasthis)
 		ctx.params [0] = method->klass->valuetype ? &method->klass->this_arg : &method->klass->byval_arg;
 	memcpy (ctx.params + ctx.signature->hasthis, ctx.signature->params, sizeof (MonoType *) * ctx.signature->param_count);
@@ -4902,20 +4545,57 @@ mono_method_verify (MonoMethod *method, int level)
 			ctx.generic_context = generic_context = &method->klass->generic_container->context;
 	}
 
-	for (i = 0; i < ctx.num_locals; ++i)
-		ctx.locals [i] = mono_class_inflate_generic_type (ctx.locals [i], ctx.generic_context);
-	for (i = 0; i < ctx.max_args; ++i)
-		ctx.params [i] = mono_class_inflate_generic_type (ctx.params [i], ctx.generic_context);
+	for (i = 0; i < ctx.num_locals; ++i) {
+		MonoType *uninflated = ctx.locals [i];
+		ctx.locals [i] = mono_class_inflate_generic_type_checked (ctx.locals [i], ctx.generic_context, &error);
+		if (!mono_error_ok (&error)) {
+			char *name = mono_type_full_name (ctx.locals [i] ? ctx.locals [i] : uninflated);
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Invalid local %d of type %s", i, name));
+			g_free (name);
+			mono_error_cleanup (&error);
+			/* we must not free (in cleanup) what was not yet allocated (but only copied) */
+			ctx.num_locals = i;
+			ctx.max_args = 0;
+			goto cleanup;
+		}
+	}
+	for (i = 0; i < ctx.max_args; ++i) {
+		MonoType *uninflated = ctx.params [i];
+		ctx.params [i] = mono_class_inflate_generic_type_checked (ctx.params [i], ctx.generic_context, &error);
+		if (!mono_error_ok (&error)) {
+			char *name = mono_type_full_name (ctx.params [i] ? ctx.params [i] : uninflated);
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Invalid parameter %d of type %s", i, name));
+			g_free (name);
+			mono_error_cleanup (&error);
+			/* we must not free (in cleanup) what was not yet allocated (but only copied) */
+			ctx.max_args = i;
+			goto cleanup;
+		}
+	}
 	stack_init (&ctx, &ctx.eval);
 
 	for (i = 0; i < ctx.num_locals; ++i) {
 		if (!mono_type_is_valid_in_context (&ctx, ctx.locals [i]))
 			break;
+		if (get_stack_type (ctx.locals [i]) == TYPE_INV) {
+			char *name = mono_type_full_name (ctx.locals [i]);
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Invalid local %i of type %s", i, name));
+			g_free (name);
+			break;
+		}
+		
 	}
 
 	for (i = 0; i < ctx.max_args; ++i) {
 		if (!mono_type_is_valid_in_context (&ctx, ctx.params [i]))
 			break;
+
+		if (get_stack_type (ctx.params [i]) == TYPE_INV) {
+			char *name = mono_type_full_name (ctx.params [i]);
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Invalid parameter %i of type %s", i, name));
+			g_free (name);
+			break;
+		}
 	}
 
 	if (!ctx.valid)
@@ -4925,20 +4605,28 @@ mono_method_verify (MonoMethod *method, int level)
 		MonoExceptionClause *clause = ctx.header->clauses + i;
 		VERIFIER_DEBUG (printf ("clause try %x len %x filter at %x handler at %x len %x\n", clause->try_offset, clause->try_len, clause->data.filter_offset, clause->handler_offset, clause->handler_len); );
 
-		if (clause->try_offset > ctx.code_size || clause->try_offset + clause->try_len > ctx.code_size)
+		if (clause->try_offset > ctx.code_size || ADD_IS_GREATER_OR_OVF (clause->try_offset, clause->try_len, ctx.code_size))
 			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("try clause out of bounds at 0x%04x", clause->try_offset));
 
 		if (clause->try_len <= 0)
 			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("try clause len <= 0 at 0x%04x", clause->try_offset));
 
-		if (clause->handler_offset > ctx.code_size || clause->handler_offset + clause->handler_len > ctx.code_size)
+		if (clause->handler_offset > ctx.code_size || ADD_IS_GREATER_OR_OVF (clause->handler_offset, clause->handler_len, ctx.code_size))
 			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("handler clause out of bounds at 0x%04x", clause->try_offset));
 
 		if (clause->handler_len <= 0)
-			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("try clause len <= 0 at 0x%04x", clause->try_offset));
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("handler clause len <= 0 at 0x%04x", clause->try_offset));
 
-		if (clause->try_offset < clause->handler_offset && clause->try_offset + clause->try_len > HANDLER_START (clause))
+		if (clause->try_offset < clause->handler_offset && ADD_IS_GREATER_OR_OVF (clause->try_offset, clause->try_len, HANDLER_START (clause)))
 			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("try block (at 0x%04x) includes handler block (at 0x%04x)", clause->try_offset, clause->handler_offset));
+
+		if (clause->flags == MONO_EXCEPTION_CLAUSE_FILTER) {
+			if (clause->data.filter_offset > ctx.code_size)
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("filter clause out of bounds at 0x%04x", clause->try_offset));
+
+			if (clause->data.filter_offset >= clause->handler_offset)
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("filter clause must come before the handler clause at 0x%04x", clause->data.filter_offset));
+		}
 
 		for (n = i + 1; n < ctx.header->num_clauses && ctx.valid; ++n)
 			verify_clause_relationship (&ctx, clause, ctx.header->clauses + n);
@@ -4953,6 +4641,11 @@ mono_method_verify (MonoMethod *method, int level)
 			ctx.code [clause->handler_offset + clause->handler_len].flags |= IL_CODE_FLAG_WAS_TARGET;
 
 		if (clause->flags == MONO_EXCEPTION_CLAUSE_NONE) {
+			if (!clause->data.catch_class) {
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Catch clause %d with invalid type", i));
+				break;
+			}
+		
 			init_stack_with_value_at_exception_boundary (&ctx, ctx.code + clause->handler_offset, clause->data.catch_class);
 		}
 		else if (clause->flags == MONO_EXCEPTION_CLAUSE_FILTER) {
@@ -4961,8 +4654,54 @@ mono_method_verify (MonoMethod *method, int level)
 		}
 	}
 
+	original_bb = bb = mono_basic_block_split (method, &error);
+	if (!mono_error_ok (&error)) {
+		ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Invalid branch target: %s", mono_error_get_message (&error)));
+		mono_error_cleanup (&error);
+		goto cleanup;
+	}
+	g_assert (bb);
+
 	while (ip < end && ctx.valid) {
-		ctx.ip_offset = ip_offset = ip - ctx.header->code;
+		ip_offset = ip - code_start;
+		{
+			const unsigned char *ip_copy = ip;
+			int size, op;
+
+			if (ip_offset > bb->end) {
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Branch or EH block at [0x%04x] targets middle instruction at 0x%04x", bb->end, ip_offset));
+				goto cleanup;
+			}
+
+			if (ip_offset == bb->end)
+				bb = bb->next;
+	
+			size = mono_opcode_value_and_size (&ip_copy, end, &op);
+			if (size == -1) {
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Invalid instruction %x at 0x%04x", *ip, ip_offset));
+				goto cleanup;
+			}
+
+			if (ADD_IS_GREATER_OR_OVF (ip_offset, size, bb->end)) {
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Branch or EH block targets middle of instruction at 0x%04x", ip_offset));
+				goto cleanup;
+			}
+
+			/*Last Instruction*/
+			if (ip_offset + size == bb->end && mono_opcode_is_prefix (op)) {
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Branch or EH block targets between prefix '%s' and instruction at 0x%04x", mono_opcode_name (op), ip_offset));
+				goto cleanup;
+			}
+
+			if (bb->dead) {
+				/*FIXME remove this once we move all bad branch checking code to use BB only*/
+				ctx.code [ip_offset].flags |= IL_CODE_FLAG_SEEN;
+				ip += size;
+				continue;
+			}
+		}
+
+		ctx.ip_offset = ip_offset = ip - code_start;
 
 		/*We need to check against fallthrou in and out of protected blocks.
 		 * For fallout we check the once a protected block ends, if the start flag is not set.
@@ -5246,20 +4985,19 @@ mono_method_verify (MonoMethod *method, int level)
 			ip += 2;
 			break;
 
-		/* FIXME: warn/error instead? */
 		case CEE_UNUSED99:
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Use of the `unused' opcode"));
 			++ip;
 			break; 
 
 		case CEE_DUP: {
-			ILStackDesc * top;
+			ILStackDesc *top;
 			if (!check_underflow (&ctx, 1))
 				break;
 			if (!check_overflow (&ctx))
 				break;
-			top = stack_pop_safe (&ctx);
-			copy_stack_value (stack_push (&ctx), top); 
-			copy_stack_value (stack_push (&ctx), top);
+			top = stack_push (&ctx);
+			copy_stack_value (top, stack_peek (&ctx, 1));
 			++ip;
 			break;
 		}
@@ -5327,16 +5065,21 @@ mono_method_verify (MonoMethod *method, int level)
 			need_merge = 1;
 			break;
 
-		case CEE_SWITCH:
+		case CEE_SWITCH: {
+			guint32 entries;
 			code_bounds_check (5);
-			n = read32 (ip + 1);
-			code_bounds_check (5 + sizeof (guint32) * n);
-			
-			do_switch (&ctx, n, (ip + 5));
-			start = 1;
-			ip += 5 + sizeof (guint32) * n;
-			break;
+			entries = read32 (ip + 1);
 
+			if (entries > 0xFFFFFFFFU / sizeof (guint32))
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Too many switch entries %x at 0x%04x", entries, ctx.ip_offset));
+
+			ip += 5;
+			code_bounds_check (sizeof (guint32) * entries);
+			
+			do_switch (&ctx, entries, ip);
+			ip += sizeof (guint32) * entries;
+			break;
+		}
 		case CEE_LDIND_I1:
 		case CEE_LDIND_U1:
 		case CEE_LDIND_I2:
@@ -5432,7 +5175,8 @@ mono_method_verify (MonoMethod *method, int level)
 
 		case CEE_UNUSED58:
 		case CEE_UNUSED1:
-			++ip; /* warn, error ? */
+			ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Use of the `unused' opcode"));
+			++ip;
 			break;
 
 		case CEE_UNBOX:
@@ -5667,7 +5411,8 @@ mono_method_verify (MonoMethod *method, int level)
 
 
 			case CEE_ARGLIST:
-				check_overflow (&ctx);
+				if (!check_overflow (&ctx))
+					break;
 				if (ctx.signature->call_convention != MONO_CALL_VARARG)
 					ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Cannot use arglist on method without VARGARG calling convention at 0x%04x", ctx.ip_offset));
 				set_stack_value (&ctx, stack_push (&ctx), &mono_defaults.argumenthandle_class->byval_arg, FALSE);
@@ -5684,10 +5429,6 @@ mono_method_verify (MonoMethod *method, int level)
 				code_bounds_check (5);
 				do_load_function_ptr (&ctx, read32 (ip + 1), TRUE);
 				ip += 5;
-				break;
-
-			case CEE_UNUSED56:
-				++ip;
 				break;
 
 			case CEE_LDARG:
@@ -5709,7 +5450,11 @@ mono_method_verify (MonoMethod *method, int level)
 				++ip;
 				break;
 
+			case CEE_UNUSED56:
 			case CEE_UNUSED57:
+			case CEE_UNUSED70:
+			case CEE_UNUSED:
+				ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("Use of the `unused' opcode"));
 				++ip;
 				break;
 			case CEE_ENDFILTER:
@@ -5775,9 +5520,6 @@ mono_method_verify (MonoMethod *method, int level)
 					ADD_VERIFY_ERROR (&ctx, g_strdup_printf ("rethrow must be used inside a catch handler at 0x%04x", ctx.ip_offset));
 				ctx.eval.size = 0;
 				start = 1;
-				++ip;
-				break;
-			case CEE_UNUSED:
 				++ip;
 				break;
 
@@ -5849,8 +5591,16 @@ mono_method_verify (MonoMethod *method, int level)
 			CODE_NOT_VERIFIABLE (&ctx, g_strdup_printf ("Invalid call to a non-final virtual function in method with stdarg.0 or ldarga.0 at  0x%04x", i));
 	}
 
-	if (mono_method_is_constructor (ctx.method) && !ctx.super_ctor_called && !ctx.method->klass->valuetype && ctx.method->klass != mono_defaults.object_class)
-		CODE_NOT_VERIFIABLE (&ctx, g_strdup_printf ("Constructor not calling super\n"));
+	if (mono_method_is_constructor (ctx.method) && !ctx.super_ctor_called && !ctx.method->klass->valuetype && ctx.method->klass != mono_defaults.object_class) {
+		char *method_name = mono_method_full_name (ctx.method, TRUE);
+		char *type = mono_type_get_full_name (ctx.method->klass);
+		if (ctx.method->klass->parent && ctx.method->klass->parent->exception_type != MONO_EXCEPTION_NONE)
+			CODE_NOT_VERIFIABLE (&ctx, g_strdup_printf ("Constructor %s for type %s not calling base type ctor due to a TypeLoadException on base type.", method_name, type));
+		else
+			CODE_NOT_VERIFIABLE (&ctx, g_strdup_printf ("Constructor %s for type %s not calling base type ctor.", method_name, type));
+		g_free (method_name);
+		g_free (type);
+	}
 
 cleanup:
 	if (ctx.code) {
@@ -5868,10 +5618,14 @@ cleanup:
 		mono_metadata_free_type (tmp->data);
 	g_slist_free (ctx.exception_types);
 
-	for (i = 0; i < ctx.num_locals; ++i)
-		mono_metadata_free_type (ctx.locals [i]);
-	for (i = 0; i < ctx.max_args; ++i)
-		mono_metadata_free_type (ctx.params [i]);
+	for (i = 0; i < ctx.num_locals; ++i) {
+		if (ctx.locals [i])
+			mono_metadata_free_type (ctx.locals [i]);
+	}
+	for (i = 0; i < ctx.max_args; ++i) {
+		if (ctx.params [i])
+			mono_metadata_free_type (ctx.params [i]);
+	}
 
 	if (ctx.eval.stack)
 		g_free (ctx.eval.stack);
@@ -5879,7 +5633,10 @@ cleanup:
 		g_free (ctx.code);
 	g_free (ctx.locals);
 	g_free (ctx.params);
+	mono_basic_block_free (original_bb);
+	mono_metadata_free_mh (ctx.header);
 
+	finish_collect_stats ();
 	return ctx.list;
 }
 
@@ -5907,7 +5664,7 @@ mono_verifier_is_enabled_for_method (MonoMethod *method)
 gboolean
 mono_verifier_is_enabled_for_class (MonoClass *klass)
 {
-	return verify_all || (verifier_mode > MONO_VERIFIER_MODE_OFF && !klass->image->assembly->in_gac && klass->image != mono_defaults.corlib);
+	return verify_all || (verifier_mode > MONO_VERIFIER_MODE_OFF && !(klass->image->assembly && klass->image->assembly->in_gac) && klass->image != mono_defaults.corlib);
 }
 
 gboolean
@@ -5935,7 +5692,7 @@ mono_verifier_is_class_full_trust (MonoClass *klass)
 {
 	/* under CoreCLR code is trusted if it is part of the "platform" otherwise all code inside the GAC is trusted */
 	gboolean trusted_location = (mono_security_get_mode () != MONO_SECURITY_MODE_CORE_CLR) ? 
-		klass->image->assembly->in_gac : mono_security_core_clr_is_platform_image (klass->image);
+		(klass->image->assembly && klass->image->assembly->in_gac) : mono_security_core_clr_is_platform_image (klass->image);
 
 	if (verify_all && verifier_mode == MONO_VERIFIER_MODE_OFF)
 		return trusted_location || klass->image == mono_defaults.corlib;
@@ -5964,20 +5721,27 @@ get_field_end (MonoClassField *field)
 static gboolean
 verify_class_for_overlapping_reference_fields (MonoClass *class)
 {
-	int i, j;
+	int i = 0, j;
+	gpointer iter = NULL;
+	MonoClassField *field;
 	gboolean is_fulltrust = mono_verifier_is_class_full_trust (class);
-	if (!((class->flags & TYPE_ATTRIBUTE_LAYOUT_MASK) == TYPE_ATTRIBUTE_EXPLICIT_LAYOUT) || !class->has_references)
+	/*We can't skip types with !has_references since this is calculated after we have run.*/
+	if (!((class->flags & TYPE_ATTRIBUTE_LAYOUT_MASK) == TYPE_ATTRIBUTE_EXPLICIT_LAYOUT))
 		return TRUE;
-		
-		//we must check for stuff overlapping reference fields
-	for (i = 0; i < class->field.count; ++i) {
-		MonoClassField *field = &class->fields [i];
+
+
+	/*We must check for stuff overlapping reference fields.
+	  The outer loop uses mono_class_get_fields to ensure that MonoClass:fields get inited.
+	*/
+	while ((field = mono_class_get_fields (class, &iter))) {
 		int fieldEnd = get_field_end (field);
 		gboolean is_valuetype = !MONO_TYPE_IS_REFERENCE (field->type);
+		++i;
+
 		if (mono_field_is_deleted (field) || (field->type->attrs & FIELD_ATTRIBUTE_STATIC))
 			continue;
 
-		for (j = i + 1; j < class->field.count; ++j) {
+		for (j = i; j < class->field.count; ++j) {
 			MonoClassField *other = &class->fields [j];
 			int otherEnd = get_field_end (other);
 			if (mono_field_is_deleted (other) || (is_valuetype && !MONO_TYPE_IS_REFERENCE (other->type)) || (other->type->attrs & FIELD_ATTRIBUTE_STATIC))
@@ -6071,7 +5835,7 @@ verify_valuetype_layout_with_target (MonoClass *class, MonoClass *target_class)
 
 		field_class = mono_class_get_generic_type_definition (mono_class_from_mono_type (field->type));
 
-		if (field_class == target_class || !verify_valuetype_layout_with_target (field_class, target_class))
+		if (field_class == target_class || class == field_class || !verify_valuetype_layout_with_target (field_class, target_class))
 			return FALSE;
 	}
 
@@ -6086,6 +5850,71 @@ verify_valuetype_layout (MonoClass *class)
 	return res;
 }
 
+static gboolean
+recursive_mark_constraint_args (MonoBitSet *used_args, MonoGenericContainer *gc, MonoType *type)
+{
+	int idx;
+	MonoClass **constraints;
+	MonoGenericParamInfo *param_info;
+
+	g_assert (mono_type_is_generic_argument (type));
+
+	idx = mono_type_get_generic_param_num (type);
+	if (mono_bitset_test_fast (used_args, idx))
+		return FALSE;
+
+	mono_bitset_set_fast (used_args, idx);
+	param_info = mono_generic_container_get_param_info (gc, idx);
+
+	if (!param_info->constraints)
+		return TRUE;
+
+	for (constraints = param_info->constraints; *constraints; ++constraints) {
+		MonoClass *ctr = *constraints;
+		MonoType *constraint_type = &ctr->byval_arg;
+
+		if (mono_type_is_generic_argument (constraint_type) && !recursive_mark_constraint_args (used_args, gc, constraint_type))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
+verify_generic_parameters (MonoClass *class)
+{
+	int i;
+	MonoGenericContainer *gc = class->generic_container;
+	MonoBitSet *used_args = mono_bitset_new (gc->type_argc, 0);
+
+	for (i = 0; i < gc->type_argc; ++i) {
+		MonoGenericParamInfo *param_info = mono_generic_container_get_param_info (gc, i);
+		MonoClass **constraints;
+
+		if (!param_info->constraints)
+			continue;
+
+		mono_bitset_clear_all (used_args);
+		mono_bitset_set_fast (used_args, i);
+
+		for (constraints = param_info->constraints; *constraints; ++constraints) {
+			MonoClass *ctr = *constraints;
+			MonoType *constraint_type = &ctr->byval_arg;
+
+			if (!mono_type_is_valid_type_in_context (constraint_type, &gc->context))
+				goto fail;
+
+			if (mono_type_is_generic_argument (constraint_type) && !recursive_mark_constraint_args (used_args, gc, constraint_type))
+				goto fail;
+		}
+	}
+	mono_bitset_free (used_args);
+	return TRUE;
+
+fail:
+	mono_bitset_free (used_args);
+	return FALSE;
+}
+
 /*
  * Check if the class is verifiable.
  * 
@@ -6098,7 +5927,17 @@ verify_valuetype_layout (MonoClass *class)
 gboolean
 mono_verifier_verify_class (MonoClass *class)
 {
+	/*Neither <Module>, object or ifaces have parent.*/
+	if (!class->parent &&
+		class != mono_defaults.object_class && 
+		!MONO_CLASS_IS_INTERFACE (class) &&
+		(!class->image->dynamic && class->type_token != 0x2000001)) /*<Module> is the first type in the assembly*/
+		return FALSE;
+	if (class->parent && MONO_CLASS_IS_INTERFACE (class->parent))
+		return FALSE;
 	if (class->generic_container && (class->flags & TYPE_ATTRIBUTE_LAYOUT_MASK) == TYPE_ATTRIBUTE_EXPLICIT_LAYOUT)
+		return FALSE;
+	if (class->generic_container && !verify_generic_parameters (class))
 		return FALSE;
 	if (!verify_class_for_overlapping_reference_fields (class))
 		return FALSE;
@@ -6177,10 +6016,4 @@ mono_free_verify_list (GSList *list)
 	/* will always be null if verifier is disabled */
 }
 
-GSList*
-mono_image_verify_tables (MonoImage *image, int level)
-{
-	/* The verifier was disabled at compile time */
-	return NULL;
-}	
 #endif

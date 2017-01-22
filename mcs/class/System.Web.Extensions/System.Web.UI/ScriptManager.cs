@@ -395,9 +395,17 @@ namespace System.Web.UI
 		public static ScriptManager GetCurrent (Page page) {
 			if (page == null)
 				throw new ArgumentNullException ("page");
-			return (ScriptManager) page.Items [ScriptManagerKey];
+			return GetCurrentInternal (page);
 		}
 
+		static ScriptManager GetCurrentInternal (Page page)
+		{
+			if (page == null)
+				return null;
+
+			return (ScriptManager) page.Items [ScriptManagerKey];
+		}
+		
 		static void SetCurrent (Page page, ScriptManager instance) {
 			page.Items [ScriptManagerKey] = instance;
 			page.ClientScript.RegisterWebFormClientScript ();
@@ -446,7 +454,7 @@ namespace System.Web.UI
 		protected override void OnInit (EventArgs e) {
 			base.OnInit (e);
 
-			if (GetCurrent (Page) != null)
+			if (GetCurrentInternal (Page) != null)
 				throw new InvalidOperationException ("Only one instance of a ScriptManager can be added to the page.");
 
 			SetCurrent (Page, this);
@@ -754,8 +762,11 @@ namespace System.Web.UI
 
 		public static void RegisterArrayDeclaration (Control control, string arrayName, string arrayValue) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			if (sm._arrayDeclarations == null)
 				sm._arrayDeclarations = new List<RegisteredArrayDeclaration> ();
 
@@ -784,8 +795,11 @@ namespace System.Web.UI
 
 		public static void RegisterClientScriptBlock (Control control, Type type, string key, string script, bool addScriptTags) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			RegisterScript (ref sm._clientScriptBlocks, control, type, key, script, null, addScriptTags, RegisteredScriptType.ClientScriptBlock);
 
 			if (!sm.IsInAsyncPostBack)
@@ -798,8 +812,11 @@ namespace System.Web.UI
 
 		public static void RegisterClientScriptInclude (Control control, Type type, string key, string url) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			RegisterScript (ref sm._clientScriptBlocks, control, type, key, null, url, false, RegisteredScriptType.ClientScriptInclude);
 
 			if (!sm.IsInAsyncPostBack)
@@ -901,8 +918,11 @@ namespace System.Web.UI
 
 		public static void RegisterExpandoAttribute (Control control, string controlId, string attributeName, string attributeValue, bool encode) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			if (sm._expandoAttributes == null)
 				sm._expandoAttributes = new List<RegisteredExpandoAttribute> ();
 
@@ -918,8 +938,11 @@ namespace System.Web.UI
 
 		public static void RegisterHiddenField (Control control, string hiddenFieldName, string hiddenFieldInitialValue) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			if (sm._hiddenFields == null)
 				sm._hiddenFields = new List<RegisteredHiddenField> ();
 
@@ -935,8 +958,11 @@ namespace System.Web.UI
 
 		public static void RegisterOnSubmitStatement (Control control, Type type, string key, string script) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			RegisterScript (ref sm._onSubmitStatements, control, type, key, script, null, false, RegisteredScriptType.OnSubmitStatement);
 
 			if (!sm.IsInAsyncPostBack)
@@ -987,7 +1013,8 @@ namespace System.Web.UI
 			RegisterScriptDescriptors ((Control) scriptControl, scriptControl.GetScriptDescriptors ());
 		}
 
-		void RegisterScriptDescriptors (Control control, IEnumerable<ScriptDescriptor> scriptDescriptors) {
+		void RegisterScriptDescriptors (Control control, IEnumerable<ScriptDescriptor> scriptDescriptors)
+		{
 			if (scriptDescriptors == null)
 				return;
 
@@ -999,6 +1026,7 @@ namespace System.Web.UI
 				}
 				else
 					sb.AppendLine ("Sys.Application.add_init(function() {");
+				sb.Append ("\t");
 				sb.AppendLine (scriptDescriptor.GetScript ());
 				sb.AppendLine ("});");
 			}
@@ -1012,8 +1040,11 @@ namespace System.Web.UI
 
 		public static void RegisterStartupScript (Control control, Type type, string key, string script, bool addScriptTags) {
 			Page page = control.Page;
-			ScriptManager sm = GetCurrent (page);
+			ScriptManager sm = GetCurrentInternal (page);
 
+			if (sm == null)
+				return;
+			
 			RegisterScript (ref sm._startupScriptBlocks, control, type, key, script, null, addScriptTags, RegisteredScriptType.ClientStartupScript);
 
 			if (!sm.IsInAsyncPostBack)
@@ -1061,9 +1092,18 @@ namespace System.Web.UI
 				writer.WriteLine ("//<![CDATA[");
 				writer.WriteLine ("Sys.WebForms.PageRequestManager._initialize('{0}', document.getElementById('{1}'));", UniqueID, Page.Form.ClientID);
 				if (IsMultiForm)
-					writer.WriteLine ("Sys.WebForms.PageRequestManager.getInstance($get(\"{0}\"))._updateControls([{1}], [{2}], [{3}], {4});", Page.Form.ClientID, FormatUpdatePanelIDs (_updatePanels, true), FormatListIDs (_asyncPostBackControls, true), FormatListIDs (_postBackControls, true), AsyncPostBackTimeout);
+					writer.WriteLine ("Sys.WebForms.PageRequestManager.getInstance($get(\"{0}\"))._updateControls([{1}], [{2}], [{3}], {4});",
+							  Page.Form.ClientID,
+							  FormatUpdatePanelIDs (_updatePanels, true),
+							  FormatListIDs (_asyncPostBackControls, true, false),
+							  FormatListIDs (_postBackControls, true, false),
+							  AsyncPostBackTimeout);
 				else
-					writer.WriteLine ("Sys.WebForms.PageRequestManager.getInstance()._updateControls([{0}], [{1}], [{2}], {3});", FormatUpdatePanelIDs (_updatePanels, true), FormatListIDs (_asyncPostBackControls, true), FormatListIDs (_postBackControls, true), AsyncPostBackTimeout);
+					writer.WriteLine ("Sys.WebForms.PageRequestManager.getInstance()._updateControls([{0}], [{1}], [{2}], {3});",
+							  FormatUpdatePanelIDs (_updatePanels, true),
+							  FormatListIDs (_asyncPostBackControls, true, false),
+							  FormatListIDs (_postBackControls, true, false),
+							  AsyncPostBackTimeout);
 				writer.WriteLine ("//]]");
 				writer.WriteLine ("</script>");
 			}
@@ -1075,21 +1115,29 @@ namespace System.Web.UI
 				return null;
 
 			StringBuilder sb = new StringBuilder ();
-			for (int i = 0; i < list.Count; i++) {
-				sb.AppendFormat ("{0}{1}{2}{0},", useSingleQuote ? "'" : String.Empty, list [i].ChildrenAsTriggers ? "t" : "f", list [i].UniqueID);
+			foreach (UpdatePanel panel in list) {
+				if (!panel.Visible)
+					continue;
+				
+				sb.AppendFormat ("{0}{1}{2}{0},", useSingleQuote ? "'" : String.Empty, panel.ChildrenAsTriggers ? "t" : "f", panel.UniqueID);
 			}
+			
 			if (sb.Length > 0)
 				sb.Length--;
 
 			return sb.ToString ();
 		}
 
-		static string FormatListIDs<T> (List<T> list, bool useSingleQuote) where T : Control {
+		static string FormatListIDs<T> (List<T> list, bool useSingleQuote, bool skipInvisible) where T : Control
+		{
 			if (list == null || list.Count == 0)
 				return null;
 
 			StringBuilder sb = new StringBuilder ();
 			for (int i = 0; i < list.Count; i++) {
+				if (skipInvisible && !list [i].Visible)
+					continue;
+				
 				sb.AppendFormat ("{0}{1}{0},", useSingleQuote ? "'" : String.Empty, list [i].UniqueID);
 			}
 			if (sb.Length > 0)
@@ -1255,7 +1303,7 @@ namespace System.Web.UI
 						needsUpdate = true;
 					else
 						needsUpdate = false;
-
+					
 					if (needsUpdate == false) {
 						Control parent = panel.Parent;
 						UpdatePanel parentPanel;
@@ -1270,7 +1318,7 @@ namespace System.Web.UI
 							parent = parent.Parent;
 						}
 					}
-
+					
 					panel.SetInPartialRendering (needsUpdate);
 					if (needsUpdate)
 						RegisterPanelForRefresh (panel);
@@ -1286,11 +1334,11 @@ namespace System.Web.UI
 				foreach (KeyValuePair <string, string> kvp in pageHiddenFields)
 					WriteCallbackOutput (output, hiddenField, kvp.Key, kvp.Value);
 			
-			WriteCallbackOutput (output, asyncPostBackControlIDs, null, FormatListIDs (_asyncPostBackControls, false));
-			WriteCallbackOutput (output, postBackControlIDs, null, FormatListIDs (_postBackControls, false));
+			WriteCallbackOutput (output, asyncPostBackControlIDs, null, FormatListIDs (_asyncPostBackControls, false, false));
+			WriteCallbackOutput (output, postBackControlIDs, null, FormatListIDs (_postBackControls, false, false));
 			WriteCallbackOutput (output, updatePanelIDs, null, FormatUpdatePanelIDs (_updatePanels, false));
-			WriteCallbackOutput (output, childUpdatePanelIDs, null, FormatListIDs (_childUpdatePanels, false));
-			WriteCallbackOutput (output, panelsToRefreshIDs, null, FormatListIDs (_panelsToRefresh, false));
+			WriteCallbackOutput (output, childUpdatePanelIDs, null, FormatListIDs (_childUpdatePanels, false, true));
+			WriteCallbackOutput (output, panelsToRefreshIDs, null, FormatListIDs (_panelsToRefresh, false, true));
 			WriteCallbackOutput (output, asyncPostBackTimeout, null, AsyncPostBackTimeout.ToString ());
 			if (!IsMultiForm)
 				WriteCallbackOutput (output, pageTitle, null, Page.Title);
@@ -1433,10 +1481,10 @@ namespace System.Web.UI
 			output = ((HtmlTextParser) output).ResponseOutput;
 			HtmlForm form = (HtmlForm) container;
 			HtmlTextWriter writer = new HtmlDropWriter (output);
+			
 			if (form.HasControls ()) {
-				for (int i = 0; i < form.Controls.Count; i++) {
-					form.Controls [i].RenderControl (writer);
-				}
+				foreach (Control control in form.Controls)
+					control.RenderControl (writer);
 			}
 		}
 

@@ -5,7 +5,7 @@
 //	Atsushi Enomoto  <atsushi@ximian.com>
 //  Jb Evain  <jbevain@novell.com>
 //
-// Copyright (C) 2007, 2009 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2007, 2009-2010 Novell, Inc (http://www.novell.com)
 //
 
 //
@@ -38,8 +38,9 @@ namespace System.Net {
 	// note: the NotImplementedException are needed to match MS implementation
 
 	// note: MS documents a lot of thing for this type but, in truth, all happens
-	// in a type that derive from HttpWebRequest. In Moonlight case this is
-	// BrowserHttpWebRequest and is located in System.Windows.Browser.dll
+	// in a type that derive from HttpWebRequest. In Moonlight case this is either
+	// * BrowserHttpWebRequest (browser stack) located in System.Windows.Browser.dll; or
+	// * System.Net.Browser.ClientHttpWebRequest (client stack) located in System.Windows.dll
 
 	public abstract class HttpWebRequest : WebRequest {
 
@@ -56,6 +57,12 @@ namespace System.Net {
 		}
 
 		public virtual bool AllowReadStreamBuffering {
+			get { throw NotImplemented (); }
+			set { throw NotImplemented (); }
+		}
+
+		// new in SL4 RC
+		public virtual bool AllowWriteStreamBuffering {
 			get { throw NotImplemented (); }
 			set { throw NotImplemented (); }
 		}
@@ -79,17 +86,21 @@ namespace System.Net {
 			set {
 				// note: this is not a field assignment but a copy (see unit tests)
 				// make sure everything we're supplied is valid...
-				string[] keys = value.AllKeys;
-				foreach (string header in keys) {
+				foreach (string header in value) {
 					// anything bad will throw
 					WebHeaderCollection.ValidateHeader (header);
 				}
 				// ... before making those values our own
-				Headers.headers.Clear ();
-				foreach (string header in keys) {
+				Headers.Clear ();
+				foreach (string header in value) {
 					headers [header] = value [header];
 				}
 			}
+		}
+
+		public virtual CookieContainer CookieContainer {
+			get { throw NotImplemented (); }
+			set { throw NotImplemented (); }
 		}
 
 		public override string Method {
@@ -101,6 +112,10 @@ namespace System.Net {
 			get { throw NotImplemented (); }
 		}
 
+		// new in SL4 RC
+		public virtual bool SupportsCookieContainer {
+			get { return false; }
+		}
 
 		public override void Abort ()
 		{

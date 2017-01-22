@@ -66,7 +66,7 @@ enum {
 static CRITICAL_SECTION cominterop_mutex;
 
 /* STDCALL on windows, CDECL everywhere else to work with XPCOM and MainWin COM */
-#ifdef  PLATFORM_WIN32
+#ifdef  HOST_WIN32
 #define STDCALL __stdcall
 #else
 #define STDCALL
@@ -81,7 +81,7 @@ typedef struct {
 	guint32 ref_count;
 	guint32 gc_handle;
 	GHashTable* vtable_hash;
-#ifdef  PLATFORM_WIN32
+#ifdef  HOST_WIN32
 	gpointer free_marshaler;
 #endif
 } MonoCCW;
@@ -127,7 +127,7 @@ cominterop_get_ccw_object (MonoCCWInterface* ccw_entry, gboolean verify);
 
 /* SAFEARRAY marshalling */
 static gboolean
-mono_marshal_safearray_begin (gpointer safearray, MonoArray **result, gpointer *indices, gpointer empty);
+mono_marshal_safearray_begin (gpointer safearray, MonoArray **result, gpointer *indices, gpointer empty, gpointer parameter, gboolean allocateNewArray);
 
 static gpointer
 mono_marshal_safearray_get_value (gpointer safearray, gpointer indices);
@@ -137,6 +137,15 @@ mono_marshal_safearray_next (gpointer safearray, gpointer indices);
 
 static void
 mono_marshal_safearray_end (gpointer safearray, gpointer indices);
+
+static gboolean
+mono_marshal_safearray_create (MonoArray *input, gpointer *newsafearray, gpointer *indices, gpointer empty);
+
+static void
+mono_marshal_safearray_set_value (gpointer safearray, gpointer indices, gpointer value);
+
+static void
+mono_marshal_safearray_free_indices (gpointer indices);
 
 /**
  * cominterop_method_signature:
@@ -195,7 +204,7 @@ cominterop_method_signature (MonoMethod* method)
 	res->param_count = param_count;
 
 	// STDCALL on windows, CDECL everywhere else to work with XPCOM and MainWin COM
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	res->call_convention = MONO_CALL_STDCALL;
 #else
 	res->call_convention = MONO_CALL_C;
@@ -277,18 +286,28 @@ cominterop_get_com_slot_begin (MonoClass* klass)
 static MonoClass*
 cominterop_get_method_interface (MonoMethod* method)
 {
+	MonoError error;
 	MonoClass *ic = method->klass;
 
 	/* if method is on a class, we need to look up interface method exists on */
 	if (!MONO_CLASS_IS_INTERFACE(method->klass)) {
-		GPtrArray *ifaces = mono_class_get_implemented_interfaces (method->klass);
+		GPtrArray *ifaces = mono_class_get_implemented_interfaces (method->klass, &error);
+		g_assert (mono_error_ok (&error));
 		if (ifaces) {
 			int i;
+			mono_class_setup_vtable (method->klass);
 			for (i = 0; i < ifaces->len; ++i) {
-				int offset;
+				int j, offset;
+				gboolean found = FALSE;
 				ic = g_ptr_array_index (ifaces, i);
 				offset = mono_class_interface_offset (method->klass, ic);
-				if (method->slot >= offset && method->slot < offset + ic->method.count)
+				for (j = 0; j < ic->method.count; ++j) {
+					if (method->klass->vtable [j + offset] == method) {
+						found = TRUE;
+						break;
+					}
+				}
+				if (found)
 					break;
 				ic = NULL;
 			}
@@ -296,7 +315,8 @@ cominterop_get_method_interface (MonoMethod* method)
 		}
 	}
 
-	g_assert (ic);
+	if (!ic) 
+		g_assert (ic);
 	g_assert (MONO_CLASS_IS_INTERFACE (ic));
 
 	return ic;
@@ -317,10 +337,17 @@ cominterop_get_com_slot_for_method (MonoMethod* method)
 	/* if method is on a class, we need to look up interface method exists on */
 	if (!MONO_CLASS_IS_INTERFACE(ic)) {
 		int offset = 0;
+		int i = 0;
 		ic = cominterop_get_method_interface (method);
 		offset = mono_class_interface_offset (method->klass, ic);
 		g_assert(offset >= 0);
-		slot -= offset;
+		for(i = 0; i < ic->method.count; ++i) {
+			if (method->klass->vtable [i + offset] == method)
+			{
+				slot = ic->methods[i]->slot;
+				break;
+			}
+		}
 	}
 
 	g_assert (ic);
@@ -331,7 +358,7 @@ cominterop_get_com_slot_for_method (MonoMethod* method)
 
 
 static void
-cominterop_mono_string_to_guid (const MonoString* string, guint8 *guid);
+cominterop_mono_string_to_guid (MonoString* string, guint8 *guid);
 
 static gboolean
 cominterop_class_guid (MonoClass* klass, guint8* guid)
@@ -362,6 +389,7 @@ static gboolean
 cominterop_com_visible (MonoClass* klass)
 {
 	static MonoClass *ComVisibleAttribute = NULL;
+	MonoError error;
 	MonoCustomAttrInfo *cinfo;
 	GPtrArray *ifaces;
 	MonoBoolean visible = 0;
@@ -382,7 +410,8 @@ cominterop_com_visible (MonoClass* klass)
 			return TRUE;
 	}
 
-	ifaces = mono_class_get_implemented_interfaces (klass);
+	ifaces = mono_class_get_implemented_interfaces (klass, &error);
+	g_assert (mono_error_ok (&error));
 	if (ifaces) {
 		int i;
 		for (i = 0; i < ifaces->len; ++i) {
@@ -506,10 +535,13 @@ mono_cominterop_init (void)
 	register_icall (cominterop_type_from_handle, "cominterop_type_from_handle", "object ptr", FALSE);
 
 	/* SAFEARRAY marshalling */
-	register_icall (mono_marshal_safearray_begin, "mono_marshal_safearray_begin", "int32 ptr ptr ptr ptr", FALSE);
+	register_icall (mono_marshal_safearray_begin, "mono_marshal_safearray_begin", "int32 ptr ptr ptr ptr ptr int32", FALSE);
 	register_icall (mono_marshal_safearray_get_value, "mono_marshal_safearray_get_value", "ptr ptr ptr", FALSE);
 	register_icall (mono_marshal_safearray_next, "mono_marshal_safearray_next", "int32 ptr ptr", FALSE);
 	register_icall (mono_marshal_safearray_end, "mono_marshal_safearray_end", "void ptr ptr", FALSE);
+	register_icall (mono_marshal_safearray_create, "mono_marshal_safearray_create", "int32 object ptr ptr ptr", FALSE);
+	register_icall (mono_marshal_safearray_set_value, "mono_marshal_safearray_set_value", "void ptr ptr ptr", FALSE);
+	register_icall (mono_marshal_safearray_free_indices, "mono_marshal_safearray_free_indices", "void ptr", FALSE);
 }
 
 void
@@ -840,6 +872,7 @@ mono_cominterop_get_native_wrapper (MonoMethod *method)
 	
 	if (!method->klass->methods)
 		mono_class_setup_methods (method->klass);
+	g_assert (!method->klass->exception_type); /*FIXME do proper error handling*/
 
 	sig = mono_method_signature (method);
 	mb = mono_mb_new (method->klass, method->name, MONO_WRAPPER_COMINTEROP);
@@ -1492,6 +1525,9 @@ ves_icall_System_Runtime_InteropServices_Marshal_GetCCW (MonoObject* object, Mon
 	g_assert (type->type);
 	klass = mono_type_get_class (type->type);
 	g_assert (klass);
+	if (!mono_class_init (klass))
+		mono_raise_exception (mono_class_get_exception_for_failure (klass));
+
 	itf = cominterop_get_ccw (object, klass);
 	g_assert (itf);
 	return itf;
@@ -1647,7 +1683,11 @@ gpointer
 ves_icall_System_ComObject_GetInterfaceInternal (MonoComObject* obj, MonoReflectionType* type, MonoBoolean throw_exception)
 {
 #ifndef DISABLE_COM
-	return cominterop_get_interface (obj, mono_type_get_class (type->type), (gboolean)throw_exception);
+	MonoClass *class = mono_type_get_class (type->type);
+	if (!mono_class_init (class))
+		mono_raise_exception (mono_class_get_exception_for_failure (class));
+
+	return cominterop_get_interface (obj, class, (gboolean)throw_exception);
 #else
 	g_assert_not_reached ();
 #endif
@@ -1763,7 +1803,7 @@ cominterop_setup_marshal_context (EmitMarshalContext *m, MonoMethod *method)
 	/* csig = mono_metadata_signature_dup (sig); */
 	
 	/* STDCALL on windows, CDECL everywhere else to work with XPCOM and MainWin COM */
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	csig->call_convention = MONO_CALL_STDCALL;
 #else
 	csig->call_convention = MONO_CALL_C;
@@ -1842,7 +1882,7 @@ cominterop_get_ccw (MonoObject* object, MonoClass* itf)
 
 	if (!ccw) {
 		ccw = g_new0 (MonoCCW, 1);
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 		ccw->free_marshaler = 0;
 #endif
 		ccw->vtable_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
@@ -1982,7 +2022,7 @@ cominterop_get_ccw (MonoObject* object, MonoClass* itf)
 
 			cominterop_setup_marshal_context (&m, adjust_method);
 			m.mb = mb;
-			mono_marshal_emit_managed_wrapper (mb, sig_adjusted, mspecs, &m, adjust_method, NULL);
+			mono_marshal_emit_managed_wrapper (mb, sig_adjusted, mspecs, &m, adjust_method, 0);
 			mono_loader_lock ();
 			mono_cominterop_lock ();
 			wrapper_method = mono_mb_create_method (mb, m.csig, m.csig->param_count + 16);
@@ -2011,6 +2051,7 @@ cominterop_get_ccw (MonoObject* object, MonoClass* itf)
 static gboolean
 mono_marshal_free_ccw_entry (gpointer key, gpointer value, gpointer user_data)
 {
+	g_hash_table_remove (ccw_interface_hash, value);
 	g_assert (value);
 	g_free (value);
 	return TRUE;
@@ -2207,7 +2248,7 @@ cominterop_get_managed_wrapper_adjusted (MonoMethod *method)
  * to a 16 byte Microsoft GUID.
  */
 static void
-cominterop_mono_string_to_guid (const MonoString* string, guint8 *guid) {
+cominterop_mono_string_to_guid (MonoString* string, guint8 *guid) {
 	gunichar2 * chars = mono_string_chars (string);
 	int i = 0;
 	static guint8 indexes[16] = {7, 5, 3, 1, 12, 10, 17, 15, 20, 22, 25, 27, 29, 31, 33, 35};
@@ -2256,7 +2297,7 @@ cominterop_ccw_release (MonoCCWInterface* ccwe)
 		/* allow gc of object */
 		guint32 oldhandle = ccw->gc_handle;
 		g_assert (oldhandle);
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 		if (ccw->free_marshaler)
 			ves_icall_System_Runtime_InteropServices_Marshal_ReleaseInternal (ccw->free_marshaler);
 #endif
@@ -2266,16 +2307,16 @@ cominterop_ccw_release (MonoCCWInterface* ccwe)
 	return ref_count;
 }
 
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 static const IID MONO_IID_IMarshal = {0x3, 0x0, 0x0, {0xC0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x46}};
 #endif
 
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 /* All ccw objects are free threaded */
 static int
 cominterop_ccw_getfreethreadedmarshaler (MonoCCW* ccw, MonoObject* object, gpointer* ppv)
 {
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	if (!ccw->free_marshaler) {
 		int ret = 0;
 		gpointer tunk;
@@ -2299,6 +2340,7 @@ cominterop_ccw_getfreethreadedmarshaler (MonoCCW* ccw, MonoObject* object, gpoin
 static int STDCALL 
 cominterop_ccw_queryinterface (MonoCCWInterface* ccwe, guint8* riid, gpointer* ppv)
 {
+	MonoError error;
 	GPtrArray *ifaces;
 	MonoClass *itf = NULL;
 	int i;
@@ -2335,7 +2377,7 @@ cominterop_ccw_queryinterface (MonoCCWInterface* ccwe, guint8* riid, gpointer* p
 		return MONO_S_OK;
 	}
 
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	/* handle IMarshal special */
 	if (0 == memcmp (riid, &MONO_IID_IMarshal, sizeof (IID))) {
 		return cominterop_ccw_getfreethreadedmarshaler (ccw, object, ppv);	
@@ -2343,7 +2385,8 @@ cominterop_ccw_queryinterface (MonoCCWInterface* ccwe, guint8* riid, gpointer* p
 #endif
 	klass_iter = klass;
 	while (klass_iter && klass_iter != mono_defaults.object_class) {
-		ifaces = mono_class_get_implemented_interfaces (klass_iter);
+		ifaces = mono_class_get_implemented_interfaces (klass_iter, &error);
+		g_assert (mono_error_ok (&error));
 		if (ifaces) {
 			for (i = 0; i < ifaces->len; ++i) {
 				MonoClass *ic = NULL;
@@ -2409,17 +2452,31 @@ static SysAllocStringLenFunc sys_alloc_string_len_ms = NULL;
 static SysStringLenFunc sys_string_len_ms = NULL;
 static SysFreeStringFunc sys_free_string_ms = NULL;
 
+#ifndef HOST_WIN32
+
+typedef struct tagSAFEARRAYBOUND {
+	ULONG cElements;
+	LONG lLbound;
+}SAFEARRAYBOUND,*LPSAFEARRAYBOUND;
+#define VT_VARIANT 12
+
+#endif 
+
 typedef guint32 (STDCALL *SafeArrayGetDimFunc)(gpointer psa);
 typedef int (STDCALL *SafeArrayGetLBoundFunc)(gpointer psa, guint32 nDim, glong* plLbound);
 typedef int (STDCALL *SafeArrayGetUBoundFunc)(gpointer psa, guint32 nDim, glong* plUbound);
 typedef int (STDCALL *SafeArrayPtrOfIndexFunc)(gpointer psa, glong* rgIndices, gpointer* ppvData);
 typedef int (STDCALL *SafeArrayDestroyFunc)(gpointer psa);
+typedef int (STDCALL *SafeArrayPutElementFunc)(gpointer psa, glong* rgIndices, gpointer* ppvData);
+typedef gpointer (STDCALL *SafeArrayCreateFunc)(int vt, guint32 cDims, SAFEARRAYBOUND* rgsabound);
 
 static SafeArrayGetDimFunc safe_array_get_dim_ms = NULL;
 static SafeArrayGetLBoundFunc safe_array_get_lbound_ms = NULL;
 static SafeArrayGetUBoundFunc safe_array_get_ubound_ms = NULL;
 static SafeArrayPtrOfIndexFunc safe_array_ptr_of_index_ms = NULL;
 static SafeArrayDestroyFunc safe_array_destroy_ms = NULL;
+static SafeArrayPutElementFunc safe_array_put_element_ms = NULL;
+static SafeArrayCreateFunc safe_array_create_ms = NULL;
 
 static gboolean
 init_com_provider_ms (void)
@@ -2494,6 +2551,20 @@ init_com_provider_ms (void)
 		return FALSE;
 	}
 
+	error_msg = mono_dl_symbol (module, "SafeArrayPutElement", (gpointer*)&safe_array_put_element_ms);
+	if (error_msg) {
+		g_warning ("Error loading entry point '%s' in COM support library '%s': %s", "SafeArrayPutElement", scope, error_msg);
+		g_assert_not_reached ();
+		return FALSE;
+	}
+
+	error_msg = mono_dl_symbol (module, "SafeArrayCreate", (gpointer*)&safe_array_create_ms);
+	if (error_msg) {
+		g_warning ("Error loading entry point '%s' in COM support library '%s': %s", "SafeArrayCreate", scope, error_msg);
+		g_assert_not_reached ();
+		return FALSE;
+	}
+
 	initialized = TRUE;
 	return TRUE;
 }
@@ -2503,7 +2574,7 @@ mono_string_to_bstr (MonoString *string_obj)
 {
 	if (!string_obj)
 		return NULL;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	return SysAllocStringLen (mono_string_chars (string_obj), mono_string_length (string_obj));
 #else
 	if (com_provider == MONO_COM_DEFAULT) {
@@ -2539,7 +2610,7 @@ mono_string_from_bstr (gpointer bstr)
 {
 	if (!bstr)
 		return NULL;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	return mono_string_new_utf16 (mono_domain_get (), bstr, SysStringLen (bstr));
 #else
 	if (com_provider == MONO_COM_DEFAULT) {
@@ -2565,7 +2636,7 @@ mono_free_bstr (gpointer bstr)
 {
 	if (!bstr)
 		return;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	SysFreeString ((BSTR)bstr);
 #else
 	if (com_provider == MONO_COM_DEFAULT) {
@@ -2593,33 +2664,152 @@ mono_cominterop_emit_marshal_safearray (EmitMarshalContext *m, int argnum, MonoT
 	
 	switch (action) {
 
+	case MARSHAL_ACTION_CONV_IN: {
+
+		if (t->attrs & PARAM_ATTRIBUTE_IN) {
+
+			/* Generates IL code for the following algorithm:
+
+					SafeArray safearray;   // safearray_var
+					IntPtr indices; // indices_var
+					int empty;      // empty_var
+					if (mono_marshal_safearray_create (array, out safearray, out indices, out empty)) {
+						if (!empty) {
+							int index=0; // index_var
+							do { // label3
+								variant elem = Marshal.GetNativeVariantForObject (array.GetValueImpl(index));
+								mono_marshal_safearray_set_value (safearray, indices, elem);
+								++index;
+							} 
+							while (mono_marshal_safearray_next (safearray, indices));
+						} // label2
+						mono_marshal_safearray_free_indices (indices);
+					} // label1
+			*/
+
+			int safearray_var, indices_var, empty_var, elem_var, index_var;
+			guint32 label1 = 0, label2 = 0, label3 = 0;
+			static MonoMethod *get_native_variant_for_object = NULL;
+			static MonoMethod *get_value_impl = NULL;
+			static MonoMethod *variant_clear = NULL;
+
+			conv_arg = safearray_var = mono_mb_add_local (mb, &mono_defaults.object_class->byval_arg);
+			indices_var = mono_mb_add_local (mb, &mono_defaults.int_class->byval_arg);
+			empty_var = mono_mb_add_local (mb, &mono_defaults.int_class->byval_arg);
+
+			if (t->byref) {
+				mono_mb_emit_ldarg (mb, argnum);
+				mono_mb_emit_byte (mb, CEE_LDIND_I);
+			} else
+				mono_mb_emit_ldarg (mb, argnum);
+
+			mono_mb_emit_ldloc_addr (mb, safearray_var);
+			mono_mb_emit_ldloc_addr (mb, indices_var);
+			mono_mb_emit_ldloc_addr (mb, empty_var);
+			mono_mb_emit_icall (mb, mono_marshal_safearray_create);
+
+			label1 = mono_mb_emit_short_branch (mb, CEE_BRFALSE_S);
+
+			mono_mb_emit_ldloc (mb, empty_var);
+
+			label2 = mono_mb_emit_short_branch (mb, CEE_BRTRUE_S);
+
+			index_var = mono_mb_add_local (mb, &mono_defaults.int_class->byval_arg);
+			mono_mb_emit_byte (mb, CEE_LDC_I4_0);
+			mono_mb_emit_stloc (mb, index_var);
+
+			label3 = mono_mb_get_label (mb);
+
+			if (!get_value_impl)
+				get_value_impl = mono_class_get_method_from_name (mono_defaults.array_class, "GetValueImpl", 1);
+			g_assert (get_value_impl);
+
+			if (t->byref) {
+				mono_mb_emit_ldarg (mb, argnum);
+				mono_mb_emit_byte (mb, CEE_LDIND_I);
+			} else
+				mono_mb_emit_ldarg (mb, argnum);
+
+			mono_mb_emit_ldloc (mb, index_var);
+
+			mono_mb_emit_managed_call (mb, get_value_impl, NULL);
+
+			if (!get_native_variant_for_object)
+				get_native_variant_for_object = mono_class_get_method_from_name (mono_defaults.marshal_class, "GetNativeVariantForObject", 2);
+			g_assert (get_native_variant_for_object);
+
+			elem_var =  mono_mb_add_local (mb, &mono_defaults.variant_class->byval_arg);
+			mono_mb_emit_ldloc_addr (mb, elem_var);
+
+			mono_mb_emit_managed_call (mb, get_native_variant_for_object, NULL);
+
+			mono_mb_emit_ldloc (mb, safearray_var);
+			mono_mb_emit_ldloc (mb, indices_var);
+			mono_mb_emit_ldloc_addr (mb, elem_var);
+			mono_mb_emit_icall (mb, mono_marshal_safearray_set_value);
+
+			if (!variant_clear)
+				variant_clear = mono_class_get_method_from_name (mono_defaults.variant_class, "Clear", 0);
+
+			mono_mb_emit_ldloc_addr (mb, elem_var);
+			mono_mb_emit_managed_call (mb, variant_clear, NULL);
+
+			mono_mb_emit_add_to_local (mb, index_var, 1);
+
+			mono_mb_emit_ldloc (mb, safearray_var);
+			mono_mb_emit_ldloc (mb, indices_var);
+			mono_mb_emit_icall (mb, mono_marshal_safearray_next);
+			mono_mb_emit_branch_label (mb, CEE_BRTRUE, label3);
+
+			mono_mb_patch_short_branch (mb, label2);
+
+			mono_mb_emit_ldloc (mb, indices_var);
+			mono_mb_emit_icall (mb, mono_marshal_safearray_free_indices);
+
+			mono_mb_patch_short_branch (mb, label1);
+		}
+		break;
+	}
+
+	case MARSHAL_ACTION_PUSH:
+		if (t->byref)
+			mono_mb_emit_ldloc_addr (mb, conv_arg);
+		else
+			mono_mb_emit_ldloc (mb, conv_arg);
+		break;
+
 	case MARSHAL_ACTION_CONV_OUT: {
 
-		if (t->byref && (t->attrs & PARAM_ATTRIBUTE_OUT || !(t->attrs & PARAM_ATTRIBUTE_IN))) {
-
+		if (t->attrs & PARAM_ATTRIBUTE_OUT) {
 			/* Generates IL code for the following algorithm:
 
 					Array result;   // result_var
 					IntPtr indices; // indices_var
 					int empty;      // empty_var
-					if (mono_marshal_safearray_begin(safearray, out result, out indices, out empty)) {
+					bool byValue = !t->byref && (t->attrs & PARAM_ATTRIBUTE_IN);
+					if (mono_marshal_safearray_begin(safearray, out result, out indices, out empty, parameter, byValue)) {
 						if (!empty) {
 							int index=0; // index_var
 							do { // label3
-								object elem = Variant.GetObjectForNativeVariant(mono_marshal_safearray_get_value(safearray, indices));
-								result.SetValueImpl(elem, index);
+								if (!byValue || (index < parameter.Length)) {
+									object elem = Variant.GetObjectForNativeVariant(mono_marshal_safearray_get_value(safearray, indices));
+									result.SetValueImpl(elem, index);
+								}
 								++index;
 							} 
 							while (mono_marshal_safearray_next(safearray, indices));
 						} // label2
 						mono_marshal_safearray_end(safearray, indices);
 					} // label1
+					if (!byValue)
+						return result;
 			*/
 
 			int result_var, indices_var, empty_var, elem_var, index_var;
-			guint32 label1 = 0, label2 = 0, label3 = 0;
+			guint32 label1 = 0, label2 = 0, label3 = 0, label4 = 0;
 			static MonoMethod *get_object_for_native_variant = NULL;
 			static MonoMethod *set_value_impl = NULL;
+			gboolean byValue = !t->byref && (t->attrs & PARAM_ATTRIBUTE_IN);
 
 			result_var = mono_mb_add_local (mb, &mono_defaults.object_class->byval_arg);
 			indices_var = mono_mb_add_local (mb, &mono_defaults.int_class->byval_arg);
@@ -2629,6 +2819,11 @@ mono_cominterop_emit_marshal_safearray (EmitMarshalContext *m, int argnum, MonoT
 			mono_mb_emit_ldloc_addr (mb, result_var);
 			mono_mb_emit_ldloc_addr (mb, indices_var);
 			mono_mb_emit_ldloc_addr (mb, empty_var);
+			mono_mb_emit_ldarg (mb, argnum);
+			if (byValue)
+				mono_mb_emit_byte (mb, CEE_LDC_I4_0);
+			else
+				mono_mb_emit_byte (mb, CEE_LDC_I4_1);
 			mono_mb_emit_icall (mb, mono_marshal_safearray_begin);
 
 			label1 = mono_mb_emit_short_branch (mb, CEE_BRFALSE_S);
@@ -2642,6 +2837,13 @@ mono_cominterop_emit_marshal_safearray (EmitMarshalContext *m, int argnum, MonoT
 			mono_mb_emit_stloc (mb, index_var);
 
 			label3 = mono_mb_get_label (mb);
+
+			if (byValue) {
+				mono_mb_emit_ldloc (mb, index_var);
+				mono_mb_emit_ldarg (mb, argnum);
+				mono_mb_emit_byte (mb, CEE_LDLEN);
+				label4 = mono_mb_emit_branch (mb, CEE_BGE);
+			}
 
 			mono_mb_emit_ldloc (mb, conv_arg);
 			mono_mb_emit_ldloc (mb, indices_var);
@@ -2665,6 +2867,9 @@ mono_cominterop_emit_marshal_safearray (EmitMarshalContext *m, int argnum, MonoT
 			mono_mb_emit_ldloc (mb, index_var);
 			mono_mb_emit_managed_call (mb, set_value_impl, NULL);
 
+			if (byValue)
+				mono_mb_patch_short_branch (mb, label4);
+
 			mono_mb_emit_add_to_local (mb, index_var, 1);
 
 			mono_mb_emit_ldloc (mb, conv_arg);
@@ -2680,9 +2885,11 @@ mono_cominterop_emit_marshal_safearray (EmitMarshalContext *m, int argnum, MonoT
 
 			mono_mb_patch_short_branch (mb, label1);
 
-			mono_mb_emit_ldarg (mb, argnum);
-			mono_mb_emit_ldloc (mb, result_var);
-			mono_mb_emit_byte (mb, CEE_STIND_REF);
+			if (!byValue) {
+				mono_mb_emit_ldarg (mb, argnum);
+				mono_mb_emit_ldloc (mb, result_var);
+				mono_mb_emit_byte (mb, CEE_STIND_REF);
+			}
 		}
 		break;
 	}
@@ -2698,7 +2905,7 @@ static
 guint32 mono_marshal_safearray_get_dim (gpointer safearray)
 {
 	guint32 result=0;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	result = SafeArrayGetDim (safearray);
 #else
 	if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
@@ -2714,7 +2921,7 @@ static
 int mono_marshal_safe_array_get_lbound (gpointer psa, guint nDim, glong* plLbound)
 {
 	int result=MONO_S_OK;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	result = SafeArrayGetLBound (psa, nDim, plLbound);
 #else
 	if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
@@ -2730,7 +2937,7 @@ static
 int mono_marshal_safe_array_get_ubound (gpointer psa, guint nDim, glong* plUbound)
 {
 	int result=MONO_S_OK;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	result = SafeArrayGetUBound (psa, nDim, plUbound);
 #else
 	if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
@@ -2743,16 +2950,16 @@ int mono_marshal_safe_array_get_ubound (gpointer psa, guint nDim, glong* plUboun
 }
 
 static gboolean
-mono_marshal_safearray_begin (gpointer safearray, MonoArray **result, gpointer *indices, gpointer empty)
+mono_marshal_safearray_begin (gpointer safearray, MonoArray **result, gpointer *indices, gpointer empty, gpointer parameter, gboolean allocateNewArray)
 {
 	int dim;
-	mono_array_size_t *sizes;
-	mono_array_size_t *bounds;
+	uintptr_t *sizes;
+	intptr_t *bounds;
 	MonoClass *aklass;
 	int i;
 	gboolean bounded = FALSE;
 
-#ifndef PLATFORM_WIN32
+#ifndef HOST_WIN32
 	// If not on windows, check that the MS provider is used as it is 
 	// required for SAFEARRAY support.
 	// If SAFEARRAYs are not supported, returning FALSE from this
@@ -2763,42 +2970,52 @@ mono_marshal_safearray_begin (gpointer safearray, MonoArray **result, gpointer *
 	}
 #endif
 
-	dim = mono_marshal_safearray_get_dim (safearray);
-
-	*indices = g_malloc (dim * sizeof(int));
-
-	sizes = alloca (dim * sizeof(mono_array_size_t));
-	bounds = alloca (dim * sizeof(mono_array_size_t));
-
 	(*(int*)empty) = TRUE;
-	for (i=0; i<dim; ++i) {
-		glong lbound, ubound;
-		int cursize;
-		int hr;
 
-		hr = mono_marshal_safe_array_get_lbound (safearray, i+1, &lbound);
-		if (hr < 0) {
-			cominterop_raise_hr_exception (hr);
+	if (safearray != NULL) {
+
+		dim = mono_marshal_safearray_get_dim (safearray);
+
+		if (dim > 0) {
+
+			*indices = g_malloc (dim * sizeof(int));
+
+			sizes = alloca (dim * sizeof(uintptr_t));
+			bounds = alloca (dim * sizeof(intptr_t));
+
+			for (i=0; i<dim; ++i) {
+				glong lbound, ubound;
+				int cursize;
+				int hr;
+
+				hr = mono_marshal_safe_array_get_lbound (safearray, i+1, &lbound);
+				if (hr < 0) {
+					cominterop_raise_hr_exception (hr);
+				}
+				if (lbound != 0)
+					bounded = TRUE;
+				hr = mono_marshal_safe_array_get_ubound (safearray, i+1, &ubound);
+				if (hr < 0) {
+					cominterop_raise_hr_exception (hr);
+				}
+				cursize = ubound-lbound+1;
+				sizes [i] = cursize;
+				bounds [i] = lbound;
+
+				((int*)*indices) [i] = lbound;
+
+				if (cursize != 0)
+					(*(int*)empty) = FALSE;
+			}
+
+			if (allocateNewArray) {
+				aklass = mono_bounded_array_class_get (mono_defaults.object_class, dim, bounded);
+				*result = mono_array_new_full (mono_domain_get (), aklass, sizes, bounds);
+			} else {
+				*result = parameter;
+			}
 		}
-		if (lbound != 0)
-			bounded = TRUE;
-		hr = mono_marshal_safe_array_get_ubound (safearray, i+1, &ubound);
-		if (hr < 0) {
-			cominterop_raise_hr_exception (hr);
-		}
-		cursize = ubound-lbound+1;
-		sizes [i] = cursize;
-		bounds [i] = lbound;
-
-		((int*)*indices) [i] = lbound;
-
-		if (cursize != 0)
-			(*(int*)empty) = FALSE;
 	}
-
-	aklass = mono_bounded_array_class_get (mono_defaults.object_class, dim, bounded);
-	*result = mono_array_new_full (mono_domain_get (), aklass, sizes, bounds);
-
 	return TRUE;
 }
 
@@ -2806,7 +3023,7 @@ static
 gpointer mono_marshal_safearray_get_value (gpointer safearray, gpointer indices)
 {
 	gpointer result;
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	int hr = SafeArrayPtrOfIndex (safearray, indices, &result);
 	if (hr < 0) {
 		cominterop_raise_hr_exception (hr);
@@ -2863,7 +3080,7 @@ static
 void mono_marshal_safearray_end (gpointer safearray, gpointer indices)
 {
 	g_free(indices);
-#ifdef PLATFORM_WIN32
+#ifdef HOST_WIN32
 	SafeArrayDestroy (safearray);
 #else
 	if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
@@ -2872,6 +3089,76 @@ void mono_marshal_safearray_end (gpointer safearray, gpointer indices)
 		g_assert_not_reached ();
 	}
 #endif
+}
+
+static gboolean
+mono_marshal_safearray_create (MonoArray *input, gpointer *newsafearray, gpointer *indices, gpointer empty)
+{
+	int dim;
+	SAFEARRAYBOUND *bounds;
+	int i;
+	int max_array_length;
+
+#ifndef HOST_WIN32
+	// If not on windows, check that the MS provider is used as it is 
+	// required for SAFEARRAY support.
+	// If SAFEARRAYs are not supported, returning FALSE from this
+	// function will prevent the other mono_marshal_safearray_xxx functions
+	// from being called.
+	if ((com_provider != MONO_COM_MS) || !init_com_provider_ms ()) {
+		return FALSE;
+	}
+#endif
+
+	max_array_length = mono_array_length (input);
+	dim = ((MonoObject *)input)->vtable->klass->rank;
+
+	*indices = g_malloc (dim * sizeof (int));
+	bounds = alloca (dim * sizeof (SAFEARRAYBOUND));
+	(*(int*)empty) = (max_array_length == 0);
+
+	if (dim > 1) {
+		for (i=0; i<dim; ++i) {
+			((int*)*indices) [i] = bounds [i].lLbound = input->bounds [i].lower_bound;
+			bounds [i].cElements = input->bounds [i].length;
+		}
+	} else {
+		((int*)*indices) [0] = 0;
+		bounds [0].cElements = max_array_length;
+		bounds [0].lLbound = 0;
+	}
+
+#ifdef HOST_WIN32
+	*newsafearray = SafeArrayCreate (VT_VARIANT, dim, bounds);
+#else
+	*newsafearray = safe_array_create_ms (VT_VARIANT, dim, bounds);
+#endif
+
+	return TRUE;
+}
+
+static 
+void mono_marshal_safearray_set_value (gpointer safearray, gpointer indices, gpointer value)
+{
+#ifdef HOST_WIN32
+	int hr = SafeArrayPutElement (safearray, indices, value);
+	if (hr < 0)
+		cominterop_raise_hr_exception (hr);
+#else
+	if (com_provider == MONO_COM_MS && init_com_provider_ms ()) {
+		int hr = safe_array_put_element_ms (safearray, indices, value);
+		if (hr < 0) {
+			cominterop_raise_hr_exception (hr);
+		}
+	} else
+		g_assert_not_reached ();
+#endif
+}
+
+static 
+void mono_marshal_safearray_free_indices (gpointer indices)
+{
+	g_free (indices);
 }
 
 #else /* DISABLE_COM */

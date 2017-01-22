@@ -606,20 +606,20 @@ class MsbuildGenerator {
 			mcs = mcs.Substring (10);
 		
 		var compiler = mcs.Substring (mcs.LastIndexOf (' ') + 1);
-		if (compiler.EndsWith ("class/lib/basic/mcs.exe"))
-			compiler = "basic";
-		else if (compiler.EndsWith ("class/lib/net_1_1_bootstrap/mcs.exe"))
-			compiler = "net_1_1_bootstrap";
-		else if (compiler.EndsWith ("class/lib/net_1_1/mcs.exe"))
-			compiler = "net_1_1";
+		if (compiler.EndsWith ("class/lib/basic/gmcs.exe"))
+			compiler = "gmcs";
 		else if (compiler.EndsWith ("class/lib/net_2_0_bootstrap/gmcs.exe"))
 			compiler = "net_2_0_bootstrap";
 		else if (compiler.EndsWith ("mcs/gmcs.exe"))
 			compiler = "gmcs";
-		else if (compiler.EndsWith ("class/lib/net_2_1_bootstrap/smcs.exe"))
-			compiler = "net_2_1_bootstrap";
-		else if (compiler.EndsWith ("class/lib/net_2_1_raw/smcs.exe"))
-			compiler = "net_2_1_raw";
+		else if (compiler.EndsWith ("class/lib/moonlight_bootstrap/smcs.exe"))
+			compiler = "moonlight_bootstrap";
+		else if (compiler.EndsWith ("class/lib/moonlight_raw/smcs.exe"))
+			compiler = "moonlight_raw";
+		else if (compiler.EndsWith ("class/lib/net_4_0_bootstrap/dmcs.exe"))
+			compiler = "net_4_0_bootstrap";
+		else if (compiler.EndsWith ("class/lib/net_4_0/dmcs.exe"))
+			compiler = "dmcs";
 		else {
 			Console.WriteLine ("Can not determine compiler from {0}", compiler);
 			Environment.Exit (1);
@@ -727,7 +727,7 @@ public class Driver {
 			Environment.Exit (1);
 		}
 
-        var sln_gen = new SlnGenerator ();
+		var sln_gen = new SlnGenerator ();
 		XDocument doc = XDocument.Load ("order.xml");
 		foreach (XElement project in doc.Root.Elements ()){
 			string dir = project.Attribute ("dir").Value;
@@ -743,7 +743,7 @@ public class Driver {
 			// Do not do 2.1, it is not working yet
 			// Do not do basic, as there is no point (requires a system mcs to be installed).
 			//
-			if (library.Contains ("net_2_1") || library.Contains ("-basic"))
+			if (library.Contains ("moonlight") || library.Contains ("-basic"))
 				continue;
 			
 			var gen = new MsbuildGenerator (dir);
@@ -753,7 +753,7 @@ public class Driver {
 				Console.WriteLine ("Error in {0}\n{1}", dir, e);
 			}
 		}
-        sln_gen.Write ("mcs_full.sln");
+		sln_gen.Write ("mcs_full.sln");
     }
 
 }

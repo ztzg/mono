@@ -38,19 +38,21 @@
 #include <glib.h>
 #include <unicode-data.h>
 #include <errno.h>
-#ifdef _MSC_VER
-/* FIXME */
-#define CODESET 1
-#include <Windows.h>
 
-typedef int iconv_t;
+#if defined(_MSC_VER) || defined(G_OS_WIN32)
+/* FIXME */
+#  define CODESET 1
+#  include <windows.h>
+#  ifdef _MSC_VER
+       typedef int iconv_t;
+#  endif
 #else
-#ifdef HAVE_LANGINFO_H
-#include <langinfo.h>
-#endif
-#ifdef HAVE_ICONV_H
-#include <iconv.h>
-#endif
+#    ifdef HAVE_LANGINFO_H
+#       include <langinfo.h>
+#    endif
+#    ifdef HAVE_ICONV_H
+#       include <iconv.h>
+#    endif
 #endif
 
 static char *my_charset;
@@ -300,10 +302,11 @@ g_get_charset (G_CONST_RETURN char **charset)
 	is_utf8 = FALSE;
 #else
 	if (my_charset == NULL){
+		/* These shouldn't be heap allocated */
 #if HAVE_LANGINFO_H
-		my_charset = g_strdup (nl_langinfo (CODESET));
+		my_charset = nl_langinfo (CODESET);
 #else
-		my_charset = g_strdup ("UTF-8");
+		my_charset = "UTF-8";
 #endif
 		is_utf8 = strcmp (my_charset, "UTF-8") == 0;
 	}

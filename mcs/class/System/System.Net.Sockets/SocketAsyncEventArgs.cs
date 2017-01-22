@@ -32,26 +32,16 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Security;
 using System.Threading;
+#if MOONLIGHT && !INSIDE_SYSTEM
+using System.Net.Policy;
+#endif
 
 namespace System.Net.Sockets
 {
 	public class SocketAsyncEventArgs : EventArgs, IDisposable
 	{
-#if NET_2_1 && !MONOTOUCH
-		static MethodInfo check_socket_policy;
-
-		static SocketAsyncEventArgs ()
-		{
-			Type type = Type.GetType ("System.Windows.Browser.Net.CrossDomainPolicyManager, System.Windows.Browser, Version=2.0.5.0, Culture=Neutral, PublicKeyToken=7cec85d7bea7798e");
-			check_socket_policy = type.GetMethod ("CheckEndPoint");
-		}
-
-		static internal bool CheckEndPoint (EndPoint endpoint)
-		{
-			if (check_socket_policy == null)
-				throw new SecurityException ();
-			return ((bool) check_socket_policy.Invoke (null, new object [1] { endpoint }));
-		}
+#if MOONLIGHT || NET_4_0
+		public Exception ConnectByNameError { get; internal set; }
 #endif
 
 		public event EventHandler<SocketAsyncEventArgs> Completed;
@@ -82,10 +72,25 @@ namespace System.Net.Sockets
 		public SendPacketsElement[] SendPacketsElements { get; set; }
 		public TransmitFileOptions SendPacketsFlags { get; set; }
 #endif
+		[MonoTODO ("unused property")]
 		public int SendPacketsSendSize { get; set; }
 		public SocketError SocketError { get; set; }
 		public SocketFlags SocketFlags { get; set; }
 		public object UserToken { get; set; }
+
+#if MOONLIGHT && !INSIDE_SYSTEM
+		private SocketClientAccessPolicyProtocol policy_protocol;
+
+		[MonoTODO ("Only TCP is currently supported by Moonlight")]
+		public SocketClientAccessPolicyProtocol SocketClientAccessPolicyProtocol {
+			get { return policy_protocol; }
+			set {
+				if ((value != SocketClientAccessPolicyProtocol.Tcp) && (value != SocketClientAccessPolicyProtocol.Http))
+					throw new ArgumentException ("Invalid value");
+				policy_protocol = value;
+			}
+		}
+#endif
 
 		Socket curSocket;
 #if NET_2_1
@@ -124,10 +129,14 @@ namespace System.Net.Sockets
 			SendPacketsElements = null;
 			SendPacketsFlags = TransmitFileOptions.UseDefaultWorkerThread;
 #endif
-			SendPacketsSendSize = 0;
+			SendPacketsSendSize = -1;
 			SocketError = SocketError.Success;
 			SocketFlags = SocketFlags.None;
 			UserToken = null;
+
+#if MOONLIGHT && !INSIDE_SYSTEM
+			policy_protocol = SocketClientAccessPolicyProtocol.Tcp;
+#endif
 		}
 
 		~SocketAsyncEventArgs ()
@@ -155,8 +164,9 @@ namespace System.Net.Sockets
 			if (e == null)
 				return;
 			
-			if (e.Completed != null)
-				e.Completed (e.curSocket, e);
+			EventHandler<SocketAsyncEventArgs> handler = e.Completed;
+			if (handler != null)
+				handler (e.curSocket, e);
 		}
 
 		public void SetBuffer (int offset, int count)
@@ -176,15 +186,15 @@ namespace System.Net.Sockets
 					throw new ArgumentException ("Buffer and BufferList properties cannot both be non-null.");
 				
 				int buflen = buffer.Length;
-				if (offset < 0 || offset >= buflen)
+				if (offset < 0 || (offset != 0 && offset >= buflen))
 					throw new ArgumentOutOfRangeException ("offset");
 
-				if (count < 0 || count + offset > buflen)
+				if (count < 0 || count > buflen - offset)
 					throw new ArgumentOutOfRangeException ("count");
-			}
 
-			Count = count;
-			Offset = offset;
+				Count = count;
+				Offset = offset;
+			}
 			Buffer = buffer;
 		}
 
@@ -212,9 +222,9 @@ namespace System.Net.Sockets
 		void ConnectCallback ()
 		{
 			LastOperation = SocketAsyncOperation.Connect;
-			SocketError error = SocketError.Success;
+			SocketError error = SocketError.AccessDenied;
 			try {
-#if NET_2_1 && !MONOTOUCH
+#if MOONLIGHT || NET_4_0
 				// Connect to the first address that match the host name, like:
 				// http://blogs.msdn.com/ncl/archive/2009/07/20/new-ncl-features-in-net-4-0-beta-2.aspx
 				// while skipping entries that do not match the address family
@@ -225,15 +235,19 @@ namespace System.Net.Sockets
 						try {
 							if (curSocket.AddressFamily == addr.AddressFamily) {
 								error = TryConnect (new IPEndPoint (addr, dep.Port));
-								if (error == SocketError.Success)
+								if (error == SocketError.Success) {
+									ConnectByNameError = null;
 									break;
+								}
 							}
 						}
-						catch (SocketException) {
+						catch (SocketException se) {
+							ConnectByNameError = se;
 							error = SocketError.AccessDenied;
 						}
 					}
 				} else {
+					ConnectByNameError = null;
 					error = TryConnect (RemoteEndPoint);
 				}
 #else
@@ -249,16 +263,19 @@ namespace System.Net.Sockets
 		{
 			curSocket.Connected = false;
 			SocketError error = SocketError.Success;
-#if NET_2_1 && !MONOTOUCH
+#if MOONLIGHT && !INSIDE_SYSTEM
 			// if we're not downloading a socket policy then check the policy
-			if (!PolicyRestricted) {
+			// and if we're not running with elevated permissions (SL4 OoB option)
+			if (!PolicyRestricted && !SecurityManager.HasElevatedPermissions) {
 				error = SocketError.AccessDenied;
-				if (!CheckEndPoint (endpoint)) {
+				if (!CrossDomainPolicyManager.CheckEndPoint (endpoint, policy_protocol)) {
 					return error;
 				}
+				error = SocketError.Success;
 			}
 #endif
 			try {
+#if !NET_2_1
 				if (!curSocket.Blocking) {
 					int success;
 					curSocket.Poll (-1, SelectMode.SelectWrite, out success);
@@ -267,7 +284,9 @@ namespace System.Net.Sockets
 						curSocket.Connected = true;
 					else
 						return error;
-				} else {
+				} else
+#endif
+				{
 					curSocket.seed_endpoint = endpoint;
 					curSocket.Connect (endpoint);
 					curSocket.Connected = true;
@@ -343,7 +362,11 @@ namespace System.Net.Sockets
 
 			try {
 				EndPoint ep = RemoteEndPoint;
-				BytesTransferred = curSocket.ReceiveFrom_nochecks (Buffer, Offset, Count, SocketFlags, ref ep);
+				if (Buffer != null) {
+					BytesTransferred = curSocket.ReceiveFrom_nochecks (Buffer, Offset, Count, SocketFlags, ref ep);
+				} else if (BufferList != null) {
+					throw new NotImplementedException ();
+				}
 			} catch (SocketException ex) {
 				SocketError = ex.SocketErrorCode;
 				throw;

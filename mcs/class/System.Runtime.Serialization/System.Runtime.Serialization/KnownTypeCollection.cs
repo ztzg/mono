@@ -266,6 +266,7 @@ namespace System.Runtime.Serialization
 			}
 		}
 
+		// FIXME: xsd types and ms serialization types should be differentiated.
 		internal static Type GetPrimitiveTypeFromName (string name)
 		{
 			switch (name) {
@@ -445,13 +446,17 @@ namespace System.Runtime.Serialization
 
 		internal QName GetQName (Type type)
 		{
-			if (IsPrimitiveNotEnum (type))
-				return GetPrimitiveTypeName (type);
-
 			SerializationMap map = FindUserMap (type);
 			if (map != null)
 				// already mapped.
 				return map.XmlName; 
+			return GetStaticQName (type);
+		}
+
+		public static QName GetStaticQName (Type type)
+		{
+			if (IsPrimitiveNotEnum (type))
+				return GetPrimitiveTypeName (type);
 
 			if (type.IsEnum)
 				return GetEnumQName (type);
@@ -476,40 +481,32 @@ namespace System.Runtime.Serialization
 			if (GetAttribute<SerializableAttribute> (type) != null)
 				return GetSerializableQName (type);
 
-			// FIXME: it needs in-depth check.
-			return QName.Empty;
+			// default type map - still uses GetContractQName().
+			return GetContractQName (type, null, null);
 		}
 
-		QName GetContractQName (Type type)
+		internal static QName GetContractQName (Type type)
 		{
 			var a = GetAttribute<DataContractAttribute> (type);
 			return a == null ? null : GetContractQName (type, a.Name, a.Namespace);
 		}
 
-		QName GetCollectionContractQName (Type type)
+		static QName GetCollectionContractQName (Type type)
 		{
 			var a = GetAttribute<CollectionDataContractAttribute> (type);
 			return a == null ? null : GetContractQName (type, a.Name, a.Namespace);
 		}
 
-		internal static QName GetContractQName (Type type, string name, string ns)
+		static QName GetContractQName (Type type, string name, string ns)
 		{
-			if (name == null) {
-				// FIXME: there could be decent ways to get 
-				// the same result...
-				name = type.Namespace == null || type.Namespace.Length == 0 ? type.Name : type.FullName.Substring (type.Namespace.Length + 1).Replace ('+', '.');
-				if (type.IsGenericType) {
-					name = name.Substring (0, name.IndexOf ('`')) + "Of";
-					foreach (var t in type.GetGenericArguments ())
-						name += t.Name; // FIXME: check namespaces too
-				}
-			}
+			if (name == null)
+				name = GetDefaultName (type);
 			if (ns == null)
-				ns = DefaultClrNamespaceBase + type.Namespace;
+				ns = GetDefaultNamespace (type);
 			return new QName (name, ns);
 		}
 
-		private QName GetEnumQName (Type type)
+		static QName GetEnumQName (Type type)
 		{
 			string name = null, ns = null;
 
@@ -524,17 +521,38 @@ namespace System.Runtime.Serialization
 			}
 
 			if (ns == null)
-				ns = DefaultClrNamespaceBase + type.Namespace;
+				ns = GetDefaultNamespace (type);
 
 			if (name == null)
-				name = type.Namespace == null || type.Namespace.Length == 0 ? type.Name : type.FullName.Substring (type.Namespace.Length + 1).Replace ('+', '.');
+				name = type.Namespace == null ? type.Name : type.FullName.Substring (type.Namespace.Length + 1).Replace ('+', '.');
 
 			return new QName (name, ns);
 		}
 
-		private QName GetCollectionQName (Type element)
+		internal static string GetDefaultName (Type type)
 		{
-			QName eqname = GetQName (element);
+			// FIXME: there could be decent ways to get 
+			// the same result...
+			string name = type.Namespace == null || type.Namespace.Length == 0 ? type.Name : type.FullName.Substring (type.Namespace.Length + 1).Replace ('+', '.');
+			if (type.IsGenericType) {
+				name = name.Substring (0, name.IndexOf ('`')) + "Of";
+				foreach (var t in type.GetGenericArguments ())
+					name += t.Name; // FIXME: check namespaces too
+			}
+			return name;
+		}
+
+		internal static string GetDefaultNamespace (Type type)
+		{
+			foreach (ContractNamespaceAttribute a in type.Assembly.GetCustomAttributes (typeof (ContractNamespaceAttribute), true))
+				if (a.ClrNamespace == type.Namespace)
+					return a.ContractNamespace;
+			return DefaultClrNamespaceBase + type.Namespace;
+		}
+
+		static QName GetCollectionQName (Type element)
+		{
+			QName eqname = GetStaticQName (element);
 			
 			string ns = eqname.Namespace;
 			if (eqname.Namespace == MSSimpleNamespace)
@@ -546,15 +564,31 @@ namespace System.Runtime.Serialization
 				ns);
 		}
 
-		private QName GetSerializableQName (Type type)
+		static QName GetSerializableQName (Type type)
 		{
+#if !NET_2_1
+			// First, check XmlSchemaProviderAttribute and try GetSchema() to see if it returns a schema in the expected format.
+			var xpa = type.GetCustomAttribute<XmlSchemaProviderAttribute> (true);
+			if (xpa != null) {
+				var mi = type.GetMethod (xpa.MethodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+				if (mi != null) {
+					try {
+						var xss = new XmlSchemaSet ();
+						return (XmlQualifiedName) mi.Invoke (null, new object [] {xss});
+					} catch {
+						// ignore.
+					}
+				}
+			}
+#endif
+
 			string xmlName = type.Name;
 			if (type.IsGenericType) {
 				xmlName = xmlName.Substring (0, xmlName.IndexOf ('`')) + "Of";
 				foreach (var t in type.GetGenericArguments ())
-					xmlName += GetQName (t).Name; // FIXME: check namespaces too
+					xmlName += GetStaticQName (t).Name; // FIXME: check namespaces too
 			}
-			string xmlNamespace = DefaultClrNamespaceBase + type.Namespace;
+			string xmlNamespace = GetDefaultNamespace (type);
 			var x = GetAttribute<XmlRootAttribute> (type);
 			if (x != null) {
 				xmlName = x.ElementName;
@@ -563,7 +597,7 @@ namespace System.Runtime.Serialization
 			return new QName (XmlConvert.EncodeLocalName (xmlName), xmlNamespace);
 		}
 
-		internal bool IsPrimitiveNotEnum (Type type)
+		static bool IsPrimitiveNotEnum (Type type)
 		{
 			if (type.IsEnum)
 				return false;
@@ -589,16 +623,16 @@ namespace System.Runtime.Serialization
 			if (RegisterEnum (type) != null)
 				return true;
 
-			if (RegisterContract (type) != null)
-				return true;
-
-			if (RegisterIXmlSerializable (type) != null)
-				return true;
-
 			if (RegisterDictionary (type) != null)
 				return true;
 
 			if (RegisterCollectionContract (type) != null)
+				return true;
+
+			if (RegisterContract (type) != null)
+				return true;
+
+			if (RegisterIXmlSerializable (type) != null)
 				return true;
 
 			if (RegisterCollection (type) != null)
@@ -613,7 +647,7 @@ namespace System.Runtime.Serialization
 			return true;
 		}
 
-		internal static Type GetCollectionElementType (Type type)
+		static Type GetCollectionElementType (Type type)
 		{
 			if (type.IsArray)
 				return type.GetElementType ();
@@ -628,9 +662,9 @@ namespace System.Runtime.Serialization
 			return null;
 		}
 
-		internal T GetAttribute<T> (MemberInfo mi) where T : Attribute
+		internal static T GetAttribute<T> (ICustomAttributeProvider ap) where T : Attribute
 		{
-			object [] atts = mi.GetCustomAttributes (typeof (T), false);
+			object [] atts = ap.GetCustomAttributes (typeof (T), false);
 			return atts.Length == 0 ? null : (T) atts [0];
 		}
 
@@ -666,8 +700,13 @@ namespace System.Runtime.Serialization
 
 			QName qname = GetCollectionQName (element);
 
-			if (FindUserMap (qname) != null)
-				throw new InvalidOperationException (String.Format ("Failed to add type {0} to known type collection. There already is a registered type for XML name {1}", type, qname));
+			var map = FindUserMap (qname);
+			if (map != null) {
+				var cmap = map as CollectionTypeMap;
+				if (cmap == null || cmap.RuntimeType != type)
+					throw new InvalidOperationException (String.Format ("Failed to add type {0} to known type collection. There already is a registered type for XML name {1}", type, qname));
+				return cmap;
+			}
 
 			CollectionTypeMap ret =
 				new CollectionTypeMap (type, element, qname, this);
@@ -675,10 +714,19 @@ namespace System.Runtime.Serialization
 			return ret;
 		}
 
+		static bool TypeImplementsIDictionary (Type type)
+		{
+			foreach (var iface in type.GetInterfaces ())
+				if (iface == typeof (IDictionary) || (iface.IsGenericType && iface.GetGenericTypeDefinition () == typeof (IDictionary<,>)))
+					return true;
+
+			return false;
+		}
+
 		// it also supports contract-based dictionary.
 		private DictionaryTypeMap RegisterDictionary (Type type)
 		{
-			if (!type.GetInterfaces ().Any (t => t == typeof (IDictionary) || t.FullName.StartsWith ("System.Collections.Generic.IDictionary")))
+			if (!TypeImplementsIDictionary (type))
 				return null;
 
 			var cdca = GetAttribute<CollectionDataContractAttribute> (type);
@@ -703,9 +751,9 @@ namespace System.Runtime.Serialization
 			if (FindUserMap (qname) != null)
 				throw new InvalidOperationException (String.Format ("There is already a registered type for XML name {0}", qname));
 
-			SharedTypeMap ret =
-				new SharedTypeMap (type, qname, this);
+			SharedTypeMap ret = new SharedTypeMap (type, qname, this);
 			contracts.Add (ret);
+			ret.Initialize ();
 			return ret;
 		}
 
@@ -746,9 +794,9 @@ namespace System.Runtime.Serialization
 			if (FindUserMap (qname) != null)
 				throw new InvalidOperationException (String.Format ("There is already a registered type for XML name {0}", qname));
 
-			SharedContractMap ret =
-				new SharedContractMap (type, qname, this);
+			SharedContractMap ret = new SharedContractMap (type, qname, this);
 			contracts.Add (ret);
+			ret.Initialize ();
 
 			object [] attrs = type.GetCustomAttributes (typeof (KnownTypeAttribute), true);
 			for (int i = 0; i < attrs.Length; i++) {

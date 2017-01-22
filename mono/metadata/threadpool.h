@@ -7,6 +7,7 @@
 /* No managed code here */
 void mono_thread_pool_init (void) MONO_INTERNAL;
 
+void icall_append_job (MonoObject *ar) MONO_INTERNAL;
 MonoAsyncResult *
 mono_thread_pool_add     (MonoObject *target, MonoMethodMessage *msg, 
 			  MonoDelegate *async_callback, MonoObject *state) MONO_INTERNAL;
@@ -39,4 +40,11 @@ MonoBoolean
 ves_icall_System_Threading_ThreadPool_SetMaxThreads (gint workerThreads, 
 								gint completionPortThreads) MONO_INTERNAL;
 
+typedef void  (*MonoThreadPoolFunc) (gpointer user_data);
+void mono_install_threadpool_thread_hooks (MonoThreadPoolFunc start_func, MonoThreadPoolFunc finish_func, gpointer user_data);
+
+typedef void  (*MonoThreadPoolItemFunc) (gpointer user_data);
+void mono_install_threadpool_item_hooks (MonoThreadPoolItemFunc begin_func, MonoThreadPoolItemFunc end_func, gpointer user_data);
+
 #endif
+

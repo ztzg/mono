@@ -47,6 +47,8 @@ namespace System.Web.UI.WebControls {
 		TableCellCollection cells;
 #if NET_2_0
 		bool tableRowSectionSet;
+
+		internal TableRowCollection Container { get; set; }
 #endif
 		
 		public TableRow ()
@@ -106,8 +108,11 @@ namespace System.Web.UI.WebControls {
 		TableItemStyle TableItemStyle {
 			get { return (ControlStyle as TableItemStyle); }
 		}
-
-
+#if NET_4_0
+		public override bool SupportsDisabledAttribute {
+			get { return RenderingCompatibilityLessThan40; }
+		}
+#endif
 		protected override ControlCollection CreateControlCollection ()
 		{
 			return new CellControlCollection (this);
@@ -129,6 +134,9 @@ namespace System.Web.UI.WebControls {
 					throw new ArgumentOutOfRangeException ("TableSection");
 				ViewState ["TableSection"] = (int) value;
 				tableRowSectionSet = true;
+				TableRowCollection container = Container;
+				if (container != null)
+					container.RowTableSectionSet ();
 			}
 		}
 #endif

@@ -58,7 +58,11 @@ namespace System.ServiceModel.Channels
 
 		public override MessageVersion MessageVersion {
 			get { return version; }
-			set { version = value; }
+			set {
+				if (!version.Envelope.Equals (EnvelopeVersion.Soap12))
+					throw new InvalidOperationException ("Binary message encoding binding element only supports SOAP 1.2.");
+				version = value;
+			}
 		}
 
 		public int MaxSessionSize {
@@ -85,16 +89,17 @@ namespace System.ServiceModel.Channels
 		{
 			if (context == null)
 				throw new ArgumentNullException ("context");
-			context.RemainingBindingElements.Add (this);
+			//context.RemainingBindingElements.Add (this);
 			return base.BuildChannelFactory<TChannel> (context);
 		}
 
+#if !NET_2_1
 		public override IChannelListener<TChannel> BuildChannelListener<TChannel> (
 			BindingContext context)
 		{
 			if (context == null)
 				throw new ArgumentNullException ("context");
-			context.RemainingBindingElements.Add (this);
+			//context.RemainingBindingElements.Add (this);
 			return base.BuildChannelListener<TChannel> (context);
 		}
 
@@ -105,6 +110,7 @@ namespace System.ServiceModel.Channels
 				throw new ArgumentNullException ("context");
 			return context.CanBuildInnerChannelListener<TChannel> ();
 		}
+#endif
 
 		public override BindingElement Clone ()
 		{
@@ -124,6 +130,7 @@ namespace System.ServiceModel.Channels
 			return new BinaryMessageEncoderFactory (this);
 		}
 
+#if !NET_2_1
 		[MonoTODO]
 		void IWsdlExportExtension.ExportContract (WsdlExporter exporter,
 			WsdlContractConversionContext context)
@@ -144,5 +151,6 @@ namespace System.ServiceModel.Channels
 		{
 			throw new NotImplementedException ();
 		}
+#endif
 	}
 }

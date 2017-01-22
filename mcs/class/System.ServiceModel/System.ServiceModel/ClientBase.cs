@@ -33,18 +33,19 @@ using System.ServiceModel.Channels;
 using System.ServiceModel.Description;
 using System.ServiceModel.Dispatcher;
 using System.Threading;
+using System.ServiceModel.MonoInternal;
 
 namespace System.ServiceModel
 {
 	[MonoTODO ("It somehow rejects classes, but dunno how we can do that besides our code wise.")]
 	public abstract class ClientBase<TChannel> :
-#if !NET_2_1
+#if !MOONLIGHT
 		IDisposable,
 #endif
 		ICommunicationObject where TChannel : class
 	{
 		static InstanceContext initialContxt = new InstanceContext (null);
-#if NET_2_1
+#if MOONLIGHT
 		static readonly PropertyInfo dispatcher_main_property;
 		static readonly MethodInfo dispatcher_begin_invoke_method;
 
@@ -64,7 +65,6 @@ namespace System.ServiceModel
 
 		ChannelFactory<TChannel> factory;
 		IClientChannel inner_channel;
-		CommunicationState state;
 
 		protected delegate IAsyncResult BeginOperationDelegate (object[] inValues, AsyncCallback asyncCallback, object state);
 		protected delegate object[] EndOperationDelegate (IAsyncResult result);
@@ -148,20 +148,40 @@ namespace System.ServiceModel
 			Initialize (instance, binding, remoteAddress);
 		}
 
-		internal ClientBase (ChannelFactory<TChannel> factory)
+#if NET_4_0
+		protected ClientBase (ServiceEndpoint endpoint)
+			: this (null, endpoint)
 		{
+		}
+
+		protected ClientBase (InstanceContext instance, ServiceEndpoint endpoint)
+			: this (instance, new ChannelFactory<TChannel> (endpoint))
+		{
+		}
+#endif
+
+		internal ClientBase (ChannelFactory<TChannel> factory)
+			: this (null, factory)
+		{
+		}
+
+		internal ClientBase (InstanceContext instance, ChannelFactory<TChannel> factory)
+		{
+			// FIXME: use instance
 			ChannelFactory = factory;
 		}
 
 		internal virtual void Initialize (InstanceContext instance,
 			string endpointConfigurationName, EndpointAddress remoteAddress)
 		{
+			// FIXME: use instance
 			ChannelFactory = new ChannelFactory<TChannel> (endpointConfigurationName, remoteAddress);
 		}
 
 		internal virtual void Initialize (InstanceContext instance,
 			Binding binding, EndpointAddress remoteAddress)
 		{
+			// FIXME: use instance
 			ChannelFactory = new ChannelFactory<TChannel> (binding, remoteAddress);
 		}
 
@@ -173,11 +193,9 @@ namespace System.ServiceModel
 			}
 		}
 
-#if !NET_2_1
 		public ClientCredentials ClientCredentials {
 			get { return ChannelFactory.Credentials; }
 		}
-#endif
 
 		public ServiceEndpoint Endpoint {
 			get { return factory.Endpoint; }
@@ -196,7 +214,7 @@ namespace System.ServiceModel
 		}
 
 		public CommunicationState State {
-			get { return InnerChannel.State; }
+			get { return inner_channel != null ? inner_channel.State : CommunicationState.Created; }
 		}
 
 		public void Abort ()
@@ -223,7 +241,7 @@ namespace System.ServiceModel
 
 		void RunCompletedCallback (SendOrPostCallback callback, InvokeAsyncCompletedEventArgs args)
 		{
-#if !NET_2_1
+#if !MOONLIGHT
 			callback (args);
 #else
 			object dispatcher = dispatcher_main_property.GetValue (null, null);
@@ -234,9 +252,9 @@ namespace System.ServiceModel
 			EventHandler a = delegate {
 				try {
 					callback (args); 
-					Console.WriteLine ("ClientBase<TChannel>: operationCompletedCallback is successfully done (unless the callback has further async operations)");
+					//Console.WriteLine ("ClientBase<TChannel>: operationCompletedCallback is successfully done (unless the callback has further async operations)");
 				} catch (Exception ex) {
-					Console.WriteLine ("ClientBase<TChannel> caught an error during operationCompletedCallback: " + ex);
+					//Console.WriteLine ("ClientBase<TChannel> caught an error during operationCompletedCallback: " + ex);
 					throw;
 				}
 			};
@@ -268,16 +286,16 @@ namespace System.ServiceModel
 					if (operationCompletedCallback != null)
 						RunCompletedCallback (operationCompletedCallback, new InvokeAsyncCompletedEventArgs (results, error, cancelled, userState));
 				} catch (Exception ex) {
-					Console.WriteLine ("Exception during operationCompletedCallback" + ex);
+					//Console.WriteLine ("Exception during operationCompletedCallback" + ex);
 					throw;
 				}
-				Console.WriteLine ("System.ServiceModel.ClientBase<TChannel>: web service invocation is successfully done (operationCompletedCallback may not be).");
+				//Console.WriteLine ("System.ServiceModel.ClientBase<TChannel>: web service invocation is successfully done (operationCompletedCallback may not be).");
 			};
 			begin_async_result = beginOperationDelegate (inValues, cb, userState);
 		}
 		IAsyncResult begin_async_result;
 
-#if !NET_2_1
+#if !MOONLIGHT
 		void IDisposable.Dispose ()
 		{
 			Close ();
@@ -403,8 +421,8 @@ namespace System.ServiceModel
 				}
 			}
 
-#if !NET_2_1
-			public object Invoke (string methodName, object [] args)
+#if !MOONLIGHT
+			protected object Invoke (string methodName, object [] args)
 			{
 				var cd = endpoint.Contract;
 				var od = cd.Operations.Find (methodName);

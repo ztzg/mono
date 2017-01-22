@@ -5,7 +5,7 @@
 //	Gonzalo Paniagua Javier (gonzalo@ximian.com)
 //
 // (C) 2002,2003 Ximian, Inc (http://www.ximian.com)
-// Copyright (C) 2005 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2005-2010 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -29,6 +29,7 @@
 
 using System.CodeDom.Compiler;
 using System.Collections;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Security.Permissions;
@@ -57,14 +58,7 @@ namespace System.Web.UI
 		Hashtable anames;
 		string baseDir;
 		string baseVDir;
-#if !NET_2_0
-		CompilationConfiguration compilationConfig;
-#endif
-
-#if NET_2_0
 		TextReader reader;
-#endif
-		
 		int appAssemblyIndex = -1;
 		Type cachedType;
 
@@ -74,9 +68,7 @@ namespace System.Web.UI
 		
 		internal SimpleWebHandlerParser (HttpContext context, string virtualPath, string physicalPath, TextReader reader)
 		{
-#if NET_2_0
 			this.reader = reader;
-#endif
 			cachedType = CachingCompiler.GetTypeFromCache (physicalPath);
 			if (cachedType != null)
 				return; // We don't need anything else.
@@ -105,7 +97,6 @@ namespace System.Web.UI
 			if (location != typeof (TemplateParser).Assembly.Location)
 				appAssemblyIndex = assemblies.Add (location);
 
-#if NET_2_0
 			bool addAssembliesInBin = false;
 			foreach (AssemblyInfo info in CompilationConfig.Assemblies) {
 				if (info.Assembly == "*")
@@ -115,12 +106,6 @@ namespace System.Web.UI
 			}
 			if (addAssembliesInBin)
 				AddAssembliesInBin ();
-#else
-			assemblies.AddRange (CompilationConfig.Assemblies);
-			if (CompilationConfig.AssembliesInBin)
-				AddAssembliesInBin ();
-#endif
-
 			language = CompilationConfig.DefaultLanguage;
 
 			GetDirectivesAndContent ();
@@ -141,11 +126,9 @@ namespace System.Web.UI
 			int idxStart, idxEnd, length;
 			StreamReader sr;
 
-#if NET_2_0
 			if (reader != null)
 				sr = reader as StreamReader;
 			else
-#endif
 				sr = new StreamReader (File.OpenRead (physPath), WebEncoding.FileEncoding);
 			
 			using (sr) {
@@ -225,9 +208,9 @@ namespace System.Web.UI
 			if (tagtype != System.Web.Compilation.TagType.Directive)
 				throw new ParseException (location, "Unexpected tag");
 
-			if (tagid == null || tagid.Length == 0 || String.Compare (tagid, DefaultDirectiveName, true) == 0) {
+			if (tagid == null || tagid.Length == 0 || String.Compare (tagid, DefaultDirectiveName, true, Helpers.InvariantCulture) == 0) {
 				AddDefaultDirective (location, attributes);
-			} else if (String.Compare (tagid, "Assembly", true) == 0) {
+			} else if (String.Compare (tagid, "Assembly", true, Helpers.InvariantCulture) == 0) {
 				AddAssemblyDirective (location, attributes);
 			} else {
 				throw new ParseException (location, "Unexpected directive: " + tagid);
@@ -245,7 +228,7 @@ namespace System.Web.UI
 			throw new ParseException (location, message);
 		}
 
-		static string GetAndRemove (Hashtable table, string key)
+		static string GetAndRemove (IDictionary table, string key)
 		{
 			string o = table [key] as string;
 			table.Remove (key);
@@ -269,26 +252,22 @@ namespace System.Web.UI
 
 		internal virtual void AddDefaultDirective (ILocation location, TagAttributes attrs)
 		{
-#if NET_2_0
 			CompilationSection compConfig;
-#else
-			CompilationConfiguration compConfig;
-#endif
 			compConfig = CompilationConfig;
 			
 			if (gotDefault)
 				throw new ParseException (location, "duplicate " + DefaultDirectiveName + " directive");
 
 			gotDefault = true;
-			Hashtable attributes = attrs.GetDictionary (null);
+			IDictionary attributes = attrs.GetDictionary (null);
 			className = GetAndRemove (attributes, "class");
 			if (className == null)
 				throw new ParseException (null, "No Class attribute found.");
 			
 			string d = GetAndRemove (attributes, "debug");
 			if (d != null) {
-				debug = (String.Compare (d, "true", true) == 0);
-				if (debug == false && String.Compare (d, "false", true) != 0)
+				debug = (String.Compare (d, "true", true, Helpers.InvariantCulture) == 0);
+				if (debug == false && String.Compare (d, "false", true, Helpers.InvariantCulture) != 0)
 					throw new ParseException (null, "Invalid value for Debug attribute");
 			} else
 				debug = compConfig.Debug;
@@ -305,7 +284,7 @@ namespace System.Web.UI
 
 		internal virtual void AddAssemblyDirective (ILocation location, TagAttributes attrs)
 		{
-			Hashtable tbl = attrs.GetDictionary (null);
+			IDictionary tbl = attrs.GetDictionary (null);
 			string name = GetAndRemove (tbl, "Name");
 			string src = GetAndRemove (tbl, "Src");
 			if (name == null && src == null)
@@ -403,7 +382,7 @@ namespace System.Web.UI
 					throw new Exception ("Error while loading " + s, e);
 				}
 				
-				if (ex != null && HttpRuntime.IsDebuggingEnabled) {
+				if (ex != null && RuntimeHelpers.DebuggingEnabled) {
 					Console.WriteLine ("**** DEBUG MODE *****");
 					Console.WriteLine ("Bad assembly found in bin/. Exception (ignored):");
 					Console.WriteLine (ex);
@@ -475,7 +454,6 @@ namespace System.Web.UI
 					return type;
 			}
 			
-#if NET_2_0
 			IList toplevelAssemblies = BuildManager.TopLevelAssemblies;
 			if (toplevelAssemblies != null && toplevelAssemblies.Count > 0) {
 				foreach (Assembly asm in toplevelAssemblies) {
@@ -487,7 +465,6 @@ namespace System.Web.UI
 					}
 				}
 			}
-#endif
 
 			foreach (string dll in HttpApplication.BinDirectoryAssemblies) {
 				try {
@@ -596,7 +573,6 @@ namespace System.Web.UI
 			}
 		}
 
-#if NET_2_0
 		CompilationSection CompilationConfig {
 			get {
 				string vp = VirtualPath;
@@ -611,16 +587,6 @@ namespace System.Web.UI
 			get { return reader; }
 			set { reader = value; }
 		}
-#else
-		internal CompilationConfiguration CompilationConfig {
-			get {
-				if (compilationConfig == null)
-					compilationConfig = CompilationConfiguration.GetInstance (context);
-
-				return compilationConfig;
-			}
-		}
-#endif
 	}
 }
 

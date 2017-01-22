@@ -274,7 +274,9 @@ namespace System.Windows.Forms {
 		internal abstract event EventHandler Idle;
 
 		#region XplatUI Driver Methods
-		internal abstract void AudibleAlert();
+		internal abstract void AudibleAlert(AlertType alert);
+
+		internal abstract void BeginMoveResize (IntPtr handle); // init a window manager driven resize event
 
 		internal abstract void EnableThemes();
 

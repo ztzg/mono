@@ -1,3 +1,131 @@
+2010-06-10  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocs2html.cs: Regenerate all index.{opts.ext}
+	  files if any of the source .xml files have changed.  This allows
+	  new <summary/> values to be inserted into the index.{opts.ext}
+	  files, instead of the index files being "stale".  Fixes #573121.
+
+2010-04-16  Jonathan Pryor <jpryor@novell.com>
+
+	* Makefile: Add System.Xml.Linq.dll to the referenced assemblies.
+	* Mono.Documentation/webdoc.cs: Allow .source files to be provided to
+	  'mdoc export-html-webdoc', which will cause the .source files to be
+	  read and all referenced .tree/.zip files to be processed.
+
+2010-04-16  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: Use Int64 instead of UInt64 for
+	  enum values, so that we can properly capture negative values.
+
+2010-02-28  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/webdoc.cs: Add --use-system-sources option so
+	  that 'mdoc export-html-webdoc' will use the system-installed sources
+	  in addition to any -r'd sources (which was the behavior 2 commits
+	  ago).
+
+2010-02-26  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/assembler.cs: Allow other apps to get the same
+	  '--format' logic, specifically 'mdoc export-html-webdoc'.
+	* Mono.Documentation/webdoc.cs: Allow it to be more "stand-alone".
+	  Previously, it would depend upon the system-wide .source files.
+	  This is bad, because you might want to generate the 'cache'
+	  directory for a different installation, with a different set of
+	  .tree/.zip/.source files, and you might not want to replace your own
+	  and/or you often forget, as is the case with me.  Instead, allow a 
+	  format to be specified for .tree files, and allow additional .source 
+	  files to be referenced so that extension methods will be found within
+	  the specified sources.  This allows for a "stand-alone" method of 
+	  operation w/o depending upon the system-wide .source files.
+
+2010-01-11  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocs2slashdoc.cs: Fix NamespaceSummaries.xml
+	  generation to look at the ns-NAMESPACE.xml files, not just
+	  NAMESPACE.xml files.
+
+2009-12-03  Jonathan Pryor <jpryor@novell.com>
+
+	* Resources/stylesheet.xsl: Add support for generating namespace links
+	  for <see cref="N:..." />.
+	* Test/DocTest-v1.cs: Add namespace links for testing.
+	* Test/en.expected.importslashdoc/Mono.DocTest/Color.xml,
+	  Test/en.expected.importslashdoc/NoNamespace.xml,
+	  Test/html.expected/index.html,
+	  Test/html.expected/Mono.DocTest/Color.html,
+	  Test/html.expected/NoNamespace.html,
+	  Test/msxdoc-expected.importslashdoc.xml: Flush.
+
+2009-12-03  Jonathan Pryor <jpryor@novell.com>
+
+	* Test/html.expected/Mono.DocTest.Generic/MyList`1.html,
+	  Test/html.expected/Mono.DocTest.Generic/MyList`2.html: Flush to sync
+	  with updated mdoc.  Inherited members are now shown (as they were
+	  supposed to be, but a bug had prevented from being found).
+
+2009-12-02  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocs2html.cs: Enable debug output in
+	  XslCompiledTransform when --debug is specified.
+	* Resources/overview.xsl: Add xmlns, exclude-result-prefixes so that
+	  .NET won't complain about the stylesheet.  (Why's it complain?)
+	* Resources/stylesheet.xsl: .NET compatibility fixes:
+	  - Use msxsl:node-set() when necessary.
+	  - Change XPath expressions so that they work properly everywhere.
+	* Makefile: Don't build an 'mdoc-net.exe' anymore, as the normal
+	  mdoc.exe can now run normally under .NET.
+
+2009-11-25  Jonathan Pryor <jpryor@novell.com>
+
+	* Makefile: When copying mdoc-net.exe into ./mdoc-net, rename it to
+	  mdoc.exe so that .NET users continue to use the name 'mdoc'.  This
+	  will make documentation easier, etc.
+
+2009-11-25  Jonathan Pryor <jpryor@novell.com>
+
+	+ Giving up on getting mdoc to fully work under .NET; specifically,
+	  mdoc-export-html makes use of many Mono XSLT "extensions" (part of
+	  XSLT 2.0, apparently) which .NET doesn't support.  To run mdoc under
+	  .NET, use mdoc-net.exe, which is a "static" mdoc.exe, including the 
+	  sources for BOTH monodoc.dll AND Mono's System.Xml.dll in the binary.
+	  Yes, this makes it huge.
+
+	* . (svn:ignore): Ignore generated files.
+	* Makefile: If the NET variable is present (e.g. 'make NET=1'),
+	  generate mdoc-net.exe instead of mdoc.exe, otherwise generate
+	  mdoc.exe (the default, with normal dependencies).  When NET is
+	  present, also create a 'mdoc-net' directory which contains
+	  mdoc-net.exe and all assembly dependencies (to make it easier to
+	  grab all the deps at once).
+	* mdoc-net.exe.sources: Added; sources to use for mdoc-net.exe.
+	* Mono.Documentation/monodocs2html.cs: Ensure that the "Index" XSLT
+	  variable is set before generating output.
+
+2009-11-24  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocs2html.cs: Use XslCompiledTransform, as
+	  it's *significantly* faster under .NET than XslTransform -- 
+	  1.7s vs ~3 minutes 7s (for a trivial test case).
+
+2009-11-23  Jonathan Pryor <jpryor@novell.com>
+
+	* Resources/overview.xsl, Resources/stylesheet.xsl: Remove the 'ext'
+	  and 'language' global <xsl:param>'s, as they cause "variable 'foo' 
+	  was duplicated within the same scope" errors under .NET.
+
+2009-11-23  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: ".NET support": ensure that we
+	  always get Unix line endings so that we can update documentation
+	  under both Mono & .NET w/o continually changing the file due to
+	  line-ending differences.
+
+2009-11-06  Jonathan Pryor <jpryor@novell.com>
+
+	* Mono.Documentation/monodocer.cs: When deleting the ExtensionMethods
+	  element, remove it from the correct parent XML node.  Fixes #553144.
+
 2009-09-19  Jonathan Pryor <jpryor@novell.com>
 
 	* Mono.Documentation/monodocs2html.cs: Add --with-profile=PROFILE

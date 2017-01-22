@@ -1,3 +1,57 @@
+2010-03-24  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* SpinLockTests.cs: Add a correctness check unit test
+
+2010-03-08  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* SpinLockTests.cs: Added unit tests for SpinLock
+
+2010-02-08  Zoltan Varga  <vargaz@gmail.com>
+
+	* WaitHandleTest.cs: Add a test for #576039.
+
+2010-02-02  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* CancellationTokenTests.cs:
+	* LazyInitTests.cs:
+	* ThreadLazyTests.cs: Update namespace and tested methods
+
+2009-12-09  Jb Evain  <jbevain@novell.com>
+
+	* ThreadTest.cs: add a test for a null callback passed to
+	ThreadPool.QueueUserWorkItem.
+
+2009-11-02  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* ParallelTests.cs: Added unit test for Bug #536919, cleaned up.
+
+2009-10-26  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* InterlockedTest.cs: Add test case for generic methods
+	ComapreExchange and Exchange
+
+2009-10-25  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* ThreadTest.cs: Add test cases for Current[UI]Culture (not 
+	working), Name, Join, Sleep and SpinWait
+
+2009-10-22  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* EventWaitHandleTest.cs: New. Test case for EventResetMode 
+	validation
+	* MonitorTest.cs: Mark existing tests as "NotWorking" since they
+	fail in MS FX2 (maybe they worked in 1.x?). Add more test cases
+	to validate the TryEnter and Wait overloaded methods.
+
+2009-10-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WaitHandleTest.cs: New. Add test cases for Wait[One|All|Any]
+	methods overloads (at least the one present in Silverlight 2)
+
+2009-10-20  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* TimerTest.cs: Add more validation tests
+
 2009-08-11  Jérémie Laval  <jeremie.laval@gmail.com>
 
 	* ParallelTests.cs: Remove While test case.

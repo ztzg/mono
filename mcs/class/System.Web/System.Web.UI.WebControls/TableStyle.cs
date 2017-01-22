@@ -30,6 +30,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Security.Permissions;
 using System.Web.UI;
+using System.Web.Util;
 
 namespace System.Web.UI.WebControls {
 
@@ -174,8 +175,9 @@ namespace System.Web.UI.WebControls {
 				SetBit ((int) TableStyles.HorizontalAlign);
 			}
 		}
-
-
+#if NET_4_0
+		[MonoTODO ("collapse style should be rendered only for browsers which support that.")]
+#endif
 		public override void AddAttributesToRender (HtmlTextWriter writer, WebControl owner)
 		{
 			base.AddAttributesToRender (writer, owner);
@@ -183,18 +185,17 @@ namespace System.Web.UI.WebControls {
 				return;
 
 			// note: avoid calling properties multiple times
-			int i = CellPadding;
-			if (i != -1)
-				writer.AddAttribute (HtmlTextWriterAttribute.Cellpadding, i.ToString (CultureInfo.InvariantCulture), false);
-			
-			i = CellSpacing;
+			int i = CellSpacing;
 			if (i != -1) {
-				writer.AddAttribute (HtmlTextWriterAttribute.Cellspacing, i.ToString (CultureInfo.InvariantCulture), false);
-				if (i == 0) {
+				writer.AddAttribute (HtmlTextWriterAttribute.Cellspacing, i.ToString (Helpers.InvariantCulture), false);
+				if (i == 0)
 					writer.AddStyleAttribute(HtmlTextWriterStyle.BorderCollapse, "collapse");
-				}
 			}
 
+			i = CellPadding;
+			if (i != -1)
+				writer.AddAttribute (HtmlTextWriterAttribute.Cellpadding, i.ToString (Helpers.InvariantCulture), false);
+			
 			GridLines g = GridLines;
 			switch (g) {
 			case GridLines.Horizontal:
@@ -223,7 +224,10 @@ namespace System.Web.UI.WebControls {
 				writer.AddAttribute (HtmlTextWriterAttribute.Align, "justify", false);
 				break;
 			}
-
+#if NET_4_0
+			if (g != GridLines.None && BorderWidth.IsEmpty)
+				writer.AddAttribute (HtmlTextWriterAttribute.Border, "1", false);
+#else
 			// border (=0) is always present (and base class doesn't seems to add it)
 			// but border is "promoted" to 1 if gridlines are present (with BorderWidth == 0)
 			if (g == GridLines.None) {
@@ -231,9 +235,9 @@ namespace System.Web.UI.WebControls {
 			} else if (BorderWidth.IsEmpty) {
 				writer.AddAttribute (HtmlTextWriterAttribute.Border, "1", false);
 			} else {
-				writer.AddAttribute (HtmlTextWriterAttribute.Border, BorderWidth.Value.ToString (CultureInfo.InvariantCulture));
+				writer.AddAttribute (HtmlTextWriterAttribute.Border, BorderWidth.Value.ToString (Helpers.InvariantCulture));
 			}
-
+#endif
 #if !NET_2_0
 			string s = BackImageUrl;
 			if (s.Length > 0) {

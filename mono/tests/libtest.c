@@ -53,6 +53,22 @@ static void* marshal_alloc (gsize size)
 #endif
 }
 
+static char* marshal_strdup (const char *str)
+{
+#ifdef WIN32
+	int len;
+	char *buf;
+
+	if (!str)
+		return NULL;
+
+	len = strlen (str);
+	buf = (char *) CoTaskMemAlloc (len + 1);
+	return strcpy (buf, str);
+#else
+	return g_strdup (str);
+#endif
+}
 
 static gunichar2* marshal_bstr_alloc(const gchar* str)
 {
@@ -82,7 +98,7 @@ static gunichar2* marshal_bstr_alloc(const gchar* str)
 }
 
 LIBTEST_API int STDCALL
-mono_cominterop_is_supported ()
+mono_cominterop_is_supported (void)
 {
 #if defined(TARGET_X86) || defined(TARGET_AMD64)
 	return 1;
@@ -403,6 +419,12 @@ mono_test_marshal_inout_array (int *a1)
 	return sum;
 }
 
+LIBTEST_API int /* cdecl */
+mono_test_marshal_inout_array_cdecl (int *a1)
+{
+	return mono_test_marshal_inout_array (a1);
+}
+
 LIBTEST_API int STDCALL  
 mono_test_marshal_out_array (int *a1)
 {
@@ -474,7 +496,7 @@ mono_test_return_string (ReturnStringDelegate func)
 	marshal_free (res);
 
 	// printf ("got string: %s\n", res);
-	return g_strdup ("12345");
+	return marshal_strdup ("12345");
 }
 
 typedef int (STDCALL *RefVTypeDelegate) (int a, simplestruct *ss, int b);
@@ -549,7 +571,7 @@ mono_test_marshal_byref_struct (simplestruct *ss, int a, int b, int c, char *d)
 	ss->a = !ss->a;
 	ss->b = !ss->b;
 	ss->c = !ss->c;
-	ss->d = g_strdup ("DEF");
+	ss->d = marshal_strdup ("DEF");
 
 	return res ? 0 : 1;
 }
@@ -654,7 +676,7 @@ mono_test_marshal_class (int i, int j, int k, simplestruct2 *ss, int l)
 
 	res = g_new0 (simplestruct2, 1);
 	memcpy (res, ss, sizeof (simplestruct2));
-	res->d = g_strdup ("TEST");
+	res->d = marshal_strdup ("TEST");
 	return res;
 }
 
@@ -671,7 +693,7 @@ mono_test_marshal_byref_class (simplestruct2 **ssp)
 
 	res = g_new0 (simplestruct2, 1);
 	memcpy (res, ss, sizeof (simplestruct2));
-	res->d = g_strdup ("TEST-RES");
+	res->d = marshal_strdup ("TEST-RES");
 
 	*ssp = res;
 	return 0;
@@ -996,6 +1018,36 @@ mono_test_marshal_stringbuilder_unicode (gunichar2 *s, int n)
 	return 0;
 }
 
+LIBTEST_API void STDCALL
+mono_test_marshal_stringbuilder_out (char **s)
+{
+	const char m[] = "This is my message.  Isn't it nice?";
+	char *str;
+
+	str = marshal_alloc (strlen (m) + 1);
+	memcpy (str, m, strlen (m) + 1);
+	
+	*s = str;
+}
+
+LIBTEST_API int STDCALL  
+mono_test_marshal_stringbuilder_out_unicode (gunichar2 **s)
+{
+	const char m[] = "This is my message.  Isn't it nice?";
+	gunichar2 *s2;
+	glong len;
+
+	s2 = g_utf8_to_utf16 (m, -1, NULL, &len, NULL);
+	
+	len = (len * 2) + 2;
+	*s = marshal_alloc (len);
+	memcpy (*s, s2, len);
+
+	g_free (s2);
+
+	return 0;
+}
+
 typedef struct {
 #ifndef __GNUC__
     char a;
@@ -1124,7 +1176,8 @@ mono_test_byvalstr_check (ByValStrStruct* data, char* correctString)
 	// printf ("T1: %s\n", data->a);
 	// printf ("T2: %s\n", correctString);
 
-	marshal_free (data);
+	/* we need g_free because the allocation was performed by mono_test_byvalstr_gen */
+	g_free (data);
 	return (ret != 0);
 }
 
@@ -1265,7 +1318,7 @@ class_marshal_test1 (SimpleObj **obj1)
 {
 	SimpleObj *res = malloc (sizeof (SimpleObj));
 
-	res->str = g_strdup ("ABC");
+	res->str = marshal_strdup ("ABC");
 	res->i = 5;
 
 	*obj1 = res;
@@ -1296,7 +1349,7 @@ string_marshal_test0 (char *str)
 LIBTEST_API void STDCALL
 string_marshal_test1 (const char **str)
 {
-	*str = g_strdup ("TEST1");
+	*str = marshal_strdup ("TEST1");
 }
 
 LIBTEST_API int STDCALL 
@@ -1505,6 +1558,10 @@ mono_test_asany (void *ptr, int what)
 		char *s;
 
 		s = g_utf16_to_utf8 (ptr, -1, NULL, NULL, &error);
+
+		if (!s)
+			return 1;
+
 		if (!strcmp (s, "ABC")) {
 			g_free (s);
 			return 0;
@@ -2267,6 +2324,14 @@ mono_safe_handle_ref (void **handle)
 
 	*handle = (void *) 0x800d;
 }
+
+LIBTEST_API double STDCALL
+mono_test_marshal_date_time (double d, double *d2)
+{
+	*d2 = d;
+	return d;
+}
+
 /*
  * COM INTEROP TESTS
  */
@@ -3153,7 +3218,7 @@ mono_test_marshal_ccw_itest (MonoComObject *pUnk)
  * mono_method_get_unmanaged_thunk tests
  */
 
-#if defined(__GNUC__) && ((defined(__i386__) && (defined(__linux__) || defined (__APPLE__)) || defined (__FreeBSD__)) || (defined(__ppc__) && defined(__APPLE__)))
+#if defined(__GNUC__) && ((defined(__i386__) && (defined(__linux__) || defined (__APPLE__)) || defined (__FreeBSD__) || defined(__OpenBSD__)) || (defined(__ppc__) && defined(__APPLE__)))
 #define ALIGN(size) __attribute__ ((aligned(size)))
 #else
 #define ALIGN(size)
@@ -3175,6 +3240,12 @@ lookup_mono_symbol (const char *symbol_name)
 		return symbol;
 	else
 		return NULL;
+}
+
+LIBTEST_API gpointer STDCALL
+mono_test_marshal_lookup_symbol (const char *symbol_name)
+{
+	return lookup_mono_symbol (symbol_name);
 }
 
 /**
@@ -3914,7 +3985,7 @@ mono_test_Winx64_struct5_ret_managed (managed_struct5_ret_delegate func)
 
 LIBTEST_API int STDCALL 
 mono_test_marshal_bool_in (int arg, unsigned int expected, unsigned int bDefaultMarsh, unsigned int bBoolCustMarsh,
-			   char bI1CustMarsh, unsigned char bU1CustMarsh, unsigned short bVBCustMarsh)
+			   char bI1CustMarsh, unsigned char bU1CustMarsh, short bVBCustMarsh)
 {
 	switch (arg) {
 	case 1:	
@@ -4201,7 +4272,7 @@ mono_test_managed_marshal_bool_ref (int arg, unsigned int expected, unsigned int
 #ifdef WIN32
 
 LIBTEST_API int STDCALL 
-mono_test_marshal_variant_out_safearray_1dim_vt_bstr_empty (SAFEARRAY** safearray)
+mono_test_marshal_safearray_out_1dim_vt_bstr_empty (SAFEARRAY** safearray)
 {
 	/* Create an empty one-dimensional array of variants */
 	SAFEARRAY *pSA;
@@ -4216,7 +4287,7 @@ mono_test_marshal_variant_out_safearray_1dim_vt_bstr_empty (SAFEARRAY** safearra
 }
 
 LIBTEST_API int STDCALL 
-mono_test_marshal_variant_out_safearray_1dim_vt_bstr (SAFEARRAY** safearray)
+mono_test_marshal_safearray_out_1dim_vt_bstr (SAFEARRAY** safearray)
 {
 	/* Create a one-dimensional array of 10 variants filled with "0" to "9" */
 	SAFEARRAY *pSA;
@@ -4249,7 +4320,7 @@ mono_test_marshal_variant_out_safearray_1dim_vt_bstr (SAFEARRAY** safearray)
 }
 
 LIBTEST_API int STDCALL 
-mono_test_marshal_variant_out_safearray_2dim_vt_int (SAFEARRAY** safearray)
+mono_test_marshal_safearray_out_2dim_vt_i4 (SAFEARRAY** safearray)
 {
 	/* Create a two-dimensional array of 4x3 variants filled with 11, 12, 13, etc. */
 	SAFEARRAY *pSA;
@@ -4269,7 +4340,7 @@ mono_test_marshal_variant_out_safearray_2dim_vt_int (SAFEARRAY** safearray)
 			VARIANT vOut;
 			VariantInit (&vOut);
 			vOut.vt = VT_I4;
-			vOut.intVal = (i+1)*10+(j+1);
+			vOut.lVal = (i+1)*10+(j+1);
 			indices [0] = i;
 			indices [1] = j;
 			if ((hr = SafeArrayPutElement (pSA, indices, &vOut)) != S_OK) {
@@ -4285,7 +4356,7 @@ mono_test_marshal_variant_out_safearray_2dim_vt_int (SAFEARRAY** safearray)
 }
 
 LIBTEST_API int STDCALL 
-mono_test_marshal_variant_out_safearray_4dim_vt_int (SAFEARRAY** safearray)
+mono_test_marshal_safearray_out_4dim_vt_i4 (SAFEARRAY** safearray)
 {
 	/* Create a four-dimensional array of 10x3x6x7 variants filled with their indices */
 	/* Also use non zero lower bounds                                                 */
@@ -4311,10 +4382,604 @@ mono_test_marshal_variant_out_safearray_4dim_vt_int (SAFEARRAY** safearray)
 	for (i= 0; i< 10*3*6*7; i++) {
 		VariantInit(&pData [i]);
 		pData [i].vt = VT_I4;
-		pData [i].intVal = i;
+		pData [i].lVal = i;
 	}
-	SafeArrayUnaccessData(pSA);
+	SafeArrayUnaccessData (pSA);
 	*safearray = pSA;
+	return hr;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_byval_1dim_empty (SAFEARRAY* safearray)
+{
+	/* Check that array is one dimensional and empty */
+
+	UINT dim;
+	long lbound, ubound;
+	
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 1)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound);
+	SafeArrayGetUBound (safearray, 1, &ubound);
+
+	if ((lbound > 0) || (ubound > 0))
+		return 1;
+
+	return 0;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_byval_1dim_vt_i4 (SAFEARRAY* safearray)
+{
+	/* Check that array is one dimensional containing integers from 1 to 10 */
+
+	UINT dim;
+	long lbound, ubound;
+	VARIANT *pData;	
+	long i;
+	int result=0;
+
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 1)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound);
+	SafeArrayGetUBound (safearray, 1, &ubound);
+
+	if ((lbound != 0) || (ubound != 9))
+		return 1;
+
+	SafeArrayAccessData (safearray, (void **)&pData);
+	for (i= lbound; i <= ubound; i++) {
+		if ((VariantChangeType (&pData [i], &pData [i], VARIANT_NOUSEROVERRIDE, VT_I4) != S_OK) || (pData [i].lVal != i + 1))
+			result = 1;
+	}
+	SafeArrayUnaccessData (safearray);
+
+	return result;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_byval_1dim_vt_mixed (SAFEARRAY* safearray)
+{
+	/* Check that array is one dimensional containing integers mixed with strings from 0 to 12 */
+
+	UINT dim;
+	long lbound, ubound;
+	VARIANT *pData;	
+	long i;
+	long indices [1];
+	VARIANT element;
+	int result=0;
+
+	VariantInit (&element);
+
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 1)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound);
+	SafeArrayGetUBound (safearray, 1, &ubound);
+		
+	if ((lbound != 0) || (ubound != 12))
+		return 1;
+
+	SafeArrayAccessData (safearray, (void **)&pData);
+	for (i= lbound; i <= ubound; i++) {
+		if ((i%2 == 0) && (pData [i].vt != VT_I4))
+			result = 1;
+		if ((i%2 == 1) && (pData [i].vt != VT_BSTR))
+			result = 1;
+		if ((VariantChangeType (&pData [i], &pData [i], VARIANT_NOUSEROVERRIDE, VT_I4) != S_OK) || (pData [i].lVal != i))
+			result = 1;
+	}
+	SafeArrayUnaccessData (safearray);
+
+	/* Change the first element of the array to verify that [in] parameters are not marshalled back to the managed side */
+
+	indices [0] = 0;
+	element.vt = VT_I4;
+	element.lVal = 333;
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	return result;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_byval_2dim_vt_i4 (SAFEARRAY* safearray)
+{
+	/* Check that array is one dimensional containing integers mixed with strings from 0 to 12 */
+
+	UINT dim;
+	long lbound1, ubound1, lbound2, ubound2;
+	long i, j, failed;
+	long indices [2];
+	VARIANT element;
+
+	VariantInit (&element);
+
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 2)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound1);
+	SafeArrayGetUBound (safearray, 1, &ubound1);
+
+	if ((lbound1 != 0) || (ubound1 != 1))
+		return 1;
+
+	SafeArrayGetLBound (safearray, 2, &lbound2);
+	SafeArrayGetUBound (safearray, 2, &ubound2);
+
+	if ((lbound2 != 0) || (ubound2 != 3)) {
+		return 1;
+	}
+
+	for (i= lbound1; i <= ubound1; i++) {
+		indices [0] = i;
+		for (j= lbound2; j <= ubound2; j++) {
+			indices [1] = j;
+			if (SafeArrayGetElement (safearray, indices, &element) != S_OK)
+				return 1;
+			failed = ((element.vt != VT_I4) || (element.lVal != 10*(i+1)+(j+1)));
+			VariantClear (&element);
+			if (failed)
+				return 1;
+		}
+	}
+
+	/* Change the first element of the array to verify that [in] parameters are not marshalled back to the managed side */
+
+	indices [0] = 0;
+	indices [1] = 0;
+	element.vt = VT_I4;
+	element.lVal = 333;
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	return 0;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_byval_3dim_vt_bstr (SAFEARRAY* safearray)
+{
+	/* Check that array is one dimensional containing integers mixed with strings from 0 to 12 */
+
+	UINT dim;
+	long lbound1, ubound1, lbound2, ubound2, lbound3, ubound3;
+	long i, j, k, failed;
+	long indices [3];
+	VARIANT element;
+
+	VariantInit (&element);
+
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 3)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound1);
+	SafeArrayGetUBound (safearray, 1, &ubound1);
+
+	if ((lbound1 != 0) || (ubound1 != 1))
+		return 1;
+
+	SafeArrayGetLBound (safearray, 2, &lbound2);
+	SafeArrayGetUBound (safearray, 2, &ubound2);
+
+	if ((lbound2 != 0) || (ubound2 != 1))
+		return 1;
+
+	SafeArrayGetLBound (safearray, 3, &lbound3);
+	SafeArrayGetUBound (safearray, 3, &ubound3);
+
+	if ((lbound3 != 0) || (ubound3 != 2))
+		return 1;
+
+	for (i= lbound1; i <= ubound1; i++) {
+		indices [0] = i;
+		for (j= lbound2; j <= ubound2; j++) {
+			indices [1] = j;
+		for (k= lbound3; k <= ubound3; k++) {
+				indices [2] = k;
+				if (SafeArrayGetElement (safearray, indices, &element) != S_OK)
+					return 1;
+				failed = ((element.vt != VT_BSTR) 
+					|| (VariantChangeType (&element, &element, VARIANT_NOUSEROVERRIDE, VT_I4) != S_OK) 
+					|| (element.lVal != 100*(i+1)+10*(j+1)+(k+1)));
+				VariantClear (&element);
+				if (failed)
+					return 1;
+			}
+		}
+	}
+
+	/* Change the first element of the array to verify that [in] parameters are not marshalled back to the managed side */
+
+	indices [0] = 0;
+	indices [1] = 0;
+	indices [2] = 0;
+	element.vt = VT_BSTR;
+	element.bstrVal = SysAllocString(L"Should not be copied");
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	return 0;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_byref_3dim_vt_bstr (SAFEARRAY** safearray)
+{
+	return mono_test_marshal_safearray_in_byval_3dim_vt_bstr (*safearray);
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_out_byref_1dim_empty (SAFEARRAY** safearray)
+{
+	/* Check that the input array is what is expected and change it so the caller can check */
+	/* correct marshalling back to managed code                                             */
+
+	UINT dim;
+	long lbound, ubound;
+	SAFEARRAYBOUND dimensions [1];
+	long i;
+	wchar_t buffer [20];
+	HRESULT hr = S_OK;
+	long indices [1];
+
+	/* Check that in array is one dimensional and empty */
+
+	dim = SafeArrayGetDim (*safearray);
+	if (dim != 1) {
+		return 1;
+	}
+
+	SafeArrayGetLBound (*safearray, 1, &lbound);
+	SafeArrayGetUBound (*safearray, 1, &ubound);
+		
+	if ((lbound > 0) || (ubound > 0)) {
+		return 1;
+	}
+
+	/* Re-dimension the array and return a one-dimensional array of 8 variants filled with "0" to "7" */
+
+	dimensions [0].lLbound = 0;
+	dimensions [0].cElements = 8;
+
+	hr = SafeArrayRedim (*safearray, dimensions);
+	if (hr != S_OK)
+		return 1;
+
+	for (i= dimensions [0].lLbound; i< (dimensions [0].lLbound + dimensions [0].cElements); i++) {
+		VARIANT vOut;
+		VariantInit (&vOut);
+		vOut.vt = VT_BSTR;
+		_ltow (i,buffer,10);
+		vOut.bstrVal = SysAllocString (buffer);
+		indices [0] = i;
+		if ((hr = SafeArrayPutElement (*safearray, indices, &vOut)) != S_OK) {
+			VariantClear (&vOut);
+			SafeArrayDestroy (*safearray);
+			return hr;
+		}
+		VariantClear (&vOut);
+	}
+	return hr;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_out_byref_3dim_vt_bstr (SAFEARRAY** safearray)
+{
+	/* Check that the input array is what is expected and change it so the caller can check */
+	/* correct marshalling back to managed code                                             */
+
+	UINT dim;
+	long lbound1, ubound1, lbound2, ubound2, lbound3, ubound3;
+	SAFEARRAYBOUND dimensions [1];
+	long i, j, k, failed;
+	wchar_t buffer [20];
+	HRESULT hr = S_OK;
+	long indices [3];
+	VARIANT element;
+
+	VariantInit (&element);
+
+	/* Check that in array is three dimensional and contains the expected values */
+
+	dim = SafeArrayGetDim (*safearray);
+	if (dim != 3)
+		return 1;
+
+	SafeArrayGetLBound (*safearray, 1, &lbound1);
+	SafeArrayGetUBound (*safearray, 1, &ubound1);
+
+	if ((lbound1 != 0) || (ubound1 != 1))
+		return 1;
+
+	SafeArrayGetLBound (*safearray, 2, &lbound2);
+	SafeArrayGetUBound (*safearray, 2, &ubound2);
+
+	if ((lbound2 != 0) || (ubound2 != 1))
+		return 1;
+
+	SafeArrayGetLBound (*safearray, 3, &lbound3);
+	SafeArrayGetUBound (*safearray, 3, &ubound3);
+
+	if ((lbound3 != 0) || (ubound3 != 2))
+		return 1;
+
+	for (i= lbound1; i <= ubound1; i++) {
+		indices [0] = i;
+		for (j= lbound2; j <= ubound2; j++) {
+			indices [1] = j;
+			for (k= lbound3; k <= ubound3; k++) {
+				indices [2] = k;
+				if (SafeArrayGetElement (*safearray, indices, &element) != S_OK)
+					return 1;
+				failed = ((element.vt != VT_BSTR) 
+					|| (VariantChangeType (&element, &element, VARIANT_NOUSEROVERRIDE, VT_I4) != S_OK) 
+					|| (element.lVal != 100*(i+1)+10*(j+1)+(k+1)));
+				VariantClear (&element);
+				if (failed)
+					return 1;
+			}
+		}
+	}
+
+	hr = SafeArrayDestroy (*safearray);
+	if (hr != S_OK)
+		return 1;
+
+	/* Return a new one-dimensional array of 8 variants filled with "0" to "7" */
+
+	dimensions [0].lLbound = 0;
+	dimensions [0].cElements = 8;
+
+	*safearray = SafeArrayCreate (VT_VARIANT, 1, dimensions);
+
+	for (i= dimensions [0].lLbound; i< (dimensions [0].lLbound + dimensions [0].cElements); i++) {
+		VARIANT vOut;
+		VariantInit (&vOut);
+		vOut.vt = VT_BSTR;
+		_ltow (i,buffer,10);
+		vOut.bstrVal = SysAllocString (buffer);
+		indices [0] = i;
+		if ((hr = SafeArrayPutElement (*safearray, indices, &vOut)) != S_OK) {
+			VariantClear (&vOut);
+			SafeArrayDestroy (*safearray);
+			return hr;
+		}
+		VariantClear (&vOut);
+	}
+	return hr;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_out_byref_1dim_vt_i4 (SAFEARRAY** safearray)
+{
+	/* Check that the input array is what is expected and change it so the caller can check */
+	/* correct marshalling back to managed code                                             */
+
+	UINT dim;
+	long lbound1, ubound1;
+	long i, failed;
+	HRESULT hr = S_OK;
+	long indices [1];
+	VARIANT element;
+	
+	VariantInit (&element);
+
+	/* Check that in array is one dimensional and contains the expected value */
+
+	dim = SafeArrayGetDim (*safearray);
+	if (dim != 1)
+		return 1;
+
+	SafeArrayGetLBound (*safearray, 1, &lbound1);
+	SafeArrayGetUBound (*safearray, 1, &ubound1);
+
+	ubound1 = 1;
+	if ((lbound1 != 0) || (ubound1 != 1))
+		return 1;
+	ubound1 = 0;
+
+	for (i= lbound1; i <= ubound1; i++) {
+		indices [0] = i;
+		if (SafeArrayGetElement (*safearray, indices, &element) != S_OK)
+			return 1;
+		failed = (element.vt != VT_I4) || (element.lVal != i+1);
+		VariantClear (&element);
+		if (failed)
+			return 1;
+	}
+
+	/* Change one of the elements of the array to verify that [out] parameter is marshalled back to the managed side */
+
+	indices [0] = 0;
+	element.vt = VT_I4;
+	element.lVal = -1;
+	SafeArrayPutElement (*safearray, indices, &element);
+	VariantClear (&element);
+
+	return hr;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_out_byval_1dim_vt_i4 (SAFEARRAY* safearray)
+{
+	/* Check that the input array is what is expected and change it so the caller can check */
+	/* correct marshalling back to managed code                                             */
+
+	UINT dim;
+	long lbound1, ubound1;
+	SAFEARRAYBOUND dimensions [1];
+	long i, failed;
+	HRESULT hr = S_OK;
+	long indices [1];
+	VARIANT element;
+
+	VariantInit (&element);
+
+	/* Check that in array is one dimensional and contains the expected value */
+
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 1)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound1);
+	SafeArrayGetUBound (safearray, 1, &ubound1);
+		
+	if ((lbound1 != 0) || (ubound1 != 0))
+		return 1;
+
+	for (i= lbound1; i <= ubound1; i++) {
+		indices [0] = i;
+		if (SafeArrayGetElement (safearray, indices, &element) != S_OK)
+			return 1;
+		failed = (element.vt != VT_I4) || (element.lVal != i+1);
+		VariantClear (&element);
+		if (failed)
+			return 1;
+	}
+
+	/* Change the array to verify how [out] parameter is marshalled back to the managed side */
+
+	/* Redimension the array */
+	dimensions [0].lLbound = lbound1;
+	dimensions [0].cElements = 2;
+	hr = SafeArrayRedim(safearray, dimensions);
+
+	indices [0] = 0;
+	element.vt = VT_I4;
+	element.lVal = 12345;
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	indices [0] = 1;
+	element.vt = VT_I4;
+	element.lVal = -12345;
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	return hr;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_in_out_byval_3dim_vt_bstr (SAFEARRAY* safearray)
+{
+	/* Check that the input array is what is expected and change it so the caller can check */
+	/* correct marshalling back to managed code                                             */
+
+	UINT dim;
+	long lbound1, ubound1, lbound2, ubound2, lbound3, ubound3;
+	long i, j, k, failed;
+	HRESULT hr = S_OK;
+	long indices [3];
+	VARIANT element;
+
+	VariantInit (&element);
+
+	/* Check that in array is three dimensional and contains the expected values */
+
+	dim = SafeArrayGetDim (safearray);
+	if (dim != 3)
+		return 1;
+
+	SafeArrayGetLBound (safearray, 1, &lbound1);
+	SafeArrayGetUBound (safearray, 1, &ubound1);
+
+	if ((lbound1 != 0) || (ubound1 != 1))
+		return 1;
+
+	SafeArrayGetLBound (safearray, 2, &lbound2);
+	SafeArrayGetUBound (safearray, 2, &ubound2);
+
+	if ((lbound2 != 0) || (ubound2 != 1))
+		return 1;
+
+	SafeArrayGetLBound (safearray, 3, &lbound3);
+	SafeArrayGetUBound (safearray, 3, &ubound3);
+
+	if ((lbound3 != 0) || (ubound3 != 2))
+		return 1;
+
+	for (i= lbound1; i <= ubound1; i++) {
+		indices [0] = i;
+		for (j= lbound2; j <= ubound2; j++) {
+			indices [1] = j;
+			for (k= lbound3; k <= ubound3; k++) {
+				indices [2] = k;
+				if (SafeArrayGetElement (safearray, indices, &element) != S_OK)
+					return 1;
+				failed = ((element.vt != VT_BSTR) 
+					|| (VariantChangeType (&element, &element, VARIANT_NOUSEROVERRIDE, VT_I4) != S_OK) 
+					|| (element.lVal != 100*(i+1)+10*(j+1)+(k+1)));
+				VariantClear (&element);
+				if (failed)
+					return 1;
+			}
+		}
+	}
+
+	/* Change the elements of the array to verify that [out] parameter is marshalled back to the managed side */
+
+	indices [0] = 1;
+	indices [1] = 1;
+	indices [2] = 2;
+	element.vt = VT_I4;
+	element.lVal = 333;
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	indices [0] = 1;
+	indices [1] = 1;
+	indices [2] = 1;
+	element.vt = VT_I4;
+	element.lVal = 111;
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	indices [0] = 0;
+	indices [1] = 1;
+	indices [2] = 0;
+	element.vt = VT_BSTR;
+	element.bstrVal = marshal_bstr_alloc("ABCDEFG");
+	SafeArrayPutElement (safearray, indices, &element);
+	VariantClear (&element);
+
+	return hr;
+}
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_safearray_mixed(
+		SAFEARRAY  *safearray1,
+		SAFEARRAY **safearray2,
+		SAFEARRAY  *safearray3,
+		SAFEARRAY **safearray4
+		)
+{
+	HRESULT hr = S_OK;
+
+	/* Initialize out parameters */
+	*safearray2 = NULL;
+
+	/* array1: Check that in array is one dimensional and contains the expected value */
+	hr = mono_test_marshal_safearray_in_out_byval_1dim_vt_i4 (safearray1);
+
+	/* array2: Fill in with some values to check on the managed side */
+	if (hr == S_OK)
+		hr = mono_test_marshal_safearray_out_1dim_vt_bstr (safearray2);
+
+	/* array3: Check that in array is one dimensional and contains the expected value */
+	if (hr == S_OK)
+		hr = mono_test_marshal_safearray_in_byval_1dim_vt_mixed(safearray3);
+
+	/* array4: Check input values and fill in with some values to check on the managed side */
+	if (hr == S_OK)
+		hr = mono_test_marshal_safearray_in_out_byref_3dim_vt_bstr(safearray4);
+
 	return hr;
 }
 

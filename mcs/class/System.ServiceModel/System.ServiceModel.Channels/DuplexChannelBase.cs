@@ -81,6 +81,12 @@ namespace System.ServiceModel.Channels
 
 		public override T GetProperty<T> ()
 		{
+			if (typeof (T) == typeof (MessageVersion)) {
+				if (channel_factory_base is IHasMessageEncoder)
+					return (T) (object) ((IHasMessageEncoder) channel_factory_base).MessageEncoder.MessageVersion;
+				if (channel_listener_base is IHasMessageEncoder)
+					return (T) (object) ((IHasMessageEncoder) channel_listener_base).MessageEncoder.MessageVersion;
+			}
 			if (typeof (T) == typeof (IChannelFactory))
 				return (T) (object) channel_factory_base;
 			if (typeof (T) == typeof (IChannelListener))
@@ -166,7 +172,13 @@ namespace System.ServiceModel.Channels
 			return Receive (this.DefaultReceiveTimeout);
 		}
 
-		public abstract Message Receive (TimeSpan timeout);
+		public virtual Message Receive (TimeSpan timeout)
+		{
+			Message msg;
+			if (!TryReceive (timeout, out msg))
+				throw new TimeoutException ();
+			return msg;
+		}
 
 		// TryReceive
 
@@ -184,16 +196,7 @@ namespace System.ServiceModel.Channels
 			return try_receive_handler.EndInvoke (out message, result);
 		}
 		
-		public virtual bool TryReceive (TimeSpan timeout, out Message message)
-		{
-			try {
-				message = Receive (timeout);
-				return true;
-			} catch (TimeoutException) {
-				message = null;
-				return false;
-			}
-		}
+		public abstract bool TryReceive (TimeSpan timeout, out Message message);
 
 		// WaitForMessage
 

@@ -28,7 +28,8 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
+using System;
+
 namespace System.Web.UI
 {
 	[SerializableAttribute]
@@ -36,10 +37,15 @@ namespace System.Web.UI
 	{
 		public IndexedString (string s)
 		{
-			throw new NotImplementedException ();
+			if (String.IsNullOrEmpty (s))
+				throw new ArgumentNullException ("s");
+			
+			Value = s;
 		}
 		
-		public string Value { get { throw new NotImplementedException (); } }
+		public string Value {
+			get;
+			private set;
+		}
 	}
 }
-#endif

@@ -66,6 +66,7 @@ namespace MonoTests.System.ServiceModel.Dispatcher
 			Assert.AreEqual (0, r.InstanceContextInitializers.Count, "#8");
 			//Assert.AreEqual (0, r.InstanceContextLifetimes.Count, "#9");
 			Assert.IsNull (r.InstanceProvider, "#10");
+			Assert.IsNull (r.InstanceContextProvider, "#10-2");
 			Assert.AreEqual (AuditLevel.None,
 					 r.MessageAuthenticationAuditLevel, "#11");
 			Assert.AreEqual (0, r.MessageInspectors.Count, "#12");
@@ -92,7 +93,7 @@ namespace MonoTests.System.ServiceModel.Dispatcher
 		}
 
 		[Test]
-		public void TestInstanceBehavior1()
+		public void TestInstanceBehavior1 ()
 		{
 			
 			Result res = new Result ();
@@ -137,7 +138,6 @@ namespace MonoTests.System.ServiceModel.Dispatcher
 		}
 
 		[Test]
-		[Category ("NotWorking")]
 		public void TestInstanceBehavior4 ()
 		{
 			Result res = new Result ();
@@ -168,7 +168,6 @@ namespace MonoTests.System.ServiceModel.Dispatcher
 
 				//let ther server finish his work
 				Thread.Sleep (100);
-Console.WriteLine (actual.string_res);
 				Assert.AreEqual (expected, actual.string_res);
 				actual.Done = true;
 			}

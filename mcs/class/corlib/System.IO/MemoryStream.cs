@@ -39,10 +39,8 @@ using System.Runtime.InteropServices;
 namespace System.IO
 {
 	[Serializable]
-#if NET_2_0
 	[ComVisible (true)]
-#endif
-	[MonoTODO ("Serialization format not compatible with .NET")]
+	[MonoLimitation ("Serialization format not compatible with .NET")]
 	public class MemoryStream : Stream
 	{
 		bool canWrite;
@@ -54,6 +52,7 @@ namespace System.IO
 		bool expandable;
 		bool streamClosed;
 		int position;
+		int dirty_bytes;
 
 		public MemoryStream () : this (0)
 		{
@@ -164,12 +163,16 @@ namespace System.IO
 					throw new ArgumentOutOfRangeException ("value",
 					"New capacity cannot be negative or less than the current capacity " + value + " " + capacity);
 
+				if (value == internalBuffer.Length)
+					return;
+
 				byte [] newBuffer = null;
 				if (value != 0) {
 					newBuffer = new byte [value];
 					Buffer.BlockCopy (internalBuffer, 0, newBuffer, 0, length);
 				}
 
+				dirty_bytes = 0; // discard any dirty area beyond previous length
 				internalBuffer = newBuffer; // It's null when capacity is set to 0
 				capacity = value;
 			}
@@ -209,11 +212,7 @@ namespace System.IO
 			}
 		}
 
-#if NET_2_0
 		protected override void Dispose (bool disposing)
-#else
-		public override void Close ()
-#endif
 		{
 			streamClosed = true;
 			expandable = false;
@@ -317,6 +316,18 @@ namespace System.IO
 			return minimum;
 		}
 
+		void Expand (int newSize)
+		{
+			// We don't need to take into account the dirty bytes when incrementing the
+			// Capacity, as changing it will only preserve the valid clear region.
+			if (newSize > capacity)
+				Capacity = CalculateNewCapacity (newSize);
+			else if (dirty_bytes > 0) {
+				Array.Clear (internalBuffer, length, dirty_bytes);
+				dirty_bytes = 0;
+			}
+		}
+
 		public override void SetLength (long value)
 		{
 			if (!expandable && value > capacity)
@@ -337,12 +348,11 @@ namespace System.IO
 				throw new ArgumentOutOfRangeException ();
 
 			int newSize = (int) value + initialIndex;
-			if (newSize > capacity)
-				Capacity = CalculateNewCapacity (newSize);
-			else if (newSize < length)
-				// zeroize present data (so we don't get it 
-				// back if we expand the stream using Seek)
-				Array.Clear (internalBuffer, newSize, length - newSize);
+
+			if (newSize > length)
+				Expand (newSize);
+			else if (newSize < length) // Postpone the call to Array.Clear till expand time
+				dirty_bytes += length - newSize;
 
 			length = newSize;
 			if (position > length)
@@ -377,8 +387,8 @@ namespace System.IO
 							     "The size of the buffer is less than offset + count.");
 
 			// reordered to avoid possible integer overflow
-			if (position > capacity - count)
-				Capacity = CalculateNewCapacity (position + count);
+			if (position > length - count)
+				Expand (position + count);
 
 			Buffer.BlockCopy (buffer, offset, internalBuffer, position, count);
 			position += count;
@@ -392,11 +402,10 @@ namespace System.IO
 			if (!canWrite)
 				throw new NotSupportedException ("Cannot write to this stream.");
 
-			if (position >= capacity)
-				Capacity = CalculateNewCapacity (position + 1);
-
-			if (position >= length)
+			if (position >= length) {
+				Expand (position + 1);
 				length = position + 1;
+			}
 
 			internalBuffer [position++] = value;
 		}
@@ -410,5 +419,11 @@ namespace System.IO
 
 			stream.Write (internalBuffer, initialIndex, length - initialIndex);
 		}
+
+#if NET_4_0
+		protected override void ObjectInvariant ()
+		{
+		}
+#endif
 	}               
 }

@@ -1,3 +1,207 @@
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlNodeReaderImpl.cs : in GetNamespacesInScope(), avoid NREs under
+	  "no current node" situation. Also, look for attributes on iterated
+	  nodes, not current ones.
+
+2010-07-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlInputStream.cs : it had been failing to retrieve correct
+	  encoding due to insufficient buffer reading. Fixed bug #615499.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDefaultWriter.cs : add state management support. 
+	* XmlWriter.cs : use above feature for "null Settings in source
+	  writer" case. This brings some minor .NET compatibility and
+	  should fix bug #607697.
+
+2010-06-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDefaultWriter.cs : new source (which I once wrote for relaxng
+	  and corcompare).
+	* XmlWriter.cs : in some cases XmlWriter.Create() returns a new
+	  wrapping writer instance.
+	  If there was no Settings specified, return null.
+
+2010-06-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextReader.cs : do not try to parse xml:base="".
+	  Fixed bug #608391.
+
+2010-06-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDocument.cs : do not create XmlSchemaInfo instance every time
+	  it validates a node.
+
+2010-05-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlNode.cs : use as-operator (isinst) to optimize certain use case.
+	  Patch by Tom Hindle.
+
+2010-04-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlInputStream.cs : minimize initial buffer size so that it does
+	  not mostly block some readers. Fixed bug #591291.
+
+2010-04-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDocument.cs : it seems .net does allow Load() with such an xml
+	  reader positioned in the middle of the document. Fixed bug #598953.
+
+2010-04-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextReader.cs, DTDReader.cs : 0xFFFF was treated as if it were
+	  0x10000. (It is invalid and should be rejected by decent
+	  XmlReaders usage though.) Fixed bug #594628.
+
+2010-03-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlQualifiedName.cs : do not reject names in no namespace.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReader.cs, XmlQualifiedName.cs : ReadElementContentAs() when
+	  used for qname, treats non-prefixed name as in default namespace.
+
+2010-03-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlTextWriter2.cs : fix cosmetic 2.0 compatibility issue in 
+	  WriteStartAttribute() which allows "" for prefixed xmlns and brings
+	  incompatibility with XmlTextWriter class.
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* XmlNodeReader2.cs
+	* DTDValidatingReader2.cs
+	* XmlReader.cs
+	* XmlTextReader.cs
+	* XmlWriter.cs
+	* XmlResolver.cs
+	* XmlNodeReaderImpl.cs
+	* XmlInputStream.cs
+	* XmlReaderSettings.cs
+	* XmlWriterSettings.cs:
+		Use MOONLIGHT symbol to disambiguate MonoTouch and Moonlight code.
+
+2010-02-20  Geoff Norton  <gnorton@novell.com>
+
+	* XmlInputStream.cs: Disable this codepath on monotouch.  Fixes
+	#562155
+
+2010-02-12  Miguel de Icaza  <miguel@novell.com>
+
+	* XmlWriterSettings.cs: Expose NamespaceHandling in NET 4.0 
+
+2010-01-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderBinarySupport.cs : eliminate possible extra buffer
+	  storing of zeros. Fixed bug #543332.
+
+2010-01-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : convert TimeSpan.MinValue to correct string.
+	  Patch by Tiaan Geldenhuys.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDocument.cs : fix type check for optimal node creation.
+	  Fixed bug #571336, #571226 and #572738.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : Do not ignore ticks which are less than a
+	  millisecond. Remove trailing zeros for milliseconds and ticks.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : trim spaces when parsing TimeSpan.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : shorten format string patterns.
+
+2010-01-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : DateTimeOffset parse is sloppy.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : handle Infinity and -Infinity here due to the
+	  commented reason.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : ToSingle(string) should do the same as ToDouble().
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : ToDouble(string) should handle NaN, INF and -INF
+	  with whitespace allowed.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : ToDouble(string) and ToIntXX(string) allows
+	  whitespaces.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : ToString(DateTimeOffset) does not emit extra
+	  fraction numbers.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : fix some cosmetic compatibility bugs:
+	  ArgumentException -> FormatException.
+
+2010-01-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlWriter.cs : handle a corner case for empty string handling 
+	  difference between XmlTextWriter and XmlWriter.Create().
+
+2009-11-27  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* NamespaceHandling.cs, XmlWriterSettings.cs, XmlTextWriter2.cs:
+	  implement NamespaceHandling support for Moonlight.
+
+2009-11-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : fix DateTimeOffset roundtrip by giving format
+	  strings in refined order. Patch by Santa Marta, at:
+	  http://irc.gimite.net/channel/mono-jp/archive/20091105
+	  ( http://smdn.invisiblefulmoon.net/misc/forum/programming/#n10 )
+
+2009-11-13  Andreia Gaita  <avidigal@novell.com>
+
+	* XmlNamespaceManager.cs: XmlReader.Read calls LookupNamespace via
+	the internal sig, which skips any overrides that might exist on
+	subclasses, so redirect all calls to the public call to make sure
+	all overrides are called as well.
+	Make AddNamespace, HasNamespace and RemoveNamespace private.
+
+2009-11-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlDocument.cs, XmlElement.cs, XmlAttribute.cs,
+	  XmlAttributeCollection.cs :
+	  when CreateElement() and/or CreateAttribute() are overriden,
+	  use overriden method. Otherwise, use internal optimal ones.
+	  Fixed bug #549839.
+
+2009-11-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlNodeReaderImpl.cs : when the reader is at attribute value,
+	  MoveToNextAttribute() incorrectly moved to the first attribute.
+	  Fixed bug #550379.
+
+2009-10-23  Andreia Gaita  <avidigal@novell.com>
+
+	* XmlConvert.cs: make ToUri static, fixes #548918 (moon)
+
+2009-10-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlConvert.cs : fix wrong ToDateTimeOffset loop, based on the
+	  patch by David Mitchell.
+
 2009-09-15  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlAttributeCollection.cs : removed duplicate ID attribute check

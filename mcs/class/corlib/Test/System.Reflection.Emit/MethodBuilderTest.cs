@@ -757,10 +757,10 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.AreEqual (0, cattrs.Length, "#A4");
 #endif
 
+			cattrs = pi [1].GetCustomAttributes (true);
 			Assert.AreEqual ("foo", pi [1].DefaultValue, "#B1");
 		}
 
-#if NET_2_0
 		[Test]
 		public void SetCustomAttribute_DllImport1 ()
 		{
@@ -944,6 +944,177 @@ namespace MonoTests.System.Reflection.Emit
 			MethodInfo mopen = m.MakeGenericMethod (m.GetGenericArguments ());
 			Assert.IsFalse (mopen.IsGenericMethodDefinition);
 		}
-#endif
+
+		[Test]
+		public void DefineGenericParameters_Names_Empty ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public);
+			MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public);
+
+			try {
+				mb.DefineGenericParameters (new string [0]);
+				Assert.Fail ("#1");
+			} catch (ArgumentException ex) {
+				// Value does not fall within the expected range
+				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#2");
+				Assert.IsNull (ex.InnerException, "#3");
+				Assert.IsNotNull (ex.Message, "#4");
+				Assert.IsNull (ex.ParamName, "#5");
+			}
+		}
+
+
+
+		[Test]
+		public void DefineGenericParameters_Names_Null ()
+		{
+			TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public);
+			MethodBuilder mb = tb.DefineMethod ("foo", MethodAttributes.Public);
+
+			try {
+				mb.DefineGenericParameters ((string []) null);
+				Assert.Fail ("#A1");
+			} catch (ArgumentNullException ex) {
+				Assert.AreEqual (typeof (ArgumentNullException), ex.GetType (), "#A2");
+				Assert.IsNull (ex.InnerException, "#A3");
+				Assert.IsNotNull (ex.Message, "#A4");
+				Assert.AreEqual ("names", ex.ParamName, "#A5");
+			}
+
+			try {
+				mb.DefineGenericParameters ("K", null, "V");
+				Assert.Fail ("#B1");
+			} catch (ArgumentNullException ex) {
+				Assert.AreEqual (typeof (ArgumentNullException), ex.GetType (), "#B2");
+				Assert.IsNull (ex.InnerException, "#B3");
+				Assert.IsNotNull (ex.Message, "#B4");
+				Assert.AreEqual ("names", ex.ParamName, "#B5");
+			}
+		}
+
+
+		public static int Foo<T> (T a, T b) {
+			return 99;
+		}
+
+		[Test]//bug #591226
+		public void GenericMethodIsProperlyInflated ()
+		{
+			var tb = module.DefineType ("foo");
+			var met = typeof (MethodBuilderTest).GetMethod ("Foo");
+
+			var mb = tb.DefineMethod ("myFunc", MethodAttributes.Public | MethodAttributes.Static, typeof (int), Type.EmptyTypes);
+			var garg = mb.DefineGenericParameters ("a") [0];
+			mb.SetParameters (garg, garg);
+
+			var ilgen = mb.GetILGenerator ();
+			ilgen.Emit (OpCodes.Ldarg_0);
+			ilgen.Emit (OpCodes.Ldarg_1);
+			ilgen.Emit (OpCodes.Call, met.MakeGenericMethod (garg));
+			ilgen.Emit (OpCodes.Ret);
+
+			var res = tb.CreateType ();
+			var mm = res.GetMethod ("myFunc").MakeGenericMethod (typeof (int));
+
+			var rt = mm.Invoke (null, new object[] { 10, 20 });
+			Assert.AreEqual (99, rt, "#1");
+		}
+
+	    public static void VarargMethod (string headline, __arglist) {
+	        ArgIterator ai = new ArgIterator (__arglist);
+	
+	        Console.Write (headline);
+	        while (ai.GetRemainingCount () > 0)
+	            Console.Write (TypedReference.ToObject (ai.GetNextArg ()));
+	        Console.WriteLine ();
+	    }
+
+		[Test]//bug #626441
+		public void CanCallVarargMethods ()
+		{
+			var tb = module.DefineType ("foo");
+			MethodBuilder mb = tb.DefineMethod ("CallVarargMethod", 
+				MethodAttributes.Public | MethodAttributes.Static, CallingConventions.Standard,
+				typeof (void), Type.EmptyTypes);
+
+			ILGenerator il = mb.GetILGenerator ();
+			MethodInfo miVarargMethod = typeof (MethodBuilderTest).GetMethod ("VarargMethod");
+			
+			il.Emit (OpCodes.Ldstr, "Hello world from ");
+			il.Emit (OpCodes.Call, typeof(Assembly).GetMethod ("GetExecutingAssembly"));
+			il.EmitCall (OpCodes.Call, miVarargMethod, new Type[] { typeof(Assembly) });
+			
+			il.Emit (OpCodes.Ldstr, "Current time: ");
+			il.Emit (OpCodes.Call, typeof(DateTime).GetMethod("get_Now"));
+			il.Emit (OpCodes.Ldstr, " (UTC ");
+			il.Emit (OpCodes.Call, typeof(DateTime).GetMethod("get_UtcNow"));
+			il.Emit (OpCodes.Ldstr, ")");
+			il.EmitCall (OpCodes.Call, miVarargMethod, new Type[] { typeof (DateTime), typeof (string), typeof (DateTime), typeof (string) });
+			il.Emit (OpCodes.Ret);
+
+			Type type = tb.CreateType ();
+			type.GetMethod ("CallVarargMethod").Invoke (null, null);
+		}
+
+		public static string GenericMethodWithOneArg<T> (T t)
+		{
+			return t.ToString ();
+		}
+
+		[Test]
+		public void ParamerersOfGenericArgumentsAreProperlyEncoded ()
+		{
+			var type = module.DefineType (
+				"Bar",
+				TypeAttributes.Public
+				| TypeAttributes.Abstract
+				| TypeAttributes.Sealed,
+				typeof (object));
+
+			var foo_method = typeof (MethodBuilderTest).GetMethod ("GenericMethodWithOneArg");
+
+			var method = type.DefineMethod (
+				"ReFoo",
+				MethodAttributes.Static | MethodAttributes.Public,
+				typeof (string),
+				new [] { foo_method.GetGenericArguments () [0] });
+			method.DefineGenericParameters ("K");
+
+			var il = method.GetILGenerator ();
+			il.Emit (OpCodes.Ldarga, 0);
+			il.Emit (OpCodes.Constrained, method.GetGenericArguments () [0]);
+			il.Emit (OpCodes.Callvirt, typeof (object).GetMethod ("ToString"));
+			il.Emit (OpCodes.Ret);
+
+			type.CreateType ();
+
+			var re_foo_open = module.GetType ("Bar").GetMethod ("ReFoo");
+
+			Assert.AreEqual (re_foo_open.GetGenericArguments ()[0], re_foo_open.GetParameters () [0].ParameterType, "#1");
+		}
+
+		[Test] // #628660
+		public void CanCallGetMethodBodyOnDynamicImageMethod ()
+		{
+			var type = module.DefineType (
+				"CanCallGetMethodBodyOnDynamicImageMethod",
+				TypeAttributes.Public,
+				typeof (object));
+
+			var baz = type.DefineMethod ("Foo", MethodAttributes.Public | MethodAttributes.Static, typeof (object), Type.EmptyTypes);
+
+			var il = baz.GetILGenerator ();
+			var temp = il.DeclareLocal (typeof (object));
+			il.Emit (OpCodes.Ldnull);
+			il.Emit (OpCodes.Stloc, temp);
+			il.Emit (OpCodes.Ldloc, temp);
+			il.Emit (OpCodes.Ret);
+
+			var body = type.CreateType ().GetMethod ("Foo").GetMethodBody ();
+
+			Assert.IsNotNull (body);
+			Assert.AreEqual (1, body.LocalVariables.Count);
+			Assert.AreEqual (typeof (object), body.LocalVariables [0].LocalType);
+		}
 	}
 }

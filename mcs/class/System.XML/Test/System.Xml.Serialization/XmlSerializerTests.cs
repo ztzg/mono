@@ -2412,6 +2412,35 @@ namespace MonoTests.System.XmlSerialization
 			new XmlSerializer (typeof (XmlSerializableImplicitConvertible), attrOverrides).Serialize (TextWriter.Null, x);
 		}
 
+		[Test] // bug #566370
+		public void SerializeEnumWithCSharpKeyword ()
+		{
+			var ser = new XmlSerializer (typeof (DoxCompoundKind));
+			for (int i = 0; i < 100; i++) // test serialization code generator
+				ser.Serialize (Console.Out, DoxCompoundKind.@class);
+		}
+
+		public enum DoxCompoundKind
+		{
+			[XmlEnum("class")]
+			@class,
+			[XmlEnum("struct")]
+			@struct,
+			union,
+			[XmlEnum("interface")]
+			@interface,
+			protocol,
+			category,
+			exception,
+			file,
+			[XmlEnum("namespace")]
+			@namespace,
+			group,
+			page,
+			example,
+			dir
+		}
+
 		#region GenericsSeralizationTests
 
 #if NET_2_0
@@ -2802,6 +2831,32 @@ namespace MonoTests.System.XmlSerialization
 			Assert.AreEqual (Infoset (xml), WriterText);
 			xs.Deserialize (new StringReader (xml));
 		}
+
+		[Test]
+		public void XmlAnyElementForObjects () // bug #553032
+		{
+			new XmlSerializer (typeof (XmlAnyElementForObjectsType));
+		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))]
+		public void XmlAnyElementForObjects2 () // bug #553032-2
+		{
+			new XmlSerializer (typeof (XmlAnyElementForObjectsType)).Serialize (TextWriter.Null, new XmlAnyElementForObjectsType ());
+		}
+
+		[Test]
+		public void XmlRootOverridesSchemaProviderQName ()
+		{
+			var obj = new XmlRootOverridesSchemaProviderQNameType ();
+
+			XmlSerializer xs = new XmlSerializer (obj.GetType ());
+
+			var sw = new StringWriter ();
+			using (XmlWriter xw = XmlWriter.Create (sw))
+				xs.Serialize (xw, obj);
+			Assert.IsTrue (sw.ToString ().IndexOf ("foo") > 0, "#1");
+		}
 #endif
 
 		#endregion //GenericsSeralizationTests
@@ -2954,6 +3009,39 @@ namespace MonoTests.System.XmlSerialization
 		        [XmlArrayItem (typeof (XmlSchemaProviderQNameBecomesRootNameType))]
 		        public object [] Foo = new object [] {new XmlSchemaProviderQNameBecomesRootNameType ()};
 		}
+
+		public class XmlAnyElementForObjectsType
+		{
+			[XmlAnyElement]
+			public object [] arr = new object [] {3,4,5};
+		}
+
+		[XmlRoot ("foo")]
+		[XmlSchemaProvider ("GetSchema")]
+		public class XmlRootOverridesSchemaProviderQNameType : IXmlSerializable
+		{
+			public static XmlQualifiedName GetSchema (XmlSchemaSet xss)
+			{
+				var xs = new XmlSchema ();
+				var xse = new XmlSchemaComplexType () { Name = "bar" };
+				xs.Items.Add (xse);
+				xss.Add (xs);
+				return new XmlQualifiedName ("bar");
+			}
+
+			XmlSchema IXmlSerializable.GetSchema ()
+			{
+				return null;
+			}
+
+			void IXmlSerializable.ReadXml (XmlReader reader)
+			{
+			}
+			void IXmlSerializable.WriteXml (XmlWriter writer)
+			{
+			}
+		}
+
 #endif
 
 		void CDataTextNodes_BadNode (object s, XmlNodeEventArgs e)

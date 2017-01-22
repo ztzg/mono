@@ -27,6 +27,7 @@
 //
 using System;
 using System.Reflection;
+using System.Runtime.Serialization;
 using System.ServiceModel.Channels;
 using System.ServiceModel.Description;
 using System.ServiceModel.Dispatcher;
@@ -34,9 +35,10 @@ using System.ServiceModel.Security;
 using System.Threading;
 using System.Xml;
 
-namespace System.ServiceModel
+namespace System.ServiceModel.MonoInternal
 {
-	internal class ClientRuntimeChannel
+	// FIXME: This is a quick workaround for bug #571907
+	public class ClientRuntimeChannel
 		: CommunicationObject, IClientChannel
 	{
 		ClientRuntime runtime;
@@ -46,6 +48,7 @@ namespace System.ServiceModel
 		TimeSpan default_open_timeout, default_close_timeout;
 		IChannel channel;
 		IChannelFactory factory;
+		OperationContext context;
 
 		#region delegates
 		readonly ProcessDelegate _processDelegate;
@@ -63,7 +66,7 @@ namespace System.ServiceModel
 
 		public ClientRuntimeChannel (ServiceEndpoint endpoint,
 			ChannelFactory channelFactory, EndpointAddress remoteAddress, Uri via)
-			: this (endpoint.CreateRuntime (), endpoint.Contract, channelFactory.DefaultOpenTimeout, channelFactory.DefaultCloseTimeout, null, channelFactory.OpenedChannelFactory, endpoint.Binding.MessageVersion, remoteAddress, via)
+			: this (endpoint.CreateClientRuntime (null), endpoint.Contract, channelFactory.DefaultOpenTimeout, channelFactory.DefaultCloseTimeout, null, channelFactory.OpenedChannelFactory, endpoint.Binding.MessageVersion, remoteAddress, via)
 		{
 		}
 
@@ -71,7 +74,8 @@ namespace System.ServiceModel
 		{
 			this.runtime = runtime;
 			this.remote_address = remoteAddress;
-			runtime.Via = via;
+			if (runtime.Via == null)
+				runtime.Via = via ?? remote_address.Uri;
 			this.contract = contract;
 			this.message_version = messageVersion;
 			default_open_timeout = openTimeout;
@@ -88,9 +92,20 @@ namespace System.ServiceModel
 				channel = contextChannel;
 			else {
 				var method = factory.GetType ().GetMethod ("CreateChannel", new Type [] {typeof (EndpointAddress), typeof (Uri)});
-				channel = (IChannel) method.Invoke (factory, new object [] {remote_address, Via});
-				this.factory = factory;
+				try {
+					channel = (IChannel) method.Invoke (factory, new object [] {remote_address, Via});
+					this.factory = factory;
+				} catch (TargetInvocationException ex) {
+					if (ex.InnerException != null)
+						throw ex.InnerException;
+					else
+						throw;
+				}
 			}
+		}
+
+		public ContractDescription Contract {
+			get { return contract; }
 		}
 
 		public ClientRuntime Runtime {
@@ -148,7 +163,7 @@ namespace System.ServiceModel
 
 			public override bool WaitOne (int millisecondsTimeout)
 			{
-				return WaitOne (millisecondsTimeout, false);
+				return WaitHandle.WaitAll (ResultWaitHandles, millisecondsTimeout);
 			}
 
 			WaitHandle [] ResultWaitHandles {
@@ -160,6 +175,7 @@ namespace System.ServiceModel
 				}
 			}
 
+#if !MOONLIGHT
 			public override bool WaitOne (int millisecondsTimeout, bool exitContext)
 			{
 				return WaitHandle.WaitAll (ResultWaitHandles, millisecondsTimeout, exitContext);
@@ -169,6 +185,7 @@ namespace System.ServiceModel
 			{
 				return WaitHandle.WaitAll (ResultWaitHandles, timeout, exitContext);
 			}
+#endif
 		}
 
 		class DisplayUIAsyncResult : IAsyncResult
@@ -396,20 +413,61 @@ namespace System.ServiceModel
 
 		#region Request/Output processing
 
+		class TempAsyncResult : IAsyncResult
+		{
+			public TempAsyncResult (object returnValue, object state)
+			{
+				ReturnValue = returnValue;
+				AsyncState = state;
+				CompletedSynchronously = true;
+				IsCompleted = true;
+				AsyncWaitHandle = new ManualResetEvent (true);
+			}
+			
+			public object ReturnValue { get; set; }
+			public object AsyncState { get; set; }
+			public bool CompletedSynchronously { get; set; }
+			public bool IsCompleted { get; set; }
+			public WaitHandle AsyncWaitHandle { get; set; }
+		}
+
 		public IAsyncResult BeginProcess (MethodBase method, string operationName, object [] parameters, AsyncCallback callback, object asyncState)
 		{
-			return _processDelegate.BeginInvoke (method, operationName, parameters, callback, asyncState);
+			if (context != null)
+				throw new InvalidOperationException ("another operation is in progress");
+			context = OperationContext.Current;
+
+			// FIXME: this is a workaround for bug #633945
+			switch (Environment.OSVersion.Platform) {
+			case PlatformID.Unix:
+			case PlatformID.MacOSX:
+				return _processDelegate.BeginInvoke (method, operationName, parameters, callback, asyncState);
+			default:
+				var result = Process (method, operationName, parameters);
+				var ret = new TempAsyncResult (asyncState, result);
+				if (callback != null)
+					callback (ret);
+				return ret;
+			}
 		}
 
 		public object EndProcess (MethodBase method, string operationName, object [] parameters, IAsyncResult result)
 		{
+			context = null;
 			if (result == null)
 				throw new ArgumentNullException ("result");
 			if (parameters == null)
 				throw new ArgumentNullException ("parameters");
 			// FIXME: the method arguments should be verified to be 
 			// identical to the arguments in the corresponding begin method.
-			return _processDelegate.EndInvoke (result);
+			// FIXME: this is a workaround for bug #633945
+			switch (Environment.OSVersion.Platform) {
+			case PlatformID.Unix:
+			case PlatformID.MacOSX:
+				return _processDelegate.EndInvoke (result);
+			default:
+				return ((TempAsyncResult) result).ReturnValue;
+			}
 		}
 
 		public object Process (MethodBase method, string operationName, object [] parameters)
@@ -417,8 +475,10 @@ namespace System.ServiceModel
 			try {
 				return DoProcess (method, operationName, parameters);
 			} catch (Exception ex) {
+#if MOONLIGHT // just for debugging
 				Console.Write ("Exception in async operation: ");
 				Console.WriteLine (ex);
+#endif
 				throw;
 			}
 		}
@@ -428,6 +488,10 @@ namespace System.ServiceModel
 			if (AllowInitializationUI)
 				DisplayInitializationUI ();
 			OperationDescription od = SelectOperation (method, operationName, parameters);
+
+			if (State != CommunicationState.Opened)
+				Open ();
+
 			if (!od.IsOneWay)
 				return Request (od, parameters);
 			else {
@@ -451,18 +515,12 @@ namespace System.ServiceModel
 
 		void Output (OperationDescription od, object [] parameters)
 		{
-			if (OutputChannel.State != CommunicationState.Opened)
-				OutputChannel.Open ();
-
 			ClientOperation op = runtime.Operations [od.Name];
 			Send (CreateRequest (op, parameters), OperationTimeout);
 		}
 
 		object Request (OperationDescription od, object [] parameters)
 		{
-			if (OperationChannel.State != CommunicationState.Opened)
-				OperationChannel.Open ();
-
 			ClientOperation op = runtime.Operations [od.Name];
 			object [] inspections = new object [runtime.MessageInspectors.Count];
 			Message req = CreateRequest (op, parameters);
@@ -472,27 +530,40 @@ namespace System.ServiceModel
 
 			Message res = Request (req, OperationTimeout);
 			if (res.IsFault) {
-				MessageFault fault = MessageFault.CreateFault (res, runtime.MaxFaultSize);
-				if (fault.HasDetail && fault is MessageFault.SimpleMessageFault) {
-					MessageFault.SimpleMessageFault simpleFault = fault as MessageFault.SimpleMessageFault;
-					object detail = simpleFault.Detail;
-					Type t = detail.GetType ();
-					Type faultType = typeof (FaultException<>).MakeGenericType (t);
-					object [] constructorParams = new object [] { detail, fault.Reason, fault.Code, fault.Actor };
-					FaultException fe = (FaultException) Activator.CreateInstance (faultType, constructorParams);
-					throw fe;
+				var resb = res.CreateBufferedCopy (runtime.MaxFaultSize);
+				MessageFault fault = MessageFault.CreateFault (resb.CreateMessage (), runtime.MaxFaultSize);
+				var conv = OperationChannel.GetProperty<FaultConverter> () ?? FaultConverter.GetDefaultFaultConverter (res.Version);
+				Exception ex;
+				if (!conv.TryCreateException (resb.CreateMessage (), fault, out ex)) {
+					if (fault.HasDetail) {
+						Type detailType = typeof (ExceptionDetail);
+						var freader = fault.GetReaderAtDetailContents ();
+						DataContractSerializer ds = null;
+#if !NET_2_1
+						foreach (var fci in op.FaultContractInfos)
+							if (res.Headers.Action == fci.Action || fci.Serializer.IsStartObject (freader)) {
+								detailType = fci.Detail;
+								ds = fci.Serializer;
+								break;
+							}
+#endif
+						if (ds == null)
+							ds = new DataContractSerializer (detailType);
+						var detail = ds.ReadObject (freader);
+						ex = (Exception) Activator.CreateInstance (typeof (FaultException<>).MakeGenericType (detailType), new object [] {detail, fault.Reason, fault.Code, res.Headers.Action});
+					}
+
+					if (ex == null)
+						ex = new FaultException (fault);
 				}
-				else {
-					// given a MessageFault, it is hard to figure out the type of the embedded detail
-					throw new FaultException(fault);
-				}
+				throw ex;
 			}
 
 			for (int i = 0; i < inspections.Length; i++)
 				runtime.MessageInspectors [i].AfterReceiveReply (ref res, inspections [i]);
 
 			if (op.DeserializeReply)
-				return op.GetFormatter ().DeserializeReply (res, parameters);
+				return op.Formatter.DeserializeReply (res, parameters);
 			else
 				return res;
 		}
@@ -522,7 +593,10 @@ namespace System.ServiceModel
 
 		internal void Send (Message msg, TimeSpan timeout)
 		{
-			OutputChannel.Send (msg, timeout);
+			if (OutputChannel != null)
+				OutputChannel.Send (msg, timeout);
+			else
+				RequestChannel.Request (msg, timeout); // and ignore returned message.
 		}
 
 		internal IAsyncResult BeginSend (Message msg, TimeSpan timeout, AsyncCallback callback, object state)
@@ -544,25 +618,41 @@ namespace System.ServiceModel
 
 			Message msg;
 			if (op.SerializeRequest)
-				msg = op.GetFormatter ().SerializeRequest (
+				msg = op.Formatter.SerializeRequest (
 					version, parameters);
-			else
+			else {
+				if (parameters.Length != 1)
+					throw new ArgumentException (String.Format ("Argument parameters does not match the expected input. It should contain only a Message, but has {0} parameters", parameters.Length));
+				if (!(parameters [0] is Message))
+					throw new ArgumentException (String.Format ("Argument should be only a Message, but has {0}", parameters [0] != null ? parameters [0].GetType ().FullName : "null"));
 				msg = (Message) parameters [0];
+			}
 
-			if (OperationContext.Current != null) {
+			context = context ?? OperationContext.Current;
+			if (context != null) {
 				// CopyHeadersFrom does not work here (brings duplicates -> error)
-				foreach (var mh in OperationContext.Current.OutgoingMessageHeaders) {
+				foreach (var mh in context.OutgoingMessageHeaders) {
 					int x = msg.Headers.FindHeader (mh.Name, mh.Namespace, mh.Actor);
 					if (x >= 0)
 						msg.Headers.RemoveAt (x);
 					msg.Headers.Add ((MessageHeader) mh);
 				}
-				msg.Properties.CopyProperties (OperationContext.Current.OutgoingMessageProperties);
+				msg.Properties.CopyProperties (context.OutgoingMessageProperties);
 			}
 
-			if (OutputSession != null)
-				msg.Headers.MessageId = new UniqueId (OutputSession.Id);
+			// FIXME: disabling MessageId as it's not seen for bug #567672 case. But might be required for PeerDuplexChannel. Check it later.
+			//if (OutputSession != null)
+			//	msg.Headers.MessageId = new UniqueId (OutputSession.Id);
 			msg.Properties.AllowOutputBatching = AllowOutputBatching;
+
+			if (msg.Version.Addressing.Equals (AddressingVersion.WSAddressing10)) {
+				if (msg.Headers.MessageId == null)
+					msg.Headers.MessageId = new UniqueId ();
+				if (msg.Headers.ReplyTo == null)
+					msg.Headers.ReplyTo = new EndpointAddress (Constants.WsaAnonymousUri);
+				if (msg.Headers.To == null)
+					msg.Headers.To = RemoteAddress.Uri;
+			}
 
 			return msg;
 		}

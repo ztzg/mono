@@ -41,9 +41,32 @@ namespace DbLinq.Sqlite
     partial class SqliteSchemaLoader : SchemaLoader
     {
         private readonly IVendor vendor = new SqliteVendor();
-        public override IVendor Vendor { get { return vendor; } }
+        public override IVendor Vendor { get { return vendor; } set { } }
 
-        public override System.Type DataContextType { get { return typeof(SqliteDataContext); } }
+        protected string UnquoteSqlName(string name)
+        {
+            var quotes = new[]{
+                new { Start = "[",  End = "]" },
+                new { Start = "`",  End = "`" },
+                new { Start = "\"", End = "\"" },
+            };
+            foreach (var q in quotes)
+            {
+                if (name.StartsWith(q.Start) && name.EndsWith(q.End))
+                    return name.Substring(q.Start.Length, name.Length - q.Start.Length - q.End.Length);
+            }
+            return name;
+        }
+
+        // note: the ReadDataNameAndSchema relies on information order;
+        // tbl_name MUST be first
+        const string SelectTablesFormat = 
+@"   SELECT tbl_name{0}
+       FROM sqlite_master
+      WHERE type='table' AND
+            tbl_name NOT LIKE 'sqlite_%'
+   ORDER BY tbl_name";
+
 
         /// <summary>
         /// Gets a usable name for the database.

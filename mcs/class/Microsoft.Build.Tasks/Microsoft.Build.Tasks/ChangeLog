@@ -1,3 +1,211 @@
+2010-06-10  Ankit Jain  <jankit@novell.com>
+
+	* Csc.cs: Quote -define: arguments.
+
+2010-06-09  Ankit Jain  <jankit@novell.com>
+
+	* ToolTask.cs: Don't check for tool's existence, as we might
+	not have the full path.
+
+2010-05-28  Ankit Jain  <jankit@novell.com>
+
+	* AssemblyResolver.cs: Add some comments.
+
+2010-05-28  Ankit Jain  <jankit@novell.com>
+
+	* AssemblyResolver.cs (FindInDirectory): Add a 'specific_version'
+	parameter. Look for reference.{dll|exe} instead of checking all
+	files in the directory. Compare assembly names only if
+	specific_version is true.
+	(ResolveHintPathReference): Extract code to check and compare assembly
+	names to ..
+	(ResolvedReferenceFromPath): .. this.
+	(AssemblyNamesCompatible): Change default value of @specificVersion to
+	true.
+	Track api changes.
+	* ResolveAssemblyReference.cs (ResolveReference): Specify
+	'specific_version' in case of SearchPath.Directory.
+	(TryGetSpecificVersionValue): msbuild seems to look only for ',' in
+	the reference, instead of checking whether the assembly is strong
+	named.
+	(TryGetResolvedReferenceByAssemblyName): Track api changes.
+
+2010-05-28  Ankit Jain  <jankit@novell.com>
+
+	* AssemblyResolver.cs (PopulateTargetFrameworkAssemblies):
+	Handle invalid dll, add a null check.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* GetFrameworkPath.cs (FrameworkVersion40Path): New.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* Copy.cs: Cleanly log errors, instead of throwing exceptions.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* Vbc.cs (LogEventsFromTextOutput):
+	* ToolTask.cs (LogEventsFromTextOutput): Emit the messages
+	that don't match the error regex, as is.
+
+2010-04-08  Ankit Jain  <jankit@novell.com>
+
+	* Copy.cs: Handle non-existant source files.
+
+2010-04-08  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #594541
+	* Vbc.cs (LogEventsFromTextOutput): Override and correctly parse
+	output. Taken regex from monodevelop for this.
+
+2010-04-08  Ankit Jain  <jankit@novell.com>
+
+	* Vbc.cs (ValidateParameters): Always return true, dummy implementation.
+
+2010-04-07  Ankit Jain  <jankit@novell.com>
+
+	* MSBuild.cs: Emit global properties, if any. Sort the property
+	list.
+
+2010-04-03  Ankit Jain  <jankit@novell.com>
+
+	* Csc.cs: Use dmcs as the compiler for 4.0 profile.
+	* MSBuild.cs (ToolsVersion): New.
+	Use toolsVersion for building.
+
+2010-02-10  Ankit Jain  <jankit@novell.com>
+
+	* GenerateResource.cs (CompileResourceFile): Check File.Exists
+	for source file.
+	Don't build if the target is newer than the source file.
+	(Execute): Continue building all the resources, even if there
+	are failures for some files.
+
+2010-02-10  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #558739.
+	* GenerateResource (Resgen): New. Internal task to run resgen
+	with MONO_IOMAP=drive .
+	(Execute): Use the new Resgen task to compile the resources.
+
+2010-02-06  Ankit Jain  <jankit@novell.com>
+
+	* LC.cs: New.
+
+2010-02-05  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #576579.
+	* CreateManifestResourceName.cs: Use TargetPath metadata, as the link
+	name.
+	* CreateCSharpManifestResourceName.cs:
+	* CreateVisualBasicManifestResourceName.cs: Prefer linkname over
+	filename, if available.
+
+2010-02-04  Ankit Jain  <jankit@novell.com>
+
+	* WriteLinesToFile.cs: Delete the file if there is nothing to
+	be written and overwrite==true.
+
+2010-02-02	Rodrigo B. de Oliveira	<rodrigo@unity3d.com>
+
+	* AssemblyResolver.cs:
+		guard against non existing framework directory
+		(for scenarios where lib/mono/3.5 is not available).
+
+2009-12-22  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #565849.
+	* CreateItem.cs: Use DirectoryScanner to handle wildcards.
+	(IsExcluded): Remove.
+
+2009-11-26  Ankit Jain  <jankit@novell.com>
+
+	* ManagedCompiler.cs (AddResponseFileCommands): *mcs doesn't
+	support /debug:pdbonly, so map it to /debug:full .
+
+2009-11-10  Ankit Jain  <jankit@novell.com>
+
+	* ToolTask.cs (ToolExe): New.
+	* Csc.cs:
+	* AL.cs: Use ToolExe instead of ToolName to construct
+	tool's full path.
+
+2009-11-09  Ankit Jain  <jankit@novell.com>
+
+	* GetFrameworkPath.cs (FrameworkVersion11Path):
+	(FrameworkVersion20Path):
+	(FrameworkVersion30Path):
+	(FrameworkVersion35Path): New.
+
+2009-10-13  Ankit Jain  <jankit@novell.com>
+
+	* ResolveAssemblyReference.cs: Fix warnings.
+
+2009-10-13  Ankit Jain  <jankit@novell.com>
+
+	* ResolveAssemblyReference.cs: Log only unique conflict warnings.
+
+2009-10-12  Ankit Jain  <jankit@novell.com>
+
+	* ResolveAssemblyReference.cs: Remove unnecessary tab in the warning
+	messages.
+
+2009-10-12  Ankit Jain  <jankit@novell.com>
+
+	* MSBuild.cs (Execute): Handle build errors.
+
+2009-10-09  Ankit Jain  <jankit@novell.com>
+
+	* Exec.cs (AddCommandLineCommands): Add '/q' for cmd.exe, to
+	turn 'echo off'. And make sure the script file on windows, has
+	a '.bat' extension, otherwise cmd.exe opens it in a text editor.
+
+2009-10-09  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #545703.
+	* Exec.cs (Command): On unix, change CRLF to CR.
+
+2009-10-08  Ankit Jain  <jankit@novell.com>
+
+	* ResolveAssemblyReference.cs: Don't resolve any dependencies for
+	assemblies resolved from {PkgConfig}. Honor parent's CopyLocal for
+	dependencies.
+
+2009-10-08  Ankit Jain  <jankit@novell.com>
+
+	* MSBuild.cs (Execute): Don't share target output items,
+	always create a copy.
+
+2009-10-08  Ankit Jain  <jankit@novell.com>
+
+	* RemoveDuplicates.cs: Use item's ItemSpec as the key.
+
+2009-10-07  Ankit Jain  <jankit@novell.com>
+
+	* ManagedCompiler.cs (HandleTaskExecutionErrors): Log error if
+	required.
+
+2009-10-06  Ankit Jain  <jankit@novell.com>
+
+	* Exec.cs (ExecuteTool): Use DeleteTempFile instead of File.Delete
+	(HandleTaskExecutionErrors): Log error, if required.
+	* MSBuild.cs: Don't log error.
+	* Warning.cs: Don't log if @text is empty.
+
+2009-09-29  Ankit Jain  <jankit@novell.com>
+
+	* Exec.cs: Write the commands, which can be multiline,
+	to a temporary file, and execute that with "cmd.exe /c"
+	on windows and "sh" on non-windows.
+	(LogToolCommand): Override, and emit the commands instead
+	of the actual args passed to the shell.
+
+2009-09-28  Ankit Jain  <jankit@novell.com>
+
+	* WriteLinesToFiles.cs (Execute): Handle empty list of
+	lines.
+
 2009-09-25  Ankit Jain  <jankit@novell.com>
 
 	* FindAppConfigFile.cs: New.

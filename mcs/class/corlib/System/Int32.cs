@@ -33,13 +33,8 @@ using System.Threading;
 namespace System {
 	
 	[Serializable]
-#if NET_2_0
 	[System.Runtime.InteropServices.ComVisible (true)]
-#endif
-	public struct Int32 : IFormattable, IConvertible, IComparable
-#if NET_2_0
-		, IComparable<Int32>, IEquatable <Int32>
-#endif
+	public struct Int32 : IFormattable, IConvertible, IComparable, IComparable<Int32>, IEquatable <Int32>
 	{
 
 		public const int MaxValue = 0x7fffffff;
@@ -78,7 +73,6 @@ namespace System {
 			return m_value;
 		}
 
-#if NET_2_0
 		public int CompareTo (int value)
 		{
 			if (m_value == value)
@@ -93,7 +87,6 @@ namespace System {
 		{
 			return obj == m_value;
 		}
-#endif
 
 		internal static bool ProcessTrailingWhitespace (bool tryParse, string s, int position, ref Exception exc)
 		{
@@ -102,7 +95,7 @@ namespace System {
 			for (int i = position; i < len; i++){
 				char c = s [i];
 				
-				if (!Char.IsWhiteSpace (c)){
+				if (c != 0 && !Char.IsWhiteSpace (c)){
 					if (!tryParse)
 						exc = GetFormatException ();
 					return false;
@@ -281,21 +274,52 @@ namespace System {
 			} 
 		}
 
-		internal static bool FindExponent (ref int pos, string s)
+		internal static bool FindExponent (ref int pos, string s, ref int exponent, bool tryParse, ref Exception exc)
 		{
+				exponent = 0;
+				long exp = 0; // temp long value
+
 				int i = s.IndexOfAny(new char [] {'e', 'E'}, pos);
-				if (i < 0)
-						return false;
-				if (++i == s.Length)
-						return false;
-				if (s [i] == '+' || s [i] == '-')
-						if (++i == s.Length)
-								return false;
-				if (!Char.IsDigit (s [i]))
-						return false;
-				for (; i < s.Length; ++i)
-						if (!Char.IsDigit (s [i])) 
-								break;
+				if (i < 0) {
+					exc = null;
+					return false;
+				}
+
+				if (++i == s.Length) {
+					exc = tryParse ? null : GetFormatException ();
+					return true;
+				}
+
+				// negative exponent not valid for Int32
+				if (s [i] == '-') {
+					exc = tryParse ? null : new OverflowException ("Value too large or too small.");
+					return true;
+				}
+
+				if (s [i] == '+' && ++i == s.Length) {
+					exc = tryParse ? null : GetFormatException ();
+					return true;
+				}
+
+				for (; i < s.Length; i++) {
+					if (!Char.IsDigit (s [i]))  {
+						exc = tryParse ? null : GetFormatException ();
+						return true;
+					}
+
+					// Reduce the risk of throwing an overflow exc
+					exp = checked (exp * 10 - (int) (s [i] - '0'));
+					if (exp < Int32.MinValue || exp > Int32.MaxValue) {
+						exc = tryParse ? null : new OverflowException ("Value too large or too small.");
+						return true;
+					}
+				}
+
+				// exp value saved as negative
+				exp = -exp;
+
+				exc = null;
+				exponent = (int)exp;
 				pos = i;
 				return true;
 		}
@@ -437,6 +461,7 @@ namespace System {
 			bool decimalPointFound = false;
 			int digitValue;
 			char hexDigit;
+			int exponent = 0;
 				
 			// Number stuff
 			do {
@@ -511,8 +536,9 @@ namespace System {
 				return false;
 			}
 
-			if (AllowExponent) 
-					FindExponent(ref pos, s);
+			if (AllowExponent)
+				if (FindExponent (ref pos, s, ref exponent, tryParse, ref exc) && exc != null)
+					return false;
 
 			if (AllowTrailingSign && !foundSign) {
 				// Sign + Currency
@@ -560,13 +586,26 @@ namespace System {
 			
 			if (!negative && !AllowHexSpecifier){
 				if (tryParse){
-					long lval = -number;
+					long lval = -((long)number);
 
 					if (lval < MinValue || lval > MaxValue)
 						return false;
 					number = (int) lval;
 				} else
 					number = checked (-number);
+			}
+
+			// result *= 10^exponent
+			if (exponent > 0) {
+				// Reduce the risk of throwing an overflow exc
+				double res = checked (Math.Pow (10, exponent) * number);
+				if (res < Int32.MinValue || res > Int32.MaxValue) {
+					if (!tryParse)
+						exc = new OverflowException ("Value too large or too small.");
+					return false;
+				}
+
+				number = (int)res;
 			}
 			
 			result = number;
@@ -596,7 +635,6 @@ namespace System {
 			return res;
 		}
 
-#if NET_2_0
 		public static bool TryParse (string s, out int result) 
 		{
 			Exception exc;
@@ -619,7 +657,6 @@ namespace System {
 
 			return true;
 		}
-#endif
 
 		public override string ToString ()
 		{
@@ -693,17 +730,10 @@ namespace System {
 			return System.Convert.ToInt64 (m_value);
 		}
 
-#if ONLY_1_1
-#pragma warning disable 3019
-		[CLSCompliant (false)]
-#endif
 		sbyte IConvertible.ToSByte (IFormatProvider provider)
 		{
 			return System.Convert.ToSByte (m_value);
 		}
-#if ONLY_1_1
-#pragma warning restore 3019
-#endif
 
 		float IConvertible.ToSingle (IFormatProvider provider)
 		{
@@ -717,40 +747,19 @@ namespace System {
 			return System.Convert.ToType (m_value, targetType, provider, false);
 		}
 
-#if ONLY_1_1
-#pragma warning disable 3019
-		[CLSCompliant (false)]
-#endif
 		ushort IConvertible.ToUInt16 (IFormatProvider provider)
 		{
 			return System.Convert.ToUInt16 (m_value);
 		}
-#if ONLY_1_1
-#pragma warning restore 3019
-#endif
 
-#if ONLY_1_1
-#pragma warning disable 3019
-		[CLSCompliant (false)]
-#endif
 		uint IConvertible.ToUInt32 (IFormatProvider provider)
 		{
 			return System.Convert.ToUInt32 (m_value);
 		}
-#if ONLY_1_1
-#pragma warning restore 3019
-#endif
 
-#if ONLY_1_1
-#pragma warning disable 3019
-		[CLSCompliant (false)]
-#endif
 		ulong IConvertible.ToUInt64 (IFormatProvider provider)
 		{
 			return System.Convert.ToUInt64 (m_value);
 		}
-#if ONLY_1_1
-#pragma warning restore 3019
-#endif
 	}
 }

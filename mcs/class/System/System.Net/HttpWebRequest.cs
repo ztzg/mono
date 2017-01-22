@@ -35,6 +35,7 @@ using System;
 using System.Collections;
 using System.Configuration;
 using System.IO;
+using System.Net.Cache;
 using System.Net.Sockets;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Serialization;
@@ -42,15 +43,14 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 
-#if NET_2_0
-using System.Net.Cache;
-#endif
-
 namespace System.Net 
 {
+#if MOONLIGHT
+	internal class HttpWebRequest : WebRequest, ISerializable {
+#else
 	[Serializable]
-	public class HttpWebRequest : WebRequest, ISerializable
-	{
+	public class HttpWebRequest : WebRequest, ISerializable {
+#endif
 		Uri requestUri;
 		Uri actualUri;
 		bool hostChanged;
@@ -99,10 +99,7 @@ namespace System.Net
 		bool is_ntlm_auth;
 		bool finished_reading;
 		internal WebConnection WebConnection;
-#if NET_2_0
 		DecompressionMethods auto_decomp;
-#endif
-#if NET_1_1
 		int maxResponseHeadersLength;
 		static int defaultMaxResponseHeadersLength;
 		int readWriteTimeout = 300000; // ms
@@ -111,7 +108,7 @@ namespace System.Net
 		static HttpWebRequest ()
 		{
 			defaultMaxResponseHeadersLength = 64 * 1024;
-#if !MONOTOUCH
+#if !NET_2_1
 			NetConfig config = ConfigurationSettings.GetConfig ("system.net/settings") as NetConfig;
 			if (config != null) {
 				int x = config.MaxResponseHeadersLength;
@@ -122,7 +119,6 @@ namespace System.Net
 			}
 #endif
 		}
-#endif
 
 #if NET_2_1
 		public
@@ -136,9 +132,7 @@ namespace System.Net
 			this.proxy = GlobalProxySelection.Select;
 		}		
 		
-#if NET_2_0
 		[Obsolete ("Serialization is obsoleted for this type", false)]
-#endif
 		protected HttpWebRequest (SerializationInfo serializationInfo, StreamingContext streamingContext) 
 		{
 			SerializationInfo info = serializationInfo;
@@ -192,7 +186,6 @@ namespace System.Net
 			set { allowBuffering = value; }
 		}
 
-#if NET_2_0
 		static Exception GetMustImplement ()
 		{
 			return new NotImplementedException ();
@@ -208,13 +201,12 @@ namespace System.Net
 				auto_decomp = value;
 			}
 		}
-#endif
 		
 		internal bool InternalAllowBuffering {
 			get {
 				return (allowBuffering && (method != "HEAD" && method != "GET" &&
 							method != "MKCOL" && method != "CONNECT" &&
-							method != "DELETE" && method != "TRACE"));
+							method != "TRACE"));
 			}
 		}
 		
@@ -225,12 +217,10 @@ namespace System.Net
 
 				return certificates;
 			}
-#if NET_2_0
 			[MonoTODO]
 			set {
 				throw GetMustImplement ();
 			}
-#endif
 		}
 		
 		public string Connection {
@@ -302,7 +292,6 @@ namespace System.Net
 			set { credentials = value; }
 		}
 
-#if NET_2_0
 		[MonoTODO]
 		public static new RequestCachePolicy DefaultCachePolicy
 		{
@@ -324,7 +313,6 @@ namespace System.Net
 				throw GetMustImplement ();
 			}
 		}
-#endif
 		
 		public string Expect {
 			get { return webHeaders ["Expect"]; }
@@ -402,7 +390,6 @@ namespace System.Net
 			}			
 		}
 
-#if NET_1_1
 		[MonoTODO ("Use this")]
 		public int MaximumResponseHeadersLength {
 			get { return maxResponseHeadersLength; }
@@ -415,11 +402,7 @@ namespace System.Net
 			set { defaultMaxResponseHeadersLength = value; }
 		}
 
-		public
-#else
-		internal
-#endif
-		int ReadWriteTimeout {
+		public	int ReadWriteTimeout {
 			get { return readWriteTimeout; }
 			set {
 				if (requestSent)
@@ -473,11 +456,6 @@ namespace System.Net
 			get { return proxy; }
 			set { 
 				CheckRequestStarted ();
-#if ONLY_1_1
-				if (value == null)
-					throw new ArgumentNullException ("value");
-#endif
-
 				proxy = value;
 				servicePoint = null; // we may need a new one
 			}
@@ -544,27 +522,23 @@ namespace System.Net
 			}
 		}
 
-#if NET_2_0
 		public override bool UseDefaultCredentials
 		{
 			get { return CredentialCache.DefaultCredentials == Credentials; }
 			set { Credentials = value ? CredentialCache.DefaultCredentials : null; }
 		}
-#endif
 		
 		public string UserAgent {
 			get { return webHeaders ["User-Agent"]; }
 			set { webHeaders.SetInternal ("User-Agent", value); }
 		}
 
-#if NET_1_1
 		bool unsafe_auth_blah;
 		public bool UnsafeAuthenticatedConnectionSharing
 		{
 			get { return unsafe_auth_blah; }
 			set { unsafe_auth_blah = value; }
 		}
-#endif
 
 		internal bool GotRequestStream {
 			get { return gotRequestStream; }
@@ -636,12 +610,6 @@ namespace System.Net
 				throw new InvalidOperationException ("rangeSpecifier");
 			webHeaders.RemoveAndAdd ("Range", value + from + "-" + to);	
 		}
-#if !NET_2_0
-		public override int GetHashCode ()
-		{
-			return base.GetHashCode ();
-		}
-#endif
 		
 		public override IAsyncResult BeginGetRequestStream (AsyncCallback callback, object state) 
 		{
@@ -649,7 +617,7 @@ namespace System.Net
 				throw new WebException ("The request was canceled.", WebExceptionStatus.RequestCanceled);
 
 			bool send = !(method == "GET" || method == "CONNECT" || method == "HEAD" ||
-					method == "TRACE" || method == "DELETE");
+					method == "TRACE");
 			if (method == null || !send)
 				throw new ProtocolViolationException ("Cannot send data when method is: " + method);
 
@@ -742,16 +710,6 @@ namespace System.Net
 
 			if (method == null)
 				throw new ProtocolViolationException ("Method is null.");
-
-#if !NET_2_0
-			bool send = !(method == "GET" || method == "CONNECT" || method == "HEAD" ||
-						method == "TRACE" || method == "DELETE");
-			if (send && contentLength < 0 && !sendChunked && !allowBuffering && KeepAlive)
-				throw new ProtocolViolationException ("Buffering is disabled, ContentLength is negative and SendChunked is disabled.");
-
-			if (!send && (contentLength > -1 || sendChunked))
-				throw new ProtocolViolationException ("ContentLength can't be set for non-write operations.");
-#endif
 
 			string transferEncoding = TransferEncoding;
 			if (!sendChunked && transferEncoding != null && transferEncoding.Trim () != "")
@@ -895,11 +853,8 @@ namespace System.Net
 			GetObjectData (serializationInfo, streamingContext);
 		}
 
-#if NET_2_0
-		protected override
-#endif
-		void GetObjectData (SerializationInfo serializationInfo,
-				    StreamingContext streamingContext)
+		protected override void GetObjectData (SerializationInfo serializationInfo,
+			StreamingContext streamingContext)
 		{
 			SerializationInfo info = serializationInfo;
 
@@ -954,10 +909,11 @@ namespace System.Net
 					return false;
 				*/
 
-				contentLength = 0;
+				contentLength = -1;
 				bodyBufferLength = 0;
 				bodyBuffer = null;
-				method = "GET";
+				if (code != HttpStatusCode.TemporaryRedirect)
+					method = "GET";
 				uriString = webResponse.Headers ["Location"];
 				break;
 			case HttpStatusCode.SeeOther: //303
@@ -1038,7 +994,6 @@ namespace System.Net
 					webHeaders.SetInternal ("Cookie", cookieHeader);
 			}
 
-#if NET_2_0
 			string accept_encoding = null;
 			if ((auto_decomp & DecompressionMethods.GZip) != 0)
 				accept_encoding = "gzip";
@@ -1046,7 +1001,7 @@ namespace System.Net
 				accept_encoding = accept_encoding != null ? "gzip, deflate" : "deflate";
 			if (accept_encoding != null)
 				webHeaders.RemoveAndAdd ("Accept-Encoding", accept_encoding);
-#endif
+
 			if (!usedPreAuth && preAuthenticate)
 				DoPreAuthenticate ();
 
@@ -1055,14 +1010,14 @@ namespace System.Net
 
 		void DoPreAuthenticate ()
 		{
-			webHeaders.RemoveInternal ("Proxy-Authorization");
-			webHeaders.RemoveInternal ("Authorization");
 			bool isProxy = (proxy != null && !proxy.IsBypassed (actualUri));
 			ICredentials creds = (!isProxy || credentials != null) ? credentials : proxy.Credentials;
 			Authorization auth = AuthenticationManager.PreAuthenticate (this, creds);
 			if (auth == null)
 				return;
 
+			webHeaders.RemoveInternal ("Proxy-Authorization");
+			webHeaders.RemoveInternal ("Authorization");
 			string authHeader = (isProxy && credentials == null) ? "Proxy-Authorization" : "Authorization";
 			webHeaders [authHeader] = auth.Message;
 			usedPreAuth = true;
@@ -1156,7 +1111,7 @@ namespace System.Net
 				bodyBuffer = null;
 				writeStream.Close ();
 			} else if (method != "HEAD" && method != "GET" && method != "MKCOL" && method != "CONNECT" &&
-					method != "DELETE" && method != "TRACE") {
+					method != "TRACE") {
 				if (getResponseCalled && !writeStream.RequestWritten)
 					writeStream.WriteRequest ();
 			}
@@ -1226,9 +1181,7 @@ namespace System.Net
 				ICredentials creds = (!isProxy) ? credentials : proxy.Credentials;
 				if (creds != null) {
 					cnc.NtlmCredential = creds.GetCredential (requestUri, "NTLM");
-#if NET_1_1
 					cnc.UnsafeAuthenticatedConnectionSharing = unsafe_auth_blah;
-#endif
 				}
 			}
 			r.Reset ();
@@ -1309,6 +1262,7 @@ namespace System.Net
 							}
 							webResponse.Close ();
 						}
+						finished_reading = false;
 						haveResponse = false;
 						webResponse = null;
 						r.Reset ();
@@ -1347,15 +1301,19 @@ namespace System.Net
 			if (isProxy && (proxy == null || proxy.Credentials == null))
 				return false;
 
-			string authHeader = response.Headers [(isProxy) ? "Proxy-Authenticate" : "WWW-Authenticate"];
-			if (authHeader == null)
+			string [] authHeaders = response.Headers.GetValues ( (isProxy) ? "Proxy-Authenticate" : "WWW-Authenticate");
+			if (authHeaders == null || authHeaders.Length == 0)
 				return false;
 
 			ICredentials creds = (!isProxy) ? credentials : proxy.Credentials;
-			Authorization auth = AuthenticationManager.Authenticate (authHeader, this, creds);
+			Authorization auth = null;
+			foreach (string authHeader in authHeaders) {
+				auth = AuthenticationManager.Authenticate (authHeader, this, creds);
+				if (auth != null)
+					break;
+			}
 			if (auth == null)
 				return false;
-
 			webHeaders [(isProxy) ? "Proxy-Authorization" : "Authorization"] = auth.Message;
 			authCompleted = auth.Complete;
 			is_ntlm_auth = (auth.Module.AuthenticationType == "NTLM");

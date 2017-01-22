@@ -33,7 +33,6 @@ using NUnit.Framework;
 
 namespace MonoTests.System.Reflection
 {
-#if NET_2_0
 	public class Generic<T> {
 		public void Foo () {
 		}
@@ -53,14 +52,38 @@ namespace MonoTests.System.Reflection
 
 		}
 	}
-#endif
+
 
 	[TestFixture]
 	public class MethodBaseTest
 	{
-#if NET_2_0
+		public static MethodInfo Where<T> (T a) {
+			return (MethodInfo) MethodBase.GetCurrentMethod ();
+		}
+
+		public class Foo<K>
+		{
+			public static MethodInfo Where<T> (T a, K b) {
+				return (MethodInfo) MethodBase.GetCurrentMethod ();
+			}
+		}
+
+		[Test]
+		public void GetCurrentMethodDropsAllGenericArguments ()
+		{
+			MethodInfo a = Where<int> (10);
+			MethodInfo b = Foo<int>.Where <double> (10, 10);
+
+			Assert.IsTrue (a.IsGenericMethodDefinition, "#1");
+			Assert.IsTrue (b.IsGenericMethodDefinition, "#2");
+
+			Assert.IsTrue (b.DeclaringType.IsGenericTypeDefinition, "#3");
+
+			Assert.AreSame (a, typeof (MethodBaseTest).GetMethod ("Where"), "#4");
+			Assert.AreSame (b, typeof (Foo<>).GetMethod ("Where"), "#5");
+		}
+
 		[Test] // GetMethodFromHandle (RuntimeMethodHandle)
-		[Category ("NotWorking")]
 		public void GetMethodFromHandle1_Handle_Generic ()
 		{
 			G<string> instance = new G<string> ();
@@ -80,7 +103,6 @@ namespace MonoTests.System.Reflection
 				// GetMethodFromHandle
 			}
 		}
-#endif
 
 		[Test] // GetMethodFromHandle (RuntimeMethodHandle)
 		public void GetMethodFromHandle1_Handle_Zero ()
@@ -99,7 +121,34 @@ namespace MonoTests.System.Reflection
 			}
 		}
 
-#if NET_2_0
+		[Test]
+		public void GetMethodFromHandle ()
+		{
+			Type t = typeof (object);
+			RuntimeMethodHandle rmh = t.GetConstructor (Type.EmptyTypes).MethodHandle;
+			MethodBase mb = MethodBase.GetMethodFromHandle (rmh);
+			Assert.IsNotNull (mb, "#1");
+			Assert.AreEqual (t, mb.DeclaringType, "#2");
+			Assert.AreEqual (".ctor", mb.Name, "#3");
+			ParameterInfo [] parameters = mb.GetParameters ();
+			Assert.IsNotNull (parameters, "#4");
+			Assert.AreEqual (0, parameters.Length, "#5");
+		}
+
+		[Test]
+		public void GetMethodFromHandle_NonGenericType_DeclaringTypeZero ()
+		{
+			Type t = typeof (object);
+			RuntimeMethodHandle rmh = t.GetConstructor (Type.EmptyTypes).MethodHandle;
+			MethodBase mb = MethodBase.GetMethodFromHandle (rmh, new RuntimeTypeHandle ());
+			Assert.IsNotNull (mb, "#1");
+			Assert.AreEqual (t, mb.DeclaringType, "#2");
+			Assert.AreEqual (".ctor", mb.Name, "#3");
+			ParameterInfo [] parameters = mb.GetParameters ();
+			Assert.IsNotNull (parameters, "#4");
+			Assert.AreEqual (0, parameters.Length, "#5");
+		}
+
 		[Test] // GetMethodFromHandle (RuntimeMethodHandle, RuntimeTypeHandle)
 		public void GetMethodFromHandle2_DeclaringType_Zero ()
 		{
@@ -190,7 +239,7 @@ namespace MonoTests.System.Reflection
 
 		[Test]
 		public void GetMethodFromHandle_Handle_Generic_Method_On_Generic_Class ()
-	    {
+		{
 			MethodInfo mi = typeof (Generic<>).GetMethod ("GenericFoo");
 			RuntimeMethodHandle handle = mi.MethodHandle;
 			MethodBase res;
@@ -239,7 +288,7 @@ namespace MonoTests.System.Reflection
 
 		[Test]
 		public void GetMethodFromHandle_Handle_Method_On_Generic_Class ()
-	    {
+		{
 			MethodInfo mi = typeof (Generic<>).GetMethod ("Foo");
 			RuntimeMethodHandle handle = mi.MethodHandle;
 			MethodBase res;
@@ -277,7 +326,5 @@ namespace MonoTests.System.Reflection
 			} catch (ArgumentException) {
 			}
 		}
-
-#endif
 	}
 }

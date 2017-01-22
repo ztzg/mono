@@ -3,7 +3,7 @@
 	ilasm2 -out:$@ $<
 
 BatchCompiler.exe: BatchCompiler.cs
-	gmcs -r:../../../../mcs/class/lib/net_2_0/ilasm.exe BatchCompiler.cs
+	gmcs -r:../../../mcs/class/lib/net_2_0/ilasm.exe BatchCompiler.cs
 
 test_lib.dll: test_lib.cs
 	gmcs test_lib.cs -target:library
@@ -16,7 +16,7 @@ compile-stamp: generate-stamp BatchCompiler.exe test_lib.dll
 			gmcs /unsafe $$i; \
 		fi \
 	done 
-	MONO_PATH=../../../../mcs/class/lib/net_2_0/ mono BatchCompiler.exe
+	MONO_PATH=../../../mcs/class/lib/net_2_0/ mono BatchCompiler.exe
 	#for $$I in *.il; do ilasm2 $$I; done
 	touch compile-stamp
 
@@ -57,9 +57,9 @@ run-test: compile-stamp
 		if [ "$$FIRST" == "strict" ]; \
 		then \
 			#in strict more it must fail under strict check and pass under non-strict check \
-			../../metadata/pedump --verify error,warn,cls,code $$TEST.exe >/dev/null 2>/dev/null; \
+			../../metadata/pedump --verify partial-md,error,warn,cls,code $$TEST.exe >/dev/null 2>/dev/null; \
 			R1=$$?; \
-			../../metadata/pedump --verify error,warn,cls,code,non-strict $$TEST.exe >/dev/null 2>/dev/null; \
+			../../metadata/pedump --verify partial-md,error,warn,cls,code,non-strict $$TEST.exe >/dev/null 2>/dev/null; \
 			R2=$$?; \
 			if [ $$R1 != 2 ] && [ $$R1 != 3 ]; then \
 				echo "$$TEST is strict but did not fail under strict check, got $${R1} but expected 2 or 3"; \
@@ -70,9 +70,9 @@ run-test: compile-stamp
 			fi \
 		elif [ "$$FIRST" == "typeunverifiable" ]; then \
 			#in type unverifiable more it must fail under verifiable mode but it's ok under valid mode \
-			../../metadata/pedump --verify error,warn,cls,code $$TEST.exe  >/dev/null 2>/dev/null; \
+			../../metadata/pedump --verify partial-md,error,warn,cls,code $$TEST.exe  >/dev/null 2>/dev/null; \
 			R1=$$?; \
-			../../metadata/pedump --verify error,warn,cls,code,valid-only $$TEST.exe  >/dev/null 2>/dev/null; \
+			../../metadata/pedump --verify partial-md,error,warn,cls,code,valid-only $$TEST.exe  >/dev/null 2>/dev/null; \
 			R2=$$?; \
 			if [ $$R1 != 3 ]; then \
 				echo "$$TEST is type unverifiable but did not fail under verifiable check, got $${R1} but expected 3"; \
@@ -82,7 +82,7 @@ run-test: compile-stamp
 				echo "$$TEST is type unverifiable but did not pass under non-strict check, got $${R2} but expected 0"; \
 			fi \
 		elif [ $$RES != 99 ]; then \
-			../../metadata/pedump --verify error,warn,cls,code $$TEST.exe >/dev/null 2>/dev/null; \
+			../../metadata/pedump --verify partial-md,error,warn,cls,code $$TEST.exe >/dev/null 2>/dev/null; \
 			R=$$?; \
 			if [ $$R != $$RES ]; then \
 				echo "$$TEST failed expected $$RES but got $$R"; \

@@ -6,7 +6,7 @@
 //	Gonzalo Paniagua (gonzalo@ximian.com)
 //
 // (C) 2003 Ben Maurer
-// (c) Copyright 2004-2008 Novell, Inc. (http://www.novell.com)
+// (c) Copyright 2004-2010 Novell, Inc. (http://www.novell.com)
 //
 
 //
@@ -47,13 +47,9 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Web.Configuration;
 
-namespace System.Web.UI {
-#if NET_2_0
-	public
-#else
-	internal
-#endif
-	sealed class ObjectStateFormatter : IFormatter, IStateFormatter
+namespace System.Web.UI
+{
+	public sealed class ObjectStateFormatter : IFormatter, IStateFormatter
 	{
 		Page page;
 		HashAlgorithm algo;
@@ -79,16 +75,8 @@ namespace System.Web.UI {
 					if (vkey == null)
 						return false;
 					return true;
-				} else {
-				
-#if NET_2_0
+				} else				
 					return page.EnableViewStateMac;
-#elif NET_1_1
-					return page.EnableViewStateMacInternal;
-#else
-					return false;
-#endif
-				}
 			}
 		}
 
@@ -101,13 +89,8 @@ namespace System.Web.UI {
 			
 			byte [] algoKey;
 			if (page != null) {
-#if NET_2_0
 				MachineKeySection mconfig = (MachineKeySection) WebConfigurationManager.GetWebApplicationSection ("system.web/machineKey");
 				algoKey = MachineKeySectionUtils.ValidationKeyBytes (mconfig);
-#else
-				MachineKeyConfig mconfig = HttpContext.GetAppConfig ("system.web/machineKey") as MachineKeyConfig;
-				algoKey = mconfig.ValidationKey;
-#endif
 			} else
 				algoKey = vkey;
 
@@ -146,48 +129,36 @@ namespace System.Web.UI {
 		{
 			if (inputString == null)
 				throw new ArgumentNullException ("inputString");
-#if NET_2_0
 			if (inputString.Length == 0)
 				throw new ArgumentNullException ("inputString");
-#else
-			if (inputString == "")
-				return "";
-#endif
+
 			byte [] buffer = Convert.FromBase64String (inputString);
 			int length;
 			if (buffer == null || (length = buffer.Length) == 0)
 				throw new ArgumentNullException ("inputString");
 			if (page != null && EnableMac)
 				length = ValidateInput (GetAlgo (), buffer, 0, length);
-#if NET_2_0
+
 			bool isEncrypted = ((int)buffer [--length] == 1)? true : false;
-#endif
 			Stream ms = new MemoryStream (buffer, 0, length, false, false);
-#if NET_2_0
 			if (isEncrypted)
 				ms = new CryptoStream (ms, page.GetCryptoTransform (CryptoStreamMode.Read), CryptoStreamMode.Read);
-#endif
 			return Deserialize (ms);
 		}
 		
 		public string Serialize (object stateGraph)
 		{
 			if (stateGraph == null)
-				return "";
+				return String.Empty;
 			
 			MemoryStream ms = new MemoryStream ();
 			Stream output = ms;
-#if NET_2_0
 			bool needEncryption = page == null ? false : page.NeedViewStateEncryption;
 			if (needEncryption){
 				output = new CryptoStream (output, page.GetCryptoTransform (CryptoStreamMode.Write), CryptoStreamMode.Write);
 			}
-#endif
 			Serialize (output, stateGraph);
-#if NET_2_0
-			ms.WriteByte((byte)(needEncryption? 1 : 0));
-#endif
-			
+			ms.WriteByte((byte)(needEncryption? 1 : 0));			
 #if TRACE
 			ms.WriteTo (File.OpenWrite (Path.GetTempFileName ()));
 #endif
@@ -254,7 +225,7 @@ namespace System.Web.UI {
 
 #region Object Readers/Writers
 		
-		class WriterContext
+		sealed class WriterContext
 		{
 			Hashtable cache;
 			short nextKey = 0;
@@ -286,7 +257,7 @@ namespace System.Web.UI {
 			}
 		}
 		
-		class ReaderContext
+		sealed class ReaderContext
 		{
 			ArrayList cache;
 			
@@ -331,7 +302,7 @@ namespace System.Web.UI {
 				new ObjectArrayFormatter ().Register ();
 				new UnitFormatter ().Register ();
 				new FontUnitFormatter ().Register ();
-				
+				new IndexedStringFormatter ().Register ();
 				new ColorFormatter ().Register ();
 
 				enumFormatter = new EnumFormatter ();
@@ -433,11 +404,16 @@ namespace System.Web.UI {
 										t,
 										converter != null ? converter.CanConvertFrom (t) : false));
 #endif
-						if (converter == null ||
-						    !converter.CanConvertTo (typeof (string)) ||
-						    !converter.CanConvertFrom (t)) {
+						// Do not use the converter if it's an instance of
+						// TypeConverter itself - it reports it is able to
+						// convert to string, but it's only a conversion
+						// consisting of a call to ToString() with no
+						// reverse conversion supported. This leads to
+						// problems when deserializing the object.
+						if (converter == null || converter.GetType () == typeof (TypeConverter) ||
+						    !converter.CanConvertTo (typeof (string)) || !converter.CanConvertFrom (typeof (string)))
 							fmt = binaryObjectFormatter;
-						} else {
+						else {
 							typeConverterFormatter.Converter = converter;
 							fmt = typeConverterFormatter;
 						}
@@ -521,6 +497,36 @@ namespace System.Web.UI {
 			}
 			protected override Type Type {
 				get { return typeof (string); }
+			}
+			
+			protected override int NumberOfIds {
+				get { return 2; }
+			}
+		}
+
+		class IndexedStringFormatter : StringFormatter
+		{
+			protected override void Write (BinaryWriter w, object o, WriterContext ctx)
+			{
+				IndexedString s = o as IndexedString;
+
+				if (s == null)
+					throw new InvalidOperationException ("object is not of the IndexedString type");
+				
+				base.Write (w, s.Value, ctx);
+			}
+			
+			protected override object Read (byte token, BinaryReader r, ReaderContext ctx)
+			{
+				string s = base.Read (token, r, ctx) as string;
+				if (String.IsNullOrEmpty (s))
+					throw new InvalidOperationException ("string must not be null or empty.");
+				
+				return new IndexedString (s);
+			}
+			
+			protected override Type Type {
+				get { return typeof (IndexedString); }
 			}
 			
 			protected override int NumberOfIds {
@@ -1002,7 +1008,7 @@ namespace System.Web.UI {
 			{
 				w.Write (PrimaryId);
 				ObjectFormatter.WriteObject (w, o.GetType (), ctx);
-				string v = (string) converter.ConvertTo (null, CultureInfo.InvariantCulture,
+				string v = (string) converter.ConvertTo (null, Helpers.InvariantCulture,
 									 o, typeof (string));
 				base.Write (w, v, ctx);
 			}
@@ -1013,7 +1019,7 @@ namespace System.Web.UI {
 				converter = TypeDescriptor.GetConverter (t);
 				token = r.ReadByte ();
 				string v = (string) base.Read (token, r, ctx);
-				return converter.ConvertFrom (null, CultureInfo.InvariantCulture, v);
+				return converter.ConvertFrom (null, Helpers.InvariantCulture, v);
 			}
 			
 			protected override Type Type {

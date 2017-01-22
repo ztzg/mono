@@ -52,13 +52,10 @@ namespace System.ServiceModel.Channels {
 			ServiceHostingEnvironment.InAspNet = true;
 		}
 
-		// FIXME: this should probably be moved to ServiceHostingEnvironment.
-		internal static Dictionary<string, SvcHttpHandler> Handlers {
-			get { return handlers; }
-		}
-
 		public IHttpHandler GetHandler (HttpContext context, string requestType, string url, string pathTranslated)
 		{
+			lock (handlers) {
+
 			if (handlers.ContainsKey (url))
 				return handlers [url];
 			
@@ -71,12 +68,13 @@ namespace System.ServiceModel.Channels {
 			handlers [url] = handler;
 
 			return handler;
+
+			}
 		}
 
-		[MonoTODO]
 		public void ReleaseHandler (IHttpHandler handler)
 		{
-			return;
+			// do nothing
 		}
 
 		void LoadTypeFromSvc (string path, string url, HttpContext context)

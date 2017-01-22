@@ -1,3 +1,22 @@
+2010-06-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py: Add pretty printers for more runtime data structures.
+
+2009-10-13  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py: Add an 'xdb' command to flush the debugging info.
+
+2009-10-12  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py: Update this to gdb 7.0.
+
+	* mono-gdbinit: Removed, no longer needed.
+
+2009-10-09  Zoltan Varga  <vargaz@gmail.com>
+
+	* mono-gdb.py (MonoSupport.run_hook): Set MONO_XDEBUG to 'gdb' to activate
+	the GDB support mode in the runtime.
+
 2009-04-14  Zoltan Varga  <vargaz@gmail.com>
 
 	* mono-gdb.py (MonoClassPrinter.to_string): Add a MonoClass* pretty

@@ -25,25 +25,35 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 using System;
+using System.Runtime.Serialization;
 using System.ServiceModel;
 
 namespace System.ServiceModel.Dispatcher
 {
 	public class FaultContractInfo
 	{
-		string action;
-		Type detail;
-
 		public FaultContractInfo (string action, Type detail)
 		{
+			if (action == null)
+				throw new ArgumentNullException ("action");
+			if (detail == null)
+				throw new ArgumentNullException ("detail");
+			Action = action;
+			Detail = detail;
 		}
 
-		public string Action {
-			get { return action; }
-		}
+		DataContractSerializer serializer;
 
-		public Type Detail {
-			get { return detail; }
+		public string Action { get; private set; }
+
+		public Type Detail { get; private set; }
+
+		internal DataContractSerializer Serializer {
+			get {
+				if (serializer == null)
+					serializer = new DataContractSerializer (Detail);
+				return serializer;
+			}
 		}
 	}
 }

@@ -33,6 +33,7 @@
 #if NET_2_0
 using System.Collections;
 using System.Collections.Specialized;
+using System.Drawing;
 using System.Text;
 using System.Xml;
 using System.Xml.Xsl;
@@ -54,6 +55,7 @@ namespace System.Web.UI.WebControls {
 	[PersistChildren (false)]
 	[WebSysDescription ("Connect to an XML file.")]
 //	[WebSysDisplayName ("XML file")]
+	[ToolboxBitmap ("")]
 	public class XmlDataSource : HierarchicalDataSourceControl, IDataSource, IListSource {
 
 		string _data = string.Empty;
@@ -64,6 +66,8 @@ namespace System.Web.UI.WebControls {
 		string _cacheKeyDependency = string.Empty;
 		bool _enableCaching = true;
 		int _cacheDuration = 0;
+		bool _documentNeedsUpdate;
+		
 		DataSourceCacheExpiry _cacheExpirationPolicy = DataSourceCacheExpiry.Absolute;
 		static readonly string [] emptyNames = new string [] { "DefaultView" };
 		
@@ -77,7 +81,7 @@ namespace System.Web.UI.WebControls {
 			add { Events.AddHandler (EventTransforming, value); }
 			remove { Events.RemoveHandler (EventTransforming, value); }
 		}
-		
+
 		protected virtual void OnTransforming (EventArgs e)
 		{
 			EventHandler eh = Events [EventTransforming] as EventHandler;
@@ -88,6 +92,9 @@ namespace System.Web.UI.WebControls {
 		XmlDocument xmlDocument;
 		public XmlDocument GetXmlDocument ()
 		{
+			if (_documentNeedsUpdate)
+				UpdateXml ();
+			
 			if (xmlDocument == null && EnableCaching)
 				xmlDocument = GetXmlDocumentFromCache ();
 
@@ -128,8 +135,8 @@ namespace System.Web.UI.WebControls {
 				else
 					document.Load (MapPathSecure (filename));
 			} else
-				document.LoadXml (data);
-
+				if (!String.IsNullOrEmpty (data))
+					document.LoadXml (data);
 			return document;
 		}
 
@@ -143,6 +150,13 @@ namespace System.Web.UI.WebControls {
 
 		string GetDataKey ()
 		{
+#if NET_4_0
+			if (String.IsNullOrEmpty (DataFile) && !String.IsNullOrEmpty (Data)) {
+				string key = CacheKeyContext;
+				if (!String.IsNullOrEmpty (key))
+					return key;
+			}
+#endif
 			Page page = Page;
 			string p = page != null ? page.ToString () : "NullPage";
 			
@@ -168,8 +182,9 @@ namespace System.Web.UI.WebControls {
 			if (DataCache == null)
 				return;
 
-			if (DataCache [GetDataKey ()] != null)
-				DataCache.Remove (GetDataKey ());
+			string dataKey = GetDataKey ();
+			if (DataCache [dataKey] != null)
+				DataCache.Remove (dataKey);
 
 			DateTime absoluteExpiration = Cache.NoAbsoluteExpiration;
 			TimeSpan slidindExpiraion = Cache.NoSlidingExpiration;
@@ -187,21 +202,30 @@ namespace System.Web.UI.WebControls {
 			else
 				dependency = new CacheDependency (new string [] { }, new string [] { });
 
-			DataCache.Add (GetDataKey (), xmlDocument, dependency,
+			DataCache.Add (dataKey, xmlDocument, dependency,
 				absoluteExpiration, slidindExpiraion, CacheItemPriority.Default, null);
+		}
+		
+		// If datafile changed, then DO NOT USE the cached data, but update it.
+		void UpdateXml()
+		{
+			xmlDocument = LoadXmlDocument (); 
+			UpdateCache ();
+			_documentNeedsUpdate = false;
 		}
 
 		public void Save ()
 		{
 			if (!CanBeSaved)
 				throw new InvalidOperationException ();
-			
-			xmlDocument.Save (MapPathSecure (DataFile));
+
+			if (xmlDocument != null)
+				xmlDocument.Save (MapPathSecure (DataFile));
 		}
 		
 		bool CanBeSaved {
 			get {
-				return Transform == "" && TransformFile == "" && DataFile != "";
+				return Transform == String.Empty && TransformFile == String.Empty && DataFile != String.Empty;
 			}
 		}
 		
@@ -210,11 +234,11 @@ namespace System.Web.UI.WebControls {
 			XmlNode doc = this.GetXmlDocument ();
 			XmlNodeList ret = null;
 			
-			if (viewPath != "") {
+			if (!String.IsNullOrEmpty (viewPath)) {
 				XmlNode n = doc.SelectSingleNode (viewPath);
 				if (n != null)
 					ret = n.ChildNodes;
-			} else if (XPath != "") {
+			} else if (!String.IsNullOrEmpty (XPath)) {
 				ret = doc.SelectNodes (XPath);
 			} else {
 				ret = doc.ChildNodes;
@@ -234,7 +258,7 @@ namespace System.Web.UI.WebControls {
 		
 		DataSourceView IDataSource.GetView (string viewName)
 		{
-			if (viewName == "")
+			if (String.IsNullOrEmpty (viewName))
 				viewName = "DefaultView";
 			
 			return new XmlDataSourceView (this, viewName);
@@ -246,7 +270,7 @@ namespace System.Web.UI.WebControls {
 		}
 		
 		[DefaultValue (0)]
-		//[TypeConverter (typeof(DataSourceCacheDurationConverter))]
+		[TypeConverter (typeof(DataSourceCacheDurationConverter))]
 		public virtual int CacheDuration {
 			get {
 				return _cacheDuration;
@@ -291,13 +315,13 @@ namespace System.Web.UI.WebControls {
 		[WebSysDescription ("Inline XML data.")]
 		[WebCategory ("Data")]
 		[EditorAttribute ("System.ComponentModel.Design.MultilineStringEditor," + Consts.AssemblySystem_Design, "System.Drawing.Design.UITypeEditor, " + Consts.AssemblySystem_Drawing)]
-//		[TypeConverter (typeof(MultilineStringConverter))]
+		[TypeConverter (typeof(MultilineStringConverter))]
 		public virtual string Data {
 			get { return _data; }
 			set {
 				if (_data != value) {
 					_data = value;
-					xmlDocument = null;
+					_documentNeedsUpdate = true;
 					OnDataSourceChanged(EventArgs.Empty);
 				}
 			}
@@ -311,7 +335,7 @@ namespace System.Web.UI.WebControls {
 			set {
 				if (_dataFile != value) {
 					_dataFile = value;
-					xmlDocument = null;
+					_documentNeedsUpdate = true;
 					OnDataSourceChanged(EventArgs.Empty);
 				}
 			}
@@ -328,13 +352,13 @@ namespace System.Web.UI.WebControls {
 		[PersistenceModeAttribute (PersistenceMode.InnerProperty)]
 		[EditorAttribute ("System.ComponentModel.Design.MultilineStringEditor," + Consts.AssemblySystem_Design, "System.Drawing.Design.UITypeEditor, " + Consts.AssemblySystem_Drawing)]
 		[DefaultValueAttribute ("")]
-//		[TypeConverterAttribute (typeof(System.ComponentModel.MultilineStringConverter))]
+		[TypeConverterAttribute (typeof(MultilineStringConverter))]
 		public virtual string Transform {
 			get { return _transform; }
 			set {
 				if (_transform != value) {
-					_transform = value;
-					xmlDocument = null;
+					_transform = value; 
+					_documentNeedsUpdate = true;
 					OnDataSourceChanged(EventArgs.Empty);
 				}
 			}
@@ -348,7 +372,7 @@ namespace System.Web.UI.WebControls {
 			set {
 				if (_transformFile != value) {
 					_transformFile = value;
-					xmlDocument = null;
+					_documentNeedsUpdate = true;
 					OnDataSourceChanged(EventArgs.Empty);
 				}
 			}
@@ -364,6 +388,13 @@ namespace System.Web.UI.WebControls {
 				}
 			}
 		}
+#if NET_4_0
+		[DefaultValue ("")]
+		public virtual string CacheKeyContext {
+			get { return ViewState.GetString ("CacheKeyContext", String.Empty); }
+			set { ViewState ["CacheKeyContext"] = value; }
+		}
+#endif
 	}
 }
 #endif

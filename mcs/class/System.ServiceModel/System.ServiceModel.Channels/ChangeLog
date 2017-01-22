@@ -1,3 +1,1045 @@
+2010-07-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecurityBindingElement.cs : implement ToString().
+
+2010-07-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MtomMessageEncodingBindingElement.cs, MtomMessageEncoder.cs :
+	  add missing members.
+
+2010-07-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BinaryMessageEncoder.cs, MessageEncoder.cs:
+	  The default content type value is null, not the ContentType value.
+
+2010-07-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageSecurityBindingSupport.cs : and move this too.
+
+2010-07-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageSecurityBindingSupport.cs : split a couple of classes out.
+	  Changed namespace to internal one.
+
+2010-07-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecurityChannelFactory.cs
+	  SecurityChannelListener.cs
+	  SecurityRequestContext.cs
+	  SecurityOutputChannel.cs
+	  SecurityReplyChannel.cs
+	  SecurityRequestChannel.cs
+	  SecureMessageGenerator.cs
+	  SecureMessageDecryptor.cs
+	  WSEncryptedXml.cs
+	  WSSignedXml.cs
+	  WSSecurityMessageHeader.cs :
+	  moved to System.ServiceModel.Channels.Security.
+
+2010-07-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecurityReplyChannel.cs : split from SecurityChannelListener.cs.
+	* AsymmetricSecurityBindingElement.cs
+	  WSSecurityMessageHeader.cs
+	  SecureMessageDecryptor.cs
+	  SecureMessageGenerator.cs
+	  SecurityChannelListener.cs
+	  SecurityRequestContext.cs
+	  WSEncryptedXml.cs
+	  SecurityRequestChannel.cs
+	  SymmetricSecurityBindingElement.cs
+	  SecurityOutputChannel.cs
+	  SecurityChannelFactory.cs
+	  WSSignedXml.cs
+	  SecurityBindingElement.cs : change namespace to move to internal
+	  namespace directory.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecurityRequestContext.cs : remove extraneous buffering.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecureMessageDecryptor.cs : avoid duplicate copy of headers into
+	  the decrypted message.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs, MessageBufferImpl.cs, MessageImpl.cs: preserve and
+	  output attributes prefixes, to copy Body/@wsu:Id to successfully
+	  verify the xmldsig.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : MessageFault from Message could have empty
+	  detail. Have it return HasDetail as expected.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecurityRequestChannel.cs : do not try to decrypt faults, they
+	  are not encrypted.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs : to clone raw xml completely, avoid using 
+	  ReadOuterXml() and text reader but use XmlNodeReader instaed.
+	* Message.cs : avoid extraneous xmlns:u attribute.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs, MessageHeaderInfo.cs: add internal Prefix
+	  property and copy them from source to destination.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageImpl.cs : When XmlReaderMessage was writing its contents,
+	  it was dropping body attributes, including wsu:Id for WS-Security.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecureMessageGenerator.cs : MessageBuffer was missing copy of
+	  Body wsu:Id attribute.
+	* HttpRequestChannel.cs : remove comment for resolved issue.
+
+2010-07-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : move another old code.
+
+2010-07-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : remove extra code.
+
+2010-07-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderBodyWriter.cs, MessageFault.cs: warning cleanups.
+
+2010-07-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactoryBase.cs : null via uri parameter is not allowed.
+
+2010-07-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpTransportbindingElement.cs : remove "Standalone".
+
+2010-07-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : removed old code and #if blocks.
+
+2010-07-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : add required code for new ASP.NET HTTP stack.
+	  Support for new and old stack (both) are temporarily enabled.
+	* HttpTransportBindingElement.cs : switch to new ASP.NET stack.
+
+2010-07-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandlerFactory.cs : remove unused code.
+	* SvcHttpHandler.cs : ditto. Add some code for what new asp.net
+	  support will look like.
+
+2010-07-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs, MessageImpl.cs, MessageBufferImpl.cs : remove BodyId.
+	  XML attributes on s:Body are handled appropriately, not limited to
+	  wsu:Id. Added several required overrides to Message and
+	  MessageBuffer implementation classes.
+	* SecureMessageGenerator.cs : so, don't use BodyId. Treat it as a
+	  specific case but still fallback.
+
+2010-06-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpTransportBindingElement.cs :
+	  Use new HTTP channel listener implementation.
+
+2010-06-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : cosmetic code formatting fix.
+
+2010-06-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs :
+	  No need to get messed around MetadataPublishingInfo anymore.
+
+2010-06-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : remove extra different code paths for
+	  channel dispatchers with or without mex endpoints.
+
+2010-06-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : simplify FilterHttpContext().
+
+2010-06-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : add some comments.
+
+2010-06-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : use MessageVersion.None for GET messages.
+	* HttpChannelListener.cs : remove extra field.
+	* HttpListenerManager.cs : check HelpUrl existence (avoid NRE).
+	* HttpRequestContext.cs : reduce internal field.
+
+2010-06-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MtomMessageEncodingBindingElement.cs: it's base is abstract, use 
+	  context.GetInnerProperty<T>().
+
+2010-06-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Binding.cs : enable simpler MessageVersion code (issued got fixed).
+	* MtomMessageEncodingBindingElement.cs, TransportBindingElement.cs,
+	  TextMessageEncodingBindingElement.cs : return MessageVersion in
+	  GetProperty<T>().
+
+2010-06-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Binding.cs : add commented-out code for MessageVersion replacement.
+	* TransactionFlowBindingElement.cs : implement (almost dummy).
+
+2010-06-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpReplyChannel.cs : accept TCP channel on ReceiveRequest(). This
+	  fixes standalone tcp-transport/sample[svc|cli]5.exe test in olive
+	  (but not TcpTransportBindingElementTest.SimpleDuplexStreamed.)
+
+2010-06-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpBinaryFrameManager.cs : lock read and write respectively.
+	  Finally fixed bug #567672 ('IsOneWay=false' case).
+
+2010-05-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DirectionalAction.cs : remove old code from winfx beta.
+
+2010-05-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpDuplexSessionChannel.cs, TcpReplyChannel.cs : do not set RelatesTo
+	  here. If the contract is not one-way (IsOneWay = false) and there is
+	  a callback, the callback message sent to the client should *not* be
+	  assigned RelatesTo header here. Just do it in the request-reply
+	  context. Do it in OperationInvokerHandler.
+
+2010-05-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : remove Sleep() hack. The host is now ensured
+	  to wait for channels opened.
+
+2010-05-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : remove unused field. Some code cleanup.
+
+2010-05-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : use manual reset.
+	* AspNetReplyChannel.cs : make it equivalent to the above.
+
+2010-05-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpChannelListener.cs : do not accept more than one channel at a
+	  time. Remove extra fields. Add CancelAsync() implementation.
+
+2010-05-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : add a workaround for Func<>.BeginInvoke()
+	  problem that blocked ASP.NET channels working.
+
+2010-05-19  Andreia Gaita  <avidigal@novell.com>
+
+	* HttpRequestChannel.cs: if the response has no body, create an
+	  empty message and return that.
+	  Note: the ws-mc protocol defines that the service returns an
+	  200 response with an empty body on first connection, this
+	  adds support for that (fixes part of #599667)
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DuplexChannelBase.cs
+	  ReplyChannelBase.cs
+	  TcpChannelListener.cs
+	  ChannelListenerBase_1.cs
+	  PeerChannelListener.cs
+	  HttpChannelListener.cs
+	  NamedPipeChannelListener.cs:
+	  do the same for channel listener,reply channels and
+	  duplex channels.
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactoryBase.cs, RequestChannelBase.cs : support
+	  MessageVersion in GetProperty<T>() for many transport channels.
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpChannelFactory.cs
+	  TcpChannelFactory.cs
+	  ChannelFactoryBase.cs
+	  NamedPipeChannelFactory.cs
+	  PeerChannelFactory.cs
+	  RequestChannelBase.cs : commonize MessageEncoder.
+	  (Commented out GetPrpoerty<T>() for MessageVersion as it is 
+	  in doubt yet.)
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs : do not pass empty string array; it almost
+	  always results in header-not-found error.
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs : do not try to lookup prefix for empty ns.
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageImpl.cs : do not use maxBufferSize for initialSize argument
+	  for MessageHeaders. Fix OutOfMemoryException for certain usage.
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BindingContext.cs : actually clone is needed everywhere else too.
+	* CustomBinding.cs : remove extra field.
+
+2010-05-14  Andreia Gaita  <avidigal@novell.com>
+
+	* BindingContext.cs: Copy elements from the original binding only when
+	creating it, never when cloning it. This way, CanBuildInnerChannel can
+	work recursively as it should.
+
+2010-05-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CustomBinding.cs : return clone collection.
+	* BindingContext.cs :
+	  Simply use RemainingBindingElements in builder methods.
+	  Clone() should be deep copying (as documented).
+	* BinaryMessageEncodingBindingElement.cs
+	  MtomMessageEncodingBindingElement.cs
+	  TextMessageEncodingBindingElement.cs
+	  HttpCookieContainerBindingElement.cs :
+	  do not add itself to RemainingBindingElements.
+	* HttpChannelFactory.cs
+	  HttpChannelListener.cs
+	  TcpChannelFactory.cs
+	  TcpChannelListener.cs
+	  MsmqChannelFactory.cs
+	  MsmqChannelListener.cs
+	  NamedPipeChannelFactory.cs
+	  NamedPipeChannelListener.cs
+	  PeerChannelFactory.cs
+	  PeerChannelListener.cs : do not iterate RemainingBindingElements.
+	  Instead, iterate all binding elements in the CustomBinding.
+
+2010-05-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : implement On[Begin|End][Close|Open] methods.
+
+2010-04-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : use manual reset here to not cause
+	  possible inconsistent locking.
+
+2010-04-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpChannelListener.cs, HttpListenerManager.cs :
+	  Fix NRE issue in olive/samples/wcf/web-http-binding/samplesvc3.exe.
+
+2010-04-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : fixed the issue that mex_info is never
+	  retrieved from the latest channel listener (which could be other
+	  listener than the one which was set mex info).
+
+2010-04-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpChannelListener.cs, HttpListenerManager.cs :
+	  actually it should be ChannelDispatcher-to-HttpChannelListener,
+	  to identify which dispatcher to send reqs.
+
+2010-04-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : remove old Http Keep-Alive workaround.
+
+2010-04-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpTransportBindingElement.cs,
+	  HttpChannelListener.cs,
+	  HttpListenerManager.cs : add host-to-http-listener mapping so that
+	  they can be managed per host.
+
+2010-04-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BindingContext.cs : require a TransportBindingElement when
+	  building a channel listener.
+
+2010-04-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : use local var to hold wait handle to avoid
+	  possible NRE on field. Based on the patch by Matt Dargavel.
+
+2010-04-07  Miguel de Icaza  <miguel@novell.com>
+
+	*  BufferManager.cs: Implement the BufferManager. 
+
+2010-04-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* WSSecurityMessageHeader.cs : add FIXME comment.
+
+2010-04-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : add commented note.
+
+2010-04-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : fill To header only if it does not exist.
+
+2010-04-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SecureMessageGenerator.cs : set ReplyTo and To, do not add.
+
+2010-04-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs : use matching addressing version.
+	  Remove header item if the same ones already exist.
+
+2010-04-06 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* HttpRequestChannel.cs: don't create the wait handle unless it is
+	really needed.
+
+2010-04-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : use correct max buffer size.
+
+2010-04-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : check null serializer and detail.
+	  Make sure to consume s12:Reason EndElement.
+
+2010-04-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : when created from XmlReader, it should not
+	  deserialize fault details immediately. This class itself should
+	  not do that. Strongly typed FaultContractInfo may want to use the
+	  reader (GetReaderAtDetailContents()) for its own deserialization.
+
+2010-04-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ConnectionOrientedTransportBindingElement.cs,
+	  TcpTransportBindingElement.cs : implement GetProperty<T>().
+
+2010-04-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpTransportBindingElement.cs, HttpsTransportBindingElement.cs:
+	  implement HttpsTransportBindingElement.GetProperty<T>(). Extend the
+	  properties type from HTTP.
+
+2010-04-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* FaultConverter.cs : use addressing version from the message.
+
+2010-03-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* FaultConverter.cs : check envelope version, not addressing version.
+
+2010-03-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* FaultConverter.cs : implemented TryCreateException().
+
+2010-03-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : cosmetic method name clarification.
+
+2010-03-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderBodyWriter.cs, Message.cs, MessageImpl.cs, BodyWriter.cs:
+	  fix BodyWriter buffering that dropped in-scope namespaces and thus
+	  caused problem on resolving QNames.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* FaultConverter.cs : do implement OnTryCreateFaultMessage() to work
+	  with certain Exception types.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Message.cs : fix explanation on CreateMessage() overloads.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : Write Subcode element correctly and fix wrong
+	  Code/Value/Subcode element relationship. Give better error message.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : ok, no need for conditional code path.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AddressingVersion.cs : add fault action namespace.
+
+2010-03-26  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* HttpRequestChannel.cs: There is no WebHeaderCollection.Add 
+	method in SL API
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageImpl.cs : pass IsFault argument in OnCreateBufferedCopy().
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestContext.cs, AspNetRequestContext.cs : return HTTP 500
+	  for fault message.
+
+2010-03-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : create HttpResponseMessageProperty.
+
+2010-03-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestContext.cs : removed HTTP status rewriting for
+	  commented reason.
+
+2010-03-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : handle only 4xx errors as to not process
+	  content stream.
+
+2010-03-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : do not use SOAP11 namespace for fault contents.
+
+2010-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ReplyChannelBase.cs, HttpReplyChannel.cs : add some locking.
+	  Patch by Matt Dargavel.
+
+2010-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : use lock object which is subject to
+	  change. Fix by Matt Dargavel.
+
+2010-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : remove consumed HttpListenerContext from
+	  the pending queue. Compare "wsdl" request in case insensitive
+	  manner. Patch by Matt Dargavel.
+
+2010-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestContext.cs : apply the patch by Matt Dargavel, which is
+	  supposed to provide detailed 400 error message.
+
+2010-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TransactionFlowBindingElement.cs: revamp the previous change to
+	  not regress regarding service metadata.
+
+2010-03-24  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelListenerBase.cs, TransactionFlowBindingElement.cs: fix 
+	  GetProperty<T>() bug that fails to retrieve properties. (This may
+	  be rewritten later if an ongoing change proposal is to take place.)
+
+2010-03-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ReliableSessionBindingElement.cs,
+	  PrivacyNoticeBindingElement.cs,
+	  RemoteEndpointMessageProperty.cs : added some missing types.
+
+2010-03-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs :
+	  why does it filter out most of the headers? kill it.
+
+2010-03-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs, AspNetReplyChannel.cs, HttpChannelListener.cs,
+	  HttpListenerManager.cs : refactoring on acquiring SvcHttpHandler
+	  to not raise "not found" error (see bug #573795).
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* HttpRequestChannel.cs, HttpTransportBindingElement.cs: use
+	MOONLIGHT symbol to disambiguate MonoTouch and Moonlight code.
+
+2010-03-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : For ASP.NET, use correct GenericIdentity
+	  type, and use null password unless we find a chance to get password
+	  in ASP.NET HttpContext.
+
+2010-03-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs, AspNetReplyChannel.cs, HttpChannelListener.cs,
+	  HttpListenerManager.cs : ongoing authentication support. It returns
+	  401 as expected, but somehow fails to retrieve user info.
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : this change (along with HttpListener
+	  implementation) somehow fixes basic auth. connection error...
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs : add !NET_2_1.
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs, MessageHeaders.cs : add nasty workaround for
+	  typed UniqueId output.
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs : no need to treat EndpointAddress as a special
+	  case here too.
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs : remove duplicate constant.
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs, MessageHeaders.cs: MessageHeader does not treat
+	  EndpointAddress as a special case. Instead, each MessageHeaders
+	  property should convert it to appropriate serializable objects.
+
+	  (Our DataContractSerializer fails to reject EndpointAddress as
+	  serializable type, so it's rather a preparation step.)
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeader.cs, Message.cs : use dictionary string whenever
+	  applicable. The binary output on #577139 is getting closer (no
+	  idea if it is really about binary output though).
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BinaryMessageEncoder.cs : moved soap_dictionary to Constants.
+
+2010-02-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	*  HttpTransportBindingElement.cs : ... and add MONOTOUCH on #ifs.
+
+2010-02-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	*  HttpRequestChannel.cs, HttpTransportBindingElement.cs :
+	  enable authentication schemes on monotouch.
+
+2010-02-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : a wait handle could be used for more than one
+	  requests and hence it sometimes blocked one reply channel. Now
+	  it creates a wait handle for each ASP.NET request so that such
+	  multiple use should not occur. This should fix blocking on
+	  concurrent requests (it indeed fixes as long as I can see).
+
+2010-02-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AspNetReplyChannel.cs : remove garbage output.
+
+2010-02-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : Use lock when it tries to create the service
+	  host.
+
+2010-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandlerFactory.cs : lock when it tries to acquire
+	  HttpHandler.
+
+2010-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : add another workaround for blocking
+	  concurrent calls.
+
+2010-02-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : small refactoring.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpDuplexSessionChannel.cs : added a workaround receiver delay
+	  that somehow makes callback client to not cause infinite loop.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpDuplexSessionChannel.cs, PeerDuplexChannel.cs,
+	  DuplexChannelBase.cs : Receive() should rather use TryReceive().
+	  It should not be in reverse order.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs, HttpListenerManager.cs :
+	  Implement async cancellation in the expected manner (though with
+	  some hack). This mostly removed nunit blockers.
+
+2010-01-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CommunicationObject.cs : fix wrong status changes.
+
+2010-01-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AddressHeader.cs : XmlSchema.InstanceNamespace didn't exist in 2.1 :(
+
+2010-01-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AddressHeader.cs : implement remaining bits.
+	  Eliminate dependency on NetDataContractSerializer.
+
+2010-01-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CommunicationObject.cs : in Fault(), do similar work as previous
+	  change does.
+
+2010-01-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CommunicationObject.cs : when process state changes, lock the
+	  object to make sure the state transition is valid.
+	  Change OnClosed/OnClosing to do the way OnOpened/OnOpening does.
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs : implement SetAction().
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactoryBase.cs : fix build.
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelBase.cs : cosmetic API fix for SL3.
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelFactoryBase.cs :
+	  implement On{Begin/End}Close() on the generic type.
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpChannelFactory.cs, TcpChannelFactory.cs,
+	  ChannelFactoryBase.cs, NamedPipeChannelFactory.cs
+	  PeerChannelFactory.cs, HttpRequestChannel.cs:
+	  fix ChannelFactoryBase API; move On(Begin/End)Open() to internal
+	  type and made required changes.
+
+2010-01-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpCookieContainerBindingElement.cs : new.
+	* IHttpCookieContainer.cs : fix type name.
+	* HttpRequestChannel.cs, HttpChannelFactory.cs : support above.
+
+2010-01-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpBinaryFrameManager.cs : treat EOF as interrupted stream too (it
+	  does not happen when communicating with .NET client but happens with
+	  mono). Seealso FIXME comment.
+	* TcpDuplexSessionChannel.cs : do not try to close session when it
+	  failed to read sized message. The connection is already dead.
+
+	  Fixed bug #567949.
+
+2010-01-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpDuplexSessionChannel.cs :
+	  Write EndRecord only when the connection is available.
+	  Remove hack - do let ChannelDispatcher close the channel.
+	* TcpBinaryFrameManager.cs :
+	  The socket may be disconnected when trying to read a sized message,
+	  so check some socket exceptions.
+	  In case the client silently shuts down without EndRecord and
+	  reconnects to the server with preamble while expecting a sized
+	  message (which is so lame, but that's what .NET often does), refresh
+	  preamble and continue.
+
+	  This fixes some cases of bug #567949 but not all.
+
+2010-01-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BinaryMessageEncoder.cs : enable workaround buffering only when
+	  the argument stream does *not* support seek. This fixes some
+	  net.tcp connection problem.
+
+2009-12-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpBinaryFrameManager.cs : If preamble byte is not available from
+	  the client stream, detect it to close the reply or input channel.
+	* TcpRequestChannel.cs : send preamble at each request time.
+	  It differentiates communication behavior on such cases that involve
+	  single open and multiple requests.
+	* TcpReplyChannel.cs : close the channel only when the channel is
+	  oeprated to close i.e. do not close the socket every time.
+	  Process preambles on each request (the same as request channel).
+
+2009-12-26  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TcpBinaryFrameManager.cs : unsized envelope record may have more
+	  than one data block, so consume them accordingly. This should fix
+	  large buffer consumption.
+
+2009-12-21  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageFault.cs : support EnvelopeVersion.None as well, as almost
+	  the same as SOAP12.
+
+2009-12-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestContext.cs : for DestinationUnreachable message, this
+	  channel returns 400 in .NET.
+
+2009-12-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BinaryMessageEncoder.cs : added workaround for strange stream
+	  consumption error raised by HttpTransport + Binary encoder example.
+	* BinaryMessageEncodingBindingElement.cs:
+	  only SOAP 1.2 is allowed for this encoder.
+
+2009-12-14  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlReaderBodyWriter.cs : don't try to write empty xml.
+
+2009-12-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : avoid adding duplicate headers. Basically
+	  default WebHeaderCollection items are overwritten.
+
+2009-12-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : when HTTP response was error, do not try
+	  to read message but just raise an error.
+
+2009-12-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs : null can be set as a WS-Addressing header item.
+
+2009-12-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : WebException.Response might be null.
+
+2009-12-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ReplyChannelBase.cs : added listener property.
+	* SecurityChannelListener.cs : quick async impl, as ServiceHost has
+	  been updated to prefer async by default, a while ago.
+
+2009-12-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpTransportBindingElement.cs : finished all GetProperty() values.
+
+2009-12-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs : disabled carelessly added
+	  "UseDefaultCredentials = false" line. It blocked basic auth.
+
+2009-12-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpRequestChannel.cs, HttpChannelFactory.cs,
+	  HttpChannelListener.cs, HttpListenerManager.cs :
+	  implemented http client authentication and some of corresponding
+	  service code. Only client works so far.
+
+2009-12-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpsTransportBindingElement.cs, HttpChannelListener.cs :
+	  added URI scheme check.
+
+2009-12-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* TransportSecurityBindingElement.cs : fix 2.1 build.
+
+2009-12-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpsTransportBindingElement.cs :
+	  RequireClientCertificate is false by default.
+	  Remove extra #if NET_2_1.
+	* SecurityBindingElement.cs :
+	  Implement some transport security factory methods.
+	* TransportSecurityBindingElement.cs :
+	  It is not ISecurityCapabilities anymore.
+
+2009-11-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* MessageHeaders.cs
+	  SecurityBindingElement.cs
+	  LocalClientSecuritySettings.cs
+	  TransportSecurityBindingElement.cs
+	  FaultConverter.cs : They are now part of SL3 API.
+
+2009-11-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* BinaryMessageEncodingBindingElement.cs : changes for 2.1 build.
+
+2009-11-05  Geoff Norton  <gnorton@novell.com>
+
+	* HttpsTransportBindingElement.cs: Implement basic https transport
+	binding support for Moonlight and MonoTouch
+
+2009-10-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : remove CWLs.
+
+2009-10-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : move back previous listener selector code in
+	  ProcessRequest(). Unlike HttpListener, ASP.NET does not refine
+	  and differentiate requests to deeper paths (such as /jsdebug), so
+	  we need such refinement here.
+
+2009-10-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpListenerManager.cs : dependent fix to ServiceMetadataExtension
+	  changes.
+
+2009-10-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs, HttpReplyChannel.cs, AspNetReplyChannel.cs,
+	  HttpChannelListener.cs, HttpListenerManager.cs :
+	  Similar refactoring on ASP.NET side to the previous one.
+	  Added ASP.NET implementation of HttpListenerManager and use some
+	  part of it in SvcHttpHandler (ASP.NET stack does not fully make use
+	  of the manager yet).
+	  Rewrote AspNetReplyChannel to become almost the same as
+	  HttpSimpleReplyChannel, to hopefully unify them later.
+	  Now it dispatches requests to *.svc for wsdl, help and SOAP as long
+	  as ServiceThrottle has MaxConcurrentSessions=1. Also REST calls
+	  are still broken.
+
+2009-10-20  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs, HttpChannelListener.cs, HttpListenerManager.cs:
+	  Refactoring on listener manager to correctly handle wsdl and help
+	  requests for such case that they conflict in addressing. Now it
+	  can correctly distinguish service calls, WSDL requests and help
+	  requests when all of them point to "http://localhost/foo.svc"
+	  (which is very common case that the user does not change Http*Url).
+
+2009-10-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* ChannelListenerBase.cs : add Properties property to add arbitrary
+	  properties handy (only inside this assembly).
+
+2009-10-16  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : fix warning.
+
+2009-10-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs, AspNetReplyChannel.cs : set Via property.
+
+2009-10-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : make sure to release wait lock.
+	* HttpChannelListener.cs : session channels are not supported, so
+	  remove relevant NIEs.
+
+2009-10-15  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* HttpRequestChannel.cs (WaitEnd): Neither Moonlight nor MonoTouch
+	support contexts so we call the non-overloaded WaitOne method 
+	(which defaults to false).
+
+2009-10-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs, AspNetReplyChannel.cs, HttpChannelListener.cs:
+	  significant rewrite to cooperate wcf handler and asp.net handler
+	  to not mix multiple WCF listener within the asp.net handler.
+	  So far it mostly works when 1) there are no ChannelDispatchers
+	  that have an identical listen Uri and 2) MaxConcurrentSessions is
+	  1 (must be explicitly set).
+
+2009-10-13  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CommunicationObject.cs : give better state error description.
+
+2009-10-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* CommunicationObject.cs : OnOpening() and OnOpened() require calls
+	  to base methods. This resulted in not a few changes everywhere.
+
+2009-10-07  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* IHttpCookieContainer.cs : new 2.1-only interface (no use).
+
+2009-10-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : use file path given by the factory to
+	  construct BaseAddresses. Requests to "test.svc/jsdebug" should
+	  not be handled as request to "jsdebug" file, it's rather an
+	  "argument" to "test.svc".
+
+2009-10-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs, HttpChannelListener.cs : some significant
+	  rewrite to handle shutdown situation better. The listeners should
+	  not close channels that it opened. Instead, just stop accepting
+	  further requests. Removed blocking mutex on WaitForRequest().
+	  Now xsp shuts down as expected.
+
+2009-10-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : lock list when releasing its content contexts.
+	* AspNetReplyChannel.cs : send EndRequest() to handler when it is
+	  closing.
+
+2009-10-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandlerFactory.cs : remove todo.
+	* ReplyChannelBase.cs : add comment.
+
+2009-10-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpTransportBindingElement.cs, SvcHttpHandlerFactory.cs :
+	  revert the change, to use internal asp.net state again.
+	* SvcHttpHandler.cs : add VirtualPathExtension.
+
+2009-10-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs, AspNetReplyChannel.cs, AspNetRequestContext.cs:
+	  asp.net response was not written correctly.
+	  Fill HttpRequestMessageProperty to get handle WSDL requests
+	  processed in ServiceMetadataExtension without NRE.
+	  Remove wrong HttpListenerContext iteration at Abort and Close in
+	  common base class and move it to non-asp derived channel.
+
+2009-10-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandler.cs : remove unused code.
+
+2009-09-30  Jb Evain  <jbevain@novell.com>
+
+	* HttpRequestChannel.cs: When compiling for MonoTouch, avoid
+	to use any of the remoting features.
+
+2009-09-30  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SvcHttpHandlerFactory.cs, HttpTransportBindingElement.cs :
+	  use AspNetCompatibilityEnabled.
+	* SvcHttpHandler.cs : disable ApplyConfiguration(). It should be done
+	  at ServiceHostBase.
+	* AspNetReplyChannel.cs : remove extra field.
+
+2009-09-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* HttpReplyChannel.cs : remove extra field.
+
+2009-09-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AspNetRequestContext.cs : remove CWL.
+
+2009-09-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AspNetReplyChannel.cs, AspNetRequestContext.cs : close HttpContext
+	  only after AspNetRequestContext is closed. Do not close it
+	  immediately after receiving the context. (HttpRuntime destructs it
+	  and further uses then becomes impossible.)
+
+2009-09-29  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* AspNetReplyChannel.cs, HttpReplyChannel.cs : add some comments.
+	* SvcHttpHandlerFactory.cs, SvcHttpHandler.cs, HttpChannelListener.cs:
+	  Make sure that AspNetChannelListener is bound to correct
+	  SvcHttpHandler, regardless of specific request URI. It is required
+	  for both WSDL requests and RESTful binding requests.
+
 2009-09-14  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* MessageProperties.cs : fix CopyProperties() behavior to not

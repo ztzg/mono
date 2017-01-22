@@ -8,7 +8,7 @@
 //   Lluis Sanchez (lluis@novell.com)
 //
 // (C) 2002,2003 Ximian, Inc. (http://www.ximian.com)
-// (c) 2003 Novell, Inc. (http://www.novell.com)
+// (c) 2003-2010 Novell, Inc. (http://www.novell.com)
 //
 
 //
@@ -34,9 +34,7 @@
 
 using System;
 using System.Collections;
-#if NET_2_0
 using System.Collections.Generic;
-#endif
 using System.Text;
 using System.Collections.Specialized;
 using System.Web.Util;
@@ -44,12 +42,7 @@ using System.Globalization;
 
 namespace System.Web.UI
 {
-	#if NET_2_0
-	public sealed partial
-	#else
-	internal
-	#endif
-	class ClientScriptManager
+	public sealed partial class ClientScriptManager
 	{
 		internal const string EventStateFieldName = "__EVENTVALIDATION";
 		
@@ -59,47 +52,46 @@ namespace System.Web.UI
 		internal Hashtable hiddenFields;
 		ScriptEntry submitStatements;
 		Page page;
-#if NET_2_0
 		int [] eventValidationValues;
 		int eventValidationPos = 0;
 		Hashtable expandoAttributes;
 		bool _hasRegisteredForEventValidationOnCallback;
 		bool _pageInRender;
 		bool _initCallBackRegistered;
-#endif
+		bool _webFormClientScriptRendered;
+		bool _webFormClientScriptRequired;
+		
+		internal bool ScriptsPresent {
+			get {
+				return _webFormClientScriptRequired ||
+					_initCallBackRegistered ||
+					_hasRegisteredForEventValidationOnCallback ||
+					clientScriptBlocks != null ||
+					startupScriptBlocks != null ||
+					submitStatements != null ||
+					registeredArrayDeclares != null ||
+					expandoAttributes != null;
+			}
+		}
 		
 		internal ClientScriptManager (Page page)
 		{
 			this.page = page;
 		}
 
-#if !NET_2_0
-		public string GetPostBackClientEvent (Control control, string argument)
-		{
-			return GetPostBackEventReference (control, argument);
-		}
-#endif
-
 		public string GetPostBackClientHyperlink (Control control, string argument)
 		{
 			return "javascript:" + GetPostBackEventReference (control, argument);
 		}
 	
-#if NET_2_0
 		public string GetPostBackClientHyperlink (Control control, string argument, bool registerForEventValidation)
 		{
 			if (registerForEventValidation)
 				RegisterForEventValidation (control.UniqueID, argument);
 			return "javascript:" + GetPostBackEventReference (control, argument);
 		}
-#endif		
 
-#if !NET_2_0
-		internal
-#else
-		public
-#endif
-		string GetPostBackEventReference (Control control, string argument)
+		public string GetPostBackEventReference (Control control, string argument)
 		{
 			if (control == null)
 				throw new ArgumentNullException ("control");
@@ -111,7 +103,6 @@ namespace System.Web.UI
 				return "__doPostBack('" + control.UniqueID + "','" + argument + "')";
 		}
 
-#if NET_2_0
 		public string GetPostBackEventReference (Control control, string argument, bool registerForEventValidation)
 		{
 			if (control == null)
@@ -157,7 +148,7 @@ namespace System.Web.UI
 			if(options.TrackFocus)
 				RegisterHiddenField (Page.LastFocusID, String.Empty);
 
-			string prefix = options.RequiresJavaScriptProtocol ? "javascript:" : "";
+			string prefix = options.RequiresJavaScriptProtocol ? "javascript:" : String.Empty;
 			if (page.IsMultiForm)
 				prefix += page.theForm + ".";
 
@@ -180,9 +171,6 @@ namespace System.Web.UI
 			page.RequiresPostBackScript ();
 			_webFormClientScriptRequired = true;
 		}
-
-		bool _webFormClientScriptRendered;
-		bool _webFormClientScriptRequired;
 
 		internal void WriteWebFormClientScript (HtmlTextWriter writer) {
 			if (!_webFormClientScriptRendered && _webFormClientScriptRequired) {
@@ -231,14 +219,8 @@ namespace System.Web.UI
 				(clientErrorCallback ?? "null") + "," +
 				(useAsync ? "true" : "false") + ")";
 		}
-#endif
 		
-#if NET_2_0
-		public
-#else
-		internal
-#endif
-		string GetWebResourceUrl(Type type, string resourceName)
+		public string GetWebResourceUrl(Type type, string resourceName)
 		{
 			if (type == null)
 				throw new ArgumentNullException ("type");
@@ -309,6 +291,7 @@ namespace System.Web.UI
 				registeredArrayDeclares.Add (arrayName, new ArrayList());
 	
 			((ArrayList) registeredArrayDeclares[arrayName]).Add(arrayValue);
+			page.RequiresFormScriptDeclaration ();
 		}
 
 		void RegisterScript (ref ScriptEntry scriptList, Type type, string key, string script, bool addScriptTags)
@@ -407,7 +390,6 @@ namespace System.Web.UI
 			RegisterScript (ref clientScriptBlocks, type, "include-" + key, url, ScriptEntryFormat.Include);
 		}
 
-#if NET_2_0
 		public void RegisterClientScriptResource (Type type, string resourceName)
 		{
 			RegisterScript (ref clientScriptBlocks, type, "resource-" + resourceName, GetWebResourceUrl (type, resourceName), ScriptEntryFormat.Include);
@@ -523,7 +505,7 @@ namespace System.Web.UI
 			
 			throw InvalidPostBackException ();
 		}
-#endif
+
 		void WriteScripts (HtmlTextWriter writer, ScriptEntry scriptList)
 		{
 			if (scriptList == null)
@@ -567,7 +549,6 @@ namespace System.Web.UI
 			}
 		}
 
-#if NET_2_0
 		internal void RestoreEventValidationState (string fieldValue)
 		{
 			if (!page.EnableEventValidation || fieldValue == null || fieldValue.Length == 0)
@@ -622,30 +603,19 @@ namespace System.Web.UI
 			writer.WriteLine ();
 		}
 
-#endif
-		
-#if NET_2_0
 		internal const string SCRIPT_BLOCK_START = "//<![CDATA[";
 		internal const string SCRIPT_BLOCK_END = "//]]>";
-#else
-		internal const string SCRIPT_BLOCK_START = "<!--";
-		internal const string SCRIPT_BLOCK_END ="// -->";
-#endif
+		internal const string SCRIPT_ELEMENT_START = @"<script type=""text/javascript"">" + SCRIPT_BLOCK_START;
+		internal const string SCRIPT_ELEMENT_END = SCRIPT_BLOCK_END + "</script>";
 		
 		internal static void WriteBeginScriptBlock (HtmlTextWriter writer)
 		{
-			writer.WriteLine ("<script"+
-#if !NET_2_0
-				" language=\"javascript\""+
-#endif
-				" type=\"text/javascript\">");
-			writer.WriteLine (SCRIPT_BLOCK_START);
+			writer.WriteLine (SCRIPT_ELEMENT_START);
 		}
 
 		internal static void WriteEndScriptBlock (HtmlTextWriter writer)
 		{
-			writer.WriteLine (SCRIPT_BLOCK_END);
-			writer.WriteLine ("</script>");
+			writer.WriteLine (SCRIPT_ELEMENT_END);
 		}
 		
 		internal void WriteHiddenFields (HtmlTextWriter writer)
@@ -653,20 +623,26 @@ namespace System.Web.UI
 			if (hiddenFields == null)
 				return;
 
-#if NET_2_0
-			writer.RenderBeginTag (HtmlTextWriterTag.Div);
+			writer.WriteLine ();
+#if NET_4_0
+			writer.AddAttribute (HtmlTextWriterAttribute.Class, "aspNetHidden");
 #endif
+			writer.RenderBeginTag (HtmlTextWriterTag.Div);
+			int oldIndent = writer.Indent;
+			writer.Indent = 0;
+			bool first = true;
+
 			foreach (string key in hiddenFields.Keys) {
 				string value = hiddenFields [key] as string;
-#if NET_2_0
-				writer.WriteLine ("<input type=\"hidden\" name=\"{0}\" id=\"{0}\" value=\"{1}\" />", key, HttpUtility.HtmlAttributeEncode (value));
-#else
-				writer.WriteLine ("<input type=\"hidden\" name=\"{0}\" value=\"{1}\" />", key, HttpUtility.HtmlAttributeEncode (value));
-#endif
+				if (first)
+					first = false;
+				else
+					writer.WriteLine ();
+				writer.Write ("<input type=\"hidden\" name=\"{0}\" id=\"{0}\" value=\"{1}\" />", key, HttpUtility.HtmlAttributeEncode (value));
 			}
-#if NET_2_0
+			writer.Indent = oldIndent;
 			writer.RenderEndTag (); // DIV
-#endif
+			writer.WriteLine ();
 			hiddenFields = null;
 		}
 		
@@ -724,13 +700,11 @@ namespace System.Web.UI
 			}
 		}
 
-#if NET_2_0
 		internal string GetClientValidationEvent (string validationGroup) {
 			if (page.IsMultiForm)
 				return "if (typeof(" + page.theForm + ".Page_ClientValidate) == 'function') " + page.theForm + ".Page_ClientValidate('" + validationGroup + "');";
 			return "if (typeof(Page_ClientValidate) == 'function') Page_ClientValidate('" + validationGroup + "');";
 		}
-#endif
 
 		internal string GetClientValidationEvent ()
 		{
@@ -747,14 +721,9 @@ namespace System.Web.UI
 			StringBuilder sb = new StringBuilder ();
 			ScriptEntry entry = submitStatements;
 			while (entry != null) {
-#if NET_2_0
 				sb.Append (EnsureEndsWithSemicolon (entry.Script));
-#else
-				sb.Append (entry.Script);
-#endif
 				entry = entry.Next;
 			}
-#if NET_2_0
 			RegisterClientScriptBlock (GetType(), "HtmlForm-OnSubmitStatemen",
 @"
 " + page.WebFormScriptReference + @".WebForm_OnSubmit = function () {
@@ -763,10 +732,6 @@ return true;
 }
 ", true);
 			return "javascript:return " + page.WebFormScriptReference + ".WebForm_OnSubmit();";
-
-#else
-			return sb.ToString ();
-#endif
 		}
 		
 		internal static string GetScriptLiteral (object ob)
@@ -802,7 +767,7 @@ return true;
 
 				return sb.ToString ();
 			} else if (ob is bool) {
-				return ob.ToString ().ToLower (CultureInfo.InvariantCulture);
+				return ob.ToString ().ToLower (Helpers.InvariantCulture);
 			} else {
 				return ob.ToString ();
 			}
@@ -831,13 +796,11 @@ return true;
 			Include,
 		}
 
-#if NET_2_0
 		// helper method
 		internal static string EnsureEndsWithSemicolon (string value) {
 			if (value != null && value.Length > 0 && value [value.Length - 1] != ';')
 				return value += ";";
 			return value;
 		}
-#endif
 	}
 }

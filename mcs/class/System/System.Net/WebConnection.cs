@@ -35,6 +35,9 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
+#if SECURITY_DEP
+using Mono.Security.Protocol.Tls;
+#endif
 
 namespace System.Net
 {
@@ -70,9 +73,7 @@ namespace System.Net
 		HttpWebRequest priority_request;
 		NetworkCredential ntlm_credentials;
 		bool ntlm_authenticated;
-#if NET_1_1
 		bool unsafe_sharing;
-#endif
 
 		bool ssl;
 		bool certsAvailable;
@@ -83,13 +84,28 @@ namespace System.Net
 		static PropertyInfo piServer;
 		static PropertyInfo piTrustFailure;
 
+#if MONOTOUCH
+                static MethodInfo start_wwan;
+
+                static WebConnection ()
+                {
+                        Type type = Type.GetType ("MonoTouch.ObjCRuntime.Runtime, monotouch");
+			if (type != null)
+	                        start_wwan = type.GetMethod ("StartWWAN");
+                }
+#endif
+
 		public WebConnection (WebConnectionGroup group, ServicePoint sPoint)
 		{
 			this.sPoint = sPoint;
 			buffer = new byte [4096];
 			readState = ReadState.None;
 			Data = new WebConnectionData ();
-			initConn = new WaitCallback (InitConnection);
+			initConn = new WaitCallback (state => {
+				try {
+					InitConnection (state);
+				} catch {}
+				});
 			queue = group.Queue;
 			abortHelper = new AbortHelper ();
 			abortHelper.Connection = this;
@@ -136,26 +152,32 @@ namespace System.Net
 				IPHostEntry hostEntry = sPoint.HostEntry;
 
 				if (hostEntry == null) {
-					status = sPoint.UsesProxy ? WebExceptionStatus.ProxyNameResolutionFailure :
-								    WebExceptionStatus.NameResolutionFailure;
-					return;
+#if MONOTOUCH
+					if (start_wwan != null) {
+						start_wwan.Invoke (null, new object [1] { sPoint.Address });
+						hostEntry = sPoint.HostEntry;
+					}
+					if (hostEntry == null) {
+#endif
+						status = sPoint.UsesProxy ? WebExceptionStatus.ProxyNameResolutionFailure :
+									    WebExceptionStatus.NameResolutionFailure;
+						return;
+#if MONOTOUCH
+					}
+#endif
 				}
 
-				WebConnectionData data = Data;
+				//WebConnectionData data = Data;
 				foreach (IPAddress address in hostEntry.AddressList) {
 					socket = new Socket (address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 					IPEndPoint remote = new IPEndPoint (address, sPoint.Address.Port);
-#if NET_1_1
 					socket.SetSocketOption (SocketOptionLevel.Tcp, SocketOptionName.NoDelay, sPoint.UseNagleAlgorithm ? 0 : 1);
-#endif
-#if NET_2_0
 					socket.NoDelay = !sPoint.UseNagleAlgorithm;
 					if (!sPoint.CallEndPointDelegate (socket, remote)) {
 						socket.Close ();
 						socket = null;
 						status = WebExceptionStatus.ConnectFailure;
 					} else {
-#endif
 						try {
 							if (request.Aborted)
 								return;
@@ -169,7 +191,7 @@ namespace System.Net
 							if (s != null)
 								s.Close ();
 							return;
-						} catch (ObjectDisposedException exc) {
+						} catch (ObjectDisposedException) {
 							// socket closed from another thread
 							return;
 						} catch (Exception exc) {
@@ -181,9 +203,7 @@ namespace System.Net
 								status = WebExceptionStatus.ConnectFailure;
 							connect_exception = exc;
 						}
-#if NET_2_0
 					}
-#endif
 				}
 			}
 		}
@@ -194,7 +214,7 @@ namespace System.Net
 				if (sslStream != null)
 					return;
 
-#if MONOTOUCH && SECURITY_DEP
+#if NET_2_1 && SECURITY_DEP
 				sslStream = typeof (Mono.Security.Protocol.Tls.HttpsClientStream);
 #else
 				// HttpsClientStream is an internal glue class in Mono.Security.dll
@@ -332,6 +352,11 @@ namespace System.Net
 										request.ClientCertificates,
 										request, buffer};
 						nstream = (Stream) Activator.CreateInstance (sslStream, args);
+#if SECURITY_DEP
+						SslClientStream scs = (SslClientStream) nstream;
+						var helper = new ServicePointManager.ChainValidationHelper (request);
+						scs.ServerCertValidation2 += new CertificateValidationCallback2 (helper.ValidateChain);
+#endif
 						certsAvailable = false;
 					}
 					// we also need to set ServicePoint.Certificate 
@@ -1095,12 +1120,10 @@ namespace System.Net
 			set { ntlm_credentials = value; }
 		}
 
-#if NET_1_1
 		internal bool UnsafeAuthenticatedConnectionSharing {
 			get { return unsafe_sharing; }
 			set { unsafe_sharing = value; }
 		}
-#endif
 		// -
 	}
 }

@@ -1,3 +1,148 @@
+2010-05-17 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Timer.cs: check object reference when the timers are equal.
+	Fixes bug #605092.
+
+2010-04-23  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* LazyThreadSafetyMode.cs: Include in Moonlight build.
+
+2010-04-15  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* AtomicBoolean.cs:
+	* CountdownEvent.cs:
+	* SpinLock.cs: Add BOOTSTRAP_NET_4_0 define
+
+2010-03-25 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* ThreadPool.cs: add fast path to queue work items in the runtime.
+
+2010-03-23  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Monitor.cs: Implement new NET_4_0 (and SL4) Enter overload 
+	required to run some DRT tests (e.g. 7007)
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* ThreadPool.cs, Thread.cs, ExecutionContext.cs: use MOONLIGHT
+	symbol to disambiguate MonoTouch and Moonlight code.
+
+2010-03-08  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* SpinLock.cs: Merge algorithm back in SpinLock struct
+
+2010-03-08  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* SpinLock.cs: Update to use ticket spinlock algorithm
+
+2010-02-26 Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* LazyThreadSafetyMode.cs: Added.
+
+2010-02-08  Zoltan Varga  <vargaz@gmail.com>
+
+	* WaitHandle.cs (CheckArray): Check that the handles array is not null.
+	Fixes #576039.
+
+2010-02-02  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* CancellationToken.cs:
+	* CancellationTokenSource.cs:
+	* ManualResetEventSlim.cs:
+	* SemaphoreSlim.cs:
+	* SpinLock.cs:
+	* SpinWait.cs:
+	* ThreadLocal.cs: Port to .NET 4 beta 2 API
+
+2009-12-09  Jb Evain  <jbevain@novell.com>
+
+	* ThreadPool.cs (QueueUserWorkItem): properly throw
+	an ANE instead of triggering a NRE when being passed a null callback.
+
+2009-11-02  Miguel de Icaza  <miguel@novell.com>
+
+	* Jumbo patch to drop support for pre-NET_2_0 code:
+
+	Remove ONLY_1_1 code
+	Remove NET_1_0 only code
+	Remove NET_2_0 defines assuming the value is true.
+
+2009-11-02  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Thread.cs (set_CurrentUICulture): Delay setting in_currentculture
+	to true until after the null check and the return statement.
+
+2009-11-02  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* Parallel.cs: Added fix for Bug #536919.
+
+2009-10-25  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Thread.cs: Fix validations for Join and Sleep overloads
+
+2009-10-22  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* EventWaitHandle.cs: Add validation on the EventResetMode 
+	parameter used in the constructors
+	* Monitor.cs: Fix validations for TryEnter and Wait. Reduce 
+	duplicated code between overloads.
+
+2009-10-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* WaitHandle.cs: Add missing validations for 'millisecondsTimeout'
+	in Wait[One|Any|All]. Also call the overloaded (bool) methods for
+	WaitAll to reduce code duplication.
+
+2009-10-20  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Timer.cs: Always call Init from every constructors to avoid 
+	duplicate checks. Fix validations on different dueTime and period
+	(ctor and Change methods). Seal private TimerComparer class and
+	avoid multiple (identical) casts in its Compare method. Seal 
+	private Scheduler class.
+
+2009-10-20 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Timer.cs: make sure we don't insert 2 timers with the same key.
+
+2009-10-20  Jb Evain  <jbevain@novell.com>
+
+	* Thread.cs: change type of the current_appcontext field to object
+	to avoid triggering static constructors unless explicitely required.
+
+2009-10-16 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Timer.cs: looks like any negative value is treated as Infinite.
+
+2009-10-07  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Thread.cs: Remove LocalDataStoreSlot-related methods from
+	Moonlight build
+
+2009-09-29  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* Thread.cs: StartSafe: ignore ThreadAbortExceptions.
+
+2009-09-27 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Timer.cs: account for the time spent sending jobs to the queue.
+
+2009-09-26  Mark Probst  <mark.probst@gmail.com>
+
+	* Thread.cs: Serialize the principal so as not to make it cross
+	appdomains.  Two new internal calls for copying byte arrays
+	between domains.
+
+2009-09-25  Mark Probst  <mark.probst@gmail.com>
+
+	* Thread.cs: The Thread class is split up into Thread and
+	InternalThread now.  We have exactly one InternalThread per
+	thread, and at most one Thread per appdomain per thread.  Most
+	data is stored in InternalThread.  All InternalThread objects live
+	in the root domain.
+
+	* Environment.cs: Corlib version bump.
+
 2009-09-24 Gonzalo Paniagua Javier <gonzalo@novell.com>
 
 	* Timer.cs: no need to wake up the scheduler when removing the next

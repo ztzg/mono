@@ -35,26 +35,25 @@ namespace System.ServiceModel.Channels
 		public XmlDictionaryReaderQuotas ReaderQuotas { get; private set; }
 	}
 
-	internal class TcpChannelFactory<TChannel> : ChannelFactoryBase<TChannel>
+	internal class TcpChannelFactory<TChannel> : TransportChannelFactoryBase<TChannel>
 	{
 		TcpChannelInfo info;
 
-		[MonoTODO]
 		public TcpChannelFactory (TcpTransportBindingElement source, BindingContext ctx)
+			: base (source, ctx)
 		{
-			MessageEncoder encoder = null;
 			XmlDictionaryReaderQuotas quotas = null;
-			foreach (BindingElement be in ctx.RemainingBindingElements) {
+			foreach (BindingElement be in ctx.Binding.Elements) {
 				MessageEncodingBindingElement mbe = be as MessageEncodingBindingElement;
 				if (mbe != null) {
-					encoder = CreateEncoder<TChannel> (mbe);
+					MessageEncoder = CreateEncoder<TChannel> (mbe);
 					quotas = mbe.GetProperty<XmlDictionaryReaderQuotas> (ctx);
 					break;
 				}
 			}
-			if (encoder == null)
-				encoder = new BinaryMessageEncoder ();
-			info = new TcpChannelInfo (source, encoder, quotas);
+			if (MessageEncoder == null)
+				MessageEncoder = new BinaryMessageEncoder ();
+			info = new TcpChannelInfo (source, MessageEncoder, quotas);
 		}
 
 		protected override TChannel OnCreateChannel (
@@ -75,11 +74,6 @@ namespace System.ServiceModel.Channels
 				return (TChannel) (object) new TcpRequestChannel (this, info, address, targetUri);
 
 			throw new InvalidOperationException (String.Format ("Channel type {0} is not supported.", typeof (TChannel).Name));
-		}
-
-		[MonoTODO]
-		protected override void OnOpen (TimeSpan timeout)
-		{
 		}
 	}
 }

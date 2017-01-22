@@ -5,7 +5,7 @@
 //	Gonzalo Paniagua Javier (gonzalo@ximian.com)
 //
 // (C) 2003 Ximian, Inc (http://www.ximian.com)
-// Copyright (C) 2005 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2005-2010 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -31,16 +31,14 @@ using System.Collections;
 using System.Security.Permissions;
 using System.Web.UI.WebControls;
 using System.Globalization;
+using System.Web.Util;
 
 namespace System.Web.UI.HtmlControls
 {
 	// CAS
 	[AspNetHostingPermission (SecurityAction.LinkDemand, Level = AspNetHostingPermissionLevel.Minimal)]
 	[AspNetHostingPermission (SecurityAction.InheritanceDemand, Level = AspNetHostingPermissionLevel.Minimal)]
-#if NET_2_0
-	public
-#endif
-	class HtmlSelectBuilder : ControlBuilder
+	public class HtmlSelectBuilder : ControlBuilder
 	{
 		public override bool AllowWhitespaceLiterals () 
 		{
@@ -49,9 +47,12 @@ namespace System.Web.UI.HtmlControls
 
 		public override Type GetChildControlType (string tagName, IDictionary attribs) 
 		{
-			if (System.String.Compare (tagName, "option", true, CultureInfo.InvariantCulture) != 0)
+			if (String.Compare (tagName, "option", true, Helpers.InvariantCulture) != 0)
 				return null;
 
+			string selected = attribs ["selected"] as string;
+			if (selected != null && selected.Length > 0 && String.Compare (selected, "selected", true, Helpers.InvariantCulture) == 0)
+				attribs ["selected"] = "true";
 			return typeof (ListItem);
 		}
 	}

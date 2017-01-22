@@ -30,6 +30,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
@@ -38,6 +39,21 @@ using System.Xml.Serialization;
 
 namespace System.ServiceModel.Syndication
 {
+	static class XmlReaderExtensions
+	{
+		public static bool IsTextNode (this XmlReader r)
+		{
+			switch (r.NodeType) {
+			case XmlNodeType.Text:
+			case XmlNodeType.CDATA:
+			case XmlNodeType.Whitespace:
+			case XmlNodeType.SignificantWhitespace:
+				return true;
+			}
+			return false;
+		}
+	}
+
 	[XmlRoot ("item", Namespace = "")]
 	public class Rss20ItemFormatter : SyndicationItemFormatter, IXmlSerializable
 	{
@@ -187,12 +203,13 @@ namespace System.ServiceModel.Syndication
 						Item.Links.Add (l);
 						continue;
 					case "guid":
-						Item.AddPermalink (CreateUri (reader.ReadElementContentAsString ()));
+						if (reader.GetAttribute ("isPermaLink") == "true")
+							Item.AddPermalink (CreateUri (reader.ReadElementContentAsString ()));
+						else
+							Item.Id = reader.ReadElementContentAsString ();
 						continue;
 					case "pubDate":
-						// FIXME: somehow DateTimeOffset causes the runtime crash.
-						reader.ReadElementContentAsString ();
-						// Item.PublishDate = FromRFC822DateString (reader.ReadElementContentAsString ());
+						Item.PublishDate = FromRFC822DateString (reader.ReadElementContentAsString ());
 						continue;
 					case "source":
 						Item.SourceFeed = new SyndicationFeed ();
@@ -207,9 +224,7 @@ namespace System.ServiceModel.Syndication
 						Item.Contributors.Add (p);
 						continue;
 					case "updated":
-						// FIXME: somehow DateTimeOffset causes the runtime crash.
-						reader.ReadElementContentAsString ();
-						// Item.LastUpdatedTime = XmlConvert.ToDateTimeOffset (reader.ReadElementContentAsString ());
+						Item.LastUpdatedTime = XmlConvert.ToDateTimeOffset (reader.ReadElementContentAsString ());
 						continue;
 					case "rights":
 						Item.Copyright = ReadTextSyndicationContent (reader);
@@ -285,7 +300,7 @@ namespace System.ServiceModel.Syndication
 			if (!reader.IsEmptyElement) {
 				reader.Read ();
 				for (reader.MoveToContent (); reader.NodeType != XmlNodeType.EndElement; reader.MoveToContent ()) {
-					if (reader.NodeType == XmlNodeType.Text)
+					if (reader.IsTextNode ())
 						category.Name += reader.Value;
 					else if (!TryParseElement (reader, category, Version)) {
 						if (PreserveElementExtensions)
@@ -294,6 +309,7 @@ namespace System.ServiceModel.Syndication
 						else
 							reader.Skip ();
 					}
+					reader.Read ();
 				}
 			}
 			reader.Read (); // </category> or <category ... />
@@ -362,7 +378,7 @@ namespace System.ServiceModel.Syndication
 				string url = null;
 				reader.Read ();
 				for (reader.MoveToContent (); reader.NodeType != XmlNodeType.EndElement; reader.MoveToContent ()) {
-					if (reader.NodeType == XmlNodeType.Text)
+					if (reader.IsTextNode ())
 						url += reader.Value;
 					else if (!TryParseElement (reader, link, Version)) {
 						if (PreserveElementExtensions)
@@ -393,7 +409,7 @@ namespace System.ServiceModel.Syndication
 			if (!reader.IsEmptyElement) {
 				reader.Read ();
 				for (reader.MoveToContent (); reader.NodeType != XmlNodeType.EndElement; reader.MoveToContent ()) {
-					if (reader.NodeType == XmlNodeType.Text)
+					if (reader.IsTextNode ())
 						person.Email += reader.Value;
 					else if (!TryParseElement (reader, person, Version)) {
 						if (PreserveElementExtensions)
@@ -402,6 +418,7 @@ namespace System.ServiceModel.Syndication
 						else
 							reader.Skip ();
 					}
+					reader.Read ();
 				}
 			}
 			reader.Read (); // end element or empty element
@@ -468,9 +485,12 @@ namespace System.ServiceModel.Syndication
 			if (!reader.IsEmptyElement) {
 				reader.Read ();
 				string title = null;
-				while (reader.NodeType != XmlNodeType.EndElement)
-					if (reader.NodeType == XmlNodeType.Text)
+				while (reader.NodeType != XmlNodeType.EndElement) {
+					if (reader.IsTextNode ())
 						title += reader.Value;
+					reader.Skip ();
+					reader.MoveToContent ();
+				}
 				feed.Title = new TextSyndicationContent (title);
 			}
 			reader.Read (); // </source> or <source ... />

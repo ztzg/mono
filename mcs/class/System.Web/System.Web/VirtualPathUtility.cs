@@ -37,19 +37,15 @@ using Microsoft.Win32;
 
 namespace System.Web {
 
-#if NET_2_0
-	public
-#endif
-	static class VirtualPathUtility
+	public static class VirtualPathUtility
 	{
-#if NET_2_0
 		static bool monoSettingsVerifyCompatibility;
 		static bool runningOnWindows;
 		
 		static VirtualPathUtility ()
 		{
 			try {
-				runningOnWindows = HttpRuntime.RunningOnWindows;
+				runningOnWindows = RuntimeHelpers.RunningOnWindows;
 				var monoSettings = WebConfigurationManager.GetWebApplicationSection ("system.web/monoSettings") as MonoSettingsSection;
 				if (monoSettings != null)
 					monoSettingsVerifyCompatibility = monoSettings.VerificationCompatibility != 1;
@@ -57,7 +53,6 @@ namespace System.Web {
 				// ignore
 			}
 		}
-#endif
 		
 		public static string AppendTrailingSlash (string virtualPath)
 		{
@@ -102,15 +97,16 @@ namespace System.Web {
 			if (normalize)
 				virtualPath = Normalize (virtualPath);
 
-			if (IsAppRelative (virtualPath) && virtualPath.Length < 3) { // "~" or "~/"
+			int vpLen = virtualPath.Length;
+			if (IsAppRelative (virtualPath) && vpLen < 3) { // "~" or "~/"
 				virtualPath = ToAbsolute (virtualPath);
+				vpLen = virtualPath.Length;
 			}
 			
-			if (virtualPath.Length == 1 && virtualPath [0] == '/') { // "/"
+			if (vpLen == 1 && virtualPath [0] == '/') // "/"
 				return null;
-			}
 
-			int last = virtualPath.LastIndexOf ('/', virtualPath.Length - 2, virtualPath.Length - 2);
+			int last = virtualPath.LastIndexOf ('/', vpLen - 2, vpLen - 2);
 			if (last > 0)
 				return virtualPath.Substring (0, last + 1);
 			else
@@ -332,7 +328,7 @@ namespace System.Web {
 
 		static char [] path_sep = { '/' };
 
-		static string Normalize (string path)
+		internal static string Normalize (string path)
 		{
 			if (!IsRooted (path))
 				throw new ArgumentException (String.Format ("The relative virtual path '{0}' is not allowed here.", path));
@@ -482,7 +478,6 @@ namespace System.Web {
 			if (path == null)
 				return false;
 
-#if NET_2_0
 			bool doValidate = true;
 			if (runningOnWindows) {
 				try {
@@ -499,7 +494,7 @@ namespace System.Web {
 
 			if (!doValidate)
 				return true;
-#endif
+
 			return path.IndexOfAny (invalidVirtualPathChars) == -1;
 		}
 	}

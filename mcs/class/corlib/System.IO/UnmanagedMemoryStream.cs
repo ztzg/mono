@@ -6,8 +6,9 @@
 // Authors:
 // 	Sridhar Kulkarni (sridharkulkarni@gmail.com)
 // 	Gert Driesen (drieseng@users.sourceforge.net)
+//	Sebastien Pouliot  <sebastien@ximian.com>
 //
-// Copyright (C) 2005-2006 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2005-2006, 2009 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -29,75 +30,64 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
-
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
 namespace System.IO
 {
-	[CLSCompliantAttribute(false)]
 	public class UnmanagedMemoryStream : Stream
 	{
 		long length;
 		bool closed;
-//		bool canseek;
 		long capacity;
 		FileAccess fileaccess;
 		IntPtr initial_pointer;
 		long initial_position;
 		long current_position;
+#if NET_4_0
+		SafeBuffer safebuffer;
+#endif
 		
 		internal event EventHandler Closed;
 		
 #region Constructor
 		protected UnmanagedMemoryStream()
 		{
-			fileaccess = FileAccess.Read;
-//			canseek = true;
+			closed = true;
 		}
-		
-		public unsafe UnmanagedMemoryStream (byte *pointer, long length)
-			: this ()
-		{
-			if (pointer == null)
-				throw new ArgumentNullException("pointer");
-			if (length < 0)
-				throw new ArgumentOutOfRangeException("length", "Non-negative number required.");
 
-			this.length = length;
-			capacity = length;
-			initial_pointer = new IntPtr((void*)pointer);
+		[CLSCompliantAttribute(false)]
+		public unsafe UnmanagedMemoryStream (byte *pointer, long length) :
+			this (pointer, length, length, FileAccess.Read)
+		{
 		}
 		
+		[CLSCompliantAttribute(false)]
 		public unsafe UnmanagedMemoryStream (byte *pointer, long length, long capacity, FileAccess access)
 		{
-			if (pointer == null)
-				throw new ArgumentNullException("pointer");
-			if (length < 0)
-				throw new ArgumentOutOfRangeException("length", "Non-negative number required.");
-			if (capacity < 0)
-				throw new ArgumentOutOfRangeException("capacity", "Non-negative number required.");
-			if (length > capacity)
-				throw new ArgumentOutOfRangeException("length", "The length cannot be greater than the capacity.");
-			if (!Enum.IsDefined (typeof (FileAccess), access))
-				throw new ArgumentOutOfRangeException ("access", "Enum value was out of legal range.");
-				
-			fileaccess = access;
-			this.length = length;
-			this.capacity = capacity;
-//			canseek = true;
-			initial_pointer = new IntPtr ((void*)pointer);
+			closed = true;
+			Initialize (pointer, length, capacity, access);
 		}
+
+#if NET_4_0
+		public UnmanagedMemoryStream (SafeBuffer buffer, long offset, long length) :
+			this (buffer, offset, length, FileAccess.Read)
+		{
+		}
+
+		public UnmanagedMemoryStream (SafeBuffer buffer, long offset, long length, FileAccess access)
+		{
+			closed = true;
+			Initialize (buffer, offset, length, access);
+		}
+#endif
 #endregion
 	
 #region Properties
 		public override bool CanRead {
 			get {
-				if (closed)
-					return false;
-				return (fileaccess == FileAccess.Read || fileaccess == FileAccess.ReadWrite);
+				return (!closed && (fileaccess != FileAccess.Write));
 			}
 		}
 
@@ -109,9 +99,7 @@ namespace System.IO
 		
 		public override bool CanWrite {
 			get {
-				if (closed)
-					return (false);
-				return (fileaccess == FileAccess.Write || fileaccess == FileAccess.ReadWrite);
+				return (!closed && (fileaccess != FileAccess.Read));
 			}
 		}
 		public long Capacity {
@@ -130,6 +118,7 @@ namespace System.IO
 					return (length);
 			}
 		}
+
 		public override long Position {
 			get {
 				if (closed)
@@ -147,21 +136,32 @@ namespace System.IO
 			}
 		}
 
-#if NET_2_1
-		[CLSCompliantAttribute(false)]
-#endif
+		[CLSCompliantAttribute (false)]
 		public unsafe byte* PositionPointer {
 			get {
+#if NET_4_0
+				if (safebuffer != null)
+					throw new NotSupportedException ("Not supported when using SafeBuffer");
+#endif
+				if (closed)
+					throw new ObjectDisposedException("The stream is closed");
+				if (current_position >= length)
+					throw new IndexOutOfRangeException ("value");
+
 				return (byte *) initial_pointer + current_position;
 			}
 			set {
+#if NET_4_0
+				if (safebuffer != null)
+					throw new NotSupportedException ("Not supported when using SafeBuffer");
+#endif
+				if (closed)
+					throw new ObjectDisposedException("The stream is closed");
+
 				if (value < (byte *)initial_pointer)
 					throw new IOException ("Address is below the inital address");
 
-				if (value >= (byte *) ((byte *)initial_pointer + length))
-					throw new ArgumentOutOfRangeException ("value");
-
-				current_position = (long) (value - (byte *) initial_pointer);
+				Position = value - (byte*) initial_pointer;
 			}
 		}
 #endregion
@@ -183,16 +183,30 @@ namespace System.IO
 			
 			if (fileaccess == FileAccess.Write)
 				throw new NotSupportedException("Stream does not support reading");
-			else {
-				if (current_position >= length)
-					return (0);
-				else {
-					int progress = current_position + count < length ? count : (int) (length - current_position);
-					for (int i = 0; i < progress; i++)
-						buffer [offset + i] = Marshal.ReadByte (initial_pointer, (int) current_position++);
-					return progress;
+
+			if (current_position >= length)
+				return 0;
+
+			int progress = current_position + count < length ? count : (int) (length - current_position);
+#if NET_4_0
+			if (safebuffer != null) {
+				unsafe {
+					byte *ptr = null;
+					try {
+						safebuffer.AcquirePointer (ref ptr);
+						Marshal.Copy (new IntPtr (ptr + current_position), buffer, offset, progress);
+					} finally {
+						if (ptr != null)
+							safebuffer.ReleasePointer ();
+					}
 				}
+			} else
+#endif
+			{
+				Marshal.Copy (new IntPtr (initial_pointer.ToInt64 () + current_position), buffer, offset, progress);
 			}
+			current_position += progress;
+			return progress;
 		}
 
 		public override int ReadByte ()
@@ -202,9 +216,25 @@ namespace System.IO
 			
 			if (fileaccess== FileAccess.Write)
 				throw new NotSupportedException("Stream does not support reading");
-			else {
-				if (current_position >= length)
-					return (-1);
+
+			if (current_position >= length)
+				return (-1);
+
+#if NET_4_0
+			if (safebuffer != null) {
+				unsafe {
+					byte *ptr = null;
+					try {
+						safebuffer.AcquirePointer (ref ptr);
+						return (int) Marshal.ReadByte (new IntPtr (ptr), (int) current_position++);
+					} finally {
+						if (ptr != null)
+							safebuffer.ReleasePointer ();
+					}
+				}
+			} else
+#endif
+			{
 				return (int) Marshal.ReadByte(initial_pointer, (int) current_position++);
 			}
 		}
@@ -230,7 +260,7 @@ namespace System.IO
 			default:
 				throw new ArgumentException("Invalid SeekOrigin option");
 			}
-			refpoint += (int)offset;
+			refpoint += offset;
 			if (refpoint < initial_position)
 				throw new IOException("An attempt was made to seek before the beginning of the stream");
 			current_position = refpoint;
@@ -239,6 +269,10 @@ namespace System.IO
 		 
 		public override void SetLength (long value)
 		{
+#if NET_4_0
+			if (safebuffer != null)
+				throw new NotSupportedException ("Not supported when using SafeBuffer");
+#endif
 			if (closed)
 				throw new ObjectDisposedException("The stream is closed");
 			if (value < 0)
@@ -275,27 +309,45 @@ namespace System.IO
 				throw new ObjectDisposedException("The stream is closed");
 			if (buffer == null)
 				throw new ArgumentNullException("The buffer parameter is a null reference");
-			if ((current_position + count) > capacity)
-				throw new NotSupportedException ("Unable to expand length of this stream beyond its capacity.");
 			if (offset < 0)
 				throw new ArgumentOutOfRangeException("offset", "Non-negative number required.");
 			if (count < 0)
 				throw new ArgumentOutOfRangeException("count", "Non-negative number required.");
 			if ((buffer.Length - offset) < count)
 				throw new ArgumentException("The length of the buffer array minus the offset parameter is less than the count parameter");
+			if (current_position > capacity - count)
+				throw new NotSupportedException ("Unable to expand length of this stream beyond its capacity.");
 			if (fileaccess == FileAccess.Read)
 				throw new NotSupportedException ("Stream does not support writing.");
-			else {
-				unsafe {
-					// use Marshal.WriteByte since that allow us to start writing
-					// from the current position
-					for (int i = 0; i < count; i++)
-						Marshal.WriteByte (initial_pointer, (int) current_position++, buffer [offset + i]);
 
-					if (current_position > length)
-						length = current_position;
+#if NET_4_0
+			if (safebuffer != null) {
+				unsafe {
+					byte *dest = null;
+					try {
+						safebuffer.AcquirePointer (ref dest);
+						fixed (byte *src = buffer) {
+							dest += current_position;
+							String.memcpy (dest, src + offset, count);
+						}
+					} finally {
+						if (dest != null)
+							safebuffer.ReleasePointer ();
+					}
+				}
+			} else
+#endif
+			{
+				unsafe {
+					fixed (byte *src = buffer) {
+						byte *dest = (byte *) initial_pointer + current_position;
+						String.memcpy (dest, src + offset, count);
+					}
 				}
 			}
+			current_position += count;
+			if (current_position > length)
+				length = current_position;
 		}
 		
 		public override void WriteByte (byte value)
@@ -307,31 +359,91 @@ namespace System.IO
 				throw new NotSupportedException("The current position is at the end of the capacity of the stream");
 			if (fileaccess == FileAccess.Read)
 				throw new NotSupportedException("Stream does not support writing.");
-			else {
+ 
+#if NET_4_0
+			if (safebuffer != null) {
 				unsafe {
-					Marshal.WriteByte(initial_pointer, (int)current_position, value);
-					current_position++;
-					if (current_position > length)
-						length = current_position;
+					byte *dest = null;
+					try {
+						safebuffer.AcquirePointer (ref dest);
+						dest += current_position++;
+						*dest = value;
+					} finally {
+						if (dest != null)
+							safebuffer.ReleasePointer ();
+					}
+				}
+			} else
+#endif
+			{
+				unsafe {
+					byte *dest = (byte *) initial_pointer + (int) current_position++;
+					*dest = value;
 				}
 			}
+			if (current_position > length)
+				length = current_position;
 		}
 
+		[CLSCompliant (false)]
 		protected unsafe void Initialize (byte* pointer, long length,
 						  long capacity,
 						  FileAccess access)
 		{
+			if (pointer == null)
+				throw new ArgumentNullException("pointer");
+			if (length < 0)
+				throw new ArgumentOutOfRangeException("length", "Non-negative number required.");
+			if (capacity < 0)
+				throw new ArgumentOutOfRangeException("capacity", "Non-negative number required.");
+			if (length > capacity)
+				throw new ArgumentOutOfRangeException("length", "The length cannot be greater than the capacity.");
+			if ((access < FileAccess.Read) || (access > FileAccess.ReadWrite))
+				throw new ArgumentOutOfRangeException ("access", "Enum value was out of legal range.");
+			if (!closed)
+				throw new InvalidOperationException ("Called Initialize twice");
+				
 			fileaccess = access;
 			this.length = length;
 			this.capacity = capacity;
 			initial_position = 0;
 			current_position = initial_position;
-//			canseek = true;
-			initial_pointer = new IntPtr ((void *)pointer);
+			initial_pointer = new IntPtr ((void*)pointer);
 			closed = false;
 		}
+
+#if NET_4_0
+		protected void Initialize (SafeBuffer buffer, long offset, long length, FileAccess access)
+		{
+			if (buffer == null)
+				throw new ArgumentNullException ("buffer");
+
+			if (offset < 0)
+				throw new ArgumentOutOfRangeException ("offset");
+
+			if (length < 0)
+				throw new ArgumentOutOfRangeException ("length");
+
+			ulong blength = buffer.ByteLength;
+			if ((blength - (ulong) length) < (ulong) offset)
+				throw new ArgumentException ("Invalid offset and/or length");
+
+			if (access < FileAccess.Read || access > FileAccess.ReadWrite)
+				throw new ArgumentOutOfRangeException ("access");
+
+			if (!closed)
+				throw new InvalidOperationException ("Called Initialize twice");
+
+			this.length = length;
+			this.capacity = length;
+			this.fileaccess = access;
+			this.safebuffer = buffer;
+			initial_position = offset;
+			current_position = offset;
+			closed = false;
+		}
+#endif
 #endregion
 	}
 }
-#endif
 

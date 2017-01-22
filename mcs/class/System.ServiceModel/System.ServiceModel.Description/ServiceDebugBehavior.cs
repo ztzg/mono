@@ -67,22 +67,26 @@ namespace System.ServiceModel.Description
 			ServiceDescription description,
 			ServiceHostBase serviceHostBase)
 		{
-			ServiceMetadataExtension sme = ServiceMetadataExtension.EnsureServiceMetadataExtension (description, serviceHostBase);
+			ServiceMetadataExtension sme = ServiceMetadataExtension.EnsureServiceMetadataExtension (serviceHostBase);
 
-			foreach (ChannelDispatcher dispatcher in serviceHostBase.ChannelDispatchers)
+			foreach (var dispatcherBase in serviceHostBase.ChannelDispatchers) {
+				var dispatcher = dispatcherBase as ChannelDispatcher;
+				if (dispatcher == null) // non-ChannelDispatcher ChannelDispatcherBase instance.
+					continue;
 				if (IncludeExceptionDetailInFaults) // may be set also in ServiceBehaviorAttribute
 					dispatcher.IncludeExceptionDetailInFaults = true;
+			}
 
 			if (HttpHelpPageEnabled) {
 				Uri uri = serviceHostBase.CreateUri ("http", HttpHelpPageUrl);
 				if (uri != null)
-					ServiceMetadataExtension.EnsureServiceMetadataHttpChanelDispatcher (description, serviceHostBase, sme, uri, HttpHelpPageBinding);
+					sme.EnsureChannelDispatcher (false, "http", uri, HttpHelpPageBinding);
 			}
 
 			if (HttpsHelpPageEnabled) {
 				Uri uri = serviceHostBase.CreateUri ("https", HttpsHelpPageUrl);
 				if (uri != null)
-					ServiceMetadataExtension.EnsureServiceMetadataHttpsChanelDispatcher (description, serviceHostBase, sme, uri, HttpsHelpPageBinding);
+					sme.EnsureChannelDispatcher (false, "https", uri, HttpsHelpPageBinding);
 			}
 		}
 

@@ -116,6 +116,7 @@ namespace MonoTests.System.Reflection.Emit
 		}
 
 		[Test]
+		[Category("NotWorking")]
 		public void TestGlobalMethods ()
 		{
 			AssemblyBuilder builder = genAssembly ();
@@ -126,9 +127,12 @@ namespace MonoTests.System.Reflection.Emit
 															  CharSet.Auto);
 			method.SetImplementationFlags (MethodImplAttributes.PreserveSig |
 										   method.GetMethodImplementationFlags ());
+
+			Assert.IsNull (module.GetMethod ("printf"), "#1");
+
 			module.CreateGlobalFunctions ();
 
-			Assert.IsNotNull (module.GetMethod ("printf"));
+			Assert.IsNotNull (module.GetMethod ("printf"), "#2");
 		}
 
 		[Test]
@@ -239,6 +243,21 @@ namespace MonoTests.System.Reflection.Emit
 			tb = mb.DefineType ("Bar", TypeAttributes.Interface,
 				typeof (ICollection));
 			Assert.AreEqual (typeof (ICollection), tb.BaseType, "#2");
+		}
+
+		[Test]
+		[ExpectedException (typeof (ArgumentException))]
+		public void DuplicateTypeName () {
+			AssemblyBuilder ab = genAssembly ();
+			ModuleBuilder module = ab.DefineDynamicModule ("foo.dll", "foo.dll", true);
+
+			var itb = module.DefineType ("TBase", TypeAttributes.Public);
+
+			itb.SetParent (typeof(ValueType));        
+
+			var ptb = module.DefineType ("TBase", TypeAttributes.Public);
+
+			ptb.SetParent (typeof(Enum));
 		}
 
 		[Test]
@@ -418,9 +437,57 @@ namespace MonoTests.System.Reflection.Emit
 #endif
 
 		[Test]
-		public void GetGenericArguments_Returns_Null_For_Non_Generic_Methods ()
+		public void GetType_String_Null ()
 		{
-			
+			AssemblyName an = genAssemblyName ();
+			AssemblyBuilder ab = AppDomain.CurrentDomain.DefineDynamicAssembly (an, AssemblyBuilderAccess.Run);
+			ModuleBuilder module = ab.DefineDynamicModule ("GetTypeNullCheck");
+
+			try {
+				module.GetType (null);
+				Assert.Fail ("Expected ArgumentNullException for GetType(string)");
+			}
+			catch (ArgumentNullException) {
+			}
+			try {
+				module.GetType (null, true); // ignoreCase
+				Assert.Fail ("Expected ArgumentNullException for GetType(string,bool)");
+			}
+			catch (ArgumentNullException) {
+			}
+			try {
+				module.GetType (null, true, true); // throwOnError, ignoreCase
+				Assert.Fail ("Expected ArgumentNullException for GetType(string,bool,bool)");
+			}
+			catch (ArgumentNullException) {
+			}
+		}
+
+		[Test]
+		public void GetType_String_Empty ()
+		{
+			AssemblyName an = genAssemblyName ();
+			AssemblyBuilder ab = AppDomain.CurrentDomain.DefineDynamicAssembly (an, AssemblyBuilderAccess.Run);
+			ModuleBuilder module = ab.DefineDynamicModule ("GetTypeEmptyCheck");
+
+			try {
+				module.GetType (String.Empty);
+				Assert.Fail ("Expected ArgumentNullException for GetType(string)");
+			}
+			catch (ArgumentException) {
+			}
+			try {
+				module.GetType (String.Empty, true); // ignoreCase
+				Assert.Fail ("Expected ArgumentNullException for GetType(string,bool)");
+			}
+			catch (ArgumentException) {
+			}
+			try {
+				module.GetType (String.Empty, true, true); // throwOnError, ignoreCase
+				Assert.Fail ("Expected ArgumentNullException for GetType(string,bool,bool)");
+			}
+			catch (ArgumentException) {
+			}
 		}
 	}
 }

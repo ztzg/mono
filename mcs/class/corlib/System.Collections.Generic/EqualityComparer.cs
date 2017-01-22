@@ -26,7 +26,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 using System;
 using System.Runtime.InteropServices;
 
@@ -61,11 +60,15 @@ namespace System.Collections.Generic {
 
 		bool IEqualityComparer.Equals (object x, object y)
 		{
+			if (!(x is T))
+				throw new ArgumentException ("Argument is not compatible", "x");
+			if (!(y is T))
+				throw new ArgumentException ("Argument is not compatible", "y");
 			return Equals ((T)x, (T)y);
 		}
 		
 		[Serializable]
-		class DefaultComparer : EqualityComparer<T> {
+		sealed class DefaultComparer : EqualityComparer<T> {
 	
 			public override int GetHashCode (T obj)
 			{
@@ -85,7 +88,10 @@ namespace System.Collections.Generic {
 	}
 	
 	[Serializable]
-	class GenericEqualityComparer <T> : EqualityComparer <T> where T : IEquatable <T> {
+#if MONOTOUCH
+	internal
+#endif
+	sealed class GenericEqualityComparer <T> : EqualityComparer <T> where T : IEquatable <T> {
 
 		public override int GetHashCode (T obj)
 		{
@@ -103,4 +109,3 @@ namespace System.Collections.Generic {
 		}
 	}
 }
-#endif

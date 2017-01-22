@@ -8,7 +8,7 @@
 //
 
 //
-// Copyright (C) 2004 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2004, 2009 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -31,6 +31,7 @@
 //
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -49,15 +50,18 @@ namespace System.Reflection {
 		public MethodInfo[] other_methods;
 		
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		internal static extern void get_event_info (MonoEvent ev, out MonoEventInfo info);
+		static extern void get_event_info (MonoEvent ev, out MonoEventInfo info);
+
+		internal static MonoEventInfo GetEventInfo (MonoEvent ev)
+		{
+			MonoEventInfo mei;
+			MonoEventInfo.get_event_info (ev, out mei);
+			return mei;
+		}
 	}
 
-#if NET_2_0
 	[Serializable]
 	internal sealed class MonoEvent: EventInfo, ISerializable
-#else
-	internal sealed class MonoEvent: EventInfo
-#endif
 	{
 #pragma warning disable 169
 		IntPtr klass;
@@ -66,46 +70,37 @@ namespace System.Reflection {
 
 		public override EventAttributes Attributes {
 			get {
-				MonoEventInfo info;
-				MonoEventInfo.get_event_info (this, out info);
-				
-				return info.attrs;
+				return MonoEventInfo.GetEventInfo (this).attrs;
 			}
 		}
 
-		public override MethodInfo GetAddMethod(bool nonPublic) {
-			MonoEventInfo info;
-			MonoEventInfo.get_event_info (this, out info);
-			
-			
+		public override MethodInfo GetAddMethod (bool nonPublic)
+		{
+			MonoEventInfo info = MonoEventInfo.GetEventInfo (this);
 			if (nonPublic || (info.add_method != null && info.add_method.IsPublic))
 				return info.add_method;
 			return null;
 		}
 
-		public override MethodInfo GetRaiseMethod( bool nonPublic) {
-			MonoEventInfo info;
-			MonoEventInfo.get_event_info (this, out info);
-				
+		public override MethodInfo GetRaiseMethod (bool nonPublic)
+		{
+			MonoEventInfo info = MonoEventInfo.GetEventInfo (this);
 			if (nonPublic || (info.raise_method != null && info.raise_method.IsPublic))
 				return info.raise_method;
 			return null;
 		}
 
-		public override MethodInfo GetRemoveMethod( bool nonPublic) {
-			MonoEventInfo info;
-			MonoEventInfo.get_event_info (this, out info);
-			
+		public override MethodInfo GetRemoveMethod (bool nonPublic)
+		{
+			MonoEventInfo info = MonoEventInfo.GetEventInfo (this);
 			if (nonPublic || (info.remove_method != null && info.remove_method.IsPublic))
 				return info.remove_method;
 			return null;
 		}
 
-#if NET_2_0
-		public override MethodInfo[] GetOtherMethods (bool nonPublic) {
-			MonoEventInfo info;
-			MonoEventInfo.get_event_info (this, out info);
-
+		public override MethodInfo[] GetOtherMethods (bool nonPublic)
+		{
+			MonoEventInfo info = MonoEventInfo.GetEventInfo (this);
 			if (nonPublic)
 				return info.other_methods;
 			int num_public = 0;
@@ -123,32 +118,22 @@ namespace System.Reflection {
 			}
 			return res;
 		}
-#endif
 
 		public override Type DeclaringType {
 			get {
-				MonoEventInfo info;
-				MonoEventInfo.get_event_info (this, out info);
-				
-				return info.declaring_type;
+				return MonoEventInfo.GetEventInfo (this).declaring_type;
 			}
 		}
 
 		public override Type ReflectedType {
 			get {
-				MonoEventInfo info;
-				MonoEventInfo.get_event_info (this, out info);
-				
-				return info.reflected_type;
+				return MonoEventInfo.GetEventInfo (this).reflected_type;
 			}
 		}
 
 		public override string Name {
 			get {
-				MonoEventInfo info;
-				MonoEventInfo.get_event_info (this, out info);
-				
-				return info.name;
+				return MonoEventInfo.GetEventInfo (this).name;
 			}
 		}
 
@@ -172,12 +157,16 @@ namespace System.Reflection {
 			return MonoCustomAttrs.GetCustomAttributes (this, attributeType, inherit);
 		}
 
-#if NET_2_0
 		// ISerializable
 		public void GetObjectData (SerializationInfo info, StreamingContext context) 
 		{
 			MemberInfoSerializationHolder.Serialize (info, Name, ReflectedType,
 				ToString(), MemberTypes.Event);
+		}
+
+#if NET_4_0
+		public override IList<CustomAttributeData> GetCustomAttributesData () {
+			return CustomAttributeData.GetCustomAttributes (this);
 		}
 #endif
 	}

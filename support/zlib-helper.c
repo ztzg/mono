@@ -103,10 +103,12 @@ CloseZStream (ZStream *zstream)
 
 	status = 0;
 	if (zstream->compress) {
-		if (zstream->stream->total_out) {
-			status = deflate (zstream->stream, Z_FINISH);
-			flush_status = Flush (zstream);
-			if (status == Z_OK || status == Z_STREAM_END)
+		if (zstream->stream->total_in > 0) {
+			do {
+				status = deflate (zstream->stream, Z_FINISH);
+				flush_status = Flush (zstream);
+			} while (status == Z_OK); /* We want Z_STREAM_END or error here here */
+			if (status == Z_STREAM_END)
 				status = flush_status;
 		}
 		deflateEnd (zstream->stream);
@@ -174,8 +176,12 @@ ReadZStream (ZStream *stream, guchar *buffer, gint length)
 		}
 
 		status = inflate (stream->stream, Z_SYNC_FLUSH);
-		if (status != Z_OK && status != Z_STREAM_END)
+		if (status == Z_STREAM_END) {
+			stream->eof = TRUE;
+			break;
+		} else if (status != Z_OK) {
 			return status;
+		}
 	}
 	return length - zs->avail_out;
 }
@@ -201,7 +207,7 @@ WriteZStream (ZStream *stream, guchar *buffer, gint length)
 			zs->next_out = stream->buffer;
 			zs->avail_out = BUFFER_SIZE;
 		}
-		status = deflate (stream->stream, Z_SYNC_FLUSH);
+		status = deflate (stream->stream, Z_NO_FLUSH);
 		if (status != Z_OK && status != Z_STREAM_END)
 			return status;
 

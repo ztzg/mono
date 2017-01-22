@@ -124,7 +124,8 @@ namespace System.ServiceModel.Channels
 
 		void DiscardSession ()
 		{
-			frame.WriteEndRecord ();
+			if (client.Connected)
+				frame.WriteEndRecord ();
 			session = null;
 		}
 
@@ -143,45 +144,33 @@ namespace System.ServiceModel.Channels
 			if (!is_service_side) {
 				if (message.Headers.To == null)
 					message.Headers.To = RemoteAddress.Uri;
-			} else {
-				if (message.Headers.RelatesTo == null && OperationContext.Current.IncomingMessageHeaders != null)
-					message.Headers.RelatesTo = OperationContext.Current.IncomingMessageHeaders.MessageId;
 			}
 
 			client.SendTimeout = (int) timeout.TotalMilliseconds;
 			frame.WriteSizedMessage (message);
 		}
 		
-		public override Message Receive ()
-		{
-			return Receive (DefaultReceiveTimeout);
-		}
-		
-		public override Message Receive (TimeSpan timeout)
+		public override bool TryReceive (TimeSpan timeout, out Message message)
 		{
 			ThrowIfDisposedOrNotOpen ();
+
+			// FIXME: there seems to be some pipeline or channel-
+			// recycling issues, which could be mostly workarounded 
+			// by delaying input receiver.
+			// This place is not ideal, but it covers both loops in
+			// ChannelDispatcher and DuplexClientRuntimeChannel.
+			Thread.Sleep (50);
 
 			if (timeout <= TimeSpan.Zero)
 				throw new ArgumentException (String.Format ("Timeout value must be positive value. It was {0}", timeout));
 			client.ReceiveTimeout = (int) timeout.TotalMilliseconds;
-			return frame.ReadSizedMessage ();
-		}
-		
-		public override bool TryReceive (TimeSpan timeout, out Message message)
-		{
-			try {
-				DateTime start = DateTime.Now;
-				message = Receive (timeout);
-				if (message != null)
-					return true;
-				// received EndRecord, so close the session and return false instead.
-				// (Closing channel here might not be a good idea, but right now I have no better way.)
-				Close (timeout - (DateTime.Now - start));
-				return false;
-			} catch (TimeoutException) {
-				message = null;
+			message = frame.ReadSizedMessage ();
+			// FIXME: this may not be precise, but connection might be reused for some weird socket state transition (that's what happens). So as a workaround, avoid closing the session by sending EndRecord from this channel at OnClose().
+			if (message == null) {
+				session = null;
 				return false;
 			}
+			return true;
 		}
 		
 		public override bool WaitForMessage (TimeSpan timeout)

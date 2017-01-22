@@ -1,3 +1,25 @@
+2010-04-15  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* Barrier.cs: Add BOOTSTRAP_NET_4_0
+
+2010-04-06  Jb Evain  <jbevain@novell.com>
+
+	* SemaphoreFullException.cs: moved to corlib in net_4_0.
+
+2010-03-02  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* Barrier.cs: Remove dead comments
+
+2010-02-25  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* Barrier.cs: Fix NRE with postPhaseAction delegate
+	Fix possible deadlock when removing participant(s)
+
+2009-12-11  Miguel de Icaza  <miguel@novell.com>
+
+	* Barrier.cs: Implement IDisposable, add a bunch of IDisposable
+	checks and some checks from the docs.
+
 2009-08-19  Jérémie Laval  <jeremie.laval@gmail.com>
 
 	* Barrier.cs: Fix Barrier to be really thread-safe.

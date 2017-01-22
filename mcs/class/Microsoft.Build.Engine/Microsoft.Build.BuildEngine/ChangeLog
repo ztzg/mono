@@ -1,3 +1,332 @@
+2010-07-24  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs: Collect and dump timing information.
+
+2010-07-24  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs: Honor LoggerVerbosity.Quiet .
+
+2010-07-22  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs: Add support for parameter 'NoItemAndPropertyList'.
+
+2010-07-22  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs: Add reserved properties MSBuildProjectFullPath
+	and MSBuildProjectExtension .
+
+2010-07-09  Ankit Jain  <jankit@novell.com>
+
+	Correctly handle precedence of ToolsVersion value coming
+	from various points.
+	* BuildEngine.cs (BuildProjectFile): Restore project.ToolsVersion .
+	* Engine.cs: Likewise. Also validate DefaultToolsVersion .
+	* Project.cs: Handle invalid tools version specified in the project
+	file, and fall back to engine's version.
+	* MSBuild.cs: Fix the precedence order, and validate.
+	* UnknownToolsVersionException.cs: New.
+
+2010-06-23  Ankit Jain  <jankit@novell.com>
+
+	* TargetBatchingImpl.cs (BuildTargetNeeded): Fix var names to
+	correctly reflect what they track. Log messages when skipping
+	or building a target.
+
+2010-06-04  Ankit Jain  <jankit@novell.com>
+
+	* Import.cs (EvaluateProjectPath): Add a hack to support multiple
+	msbuild extension paths. Paths can be specified via the environment
+	variable - $MSBuildExtensionsPath . ~/.config/xbuild/tasks is also
+	checked for extensions, besides the default location.
+	This explicitly looks for a "$(MSBuildExtensionsPath)" in the import
+	expression and tries to replace that with possible paths, till it
+	finds the file. In rest of the project, the property would resolve
+	to its single default value.
+
+2010-06-03  Ankit Jain  <jankit@novell.com>
+
+	* Engine.cs (GetLoadedProject): Return null if project not found.
+	Based on a patch by Dale Ragan <dale.ragan@sinesignal.com> .
+
+2010-05-28  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #485841.
+	* DirectoryScanner.cs (ProcessInclude): Set %(RecursiveDir) only if
+	the '**' wildcard was found in the original Include.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (InitializeProperties): Set MSBuildBinPath to the current
+	tools path.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* TaskEngine.cs (Prepare): Throw InvalidProjectFileException instead of a generic
+	Exception.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs (EventsToString): If the target being executed is
+	from an imported file, then show that.
+
+2010-04-10  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs: Add property MSBuildExtensionsPath32, used by silverlight
+	projects.
+
+2010-04-07  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs: Dump items and properties when a project starts
+	to build. Useful for debugging.
+	* Engine.cs (LogProjectStarted): Set the properties and items also,
+	for the project started event.
+	* Project.cs (EvaluatedPropertiesAsDictionaryEntries): New.
+	(EvaluatedItemsByNameAsDictionaryEntries): New. Required for
+	ProjectStartedEvent .
+
+2010-04-03  Ankit Jain  <jankit@novell.com>
+
+	* BuildEngine.cs: Implement IBuildEngine2 instead of
+	IBuildEngine.
+	* BuildTasks.cs: Use the new extension methods for logging.
+	(InitializeTask): Emit a message informing about the assembly
+	from which the task is being loaded. Emit a useful debug message
+	incase of a InvalidCastException.
+	* Engine.cs: Add missing methods, constructors and properties related
+	to ToolsVersion support. Setup a default set of Toolsets.
+	Keep separate taskdbs' per ToolsVersion. The common tasks
+	would come from different *.tasks file, and use different
+	task assemblies.
+	(DefaultToolsVersion): Correctly set this based on the profile.
+	* LogExtensions.cs: New. Extension methods on Engine, for logging.
+	* Project.cs: Add missing methods/contructors/properties related
+	to ToolsVersion support. Add reserved properties -
+	MSBuildToolsPath and MSBuildToolsVersion .
+	* Toolset.cs: New.
+	* ToolsetCollection.cs: New.
+	* ToolsetDefinitionLocations.cs: New.
+
+2010-03-04  Ankit Jain  <jankit@novell.com>
+
+	* BuildEngine.cs (LogErrorEvent): Log as warning, if
+	ContinueOnError==true, and log a corresponding message.
+	* TargetBatchingImpl.cs: Refactor to share code between the
+	batched and unbatched case. If a task fails and
+	ContinueOnError==true, then ignore the failed state.
+
+2010-02-19  Ankit Jain  <jankit@novell.com>
+
+	* BuildItem.cs: Track api changes.
+	(SetMetadata): Allow RecursiveDir to be set, this is set by
+	DirectoryScanner.
+	* DirectoryScanner.cs (ProcessInclude): Set RecursiveDir metadata.
+
+2010-02-19  Ankit Jain  <jankit@novell.com>
+
+	* Import.cs (Evaluate): Add param @ignoreMissingImports.
+	* Project.cs (Load*): Add overloads with param @projectLoadSettings.
+	(Log*): Mark internal.
+	* ProjectLoadSettings.cs: New.
+
+2010-02-04  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #576589.
+	* ConditionFunctionExpression.cs (Exists): Check for directory also.
+
+2009-12-22  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #565849.
+	* DirectoryScanner.cs (Excludes): Change from string to ITaskItem[] .
+	* BuildItem.cs: Track api changes.
+
+2009-12-02  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #559990.
+	* Engine.cs (UnloadAllProjects): Don't remove items from the collection
+	being iterated over. Patch by Laurent Etiemble
+	<laurent.etiemble@gmail.com>
+
+2009-11-28  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #547753.
+	* BatchingImplBase.cs (DumpBucket*): New. Useful for debugging.
+	* Project.cs (Batch): New. Contains the perBatchItems and the
+	commonItems for the batch.
+	Use a stack of batches, instead of directly setting the current
+	batch items.
+	(PushBatch): New.
+	(PopBatch): New.
+	(SetBatchedItems): Make this private.
+	(GlobalProperties.set): Re-evaluating the project is not required
+	for this.
+	* TargetBatchingImpl.cs: Use the new Push/PopBatch instead of directly
+	setting the batches.
+	* TaskBatchingImpl.cs: Likewise. Refactor slightly to PopBatch in
+	finally block.
+	* Target.cs (Build): Reset the current batch to nil before evaluating
+	and building this target.
+
+2009-11-28  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (TryGetEvaluatedItemByNameBatched): Item could be
+	available in either perBatchItemsByName or commonItemsByName
+	or the evaluatedItemsByName collection. Allows the use of
+	items which are not batched, but are consumed in case of batching.
+
+2009-11-26  Ankit Jain  <jankit@novell.com>
+
+	* TargetBatchingImpl.cs (BuildTargetNeeded): Expand metadata
+	refs also, for Inputs and Outputs.
+
+2009-10-13  Ankit Jain  <jankit@novell.com>
+
+	* DirectoryScanner.cs:
+	* ExpressionCollection.cs:
+	* GroupingCollection.cs:
+	* Project.cs:
+	* Target.cs: Fix warnings.
+
+2009-10-12  Ankit Jain  <jankit@novell.com>
+
+	* Target.cs (TargetFile): New. Gives the name of the file
+	containing the target definition.
+	* BuildEngine.cs (.ctor): Add a 'taskfile' parameters, and
+	return this for ProjectFileOfTaskNode.
+	* BuildTask.cs (LogTaskStarted):
+	(LogTaskFinished): Use parentTarget.ProjectFileOfTaskNode for
+	the event.
+	(InitializeTask): Set BuildEngine's task file to parent target's
+	TargetFile.
+	* Engine.cs (LogProjectStarted): Incase of default targets, set
+	TargetNames to String.Empty .
+	* TargetBatchingImpl.cs (LogTargetStarted):
+	(LogTargetFinished): Use target.TargetFile for the event.
+
+	* ConsoleLogger.cs: Keep a stack of project/target/task being
+	executed. And corresponding list of errors and warnings.
+	(EventsToString): Stringifies the current "stack", to be used
+	as key to the table of errors/warnings and for show messages
+	at the end of the build.
+
+2009-10-12  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (Load): Add argument checks.
+
+2009-10-11  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs (no_colors): Rename to ..
+	(use_colors): .. this. Fix the case when XBUILD_COLORS
+	is not set.
+
+2009-10-11  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs: Use ColorSetter and ColorResetter .
+	Support 'XBUILD_COLORS' to set colors for errors, warnings,
+	events and messages.
+
+2009-10-10  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs (ProjectFinishedHandler): Once projectFailed
+	becomes true, don't reset it. We are looking for "atleast one
+	project failed".
+
+2009-10-08  Ankit Jain  <jankit@novell.com>
+
+	* DirectoryScanner.cs: Use Path.GetPathRoot, instead of
+	directly using DirectoryInfo ("z:"), that doesn't return
+	a dir info for "z:".
+
+2009-10-08  Ankit Jain  <jankit@novell.com>
+
+	* DirectoryScanner.cs: Handle absolute paths. Fix to work
+	correctly on windows. Change order of adding paths to match
+	msbuild, useful to have.
+
+2009-10-08  Ankit Jain  <jankit@novell.com>
+
+	* TaskBatchingImpl.cs (ParseTaskAttributes): Parse attributes
+	of the 'Output' element also.
+	* TaskEngine.cs (PublishOutput): Honor condition on 'Output' also.
+
+2009-10-07  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger.cs: Mark build as failed, if any project failed.
+
+2009-10-06  Ankit Jain  <jankit@novell.com>
+
+	* ConsoleLogger: Improve error reporting. Don't count failed task,
+	target or project as another error. Show "errors" after "warnings",
+	more useful to the user.
+	* Project.cs (BuildTarget): Log error instead of using CWL.
+
+2009-10-03  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (OS): New.
+	(InitializeProperties): Set 'OS' as a pre-defined property, set to
+	'Windows_NT', 'Unix' or 'OSX' depending on the platform.
+
+2009-10-02  Ankit Jain  <jankit@novell.com>
+
+	* Expression.cs (Parse): Don't change '/' to '\\', not required.
+
+2009-10-01  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (AddImport): Show the correct source file name, when
+	the import is in the main project file.
+
+2009-10-01  Ankit Jain  <jankit@novell.com>
+
+	Fix bug #543299.
+	* Import.cs (.ctor): Evaluate and set EvaluatedProjectPath to
+	the full path of the imported project here itself, instead of ..
+	(Evaluate): .. here.
+	* ImportCollection.cs (Add): Use import.EvaluatedProjectPath .
+	(Contains): New.
+	* Project.cs (AddImport): Don't process if condition is false.
+	Warn if a circular reference is detected, and ignore the import.
+
+2009-09-29  Ankit Jain  <jankit@novell.com>
+
+	* GroupingCollection.cs (Evaluate): Mark internal.
+	* Project.cs (AddImport): Only evaluate the properties,
+	till before the import.
+
+2009-09-29  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (DoLoad): Don't use XmlReader.Create, for loading
+	the project xml, as returned Xml*Reader normalizes the newlines.
+	Instead directly use the TextReader with XmlDocument.Load ().
+
+2009-09-27  Ankit Jain  <jankit@novell.com>
+
+	* ConditionParser.cs: Show the condition being parsed in the
+	exception message.
+
+2009-09-26  Ankit Jain  <jankit@novell.com>
+
+	* Expression.cs: Allow '-' in item, property and metadata names.
+
+2009-09-26  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs (Evaluate): Split into this and ..
+	(PrepareForEvaluate): .. this.
+	(AddImport): Evaluate the current set of properties/items etc,
+	before processing the imported project. Honor the Condition
+	for the Import.
+	(ProcessProjectAttributes): Update MSBuildProjectDefaultTargets
+	property.
+	* GroupingCollection.cs (Evaluate): Don't evaluate Imports here.
+	* BuildItemGroup.cs (Evaluate): Evaluate only once.
+	* BuildPropertyGroup.cs (Evaluate): Evaluate only once.
+
+2009-09-26  Ankit Jain  <jankit@novell.com>
+
+	* Project.cs: Get InitialTargets from the imported projects also.
+	The combined list of targets are executed, in the order they were
+	found.
+	DefaultTargets are also read in from imported projects, and the first
+	non-empty DefaultTargets found is used.
+
 2009-09-25  Ankit Jain  <jankit@novell.com>
 
 	* Project.cs (BuildTarget): Handle skipped targets.

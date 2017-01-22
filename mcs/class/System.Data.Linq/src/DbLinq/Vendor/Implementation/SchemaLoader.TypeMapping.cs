@@ -47,7 +47,8 @@ namespace DbLinq.Vendor.Implementation
         /// </summary>
         public class DataType : IDataType
         {
-            public virtual string Type { get; set; }
+            public virtual string SqlType { get; set; }
+            public virtual string ManagedType { get; set; }
             public virtual bool Nullable { get; set; }
             public virtual long? Length { get; set; }
             public virtual int? Precision { get; set; }
@@ -59,8 +60,11 @@ namespace DbLinq.Vendor.Implementation
         protected virtual Type MapDbType(string columnName, IDataType dataType)
         {
             if (dataType == null)
-                return typeof(UnknownType);
-            string dataTypeL = dataType.Type.ToLower();
+                throw new ArgumentNullException("dataType");
+            if (dataType.ManagedType != null)
+                return Type.GetType(dataType.ManagedType, true);
+
+            string dataTypeL = dataType.SqlType.ToLowerInvariant();
 
             if (columnName != null && columnName.ToLower().Contains("guid"))
             {
@@ -86,7 +90,9 @@ namespace DbLinq.Vendor.Implementation
             case "long":
             case "longtext":
             case "long varchar":
+            case "mediumtext":
             case "nchar":
+            case "ntext":
             case "nvarchar":
             case "nvarchar2":
             case "string":
@@ -141,16 +147,21 @@ namespace DbLinq.Vendor.Implementation
             case "float4":
             case "real":
             case "binary_float":   // oracle type
+            case "unsigned float": // mysql type
+            case "float unsigned": // mysql type
                 return typeof(Single);
 
             // double
             case "double":
             case "double precision":
             case "binary_double":  // oracle type
+            case "unsigned double":// mysql type
+            case "double unsigned":// mysql type
                 return typeof(Double);
 
             // decimal
             case "decimal":
+            case "money":
             case "numeric":
                 return typeof(Decimal);
             case "number": // special oracle type
@@ -173,6 +184,7 @@ namespace DbLinq.Vendor.Implementation
 
             //enum
             case "enum":
+            case "set":
                 return MapEnumDbType(dataType);
 
             // date
@@ -181,15 +193,18 @@ namespace DbLinq.Vendor.Implementation
             case "ingresdate":
             case "timestamp":
             case "timestamp without time zone":
+            case "timestamp with time zone":
             case "time":
             case "time without time zone": //reported by twain_bu...@msn.com,
             case "time with time zone":
                 return typeof(DateTime);
 
             // byte[]
+            case "binary":
             case "blob":
             case "bytea":
             case "byte varying":
+            case "image":
             case "longblob":
             case "long byte":
             case "oid":
@@ -210,7 +225,9 @@ namespace DbLinq.Vendor.Implementation
 
             // if we fall to this case, we must handle the type
             default:
-                return typeof(UnknownType);
+                throw new ArgumentException(
+                    string.Format("Don't know how to convert the SQL type '{0}' into a managed type.", dataTypeL),
+                    "dataType");
             }
         }
 
@@ -419,7 +436,7 @@ namespace DbLinq.Vendor.Implementation
             #endregion
         }
 
-        protected static Regex DefaultEnumDefinitionEx = new Regex(@"\s*enum\s*\((?<values>.*)\s*\)\s*", RegexOptions.Compiled);
+        protected static Regex DefaultEnumDefinitionEx = new Regex(@"\s*(enum|set)\s*\((?<values>.*)\s*\)\s*", RegexOptions.Compiled);
         protected static Regex EnumValuesEx = new Regex(@"\'(?<value>\w*)\'\s*,?\s*", RegexOptions.Compiled);
 
         /// <summary>

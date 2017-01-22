@@ -30,6 +30,7 @@
 #if NET_2_0
 using System;
 using System.Security.Permissions;
+using System.Web.Configuration;
 
 namespace System.Web.Hosting
 {

@@ -139,6 +139,27 @@ g_ptr_array_remove_index(GPtrArray *array, guint index)
 	return removed_node;
 }
 
+gpointer
+g_ptr_array_remove_index_fast(GPtrArray *array, guint index)
+{
+	gpointer removed_node;
+
+	g_return_val_if_fail(array != NULL, NULL);
+	g_return_val_if_fail(index >= 0 || index < array->len, NULL);
+
+	removed_node = array->pdata[index];
+
+	if(index != array->len - 1) {
+		g_memmove(array->pdata + index, array->pdata + array->len - 1,
+			sizeof(gpointer));
+	}
+
+	array->len--;
+	array->pdata[array->len] = NULL;
+
+	return removed_node;
+}
+
 gboolean
 g_ptr_array_remove(GPtrArray *array, gpointer data)
 {
@@ -149,6 +170,27 @@ g_ptr_array_remove(GPtrArray *array, gpointer data)
 	for(i = 0; i < array->len; i++) {
 		if(array->pdata[i] == data) {
 			g_ptr_array_remove_index(array, i);
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+gboolean
+g_ptr_array_remove_fast(GPtrArray *array, gpointer data)
+{
+	guint i;
+
+	g_return_val_if_fail(array != NULL, FALSE);
+
+	for(i = 0; i < array->len; i++) {
+		if(array->pdata[i] == data) {
+			array->len--;
+			if (array->len > 0)
+				array->pdata [i] = array->pdata [array->len];
+			else
+				array->pdata [i] = NULL;
 			return TRUE;
 		}
 	}

@@ -36,11 +36,15 @@ void img_writer_emit_start (MonoImageWriter *w) MONO_INTERNAL;
 
 int img_writer_emit_writeout (MonoImageWriter *w) MONO_INTERNAL;
 
+guint8* img_writer_get_output (MonoImageWriter *acfg, guint32 *size) MONO_INTERNAL;
+
 void img_writer_emit_section_change (MonoImageWriter *w, const char *section_name, int subsection_index) MONO_INTERNAL;
 
 void img_writer_emit_push_section (MonoImageWriter *w, const char *section_name, int subsection) MONO_INTERNAL;
 
 void img_writer_emit_pop_section (MonoImageWriter *w) MONO_INTERNAL;
+
+void img_writer_set_section_addr (MonoImageWriter *acfg, guint64 addr) MONO_INTERNAL;
 
 void img_writer_emit_global (MonoImageWriter *w, const char *name, gboolean func) MONO_INTERNAL;
 
@@ -57,6 +61,10 @@ void img_writer_emit_string (MonoImageWriter *w, const char *value) MONO_INTERNA
 void img_writer_emit_line (MonoImageWriter *w) MONO_INTERNAL;
 
 void img_writer_emit_alignment (MonoImageWriter *w, int size) MONO_INTERNAL;
+
+#ifdef __native_client_codegen__
+void img_writer_emit_nacl_call_alignment (MonoImageWriter *w) MONO_INTERNAL;
+#endif
 
 void img_writer_emit_pointer_unaligned (MonoImageWriter *w, const char *target) MONO_INTERNAL;
 

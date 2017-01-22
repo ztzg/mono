@@ -1,3 +1,24 @@
+2010-02-24  Marek Habersack  <mhabersack@novell.com>
+
+	* SessionStateServerHandler.cs, SessionSQLServerHandler.cs: added
+	support for session state compression (4.0)
+
+2010-01-20  Marek Habersack  <mhabersack@novell.com>
+
+	* SessionStateBehavior.cs: added (4.0)
+
+2009-10-19  Marek Habersack  <mhabersack@novell.com>
+
+	* SessionStateModule.cs: enabled SQL session state provider.
+
+	* SessionSQLServerHandler.cs: implemented. Uses System.Data.Common
+	for provider-agnostic implementation. Until an issue with Npgsql's
+	2.0 factory missing is resolved it defaults to using
+	Mono.Data.Sqlite as the provider.
+	Selecting of the data provider is done by putting DbProviderName
+	in the connection string specified in the
+	<system.web/sessionState> configuration section.
+
 2009-03-21  Marek Habersack  <mhabersack@novell.com>
 
 	* HttpSessionState.cs: implemented the CookieMode property.

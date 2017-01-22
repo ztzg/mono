@@ -75,7 +75,9 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                                        ? dbSchema.ContextNamespace
                                        : context.Parameters.Namespace;
             context["database"] = dbSchema.Name;
-            context["generationTime"] = DateTime.Now.ToString("u");
+            context["generationTime"] = context.Parameters.GenerateTimestamps
+                ? DateTime.Now.ToString("u")
+                : "[TIMESTAMP]";
             context["class"] = dbSchema.Class;
 
             using (var codeWriter = CreateCodeWriter(textWriter))
@@ -91,18 +93,25 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                 if (string.IsNullOrEmpty(entityNamespace))
                     entityNamespace = dbSchema.EntityNamespace;
 
+                bool generateDataContext = true;
+                var types = context.Parameters.GenerateTypes;
+                if (types.Count > 0)
+                    generateDataContext = types.Contains(dbSchema.Class);
+
                 if (contextNamespace == entityNamespace)
                 {
                     using (WriteNamespace(codeWriter, contextNamespace))
                     {
-                        WriteDataContext(codeWriter, dbSchema, context);
+                        if (generateDataContext)
+                            WriteDataContext(codeWriter, dbSchema, context);
                         WriteClasses(codeWriter, dbSchema, context);
                     }
                 }
                 else
                 {
-                    using (WriteNamespace(codeWriter, contextNamespace))
-                        WriteDataContext(codeWriter, dbSchema, context);
+                    if (generateDataContext)
+                        using (WriteNamespace(codeWriter, contextNamespace))
+                            WriteDataContext(codeWriter, dbSchema, context);
                     using (WriteNamespace(codeWriter, entityNamespace))
                         WriteClasses(codeWriter, dbSchema, context);
                 }
@@ -139,8 +148,12 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
 #if MONO_STRICT
             writer.WriteUsingNamespace("System.Data.Linq");
 #else
+            writer.WriteLine("#if MONO_STRICT");
+            writer.WriteUsingNamespace("System.Data.Linq");
+            writer.WriteLine("#else   // MONO_STRICT");
             writer.WriteUsingNamespace("DbLinq.Data.Linq");
             writer.WriteUsingNamespace("DbLinq.Vendor");
+            writer.WriteLine("#endif  // MONO_STRICT");
 #endif
 
             //            writer.WriteUsingNamespace("System");
@@ -164,12 +177,8 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                 implementation.WriteHeader(writer, context);
 
             // write namespaces for members attributes
-            foreach (var memberExposedAttribute in context.Parameters.MemberExposedAttributes)
-                WriteUsingNamespace(writer, GetNamespace(memberExposedAttribute));
-
-            // write namespaces for clases attributes
-            foreach (var entityExposedAttribute in context.Parameters.EntityExposedAttributes)
-                WriteUsingNamespace(writer, GetNamespace(entityExposedAttribute));
+            foreach (var memberAttribute in context.Parameters.MemberAttributes)
+                WriteUsingNamespace(writer, GetNamespace(memberAttribute));
 
             writer.WriteLine();
         }
@@ -211,12 +220,10 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
 
 
             string contextBase = schema.BaseType;
-            var contextBaseType = TypeLoader.Load(contextBase);
-            // if we don't specify a base type, use the default
-            if (string.IsNullOrEmpty(contextBase))
-            {
-                contextBaseType = typeof(DataContext);
-            }
+            var contextBaseType = string.IsNullOrEmpty(contextBase)
+                ? typeof(DataContext)
+                : TypeLoader.Load(contextBase);
+
             // in all cases, get the literal type name from loaded type
             contextBase = writer.GetLiteralType(contextBaseType);
 
@@ -229,6 +236,7 @@ namespace DbMetal.Generator.Implementation.CodeTextGenerator
                 specifications |= GetSpecificationDefinition(schema.Modifier);
             using (writer.WriteClass(specifications, schema.Class, contextBase))
             {
+                WriteDataContextExtensibilityDeclarations(writer, schema, context);
                 WriteDataContextCtors(writer, schema, contextBaseType, context);
                 WriteDataContextTables(writer, schema, context);
                 WriteDataContextProcedures(writer, schema, context);

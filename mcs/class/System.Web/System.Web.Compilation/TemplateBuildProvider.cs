@@ -27,7 +27,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_2_0
+
 using System;
 using System.CodeDom;
 using System.CodeDom.Compiler;
@@ -43,7 +43,7 @@ using System.Web.Util;
 
 namespace System.Web.Compilation
 {
-	internal abstract class TemplateBuildProvider : GenericBuildProvider <TemplateParser>
+	abstract class TemplateBuildProvider : GenericBuildProvider <TemplateParser>
 	{
 		delegate void ExtractDirectiveDependencies (string baseDirectory, CaptureCollection names, CaptureCollection values, TemplateBuildProvider bp);
 		
@@ -100,9 +100,13 @@ namespace System.Web.Compilation
 				if (index > valuesCount)
 					return String.Empty;
 
-				if (isPath)
-					return new VirtualPath (values [index].Value.Trim (directiveValueTrimChars), baseDirectory).Absolute;
-				else
+				if (isPath) {
+					string value = values [index].Value.Trim (directiveValueTrimChars);
+					if (String.IsNullOrEmpty (value))
+						return String.Empty;
+					
+					return new VirtualPath (value, baseDirectory).Absolute;
+				} else
 					return values [index].Value.Trim ();
 			}
 
@@ -369,4 +373,3 @@ namespace System.Web.Compilation
 		}
 	}
 }
-#endif

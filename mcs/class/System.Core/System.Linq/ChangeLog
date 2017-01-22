@@ -1,3 +1,143 @@
+2010-07-14  Jb Evain  <jbevain@novell.com>
+
+	* Enumerable.cs (Union): fix HashSet.Contains call.
+
+2010-07-13  Jb Evain  <jbevain@novell.com>
+
+	* Enumerable.cs (Except): fix HashSet.Contains call.
+	Fixes #621911.
+
+2010-06-22  Jb Evain  <jbevain@novell.com>
+
+	* Queryable.cs: properly set the constants types in the queryable
+	expression tree.
+
+2010-06-22  Jb Evain  <jbevain@novell.com>
+
+	* EnumerableQuery_T.cs
+	* QueryableEnumerable.cs:
+		override ToString.
+
+2010-06-18  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* EnumerableQuery.cs:
+	* EnumerableQuery_T.cs:
+	* EnumerableExecutor.cs: 
+	* EnumerableExecutor_T.cs: Include in Moonlight.
+
+	* Enumerable.cs: Moonlight too needs Zip.
+
+2010-05-25  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* ParallelExecuter.cs: Fix NRE caused by lambda wrapping
+
+2010-05-25  Jb Evain  <jbevain@novell.com>
+
+	* Enumerable.cs: make Reverse lazier. Based on a patch by
+	Matthew Flaschen <matthew.flaschen@gatech.edu>. Fixes #608195.
+
+2010-05-19  Jb Evain  <jbevain@novell.com>
+
+	* Enumerable.cs: fix GroupBy to deal with a null key for the last
+	group entry. Also fix GroupBy to properly throw ArgumentNullException.
+
+2010-05-05  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* ParallelEnumerable.cs: Some operators weren't declared
+	as extension methods. Fixed.
+
+2010-04-29  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* ParallelQueryEnumerator.cs: Use new non-blocking collection
+	for storing indexed elements.
+
+2010-04-29  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* ParallelExecuter.cs: Bring indexed worker methods support.
+	Check for null callback.
+
+2010-04-15  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* OrderedParallelQuery.cs:
+	* ParallelEnumerable.cs:
+	* ParallelExecuter.cs:
+	* ParallelPartitioner.cs:
+	* ParallelQuery.cs:
+	* ParallelQueryEnumerator.cs: First check-in of PLinq
+
+2010-04-15  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* ParallelExecutionMode.cs:
+	* ParallelMergeOptions.cs: Initial check-in of PLinq (enum)
+
+2010-04-12  Miguel de Icaza  <miguel@novell.com>
+
+	* Enumerable.cs: Jumbo patch that inlines code, mainly for the AOT
+	scenario where we our compiler cant infer the extra layer of
+	indirection of a lambda function.
+
+	But additionally, since we lack support for our JIT to inline
+	intermediate delegate calls, it should save memory and run
+	faster. 
+
+2010-04-07  Jb Evain  <jbevain@novell.com>
+
+	* EnumerableExecutor.cs: make ctor protected.
+
+2010-04-07  Jb Evain  <jbevain@novell.com>
+
+	* EnumerableQuery_T.cs: implement.
+
+2010-04-07  Jb Evain  <jbevain@novell.com>
+
+	* EnumerableQuery.cs: make ctor protected.
+
+2010-04-06  Jb Evain  <jbevain@novell.com>
+
+	* QueryableEnumerable.cs: make TransformQueryable work on net_4_0.
+
+2010-04-06  Jb Evain  <jbevain@novell.com>
+
+	* QueryableTransformer.cs: use factory method that work for all
+	ET implementations.
+
+2010-03-30  Jb Evain  <jbevain@novell.com>
+
+	* Queryable.cs: implement Zip for net_4_0.
+
+2010-03-24  Jb Evain  <jbevain@novell.com>
+
+	* SortSequenceContext.cs: Fix OrderByDescending stability.
+	Based on a patch by Richard Kiene  <richard.kiene@logos.com>.
+
+2010-02-23  Marek Safar  <marek.safar@gmail.com>
+
+	* Enumerable.cs: Implement Zip.
+
+2010-01-25  Jb Evain  <jbevain@novell.com>
+
+	* QueryableTransformer.cs (ReplaceQueryableMethod): fix
+	exception message.
+
+2009-12-03  Marek Safar  <marek.safar@gmail.com>
+
+	* EnumerableExecutor.cs, EnumerableExecutor_T.cs, EnumerableQuery.cs
+	EnumerableQuery_T.cs: Implemented.
+
+2009-11-14  Jb Evain  <jbevain@novell.com>
+
+	* QueryableTransformer: adjust to latest ExpressionTransformer
+	changes.
+
+2009-11-12  Eric Maupin  <me@ermau.com>
+
+	* Enumerable.cs (ToLookup): Accept null keys.
+	* Lookup.cs: Accept null keys.
+
+2009-10-08  Marek Safar  <marek.safar@gmail.com>
+
+	* Enumerable.cs (Empty): Optimized allocation.
+
 2009-08-07  Marek Safar  <marek.safar@gmail.com>
 
 	* Enumerable.cs (Skip): Optimized and fixed int.MaxValue overflow.

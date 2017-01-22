@@ -31,7 +31,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
 
@@ -80,20 +82,22 @@ namespace System.Runtime.Serialization.Json
 		{
 			var l = new List<TypeMapMember> ();
 			foreach (var fi in type.GetFields ())
-				l.Add (new TypeMapField (fi, null));
+				if (!fi.IsStatic)
+					l.Add (new TypeMapField (fi, null));
 			foreach (var pi in type.GetProperties ())
-				if (pi.CanRead && pi.CanWrite)
+				if (pi.CanRead && pi.CanWrite && !pi.GetGetMethod ().IsStatic)
 					l.Add (new TypeMapProperty (pi, null));
+			l.Sort ((x, y) => x.Order != y.Order ? x.Order - y.Order : String.Compare (x.Name, y.Name, StringComparison.Ordinal));
 			return new TypeMap (type, null, l.ToArray ());
 		}
 
 		static bool IsCollection (Type type)
 		{
-			if (type.GetInterface ("System.Collections.IList") != null)
+			if (type.GetInterface ("System.Collections.IList", false) != null)
 				return true;
-			if (type.GetInterface ("System.Collections.Generic.IList`1") != null)
+			if (type.GetInterface ("System.Collections.Generic.IList`1", false) != null)
 				return true;
-			if (type.GetInterface ("System.Collections.Generic.ICollection`1") != null)
+			if (type.GetInterface ("System.Collections.Generic.ICollection`1", false) != null)
 				return true;
 			return false;
 		}
@@ -113,7 +117,7 @@ namespace System.Runtime.Serialization.Json
 					DataMemberAttribute dma = (DataMemberAttribute) atts [0];
 					members.Add (new TypeMapField (fi, dma));
 				} else {
-					if (fi.GetCustomAttributes (typeof (NonSerializedAttribute), false).Length > 0)
+					if (fi.GetCustomAttributes (typeof (IgnoreDataMemberAttribute), false).Length > 0)
 						continue;
 					members.Add (new TypeMapField (fi, null));
 				}
@@ -137,7 +141,7 @@ namespace System.Runtime.Serialization.Json
 				}
 			}
 
-			members.Sort (delegate (TypeMapMember m1, TypeMapMember m2) { return m1.Order - m2.Order; });
+			members.Sort (delegate (TypeMapMember m1, TypeMapMember m2) { return m1.Order != m2.Order ? m1.Order - m2.Order : String.CompareOrdinal (m1.Name, m2.Name); });
 			return new TypeMap (type, dca == null ? null : dca.Name, members.ToArray ());
 		}
 
@@ -145,12 +149,25 @@ namespace System.Runtime.Serialization.Json
 		string element;
 		TypeMapMember [] members;
 
+		static readonly Type [] deser_methods_args = new Type [] { typeof (StreamingContext) };
+		const BindingFlags binding_flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
 		public TypeMap (Type type, string element, TypeMapMember [] orderedMembers)
 		{
 			this.type = type;
 			this.element = element;
 			this.members = orderedMembers;
+
+			foreach (var mi in type.GetMethods (binding_flags)) {
+				if (mi.GetCustomAttributes (typeof (OnDeserializingAttribute), false).Length > 0)
+					OnDeserializing = mi;
+				else if (mi.GetCustomAttributes (typeof (OnDeserializedAttribute), false).Length > 0)
+					OnDeserialized = mi;
+			}
 		}
+
+		public MethodInfo OnDeserializing { get; set; }
+		public MethodInfo OnDeserialized { get; set; }
 
 		public void Serialize (JsonSerializationWriter outputter, object graph)
 		{
@@ -166,12 +183,11 @@ namespace System.Runtime.Serialization.Json
 		public object Deserialize (JsonSerializationReader jsr)
 		{
 			XmlReader reader = jsr.Reader;
-#if NET_2_1
-			// should it reject non-public constructor?
-			object ret = Activator.CreateInstance (type);
-#else
-			object ret = Activator.CreateInstance (type, true);
-#endif
+			bool isNull = reader.GetAttribute ("type") == "null";
+
+			object ret = isNull ? null : FormatterServices.GetUninitializedObject (type);
+			if (ret != null && OnDeserializing != null)
+				OnDeserializing.Invoke (ret, new object [] {new StreamingContext (StreamingContextStates.All)});
 			Dictionary<TypeMapMember,bool> filled = new Dictionary<TypeMapMember,bool> ();
 
 			reader.ReadStartElement ();
@@ -192,6 +208,8 @@ namespace System.Runtime.Serialization.Json
 					reader.Skip ();
 			}
 			reader.ReadEndElement ();
+			if (ret != null && OnDeserialized != null)
+				OnDeserialized.Invoke (ret, new object [] {new StreamingContext (StreamingContextStates.All)});
 			return ret;
 		}
 	}
@@ -211,10 +229,9 @@ namespace System.Runtime.Serialization.Json
 			get { return dma == null ? mi.Name : dma.Name ?? mi.Name; }
 		}
 
-		// FIXME: Fill 3.5 member in s.r.serialization.
-//		public bool EmitDefaultValue {
-//			get { return dma != null && dma.EmitDefaultValue; }
-//		}
+		public bool EmitDefaultValue {
+			get { return dma != null && dma.EmitDefaultValue; }
+		}
 
 		public bool IsRequired {
 			get { return dma != null && dma.IsRequired; }

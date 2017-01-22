@@ -40,10 +40,7 @@ using System.Runtime.Remoting.Activation;
 using System.Runtime.Remoting.Contexts;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
-
-#if NET_2_0
 using System.Runtime.InteropServices;
-#endif
 
 namespace System.Runtime.Remoting.Proxies
 {
@@ -55,9 +52,7 @@ namespace System.Runtime.Remoting.Proxies
 	}
 #pragma warning restore 169, 649
 	
-#if NET_2_0
 	[ComVisible (true)]
-#endif
 	public abstract class RealProxy {
 		// other classes visible to the runtime 
 		// derive from this class so keep these locals
@@ -169,6 +164,7 @@ namespace System.Runtime.Remoting.Proxies
 			CallType call_type = mMsg.CallType;
 			bool is_remproxy = (rp is RemotingProxy);
 
+			out_args = null;
 			IMethodReturnMessage res_msg = null;
 			
 			if (call_type == CallType.BeginInvoke) 
@@ -214,6 +210,7 @@ namespace System.Runtime.Remoting.Proxies
 
 					// allow calltype EndInvoke to finish
 					asyncMsg = mMsg.AsyncResult.SyncProcessMessage (res_msg as IMessage);
+					out_args = res_msg.OutArgs;
 					res_msg = new ReturnMessage (asyncMsg, null, 0, null, res_msg as IMethodCallMessage);
 				}
 			}
@@ -228,8 +225,12 @@ namespace System.Runtime.Remoting.Proxies
 				out_args = null;
 				throw exc.FixRemotingException();
 			}
-			else if (res_msg is IConstructionReturnMessage || mMsg.CallType == CallType.BeginInvoke) {
-				out_args = res_msg.OutArgs;
+			else if (res_msg is IConstructionReturnMessage) {
+				if (out_args == null)
+					out_args = res_msg.OutArgs;
+			}
+			else if (mMsg.CallType == CallType.BeginInvoke) {
+				// We don't have OutArgs in this case.
 			}
 			else if (mMsg.CallType == CallType.Sync) {
 				out_args = ProcessResponse (res_msg, mMsg);
@@ -238,7 +239,8 @@ namespace System.Runtime.Remoting.Proxies
 				out_args = ProcessResponse (res_msg, mMsg.AsyncResult.CallMessage);
 			}
 			else {
-				out_args = res_msg.OutArgs;
+				if (out_args == null)
+					out_args = res_msg.OutArgs;
 			}
 
 			return res_msg.ReturnValue;
@@ -268,9 +270,7 @@ namespace System.Runtime.Remoting.Proxies
 		}
 
 		[MonoTODO]
-#if NET_2_0
 		[ComVisible (true)]
-#endif
 		public IConstructionReturnMessage InitializeServerObject(IConstructionCallMessage ctorMsg)
 		{
 			throw new NotImplementedException();

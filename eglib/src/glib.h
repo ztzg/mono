@@ -13,9 +13,16 @@
 #pragma include_alias(<eglib-config.h>, <eglib-config.hw>)
 #else
 #include <stdint.h>
+/* For pid_t */
+#ifndef WIN32
+#include <unistd.h>
+#endif
 #endif
 
 #include <eglib-config.h>
+#ifndef EGLIB_NO_REMAP
+#include <eglib-remap.h>
+#endif
 
 #ifndef offsetof
 #   define offsetof(s_name,n_name) (size_t)(char *)&(((s_name*)0)->m_name)
@@ -23,10 +30,19 @@
 
 #define __EGLIB_X11 1
 
+#ifdef  __cplusplus
+#define G_BEGIN_DECLS  extern "C" {
+#define G_END_DECLS    }
+#else
+#define G_BEGIN_DECLS
+#define G_END_DECLS
+#endif
+
+G_BEGIN_DECLS
+
 /*
  * Basic data types
  */
-typedef int            gboolean;
 typedef int            gint;
 typedef unsigned int   guint;
 typedef short          gshort;
@@ -51,6 +67,7 @@ typedef unsigned __int64	guint64;
 typedef float				gfloat;
 typedef double				gdouble;
 typedef unsigned __int16	gunichar2;
+typedef int                 gboolean;
 #else
 /* Types defined in terms of the stdint.h */
 typedef int8_t         gint8;
@@ -64,6 +81,7 @@ typedef uint64_t       guint64;
 typedef float          gfloat;
 typedef double         gdouble;
 typedef uint16_t       gunichar2;
+typedef int32_t        gboolean;
 #endif
 #endif
 
@@ -76,10 +94,13 @@ typedef uint16_t       gunichar2;
 #define FALSE                0
 #define TRUE                 1
 
+#define G_MAXINT             INT_MAX
+#define G_MININT             INT_MIN
 #define G_MAXINT32           INT32_MAX
 #define G_MININT32           INT32_MIN
 #define G_MININT64           INT64_MIN
 #define G_MAXINT64	     INT64_MAX
+#define G_MAXUINT64	     UINT64_MAX
 
 #define G_LITTLE_ENDIAN 1234
 #define G_BIG_ENDIAN    4321
@@ -96,14 +117,6 @@ typedef uint16_t       gunichar2;
 #define EGLIB_TOSTRING(x) EGLIB_STRINGIFY(x)
 #define G_STRLOC __FILE__ ":" EGLIB_TOSTRING(__LINE__) ":"
 
-#ifdef  __cplusplus
-#define G_BEGIN_DECLS  extern "C" {
-#define G_END_DECLS    }
-#else
-#define G_BEGIN_DECLS
-#define G_END_DECLS
-#endif
- 
 #define G_CONST_RETURN const
 
 /*
@@ -126,6 +139,7 @@ static inline gpointer g_malloc0 (gsize x) {if (x) return calloc(1,x); else retu
 
 gpointer g_memdup (gconstpointer mem, guint byte_size);
 static inline gchar   *g_strdup (const gchar *str) { if (str) {return strdup (str);} return NULL; }
+gchar **g_strdupv (gchar **str_array);
 
 typedef struct {
 	gpointer (*malloc)      (gsize    n_bytes);
@@ -137,6 +151,12 @@ typedef struct {
 } GMemVTable;
 
 #define g_mem_set_vtable(x)
+
+struct _GMemChunk {
+	guint alloc_size;
+};
+
+typedef struct _GMemChunk GMemChunk;
 /*
  * Misc.
  */
@@ -151,8 +171,8 @@ gchar*           g_win32_getlocale(void);
 /*
  * Precondition macros
  */
-#define g_return_if_fail(x)  G_STMT_START { if (!(x)) { printf ("%s:%d: assertion '%s' failed", __FILE__, __LINE__, #x); return; } } G_STMT_END
-#define g_return_val_if_fail(x,e)  G_STMT_START { if (!(x)) { printf ("%s:%d: assertion '%s' failed", __FILE__, __LINE__, #x); return (e); } } G_STMT_END
+#define g_return_if_fail(x)  G_STMT_START { if (!(x)) { g_critical ("%s:%d: assertion '%s' failed", __FILE__, __LINE__, #x); return; } } G_STMT_END
+#define g_return_val_if_fail(x,e)  G_STMT_START { if (!(x)) { g_critical ("%s:%d: assertion '%s' failed", __FILE__, __LINE__, #x); return (e); } } G_STMT_END
 
 /*
  * Hashtables
@@ -181,6 +201,7 @@ gboolean        g_hash_table_remove          (GHashTable *hash, gconstpointer ke
 guint           g_hash_table_foreach_remove  (GHashTable *hash, GHRFunc func, gpointer user_data);
 guint           g_hash_table_foreach_steal   (GHashTable *hash, GHRFunc func, gpointer user_data);
 void            g_hash_table_destroy         (GHashTable *hash);
+void            g_hash_table_print_stats     (GHashTable *table);
 
 guint           g_spaced_primes_closest      (guint x);
 
@@ -194,8 +215,8 @@ guint    g_int_hash     (gconstpointer v1);
 gboolean g_str_equal    (gconstpointer v1, gconstpointer v2);
 guint    g_str_hash     (gconstpointer v1);
 
-#define  g_assert(x)     G_STMT_START { if (!(x)) g_error ("* Assertion at %s:%d, condition `%s' not met\n", __FILE__, __LINE__, #x);  } G_STMT_END
-#define  g_assert_not_reached() G_STMT_START { g_error ("* Assertion: should not be reached at %s:%d\n", __FILE__, __LINE__); } G_STMT_END
+#define  g_assert(x)     G_STMT_START { if (!(x)) g_assertion_message ("* Assertion at %s:%d, condition `%s' not met\n", __FILE__, __LINE__, #x);  } G_STMT_END
+#define  g_assert_not_reached() G_STMT_START { g_assertion_message ("* Assertion: should not be reached at %s:%d\n", __FILE__, __LINE__); } G_STMT_END
 
 /*
  * Errors
@@ -272,6 +293,7 @@ gint    g_ascii_xdigit_value (gchar c);
 #else
 #define g_strcasecmp strcasecmp
 #define g_ascii_strcasecmp strcasecmp
+#define g_ascii_strtoull strtoull
 #define g_strncasecmp strncasecmp
 #define g_strstrip(a) g_strchug (g_strchomp (a))
 #endif
@@ -449,7 +471,7 @@ void       g_ptr_array_add                (GPtrArray *array, gpointer data);
 gboolean   g_ptr_array_remove             (GPtrArray *array, gpointer data);
 gpointer   g_ptr_array_remove_index       (GPtrArray *array, guint index);
 gboolean   g_ptr_array_remove_fast        (GPtrArray *array, gpointer data);
-gpointer   g_ptr_array_remove_index_fast  (GPtrArray *array, gpointer data);
+gpointer   g_ptr_array_remove_index_fast  (GPtrArray *array, guint index);
 void       g_ptr_array_sort               (GPtrArray *array, GCompareFunc compare_func);
 void       g_ptr_array_sort_with_data     (GPtrArray *array, GCompareDataFunc compare_func, gpointer user_data);
 void       g_ptr_array_set_size           (GPtrArray *array, gint length);
@@ -468,6 +490,8 @@ typedef struct {
 
 gpointer g_queue_pop_head  (GQueue   *queue);
 void     g_queue_push_head (GQueue   *queue,
+			    gpointer  data);
+void     g_queue_push_tail (GQueue   *queue,
 			    gpointer  data);
 gboolean g_queue_is_empty  (GQueue   *queue);
 GQueue  *g_queue_new       (void);
@@ -495,29 +519,29 @@ typedef enum {
 } GLogLevelFlags;
 
 void           g_print                (const gchar *format, ...);
+void           g_printerr             (const gchar *format, ...);
 GLogLevelFlags g_log_set_always_fatal (GLogLevelFlags fatal_mask);
 GLogLevelFlags g_log_set_fatal_mask   (const gchar *log_domain, GLogLevelFlags fatal_mask);
 void           g_logv                 (const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, va_list args);
 void           g_log                  (const gchar *log_domain, GLogLevelFlags log_level, const gchar *format, ...);
+void           g_assertion_message    (const gchar *format, ...) G_GNUC_NORETURN;
 
 #ifdef HAVE_C99_SUPPORT
-#define g_error(format, ...)    g_log (G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, format, __VA_ARGS__)
+/* The for (;;) tells gc thats g_error () doesn't return, avoiding warnings */
+#define g_error(format, ...)    do { g_log (G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, format, __VA_ARGS__); for (;;); } while (0)
 #define g_critical(format, ...) g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, format, __VA_ARGS__)
 #define g_warning(format, ...)  g_log (G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, format, __VA_ARGS__)
 #define g_message(format, ...)  g_log (G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, format, __VA_ARGS__)
 #define g_debug(format, ...)    g_log (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, format, __VA_ARGS__)
-
-#define g_printerr(format, ...) fprintf (stderr, format, __VA_ARGS__)
-#else
-#define g_error(...)    g_log (G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, __VA_ARGS__)
+#else   /* HAVE_C99_SUPPORT */
+#define g_error(...)    do { g_log (G_LOG_DOMAIN, G_LOG_LEVEL_ERROR, __VA_ARGS__); for (;;); } while (0)
 #define g_critical(...) g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL, __VA_ARGS__)
 #define g_warning(...)  g_log (G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, __VA_ARGS__)
 #define g_message(...)  g_log (G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, __VA_ARGS__)
 #define g_debug(...)    g_log (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG, __VA_ARGS__)
-
-#define g_printerr(...) fprintf (stderr, __VA_ARGS__)
-#endif
+#endif  /* ndef HAVE_C99_SUPPORT */
 #define g_log_set_handler(a,b,c,d)
+
 /*
  * Conversions
  */
@@ -584,9 +608,13 @@ gint           g_unichar_xdigit_value (gunichar c);
 #define CLAMP(a,low,high) (((a) < (low)) ? (low) : (((a) > (high)) ? (high) : (a)))
 #endif
 
-/* FIXME: Implement these two for gcc */
+#if defined(__GNUC__) && (__GNUC__ > 2)
+#define G_LIKELY(expr) (__builtin_expect ((expr) != 0, 1))
+#define G_UNLIKELY(expr) (__builtin_expect ((expr) != 0, 0))
+#else
 #define G_LIKELY(x) (x)
 #define G_UNLIKELY(x) (x)
+#endif
 
 /*
  * Unicode conversion
@@ -685,6 +713,7 @@ typedef struct {
 } GTimeVal;
 
 void g_get_current_time (GTimeVal *result);
+void g_usleep (gulong microseconds);
 
 /*
  * File
@@ -748,6 +777,7 @@ GDir        *g_dir_open (const gchar *path, guint flags, GError **error);
 const gchar *g_dir_read_name (GDir *dir);
 void         g_dir_rewind (GDir *dir);
 void         g_dir_close (GDir *dir);
+#define g_mkdir mkdir
 
 /*
  * GMarkup
@@ -882,6 +912,8 @@ glong     g_utf8_strlen        (const gchar *str, gssize max);
  
 #define GLIB_CHECK_VERSION(a,b,c) ((a < _EGLIB_MAJOR) || (a == _EGLIB_MAJOR && (b < _EGLIB_MIDDLE || (b == _EGLIB_MIDDLE && c <= _EGLIB_MINOR))))
  
+G_END_DECLS
+
 #endif
 
 

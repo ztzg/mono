@@ -20,7 +20,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <string.h>
-#ifndef PLATFORM_WIN32
+#ifndef HOST_WIN32
 #include <sys/time.h>
 #else
 #include <winsock2.h>
@@ -36,7 +36,7 @@
 
 #include "image-writer.h"
 
-#ifndef PLATFORM_WIN32
+#ifndef HOST_WIN32
 #include <mono/utils/freebsd-elf32.h>
 #include <mono/utils/freebsd-elf64.h>
 #endif
@@ -53,7 +53,7 @@
  * TARGET_ASM_GAS == GNU assembler
  */
 #if !defined(TARGET_ASM_APPLE) && !defined(TARGET_ASM_GAS)
-#ifdef __MACH__
+#if defined(__MACH__) && !defined(__native_client_codegen__)
 #define TARGET_ASM_APPLE
 #else
 #define TARGET_ASM_GAS
@@ -63,7 +63,7 @@
 /*
  * Defines for the directives used by different assemblers
  */
-#if defined(__ppc__) || defined(__powerpc__) || defined(__MACH__)
+#if defined(TARGET_POWERPC) || defined(__MACH__)
 #define AS_STRING_DIRECTIVE ".asciz"
 #else
 #define AS_STRING_DIRECTIVE ".string"
@@ -92,17 +92,28 @@
 #define AS_SKIP_DIRECTIVE ".skip"
 #endif
 
+#if defined(TARGET_ASM_APPLE)
+#define AS_GLOBAL_PREFIX "_"
+#else
+#define AS_GLOBAL_PREFIX ""
+#endif
+
+#ifdef TARGET_ASM_APPLE
+#define AS_TEMP_LABEL_PREFIX "L"
+#else
+#define AS_TEMP_LABEL_PREFIX ".L"
+#endif
 
 #define ALIGN_TO(val,align) ((((guint64)val) + ((align) - 1)) & ~((align) - 1))
 #define ALIGN_PTR_TO(ptr,align) (gpointer)((((gssize)(ptr)) + (align - 1)) & (~(align - 1)))
 #define ROUND_DOWN(VALUE,SIZE)	((VALUE) & ~((SIZE) - 1))
 
-#if defined(TARGET_AMD64) && !defined(PLATFORM_WIN32)
+#if defined(TARGET_AMD64) && !defined(HOST_WIN32)
 #define USE_ELF_WRITER 1
 #define USE_ELF_RELA 1
 #endif
 
-#if defined(TARGET_X86) && !defined(PLATFORM_WIN32)
+#if defined(TARGET_X86) && !defined(TARGET_WIN32)
 #define USE_ELF_WRITER 1
 #endif
 
@@ -152,6 +163,8 @@ struct _MonoImageWriter {
 	BinReloc *relocations;
 	GHashTable *labels;
 	int num_relocs;
+	guint8 *out_buf;
+	int out_buf_size, out_buf_pos;
 #endif
 	/* Asm writer */
 	char *tmpfname;
@@ -211,6 +224,8 @@ struct _BinSection {
 	int file_offset;
 	int virt_offset;
 	int shidx;
+	guint64 addr;
+	gboolean has_addr;
 };
 
 static void
@@ -241,6 +256,13 @@ bin_writer_emit_section_change (MonoImageWriter *acfg, const char *section_name,
 		acfg->sections = section;
 		acfg->cur_section = section;
 	}
+}
+
+static void
+bin_writer_set_section_addr (MonoImageWriter *acfg, guint64 addr)
+{
+	acfg->cur_section->addr = addr;
+	acfg->cur_section->has_addr = TRUE;
 }
 
 static void
@@ -291,6 +313,11 @@ bin_writer_emit_ensure_buffer (BinSection *section, int size)
 		while (new_size <= new_offset)
 			new_size *= 2;
 		data = g_malloc0 (new_size);
+#ifdef __native_client_codegen__
+		/* for Native Client, fill empty space with HLT instruction */
+		/* instead of 00.                                           */
+		memset(data, 0xf4, new_size);
+#endif		
 		memcpy (data, section->data, section->data_len);
 		g_free (section->data);
 		section->data = data;
@@ -332,6 +359,22 @@ bin_writer_emit_alignment (MonoImageWriter *acfg, int size)
 		acfg->cur_section->cur_offset += add;
 	}
 }
+
+#ifdef __native_client_codegen__
+static void
+bin_writer_emit_nacl_call_alignment (MonoImageWriter *acfg) {
+  int offset = acfg->cur_section->cur_offset;
+  int padding = kNaClAlignment - (offset & kNaClAlignmentMask) - kNaClLengthOfCallImm;
+  guint8 padc = '\x90';
+
+  if (padding < 0) padding += kNaClAlignment;
+
+  while (padding > 0) {
+    bin_writer_emit_bytes(acfg, &padc, 1);
+    padding -= 1;
+  }
+}
+#endif  /* __native_client_codegen__ */
 
 static void
 bin_writer_emit_pointer_unaligned (MonoImageWriter *acfg, const char *target)
@@ -446,6 +489,7 @@ enum {
 	SECT_REL_DYN,
 	SECT_RELA_DYN,
 	SECT_TEXT,
+	SECT_RODATA,
 	SECT_DYNAMIC,
 	SECT_GOT_PLT,
 	SECT_DATA,
@@ -499,6 +543,7 @@ static SectInfo section_info [] = {
 	{".rel.dyn", SHT_REL, sizeof (ElfReloc), 2, SIZEOF_VOID_P},
 	{".rela.dyn", SHT_RELA, sizeof (ElfRelocA), 2, SIZEOF_VOID_P},
 	{".text", SHT_PROGBITS, 0, 6, 4096},
+	{".rodata", SHT_PROGBITS, 0, SHF_ALLOC, 4096},
 	{".dynamic", SHT_DYNAMIC, sizeof (ElfDynamic), 3, SIZEOF_VOID_P},
 	{".got.plt", SHT_PROGBITS, SIZEOF_VOID_P, 3, SIZEOF_VOID_P},
 	{".data", SHT_PROGBITS, 0, 3, 8},
@@ -692,6 +737,11 @@ collect_syms (MonoImageWriter *acfg, int *hash, ElfStrTable *strtab, ElfSectHead
 			if (strcmp (section->name, ".text") == 0) {
 				symbols [i].st_shndx = SECT_TEXT;
 				section->shidx = SECT_TEXT;
+				section->file_offset = 4096;
+				symbols [i].st_value = section->virt_offset;
+			} else if (strcmp (section->name, ".rodata") == 0) {
+				symbols [i].st_shndx = SECT_RODATA;
+				section->shidx = SECT_RODATA;
 				section->file_offset = 4096;
 				symbols [i].st_value = section->virt_offset;
 			} else if (strcmp (section->name, ".data") == 0) {
@@ -990,6 +1040,29 @@ resolve_relocations (MonoImageWriter *acfg)
 
 #endif /* USE_ELF_RELA */
 
+static void
+bin_writer_fwrite (MonoImageWriter *acfg, void *val, size_t size, size_t nmemb)
+{
+	if (acfg->fp)
+		fwrite (val, size, nmemb, acfg->fp);
+	else {
+		g_assert (acfg->out_buf_pos + (size * nmemb) <= acfg->out_buf_size);
+		memcpy (acfg->out_buf + acfg->out_buf_pos, val, size * nmemb);
+		acfg->out_buf_pos += (size * nmemb);
+	}
+}
+
+static void
+bin_writer_fseek (MonoImageWriter *acfg, int offset)
+{
+	if (acfg->fp)
+		fseek (acfg->fp, offset, SEEK_SET);
+	else
+		acfg->out_buf_pos = offset;
+}
+
+static int normal_sections [] = { SECT_DATA, SECT_DEBUG_FRAME, SECT_DEBUG_INFO, SECT_DEBUG_ABBREV, SECT_DEBUG_LINE, SECT_DEBUG_LOC };
+
 static int
 bin_writer_emit_writeout (MonoImageWriter *acfg)
 {
@@ -1104,9 +1177,24 @@ bin_writer_emit_writeout (MonoImageWriter *acfg)
 	virt_offset = file_offset;
 	secth [SECT_TEXT].sh_addr = secth [SECT_TEXT].sh_offset = file_offset;
 	if (sections [SECT_TEXT]) {
+		if (sections [SECT_TEXT]->has_addr) {
+			secth [SECT_TEXT].sh_addr = sections [SECT_TEXT]->addr;
+			secth [SECT_TEXT].sh_flags &= ~SHF_ALLOC;
+		}
 		size = sections [SECT_TEXT]->cur_offset;
 		secth [SECT_TEXT].sh_size = size;
 		file_offset += size;
+	}
+
+	file_offset = ALIGN_TO (file_offset, secth [SECT_RODATA].sh_addralign);
+	virt_offset = file_offset;
+	secth [SECT_RODATA].sh_addr = virt_offset;
+	secth [SECT_RODATA].sh_offset = file_offset;
+	if (sections [SECT_RODATA]) {
+		size = sections [SECT_RODATA]->cur_offset;
+		secth [SECT_RODATA].sh_size = size;
+		file_offset += size;
+		virt_offset += size;
 	}
 
 	file_offset = ALIGN_TO (file_offset, secth [SECT_DYNAMIC].sh_addralign);
@@ -1126,7 +1214,7 @@ bin_writer_emit_writeout (MonoImageWriter *acfg)
 	virt_offset = ALIGN_TO (virt_offset, secth [SECT_GOT_PLT].sh_addralign);
 	secth [SECT_GOT_PLT].sh_addr = virt_offset;
 	secth [SECT_GOT_PLT].sh_offset = file_offset;
-	size = 12;
+	size = 3 * SIZEOF_VOID_P;
 	secth [SECT_GOT_PLT].sh_size = size;
 	file_offset += size;
 	virt_offset += size;
@@ -1210,6 +1298,11 @@ bin_writer_emit_writeout (MonoImageWriter *acfg)
 	size = str_table.data->len;
 	secth [SECT_STRTAB].sh_size = size;
 	file_offset += size;
+
+	for (i = 1; i < SECT_NUM; ++i) {
+		if (section_info [i].esize != 0)
+			g_assert (secth [i].sh_size % section_info [i].esize == 0);
+	}
 
 	file_offset += 4-1;
 	file_offset &= ~(4-1);
@@ -1324,63 +1417,66 @@ bin_writer_emit_writeout (MonoImageWriter *acfg)
 	reloc_symbols (acfg, symtab, secth, &str_table, FALSE);
 	relocs = resolve_relocations (acfg);
 
-	fwrite (&header, sizeof (header), 1, file);
-	fwrite (&progh, sizeof (progh), 1, file);
-	fwrite (hash, sizeof (int) * (hash [0] + hash [1] + 2), 1, file);
-	fwrite (dynsym, sizeof (ElfSymbol) * hash [1], 1, file);
-	fwrite (dyn_str_table.data->str, dyn_str_table.data->len, 1, file);
+	if (!acfg->fp) {
+		acfg->out_buf_size = file_offset + sizeof (secth);
+		acfg->out_buf = g_malloc (acfg->out_buf_size);
+	}
+
+	bin_writer_fwrite (acfg, &header, sizeof (header), 1);
+	bin_writer_fwrite (acfg, &progh, sizeof (progh), 1);
+	bin_writer_fwrite (acfg, hash, sizeof (int) * (hash [0] + hash [1] + 2), 1);
+	bin_writer_fwrite (acfg, dynsym, sizeof (ElfSymbol) * hash [1], 1);
+	bin_writer_fwrite (acfg, dyn_str_table.data->str, dyn_str_table.data->len, 1);
 	/* .rel.dyn */
-	fseek (file, secth [SECT_REL_DYN].sh_offset, SEEK_SET);
-	fwrite (relocs, sizeof (ElfReloc), acfg->num_relocs, file);
+	bin_writer_fseek (acfg, secth [SECT_REL_DYN].sh_offset);
+	bin_writer_fwrite (acfg, relocs, sizeof (ElfReloc), acfg->num_relocs);
 
 	/* .rela.dyn */
-	fseek (file, secth [SECT_RELA_DYN].sh_offset, SEEK_SET);
-	fwrite (relocs, secth [SECT_RELA_DYN].sh_size, 1, file);
+	bin_writer_fseek (acfg, secth [SECT_RELA_DYN].sh_offset);
+	bin_writer_fwrite (acfg, relocs, secth [SECT_RELA_DYN].sh_size, 1);
 
 	/* .text */
 	if (sections [SECT_TEXT]) {
-		fseek (file, secth [SECT_TEXT].sh_offset, SEEK_SET);
-		fwrite (sections [SECT_TEXT]->data, sections [SECT_TEXT]->cur_offset, 1, file);
+		bin_writer_fseek (acfg, secth [SECT_TEXT].sh_offset);
+		bin_writer_fwrite (acfg, sections [SECT_TEXT]->data, sections [SECT_TEXT]->cur_offset, 1);
+	}
+	/* .rodata */
+	if (sections [SECT_RODATA]) {
+		bin_writer_fseek (acfg, secth [SECT_RODATA].sh_offset);
+		bin_writer_fwrite (acfg, sections [SECT_RODATA]->data, sections [SECT_RODATA]->cur_offset, 1);
 	}
 	/* .dynamic */
-	fwrite (dynamic, sizeof (dynamic), 1, file);
+	bin_writer_fseek (acfg, secth [SECT_DYNAMIC].sh_offset);
+	bin_writer_fwrite (acfg, dynamic, sizeof (dynamic), 1);
 
 	/* .got.plt */
 	size = secth [SECT_DYNAMIC].sh_addr;
-	fwrite (&size, sizeof (size), 1, file);
+	bin_writer_fseek (acfg, secth [SECT_GOT_PLT].sh_offset);
+	bin_writer_fwrite (acfg, &size, sizeof (size), 1);
 
-	/* .data */
-	if (sections [SECT_DATA]) {
-		fseek (file, secth [SECT_DATA].sh_offset, SEEK_SET);
-		fwrite (sections [SECT_DATA]->data, sections [SECT_DATA]->cur_offset, 1, file);
+	/* normal sections */
+	for (i = 0; i < sizeof (normal_sections) / sizeof (normal_sections [0]); ++i) {
+		int sect = normal_sections [i];
+
+		if (sections [sect]) {
+			bin_writer_fseek (acfg, secth [sect].sh_offset);
+			bin_writer_fwrite (acfg, sections [sect]->data, sections [sect]->cur_offset, 1);
+		}
 	}
 
-	fseek (file, secth [SECT_DEBUG_FRAME].sh_offset, SEEK_SET);
-	if (sections [SECT_DEBUG_FRAME])
-		fwrite (sections [SECT_DEBUG_FRAME]->data, sections [SECT_DEBUG_FRAME]->cur_offset, 1, file);
-	fseek (file, secth [SECT_DEBUG_INFO].sh_offset, SEEK_SET);
-	if (sections [SECT_DEBUG_INFO])
-		fwrite (sections [SECT_DEBUG_INFO]->data, sections [SECT_DEBUG_INFO]->cur_offset, 1, file);
-	fseek (file, secth [SECT_DEBUG_ABBREV].sh_offset, SEEK_SET);
-	if (sections [SECT_DEBUG_ABBREV])
-		fwrite (sections [SECT_DEBUG_ABBREV]->data, sections [SECT_DEBUG_ABBREV]->cur_offset, 1, file);
-	fseek (file, secth [SECT_DEBUG_LINE].sh_offset, SEEK_SET);
-	if (sections [SECT_DEBUG_LINE])
-		fwrite (sections [SECT_DEBUG_LINE]->data, sections [SECT_DEBUG_LINE]->cur_offset, 1, file);
-	fseek (file, secth [SECT_DEBUG_LINE].sh_offset, SEEK_SET);
-	if (sections [SECT_DEBUG_LOC])
-		fwrite (sections [SECT_DEBUG_LOC]->data, sections [SECT_DEBUG_LOC]->cur_offset, 1, file);
-	fseek (file, secth [SECT_SHSTRTAB].sh_offset, SEEK_SET);
-	fwrite (sh_str_table.data->str, sh_str_table.data->len, 1, file);
-	fseek (file, secth [SECT_SYMTAB].sh_offset, SEEK_SET);
-	fwrite (symtab, sizeof (ElfSymbol) * num_local_syms, 1, file);
-	fseek (file, secth [SECT_STRTAB].sh_offset, SEEK_SET);
-	fwrite (str_table.data->str, str_table.data->len, 1, file);
+	bin_writer_fseek (acfg, secth [SECT_SHSTRTAB].sh_offset);
+	bin_writer_fwrite (acfg, sh_str_table.data->str, sh_str_table.data->len, 1);
+	bin_writer_fseek (acfg, secth [SECT_SYMTAB].sh_offset);
+	bin_writer_fwrite (acfg, symtab, sizeof (ElfSymbol) * num_local_syms, 1);
+	bin_writer_fseek (acfg, secth [SECT_STRTAB].sh_offset);
+	bin_writer_fwrite (acfg, str_table.data->str, str_table.data->len, 1);
 	/*g_print ("file_offset %d vs %d\n", file_offset, ftell (file));*/
 	/*g_assert (file_offset >= ftell (file));*/
-	fseek (file, file_offset, SEEK_SET);
-	fwrite (&secth, sizeof (secth), 1, file);
-	fclose (file);
+	bin_writer_fseek (acfg, file_offset);
+	bin_writer_fwrite (acfg, &secth, sizeof (secth), 1);
+
+	if (acfg->fp)
+		fclose (acfg->fp);
 
 	return 0;
 }
@@ -1417,9 +1513,7 @@ static void
 asm_writer_emit_section_change (MonoImageWriter *acfg, const char *section_name, int subsection_index)
 {
 	asm_writer_emit_unset_mode (acfg);
-#if defined(PLATFORM_WIN32)
-	fprintf (acfg->fp, ".section %s\n", section_name);
-#elif defined(TARGET_ASM_APPLE)
+#if defined(TARGET_ASM_APPLE)
 	if (strcmp(section_name, ".bss") == 0)
 		fprintf (acfg->fp, "%s\n", ".data");
 	else if (strstr (section_name, ".debug") == section_name) {
@@ -1435,6 +1529,8 @@ asm_writer_emit_section_change (MonoImageWriter *acfg, const char *section_name,
 		fprintf (acfg->fp, ".section \"%s\"\n", section_name);
 		fprintf (acfg->fp, ".subsection %d\n", subsection_index);
 	}
+#elif defined(HOST_WIN32)
+	fprintf (acfg->fp, ".section %s\n", section_name);
 #else
 	if (!strcmp (section_name, ".text") || !strcmp (section_name, ".data") || !strcmp (section_name, ".bss")) {
 		fprintf (acfg->fp, "%s %d\n", section_name, subsection_index);
@@ -1471,8 +1567,6 @@ asm_writer_emit_symbol_type (MonoImageWriter *acfg, const char *name, gboolean f
 
 #elif defined(TARGET_ARM)
 	fprintf (acfg->fp, "\t.type %s,#%s\n", name, stype);
-#elif defined(PLATFORM_WIN32)
-
 #else
 	fprintf (acfg->fp, "\t.type %s,@%s\n", name, stype);
 #endif
@@ -1482,7 +1576,7 @@ static void
 asm_writer_emit_global (MonoImageWriter *acfg, const char *name, gboolean func)
 {
 	asm_writer_emit_unset_mode (acfg);
-#if  (defined(__ppc__) && defined(TARGET_ASM_APPLE)) || defined(PLATFORM_WIN32)
+#if  (defined(__ppc__) && defined(TARGET_ASM_APPLE)) || (defined(HOST_WIN32) && !defined(MONO_CROSS_COMPILE))
     // mach-o always uses a '_' prefix.
 	fprintf (acfg->fp, "\t.globl _%s\n", name);
 #else
@@ -1518,16 +1612,16 @@ static void
 asm_writer_emit_label (MonoImageWriter *acfg, const char *name)
 {
 	asm_writer_emit_unset_mode (acfg);
-#if defined(PLATFORM_WIN32)
+#if defined(HOST_WIN32) && (defined(TARGET_X86) || defined(TARGET_AMD64))
 	fprintf (acfg->fp, "_%s:\n", name);
+#if defined(HOST_WIN32)
+	/* Emit a normal label too */
+	fprintf (acfg->fp, "%s:\n", name);
+#endif
 #else
 	fprintf (acfg->fp, "%s:\n", get_label (name));
 #endif
 
-#if defined(PLATFORM_WIN32)
-	/* Emit a normal label too */
-	fprintf (acfg->fp, "%s:\n", name);
-#endif
 }
 
 static void
@@ -1555,10 +1649,26 @@ asm_writer_emit_alignment (MonoImageWriter *acfg, int size)
 	fprintf (acfg->fp, "\t.align %d\t; ilog2\n", ilog2(size));
 #elif defined(TARGET_ASM_GAS)
 	fprintf (acfg->fp, "\t.balign %d\n", size);
+#elif defined(TARGET_ASM_APPLE)
+	fprintf (acfg->fp, "\t.align %d\n", ilog2 (size));
 #else
 	fprintf (acfg->fp, "\t.align %d\n", size);
 #endif
 }
+
+#ifdef __native_client_codegen__
+static void
+asm_writer_emit_nacl_call_alignment (MonoImageWriter *acfg) {
+  int padding = kNaClAlignment - kNaClLengthOfCallImm;
+  guint8 padc = '\x90';
+
+  fprintf (acfg->fp, "\n\t.align %d", kNaClAlignment);
+  while (padding > 0) {
+    fprintf (acfg->fp, "\n\t.byte %d", padc);
+    padding -= 1;
+  }
+}
+#endif  /* __native_client_codegen__ */
 
 static void
 asm_writer_emit_pointer_unaligned (MonoImageWriter *acfg, const char *target)
@@ -1732,6 +1842,19 @@ img_writer_emit_pop_section (MonoImageWriter *acfg)
 }
 
 void
+img_writer_set_section_addr (MonoImageWriter *acfg, guint64 addr)
+{
+#ifdef USE_BIN_WRITER
+	if (!acfg->use_bin_writer)
+		NOT_IMPLEMENTED;
+	else
+		bin_writer_set_section_addr (acfg, addr);
+#else
+	NOT_IMPLEMENTED;
+#endif
+}
+
+void
 img_writer_emit_global (MonoImageWriter *acfg, const char *name, gboolean func)
 {
 #ifdef USE_BIN_WRITER
@@ -1828,6 +1951,20 @@ img_writer_emit_alignment (MonoImageWriter *acfg, int size)
 	asm_writer_emit_alignment (acfg, size);
 #endif
 }
+
+#ifdef __native_client_codegen__
+void
+img_writer_emit_nacl_call_alignment (MonoImageWriter *acfg) {
+#ifdef USE_BIN_WRITER
+	if (acfg->use_bin_writer)
+		bin_writer_emit_nacl_call_alignment (acfg);
+	else
+		asm_writer_emit_nacl_call_alignment (acfg);
+#else
+	g_assert_not_reached();
+#endif
+}
+#endif  /* __native_client_codegen__ */
 
 void
 img_writer_emit_pointer_unaligned (MonoImageWriter *acfg, const char *target)
@@ -1958,6 +2095,30 @@ img_writer_emit_unset_mode (MonoImageWriter *acfg)
 }
 
 /*
+ * img_writer_get_output:
+ *
+ *   Return the output buffer of a binary writer emitting to memory. The returned memory
+ * is from malloc, and it is owned by the caller.
+ */
+guint8*
+img_writer_get_output (MonoImageWriter *acfg, guint32 *size)
+{
+#ifdef USE_BIN_WRITER
+	guint8 *buf;
+
+	g_assert (acfg->use_bin_writer);
+
+	buf = acfg->out_buf;
+	*size = acfg->out_buf_size;
+	acfg->out_buf = NULL;
+	return buf;
+#else
+	g_assert_not_reached ();
+	return NULL;
+#endif
+}
+
+/*
  * Return whenever the binary writer is supported on this platform.
  */
 gboolean
@@ -1970,6 +2131,13 @@ bin_writer_supported (void)
 #endif
 }
 
+/*
+ * img_writer_create:
+ *
+ *   Create an image writer writing to FP. If USE_BIN_WRITER is TRUE, FP can be NULL,
+ * in this case the image writer will write to a memory buffer obtainable by calling
+ * img_writer_get_output ().
+ */
 MonoImageWriter*
 img_writer_create (FILE *fp, gboolean use_bin_writer)
 {
@@ -1978,6 +2146,9 @@ img_writer_create (FILE *fp, gboolean use_bin_writer)
 #ifndef USE_BIN_WRITER
 	g_assert (!use_bin_writer);
 #endif
+
+	if (!use_bin_writer)
+		g_assert (fp);
 
 	w->fp = fp;
 	w->use_bin_writer = use_bin_writer;
@@ -2013,9 +2184,5 @@ img_writer_get_fp (MonoImageWriter *acfg)
 const char *
 img_writer_get_temp_label_prefix (MonoImageWriter *acfg)
 {
-#ifdef TARGET_ASM_APPLE
-	return "L";
-#else
-	return ".L";
-#endif
+	return AS_TEMP_LABEL_PREFIX;
 }

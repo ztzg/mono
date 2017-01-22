@@ -36,7 +36,7 @@ namespace System.Resources {
 	internal class RuntimeResourceSet : ResourceSet {
 
 		// Constructor for Activator.CreateInstance from Silverlight
-		public RuntimeResourceSet (IntPtrStream stream) : base (stream)
+		public RuntimeResourceSet (UnmanagedMemoryStream stream) : base (stream)
 		{
 		}
 		
@@ -53,11 +53,7 @@ namespace System.Resources {
 		public override object GetObject (string name)
 		{
 			if (Reader == null)
-#if NET_2_0
 				throw new ObjectDisposedException ("ResourceSet is closed.");
-#else
-				throw new InvalidOperationException ("ResourceSet is closed.");
-#endif
 
 			return CloneDisposableObjectIfPossible (base.GetObject (name));
 		}
@@ -65,11 +61,7 @@ namespace System.Resources {
 		public override object GetObject (string name, bool ignoreCase)
 		{
 			if (Reader == null)
-#if NET_2_0
 				throw new ObjectDisposedException ("ResourceSet is closed.");
-#else
-				throw new InvalidOperationException ("ResourceSet is closed.");
-#endif
 
 			return CloneDisposableObjectIfPossible (base.GetObject (name, ignoreCase));
 		}

@@ -1,3 +1,4 @@
+
 noinst_LTLIBRARIES = libwapi.la
 
 INCLUDES = \
@@ -74,7 +75,6 @@ OTHER_SRC = \
 	mutex-private.h		\
 	mono-mutex.c		\
 	mono-mutex.h		\
-	mono-spinlock.h		\
 	posix.c			\
 	processes.c		\
 	processes.h		\
@@ -121,18 +121,19 @@ WINDOWS_SRC = \
 HPPA_SRC = \
 	hppa_atomic.S
 
-if PLATFORM_WIN32
-libwapi_la_SOURCES = $(WINDOWS_SRC)
-libwapiinclude_HEADERS = $(WINDOWS_H)
+if HOST_WIN32
+libwapi_la_SOURCES = $(WINDOWS_SRC) $(WINDOWS_H)
 else
 if HPPA
 libwapi_la_SOURCES = $(OTHER_SRC) $(HPPA_SRC)
 # to enable pick up of config.h
 libwapi_la_CCASFLAGS = -I$(top_builddir)
 else
-libwapi_la_SOURCES = $(OTHER_SRC)
+libwapi_la_SOURCES = $(OTHER_SRC) $(OTHER_H)
 endif
-libwapiinclude_HEADERS = $(OTHER_H)
+endif
+if PLATFORM_DARWIN
+libwapi_la_LIBADD = -lproc
 endif
 
 EXTRA_DIST =	\

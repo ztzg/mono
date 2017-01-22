@@ -26,8 +26,10 @@
 //
 
 #if NET_2_0
-namespace System.Web.UI.WebControls {
-        public enum SiteMapViewType {
+namespace System.Web.UI.WebControls
+{
+        enum SiteMapViewType
+	{
                 Automatic = 0,
 		Flat = 1,
 		Path = 2,

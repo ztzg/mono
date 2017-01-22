@@ -4422,7 +4422,7 @@ get_call_info (MonoGenericSharingContext *gsctx, MonoMethodSignature *sig, gbool
        cinfo->ret.reg = alpha_f0;
        break;
      case MONO_TYPE_GENERICINST:
-       if (!mono_type_generic_inst_is_valuetype (sig->ret))
+       if (!mono_type_generic_inst_is_valuetype (ret_type))
 	 {
 	   cinfo->ret.storage = ArgInIReg;
 	   cinfo->ret.reg = alpha_r0;
@@ -4525,7 +4525,7 @@ get_call_info (MonoGenericSharingContext *gsctx, MonoMethodSignature *sig, gbool
 	 add_general (pgr, &stack_size, ainfo);
 	 break;
        case MONO_TYPE_GENERICINST:
-	 if (!mono_type_generic_inst_is_valuetype (sig->params [i]))
+	 if (!mono_type_generic_inst_is_valuetype (ptype))
 	   {
 	     add_general (pgr, &stack_size, ainfo);
 	     break;
@@ -5053,7 +5053,7 @@ mono_arch_get_allocatable_int_vars (MonoCompile *cfg)
 
    CFG_DEBUG(2) ALPHA_DEBUG("mono_arch_get_allocatable_int_vars");
 
-   header = mono_method_get_header (cfg->method);
+   header = cfg->header;
 
    sig = mono_method_signature (cfg->method);
 
@@ -5125,31 +5125,6 @@ mono_arch_get_domain_intrinsic (MonoCompile* cfg)
    
    MONO_INST_NEW (cfg, ins, OP_TLS_GET);
    ins->inst_offset = appdomain_tls_offset;
-   return (ins);
-}
-
-/*========================= End of Function ========================*/
-
-/*------------------------------------------------------------------*/
-/*                                                                  */
-/* Name         - mono_arch_get_thread_intrinsic                    */
-/*                                                                  */
-/* Function     -                                                   */
-/*                                                                  */
-/* Returns      -                                                   */
-/*                                                                  */
-/*------------------------------------------------------------------*/
-
-MonoInst *
-mono_arch_get_thread_intrinsic (MonoCompile* cfg)
-{
-   MonoInst *ins;
-   
-   if (thread_tls_offset == -1)
-	 return NULL;
-   
-   MONO_INST_NEW (cfg, ins, OP_TLS_GET);
-   ins->inst_offset = thread_tls_offset;
    return (ins);
 }
 
@@ -5478,7 +5453,7 @@ mono_arch_allocate_vars (MonoCompile *cfg)
    
    CFG_DEBUG(2) ALPHA_DEBUG("mono_arch_allocate_vars");
    
-   header = mono_method_get_header (cfg->method);
+   header = cfg->header;
    
    sig = mono_method_signature (cfg->method);
    

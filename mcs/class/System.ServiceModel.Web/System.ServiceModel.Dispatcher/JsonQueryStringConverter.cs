@@ -40,6 +40,8 @@ namespace System.ServiceModel.Dispatcher
 	{
 		DataContractJsonSerializer serializer = new DataContractJsonSerializer (typeof (object));
 
+		internal string CustomWrapperName { get; set; }
+
 		public override bool CanConvert (Type type)
 		{
 			// almost copy from QueryStringConverter, except that DBNull and XmlQualifiedName are supported
@@ -60,7 +62,9 @@ namespace System.ServiceModel.Dispatcher
 					return true;
 //				if (type.GetCustomAttributes (typeof (TypeConverterAttribute), true).Length > 0)
 //					return true;
-				return false;
+
+				// FIXME: it should return false for things like List<OfPrivateType>.
+				return type.IsPublic || type.IsNestedPublic;
 			default:
 				return true;
 			}
@@ -79,10 +83,19 @@ namespace System.ServiceModel.Dispatcher
 			// the target type in JSON context.
 
 			switch (Type.GetTypeCode (parameterType)) {
-			//case TypeCode.String:
-			//	return parameter;
+			case TypeCode.String:
+				// LAMESPEC LAMESPEC LAMESPEC: we cannot give "foo" as the string value input (even if they are escaped as %22!)
+				if (parameter == null)
+					return null;
+				if (parameter.Length > 1 && parameter [0] == '"' && parameter [parameter.Length - 1] == '"')
+					return parameter.Substring (1, parameter.Length - 2);
+				else if (parameter [0] != '"')
+					return parameter;
+				break;
+#if !NET_2_1
 			case TypeCode.Char:
 				return parameter != null ? Char.Parse (parameter): default (char);
+#endif
 			case TypeCode.SByte:
 				return parameter != null ? SByte.Parse (parameter, CultureInfo.InvariantCulture): default (sbyte);
 			case TypeCode.Byte:
@@ -163,7 +176,7 @@ namespace System.ServiceModel.Dispatcher
 					parameter.ToString ();
 				StringBuilder sb = new StringBuilder (s);
 				sb.Replace ("\"", "\\\"");
-				sb.Insert (0, '\"');
+				sb.Insert (0, "\"");
 				sb.Append ('\"');
 				return sb.ToString ();
 			default:

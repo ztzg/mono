@@ -35,6 +35,9 @@
 #include <glib.h>
 
 #ifdef HAVE_UNISTD_H
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
 #include <unistd.h>
 #endif
 
@@ -63,13 +66,17 @@
 #define NO_INTR(var,cmd) do { (var) = (cmd); } while ((var) == -1 && errno == EINTR)
 #define CLOSE_PIPE(p) do { close (p [0]); close (p [1]); } while (0)
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined (__arm__)
 /* Apple defines this in crt_externs.h but doesn't provide that header for 
  * arm-apple-darwin9.  We'll manually define the symbol on Apple as it does
  * in fact exist on all implementations (so far) 
  */
 gchar ***_NSGetEnviron();
 #define environ (*_NSGetEnviron())
+#elif defined(_MSC_VER)
+/* MS defines this in stdlib.h */
+#else
+extern char **environ;
 #endif
 
 static int
@@ -376,10 +383,10 @@ g_spawn_async_with_pipes (const gchar *working_directory,
 			}
 
 			if (standard_input) {
-				dup2 (in_pipe [0], STDERR_FILENO);
+				dup2 (in_pipe [0], STDIN_FILENO);
 			} else if ((flags & G_SPAWN_CHILD_INHERITS_STDIN) == 0) {
 				fd = open ("/dev/null", O_RDONLY);
-				dup2 (fd, STDERR_FILENO);
+				dup2 (fd, STDIN_FILENO);
 			}
 
 			if ((flags & G_SPAWN_LEAVE_DESCRIPTORS_OPEN) != 0) {

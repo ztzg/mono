@@ -27,7 +27,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_2_0
+
 using System;
 using System.CodeDom;
 using System.CodeDom.Compiler;
@@ -41,10 +41,11 @@ using System.Text;
 using System.Threading;
 using System.Web;
 using System.Web.Configuration;
+using System.Web.Util;
 
 namespace System.Web.Compilation
 {
-	internal class AppResourcesAssemblyBuilder
+	class AppResourcesAssemblyBuilder
 	{
 		CompilationSection config;
 		CompilerInfo ci;
@@ -95,18 +96,13 @@ namespace System.Web.Compilation
 		public void Build (CodeCompileUnit unit)
 		{
 			Dictionary <string, List <string>> cultures = appResourcesCompiler.CultureFiles;
-			string defaultAssemblyKey = AppResourcesCompiler.DefaultCultureKey;
+			List <string> defaultCultureFiles = appResourcesCompiler.DefaultCultureFiles;
+			
+			if (defaultCultureFiles != null)
+				BuildDefaultAssembly (defaultCultureFiles, unit);
 			
 			foreach (KeyValuePair <string, List <string>> kvp in cultures)
-				BuildAssembly (kvp.Key, kvp.Value, defaultAssemblyKey, unit);
-		}
-
-		void BuildAssembly (string cultureName, List <string> files, string defaultAssemblyKey, CodeCompileUnit unit)
-		{
-			if (String.Compare (cultureName, defaultAssemblyKey, StringComparison.Ordinal) == 0)
-				BuildDefaultAssembly (files, unit);
-			else
-				BuildSatelliteAssembly (cultureName, files);
+				BuildSatelliteAssembly (kvp.Key, kvp.Value);
 		}
 
 		void BuildDefaultAssembly (List <string> files, CodeCompileUnit unit)
@@ -128,19 +124,16 @@ namespace System.Web.Compilation
 			if (results == null)
 				return;
 			
-			Assembly ret = null;
-			
 			if (results.NativeCompilerReturnValue == 0) {
-				ret = results.CompiledAssembly;
-				BuildManager.TopLevelAssemblies.Add (ret);
-				mainAssembly = ret;
+				mainAssembly = results.CompiledAssembly;
+				BuildManager.TopLevelAssemblies.Add (mainAssembly);
 			} else {
 				if (HttpContext.Current.IsCustomErrorEnabled)
 					throw new ApplicationException ("An error occurred while compiling global resources.");
 				throw new CompilationException (null, results.Errors, null);
 			}
 			
-			HttpRuntime.WritePreservationFile (ret, canonicAssemblyName);
+			HttpRuntime.WritePreservationFile (mainAssembly, canonicAssemblyName);
 			HttpRuntime.EnableAssemblyMapping (true);
 		}
 
@@ -156,7 +149,9 @@ namespace System.Web.Compilation
 			sb.Append ("/c:\"" + cultureName + "\" ");
 			sb.Append ("/t:lib ");
 			sb.Append ("/out:\"" + assemblyPath + "\" ");
-
+			if (mainAssembly != null)
+				sb.Append ("/template:\"" + mainAssembly.Location + "\" ");
+			
 			string responseFilePath = assemblyPath + ".response";
 			using (FileStream fs = File.OpenWrite (responseFilePath)) {
 				using (StreamWriter sw = new StreamWriter (fs)) {
@@ -235,7 +230,7 @@ namespace System.Web.Compilation
 
 		string SetAlPath (ProcessStartInfo info)
 		{			
-			if (HttpRuntime.RunningOnWindows) {
+			if (RuntimeHelpers.RunningOnWindows) {
 				string alPath;
 				string monoPath;
 				PropertyInfo gac = typeof (Environment).GetProperty ("GacPath", BindingFlags.Static|BindingFlags.NonPublic);
@@ -250,18 +245,30 @@ namespace System.Web.Compilation
 							throw new FileNotFoundException ("Windows mono path not found: " + monoPath);
 					}
 				}
-				
+
+#if NET_4_0
+                                alPath = Path.Combine (p, "4.0\\al.exe");
+#else
                                 alPath = Path.Combine (p, "2.0\\al.exe");
+#endif
                                 if (!File.Exists (alPath)) {
+#if NET_4_0
+                                        alPath = Path.Combine(Path.GetDirectoryName (p), "lib\\net_4_0\\al.exe");
+#else
                                         alPath = Path.Combine(Path.GetDirectoryName (p), "lib\\net_2_0\\al.exe");
+#endif
 					if (!File.Exists (alPath))
 						throw new FileNotFoundException ("Windows al path not found: " + alPath);
 				}
 
 				info.FileName = monoPath;
-				return alPath;
+				return alPath + " ";
 			} else {
+#if NET_4_0
+				info.FileName = "al";
+#else
 				info.FileName = "al2";
+#endif
 				return String.Empty;
 			}
 		}
@@ -302,4 +309,4 @@ namespace System.Web.Compilation
 		}
 	}
 }
-#endif
+

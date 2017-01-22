@@ -1,3 +1,31 @@
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* net_2_1_*.dll.sources: rename to moonlight_*.dll.sources.
+
+2010-03-03  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* System.Runtime.Serialization.dll.sources:
+	  update configuration sources.
+
+2010-03-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* System.Runtime.Serialization.dll.sources: use new implementation
+	  (will be renamed later).
+
+2010-02-10  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile: add Test/Resources/Schemas/* to extra dist.
+
+2009-11-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* net_4_0_System.Runtime.Serialization.dll : 4.0 dll contains
+	  JSON serializer (moved from Sys.SM.Web).
+
+2009-10-23  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* monotouch_System.Runtime.Serialization.dll.sources :
+	  add OnXmlDictionaryReaderClose.cs.
+
 2009-09-21  Sebastien Pouliot  <sebastien@ximian.com> 
 
 	* net_2_1_raw_System.Runtime.Serialization.dll.sources: Remove 

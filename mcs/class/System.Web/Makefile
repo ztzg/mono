@@ -74,6 +74,16 @@ RESOURCE_FILES_2 = \
 	System.Web.UI.WebControls/Menu.js
 
 OTHER_RES = $(RESOURCE_FILES_1)
+TEST_APP_CODE_FILES = \
+	Test/mainsoft/NunitWebResources/App_Code/EnumConverterControl.cs \
+	Test/mainsoft/NunitWebResources/App_Code/MyContainer.cs \
+	Test/mainsoft/NunitWebResources/App_Code/CustomCheckBoxColumn.cs
+
+TEST_APP_GLOBALRESOURCES_FILES = \
+	Test/mainsoft/NunitWebResources/App_GlobalResources/Common.resx \
+	Test/mainsoft/NunitWebResources/App_GlobalResources/Common.fr-FR.resx \
+	Test/mainsoft/NunitWebResources/App_GlobalResources/Resource1.resx
+
 TEST_RESOURCE_FILES = \
 	Test/mainsoft/NunitWeb/NunitWeb/Resources/Global.asax \
 	Test/mainsoft/NunitWeb/NunitWeb/Resources/My.ashx \
@@ -113,10 +123,15 @@ TEST_RESOURCE_FILES = \
 	Test/mainsoft/NunitWebResources/FooterTemplateTest.aspx \
 	Test/mainsoft/NunitWebResources/DataGrid.aspx \
 	Test/mainsoft/NunitWebResources/DetailsViewTemplates.aspx \
+	Test/mainsoft/NunitWebResources/DetailsViewTemplates_2.aspx \
+	Test/mainsoft/NunitWebResources/DetailsViewTemplates_3.aspx \
 	Test/mainsoft/NunitWebResources/DetailsViewDataActions.aspx \
 	Test/mainsoft/NunitWebResources/DetailsViewProperties1.aspx \
 	Test/mainsoft/NunitWebResources/Bluehills.jpg \
 	Test/mainsoft/NunitWebResources/FormViewTest1.aspx \
+	Test/mainsoft/NunitWebResources/FormViewTest1_2.aspx \
+	Test/mainsoft/NunitWebResources/FormViewTest1_3.aspx \
+	Test/mainsoft/NunitWebResources/FormViewTest1_4.aspx \
 	Test/mainsoft/NunitWebResources/FormViewInsertEditDelete.aspx \
 	Test/mainsoft/NunitWebResources/GridViewUpdate.aspx \
 	Test/mainsoft/NunitWebResources/XMLDataSourceTest.xml \
@@ -188,7 +203,33 @@ TEST_RESOURCE_FILES = \
 	Test/mainsoft/NunitWebResources/DuplicateControlsInClientComment.aspx \
 	Test/mainsoft/NunitWebResources/TagsNestedInClientTag.aspx \
 	Test/mainsoft/NunitWebResources/ConditionalClientComments.aspx \
-	Test/mainsoft/NunitWebResources/OneLetterIdentifierInCodeRender.aspx
+	Test/mainsoft/NunitWebResources/OneLetterIdentifierInCodeRender.aspx \
+	Test/mainsoft/NunitWebResources/GlobalResourcesLocalization.aspx \
+	Test/mainsoft/NunitWebResources/TableSections_Bug551666.aspx \
+	Test/mainsoft/NunitWebResources/TableSections_Bug551666.aspx.cs \
+	Test/mainsoft/NunitWebResources/NestedParserFileText.aspx \
+	Test/mainsoft/NunitWebResources/StateFormatter_CorrectConverter.aspx \
+	Test/mainsoft/NunitWebResources/StateFormatter_CollectionConverter.aspx \
+	Test/mainsoft/NunitWebResources/StateFormatter_CollectionConverter.aspx.cs \
+	Test/mainsoft/NunitWebResources/ChangePasswordContainer_FindControl.aspx \
+	Test/mainsoft/NunitWebResources/TagWithExpressionWithinAttribute.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug377703_1.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug377703_2.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug578770.aspx \
+	Test/mainsoft/NunitWebResources/EnumConverter_Bug578586.aspx \
+	Test/mainsoft/NunitWebResources/ButtonColor_Bug325489.aspx \
+	Test/mainsoft/NunitWebResources/SqlDataSource_OnInit_Bug572781.aspx \
+	Test/mainsoft/NunitWebResources/FormViewPagerVisibility.aspx \
+	Test/mainsoft/NunitWebResources/OverridenControlsPropertyAndPostBack_Bug594238.aspx \
+	Test/mainsoft/NunitWebResources/GlobalizationEncodingName.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxField_Bug595568_0.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxField_Bug595568_1.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxField_Bug595568_2.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxField_Bug595568_5.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxField_Bug595568_6.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxField_Bug595568_7.aspx \
+	Test/mainsoft/NunitWebResources/GridView_Bug595567.aspx \
+	Test/mainsoft/NunitWebResources/CheckBoxList_Bug600415.aspx
 
 RESX_DIST =  resources/TranslationResources.resx
 ifneq (1, $(FRAMEWORK_VERSION_MAJOR))
@@ -196,9 +237,16 @@ RESX_RES = $(RESX_DIST:.resx=.resources)
 endif
 
 NUNIT_RESOURCE_FILES = $(TEST_RESOURCE_FILES)
+NUNIT_APP_CODE_FILES = $(TEST_APP_CODE_FILES)
+NUNIT_APP_GLOBALRESOURCES_FILES = $(TEST_APP_GLOBALRESOURCES_FILES)
+
 ifneq (1, $(FRAMEWORK_VERSION_MAJOR))
 OTHER_RES += $(RESOURCE_FILES_2)
 OTHER_LIB_MCS_FLAGS = -d:INSIDE_SYSTEM_WEB -nowarn:618 -r:System.Configuration.dll -r:Mono.Data.Sqlite.dll
+endif
+
+ifeq (4, $(FRAMEWORK_VERSION_MAJOR))
+OTHER_LIB_MCS_FLAGS += -r:System.Web.ApplicationServices.dll
 endif
 
 LIB_MCS_FLAGS = \
@@ -233,13 +281,32 @@ echo-warning-systemcore:
 endif
 endif
 
-TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) -doc:$(test_lib:.dll=.xml) -nowarn:219,169,1591 $(NUNIT_RESOURCE_FILES:%=/resource:%) -r:SystemWebTestShim.dll
+TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) -doc:$(test_lib:.dll=.xml) -nowarn:219,169,1591 -r:SystemWebTestShim.dll \
+	$(NUNIT_RESOURCE_FILES:%=/resource:%) \
+	$(foreach file,$(NUNIT_APP_CODE_FILES),$(shell echo $(file) | sed -e 's;\(.*\)/\(.*\);/resource:\1/\2,App_Code/\2 ;g')) \
+	$(foreach file,$(NUNIT_APP_GLOBALRESOURCES_FILES),$(shell echo $(file) | sed -e 's;\(.*\)/\(.*\);/resource:\1/\2,App_GlobalResources/\2 ;g'))
+
 ifeq (net_2_0, $(PROFILE))
 TEST_MCS_FLAGS += -r:System.Web.Extensions.dll
 endif
 
-EXTRA_DISTFILES = $(RESOURCE_FILES_2) $(RESOURCE_FILES_1) $(TEST_RESOURCE_FILES) UplevelHelperDefinitions.xml $(RESX_DIST) \
-		  SQLiteProviders_DatabaseSchema.sql
+EXTRA_DISTFILES = \
+	$(RESOURCE_FILES_2) \
+	$(RESOURCE_FILES_1) \
+	$(TEST_RESOURCE_FILES) \
+	$(TEST_APP_CODE_FILES) \
+	$(TEST_APP_GLOBALRESOURCES_FILES) \
+	UplevelHelperDefinitions.xml \
+	$(RESX_DIST) \
+	SQLiteProviders_DatabaseSchema.sql \
+	$(shell find Test/standalone-runner-support/ -name "*.cs" -type f -printf "'%p' ") \
+	$(shell find Test/standalone-tests/ -name "*.cs" -type f -printf "'%p' " -o -name "*.cs.in" -type f -printf "'%p' ") \
+	$(shell find Test/standalone/ -path '*/.svn' -prune -o -type f -printf "'%p' ") \
+	$(shell find Test/tools/ -path '*/.svn' -prune -o -type f -printf "'%p' ") \
+	System.Web_standalone_test.dll.sources \
+	standalone-runner-support.dll.sources \
+	ASPState.sql
+
 BUILT_SOURCES = System.Web/UplevelHelper.cs 
 
 include ../../build/library.make
@@ -271,17 +338,51 @@ ifdef MONO_TRACE
 LIB_MCS_FLAGS += -define:TRACE -define:MONO_TRACE
 endif
 
+ifdef PIPELINE_TIMER
+LIB_MCS_FLAGS += -define:PIPELINE_TIMER
+endif
+
 ifdef DEVEL
 LIB_MCS_FLAGS += -define:DEVEL
 endif
 
-$(build_lib): $(RESX_RES) $(RESOURCE_FILES2) $(RESOURCE_FILES_1)
+CLASSLIB_DIR = $(topdir)/class/lib/$(PROFILE)
+
+STANDALONE_RUNNER_SUPPORT_MCS_FLAGS = $(LIB_MCS_FLAGS) $(PROFILE_MCS_FLAGS) -d:STANDALONE_TEST -debug:full -r:System.Web.dll -r:nunit.framework.dll
+STANDALONE_RUNNER_SUPPORT_ASSEMBLY = $(CLASSLIB_DIR)/standalone-runner-support.dll
+STANDALONE_RUNNER_SUPPORT_MAKEFRAG = $(depsdir)/$(PROFILE)_standalone-runner-support.dll.makefrag
+
+STANDALONE_TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) $(PROFILE_MCS_FLAGS) -debug:full -r:$(STANDALONE_RUNNER_SUPPORT_ASSEMBLY) -r:System.Web.dll -r:nunit.framework.dll
+STANDALONE_TEST_ASSEMBLY = System.Web_standalone_test_$(PROFILE).dll
+STANDALONE_TEST_MAKEFRAG = $(depsdir)/$(STANDALONE_TEST_ASSEMBLY).makefrag
+
+ifeq (4, $(FRAMEWORK_VERSION_MAJOR))
+STANDALONE_TEST_COMPILABLE_TESTS = \
+	ApplicationPreStartMethods/test_01 \
+	ApplicationPreStartMethods/test_02 \
+	ApplicationPreStartMethods/test_03 \
+	ApplicationPreStartMethods/test_04 \
+	ApplicationPreStartMethods/test_05 \
+	ApplicationPreStartMethods/test_06 \
+	ApplicationPreStartMethods/test_07 \
+	ApplicationPreStartMethods/test_08 \
+	RegisterBuildProvider \
+	PageParserDefaultTypeProperties
+endif
+
+STANDALONE_TEST_RUNNER = Test/tools/standalone-runner.exe
+RUN_STANDALONE = $(TEST_RUNTIME) $(STANDALONE_TEST_RUNNER) --output=StandaloneTestResult-$(PROFILE).log 
+ifdef TESTNAME
+RUN_STANDALONE += --test=$(TESTNAME)
+endif
+
+$(build_lib): $(RESX_RES) $(RESOURCE_FILES_2) $(RESOURCE_FILES_1)
 
 $(RESX_RES): %.resources: %.resx
 	$(RESGEN) `echo $< | $(PLATFORM_CHANGE_SEPARATOR_CMD)`
 
 System.Web/UplevelHelper.cs: UplevelHelperDefinitions.xml
-	$(TEST_RUNTIME) $(topdir)/class/lib/net_1_1_bootstrap/culevel.exe -o $@ $^
+	$(TEST_RUNTIME) $(topdir)/class/lib/$(BUILD_TOOLS_PROFILE)/culevel.exe -o $@ $^
 
 run-aaa: test
 	$(TEST_RUNTIME) $(TEST_HARNESS) $(TEST_HARNESS_FLAGS) $(LOCAL_TEST_HARNESS_FLAGS) \
@@ -301,3 +402,44 @@ run-nunitweb-ondotnet: test
 	(echo ''; cat TestResult-ondotnet-$(PROFILE).log) | sed '1,/^Tests run: /d'; \
 	$$ok
 
+run-standalone-test: $(STANDALONE_TEST_MAKEFRAG) $(STANDALONE_RUNNER_SUPPORT_MAKEFRAG) $(STANDALONE_TEST_ASSEMBLY)
+	$(MAKE) -C Test/tools/ STANDALONE_SUPPORT_BUILT=1 standalone-runner.exe
+	$(RUN_STANDALONE) $(STANDALONE_TEST_ASSEMBLY)
+
+standalone-runner-support: $(STANDALONE_RUNNER_SUPPORT_MAKEFRAG) $(STANDALONE_RUNNER_SUPPORT_ASSEMBLY)
+
+$(STANDALONE_TEST_MAKEFRAG): System.Web_standalone_test.dll.sources
+	@echo Creating $@ ...
+	@sed 's,^,$(STANDALONE_TEST_ASSEMBLY): ,' $< > $@
+
+$(STANDALONE_RUNNER_SUPPORT_MAKEFRAG): standalone-runner-support.dll.sources
+	@echo Creating $@ ...
+	@sed 's,^,$(STANDALONE_RUNNER_SUPPORT_ASSEMBLY): ,' $< > $@
+
+include $(STANDALONE_TEST_MAKEFRAG)
+include $(STANDALONE_RUNNER_SUPPORT_MAKEFRAG)
+
+$(STANDALONE_TEST_ASSEMBLY): $(the_assembly) $(STANDALONE_RUNNER_SUPPORT_ASSEMBLY) Test/standalone-tests/Consts.cs standalone-compilable-tests
+	$(CSCOMPILE) $(STANDALONE_TEST_MCS_FLAGS) -out:$@ -target:library @System.Web_standalone_test.dll.sources
+
+standalone-compilable-tests:
+ifdef STANDALONE_TEST_COMPILABLE_TESTS
+	for d in $(STANDALONE_TEST_COMPILABLE_TESTS); do \
+		$(MAKE) -C Test/standalone/$$d ; \
+	done
+endif
+
+$(STANDALONE_RUNNER_SUPPORT_ASSEMBLY): 
+	$(CSCOMPILE) $(STANDALONE_RUNNER_SUPPORT_MCS_FLAGS) -out:$(STANDALONE_RUNNER_SUPPORT_ASSEMBLY) -target:library @standalone-runner-support.dll.sources
+
+Test/standalone-tests/Consts.cs: Test/standalone-tests/Consts.cs.in
+	@sed 's,@SystemWebClassDir@,$(shell pwd),' $< > $@
+
+clean-local:
+ifdef STANDALONE_TEST_COMPILABLE_TESTS
+	for d in $(STANDALONE_TEST_COMPILABLE_TESTS); do \
+		$(MAKE) -C Test/standalone/$$d clean ; \
+	done
+endif
+ 
+ 

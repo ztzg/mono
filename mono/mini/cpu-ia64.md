@@ -146,7 +146,7 @@ float_clt_membase: dest:i src1:f src2:b len:48
 float_clt_un_membase: dest:i src1:f src2:b len:48
 float_conv_to_u: dest:i src1:f len:48
 fmove: dest:f src1:f len:48
-call_handler: len:96
+call_handler: len:96 clob:c
 start_handler: len:96
 endfilter: len:96
 endfinally: len:96
@@ -367,7 +367,7 @@ relaxed_nop: len:0
 
 # Linear IR opcodes
 nop: len:0
-dummy_use: len:0
+dummy_use: src1:i len:0
 dummy_store: len:0
 not_reached: len:0
 not_null: src1:i len:0

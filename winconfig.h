@@ -83,6 +83,8 @@
 /* Have Boehm GC */
 #define HAVE_BOEHM_GC 1
 
+#define DEFAULT_GC_NAME "Boehm"
+
 /* Define to 1 if you have the <checklist.h> header file. */
 /* #undef HAVE_CHECKLIST_H */
 
@@ -566,7 +568,7 @@
 #define PACKAGE_VERSION "6.6"
 
 /* Platform is Win32 */
-#define PLATFORM_WIN32 1
+#define HOST_WIN32 1
 #define TARGET_WIN32 1
 
 /* pthread_t is a pointer */
@@ -600,4 +602,4 @@
 /* #undef USE_MONO_MUTEX */
 
 /* Version number of package */
-#define VERSION "2.0"
+#define VERSION "2.7"

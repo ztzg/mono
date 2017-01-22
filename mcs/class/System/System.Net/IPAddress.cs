@@ -282,10 +282,14 @@ namespace System.Net {
 #endif
 					}
 
-					if (i == (ips.Length - 1)) 
+					if (i == (ips.Length - 1)) {
+						if (i != 0  && val >= (256 << ((3 - i) * 8)))
+							return null;
+						else if (val > 0x3fffffffe) // this is the last number that parses correctly with MS
+							return null;
 						i = 3;
-					else if (val > 0xFF)
-						return null; // e.g. 256.0.0.1
+					} else if (val >= 0x100)
+						return null;
 					for (int j = 0; val > 0; j++, val /= 0x100)
 						a |= (val & 0xFF) << ((i - j) << 3);
 				}
@@ -455,9 +459,8 @@ namespace System.Net {
 		/// </returns>
 		public override bool Equals (object other)
 		{
-			if (other is System.Net.IPAddress){
-				IPAddress otherAddr = other as IPAddress;
-
+			IPAddress otherAddr = other as IPAddress;
+			if (otherAddr != null){
 				if(AddressFamily != otherAddr.AddressFamily)
 					return false;
 

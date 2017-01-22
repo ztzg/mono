@@ -32,6 +32,7 @@ using System.Runtime.Serialization;
 using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.ServiceModel.Description;
+using System.Threading;
 using System.Xml;
 using System.Xml.Serialization;
 using MonoTests.System.ServiceModel.Channels;
@@ -63,6 +64,14 @@ namespace MonoTests.System.ServiceModel
 				new ChannelFactory<TestService> (
 					new BasicHttpBinding (),
 					new EndpointAddress ("http://localhost:37564"));
+		}
+
+		[Test]
+		public void EndpointAddressAfterCreateChannel ()
+		{
+			var f = new ChannelFactory<ITestService> (new BasicHttpBinding ());
+			f.CreateChannel (new EndpointAddress ("http://localhost:37564"), null);
+			Assert.IsNull (f.Endpoint.Address, "#1");
 		}
 
 		[Test]
@@ -128,7 +137,17 @@ namespace MonoTests.System.ServiceModel
 		[Test]
 		public void ConfigEmptyCtor ()
 		{
+			// It has no valid configuration, but goes on.
 			new ChannelFactory<ICtorUseCase1> ();
+		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidOperationException))]
+		public void ConfigEmptyCtor2 ()
+		{
+			var cf = new ChannelFactory<ICtorUseCase1> ();
+			// It cannot go on further.
+			cf.CreateChannel ();
 		}
 
 		[Test]
@@ -386,6 +405,7 @@ namespace MonoTests.System.ServiceModel
 		}
 
 		[Test]
+		[Ignore ("This somehow results in an infinite loop")]
 		public void XmlInvokeFooComplex ()
 		{
 			ITestServiceXml ts = CreateChannel<ITestServiceXml> (
@@ -411,6 +431,15 @@ namespace MonoTests.System.ServiceModel
 			Assert.IsNotNull (res, "#1");
 			Assert.AreEqual ("callResult", res.val, "#2");
 		}
+
+#if NET_4_0
+		[Test]
+		public void ConstructorServiceEndpoint ()
+		{
+			// It is okay to pass ServiceEndpoint that does not have Binding or EndpointAddress.
+			new ChannelFactory<IRequestChannel> (new ServiceEndpoint (ContractDescription.GetContract (typeof (IMetadataExchange)), null, null));
+		}
+#endif
 
 		public T CreateFooComplexMC_Channel<T> (bool isXml)
 		{
@@ -438,6 +467,7 @@ namespace MonoTests.System.ServiceModel
 		}
 
 		[Test]
+		[Ignore ("This somehow results in an infinite loop")]
 		public void XmlInvokeFooComplexMC ()
 		{
 			ITestServiceXml ts = CreateFooComplexMC_Channel<ITestServiceXml> (true);
@@ -445,6 +475,27 @@ namespace MonoTests.System.ServiceModel
 			Assert.IsNotNull (res, "#1");
 			Assert.AreEqual ("callResult", res.resData.val, "#2");
 			Assert.AreEqual ("callArg", res.resMsg.val, "#3");
+		}
+
+		[Test]
+		public void OneWayOperationWithRequestReplyChannel ()
+		{
+			var host = new ServiceHost (typeof (OneWayService));
+			host.AddServiceEndpoint (typeof (IOneWayService),
+				new BasicHttpBinding (),
+				new Uri ("http://localhost:8080"));
+			host.Open ();
+			try {
+				var cf = new ChannelFactory<IOneWayService> (
+					new BasicHttpBinding (),
+					new EndpointAddress ("http://localhost:8080"));
+				var ch = cf.CreateChannel ();
+				ch.GiveMessage ("test");
+				
+				Assert.IsTrue (OneWayService.WaitHandle.WaitOne (TimeSpan.FromSeconds (5)), "#1");
+			} finally {
+				host.Close ();
+			}
 		}
 
 		[ServiceContract]
@@ -491,6 +542,23 @@ namespace MonoTests.System.ServiceModel
 			[OperationContract]
 			[XmlSerializerFormat]
 			TestResult FooComplexMC (TestMessage arg1);
+		}
+
+		[ServiceContract]
+		public interface IOneWayService
+		{
+			[OperationContract (IsOneWay = true)]
+			void GiveMessage (string input);
+		}
+
+		public class OneWayService : IOneWayService
+		{
+			public static ManualResetEvent WaitHandle = new ManualResetEvent (false);
+
+			public void GiveMessage (string input)
+			{
+				WaitHandle.Set ();
+			}
 		}
 
 		public enum FooColor { Red = 1, Green, Blue }

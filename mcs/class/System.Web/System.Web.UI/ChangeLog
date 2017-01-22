@@ -1,3 +1,181 @@
+2010-07-23  Marek Habersack  <mhabersack@novell.com>
+
+	* ClientScriptManager.cs: 4.0 adds a class="aspNetHidden"
+	attribute to the div element surrounding the hidden elements.
+
+2010-07-14  Marek Habersack  <mhabersack@novell.com>
+
+	* DataKeyPropertyAttribute.cs: added (4.0)
+
+2010-07-13  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: moved 4.0 ClientID code to a separate method, so
+	that the ID_SET flag isn't set when necessary.
+
+2010-07-10  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: when setting ClientIDMode remember the value when
+	setting the property for the first time.
+
+2010-07-08  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: if generating a predictable ID and the current
+	control is a naming container, ensure that an ID is generated if
+	not specified by user.
+
+2010-07-02  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControlParser.cs: added support for ClientIDMode
+	property
+
+	* Control.cs: implemented 4.0 features - ClientIDMode and
+	RenderingCompatibility.
+
+	* ClientIDMode.cs, IDataKeysControl.cs: added
+
+2010-06-17  Marek Habersack  <mhabersack@novell.com>
+
+	* RootBuilder.cs: both LINK and META HTML tags must be represented
+	as instances of HtmlGenericControl. Fixes bug #603541
+
+2010-06-02  Marek Habersack  <mhabersack@novell.com>
+
+	* ViewStateMode.cs: added
+
+	* Control.cs: implemented 4.0 ViewStateMode
+
+	* Page.cs: implemented 4.0 properties AutoPostBackControl and
+	RouteData
+
+2010-06-01  Marek Habersack  <mhabersack@novell.com>
+
+	* PageParser.cs: added support for MetaDescription and
+	MetaKeywords main directive attributes
+
+	* Page.cs: implemented MetaDescription and MetaKeywords
+	4.0 properties. 
+
+2010-05-19  Marek Habersack  <mhabersack@novell.com>
+
+	* DataSourceCacheDurationConverter.cs: implemented. Fixes bug
+	#603083
+
+	* PageParser.cs: handle several main directive attributes
+	specially, as they can have expressions as their values. Fixes bug
+	#603532
+
+	* MainDirectiveAttribute.cs: added - helper class to handle
+	directive attributes which can take either a value or an
+	expression.
+
+	* BaseParser.cs: IsDirective, IsExpression and IsDataBound methods
+	moved to here from TemplateControlCompiler.
+
+2010-05-15  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: implemented 4.0 GetRouteUrl overloads and
+	GetUniqueIDRelativeTo
+
+2010-05-05  Marek Habersack  <mhabersack@novell.com>
+
+	* CollectionBuilder.cs: if a type has more than on indexer, check
+	all of them for type compliance in GetChildControlType. Fixes bug
+	#601290. Patch from Kalyanov Dmitry <Kalyanov.Dmitry@gmail.com>,
+	thanks!
+
+2010-04-28  Marek Habersack  <mhabersack@novell.com>
+
+	* KeyedList.cs: do not implement IStateManager in 4.0
+
+2010-04-12  Marek Habersack  <mhabersack@novell.com>
+
+	* PageParser.cs: if EnableViewStateMac option is present in the
+	directive, remember it for later use by the compiler.
+
+	* Page.cs: initialize EnableViewStateMac with the default read
+	from the config.
+
+	The above fix cross-site scripting vulnerability (CVE: CVE-2010-1459)
+	Credits: Web Security Research Group (WSRG) of Hewlett Packard
+	(HP)
+
+2010-04-07  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: control cache must be filled using the local
+	_controls collection instead of the virtual Controls
+	property. Fixes bug #594238
+	Check if _controls isn't null before using it.
+
+2010-04-06  Marek Safar  <marek.safar@gmail.com>
+
+	* FileLevelControlBuilderAttribute.cs: Use reference comparison.
+
+2010-01-20  Marek Habersack  <mhabersack@novell.com>
+
+	* ObjectStateFormatter.cs: implemented support for IndexedString
+	on top of the existing StringFormatter.
+
+	* IndexedString.cs: implemented
+
+2009-12-22  Marek Habersack  <mhabersack@novell.com>
+
+	* Page.cs: form javascript declaration block is rendered only if
+	necessary. Fixes bug #566541
+
+	* ClientScriptManager.cs: added internal property ScriptsPresent
+	used to determine if it is necessary to render form javascript
+	declaration block.
+	Hidden fields block is output without indenting the controls and
+	without rendering trailing empty line.
+	Made Write{Begin,End}ScriptBlock slightly faster.
+
+2009-12-18  Marek Habersack  <mhabersack@novell.com>
+
+	* ObjectStateFormatter.cs: ObjectFormatter.WriteObject checks
+	whether candidate converter can convert from string now. Fixes bug
+	#565547
+
+2009-11-14  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateControl.cs: if writer is null in
+	WriteUTF8ResourceString, use output.Write, not writer.Write. Fixes
+	bug #547015
+
+2009-11-10  Marek Habersack  <mhabersack@novell.com>
+
+	* TemplateParser.cs: AddImports is called from LoadConfigDefaults
+	so that it reads configuration from the correct .config file (it
+	needs to be called after this.VirtualPath has been
+	initialized). Fixes an issue with MVC apps which put configuration
+	in Views/web.config etc. Fixes bug #552457
+
+	* ControlBuilder.cs, Page.cs: system.web/pages section is not
+	confined to the top-level web.config
+
+2009-10-30  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: ResolveClientUrl takes base path from
+	Request.ClientFilePath, so that it works correctly for rewritten
+	urls.
+
+2009-10-27  Marek Habersack  <mhabersack@novell.com>
+
+	* ObjectStateFormatter.cs: do not use a type converter to
+	serialize an object if the converter is an instance of
+	TypeConverter itself - its reported capability of converting to
+	string is not useful here.
+
+2009-10-12  Marek Habersack  <mhabersack@novell.com>
+
+	* ObjectStateFormatter.cs: if a type is associated with a type
+	converter, do not check if the converter can convert FROM the type
+	in question, as this is implied. Fixes bug #545979
+
+2009-10-09  Marek Habersack  <mhabersack@novell.com>
+
+	* Control.cs: implemented the LoadViewStateByID property as well
+	as saving/restoring the view state by control's ID.
+
 2009-09-22  Marek Habersack  <mhabersack@novell.com>
 
 	* WebServiceParser.cs: GetCompiledType uses BuildManager on the

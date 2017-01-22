@@ -7,6 +7,8 @@
  * (C) 2002 Ximian, Inc.
  */
 
+#ifndef DISABLE_SOCKETS
+
 #include <config.h>
 #include <glib.h>
 #include <pthread.h>
@@ -14,10 +16,12 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef HAVE_SYS_UIO_H
+#  include <sys/uio.h>
+#endif
 #ifdef HAVE_SYS_IOCTL_H
 #  include <sys/ioctl.h>
 #endif
-#include <sys/poll.h>
 #ifdef HAVE_SYS_FILIO_H
 #include <sys/filio.h>     /* defines FIONBIO and FIONREAD */
 #endif
@@ -36,11 +40,15 @@
 #include <mono/io-layer/socket-private.h>
 #include <mono/io-layer/handles-private.h>
 #include <mono/io-layer/socket-wrappers.h>
+#include <mono/utils/mono-poll.h>
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#ifdef HAVE_SYS_SENDFILE_H
+#include <sys/sendfile.h>
+#endif
 
 #undef DEBUG
 
@@ -305,7 +313,7 @@ int _wapi_connect(guint32 fd, const struct sockaddr *serv_addr,
 	}
 	
 	if (connect (fd, serv_addr, addrlen) == -1) {
-		struct pollfd fds;
+		mono_pollfd fds;
 		int so_error;
 		socklen_t len;
 		
@@ -346,7 +354,7 @@ int _wapi_connect(guint32 fd, const struct sockaddr *serv_addr,
 
 		fds.fd = fd;
 		fds.events = POLLOUT;
-		while (poll (&fds, 1, -1) == -1 &&
+		while (mono_poll (&fds, 1, -1) == -1 &&
 		       !_wapi_thread_cur_apc_pending ()) {
 			if (errno != EINTR) {
 				errnum = errno_to_WSA (errno, __func__);
@@ -708,6 +716,15 @@ int _wapi_send(guint32 fd, const void *msg, size_t len, int send_flags)
 		g_message ("%s: send error: %s", __func__, strerror (errno));
 #endif
 
+		/* At least linux returns EAGAIN/EWOULDBLOCK when the timeout has been set on
+		 * a blocking socket. See bug #599488 */
+		if (errnum == EAGAIN) {
+			gboolean nonblock;
+
+			ret = ioctlsocket (fd, FIONBIO, (gulong *) &nonblock);
+			if (ret != SOCKET_ERROR && !nonblock)
+				errnum = ETIMEDOUT;
+		}
 		errnum = errno_to_WSA (errnum, __func__);
 		WSASetLastError (errnum);
 		
@@ -1118,29 +1135,112 @@ static gboolean wapi_disconnectex (guint32 fd, WapiOverlapped *overlapped,
 	return(socket_disconnect (fd));
 }
 
-/* NB only supports NULL file handle, NULL buffers and
- * TF_DISCONNECT|TF_REUSE_SOCKET flags to disconnect the socket fd.
- * Shouldn't actually ever need to be called anyway though, because we
- * have DisconnectEx ().
- */
-static gboolean wapi_transmitfile (guint32 fd, gpointer file,
-				   guint32 num_write, guint32 num_per_send,
-				   WapiOverlapped *overlapped,
-				   WapiTransmitFileBuffers *buffers,
-				   WapiTransmitFileFlags flags)
+#define SF_BUFFER_SIZE	16384
+static gint
+wapi_sendfile (guint32 socket, gpointer fd, guint32 bytes_to_write, guint32 bytes_per_send, guint32 flags)
 {
-#ifdef DEBUG
-	g_message ("%s: called on socket %d!", __func__, fd);
-#endif
-	
-	g_assert (file == NULL);
-	g_assert (overlapped == NULL);
-	g_assert (buffers == NULL);
-	g_assert (num_write == 0);
-	g_assert (num_per_send == 0);
-	g_assert (flags == (TF_DISCONNECT | TF_REUSE_SOCKET));
+#if defined(HAVE_SENDFILE) && (defined(__linux__) || defined(DARWIN))
+	gint file = GPOINTER_TO_INT (fd);
+	gint n;
+	gint errnum;
+	gssize res;
+	struct stat statbuf;
 
-	return(socket_disconnect (fd));
+	n = fstat (file, &statbuf);
+	if (n == -1) {
+		errnum = errno;
+		errnum = errno_to_WSA (errnum, __func__);
+		WSASetLastError (errnum);
+		return SOCKET_ERROR;
+	}
+	do {
+#ifdef __linux__
+		res = sendfile (socket, file, NULL, statbuf.st_size);
+#elif defined(DARWIN)
+		/* TODO: header/tail could be sent in the 5th argument */
+		/* TODO: Might not send the entire file for non-blocking sockets */
+		res = sendfile (file, socket, 0, &statbuf.st_size, NULL, 0);
+#endif
+	} while (res != -1 && (errno == EINTR || errno == EAGAIN) && !_wapi_thread_cur_apc_pending ());
+	if (res == -1) {
+		errnum = errno;
+		errnum = errno_to_WSA (errnum, __func__);
+		WSASetLastError (errnum);
+		return SOCKET_ERROR;
+	}
+#else
+	/* Default implementation */
+	gint file = GPOINTER_TO_INT (fd);
+	gchar *buffer;
+	gint n;
+
+	buffer = g_malloc (SF_BUFFER_SIZE);
+	do {
+		do {
+			n = read (file, buffer, SF_BUFFER_SIZE);
+		} while (n == -1 && errno == EINTR && !_wapi_thread_cur_apc_pending ());
+		if (n == -1)
+			break;
+		if (n == 0) {
+			g_free (buffer);
+			return 0; /* We're done reading */
+		}
+		do {
+			n = send (socket, buffer, n, 0); /* short sends? enclose this in a loop? */
+		} while (n == -1 && errno == EINTR && !_wapi_thread_cur_apc_pending ());
+	} while (n != -1);
+
+	if (n == -1) {
+		gint errnum = errno;
+		errnum = errno_to_WSA (errnum, __func__);
+		WSASetLastError (errnum);
+		g_free (buffer);
+		return SOCKET_ERROR;
+	}
+	g_free (buffer);
+#endif
+	return 0;
+}
+
+gboolean
+TransmitFile (guint32 socket, gpointer file, guint32 bytes_to_write, guint32 bytes_per_send, WapiOverlapped *ol,
+		WapiTransmitFileBuffers *buffers, guint32 flags)
+{
+	gpointer sock = GUINT_TO_POINTER (socket);
+	gint ret;
+	
+	if (startup_count == 0) {
+		WSASetLastError (WSANOTINITIALISED);
+		return FALSE;
+	}
+	
+	if (_wapi_handle_type (sock) != WAPI_HANDLE_SOCKET) {
+		WSASetLastError (WSAENOTSOCK);
+		return FALSE;
+	}
+
+	/* Write the header */
+	if (buffers != NULL && buffers->Head != NULL && buffers->HeadLength > 0) {
+		ret = _wapi_send (socket, buffers->Head, buffers->HeadLength, 0);
+		if (ret == SOCKET_ERROR)
+			return FALSE;
+	}
+
+	ret = wapi_sendfile (socket, file, bytes_to_write, bytes_per_send, flags);
+	if (ret == SOCKET_ERROR)
+		return FALSE;
+
+	/* Write the tail */
+	if (buffers != NULL && buffers->Tail != NULL && buffers->TailLength > 0) {
+		ret = _wapi_send (socket, buffers->Tail, buffers->TailLength, 0);
+		if (ret == SOCKET_ERROR)
+			return FALSE;
+	}
+
+	if ((flags & TF_DISCONNECT) == TF_DISCONNECT)
+		closesocket (socket);
+
+	return TRUE;
 }
 
 static struct 
@@ -1149,7 +1249,7 @@ static struct
 	gpointer func;
 } extension_functions[] = {
 	{WSAID_DISCONNECTEX, wapi_disconnectex},
-	{WSAID_TRANSMITFILE, wapi_transmitfile},
+	{WSAID_TRANSMITFILE, TransmitFile},
 	{{0}, NULL},
 };
 
@@ -1492,3 +1592,5 @@ int WSASend (guint32 fd, WapiWSABuf *buffers, guint32 count, guint32 *sent,
 	*sent = ret;
 	return 0;
 }
+
+#endif /* ifndef DISABLE_SOCKETS */

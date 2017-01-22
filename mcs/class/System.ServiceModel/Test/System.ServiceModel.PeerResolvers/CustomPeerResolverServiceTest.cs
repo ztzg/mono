@@ -53,12 +53,6 @@ namespace MonoTests.System.ServiceModel.PeerResolvers
 		}
 
 		[Test]
-		public void OpenTest ()
-		{
-			cprs.Open ();
-		}
-
-		[Test]
 		[ExpectedException (typeof (ArgumentException))]
 		public void OpenTest1 ()
 		{
@@ -88,7 +82,11 @@ namespace MonoTests.System.ServiceModel.PeerResolvers
 		public void OpenTest4 ()
 		{
 			cprs.Open ();
-			cprs.Open ();
+			try {
+				cprs.Open ();
+			} finally {
+				cprs.Close ();
+			}
 		}
 
 		[Test]

@@ -34,17 +34,12 @@ using System.Runtime.CompilerServices;
 using System.Security;
 using System.Security.Permissions;
 using System.Text;
-
-#if NET_2_0
 using System.Runtime.InteropServices;
-#endif
 
 namespace System.Diagnostics {
 
 	[Serializable]
-#if NET_2_0
 	[ComVisible (true)]
-#endif
 	[MonoTODO ("Serialized objects are not compatible with MS.NET")]
         public class StackFrame {
 
@@ -131,7 +126,7 @@ namespace System.Diagnostics {
                 
                 public virtual string GetFileName()
                 {
-#if NET_2_0 && !NET_2_1
+#if !NET_2_1
 			if (SecurityManager.SecurityEnabled && (fileName != null) && (fileName.Length > 0)) {
 				string fn = Path.GetFullPath (fileName);
 				new FileIOPermission (FileIOPermissionAccess.PathDiscovery, fn).Demand ();
@@ -139,15 +134,40 @@ namespace System.Diagnostics {
 #endif
                         return fileName;
                 }
+
+		internal string GetSecureFileName ()
+		{
+			string filename = "<filename unknown>";
+			if (fileName == null)
+				return filename;
+#if !MOONLIGHT
+			try {
+				filename = GetFileName ();
+			}
+			catch (SecurityException) {
+				// CAS check failure
+			}
+#else
+			// Silverlight always return <filename unknown> but that's not very useful for debugging
+			// OTOH we do not want to share any details about the original file system (even if they
+			// are likely available in the debugging symbols files) from the browser's plugin (but
+			// compiling stuff from smcs is fine since it's outside the sandbox)
+			try {
+				if (SecurityManager.SecurityEnabled)
+					filename = Path.GetFileName (fileName);
+			}
+			catch (ArgumentException) {
+				// e.g. invalid chars in filename
+			}
+#endif
+			return filename;
+		}
                 
                 public virtual int GetILOffset()
                 {
                         return ilOffset;
                 }
                 
-#if ONLY_1_1
-		[ReflectionPermission (SecurityAction.Demand, TypeInformation = true)]
-#endif
 		public virtual MethodBase GetMethod ()
                 {
                         return methodBase;
@@ -183,18 +203,7 @@ namespace System.Diagnostics {
 			}
 
 			sb.Append (Locale.GetText (" in file:line:column "));
-
-			if (fileName == null) {
-				sb.Append (Locale.GetText ("<filename unknown>"));
-			} else {
-				try {
-					sb.Append (GetFileName ());
-				}
-				catch (SecurityException) {
-					sb.Append (Locale.GetText ("<filename unknown>"));
-				}
-			}
-
+			sb.Append (GetSecureFileName ());
 			sb.AppendFormat (":{0}:{1}", lineNumber, columnNumber);
 			return sb.ToString ();
 		}

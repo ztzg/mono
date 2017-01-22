@@ -76,24 +76,30 @@ namespace Microsoft.Build.BuildEngine {
 
 			// Run the task in batches
 			bool retval = true;
-			if (buckets.Count > 0) {
-				foreach (Dictionary<string, BuildItemGroup> bucket in buckets) {
-					project.SetBatchedItems (bucket, commonItemsByName);
-					if (ConditionParser.ParseAndEvaluate (buildTask.Condition, project)) {
-						 retval = buildTask.Execute ();
-						 if (!retval && !buildTask.ContinueOnError) {
-							 executeOnErrors = true;
-							 break;
-						 }
-					}
-				}
-				project.SetBatchedItems (null, null);
-			} else {
+			if (buckets.Count == 0) {
 				// batched mode, but no values in the corresponding items!
 				if (ConditionParser.ParseAndEvaluate (buildTask.Condition, project)) {
 					retval = buildTask.Execute ();
 					if (!retval && !buildTask.ContinueOnError)
 						executeOnErrors = true;
+				}
+
+				return retval;
+			}
+
+			// batched
+			foreach (Dictionary<string, BuildItemGroup> bucket in buckets) {
+				project.PushBatch (bucket, commonItemsByName);
+				try {
+					if (ConditionParser.ParseAndEvaluate (buildTask.Condition, project)) {
+						 retval = buildTask.Execute ();
+						 if (!retval && !buildTask.ContinueOnError) {
+							executeOnErrors = true;
+							break;
+						 }
+					}
+				} finally {
+					project.PopBatch ();
 				}
 			}
 
@@ -108,6 +114,18 @@ namespace Microsoft.Build.BuildEngine {
 		{
 			foreach (XmlAttribute attrib in buildTask.TaskElement.Attributes)
 				ParseAttribute (attrib.Value);
+
+			foreach (XmlNode xn in buildTask.TaskElement.ChildNodes) {
+				XmlElement xe = xn as XmlElement;
+				if (xe == null)
+					continue;
+
+				//FIXME: error on any other child
+				if (String.Compare (xe.LocalName, "Output", StringComparison.Ordinal) == 0) {
+					foreach (XmlAttribute attrib in xe.Attributes)
+						ParseAttribute (attrib.Value);
+				}
+			}
 		}
 	}
 

@@ -1,3 +1,107 @@
+2010-07-02  Marek Habersack  <mhabersack@novell.com>
+
+	* VersionConverter.cs: added support for checking whether the
+	passed version is equal or more than a specified minimal version.
+
+	* PagesSection.cs: added two 4.0 properties - ClientIDMode and
+	ControlRenderingCompatibilityVersion 
+
+2010-06-01  Marek Habersack  <mhabersack@novell.com>
+
+	* HttpRuntimeSection.cs: added 4.0 properties
+	MaxQueryLengthString, MaxUrlLength, EncoderType and
+	RelaxedUrlToFileSystemMapping.
+
+2010-05-17  Marek Habersack  <mhabersack@novell.com>
+
+	* BuildProvider.cs: made the Extension property case-insensitive
+
+2010-04-09  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: GetSection properly processes paths
+	of form '~'. Fixes bug #595140. Patch from Adriaan van Kekem
+	<avkekem@hotmail.com>, thanks!
+
+2010-04-08 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* GlobalizationSection.cs: use WebName instead of EncodingName.
+
+2010-03-06  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: do not use Request.Path - it may
+	fail because of invalid web.config file, use
+	Request.PathNoValidation instead.
+
+	* VersionConverter.cs: added
+
+	* PropertyHelper.cs: added a Version converter helper.
+
+	* HttpRuntimeSection.cs: added 4.0 properties -
+	RequestPathInvalidCharacters, RequestValidationType and
+	RequestValidationMode.
+
+2010-02-23  Marek Habersack  <mhabersack@novell.com>
+
+	* SessionStateSection.cs: implemented 4.0 properties -
+	CompressionEnabled and SqlConnectionRetryInterval 
+
+2010-02-12  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationHost.cs: implemented {Encrypt,Decrypt}Section
+
+2010-01-20  Marek Habersack  <mhabersack@novell.com>
+
+	* OutputCacheSection.cs: implemented the Providers and
+	DefaultProviderName 4.0 properties.
+
+2010-01-09  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: GetSection properly handles looking
+	up and caching of <location> instances. Part of fix for bug
+	#568441
+
+	* WebConfigurationHost.cs: GetConfigPathFromLocationSubPath
+	calculatesthe path relative to the current config file path. Part
+	of fix for bug #568441
+
+2009-12-02  Marek Habersack  <mhabersack@novell.com>
+
+	* CompilationSection.cs: added two properties -
+	OptimizeCompilations (3.5+) and TargetFramework (4.0+)
+
+2009-11-19  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationHost.cs: IsDefinitionAllowed now normalizes the
+	passed configuration path, so that MachineToApplication sections
+
+	* WebConfigurationManager.cs: use an rw lock to protect access to
+	sectionCache. This is now necessary as the save handler clears the
+	cache.
+
+2009-11-10  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: path passed to OpenWebConfiguration
+	from GetSection does not come from FindWebConfig.
+
+2009-11-09  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: there's no need to cache sections by
+	_file_ path - using section name and web.config path is more than
+	enough and it reduces the number of cache entries
+	considerably. Fixes bug #550730
+
+2009-10-07  Marek Habersack  <mhabersack@novell.com>
+
+	* WebConfigurationManager.cs: GetSection doesn't perform string +
+	char + string concatenation to generate section cache key (by
+	Gonzalo Paniagua Javier) which gives an enormous performance boost
+	(processing time for mojoportal's default.aspx went down from
+	2.65s to 107ms on average). The key generation is performed
+	without any kind of string operation right now (except for
+	GetHashCode on 3 strings).
+	GetSectionCacheKey is called only once and sectionCache became a
+	dictionary.
+
 2009-08-20  Marek Habersack  <mhabersack@novell.com>
 
 	* WebConfigurationManager.cs: GetSection does not use

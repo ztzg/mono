@@ -37,14 +37,23 @@ namespace MonoTests.System.Linq.Expressions
 			Expression.Quote (null);
 		}
 
+#if !NET_4_0
 		[Test]
-		public void Constant ()
+		public void QuoteConstant ()
 		{
 			UnaryExpression expr = Expression.Quote (Expression.Constant (1));
 			Assert.AreEqual (ExpressionType.Quote, expr.NodeType, "Quote#01");
 			Assert.AreEqual (typeof (ConstantExpression), expr.Type, "Quote#02");
 			Assert.AreEqual ("1", expr.ToString(), "Quote#03");
 		}
+#else
+		[Test]
+		[ExpectedException (typeof (ArgumentException))]
+		public void QuoteConstant ()
+		{
+			Expression.Quote (Expression.Constant (1));
+		}
+#endif
 
 		[Test]
 		public void CompiledQuote ()
@@ -57,6 +66,23 @@ namespace MonoTests.System.Linq.Expressions
 			var get42 = quote42 ().Compile ();
 
 			Assert.AreEqual (42, get42 ());
+		}
+
+		[Test]
+		public void ParameterInQuotedExpression () // #550722
+		{
+			// Expression<Func<string, Expression<Func<string>>>> e = (string s) => () => s;
+
+			var s = Expression.Parameter (typeof (string), "s");
+
+			var lambda = Expression.Lambda<Func<string, Expression<Func<string>>>> (
+				Expression.Quote (
+					Expression.Lambda<Func<string>> (s, new ParameterExpression [0])),
+				s);
+
+			var fs = lambda.Compile () ("bingo").Compile ();
+
+			Assert.AreEqual ("bingo", fs ());
 		}
 	}
 }

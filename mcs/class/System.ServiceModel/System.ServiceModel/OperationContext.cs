@@ -36,15 +36,15 @@ namespace System.ServiceModel
 {
 	public sealed class OperationContext : IExtensibleObject<OperationContext>
 	{
-		// generated guid (no special meaning)
-		const string operation_context_name = "c15795e2-bb44-4cfb-a89c-8529feb170cb";
-		Message incoming_message;
+		[ThreadStatic]
+		static OperationContext current;
 
 		public static OperationContext Current {
-			get { return Thread.GetData (Thread.GetNamedDataSlot (operation_context_name)) as OperationContext; }
-			set { Thread.SetData (Thread.GetNamedDataSlot (operation_context_name), value); }
+			get { return current; }
+			set { current = value; }
 		}
 
+		Message incoming_message;
 #if !NET_2_1
 		EndpointDispatcher dispatcher;
 #endif
@@ -124,7 +124,7 @@ namespace System.ServiceModel
 		public MessageHeaders OutgoingMessageHeaders {
 			get {
 				if (outgoing_headers == null)
-					outgoing_headers = new MessageHeaders (MessageVersion.Default);
+					outgoing_headers = new MessageHeaders (channel.GetProperty<MessageVersion> () ?? MessageVersion.Default);
 				return outgoing_headers;
 			}
 		}
@@ -157,6 +157,7 @@ namespace System.ServiceModel
 
 		public T GetCallbackChannel<T> ()
 		{
+			// It is correct; OperationContext.Channel and OperationContext.GetCallbackChannel<T>() returns the same instance on .NET. (at least as far as I tested.)
 			return (T) (object) channel;
 		}
 

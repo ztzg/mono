@@ -44,11 +44,9 @@
 
 static mono_mutex_t noshm_sems[_WAPI_SHARED_SEM_COUNT];
 
-#ifdef DISABLE_SHARED_HANDLES
 gboolean _wapi_shm_disabled = TRUE;
-#else
-gboolean _wapi_shm_disabled = FALSE;
-#endif
+
+static gpointer wapi_storage [16];
 
 static void
 noshm_semaphores_init (void)
@@ -129,20 +127,30 @@ _wapi_shm_sem_unlock (int sem)
 gpointer
 _wapi_shm_attach (_wapi_shm_t type)
 {
-	guint32 size;
+	gpointer res;
 
 	switch(type) {
 	case WAPI_SHM_DATA:
-		return g_malloc0 (sizeof(struct _WapiHandleSharedLayout));
-		
+		res = g_malloc0 (sizeof(struct _WapiHandleSharedLayout));
+		break;
 	case WAPI_SHM_FILESHARE:
-		return g_malloc0 (sizeof(struct _WapiFileShareLayout));
-
+		res = g_malloc0 (sizeof(struct _WapiFileShareLayout));
+		break;
 	default:
 		g_error ("Invalid type in _wapi_shm_attach ()");
 		return NULL;
 	}
+
+	wapi_storage [type] = res;
+	return res;
 }
+
+void
+_wapi_shm_detach (_wapi_shm_t type)
+{
+	g_free (wapi_storage [type]);
+}
+
 #else
 /*
  * Use POSIX shared memory if possible, it is simpler, and it has the advantage that 
@@ -388,17 +396,18 @@ try_again:
 	return fd;
 }
 
-static gboolean
-check_disabled (void)
+gboolean
+_wapi_shm_enabled (void)
 {
-	if (_wapi_shm_disabled || g_getenv ("MONO_DISABLE_SHM")) {
-		const char* val = g_getenv ("MONO_DISABLE_SHM");
-		if (val == NULL || *val == '1' || *val == 'y' || *val == 'Y') {
-			_wapi_shm_disabled = TRUE;
-		}
+	static gboolean env_checked;
+
+	if (!env_checked) {
+		if (g_getenv ("MONO_ENABLE_SHM"))
+			_wapi_shm_disabled = FALSE;
+		env_checked = TRUE;
 	}
 
-	return _wapi_shm_disabled;
+	return !_wapi_shm_disabled;
 }
 
 /*
@@ -430,8 +439,9 @@ _wapi_shm_attach (_wapi_shm_t type)
 		return NULL;
 	}
 
-	if (check_disabled ()) {
-		return g_malloc0 (size);
+	if (!_wapi_shm_enabled ()) {
+		wapi_storage [type] = g_malloc0 (size);
+		return wapi_storage [type];
 	}
 
 #ifdef USE_SHM
@@ -474,6 +484,13 @@ _wapi_shm_attach (_wapi_shm_t type)
 	return shm_seg;
 }
 
+void
+_wapi_shm_detach (_wapi_shm_t type)
+{
+	if (!_wapi_shm_enabled ())
+		g_free (wapi_storage [type]);
+}
+
 static void
 shm_semaphores_init (void)
 {
@@ -481,6 +498,8 @@ shm_semaphores_init (void)
 	key_t oldkey;
 	int thr_ret;
 	struct _WapiHandleSharedLayout *tmp_shared;
+	gchar *ftmp;
+	gchar *filename;
 	
 	/*
 	 * Yet more barmy API - this union is a well-defined parameter
@@ -520,7 +539,16 @@ shm_semaphores_init (void)
 	tmp_shared = _wapi_shm_attach (WAPI_SHM_DATA);
 	g_assert (tmp_shared != NULL);
 	
-	key = ftok (_wapi_shm_file (WAPI_SHM_DATA), 'M');
+#ifdef USE_SHM
+	ftmp=_wapi_shm_shm_name (WAPI_SHM_DATA);
+	filename = g_build_filename ("/dev/shm", ftmp, NULL);
+	g_assert (filename!=NULL);
+	key = ftok (filename, 'M');
+	g_free (ftmp);
+	g_free (filename);
+#else
+	key = ftok ( _wapi_shm_file (WAPI_SHM_DATA), 'M');
+#endif
 
 again:
 	retries++;
@@ -807,7 +835,7 @@ shm_sem_unlock (int sem)
 void
 _wapi_shm_semaphores_init (void)
 {
-	if (check_disabled ()) 
+	if (!_wapi_shm_enabled ())
 		noshm_semaphores_init ();
 	else
 		shm_semaphores_init ();

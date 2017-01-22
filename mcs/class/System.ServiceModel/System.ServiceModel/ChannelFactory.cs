@@ -67,11 +67,9 @@ namespace System.ServiceModel
 			get { return service_endpoint; }
 		}
 
-#if !NET_2_1
 		public ClientCredentials Credentials {
 			get { return Endpoint.Behaviors.Find<ClientCredentials> (); }
 		}
-#endif
 
 		protected internal override TimeSpan DefaultCloseTimeout {
 			get { return Endpoint.Binding.CloseTimeout; }
@@ -112,7 +110,7 @@ namespace System.ServiceModel
 #else
 
 			string contractName = Endpoint.Contract.ConfigurationName;
-			ClientSection client = (ClientSection) ConfigurationManager.GetSection ("system.serviceModel/client");
+			ClientSection client = ConfigUtil.ClientSection;
 			ChannelEndpointElement res = null;
 			foreach (ChannelEndpointElement el in client.Endpoints) {
 				if (el.Contract == contractName && (endpointConfig == el.Name || endpointConfig == "*")) {
@@ -138,7 +136,7 @@ namespace System.ServiceModel
 #if !NET_2_1
 		private void ApplyBehavior (string behaviorConfig)
 		{
-			BehaviorsSection behaviorsSection = (BehaviorsSection) ConfigurationManager.GetSection ("system.serviceModel/behaviors");
+			BehaviorsSection behaviorsSection = ConfigUtil.BehaviorsSection;
 			EndpointBehaviorElement behaviorElement = behaviorsSection.EndpointBehaviors [behaviorConfig];
 			int i = 0;
 			foreach (BehaviorExtensionElement el in behaviorElement) {
@@ -200,7 +198,9 @@ namespace System.ServiceModel
 						return Endpoint.Binding.BuildChannelFactory<IOutputChannel> (pl);
 					break;
 				}
-			} else {
+			}
+			// both OneWay and non-OneWay contracts fall into here.
+			{
 				switch (Endpoint.Contract.SessionMode) {
 				case SessionMode.Required:
 					if (Endpoint.Binding.CanBuildChannelFactory<IRequestSessionChannel> (pl))
@@ -218,7 +218,7 @@ namespace System.ServiceModel
 					break;
 				}
 			}
-			throw new InvalidOperationException ("The binding does not support any of the channel types that the contract allows.");
+			throw new InvalidOperationException (String.Format ("The binding does not support any of the channel types that the contract '{0}' allows.", Endpoint.Contract.Name));
 		}
 
 		BindingParameterCollection CreateBindingParameters ()
@@ -253,6 +253,15 @@ namespace System.ServiceModel
 
 		protected void EnsureOpened ()
 		{
+			if (Endpoint == null)
+				throw new InvalidOperationException ("A service endpoint must be configured for this channel factory");
+			if (Endpoint.Address == null)
+				throw new InvalidOperationException ("An EndpointAddress must be configured for this channel factory");
+			if (Endpoint.Contract == null)
+				throw new InvalidOperationException ("A service Contract must be configured for this channel factory");
+			if (Endpoint.Binding == null)
+				throw new InvalidOperationException ("A Binding must be configured for this channel factory");
+
 			if (State != CommunicationState.Opened)
 				Open ();
 		}
@@ -336,12 +345,14 @@ namespace System.ServiceModel
 
 		protected override void OnOpening ()
 		{
+			base.OnOpening ();
 			OpenedChannelFactory = CreateFactory ();
-			OpenedChannelFactory.Open ();
 		}
 
 		protected override void OnOpened ()
 		{
+			base.OnOpened ();
+			OpenedChannelFactory.Open ();
 		}
 	}
 

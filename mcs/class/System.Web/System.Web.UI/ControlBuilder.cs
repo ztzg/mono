@@ -4,9 +4,10 @@
 // Authors:
 // 	Duncan Mak  (duncan@ximian.com)
 // 	Gonzalo Paniagua Javier (gonzalo@ximian.com)
+//      Marek Habersack <mhabersack@novell.com>
 //
 // (C) 2002, 2003 Ximian, Inc. (http://www.ximian.com)
-// Copyright (C) 2005 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2005-2010 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -38,6 +39,7 @@ using System.Web.Compilation;
 using System.Web.Configuration;
 using System.IO;
 using System.Web.UI.WebControls;
+using System.Web.Util;
 
 using _Location = System.Web.Compilation.Location;
 
@@ -78,8 +80,12 @@ namespace System.Web.UI {
 		CodeMemberMethod renderMethod;
 		int renderIndex;
 		bool isProperty;
+		bool isPropertyWritable;
 		ILocation location;
 		ArrayList otherTags;
+
+		int localVariableCount = 0;
+		bool? isTemplate;
 		
 		public ControlBuilder ()
 		{
@@ -144,12 +150,10 @@ namespace System.Web.UI {
 			set { method = value; }
 		}
 
-#if NET_2_0
 		internal CodeMemberMethod DataBindingMethod {
 			get;
 			set;
 		}
-#endif
 			
 		internal CodeStatementCollection MethodStatements {
 			get { return methodStatements; }
@@ -169,6 +173,10 @@ namespace System.Web.UI {
 			get { return isProperty; }
 		}
 
+		internal bool IsPropertyWritable {
+			get { return isPropertyWritable; }
+		}
+		
 		internal ILocation Location {
 			get { return location; }
 			set { location = new _Location (value); }
@@ -235,6 +243,19 @@ namespace System.Web.UI {
 				return typeof (INamingContainer).IsAssignableFrom (type);
 			}
 		}
+
+		internal bool IsTemplate {
+			get {
+				if (isTemplate == null)
+					isTemplate = (typeof (TemplateBuilder).IsAssignableFrom (GetType ()));
+
+				return isTemplate.Value;
+			}
+		}
+		
+		internal bool PropertyBuilderShouldReturnValue {
+			get { return isProperty && isPropertyWritable && RenderMethod == null && !IsTemplate && !(this is CollectionBuilder) && !(this is RootBuilder); }
+		}
 		
 		ControlBuilder MyNamingContainer {
 			get {
@@ -255,12 +276,7 @@ namespace System.Web.UI {
 			}
 		}
 			
-#if NET_2_0
-		public virtual
-#else
-		internal
-#endif
-		Type BindingContainerType {
+		public virtual Type BindingContainerType {
 			get {
 				ControlBuilder cb = (this is TemplateBuilder && !(this is RootBuilder)) ? this : MyNamingContainer;
 				
@@ -271,10 +287,8 @@ namespace System.Web.UI {
 					return typeof (Control);
 				}
 
-#if NET_2_0
 				if (cb != this && cb is ContentBuilderInternal && !typeof (INonBindingContainer).IsAssignableFrom (cb.BindingContainerType))
 					return cb.BindingContainerType;
-#endif
 
 				Type ct;
 				if (cb is TemplateBuilder) {
@@ -372,7 +386,6 @@ namespace System.Web.UI {
 				templateChildren.Add (child);
 			}
 
-#if NET_2_0
 			if (parser == null)
 				return;
 			
@@ -390,7 +403,6 @@ namespace System.Web.UI {
 			
 			parser.AddImport (component.Namespace);
 			parser.AddDependency (component.Source);
-#endif
 		}
 		
 		public virtual bool AllowWhitespaceLiterals ()
@@ -469,13 +481,12 @@ namespace System.Web.UI {
 		{
 		}
 
-#if NET_2_0		
 		static Type MapTagType (Type tagType)
 		{
 			if (tagType == null)
 				return null;
 			
-			PagesSection ps = WebConfigurationManager.GetWebApplicationSection ("system.web/pages") as PagesSection;
+			PagesSection ps = WebConfigurationManager.GetSection ("system.web/pages") as PagesSection;
 			if (ps == null)
 				return tagType;
 
@@ -537,7 +548,6 @@ namespace System.Web.UI {
 			
 			return tagType;
 		}
-#endif
 
 		public static ControlBuilder CreateBuilderFromType (TemplateParser parser,
 								    ControlBuilder parentBuilder,
@@ -548,14 +558,8 @@ namespace System.Web.UI {
 								    int line,
 								    string sourceFileName)
 		{
-
-			Type tagType;
-#if NET_2_0
-			tagType = MapTagType (type);
-#else
-			tagType = type;
-#endif
-			ControlBuilder  builder;
+			Type tagType = MapTagType (type);
+			ControlBuilder builder;
 			object [] atts = tagType.GetCustomAttributes (typeof (ControlBuilderAttribute), true);
 			if (atts != null && atts.Length > 0) {
 				ControlBuilderAttribute att = (ControlBuilderAttribute) atts [0];
@@ -613,6 +617,7 @@ namespace System.Web.UI {
 				builder = CreateBuilderFromType (parser, parentBuilder, propType, prop.Name,
 								 null, atts, line, fileName);
 				builder.isProperty = true;
+				builder.isPropertyWritable = prop.CanWrite;
 				if (idx >= 0)
 					builder.originalTagName = propName;
 				return builder;
@@ -622,6 +627,7 @@ namespace System.Web.UI {
 			builder.fileName = fileName;
 			builder.line = line;
 			builder.isProperty = true;
+			builder.isPropertyWritable = prop.CanWrite;
 			if (idx >= 0)
 				builder.originalTagName = propName;
 			return builder;
@@ -695,8 +701,14 @@ namespace System.Web.UI {
 			return "_bctrl_" + nextID++;
 		}
 
+		internal string GetNextLocalVariableName (string baseName)
+		{
+			localVariableCount++;
+			return baseName + localVariableCount.ToString ();
+		}
+		
 		internal virtual ControlBuilder CreateSubBuilder (string tagid,
-								  Hashtable atts,
+								  IDictionary atts,
 								  Type childType,
 								  TemplateParser parser,
 								  ILocation location)
@@ -706,7 +718,7 @@ namespace System.Web.UI {
 				if (defaultPropertyBuilder == null)
 					childBuilder = CreatePropertyBuilder (tagid, parser, atts);
 				else {
-					if (String.Compare (defaultPropertyBuilder.TagName, tagid, true, CultureInfo.InvariantCulture) == 0) {
+					if (String.Compare (defaultPropertyBuilder.TagName, tagid, true, Helpers.InvariantCulture) == 0) {
 						// The child tag is the same what our default property name. Act as if there was
 						// no default property builder, or otherwise we'll end up with invalid nested
 						// builder call.
@@ -728,7 +740,7 @@ namespace System.Web.UI {
 				return childBuilder;
 			}
 
-			if (String.Compare (tagName, tagid, true, CultureInfo.InvariantCulture) == 0)
+			if (String.Compare (tagName, tagid, true, Helpers.InvariantCulture) == 0)
 				return null;
 			
 			childType = GetChildControlType (tagid, atts);
@@ -772,7 +784,7 @@ namespace System.Web.UI {
 				}
 			}
 		}
-#if NET_2_0
+
 		[MonoTODO ("unsure, lack documentation")]
 		public virtual object BuildObject ()
 		{
@@ -801,6 +813,5 @@ namespace System.Web.UI {
 				}
 			}
 		}
-#endif
 	}
 }

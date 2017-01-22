@@ -266,11 +266,12 @@ namespace System.Windows.Forms
 		bool from_positionchanged_handler;
 
 		/* editing state */
-		internal bool pending_new_row;
 		bool cursor_in_add_row;
 		bool add_row_changed;
 		internal bool is_editing;		// Current cell is edit mode
 		bool is_changing;
+		bool commit_row_changes = true;		// Whether to commit current edit or cancel it
+		bool adding_new_row;			// Used to temporary ignore the new row added by CurrencyManager.AddNew in CurrentCell
 
 		internal Stack data_source_stack;
 
@@ -488,7 +489,8 @@ namespace System.Windows.Forms
 					throw new Exception ("CurrentCell cannot be set at this time.");
 				}
 
-				if (current_cell.Equals (value)) {
+				/* Even if we are on the same cell, we could need to actually start edition */
+				if (current_cell.Equals (value) && is_editing) {
 					setting_current_cell = false;
 					return;
 				}
@@ -514,7 +516,10 @@ namespace System.Windows.Forms
 				if (value.RowNumber != current_cell.RowNumber) {
 					if (!from_positionchanged_handler) {
 						try {
-							ListManager.EndCurrentEdit ();
+							if (commit_row_changes)
+								ListManager.EndCurrentEdit ();
+							else
+								ListManager.CancelCurrentEdit ();
 						}
 						catch (Exception e) {
 							DialogResult r = MessageBox.Show (String.Format ("{0} Do you wish to correct the value?", e.Message),
@@ -542,14 +547,20 @@ namespace System.Windows.Forms
 
 				EnsureCellVisibility (value);
 
+				// by default, edition in existing rows is commited, and for new ones is discarded, unless
+				// we receive actual input data from the user
 				if (CurrentRow == RowsCount && ListManager.AllowNew) {
+					commit_row_changes = false;
 					cursor_in_add_row = true;
 					add_row_changed = false;
-					pending_new_row = true;
+
+					adding_new_row = true;
+					AddNewRow ();
+					adding_new_row = false;
 				}
 				else {
 					cursor_in_add_row = false;
-					pending_new_row = false;
+					commit_row_changes = true;
 				}
 
 				InvalidateRowHeader (old_row);
@@ -563,6 +574,16 @@ namespace System.Windows.Forms
 					Edit ();
 
 				setting_current_cell = false;
+			}
+		}
+
+		internal void EditRowChanged (DataGridColumnStyle column_style)
+		{
+			if (cursor_in_add_row) {
+				if (!commit_row_changes) { // first change in add row, time to show another row in the ui
+					commit_row_changes = true;
+					RecreateDataGridRows (true);
+				}
 			}
 		}
 
@@ -934,6 +955,14 @@ namespace System.Windows.Forms
 
 		internal int FirstVisibleRow {
 			get { return first_visible_row; }
+		}
+
+		// As opposed to VisibleRowCount, this value is the maximum
+		// *possible* number of visible rows given our area.
+		internal int MaxVisibleRowCount {
+			get {
+				return cells_area.Height / RowHeight;
+			}
 		}
 		
 		internal int RowsCount {
@@ -1456,9 +1485,10 @@ namespace System.Windows.Forms
 			base.OnLeave (e);
 
 			EndEdit ();
-			if (cursor_in_add_row) {
+			if (commit_row_changes)
+				ListManager.EndCurrentEdit ();
+			else
 				ListManager.CancelCurrentEdit ();
-			}
 		}
 
 		protected override void OnMouseDown (MouseEventArgs e)
@@ -2011,9 +2041,17 @@ namespace System.Windows.Forms
 				if (is_editing)
 					return false;
 				else if (selected_rows.Keys.Count > 0) {
-					foreach (int row in selected_rows.Keys)
-						ListManager.RemoveAt (row);
-					selected_rows.Clear ();
+					// the removal of the items in the source will cause to
+					// reset the selection, so we need a copy of it.
+					int [] rows = new int [selected_rows.Keys.Count];
+					selected_rows.Keys.CopyTo (rows, 0);
+
+					// reverse order to keep index sanity
+					int edit_row_index = ShowEditRow ? RowsCount : -1; // new cell is +1
+					for (int i = rows.Length - 1; i >= 0; i--)
+						if (rows [i] != edit_row_index)
+							ListManager.RemoveAt (rows [i]);
+
 					CalcAreasAndInvalidate ();
 				}
 
@@ -2494,6 +2532,13 @@ namespace System.Windows.Forms
 
 		private void OnListManagerPositionChanged (object sender, EventArgs e)
 		{
+			// Set the field directly, as we are empty now and using CurrentRow
+			// directly would add a new row in this case.
+			if (list_manager.Count == 0) {
+				current_cell = new DataGridCell (0, 0);
+				return;
+			}
+
 			from_positionchanged_handler = true;
 			CurrentRow = list_manager.Position;
 			from_positionchanged_handler = false;
@@ -2501,6 +2546,10 @@ namespace System.Windows.Forms
 
 		private void OnListManagerItemChanged (object sender, ItemChangedEventArgs e)
 		{
+			// if it was us who created the new row in CurrentCell, ignore it and don't recreate the rows yet.
+			if (adding_new_row)
+				return;
+
 			if (e.Index == -1) {
 				ResetSelection ();
 				if (rows == null || RowsCount != rows.Length - (ShowEditRow ? 1 : 0))
@@ -2549,7 +2598,7 @@ namespace System.Windows.Forms
 			CalcAreasAndInvalidate ();
 		}
 
-		internal void AddNewRow ()
+		private void AddNewRow ()
 		{
 			ListManager.EndCurrentEdit ();
 			ListManager.AddNew ();
@@ -2563,7 +2612,8 @@ namespace System.Windows.Forms
 			if (!CurrentTableStyle.GridColumnStyles[CurrentColumn].bound)
 				return;
 
-			if (ListManager != null && ListManager.Count == 0)
+			// if we don't have any rows nor the "new" cell, there's nothing to do
+			if (ListManager != null && (ListManager.Count == 0 && !ListManager.AllowNew))
 				return;
 
 			is_editing = true;
@@ -2656,8 +2706,6 @@ namespace System.Windows.Forms
 
 			if (pixels == 0)
 				return;
-
-			EndEdit ();
 
 			Rectangle rows_area = cells_area; // Cells area - partial rows space
 
@@ -2985,7 +3033,7 @@ namespace System.Windows.Forms
 				UpdateVisibleRowCount ();
 
 				needHoriz = (width_of_all_columns > visible_cells_width);
-				needVert = (allrows > visible_row_count);
+				needVert = (allrows > MaxVisibleRowCount);
 			}
 
 			int horiz_scrollbar_width = ClientRectangle.Width;
@@ -3316,7 +3364,9 @@ namespace System.Windows.Forms
 		}
 
 		int VLargeChange {
-			get { return VisibleRowCount; }
+			get { 
+				return MaxVisibleRowCount;
+			}
 		}
 
 		#endregion Instance Properties

@@ -243,9 +243,10 @@ namespace System.Web.Profile
 		static SettingsProperty CreateSettingsProperty (PropertyInfo property)
 		{
 			SettingsProperty sp = new SettingsProperty (property.Name);
-
-			Attribute [] attributes = (Attribute [])property.GetCustomAttributes (typeof (SettingsSerializeAsAttribute), false);
+			Attribute [] attributes = (Attribute [])property.GetCustomAttributes (false);
 			SettingsAttributeDictionary attDict = new SettingsAttributeDictionary();
+			bool defaultAssigned = false;
+			
 			sp.SerializeAs = SettingsSerializeAs.ProviderSpecific;
 			sp.PropertyType = property.PropertyType;
 			sp.IsReadOnly = false;
@@ -253,24 +254,23 @@ namespace System.Web.Profile
 			sp.ThrowOnErrorSerializing = true;
 
 			for (int i = 0; i < attributes.Length; i++) {
-				if (attributes [i] is DefaultSettingValueAttribute)
+				if (attributes [i] is DefaultSettingValueAttribute) {
 					sp.DefaultValue = ((DefaultSettingValueAttribute) attributes [i]).Value;
-
-				else if (attributes [i] is SettingsProviderAttribute) {
+					defaultAssigned = true;
+				} else if (attributes [i] is SettingsProviderAttribute) {
 					Type providerType = HttpApplication.LoadType (((SettingsProviderAttribute) attributes [i]).ProviderTypeName);
 					sp.Provider = (SettingsProvider) Activator.CreateInstance (providerType);
 					sp.Provider.Initialize (null, null);
-				}
-
-				else if (attributes [i] is SettingsSerializeAsAttribute)
+				} else if (attributes [i] is SettingsSerializeAsAttribute) {
 					sp.SerializeAs = ((SettingsSerializeAsAttribute) attributes [i]).SerializeAs;
-
-				else if (
-					attributes [i] is SettingsAllowAnonymousAttribute ||
-					attributes [i] is ApplicationScopedSettingAttribute ||
-					attributes [i] is UserScopedSettingAttribute ||
-					attributes [i] is SettingsDescriptionAttribute  ||
-					attributes [i] is SettingAttribute)
+				} else if (attributes [i] is SettingsAllowAnonymousAttribute) {
+					sp.Attributes ["AllowAnonymous"] = ((SettingsAllowAnonymousAttribute) attributes [i]).Allow;
+				} else if (attributes [i] is CustomProviderDataAttribute) {
+					sp.Attributes ["CustomProviderData"] = ((CustomProviderDataAttribute) attributes [i]).CustomProviderData;
+				} else if (attributes [i] is ApplicationScopedSettingAttribute ||
+					   attributes [i] is UserScopedSettingAttribute ||
+					   attributes [i] is SettingsDescriptionAttribute  ||
+					   attributes [i] is SettingAttribute)
 					attDict.Add (attributes [i].GetType (), attributes [i]);
 			}
 
@@ -280,11 +280,15 @@ namespace System.Web.Profile
 			if (sp.Attributes ["AllowAnonymous"] == null)
 				sp.Attributes ["AllowAnonymous"] = false;
 
+			if (!defaultAssigned && sp.PropertyType == typeof (string) && sp.DefaultValue == null)
+				sp.DefaultValue = String.Empty;
+			
 			return sp;
 		}
+		
 		static SettingsProperty CreateSettingsProperty (ProfileGroupSettings pgs, ProfilePropertySettings pps)
 		{
-			string name = ((pgs == null) ? "" : pgs.Name + ".") + pps.Name;
+			string name = ((pgs == null) ? String.Empty : pgs.Name + ".") + pps.Name;
 			SettingsProperty sp = new SettingsProperty (name);
 
 			sp.Attributes.Add ("AllowAnonymous", pps.AllowAnonymous);

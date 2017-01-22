@@ -586,7 +586,7 @@ namespace System.Xml.Serialization
 
 			WriteLineInd ("switch (val) {");
 			for (int i = 0; i < emap.EnumNames.Length; i++)
-				WriteLine ("case " + map.TypeData.CSharpFullName + "." + emap.EnumNames[i] + ": return " + GetLiteral (emap.XmlNames[i]) + ";");
+				WriteLine ("case " + map.TypeData.CSharpFullName + ".@" + emap.EnumNames[i] + ": return " + GetLiteral (emap.XmlNames[i]) + ";");
 
 			if (emap.IsFlags) {
 				WriteLineInd ("default:");
@@ -971,15 +971,19 @@ namespace System.Xml.Serialization
 		void GenerateWriteAnyElementContent (XmlTypeMapMemberAnyElement member, string memberValue)
 		{
 			bool singleElement = (member.TypeData.Type == typeof (XmlElement));
-			string var;
+			string var, var2;
 			
+			var2 = GetObTempVar ();
 			if (singleElement)
 				var = memberValue;
 			else {
 				var = GetObTempVar ();
-				WriteLineInd ("foreach (XmlNode " + var + " in " + memberValue + ") {");
+				WriteLineInd ("foreach (object " + var2 + " in " + memberValue + ") {");
 			}
-			
+			WriteLine ("XmlNode " + var + " = " + var2 + " as XmlNode;");
+			WriteLine ("if (" + var + " == null && " + var2 + "!= null) throw new InvalidOperationException (\"A member with XmlAnyElementAttribute can only serialize and deserialize certain XmlNode types.");
+			WriteLineUni ("}");
+
 			string elem = GetObTempVar ();
 			WriteLine ("XmlNode " + elem + " = " + var + ";");
 			WriteLine ("if (" + elem + " is XmlElement) {");
@@ -2421,7 +2425,7 @@ namespace System.Xml.Serialization
 			WriteLineInd ("{");
 			foreach (EnumMap.EnumMapMember mem in map.Members)
 			{
-				WriteLine ("case " + GetLiteral (mem.XmlName) + ": return " + typeMap.TypeData.CSharpFullName + "." + mem.EnumName + ";");
+				WriteLine ("case " + GetLiteral (mem.XmlName) + ": return " + typeMap.TypeData.CSharpFullName + ".@" + mem.EnumName + ";");
 			}
 			WriteLineInd ("default:");
 			WriteLine ("throw CreateUnknownConstantException (" + val + ", typeof(" + typeMap.TypeData.CSharpFullName + "));");
@@ -2441,7 +2445,7 @@ namespace System.Xml.Serialization
 			WriteLineUni ("}");
 			WriteLine ("else UnknownNode (null);");
 			WriteLine ("");
-			WriteLine ("return null;");
+			WriteLine ("return default (" + typeMap.TypeData.CSharpFullName + ");");
 		}
 
 		void GenerateReadInitCallbacks ()
@@ -2653,7 +2657,7 @@ namespace System.Xml.Serialization
 		
 		string GetUniqueName (string uniqueGroup, object ob, string name)
 		{
-			name = name.Replace ("[]","_array");
+			name = CodeIdentifier.MakeValid (name.Replace ("[]","_array"));
 			Hashtable names = (Hashtable) _uniqueNames [uniqueGroup];
 			if (names == null) {
 				names = new Hashtable ();
@@ -2712,7 +2716,7 @@ namespace System.Xml.Serialization
 		
 		string GetUniqueClassName (string s)
 		{
-			return classNames.AddUnique (s, null);
+			return classNames.AddUnique (CodeIdentifier.MakeValid (s), null);
 		}
 		
 		string GetReadObjectCall (XmlTypeMapping typeMap, string isNullable, string checkType)

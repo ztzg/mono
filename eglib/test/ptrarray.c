@@ -170,6 +170,30 @@ RESULT ptrarray_remove_index()
 	return OK;
 }
 
+RESULT ptrarray_remove_index_fast()
+{
+	GPtrArray *array;
+	guint i;
+
+	array = ptrarray_alloc_and_fill(&i);
+
+	g_ptr_array_remove_index_fast(array, 0);
+	if(array->pdata[0] != items[array->len]) {
+		return FAILED("First item is not %s, it is %s", items[array->len],
+			array->pdata[0]);
+	}
+
+	g_ptr_array_remove_index_fast(array, array->len - 1);
+	if(array->pdata[array->len - 1] != items[array->len - 1]) {
+		return FAILED("Last item is not %s, it is %s",
+			items[array->len - 1], array->pdata[array->len - 1]);
+	}
+
+	g_ptr_array_free(array, TRUE);
+
+	return OK;
+}
+
 RESULT ptrarray_remove()
 {
 	GPtrArray *array;
@@ -229,14 +253,56 @@ RESULT ptrarray_sort()
 	return OK;
 }
 
+RESULT ptrarray_remove_fast()
+{
+	GPtrArray *array = g_ptr_array_new();
+	gchar *letters [] = { "A", "B", "C", "D", "E" };
+	
+	if (g_ptr_array_remove_fast (array, NULL))
+		return FAILED ("Removing NULL succeeded");
+
+	g_ptr_array_add(array, letters[0]);
+	if (!g_ptr_array_remove_fast (array, letters[0]) || array->len != 0)
+		return FAILED ("Removing last element failed");
+
+	g_ptr_array_add(array, letters[0]);
+	g_ptr_array_add(array, letters[1]);
+	g_ptr_array_add(array, letters[2]);
+	g_ptr_array_add(array, letters[3]);
+	g_ptr_array_add(array, letters[4]);
+
+	if (!g_ptr_array_remove_fast (array, letters[0]) || array->len != 4)
+		return FAILED ("Removing first element failed");
+
+	if (array->pdata [0] != letters [4])
+		return FAILED ("First element wasn't replaced with last upon removal");
+
+	if (g_ptr_array_remove_fast (array, letters[0]))
+		return FAILED ("Succedeed removing a non-existing element");
+
+	if (!g_ptr_array_remove_fast (array, letters[3]) || array->len != 3)
+		return FAILED ("Failed removing \"D\"");
+
+	if (!g_ptr_array_remove_fast (array, letters[1]) || array->len != 2)
+		return FAILED ("Failed removing \"B\"");
+
+	if (array->pdata [0] != letters [4] || array->pdata [1] != letters [2])
+		return FAILED ("Last two elements are wrong");
+	g_ptr_array_free(array, TRUE);
+	
+	return OK;
+}
+
 static Test ptrarray_tests [] = {
 	{"alloc", ptrarray_alloc},
 	{"for_iterate", ptrarray_for_iterate},
 	{"foreach_iterate", ptrarray_foreach_iterate},
 	{"set_size", ptrarray_set_size},
 	{"remove_index", ptrarray_remove_index},
+	{"remove_index_fast", ptrarray_remove_index_fast},
 	{"remove", ptrarray_remove},
 	{"sort", ptrarray_sort},
+	{"remove_fast", ptrarray_remove_fast},
 	{NULL, NULL}
 };
 

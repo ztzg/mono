@@ -29,6 +29,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -39,18 +40,21 @@ namespace System.Reflection {
 	
 	internal struct MonoPropertyInfo {
 		public Type parent;
+		public Type declaring_type;
 		public String name;
 		public MethodInfo get_method;
 		public MethodInfo set_method;
 		public PropertyAttributes attrs;
 		
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		internal static extern void get_property_info (MonoProperty prop, out MonoPropertyInfo info,
+		internal static extern void get_property_info (MonoProperty prop, ref MonoPropertyInfo info,
 							       PInfo req_info);
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		internal static extern Type[] GetTypeModifiers (MonoProperty prop, bool optional);
 
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		internal static extern object get_default_value (MonoProperty prop);
 	}
 
 	[Flags]
@@ -64,10 +68,8 @@ namespace System.Reflection {
 		
 	}
 
-#if NET_2_0
 	internal delegate object GetterAdapter (object _this);
 	internal delegate R Getter<T,R> (T _this);
-#endif
 
 	[Serializable]
 	internal class MonoProperty : PropertyInfo, ISerializable {
@@ -76,42 +78,42 @@ namespace System.Reflection {
 		internal IntPtr prop;
 		MonoPropertyInfo info;
 		PInfo cached;
-#if NET_2_0
 		GetterAdapter cached_getter;
-#endif
 
 #pragma warning restore 649
+
+		void CachePropertyInfo (PInfo flags)
+		{
+			if ((cached & flags) != flags) {
+				MonoPropertyInfo.get_property_info (this, ref info, flags);
+				cached |= flags;
+			}
+		}
 		
 		public override PropertyAttributes Attributes {
 			get {
-				MonoPropertyInfo info;
-				MonoPropertyInfo.get_property_info (this, out info, PInfo.Attributes);
+				CachePropertyInfo (PInfo.Attributes);
 				return info.attrs;
 			}
 		}
 		
 		public override bool CanRead {
 			get {
-				MonoPropertyInfo info;
-				MonoPropertyInfo.get_property_info (this, out info, PInfo.GetMethod);
+				CachePropertyInfo (PInfo.GetMethod);
 				return (info.get_method != null);
 			}
 		}
 		
 		public override bool CanWrite {
 			get {
-				MonoPropertyInfo info;
-				MonoPropertyInfo.get_property_info (this, out info, PInfo.SetMethod);
+				CachePropertyInfo (PInfo.SetMethod);
 				return (info.set_method != null);
 			}
 		}
 
 		public override Type PropertyType {
 			get {
-				if ((cached & (PInfo.GetMethod | PInfo.SetMethod)) != (PInfo.GetMethod | PInfo.SetMethod)) {
-					MonoPropertyInfo.get_property_info (this, out info, PInfo.GetMethod | PInfo.SetMethod);
-					cached |= (PInfo.GetMethod | PInfo.SetMethod);
-				}
+				CachePropertyInfo (PInfo.GetMethod | PInfo.SetMethod);
 
 				if (info.get_method != null) {
 					return info.get_method.ReturnType;
@@ -125,39 +127,32 @@ namespace System.Reflection {
 
 		public override Type ReflectedType {
 			get {
-				MonoPropertyInfo info;
-				MonoPropertyInfo.get_property_info (this, out info, PInfo.ReflectedType);
+				CachePropertyInfo (PInfo.ReflectedType);
 				return info.parent;
 			}
 		}
 		
 		public override Type DeclaringType {
 			get {
-				if ((cached & PInfo.DeclaringType) == 0) {
-					MonoPropertyInfo.get_property_info (this, out info, PInfo.DeclaringType);
-					cached |= PInfo.DeclaringType;
-				}
-				return info.parent;
+				CachePropertyInfo (PInfo.DeclaringType);
+				return info.declaring_type;
 			}
 		}
 		
 		public override string Name {
 			get {
-				if ((cached & PInfo.Name) == 0) {
-					MonoPropertyInfo.get_property_info (this, out info, PInfo.Name);
-					cached |= PInfo.Name;
-				}
+				CachePropertyInfo (PInfo.Name);
 				return info.name;
 			}
 		}
 
 		public override MethodInfo[] GetAccessors (bool nonPublic)
 		{
-			MonoPropertyInfo info;
 			int nget = 0;
 			int nset = 0;
 			
-			MonoPropertyInfo.get_property_info (this, out info, PInfo.GetMethod | PInfo.SetMethod);
+			CachePropertyInfo (PInfo.GetMethod | PInfo.SetMethod);
+
 			if (info.set_method != null && (nonPublic || info.set_method.IsPublic))
 				nset = 1;
 			if (info.get_method != null && (nonPublic || info.get_method.IsPublic))
@@ -174,10 +169,7 @@ namespace System.Reflection {
 
 		public override MethodInfo GetGetMethod (bool nonPublic)
 		{
-			if ((cached & PInfo.GetMethod) == 0) {
-				MonoPropertyInfo.get_property_info (this, out info, PInfo.GetMethod);
-				cached |= PInfo.GetMethod;
-			}
+			CachePropertyInfo (PInfo.GetMethod);
 			if (info.get_method != null && (nonPublic || info.get_method.IsPublic))
 				return info.get_method;
 			else
@@ -186,23 +178,42 @@ namespace System.Reflection {
 
 		public override ParameterInfo[] GetIndexParameters()
 		{
-			MonoPropertyInfo info;
-			MonoPropertyInfo.get_property_info (this, out info, PInfo.GetMethod);
-			if (info.get_method != null)
-				return info.get_method.GetParameters ();
-			return new ParameterInfo [0];
+			CachePropertyInfo (PInfo.GetMethod | PInfo.SetMethod);
+			ParameterInfo[] res;
+			if (info.get_method != null) {
+				res = info.get_method.GetParameters ();
+			} else if (info.set_method != null) {
+				ParameterInfo[] src = info.set_method.GetParameters ();
+				res = new ParameterInfo [src.Length - 1];
+				Array.Copy (src, res, res.Length);
+			} else
+				return new ParameterInfo [0];
+
+			for (int i = 0; i < res.Length; ++i) {
+				ParameterInfo pinfo = res [i];
+				res [i] = new ParameterInfo (pinfo, this);
+			}
+			return res;	
 		}
 		
 		public override MethodInfo GetSetMethod (bool nonPublic)
 		{
-			if ((cached & PInfo.SetMethod) == 0) {
-				MonoPropertyInfo.get_property_info (this, out info, PInfo.SetMethod);
-				cached |= PInfo.SetMethod;
-			}
+			CachePropertyInfo (PInfo.SetMethod);
 			if (info.set_method != null && (nonPublic || info.set_method.IsPublic))
 				return info.set_method;
 			else
 				return null;
+		}
+
+
+		/*TODO verify for attribute based default values, just like ParameterInfo*/
+		public override object GetConstantValue ()
+		{
+			return MonoPropertyInfo.get_default_value (this);
+		}
+
+		public override object GetRawConstantValue() {
+			return MonoPropertyInfo.get_default_value (this);
 		}
 
 		// According to MSDN the inherit parameter is ignored here and
@@ -224,11 +235,12 @@ namespace System.Reflection {
 		}
 
 
-#if NET_2_0
 		delegate object GetterAdapter (object _this);
 		delegate R Getter<T,R> (T _this);
 		delegate R StaticGetter<R> ();
 
+#pragma warning disable 169
+		// Used via reflection
 		static object GetterAdapterFrame<T,R> (Getter<T,R> getter, object obj)
 		{
 			return getter ((T)obj);
@@ -238,6 +250,7 @@ namespace System.Reflection {
 		{
 			return getter ();
 		}
+#pragma warning restore 169
 
 		/*
 		 * The idea behing this optimization is to use a pair of delegates to simulate the same effect of doing a reflection call.
@@ -299,7 +312,6 @@ namespace System.Reflection {
 
 			return GetValue (obj, BindingFlags.Default, null, index, null);
 		}
-#endif
 
 		public override object GetValue (object obj, BindingFlags invokeAttr, Binder binder, object[] index, CultureInfo culture)
 		{
@@ -345,8 +357,6 @@ namespace System.Reflection {
 			return PropertyType.ToString () + " " + Name;
 		}
 
-#if NET_2_0 || BOOTSTRAP_NET_2_0
-
 		public override Type[] GetOptionalCustomModifiers () {
 			Type[] types = MonoPropertyInfo.GetTypeModifiers (this, true);
 			if (types == null)
@@ -360,7 +370,6 @@ namespace System.Reflection {
 				return Type.EmptyTypes;
 			return types;
 		}
-#endif
 
 		// ISerializable
 		public void GetObjectData (SerializationInfo info, StreamingContext context) 
@@ -368,5 +377,11 @@ namespace System.Reflection {
 			MemberInfoSerializationHolder.Serialize (info, Name, ReflectedType,
 				ToString(), MemberTypes.Property);
 		}
+
+#if NET_4_0
+		public override IList<CustomAttributeData> GetCustomAttributesData () {
+			return CustomAttributeData.GetCustomAttributes (this);
+		}
+#endif
 	}
 }

@@ -10,24 +10,23 @@
     <ProjectGuid>{2AE75F5A-CD1F-4925-9647-AF4D1C282FB4}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>System.Scripting</RootNamespace>
     <AssemblyName>Microsoft.Scripting.Core</AssemblyName>
 <DocumentationFile>$(OutputPath)\Microsoft.Scripting.Core.XML</DocumentationFile>
     <NoWarn>1591</NoWarn>
-<AssemblyOriginatorKeyFile>$(SolutionDir)\Runtime\MSSharedLibKey.snk</AssemblyOriginatorKeyFile>
+<AssemblyOriginatorKeyFile>$(SolutionDir)Runtime\MSSharedLibKey.snk</AssemblyOriginatorKeyFile>
     <SignAssembly Condition="'$(SignAssembly)' == '' And Exists('$(AssemblyOriginatorKeyFile)')">true</SignAssembly>
     <SignedSym Condition="'$(SignAssembly)' == 'true'">SIGNED</SignedSym>
     <DelaySign>true</DelaySign>
-    <SilverlightPath Condition="'$(SilverlightPath)' == ''">$(ProgramFiles)\Microsoft Silverlight\3.0.40624.0</SilverlightPath>
+    <SilverlightPath Condition="'$(SilverlightPath)' == ''">$(ProgramFiles)\Microsoft Silverlight\3.0.40818.0\</SilverlightPath>
     <BaseAddress>855638016</BaseAddress>
     <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'FxCop|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-<OutputPath>$(SolutionDir)\..\Bin\fxcop\</OutputPath>
-    <DefineConstants>TRACE;$(SignedSym);MICROSOFT_SCRIPTING_CORE</DefineConstants>
+<OutputPath>$(SolutionDir)..\Bin\fxcop\</OutputPath>
+    <DefineConstants>TRACE;$(SignedSym);CLR2</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -40,9 +39,9 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-<OutputPath>$(SolutionDir)\..\Bin\Debug\</OutputPath>
+<OutputPath>$(SolutionDir)..\Bin\Debug\</OutputPath>
 <DocumentationFile>$(OutputPath)\Microsoft.Scripting.Core.xml</DocumentationFile>
-    <DefineConstants>DEBUG;TRACE;$(SignedSym);MICROSOFT_SCRIPTING_CORE</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;$(SignedSym);CLR2</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -53,9 +52,9 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-<OutputPath>$(SolutionDir)\..\Bin\Release\</OutputPath>
+<OutputPath>$(SolutionDir)..\Bin\Release\</OutputPath>
 <DocumentationFile>$(OutputPath)\Microsoft.Scripting.Core.xml</DocumentationFile>
-    <DefineConstants>TRACE;$(SignedSym);MICROSOFT_SCRIPTING_CORE</DefineConstants>
+    <DefineConstants>TRACE;$(SignedSym);CLR2</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -65,8 +64,8 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Silverlight Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
-<OutputPath>$(SolutionDir)\..\Bin\Silverlight Debug\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;SILVERLIGHT;MICROSOFT_SCRIPTING_CORE</DefineConstants>
+<OutputPath>$(SolutionDir)..\Bin\Silverlight Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;SILVERLIGHT;CLR2</DefineConstants>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DebugType>full</DebugType>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -78,8 +77,8 @@
     <SilverlightBuild>true</SilverlightBuild>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Silverlight Release|AnyCPU' ">
-<OutputPath>$(SolutionDir)\..\Bin\Silverlight Release\</OutputPath>
-    <DefineConstants>TRACE;SILVERLIGHT;MICROSOFT_SCRIPTING_CORE</DefineConstants>
+<OutputPath>$(SolutionDir)..\Bin\Silverlight Release\</OutputPath>
+    <DefineConstants>TRACE;SILVERLIGHT;CLR2</DefineConstants>
 <DocumentationFile>$(OutputPath)\Microsoft.Scripting.Core.xml</DocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>618</NoWarn>
@@ -109,6 +108,7 @@
     </Compile>
     <Compile Include="Actions\CallInfo.cs" />
     <Compile Include="Actions\CallSiteOps.cs" />
+    <Compile Include="Actions\IInvokeOnGetBinder.cs" />
     <Compile Include="Actions\InvokeMemberBinder.cs" />
     <Compile Include="Actions\BinaryOperationBinder.cs" />
     <Compile Include="Actions\CallSite.cs" />

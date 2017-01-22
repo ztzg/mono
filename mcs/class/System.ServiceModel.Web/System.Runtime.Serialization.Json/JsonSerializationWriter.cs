@@ -63,6 +63,7 @@ namespace System.Runtime.Serialization.Json
 			if (graph == null) {
 				if (top)
 					GetTypeMap (root_type); // to make sure to reject invalid contracts
+				writer.WriteString (null);
 				return;
 			}
 
@@ -76,8 +77,7 @@ namespace System.Runtime.Serialization.Json
 			case TypeCode.Single:
 			case TypeCode.Double:
 			case TypeCode.Decimal:
-				if (always_emit_type)
-					writer.WriteAttributeString ("type", "number");
+				writer.WriteAttributeString ("type", "number");
 				writer.WriteString (((IFormattable) graph).ToString ("R", CultureInfo.InvariantCulture));
 				break;
 			case TypeCode.Byte:
@@ -88,19 +88,20 @@ namespace System.Runtime.Serialization.Json
 			case TypeCode.UInt16:
 			case TypeCode.UInt32:
 			case TypeCode.UInt64:
-				if (always_emit_type)
-					writer.WriteAttributeString ("type", "number");
+				writer.WriteAttributeString ("type", "number");
 				if (graph.GetType ().IsEnum)
 					graph = ((IConvertible) graph).ToType (Enum.GetUnderlyingType (graph.GetType ()), CultureInfo.InvariantCulture);
 				writer.WriteString (((IFormattable) graph).ToString ("G", CultureInfo.InvariantCulture));
 				break;
 			case TypeCode.Boolean:
-				if (always_emit_type)
-					writer.WriteAttributeString ("type", "boolean");
+				writer.WriteAttributeString ("type", "boolean");
 				if ((bool) graph)
 					writer.WriteString ("true");
 				else
 					writer.WriteString ("false");
+				break;
+			case TypeCode.DateTime:
+				writer.WriteString (String.Format (CultureInfo.InvariantCulture, "/Date({0})/", (long) ((DateTime) graph).Subtract (new DateTime (1970, 1, 1)).TotalMilliseconds));
 				break;
 			default:
 				if (graph is Guid) {
@@ -112,6 +113,21 @@ namespace System.Runtime.Serialization.Json
 					writer.WriteString (qn.Name);
 					writer.WriteString (":");
 					writer.WriteString (qn.Namespace);
+				} else if (graph is IDictionary) {
+					writer.WriteAttributeString ("type", "array");
+					IDictionary dic = (IDictionary) graph;
+					foreach (object o in dic.Keys) {
+						writer.WriteStartElement ("item");
+						writer.WriteAttributeString ("type", "object");
+						// outputting a KeyValuePair as <Key .. /><Value ... />
+						writer.WriteStartElement ("Key");
+						WriteObjectContent (o, false, !(graph is Array && graph.GetType ().GetElementType () != typeof (object)));
+						writer.WriteEndElement ();
+						writer.WriteStartElement ("Value");
+						WriteObjectContent (dic[o], false, !(graph is Array && graph.GetType ().GetElementType () != typeof (object)));
+						writer.WriteEndElement ();
+						writer.WriteEndElement ();
+					}
 				} else if (graph is ICollection) { // array
 					writer.WriteAttributeString ("type", "array");
 					foreach (object o in (ICollection) graph) {
@@ -124,10 +140,9 @@ namespace System.Runtime.Serialization.Json
 					TypeMap tm = GetTypeMap (graph.GetType ());
 					if (tm != null) {
 						// FIXME: I'm not sure how it is determined whether __type is written or not...
-						if (outputTypeName)
+						if (outputTypeName || always_emit_type)
 							writer.WriteAttributeString ("__type", FormatTypeName (graph.GetType ()));
-						if (always_emit_type)
-							writer.WriteAttributeString ("type", "object");
+						writer.WriteAttributeString ("type", "object");
 						tm.Serialize (this, graph);
 					}
 					else
@@ -141,7 +156,7 @@ throw new InvalidDataContractException (String.Format ("Type {0} cannot be seria
 
 		string FormatTypeName (Type type)
 		{
-			return type.Namespace == null ? type.Name : String.Format ("{0}:#{1}", type.Name, type.Namespace);
+			return String.Format ("{0}:#{1}", type.Name, type.Namespace);
 		}
 
 		TypeMap GetTypeMap (Type type)

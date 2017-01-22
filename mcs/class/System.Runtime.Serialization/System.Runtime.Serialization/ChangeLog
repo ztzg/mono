@@ -1,3 +1,185 @@
+2010-07-06  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : add OnDeserializing/OnDeserialized support.
+
+2010-06-23  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* XmlFormatterDeserializer.cs: Fix some issues in Moonlight when 
+	some referenced assemblies cannot be found or loaded
+
+2010-06-03  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* SerializationMap.cs: NET_2_1 needs cast too
+
+2010-06-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : fix PeerNodeAddress serialization regression.
+
+2010-06-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : for IXmlSerializable it uses CreateInstance()
+	  instead of GetUninitializedObject(). Fixed bug #601785.
+
+2010-05-31  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, XmlFormatterSerializer.cs,
+	  DataContractSerializer.cs :
+	  support DataContractSerializer.PreserveObjectReferences. z:Ref
+	  attributes are used not only for objects with IsReference=true.
+	  Fixed bug #610036.
+
+2010-05-31  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs : contract namespace
+	  should be still considered even if contract (local) name is null.
+	  Fix crash for generic derived type of dictionary. Fixed the
+	  primary (crasher) part of bug #610036.
+
+2010-05-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlFormatterDeserializer.cs : Array of something with non-default
+	  namespace should be deserialized as well. Required for fixing
+	  PeerResolvers ResolveResponseInfo serialization test case.
+
+2010-05-19  Andreia Gaita  <avidigal@novell.com>
+
+	* SerializationMap.cs: when deserializing, it is possible that the
+	DataMemberInfo objects being matched against the xml don't have
+	a set namespace because they were created from
+	DefaultTypeMap.GetDataMembers(), so only use the namespace for
+	comparison if it's not null (fixes part of #599667)
+
+2010-04-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs : support DataContractNamespaceAttribute.
+	  Fixed bug #599889.
+
+2010-04-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataContractExporter-new.cs : do not expect contract attribute on
+	  dictionary map. Non-contract type also uses this.
+
+2010-04-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.XsdExporter.cs, DataContractExporter-new.cs :
+	  handle schema export for SharedTypeMap.
+
+2010-04-05  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs, SerializationMap.cs : split SharedTypeMap
+	  .ctor() and initialization. Fixed infinite loop for some
+	  [Serializable] types (such as Assembly).
+
+2010-04-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* DataContractSerializer : implement IsStartObject().
+
+2010-03-12  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs, SerializationMap.cs :
+	  some refactoring to implement MessageDescription.XmlName.
+
+2010-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : return array instance if the runtime type is
+	  an array (it used to return ArrayList without conveting to array).
+
+2010-03-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.XsdExporter.cs, XsdDataContractExporter-new.cs:
+	  refresh implementation to reflect the latest WCF impl.
+	* SerializationMap.cs : make types partial.
+
+2010-02-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter.cs : fix extension type name (and comment).
+
+2010-02-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter.cs : added dictionary support.
+
+2010-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter-new.cs, XsdDataContractImporter.cs :
+	  replaced implementation.
+	* ImportOptions.cs : add correct MonoTODOs.
+
+2010-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter-new.cs : output [KnownType] to expose
+	  base/derived type relationship.
+
+2010-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter-new.cs : fix GenerateInternal.
+
+2010-02-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter-new.cs : refresh implementation that is
+	  not based on xml serialization. Not enabled yet.
+	* KnownTypeCollection.cs : add cosmetic comment.
+
+2010-02-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter.cs : add appropriate code namespaces
+	  imported from xsd namespace.
+
+2010-02-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter.cs : do not add primitive ArrayOfxxx types.
+
+2010-02-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporter.cs : some generated attributes are put
+	  on enums too.
+
+2010-01-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : allow readonly field as data member.
+	  Fixed bug #560155.
+
+2010-01-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs : differentiate
+	  [DataContract(Namespace=null)] and [DataContract(Namespace="")].
+	  Fixed bug #568763.
+
+2009-12-01  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* DataContractSerializer.cs: Add two missing methods for FX3.0 
+	and SL2/SL3.
+
+2009-10-22  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs : partly revert previous sorting fix in
+	  Sep.28th. Do not sort and mix members in base and derived types.
+	  Fixed bug #546238.
+
+2009-10-21  Jb Evain  <jbevain@novell.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs: avoid using LINQ
+	on arrays as MonoTouch has issues with them.
+
+2009-09-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs :
+	  There were some places that ignored possible whitespace nodes.
+	  Fixed sorting of ordered members so that it does not give
+	  incomplete sorting among base/derived types. (should fix #539563.)
+	  Give xml error details in some places.
+
+2009-09-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* KnownTypeCollection.cs : (the previous one didn't fix #539563.)
+	  Consider attempts to register the same collection type as it did
+	  before.
+
+2009-09-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* SerializationMap.cs, KnownTypeCollection.cs : nested use of type
+	  in its members resulted in infinite loop. This hopefully fixes
+	  bug #539563.
+
 2009-09-07  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* IgnoreDataMemberAttribute.cs : add missing type.

@@ -36,24 +36,15 @@ using System.Security.Permissions;
 
 namespace System.Runtime.Serialization.Formatters.Binary {
 
-#if NET_2_0
 	[ComVisible (true)]
-#endif
 	public sealed class BinaryFormatter : IRemotingFormatter, IFormatter 
 	{
-#if NET_2_0
 		private FormatterAssemblyStyle assembly_format = FormatterAssemblyStyle.Simple;
-#else
-		private FormatterAssemblyStyle assembly_format = FormatterAssemblyStyle.Full;
-#endif
 		private SerializationBinder binder;
 		private StreamingContext context;
 		private ISurrogateSelector surrogate_selector;
 		private FormatterTypeStyle type_format = FormatterTypeStyle.TypesAlways;
-		
-#if NET_1_1
 		private TypeFilterLevel filter_level = TypeFilterLevel.Full;
-#endif
 		
 		public BinaryFormatter()
 		{
@@ -117,16 +108,11 @@ namespace System.Runtime.Serialization.Formatters.Binary {
 			}
 		}
 
-#if NET_1_1
-#if !NET_2_0
-		[System.Runtime.InteropServices.ComVisible (false)]
-#endif
 		public TypeFilterLevel FilterLevel 
 		{
 			get { return filter_level; }
 			set { filter_level = value; }
 		}
-#endif
 
 		[SecurityPermission (SecurityAction.Demand, SerializationFormatter = true)]
 		public object Deserialize (Stream serializationStream)
@@ -161,20 +147,20 @@ namespace System.Runtime.Serialization.Formatters.Binary {
 			// Messages are read using a special static method, which does not use ObjectReader
 			// if it is not needed. This saves time and memory.
 
-			BinaryElement elem = (BinaryElement) reader.PeekChar();
+			BinaryElement elem = (BinaryElement) reader.Read ();
 
 			if (elem == BinaryElement.MethodCall) {
-				return MessageFormatter.ReadMethodCall (reader, hasHeader, handler, this);
+				return MessageFormatter.ReadMethodCall (elem, reader, hasHeader, handler, this);
 			}
 			else if (elem == BinaryElement.MethodResponse) {
-				return MessageFormatter.ReadMethodResponse (reader, hasHeader, handler, null, this);
+				return MessageFormatter.ReadMethodResponse (elem, reader, hasHeader, handler, null, this);
 			}
 			else {
 				ObjectReader serializer = new ObjectReader (this);
 
 				object result;
 				Header[] headers;
-				serializer.ReadObjectGraph (reader, hasHeader, out result, out headers);
+				serializer.ReadObjectGraph (elem, reader, hasHeader, out result, out headers);
 				if (handler != null) handler(headers);
 				return result;
 			}
@@ -220,13 +206,13 @@ namespace System.Runtime.Serialization.Formatters.Binary {
 			WriteBinaryHeader (writer, headers!=null);
 
 			if (graph is IMethodCallMessage) {
-				MessageFormatter.WriteMethodCall (writer, graph, headers, surrogate_selector, context, assembly_format, type_format);
+				MessageFormatter.WriteMethodCall (writer, graph, headers, this);
 			}
 			else if (graph is IMethodReturnMessage)  {
-				MessageFormatter.WriteMethodResponse (writer, graph, headers, surrogate_selector, context, assembly_format, type_format);
+				MessageFormatter.WriteMethodResponse (writer, graph, headers, this);
 			}
 			else {
-				ObjectWriter serializer = new ObjectWriter (surrogate_selector, context, assembly_format, type_format);
+				ObjectWriter serializer = new ObjectWriter (this);
 				serializer.WriteObjectGraph (writer, graph, headers);
 			}
 			writer.Flush();

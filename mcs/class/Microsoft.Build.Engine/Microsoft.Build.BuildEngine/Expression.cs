@@ -78,7 +78,6 @@ namespace Microsoft.Build.BuildEngine {
 			bool allowItems = (options & ParseOptions.AllowItems) == ParseOptions.AllowItems;
 			bool allowMd = (options & ParseOptions.AllowMetadata) == ParseOptions.AllowMetadata;
 
-			expression = expression.Replace ('/', Path.DirectorySeparatorChar);
 			expression = expression.Replace ('\\', Path.DirectorySeparatorChar);
 		
 			string [] parts;
@@ -299,7 +298,7 @@ namespace Microsoft.Build.BuildEngine {
 				if (item_regex == null)
 					item_regex = new Regex (
 						@"@\(\s*"
-						+ @"(?<itemname>[_A-Za-z][_0-9a-zA-Z]*)"
+						+ @"(?<itemname>[_A-Za-z][_\-0-9a-zA-Z]*)"
 						+ @"(?<has_transform>\s*->\s*'(?<transform>[^']*)')?"
 						+ @"(?<has_separator>\s*,\s*'(?<separator>[^']*)')?"
 						+ @"\s*\)");
@@ -312,7 +311,7 @@ namespace Microsoft.Build.BuildEngine {
 				if (property_regex == null)
 					property_regex = new Regex (
 						@"\$\(\s*"
-						+ @"(?<name>[_a-zA-Z][_0-9a-zA-Z]*)"
+						+ @"(?<name>[_a-zA-Z][_\-0-9a-zA-Z]*)"
 						+ @"\s*\)");
 				return property_regex;
 			}
@@ -323,8 +322,8 @@ namespace Microsoft.Build.BuildEngine {
 				if (metadata_regex == null)
 					metadata_regex = new Regex (
 						@"%\(\s*"
-						+ @"((?<name>[_a-zA-Z][_0-9a-zA-Z]*)\.)?"
-						+ @"(?<meta>[_a-zA-Z][_0-9a-zA-Z]*)"
+						+ @"((?<name>[_a-zA-Z][_\-0-9a-zA-Z]*)\.)?"
+						+ @"(?<meta>[_a-zA-Z][_\-0-9a-zA-Z]*)"
 						+ @"\s*\)");
 				return metadata_regex;
 			}

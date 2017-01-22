@@ -38,33 +38,38 @@ namespace System.ServiceModel.Channels
 {
 	internal class HttpChannelFactory<TChannel> : TransportChannelFactoryBase<TChannel>
 	{
-		// not sure if they are required.
-		MessageEncoder encoder;
+#if NET_2_1
+		IHttpCookieContainerManager cookie_manager;
+#endif
 
 		public HttpChannelFactory (HttpTransportBindingElement source, BindingContext ctx)
 			: base (source, ctx)
 		{
-			foreach (BindingElement be in ctx.RemainingBindingElements) {
+			ClientCredentials = ctx.BindingParameters.Find<ClientCredentials> ();
+			foreach (BindingElement be in ctx.Binding.Elements) {
 				MessageEncodingBindingElement mbe = be as MessageEncodingBindingElement;
 				if (mbe != null) {
-					encoder = CreateEncoder<TChannel> (mbe);
+					MessageEncoder = CreateEncoder<TChannel> (mbe);
 					break;
 				}
+#if NET_2_1
+				var cbe = be as HttpCookieContainerBindingElement;
+				if (cbe != null)
+					cookie_manager = cbe.GetProperty<IHttpCookieContainerManager> (ctx);
+#endif
 			}
-			if (encoder == null)
-				encoder = new TextMessageEncoder (MessageVersion.Default, Encoding.UTF8);
+			if (MessageEncoder == null)
+				MessageEncoder = new TextMessageEncoder (MessageVersion.Default, Encoding.UTF8);
 		}
 
-		public MessageEncoder MessageEncoder {
-			get { return encoder; }
-		}
+		public ClientCredentials ClientCredentials { get; private set; }
 
 		protected override TChannel OnCreateChannel (
 			EndpointAddress address, Uri via)
 		{
 			ThrowIfDisposedOrNotOpen ();
 
-			if (Source.Scheme != address.Uri.Scheme)
+			if (Transport.Scheme != address.Uri.Scheme)
 				throw new ArgumentException (String.Format ("Argument EndpointAddress has unsupported URI scheme: {0}", address.Uri.Scheme));
 
 			if (MessageEncoder.MessageVersion.Addressing.Equals (AddressingVersion.None) &&
@@ -99,6 +104,15 @@ namespace System.ServiceModel.Channels
 
 		protected override void OnOpen (TimeSpan timeout)
 		{
+		}
+
+		public override T GetProperty<T> ()
+		{
+#if NET_2_1
+			if (cookie_manager is T)
+				return (T) (object) cookie_manager;
+#endif
+			return base.GetProperty<T> ();
 		}
 	}
 }

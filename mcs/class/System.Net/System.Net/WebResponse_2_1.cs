@@ -30,7 +30,6 @@
 
 #if NET_2_1
 
-using System;
 using System.IO;
 
 namespace System.Net {
@@ -41,8 +40,14 @@ namespace System.Net {
 		public abstract string ContentType { get; }
 		public abstract Uri ResponseUri { get; }
 
-		// the getter is public in SL3 beta 1
-		internal virtual WebHeaderCollection Headers { get; set; }
+		public virtual WebHeaderCollection Headers {
+			get { throw NotImplemented (); }
+			internal set { ; }
+		}
+
+		public virtual bool SupportsHeaders {
+			get { return false; }
+		}
 
 		protected WebResponse ()
 		{
@@ -54,6 +59,12 @@ namespace System.Net {
 		void IDisposable.Dispose ()
 		{
 			Close ();
+		}
+
+		static Exception NotImplemented ()
+		{
+			// hide the "normal" NotImplementedException from corcompare-like tools
+			return new NotImplementedException ();
 		}
 	}
 }

@@ -36,6 +36,11 @@ using DbLinq.Data.Linq.Mapping;
 using DbLinq.Data.Linq.Sugar;
 using DbLinq.Data.Linq.Sugar.Expressions;
 
+#if MONO_STRICT
+using DataContext = System.Data.Linq.DataContext;
+#else
+using DataContext = DbLinq.Data.Linq.DataContext;
+#endif
 
 namespace DbLinq.Data.Linq.Sugar.Implementation
 {
@@ -266,13 +271,13 @@ namespace DbLinq.Data.Linq.Sugar.Implementation
 
             // our table is created, with the expressions
             // now check if we didn't register exactly the same
-            if ((from t in builderContext.EnumerateScopeTables() where t.IsEqualTo(otherTableExpression) select t).SingleOrDefault() == null)
-            {
-                builderContext.CurrentSelect.Tables.Add(otherTableExpression);
-                foreach (var createdColumn in createdColumns)
-                    builderContext.CurrentSelect.Columns.Add(createdColumn);
-            }
-
+            var existingTable = (from t in builderContext.EnumerateScopeTables() where t.IsEqualTo(otherTableExpression) select t).SingleOrDefault();
+            if (existingTable != null)
+                return existingTable;
+ 
+            builderContext.CurrentSelect.Tables.Add(otherTableExpression);
+            foreach (var createdColumn in createdColumns)
+                builderContext.CurrentSelect.Columns.Add(createdColumn);
             return otherTableExpression;
         }
 
@@ -466,8 +471,41 @@ namespace DbLinq.Data.Linq.Sugar.Implementation
                                                           ParameterExpression dataRecordParameter, ParameterExpression mappingContextParameter,
                                                           BuilderContext builderContext)
         {
-            // from here, creating an EntitySet consists in just creating the instance
-            return Expression.New(expression.Type);
+            var entityType = expression.EntitySetType.GetGenericArguments()[0];
+            List<ElementInit> members = new List<ElementInit>();
+            var add = expression.EntitySetType.GetMethod("Add", 
+                    BindingFlags.NonPublic | BindingFlags.Instance,
+                    null,
+                    new Type[] { typeof(KeyValuePair<object, MemberInfo>) },
+                    null);
+
+            foreach (var info in expression.Columns)
+            {
+                var column = info.Key;
+                var tk = info.Value;
+                MemberInfo memberInfo = column.StorageInfo ?? column.MemberInfo;
+                PropertyInfo propertyInfo = memberInfo as PropertyInfo;
+                if (propertyInfo == null || propertyInfo.CanWrite)
+                {
+                    var parameterColumn = GetOutputValueReader(column,
+                            dataRecordParameter, mappingContextParameter, builderContext);
+                    members.Add(Expression.ElementInit(add, 
+                            new Expression[]{
+                                Expression.New(typeof(KeyValuePair<object, MemberInfo>).GetConstructor(new Type[]{typeof(object), typeof(MemberInfo)}),
+                                    Expression.Convert(parameterColumn, typeof(object)), 
+                                    Expression.Constant(tk.Member, typeof(MemberInfo)))}));
+                }
+            }
+
+            return Expression.ListInit(
+                    Expression.New(
+                        expression.EntitySetType.GetConstructor(
+                            BindingFlags.NonPublic | BindingFlags.Instance,
+                            null,
+                            new[] { typeof(DataContext) },
+                            null),
+                        Expression.Constant(builderContext.QueryContext.DataContext)),
+                    members);
         }
 
         /// <summary>

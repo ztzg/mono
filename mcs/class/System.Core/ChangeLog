@@ -1,3 +1,41 @@
+2010-06-18  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* System.Core/Dummy.cs: 
+	* moonlight_raw_System.Core.dll.sources: Add an internal dummy class to create
+	the System.Core namespace.
+
+	* Makefile:
+	* moonlight_raw_System.Core.dll.sources: Include the dlr in Moonlight.
+
+2010-05-25  Jb Evain  <jbevain@novell.com>
+
+	* Makefile: define INSIDE_SYSCORE.
+
+2010-04-23  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* moonlight_raw_System.Core.dll.sources: Include Lazy.cs and
+	LazyThreadSafetyMode.cs from corlib in here.
+
+2010-04-15  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* System.Core_test.dll.sources: Add PLinq unit tests
+
+2010-04-15  Jérémie Laval  <jeremie.laval@gmail.com>
+
+	* net_4_0_System.Core.dll.sources: add PLinq sources
+
+2010-04-06  Jb Evain  <jbevain@novell.com>
+
+	* net_4_0_System.Core.dll.sources: add files to support ToQueryable.
+
+2010-03-16  Jb Evain  <jbevain@novell.com>
+
+	* net_2_1_*.dll.sources: rename to moonlight_*.dll.sources.
+
+2009-12-17  Marek Safar  <marek.safar@gmail.com>
+
+	* Makefile: Compile itself using bootstrap System.Core.
+
 2009-09-23  Sebastien Pouliot  <sebastien@ximian.com>
 
 	* net_2_1_raw_System.Core.dll.sources: Remove some extra classes

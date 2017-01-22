@@ -413,6 +413,9 @@ using DbLinq.Data.Linq;
             Assert.Greater(list.Count, 0);
         }
 
+#if !DEBUG && POSTGRES
+        [Explicit]
+#endif
         [Test]
         [ExpectedException(typeof(InvalidOperationException))]
         public void DateTimeDiffTotalDaysSelectWithNulls01()
@@ -449,6 +452,9 @@ using DbLinq.Data.Linq;
             }
         }
 
+#if !DEBUG && POSTGRES
+        [Explicit]
+#endif
         [Test]
         public void DateTimeDiffTotalDaysSelectWithNulls02()
         {

@@ -5,9 +5,10 @@
 // 	Dietmar Maurer (dietmar@ximian.com)
 // 	Dan Lewis (dihlewis@yahoo.co.uk)
 //	Gonzalo Paniagua Javier (gonzalo@ximian.com)
+//  Marek Safar (marek.safar@gmail.com)
 //
 // (C) 2001-2003 Ximian, Inc.  http://www.ximian.com
-// Copyright (C) 2004-2005, 2008 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2004-2005, 2008, 2010 Novell, Inc (http://www.novell.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -34,23 +35,20 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Remoting.Messaging;
+using System.Security;
 using System.Security.Permissions;
 using System.Threading;
 
-#if NET_2_0
 using Microsoft.Win32.SafeHandles;
 #if NET_2_1
 using System.IO.IsolatedStorage;
 #else
 using System.Security.AccessControl;
 #endif
-#endif
 
 namespace System.IO
 {
-#if NET_2_0
 	[ComVisible (true)]
-#endif
 	public class FileStream : Stream
 	{
 		// construct from handle
@@ -72,7 +70,7 @@ namespace System.IO
 			: this (handle, access, ownsHandle, bufferSize, isAsync, false) {}
 
 		[SecurityPermission (SecurityAction.Demand, UnmanagedCode = true)]
-		internal FileStream (IntPtr handle, FileAccess access, bool ownsHandle, int bufferSize, bool isAsync, bool noBuffering)
+		internal FileStream (IntPtr handle, FileAccess access, bool ownsHandle, int bufferSize, bool isAsync, bool isZeroSize)
 		{
 			this.handle = MonoIO.InvalidHandle;
 			if (handle == this.handle)
@@ -100,9 +98,17 @@ namespace System.IO
 			this.access = access;
 			this.owner = ownsHandle;
 			this.async = isAsync;
+#if MOONLIGHT
+			// default the browser to 'all' anonymous files and let other usage (like smcs) with 'normal'
+			// (i.e. non-anonymous except for isolated storage) files and paths
+			this.anonymous = SecurityManager.SecurityEnabled;
+#else
 			this.anonymous = false;
+#endif
+			if (isZeroSize)
+				bufferSize = 1;
 
-			InitBuffer (bufferSize, noBuffering);
+			InitBuffer (bufferSize);
 
 			if (canseek) {
 				buf_start = MonoIO.Seek (handle, 0, SeekOrigin.Current, out error);
@@ -138,16 +144,16 @@ namespace System.IO
 		}
 
 		public FileStream (string path, FileMode mode, FileAccess access, FileShare share, int bufferSize, bool useAsync)
-			: this (path, mode, access, share, bufferSize, useAsync, FileOptions.None)
+			: this (path, mode, access, share, bufferSize, useAsync ? FileOptions.Asynchronous : FileOptions.None)
 		{
 		}
 
-#if NET_2_0 && !NET_2_1
 		public FileStream (string path, FileMode mode, FileAccess access, FileShare share, int bufferSize, FileOptions options)
 			: this (path, mode, access, share, bufferSize, false, options)
 		{
 		}
 
+#if !NET_2_1
 		public FileStream (SafeFileHandle handle, FileAccess access)
 			:this(handle, access, DefaultBufferSize, false)
 		{
@@ -167,19 +173,21 @@ namespace System.IO
 			this.safeHandle = handle;
 		}
 
+		[MonoLimitation ("This ignores the rights parameter")]
 		public FileStream (string path, FileMode mode,
 				   FileSystemRights rights, FileShare share,
 				   int bufferSize, FileOptions options)
+			: this (path, mode, (mode == FileMode.Append ? FileAccess.Write : FileAccess.ReadWrite), share, bufferSize, false, options)
 		{
-			throw new NotImplementedException ();
 		}
 		
+		[MonoLimitation ("This ignores the rights and fileSecurity parameters")]
 		public FileStream (string path, FileMode mode,
 				   FileSystemRights rights, FileShare share,
 				   int bufferSize, FileOptions options,
 				   FileSecurity fileSecurity)
+			: this (path, mode, (mode == FileMode.Append ? FileAccess.Write : FileAccess.ReadWrite), share, bufferSize, false, options)
 		{
-			throw new NotImplementedException ();
 		}
 #endif
 
@@ -198,11 +206,8 @@ namespace System.IO
 				throw new ArgumentException ("Path is empty");
 			}
 
-#if NET_2_0
 			// ignore the Inheritable flag
 			share &= ~FileShare.Inheritable;
-
-#endif
 
 			if (bufferSize <= 0)
 				throw new ArgumentOutOfRangeException ("bufferSize", "Positive number required.");
@@ -225,11 +230,7 @@ namespace System.IO
 				throw new ArgumentOutOfRangeException ("access", "Enum value was out of legal range.");
 			}
 
-#if NET_2_0
 			if (share < FileShare.None || share > (FileShare.ReadWrite | FileShare.Delete)) {
-#else
-			if (share < FileShare.None || share > FileShare.ReadWrite) {
-#endif
 #if NET_2_1
 				if (anonymous)
 					throw new IsolatedStorageException ("Enum value for FileShare was out of legal range.");
@@ -245,8 +246,7 @@ namespace System.IO
 			if (Directory.Exists (path)) {
 				// don't leak the path information for isolated storage
 				string msg = Locale.GetText ("Access to the path '{0}' is denied.");
-				string fname = (anonymous) ? Path.GetFileName (path) : Path.GetFullPath (path);
-				throw new UnauthorizedAccessException (String.Format (msg, fname));
+				throw new UnauthorizedAccessException (String.Format (msg, GetSecureFileName (path, false)));
 			}
 
 			/* Append streams can't be read (see FileMode
@@ -264,7 +264,13 @@ namespace System.IO
 				throw new ArgumentException (string.Format (msg, access, mode));
 			}
 
-			string dname = Path.GetDirectoryName (path);
+			SecurityManager.EnsureElevatedPermissions (); // this is a no-op outside moonlight
+
+			string dname;
+			if (Path.DirectorySeparatorChar != '/' && path.IndexOf ('/') >= 0)
+				dname = Path.GetDirectoryName (Path.GetFullPath (path));
+			else
+				dname = Path.GetDirectoryName (path);
 			if (dname.Length > 0) {
 				string fp = Path.GetFullPath (dname);
 				if (!Directory.Exists (fp)) {
@@ -272,6 +278,7 @@ namespace System.IO
 					string msg = Locale.GetText ("Could not find a part of the path \"{0}\".");
 					string fname = (anonymous) ? dname : Path.GetFullPath (path);
 #if NET_2_1
+					// don't use GetSecureFileName for the directory name
 					throw new IsolatedStorageException (String.Format (msg, fname));
 #else
 					throw new DirectoryNotFoundException (String.Format (msg, fname));
@@ -283,7 +290,7 @@ namespace System.IO
 					mode != FileMode.CreateNew && !File.Exists (path)) {
 				// don't leak the path information for isolated storage
 				string msg = Locale.GetText ("Could not find file \"{0}\".");
-				string fname = (anonymous) ? Path.GetFileName (path) : Path.GetFullPath (path);
+				string fname = GetSecureFileName (path);
 #if NET_2_1
 				throw new IsolatedStorageException (String.Format (msg, fname));
 #else
@@ -302,8 +309,7 @@ namespace System.IO
 			this.handle = MonoIO.Open (path, mode, access, share, options, out error);
 			if (handle == MonoIO.InvalidHandle) {
 				// don't leak the path information for isolated storage
-				string fname = (anonymous) ? Path.GetFileName (path) : Path.GetFullPath (path);
-				throw MonoIO.GetException (fname, error);
+				throw MonoIO.GetException (GetSecureFileName (path), error);
 			}
 
 			this.access = access;
@@ -329,7 +335,7 @@ namespace System.IO
 				}
 			}
 
-			InitBuffer (bufferSize, false);
+			InitBuffer (bufferSize);
 
 			if (mode==FileMode.Append) {
 				this.Seek (0, SeekOrigin.End);
@@ -369,7 +375,11 @@ namespace System.IO
 
 		public string Name {
 			get {
-				return name; 
+#if MOONLIGHT
+				return SecurityManager.CheckElevatedPermissions () ? name : "[Unknown]";
+#else
+				return name;
+#endif
 			}
 		}
 
@@ -390,8 +400,7 @@ namespace System.IO
 				length = MonoIO.GetLength (handle, out error);
 				if (error != MonoIOError.ERROR_SUCCESS) {
 					// don't leak the path information for isolated storage
-					string fname = (anonymous) ? Path.GetFileName (name) : name;
-					throw MonoIO.GetException (fname, error);
+					throw MonoIO.GetException (GetSecureFileName (name), error);
 				}
 
 				return(length);
@@ -424,9 +433,7 @@ namespace System.IO
 			}
 		}
 
-#if NET_2_0
 		[Obsolete ("Use SafeFileHandle instead")]
-#endif
 		public virtual IntPtr Handle {
 			[SecurityPermission (SecurityAction.LinkDemand, UnmanagedCode = true)]
 			[SecurityPermission (SecurityAction.InheritanceDemand, UnmanagedCode = true)]
@@ -435,7 +442,6 @@ namespace System.IO
 			}
 		}
 
-#if NET_2_0
 		public virtual SafeFileHandle SafeFileHandle {
 			[SecurityPermission (SecurityAction.LinkDemand, UnmanagedCode = true)]
 			[SecurityPermission (SecurityAction.InheritanceDemand, UnmanagedCode = true)]
@@ -451,7 +457,6 @@ namespace System.IO
 				return ret;
 			}
 		}
-#endif
 
 		// methods
 
@@ -654,14 +659,16 @@ namespace System.IO
 				MonoIOError error;
 
 				FlushBuffer ();
-
-				MonoIO.Write (handle, src, offset, count, out error);
-				if (error != MonoIOError.ERROR_SUCCESS) {
-					// don't leak the path information for isolated storage
-					string fname = (anonymous) ? Path.GetFileName (name) : name;
-					throw MonoIO.GetException (fname, error);
-				}
+				int wcount = count;
 				
+				while (wcount > 0){
+					int n = MonoIO.Write (handle, src, offset, wcount, out error);
+					if (error != MonoIOError.ERROR_SUCCESS)
+						throw MonoIO.GetException (GetSecureFileName (name), error);
+					
+					wcount -= n;
+					offset += n;
+				} 
 				buf_start += count;
 			} else {
 
@@ -715,7 +722,7 @@ namespace System.IO
 
 			if (buf_dirty) {
 				MemoryStream ms = new MemoryStream ();
-				FlushBufferToStream (ms);
+				FlushBuffer (ms);
 				ms.Write (array, offset, numBytes);
 				offset = 0;
 				numBytes = (int) ms.Length;
@@ -799,8 +806,7 @@ namespace System.IO
 
 			if (error != MonoIOError.ERROR_SUCCESS) {
 				// don't leak the path information for isolated storage
-				string fname = (anonymous) ? Path.GetFileName (name) : name;
-				throw MonoIO.GetException (fname, error);
+				throw MonoIO.GetException (GetSecureFileName (name), error);
 			}
 			
 			return(buf_start);
@@ -827,8 +833,7 @@ namespace System.IO
 			MonoIO.SetLength (handle, value, out error);
 			if (error != MonoIOError.ERROR_SUCCESS) {
 				// don't leak the path information for isolated storage
-				string fname = (anonymous) ? Path.GetFileName (name) : name;
-				throw MonoIO.GetException (fname, error);
+				throw MonoIO.GetException (GetSecureFileName (name), error);
 			}
 
 			if (Position > value)
@@ -841,18 +846,18 @@ namespace System.IO
 				throw new ObjectDisposedException ("Stream has been closed");
 
 			FlushBuffer ();
-			
-			// The flushing is not actually required, in
-			//the mono runtime we were mapping flush to
-			//`fsync' which is not the same.
-			//
-			//MonoIO.Flush (handle);
 		}
 
-#if !NET_2_0
-		public override void Close ()
+#if NET_4_0
+		public virtual void Flush (bool flushToDisk)
 		{
-			Dispose (true);
+			FlushBuffer ();
+
+			// This does the fsync
+			if (flushToDisk){
+				MonoIOError error;
+				MonoIO.Flush (handle, out error);
+			}
 		}
 #endif
 
@@ -875,8 +880,7 @@ namespace System.IO
 			MonoIO.Lock (handle, position, length, out error);
 			if (error != MonoIOError.ERROR_SUCCESS) {
 				// don't leak the path information for isolated storage
-				string fname = (anonymous) ? Path.GetFileName (name) : name;
-				throw MonoIO.GetException (fname, error);
+				throw MonoIO.GetException (GetSecureFileName (name), error);
 			}
 		}
 
@@ -896,8 +900,7 @@ namespace System.IO
 			MonoIO.Unlock (handle, position, length, out error);
 			if (error != MonoIOError.ERROR_SUCCESS) {
 				// don't leak the path information for isolated storage
-				string fname = (anonymous) ? Path.GetFileName (name) : name;
-				throw MonoIO.GetException (fname, error);
+				throw MonoIO.GetException (GetSecureFileName (name), error);
 			}
 		}
 
@@ -908,14 +911,15 @@ namespace System.IO
 			Dispose (false);
 		}
 
-#if NET_2_0
 		protected override void Dispose (bool disposing)
-#else
-		protected virtual void Dispose (bool disposing)
-#endif
 		{
+			Exception exc = null;
 			if (handle != MonoIO.InvalidHandle) {
-				FlushBuffer ();
+				try {
+					FlushBuffer ();
+				} catch (Exception e) {
+					exc = e;
+				}
 
 				if (owner) {
 					MonoIOError error;
@@ -923,8 +927,7 @@ namespace System.IO
 					MonoIO.Close (handle, out error);
 					if (error != MonoIOError.ERROR_SUCCESS) {
 						// don't leak the path information for isolated storage
-						string fname = (anonymous) ? Path.GetFileName (name) : name;
-						throw MonoIO.GetException (fname, error);
+						throw MonoIO.GetException (GetSecureFileName (name), error);
 					}
 
 					handle = MonoIO.InvalidHandle;
@@ -933,14 +936,24 @@ namespace System.IO
 
 			canseek = false;
 			access = 0;
-			if (disposing) {
+			
+			if (disposing && buf != null) {
+				if (buf.Length == DefaultBufferSize && buf_recycle == null) {
+					lock (buf_recycle_lock) {
+						if (buf_recycle == null) {
+							buf_recycle = buf;
+						}
+					}
+				}
+				
 				buf = null;
-			}
-			if (disposing)
 				GC.SuppressFinalize (this);
+			}
+			if (exc != null)
+				throw exc;
 		}
 
-#if NET_2_0 && !NET_2_1
+#if !NET_2_1
 		public FileSecurity GetAccessControl ()
 		{
 			throw new NotImplementedException ();
@@ -997,21 +1010,35 @@ namespace System.IO
 			return(count);
 		}
 
-		void FlushBufferToStream (Stream st)
+		void FlushBuffer (Stream st)
 		{
 			if (buf_dirty) {
+				MonoIOError error;
+
 				if (CanSeek == true) {
-					MonoIOError error;
 					MonoIO.Seek (handle, buf_start,
 						     SeekOrigin.Begin,
 						     out error);
 					if (error != MonoIOError.ERROR_SUCCESS) {
 						// don't leak the path information for isolated storage
-						string fname = (anonymous) ? Path.GetFileName (name) : name;
-						throw MonoIO.GetException (fname, error);
+						throw MonoIO.GetException (GetSecureFileName (name), error);
 					}
 				}
-				st.Write (buf, 0, buf_length);
+				if (st == null) {
+					int wcount = buf_length;
+					int offset = 0;
+					while (wcount > 0){
+						int n = MonoIO.Write (handle, buf, 0, buf_length, out error);
+						if (error != MonoIOError.ERROR_SUCCESS) {
+							// don't leak the path information for isolated storage
+							throw MonoIO.GetException (GetSecureFileName (name), error);
+						}
+						wcount -= n;
+						offset += n;
+					}
+				} else {
+					st.Write (buf, 0, buf_length);
+				}
 			}
 
 			buf_start += buf_offset;
@@ -1021,43 +1048,18 @@ namespace System.IO
 
 		private void FlushBuffer ()
 		{
-			if (buf_dirty) {
-				MonoIOError error;
-				
-				if (CanSeek == true) {
-					MonoIO.Seek (handle, buf_start,
-						     SeekOrigin.Begin,
-						     out error);
-					if (error != MonoIOError.ERROR_SUCCESS) {
-						// don't leak the path information for isolated storage
-						string fname = (anonymous) ? Path.GetFileName (name) : name;
-						throw MonoIO.GetException (fname, error);
-					}
-				}
-				MonoIO.Write (handle, buf, 0,
-					      buf_length, out error);
-
-				if (error != MonoIOError.ERROR_SUCCESS) {
-					// don't leak the path information for isolated storage
-					string fname = (anonymous) ? Path.GetFileName (name) : name;
-					throw MonoIO.GetException (fname, error);
-				}
-			}
-
-			buf_start += buf_offset;
-			buf_offset = buf_length = 0;
-			buf_dirty = false;
+			FlushBuffer (null);
 		}
 
 		private void FlushBufferIfDirty ()
 		{
 			if (buf_dirty)
-				FlushBuffer ();
+				FlushBuffer (null);
 		}
 
 		private void RefillBuffer ()
 		{
-			FlushBuffer();
+			FlushBuffer (null);
 			
 			buf_length = ReadData (handle, buf, 0,
 					       buf_size);
@@ -1076,8 +1078,7 @@ namespace System.IO
 				amount = 0; // might not be needed, but well...
 			} else if (error != MonoIOError.ERROR_SUCCESS) {
 				// don't leak the path information for isolated storage
-				string fname = (anonymous) ? Path.GetFileName (name) : name;
-				throw MonoIO.GetException (fname, error);
+				throw MonoIO.GetException (GetSecureFileName (name), error);
 			}
 			
 			/* Check for read error */
@@ -1088,31 +1089,55 @@ namespace System.IO
 			return(amount);
 		}
 				
-		private void InitBuffer (int size, bool noBuffering)
+		void InitBuffer (int size)
 		{
-			if (noBuffering) {
-				size = 0;
-				// We need a buffer for the ReadByte method. This buffer won't
-				// be used for anything else since buf_size==0.
-				buf = new byte [1];
+			if (size <= 0)
+				throw new ArgumentOutOfRangeException ("bufferSize", "Positive number required.");
+			
+			size = Math.Max (size, 8);
+			
+			//
+			// Instead of allocating a new default buffer use the
+			// last one if there is any available
+			//		
+			if (size <= DefaultBufferSize && buf_recycle != null) {
+				lock (buf_recycle_lock) {
+					if (buf_recycle != null) {
+						buf = buf_recycle;
+						buf_recycle = null;
+					}
+				}
 			}
-			else {
-				if (size <= 0)
-					throw new ArgumentOutOfRangeException ("bufferSize", "Positive number required.");
-				if (size < 8)
-					size = 8;
+			
+			if (buf == null)
 				buf = new byte [size];
-			}
+			else
+				Array.Clear (buf, 0, size);
 					
 			buf_size = size;
-			buf_start = 0;
-			buf_offset = buf_length = 0;
-			buf_dirty = false;
+//			buf_start = 0;
+//			buf_offset = buf_length = 0;
+//			buf_dirty = false;
+		}
+
+		private string GetSecureFileName (string filename)
+		{
+			return (anonymous) ? Path.GetFileName (filename) : Path.GetFullPath (filename);
+		}
+
+		private string GetSecureFileName (string filename, bool full)
+		{
+			return (anonymous) ? Path.GetFileName (filename) : 
+				(full) ? Path.GetFullPath (filename) : filename;
 		}
 
 		// fields
 
 		internal const int DefaultBufferSize = 8192;
+
+		// Input buffer ready for recycling				
+		static byte[] buf_recycle;
+		static readonly object buf_recycle_lock = new object ();
 
 		private FileAccess access;
 		private bool owner;
@@ -1130,9 +1155,7 @@ namespace System.IO
 		private string name = "[Unknown]";	// name of file.
 
 		IntPtr handle;				// handle to underlying file
-#if NET_2_0
 		SafeFileHandle safeHandle;              // set only when using one of the
 							// constructors taking SafeFileHandle
-#endif
 	}
 }

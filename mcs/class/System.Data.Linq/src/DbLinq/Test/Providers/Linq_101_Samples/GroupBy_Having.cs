@@ -36,7 +36,7 @@ using nwind;
     [TestFixture]
     public class GroupBy_Having : TestBase
     {
-#if !DEBUG && (MSSQL && !L2SQL)
+#if !DEBUG && (POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - Simple. This sample uses group by to partition Products by CategoryID.")]
@@ -54,7 +54,8 @@ using nwind;
 
 
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !INGRES
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - Max. This sample uses group by and Max to find the maximum unit price for each CategoryID.")]
@@ -69,8 +70,10 @@ using nwind;
             var list = q.ToList();
             Assert.IsTrue(list.Count > 0);
         }
+#endif
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !INGRES
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - Min. This sample uses group by and Min to find the minimum unit price for each CategoryID.")]
@@ -85,8 +88,10 @@ using nwind;
             var list = q.ToList();
             Assert.IsTrue(list.Count > 0);
         }
+#endif
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !INGRES
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - Average. This sample uses group by and Average to find the average UnitPrice for each CategoryID.")]
@@ -101,10 +106,10 @@ using nwind;
             var list = q.ToList();
             Assert.IsTrue(list.Count > 0);
         }
+#endif
 
-
-
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !INGRES
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - Sum. This sample uses group by and Sum to find the total UnitPrice for each CategoryID.")]
@@ -119,8 +124,9 @@ using nwind;
             var list = q.ToList();
             Assert.IsTrue(list.Count > 0);
         }
+#endif
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - Count. This sample uses group by and Count to find the number of Products in each CategoryID.")]
@@ -136,7 +142,7 @@ using nwind;
             Assert.IsTrue(list.Count > 0);
         }
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Linq101SamplesModified("Strange short to boolean casting, perhaps in the original Northwind Product.Discontinued was a boolean property")]
@@ -156,7 +162,7 @@ using nwind;
 
 
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Test(Description = "GroupBy - followed by where. This sample uses a where clause after a group by clause to find all categories that have at least 10 products.")]
@@ -176,7 +182,7 @@ using nwind;
 
 
 
-#if !DEBUG && (SQLITE || (MSSQL && !L2SQL))
+#if !DEBUG && (SQLITE || POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Linq101SamplesModified("Strange syntactical strategy. Everybody aggree with this traduction?")]
@@ -195,7 +201,7 @@ using nwind;
         }
 
 
-#if !DEBUG && (MSSQL && !L2SQL)
+#if !DEBUG && (POSTGRES || (MSSQL && !L2SQL))
         [Explicit]
 #endif
         [Linq101SamplesModified("Strange syntactical strategy. Everybody aggree with this traduction?")]

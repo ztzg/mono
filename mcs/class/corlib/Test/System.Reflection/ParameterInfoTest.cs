@@ -14,6 +14,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif // TARGET_JVM
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 using NUnit.Framework;
 
@@ -96,6 +97,16 @@ namespace MonoTests.System.Reflection
 
 			Assert.AreEqual (typeof (ParamEnum), info [5].DefaultValue.GetType (), "#1");
 			Assert.AreEqual (ParamEnum.Foo, info [5].DefaultValue, "#2");
+		}
+
+		public static void Sample2 ([DecimalConstantAttribute(2,2,2,2,2)] decimal a, [DateTimeConstantAttribute(123456)] DateTime b) {}
+
+		[Test]
+		public void DefaultValuesFromCustomAttr () {
+			ParameterInfo[] info = typeof (ParameterInfoTest).GetMethod ("Sample2").GetParameters ();
+
+			Assert.AreEqual (typeof (Decimal), info [0].DefaultValue.GetType (), "#1");
+			Assert.AreEqual (typeof (DateTime), info [1].DefaultValue.GetType (), "#2");
 		}
 
 		[Test] // bug #339013
@@ -190,6 +201,18 @@ namespace MonoTests.System.Reflection
 			ParameterInfo parm = typeof (Derived).GetMethod ("SomeMethod").GetParameters()[0];
 			Assert.AreEqual (typeof (Derived), parm.Member.ReflectedType);
 			Assert.AreEqual (typeof (Base), parm.Member.DeclaringType);
+		}
+
+		[Test]
+		public void ArrayMethodParameters ()
+		{
+			var matrix_int_get = typeof (int[,,]).GetMethod ("Get");
+			var parameters = matrix_int_get.GetParameters ();
+
+			Assert.AreEqual (3, parameters.Length);
+			Assert.AreEqual (0, parameters [0].GetCustomAttributes (false).Length);
+			Assert.AreEqual (0, parameters [1].GetCustomAttributes (false).Length);
+			Assert.AreEqual (0, parameters [2].GetCustomAttributes (false).Length);
 		}
 
 		class Base

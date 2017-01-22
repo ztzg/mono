@@ -49,6 +49,7 @@ memory_barrier: len:4
 nop: len:4
 relaxed_nop: len:4
 break: len:4
+seq_point: len:48
 jmp: len:96
 call: dest:a clob:c len:36
 br: len:4
@@ -76,18 +77,18 @@ setlret: src1:i src2:i len:12
 checkthis: src1:b len:4
 voidcall: len:36 clob:c
 voidcall_reg: src1:i len:16 clob:c
-voidcall_membase: src1:b len:12 clob:c
+voidcall_membase: src1:b len:16 clob:c
 fcall: dest:g len:36 clob:c
 fcall_reg: dest:g src1:i len:16 clob:c
-fcall_membase: dest:g src1:b len:12 clob:c
+fcall_membase: dest:g src1:b len:16 clob:c
 lcall: dest:a len:36 clob:c
 lcall_reg: dest:a src1:i len:16 clob:c
-lcall_membase: dest:a src1:b len:12 clob:c
+lcall_membase: dest:a src1:b len:16 clob:c
 vcall: len:16 clob:c
 vcall_reg: src1:i len:16 clob:c
 vcall_membase: src1:b len:12 clob:c
 call_reg: dest:a src1:i len:16 clob:c
-call_membase: dest:a src1:b len:12 clob:c
+call_membase: dest:a src1:b len:16 clob:c
 iconst: dest:i len:20
 i8const: dest:i len:20
 r4const: dest:f len:12
@@ -117,12 +118,14 @@ loadi2_memindex: dest:i src1:b src2:i len:4
 loadu2_memindex: dest:i src1:b src2:i len:4
 loadi4_memindex: dest:i src1:b src2:i len:4
 loadu4_memindex: dest:i src1:b src2:i len:4
+loadi8_memindex: dest:i src1:b src2:i len:4
 loadr4_memindex: dest:f src1:b src2:i len:4
 loadr8_memindex: dest:f src1:b src2:i len:4
 store_memindex: dest:b src1:i src2:i len:4
 storei1_memindex: dest:b src1:i src2:i len:4
 storei2_memindex: dest:b src1:i src2:i len:4
 storei4_memindex: dest:b src1:i src2:i len:4
+storei8_memindex: dest:b src1:i src2:i len:4
 storer4_memindex: dest:b src1:i src2:i len:8
 storer8_memindex: dest:b src1:i src2:i len:4
 loadu4_mem: dest:i len:8
@@ -196,7 +199,7 @@ float_cgt_un: dest:i src1:f src2:f len:20
 float_clt: dest:i src1:f src2:f len:16
 float_clt_un: dest:i src1:f src2:f len:20
 float_conv_to_u: dest:i src1:f len:36
-call_handler: len:12
+call_handler: len:12 clob:c
 endfilter: src1:i len:20
 aot_const: dest:i len:8
 load_gotaddr: dest:i len:32
@@ -215,7 +218,7 @@ bigmul_un: len:12 dest:i src1:i src2:i
 tls_get: len:8 dest:i
 
 # Linear IR opcodes
-dummy_use: len:0
+dummy_use: src1:i len:0
 dummy_store: len:0
 not_reached: len:0
 not_null: src1:i len:0
@@ -373,7 +376,7 @@ lcompare_imm: src1:i len:12
 
 vcall2: len:36 clob:c
 vcall2_reg: src1:i len:16 clob:c
-vcall2_membase: src1:b len:12 clob:c
+vcall2_membase: src1:b len:16 clob:c
 
 jump_table: dest:i len:20
 

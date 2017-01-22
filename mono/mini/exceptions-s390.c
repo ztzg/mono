@@ -105,12 +105,16 @@ mono_arch_has_unwind_info (gconstpointer addr)
 /*------------------------------------------------------------------*/
 
 gpointer
-mono_arch_get_call_filter (void)
+mono_arch_get_call_filter (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *start;
 	static int inited = 0;
 	guint8 *code;
 	int alloc_size, pos, i;
+
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
 	if (inited)
 		return start;
@@ -347,11 +351,15 @@ get_throw_exception_generic (guint8 *start, int size,
 /*                                                                  */
 /*------------------------------------------------------------------*/
 
-gpointer 
-mono_arch_get_throw_exception (void)
+gpointer
+mono_arch_get_throw_exception (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *start;
 	static int inited = 0;
+
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
 	if (inited)
 		return start;
@@ -375,10 +383,14 @@ mono_arch_get_throw_exception (void)
 /*------------------------------------------------------------------*/
 
 gpointer 
-mono_arch_get_rethrow_exception (void)
+mono_arch_get_rethrow_exception (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *start;
 	static int inited = 0;
+
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
 
 	if (inited)
 		return start;
@@ -447,7 +459,7 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
 	    ((guint8 *) ip <= ((guint8 *) prev_ji->code_start) + prev_ji->code_size)))
 		ji = prev_ji;
 	else
-		ji = mini_jit_info_table_find (domain, ip);
+		ji = mini_jit_info_table_find (domain, ip, NULL);
 
 	if (managed)
 		*managed = FALSE;
@@ -481,7 +493,7 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
 		if (!(*lmf)->method)
 			return (gpointer)-1;
 
-		if ((ji = mini_jit_info_table_find (domain, (gpointer)(*lmf)->eip))) {
+		if ((ji = mini_jit_info_table_find (domain, (gpointer)(*lmf)->eip, NULL))) {
 		} else {
 			memset (res, 0, MONO_SIZEOF_JIT_INFO);
 			res->method = (*lmf)->method;
@@ -544,7 +556,7 @@ mono_arch_ip_from_context (void *sigctx)
 
 /*------------------------------------------------------------------*/
 /*                                                                  */
-/* Name		- mono_arch_get_restore_context                     */
+/* Name		- mono_arch_get_restore_context                    */
 /*                                                                  */
 /* Function	- Return the address of the routine that will rest- */
 /*                ore the context.                                  */
@@ -552,8 +564,12 @@ mono_arch_ip_from_context (void *sigctx)
 /*------------------------------------------------------------------*/
 
 gpointer
-mono_arch_get_restore_context ()
+mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
 {
+	g_assert (!aot);
+	if (info)
+		*info = NULL;
+
 	return setcontext;
 }
 

@@ -51,7 +51,6 @@ using System.Net.Configuration;
 using System.Collections.Generic;
 #if !NET_2_1
 using System.Net.NetworkInformation;
-using System.Timers;
 #endif
 #endif
 
@@ -64,6 +63,7 @@ namespace System.Net.Sockets {
 		 *  their name without also updating the runtime code.
 		 */
 		private static int ipv4Supported = -1, ipv6Supported = -1;
+		int linger_timeout;
 
 		static Socket ()
 		{
@@ -227,6 +227,7 @@ namespace System.Net.Sockets {
 							     bool block,
 							     out int error);
 #endif
+
 		public bool Blocking {
 			get {
 				return(blocking);
@@ -381,23 +382,59 @@ namespace System.Net.Sockets {
 			}
 		}
 
+		void Linger (IntPtr handle)
+		{
+			if (!connected || linger_timeout <= 0)
+				return;
+
+			// We don't want to receive any more data
+			int error;
+			Shutdown_internal (handle, SocketShutdown.Receive, out error);
+			if (error != 0)
+				return;
+
+			int seconds = linger_timeout / 1000;
+			int ms = linger_timeout % 1000;
+			if (ms > 0) {
+				// If the other end closes, this will return 'true' with 'Available' == 0
+				Poll_internal (handle, SelectMode.SelectRead, ms * 1000, out error);
+				if (error != 0)
+					return;
+
+			}
+			if (seconds > 0) {
+				LingerOption linger = new LingerOption (true, seconds);
+				SetSocketOption_internal (handle, SocketOptionLevel.Socket, SocketOptionName.Linger, linger, null, 0, out error);
+				/* Not needed, we're closing upon return */
+				/*if (error != 0)
+					return; */
+			}
+		}
+
 		protected virtual void Dispose (bool explicitDisposing)
 		{
 			if (disposed)
 				return;
 
 			disposed = true;
+			bool was_connected = connected;
 			connected = false;
 			if ((int) socket != -1) {
 				int error;
 				closed = true;
 				IntPtr x = socket;
 				socket = (IntPtr) (-1);
-				Close_internal (x, out error);
-				if (blocking_thread != null) {
-					blocking_thread.Abort ();
+				Thread th = blocking_thread;
+				if (th != null) {
+					th.Abort ();
 					blocking_thread = null;
 				}
+
+				if (was_connected)
+					Linger (x);
+				//DateTime start = DateTime.UtcNow;
+				Close_internal (x, out error);
+				//Console.WriteLine ("Time spent in Close_internal: {0}ms", (DateTime.UtcNow - start).TotalMilliseconds);
 				if (error != 0)
 					throw new SocketException (error);
 			}
@@ -419,8 +456,17 @@ namespace System.Net.Sockets {
 
 		public void Close ()
 		{
+			linger_timeout = 0;
 			((IDisposable) this).Dispose ();
 		}
+
+#if NET_2_0
+		public void Close (int timeout) 
+		{
+			linger_timeout = timeout;
+			((IDisposable) this).Dispose ();
+		}
+#endif
 
 		// Connects to the remote address
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
@@ -443,7 +489,7 @@ namespace System.Net.Sockets {
 				if (ep.Address.Equals (IPAddress.Any) || ep.Address.Equals (IPAddress.IPv6Any))
 					throw new SocketException ((int) SocketError.AddressNotAvailable);
 
-#if NET_2_1 && !MONOTOUCH
+#if MOONLIGHT
 			if (protocol_type != ProtocolType.Tcp)
 				throw new SocketException ((int) SocketError.AccessDenied);
 #elif NET_2_0
@@ -641,10 +687,12 @@ namespace System.Net.Sockets {
 			if (disposed && closed)
 				throw new ObjectDisposedException (GetType ().ToString ());
 
+			if (!connected)
+				throw new SocketException (10057); // Not connected
+
 			int error;
 			
 			Shutdown_internal (socket, how, out error);
-
 			if (error != 0)
 				throw new SocketException (error);
 		}
@@ -677,7 +725,7 @@ namespace System.Net.Sockets {
 #endif
 		}
 
-#if NET_2_1 && !MONOTOUCH
+#if MOONLIGHT
 		static void CheckConnect (SocketAsyncEventArgs e)
 		{
 			// NO check is made whether e != null in MS.NET (NRE is thrown in such case)

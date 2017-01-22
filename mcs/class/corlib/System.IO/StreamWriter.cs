@@ -34,16 +34,12 @@
 using System.Text;
 using System;
 
-#if NET_2_0
 using System.Runtime.InteropServices;
-#endif
 
 namespace System.IO {
 	
 	[Serializable]
-#if NET_2_0
 	[ComVisible (true)]
-#endif
 	public class StreamWriter : TextWriter {
 
 		private Encoding internalEncoding;
@@ -156,16 +152,28 @@ namespace System.IO {
 
 		protected override void Dispose (bool disposing) 
 		{
+			Exception exc = null;
 			if (!DisposedAlready && disposing && internalStream != null) {
-				Flush();
+				try {
+					Flush();
+				} catch (Exception e) {
+					exc = e;
+				}
 				DisposedAlready = true;
-				internalStream.Close ();
+				try {
+					internalStream.Close ();
+				} catch (Exception e) {
+					if (exc == null)
+						exc = e;
+				}
 			}
 
 			internalStream = null;
 			byte_buf = null;
 			internalEncoding = null;
 			decode_buf = null;
+			if (exc != null)
+				throw exc;
 		}
 
 		public override void Flush ()

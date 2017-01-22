@@ -68,6 +68,7 @@ set(OTHER_SRC
 	mono-mutex.c	
 	mono-mutex.h	
 	mono-spinlock.h	
+	posix.c
 	processes.c	
 	processes.h	
 	process-private.h
@@ -112,8 +113,8 @@ set(WINDOWS_SRC
 set(HPPA_SRC
   hppa_atomic.S)
 
-if(PLATFORM_WIN32)
-###if PLATFORM_WIN32
+if(HOST_WIN32)
+###if HOST_WIN32
 ###libwapi_la_SOURCES = $(WINDOWS_SRC)
 ###libwapiinclude_HEADERS = $(WINDOWS_H)
 else()

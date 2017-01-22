@@ -1,3 +1,15 @@
+2009-12-03  Jonathan Pobst  <monkey@jpobst.com>
+
+	* System.Data.dll.sources: Add SortOrder.cs.
+
+2009-10-16  Zoltan Varga  <vargaz@gmail.com>
+
+	* Makefile: Avoid else ifeq which is not recognized by some make versions.
+
+2009-10-14  Jonathan Pryor  <jpryor@novell.com>
+
+	* monotouch_System.Data.dll.sources: Added.
+
 2009-08-17  Veerapuram Varadhan  <vvaradhan@novell.com>
 
 	* System.Data_test.dll.sources: Added

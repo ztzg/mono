@@ -236,18 +236,18 @@ namespace DbLinq.Data.Linq
             System.Text.RegularExpressions.Regex reProvider
                 = new System.Text.RegularExpressions.Regex(@"DbLinqProvider=([\w\.]+);?");
 
-            string assemblyFile = null;
+            string assemblyName = null;
             string vendor;
             if (!reProvider.IsMatch(connectionString))
             {
                 vendor       = "SqlServer";
-                assemblyFile = "DbLinq.SqlServer.dll";
+                assemblyName = "DbLinq.SqlServer";
             }
             else
             {
                 var match    = reProvider.Match(connectionString);
                 vendor       = match.Groups[1].Value;
-                assemblyFile = "DbLinq." + vendor + ".dll";
+                assemblyName = "DbLinq." + vendor;
 
                 //plain DbLinq - non MONO: 
                 //IVendor classes are in DLLs such as "DbLinq.MySql.dll"
@@ -268,16 +268,15 @@ namespace DbLinq.Data.Linq
 #if MONO_STRICT
                 assembly = typeof (DataContext).Assembly; // System.Data.Linq.dll
 #else
-                //TODO: check if DLL is already loaded?
-                assembly = Assembly.LoadFrom(assemblyFile);
+                assembly = Assembly.Load(assemblyName);
 #endif
             }
             catch (Exception e)
             {
                 throw new ArgumentException(
                         string.Format(
-                            "Unable to load the `{0}' DbLinq vendor within assembly `{1}'.",
-                            assemblyFile, vendor),
+                            "Unable to load the `{0}' DbLinq vendor within assembly '{1}.dll'.",
+                            assemblyName, vendor),
                         "connectionString", e);
             }
         }
@@ -394,53 +393,73 @@ namespace DbLinq.Data.Linq
             if (this.objectTrackingEnabled == false)
                 throw new InvalidOperationException("Object tracking is not enabled for the current data context instance.");
             using (DatabaseContext.OpenConnection()) //ConnMgr will close connection for us
-            using (IDatabaseTransaction transaction = DatabaseContext.Transaction())
             {
-                var queryContext = new QueryContext(this);
-
-                // There's no sense in updating an entity when it's going to 
-                // be deleted in the current transaction, so do deletes first.
-                foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll().ToList())
+                if (Transaction != null)
+                    SubmitChangesImpl(failureMode);
+                else
                 {
-                    switch (entityTrack.EntityState)
+                    using (IDbTransaction transaction = DatabaseContext.CreateTransaction())
                     {
-                        case EntityState.ToDelete:
-                            var deleteQuery = QueryBuilder.GetDeleteQuery(entityTrack.Entity, queryContext);
-                            QueryRunner.Delete(entityTrack.Entity, deleteQuery);
-
-                            UnregisterDelete(entityTrack.Entity);
-                            AllTrackedEntities.RegisterToDelete(entityTrack.Entity);
-                            AllTrackedEntities.RegisterDeleted(entityTrack.Entity);
-                            break;
-                        default:
-                            // ignore.
-                            break;
+                        try
+                        {
+                            Transaction = (DbTransaction) transaction;
+                            SubmitChangesImpl(failureMode);
+                            // TODO: handle conflicts (which can only occur when concurrency mode is implemented)
+                            transaction.Commit();
+                        }
+                        finally
+                        {
+                            Transaction = null;
+                        }
                     }
                 }
-                foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll()
-                        .Concat(AllTrackedEntities.EnumerateAll())
-                        .ToList())
+            }
+        }
+
+        void SubmitChangesImpl(ConflictMode failureMode)
+        {
+            var queryContext = new QueryContext(this);
+
+            // There's no sense in updating an entity when it's going to 
+            // be deleted in the current transaction, so do deletes first.
+            foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll().ToList())
+            {
+                switch (entityTrack.EntityState)
                 {
-                    switch (entityTrack.EntityState)
-                    {
-                        case EntityState.ToInsert:
-                            foreach (var toInsert in GetReferencedObjects(entityTrack.Entity))
-                            {
-                                InsertEntity(toInsert, queryContext);
-                            }
-                            break;
-                        case EntityState.ToWatch:
-                            foreach (var toUpdate in GetReferencedObjects(entityTrack.Entity))
-                            {
-                                UpdateEntity(toUpdate, queryContext);
-                            }
-                            break;
-                        default:
-                            throw new ArgumentOutOfRangeException();
-                    }
+                    case EntityState.ToDelete:
+                        var deleteQuery = QueryBuilder.GetDeleteQuery(entityTrack.Entity, queryContext);
+                        QueryRunner.Delete(entityTrack.Entity, deleteQuery);
+
+                        UnregisterDelete(entityTrack.Entity);
+                        AllTrackedEntities.RegisterToDelete(entityTrack.Entity);
+                        AllTrackedEntities.RegisterDeleted(entityTrack.Entity);
+                        break;
+                    default:
+                        // ignore.
+                        break;
                 }
-                // TODO: handle conflicts (which can only occur when concurrency mode is implemented)
-                transaction.Commit();
+            }
+            foreach (var entityTrack in CurrentTransactionEntities.EnumerateAll()
+                    .Concat(AllTrackedEntities.EnumerateAll())
+                    .ToList())
+            {
+                switch (entityTrack.EntityState)
+                {
+                    case EntityState.ToInsert:
+                        foreach (var toInsert in GetReferencedObjects(entityTrack.Entity))
+                        {
+                            InsertEntity(toInsert, queryContext);
+                        }
+                        break;
+                    case EntityState.ToWatch:
+                        foreach (var toUpdate in GetReferencedObjects(entityTrack.Entity))
+                        {
+                            UpdateEntity(toUpdate, queryContext);
+                        }
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
             }
         }
 
@@ -704,14 +723,27 @@ namespace DbLinq.Data.Linq
 					//it would be interesting surround the above query with a .Take(1) expression for performance.
 				}
 
+				// If no separate Storage is specified, use the member directly
+				MemberInfo storage = memberData.StorageMember;
+				if (storage == null)
+					storage = memberData.Member;
 
-				FieldInfo entityRefField = (FieldInfo)memberData.StorageMember;
+				 // Check that the storage is a field or a writable property
+				if (!(storage is FieldInfo) && !(storage is PropertyInfo && ((PropertyInfo)storage).CanWrite)) {
+					throw new InvalidOperationException(String.Format(
+						"Member {0}.{1} is not a field nor a writable property",
+						storage.DeclaringType, storage.Name));
+				}
+
+				Type storageType = storage.GetMemberType();
+
 				object entityRefValue = null;
 				if (query != null)
-					entityRefValue = Activator.CreateInstance(entityRefField.FieldType, query);
+					entityRefValue = Activator.CreateInstance(storageType, query);
 				else
-					entityRefValue = Activator.CreateInstance(entityRefField.FieldType);
-				entityRefField.SetValue(entity, entityRefValue);
+					entityRefValue = Activator.CreateInstance(storageType);
+
+				storage.SetMemberValue(entity, entityRefValue);
 			}
 		}
 
@@ -795,7 +827,7 @@ namespace DbLinq.Data.Linq
         }
 
 		private static MethodInfo _WhereMethod = typeof(Queryable).GetMethods().First(m => m.Name == "Where");
-        private object GetOtherTableQuery(Expression predicate, ParameterExpression parameter, Type otherTableType, IQueryable otherTable)
+        internal object GetOtherTableQuery(Expression predicate, ParameterExpression parameter, Type otherTableType, IQueryable otherTable)
         {
             //predicate: other.EmployeeID== "WARTH"
             Expression lambdaPredicate = Expression.Lambda(predicate, parameter);
@@ -992,7 +1024,10 @@ namespace DbLinq.Data.Linq
 			set { throw new NotImplementedException(); }
 		}
 
-        public DbTransaction Transaction { get; set; }
+        public DbTransaction Transaction {
+            get { return (DbTransaction) DatabaseContext.CurrentTransaction; }
+            set { DatabaseContext.CurrentTransaction = value; }
+        }
 
         /// <summary>
         /// Runs the given reader and returns columns.

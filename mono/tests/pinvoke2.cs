@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Reflection.Emit;
 
 public class Tests {
 
@@ -279,6 +280,12 @@ public class Tests {
 
 	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder_unicode", CharSet=CharSet.Unicode)]
 	public static extern void mono_test_marshal_stringbuilder_unicode (StringBuilder sb, int len);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder_out")]
+	public static extern void mono_test_marshal_stringbuilder_out (out StringBuilder sb);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder_out_unicode", CharSet=CharSet.Unicode)]
+	public static extern void mono_test_marshal_stringbuilder_out_unicode (out StringBuilder sb);
 
 	[DllImport ("libtest", EntryPoint="mono_test_last_error", SetLastError=true)]
 	public static extern void mono_test_last_error (int err);
@@ -784,6 +791,24 @@ public class Tests {
 		if (sb2.ToString () != "This is my messa")
 			return 2;
 		
+		return 0;
+	}
+
+	public static int test_0_marshal_stringbuilder_out () {
+		StringBuilder sb;
+		mono_test_marshal_stringbuilder_out (out sb);
+		
+		if (sb.ToString () != "This is my message.  Isn't it nice?")
+			return 1;  
+		return 0;
+	}
+
+	public static int test_0_marshal_stringbuilder_out_unicode () {
+		StringBuilder sb;
+		mono_test_marshal_stringbuilder_out_unicode (out sb);
+
+		if (sb.ToString () != "This is my message.  Isn't it nice?")
+			return 1;  
 		return 0;
 	}
 
@@ -1513,5 +1538,64 @@ public class Tests {
 			return 0;
 		}
 	}
+
+	/*
+	 * Marshalling of DateTime to OLE DATE (double)
+	 */
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_date_time")]
+	public static extern double mono_test_marshal_date_time (DateTime d, out DateTime d2);
+
+	public static int test_0_marshal_date_time () {
+		DateTime d = new DateTime (2009, 12, 6);
+		DateTime d2;
+		double d3 = mono_test_marshal_date_time (d, out d2);
+		if (d3 != 40153.0)
+			return 1;
+		if (d2 != d)
+			return 2;
+		return 0;
+	}
+
+	/*
+	 * Calling pinvoke functions dynamically using calli
+	 */
+	
+	[DllImport("libtest")]
+	private static extern IntPtr mono_test_marshal_lookup_symbol (string fileName);
+
+	delegate void CalliDel (IntPtr a, int[] f);
+
+	public static int test_0_calli_dynamic () {
+		/* we need the cdecl version because the icall convention demands it under Windows */
+		IntPtr func = mono_test_marshal_lookup_symbol ("mono_test_marshal_inout_array_cdecl");
+
+		DynamicMethod dm = new DynamicMethod ("calli", typeof (void), new Type [] { typeof (IntPtr), typeof (int[]) });
+
+		var il = dm.GetILGenerator ();
+		var signature = SignatureHelper.GetMethodSigHelper (CallingConvention.Cdecl, typeof (void));
+
+		il.Emit (OpCodes.Ldarg, 1);
+		signature.AddArgument (typeof (byte[]));
+
+		il.Emit (OpCodes.Ldarg_0);
+
+		il.Emit (OpCodes.Calli, signature);
+		il.Emit (OpCodes.Ret);
+
+		var f = (CalliDel)dm.CreateDelegate (typeof (CalliDel));
+
+		int[] arr = new int [1000];
+		for (int i = 0; i < 50; ++i)
+			arr [i] = (int)i;
+		f (func, arr);
+		if (arr.Length != 1000)
+			return 1;
+		for (int i = 0; i < 50; ++i)
+			if (arr [i] != 50 - i)
+				return 2;
+
+		return 0;
+	}
+
 }
 

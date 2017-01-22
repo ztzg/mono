@@ -1,3 +1,219 @@
+2010-07-25  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.ac src/eglib-config.h.in src/eglib-config.hw: Define G_GINT64_FORMAT.
+
+2010-07-20  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/glib.h (G_LIKELY): Implement these for gcc properly.
+
+2010-07-19  Miguel de Icaza  <miguel@novell.com>
+
+	* src/gmisc-win32.c (g_getenv): Distinguish between variable not
+	found and an empty variable.
+
+	This should fix 566152
+
+2010-07-19  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/glib.h (G_MAXUINT64): Define this. Fixes #623293.
+
+	* src/eglib-config.hw: Define UINT64_MAX.
+
+2010-07-16 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* src/gmisc-unix.c: include config.h. Fixes bug #609632.
+	Use getpwuid_r instead of getpwent_r.
+
+2010-07-02  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/glib.h: Define gboolean as int32_t to match mono_bool.
+
+2010-06-22  Rodrigo Kumpera  <rkumpera@novell.com>
+
+	* src/ghashtable.c: Add code to sanity check the
+	hashtable contents. This is invaluable, for example,
+	to catch bugs where a key hashcode changes after
+	insertion.
+
+2010-06-18  Chris Toshok  <toshok@ximian.com>
+
+	patch from Jacob Berkman:
+
+	* src/glib.h (g_mkdir): #define to mkdir
+	(g_ascii_strtoull): #define to strtoull
+
+	* src/gmodule.h: add G_BEGIN/END_DECLS
+
+	* src/gstr.c (g_strdupv): new function.
+
+2010-06-18  Rolf Bjarne Kvinge  <RKvinge@novell.com>
+
+	* src/eglib-remap.h: Remap g_ptr_array_remove_fast too.
+
+2010-06-15  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/gunicode.c: Applied patch from Hib Eris <hib@hiberis.nl>. use "windows.h"
+	instead of "Windows.h".
+
+2010-05-25  Zoltan Varga  <vargaz@gmail.com>
+
+	* Applied patch from Burkhard Linke (blinke@cebitec.uni-bielefeld.de). Fix
+	building on solaris.
+
+2010-05-21  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/gmisc-win32.c (g_setenv): Use the
+	GetEnvironmentVariableW/SetEnvironmentVariableW variants.
+
+2010-05-15  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/glib.h (g_error): Add a for (;;) after the call to tell GCC this doesn't
+	return, fixing some warnings.
+
+2010-05-13  Alan McGovern  <amcgovern@novell.com>
+
+	* src/gstring.c: Put in some null guards for the ctors
+
+2010-05-11  Miguel de Icaza  <miguel@novell.com>
+
+	* src/gunicode.c: Pull the Windows.h header when G_OS_WIN32 is
+	defined. 
+
+2010-05-11  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Makefile.am : do not try to build test on windows (fails).
+	* src/glib.h : fix cygwin build, do not include unistd.h.
+
+2010-05-10  Miguel de Icaza  <miguel@novell.com>
+
+	* gfile-win32.c: Port this to use the Win32 APIs to get this
+	building with Cygwin.
+
+2010-05-07  Andrew Jorgensen  <ajorgensen@novell.com>
+
+	* test/test.h: Fix some compiler warning that SUSE takes seriously.
+
+2010-05-06  Alan McGovern  <amcgovern@novell.com>
+
+	* src/gmarkup.c: Fix a parser issue when skipping the xml declaration.
+
+2010-05-06  Jonathan Chambers  <joncham@gmail.com>
+
+	* gfile-win32.c: Use __stat64 instead of _stat64.
+
+2010-05-04  Jonathan Chambers  <joncham@gmail.com>
+
+	* gspawn.c: Remove extern define for MSVC.
+
+2010-05-03  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/glib.h: Include unistd.h on !windows for pid_t.
+
+	* gspawn.c: Add an extern define for environ on !apple platforms.
+
+2010-05-02  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/glib.h: Include sys/types.h for pid_t.
+
+2010-05-01  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/goutput.c (g_logv): Append a '\n' to the end of the string as glib does.
+
+2010-04-28  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.ac src/gspawn.c: Applied openbsd changes from Robert Nagy
+	<robert@openbsd.org>.
+
+2010-04-16  Miguel de Icaza  <miguel@novell.com>
+
+	* src/gshell.c (g_shell_unquote): Implement this.
+
+2010-04-25  Andreas Faerber  <andreas.faerber@web.de>
+
+	* configure.ac: The iconv function may be libiconv_open.
+	Fixes linking with GNU libiconv.
+
+	Contributed under MIT/X11 license.
+
+2010-04-23  Geoff Norton  <gnorton@novell.com>
+
+	* configure.ac: The iconv function is iconv_open.
+
+2010-04-19  Jonathan Pryor  <jpryor@novell.com>
+
+	* src/glib.h: Rebase g_return_if_fail(), g_return_val_if_fail() in
+	  terms of g_critical() instead of printf, and turn g_printerr() into
+	  an actual function instead of a macro.
+	* src/goutput.c: Add Android support, sending g_print(), g_printerr(),
+	  and g_log() messages to the Android system log.
+
+2010-04-16 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* test/ptrarray.c: new tests
+	* src/gptrarray.c: implemented g_ptr_array_remove_fast().
+
+2010-04-10  Andreas Faerber  <andreas.faerber@web.de>
+
+	* configure.ac: Add checks for libm and libdl.
+	* {src,test}/Makefile.am: Remove hardcoded library dependencies.
+	Fixes compilation on Haiku.
+
+	Contributed under MIT/X11 license.
+
+2010-03-05  Zoltan Varga  <vargaz@gmail.com>
+
+	* test/test.c (_GNU_SOURCE): Fix compilation if _GNU_SOURCE is already defined.
+
+
+Thu Mar 4 16:34:37 CET 2010 Paolo Molaro <lupus@ximian.com>
+
+	* src/unicode-data.h: save 70 KB.
+
+Thu Mar 4 16:18:34 CET 2010 Paolo Molaro <lupus@ximian.com>
+
+	* src/eglib-remap.h, src/glib.h: header file to remap the symbols
+	so there is no clash with system glib.
+	* src/Makefile.am: build static lib as well.
+
+2010-03-04  Zoltan Varga  <vargaz@gmail.com>
+
+	* configure.ac: Add a check for ISO varargs.
+
+	* test/test.c: Fix the build.
+
+	* src/glib.h src/goutput.c: Emit asserts through a g_assertion_message ()
+	function which is decorated with G_GNUC_NORETURN, to fix many warnings when using
+	the eglib build.
+
+Mon Mar 1 17:12:24 CET 2010 Paolo Molaro <lupus@ximian.com>
+
+	* src/unicode-data.h, src/gutf8.c: don't export private symbols.
+
+2009-12-03  Zoltan Varga  <vargaz@gmail.com>
+
+	* src/gmisc-unix.c (g_get_user_name): Avoid returning NULL if the env
+	var is not set.
+
+2009-10-15 Andreia Gaita <avidigal@novell.com>
+
+	* src/gptrarray.c: implement g_ptr_array_remove_index_fast
+	* src/glib.h: fix g_ptr_array_remove_index_fast declaration
+	* test/ptrarray.c: new tests
+
+2009-10-15 Andreia Gaita <avidigal@novell.com>
+
+	* src/garray.c: (g_array_remove_index_fast) only move 1 element
+	and not the whole shebang
+
+2009-09-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* test/queue.c: new tests.
+	* src/gqueue.c: fixed pop_head.
+
+2009-09-26 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* src/gqueue.c: add g_queue_push_tail.
+
 2009-06-20  Zoltan Varga  <vargaz@gmail.com>
 
 	* src/glib.h: Add GUINT32_FROM/TO_BE macros.

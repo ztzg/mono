@@ -3,8 +3,9 @@
 //
 // Author(s):
 //  Jackson Harper (jackson@ximian.com)
+//  Marek Habersack <mhabersack@novell.com>
 //
-// (C) 2003 Novell, Inc (http://www.novell.com)
+// (C) 2003-2009 Novell, Inc (http://www.novell.com)
 //
 
 //
@@ -30,69 +31,108 @@
 
 
 using System;
-using System.Text;
 using System.Collections;
 using System.Collections.Specialized;
+using System.IO;
+using System.Text;
 
-namespace System.Web.Caching {
+using System.Collections.Generic;
 
-	internal sealed class CachedRawResponse {
-		static readonly byte[] emptyBuffer = new byte[0];
+namespace System.Web.Caching
+{
+	sealed class CachedRawResponse
+	{
+		public sealed class DataItem
+		{
+			public readonly byte[] Buffer;
+			public readonly long Length;
+			public readonly HttpResponseSubstitutionCallback Callback;
+			
+			public DataItem (byte[] buffer, long length)
+			{
+				Buffer = buffer;
+				Length = length;
+			}
+
+			public DataItem (HttpResponseSubstitutionCallback callback) : this (null, 0)
+			{
+				Callback = callback;
+			}
+		}
+		
 		HttpCachePolicy policy;
 		CachedVaryBy varyby;
 		int status_code;
 		string status_desc;
-		int content_length;
 		NameValueCollection headers;
-		byte[] buffer;
+		List <DataItem> data;
+
+		IList Data {
+			get {
+				if (data == null)
+					data = new List <DataItem> ();
+
+				return data;
+			}
+		}
 		
-		internal CachedRawResponse (HttpCachePolicy policy)
+		public CachedRawResponse (HttpCachePolicy policy)
 		{
 			this.policy = policy;
-			this.buffer = emptyBuffer;
 		}
 
-		internal HttpCachePolicy Policy {
+		public HttpCachePolicy Policy {
 			get { return policy; }
 			set { policy = value; }
 		}
 
-		internal CachedVaryBy VaryBy {
+		public CachedVaryBy VaryBy {
 			get { return varyby; }
 			set { varyby = value; }
 		}
 		
-		internal int StatusCode {
+		public int StatusCode {
 			get { return status_code; }
 			set { status_code = value; }
 		}
 
-		internal string StatusDescription {
+		public string StatusDescription {
 			get { return status_desc; }
 			set { status_desc = value; }
 		}
 
-		internal int ContentLength {
-			get { return content_length; }
-			set { content_length = value; }
-		}
-		
-		internal NameValueCollection Headers {
+		public NameValueCollection Headers {
 			get { return headers; }
 		}
 
-		internal void SetHeaders (NameValueCollection headers) {
+		public void SetHeaders (NameValueCollection headers)
+		{
 			this.headers = headers;
 		}
 
-		internal void SetData (byte[] buffer)
+		public void SetData (MemoryStream ms)
 		{
-			this.buffer = buffer;
+			if (ms == null)
+				return;
+			
+			Data.Add (new DataItem (ms.GetBuffer (), ms.Length));
+		}
+
+		public void SetData (HttpResponseSubstitutionCallback callback)
+		{
+			if (callback == null)
+				return;
+
+			Data.Add (new DataItem (callback));
 		}
 		
-		internal byte[] GetData ()
+		public IList GetData ()
 		{
-			return buffer;
+			int count = data != null ? data.Count :0;
+			if (count == 0)
+				return null;
+
+			return data;
 		}
 	}
 }

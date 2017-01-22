@@ -37,6 +37,7 @@ gboolean dump_data = TRUE;
 gboolean verify_pe = FALSE;
 gboolean verify_metadata = FALSE;
 gboolean verify_code = FALSE;
+gboolean verify_partial_md = FALSE;
 
 /* unused
 static void
@@ -348,24 +349,14 @@ dump_verify_info (MonoImage *image, int flags)
 		"Ok", "Error", "Warning", NULL, "CLS", NULL, NULL, NULL, "Not Verifiable"
 	};
 
-	if (verify_metadata) {
-		errors = mono_image_verify_tables (image, flags);
-	
-		for (tmp = errors; tmp; tmp = tmp->next) {
-			MonoVerifyInfo *info = tmp->data;
-			g_print ("%s: %s\n", desc [info->status], info->message);
-			if (info->status == MONO_VERIFY_ERROR)
-				count++;
-		}
-		mono_free_verify_list (errors);
-	}
-
 	if (verify_code) { /* verify code */
 		int i;
 		MonoTableInfo *m = &image->tables [MONO_TABLE_METHOD];
 
 		for (i = 0; i < m->rows; ++i) {
 			MonoMethod *method;
+			mono_loader_clear_error ();
+
 			method = mono_get_method (image, MONO_TOKEN_METHOD_DEF | (i+1), NULL);
 			if (!method) {
 				g_print ("Warning: Cannot lookup method with token 0x%08x\n", i + 1);
@@ -454,9 +445,8 @@ verify_image_file (const char *fname)
 
 	mono_image_load_names (image);
 
-	if (!mono_verifier_verify_full_table_data (image, &errors))
+	if (!verify_partial_md && !mono_verifier_verify_full_table_data (image, &errors))
 		goto invalid_image;
-
 
 	/*fake an assembly for class loading to work*/
 	assembly = g_new0 (MonoAssembly, 1);
@@ -478,9 +468,16 @@ verify_image_file (const char *fname)
 			mono_loader_clear_error ();
 			++count;
 		}
+
+		mono_class_setup_vtable (class);
+		if (class->exception_type != MONO_EXCEPTION_NONE || mono_loader_get_last_error ()) {
+			printf ("Error verifying class(0x%08x) %s.%s a type load error happened\n", token, class->name_space, class->name);
+			mono_loader_clear_error ();
+			++count;
+		}
 	}
 	if (count)
-		return 1;
+		return 5;
 	return 0;
 
 invalid_image:
@@ -601,16 +598,18 @@ pedump_assembly_search_hook (MonoAssemblyName *aname, gpointer user_data)
 #define VALID_ONLY_FLAG 0x08000000
 #define VERIFY_CODE_ONLY MONO_VERIFY_ALL + 1 
 #define VERIFY_METADATA_ONLY VERIFY_CODE_ONLY + 1
+#define VERIFY_PARTIAL_METADATA VERIFY_CODE_ONLY + 2
 
 int
 main (int argc, char *argv [])
 {
+	int image_result = 0;
 	MonoImage *image;
 	char *file = NULL;
 	char *flags = NULL;
 	MiniVerifierMode verifier_mode = MONO_VERIFIER_MODE_VERIFIABLE;
-	const char *flag_desc [] = {"error", "warn", "cls", "all", "code", "fail-on-verifiable", "non-strict", "valid-only", "metadata", NULL};
-	guint flag_vals [] = {MONO_VERIFY_ERROR, MONO_VERIFY_WARNING, MONO_VERIFY_CLS, MONO_VERIFY_ALL, VERIFY_CODE_ONLY, MONO_VERIFY_FAIL_FAST, MONO_VERIFY_NON_STRICT, VALID_ONLY_FLAG, VERIFY_METADATA_ONLY, 0};
+	const char *flag_desc [] = {"error", "warn", "cls", "all", "code", "fail-on-verifiable", "non-strict", "valid-only", "metadata", "partial-md", NULL};
+	guint flag_vals [] = {MONO_VERIFY_ERROR, MONO_VERIFY_WARNING, MONO_VERIFY_CLS, MONO_VERIFY_ALL, VERIFY_CODE_ONLY, MONO_VERIFY_FAIL_FAST, MONO_VERIFY_NON_STRICT, VALID_ONLY_FLAG, VERIFY_METADATA_ONLY, VERIFY_PARTIAL_METADATA, 0};
 	int i, verify_flags = MONO_VERIFY_REPORT_ALL_ERRORS, run_new_metadata_verifier = 0;
 	
 	for (i = 1; i < argc; i++){
@@ -656,6 +655,8 @@ main (int argc, char *argv [])
 					} else if(flag_vals [i] == VERIFY_METADATA_ONLY) {
 						verify_metadata = 0;
 						run_new_metadata_verifier = 1;
+					} else if(flag_vals [i] == VERIFY_PARTIAL_METADATA) {
+						verify_partial_md = 1;
 					}
 					if (flag_vals [i] == VALID_ONLY_FLAG)
 						verifier_mode = MONO_VERIFIER_MODE_VALID;
@@ -686,12 +687,11 @@ main (int argc, char *argv [])
 	}
 	
 	if (run_new_metadata_verifier) {
-		int res;
-		mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
+		mono_verifier_set_mode (verifier_mode);
 
-		res = verify_image_file (file);
-		if (res || !verify_code)
-			return res;
+		image_result = verify_image_file (file);
+		if (image_result == 1 || !verify_code)
+			return image_result;
 	}
 
 	image = mono_image_open (file, NULL);
@@ -706,6 +706,7 @@ main (int argc, char *argv [])
 		MonoAssembly *assembly;
 		MonoImage *image;
 		MonoImageOpenStatus status;
+		int code_result;
 
 		mono_verifier_set_mode (verifier_mode);
 
@@ -723,7 +724,8 @@ main (int argc, char *argv [])
 			return 4;
 		}
 
-		return dump_verify_info (assembly->image, verify_flags);
+		code_result = dump_verify_info (assembly->image, verify_flags);
+		return code_result ? code_result : image_result;
 	} else
 		mono_image_close (image);
 	

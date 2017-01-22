@@ -80,6 +80,9 @@ namespace MonoTests.System.Web.Compilation {
 			WebTest.CopyResource (GetType (), "ExpressionInListControl.aspx", "ExpressionInListControl.aspx");
 			WebTest.CopyResource (GetType (), "PreprocessorDirectivesInMarkup.aspx", "PreprocessorDirectivesInMarkup.aspx");
 			WebTest.CopyResource (GetType (), "OneLetterIdentifierInCodeRender.aspx", "OneLetterIdentifierInCodeRender.aspx");
+			WebTest.CopyResource (GetType (), "NestedParserFileText.aspx", "NestedParserFileText.aspx");
+			WebTest.CopyResource (GetType (), "TagWithExpressionWithinAttribute.aspx", "TagWithExpressionWithinAttribute.aspx");
+			WebTest.CopyResource (GetType (), "EnumConverter_Bug578586.aspx", "EnumConverter_Bug578586.aspx");
 #endif
 		}
 		
@@ -219,11 +222,11 @@ namespace MonoTests.System.Web.Compilation {
 		}
 
 		[Test (Description="Bug #524358")]
-		[ExpectedException ("System.Web.Compilation.ParseException")]
 		public void DuplicateControlsInClientComment ()
 		{
 			// Just test if it throws an exception
-			new WebTest ("DuplicateControlsInClientComment.aspx").Run ();
+			string pageHtml = new WebTest ("DuplicateControlsInClientComment.aspx").Run ();
+			Assert.IsTrue (pageHtml.IndexOf ("[System.Web.Compilation.ParseException]:") != -1, "#A1");
 		}
 
 		[Test (Description="Bug #367723")]
@@ -232,7 +235,7 @@ namespace MonoTests.System.Web.Compilation {
 			string pageHtml = new WebTest ("ConditionalClientComments.aspx").Run ();
 			string renderedHtml = HtmlDiff.GetControlFromPageHtml (pageHtml);
 			string originalHtml = @"<!--[if IE 6]>
-		<link rel=""styleheet"" type=""text/css"" href=""compat-ie6.css"" />
+		<link rel=""styleheet"" type=""text/css"" href=""~/compat-ie6.css""></link>
 	<![endif]-->";
 			HtmlDiff.AssertAreEqual (originalHtml, renderedHtml, "#A1");
 		}
@@ -243,6 +246,31 @@ namespace MonoTests.System.Web.Compilation {
 			string pageHtml = new WebTest ("OneLetterIdentifierInCodeRender.aspx").Run ();
 			string renderedHtml = HtmlDiff.GetControlFromPageHtml (pageHtml);
 			string originalHtml = @"bDoR called";
+
+			HtmlDiff.AssertAreEqual (originalHtml, renderedHtml, "#A1");
+		}
+
+		[Test (Description="Bug #562286")]
+		public void NestedParserFileText ()
+		{
+			// Just test if it doesn't throw an exception
+			new WebTest ("NestedParserFileText.aspx").Run ();
+		}
+
+		[Test (Description="Bug #568631")]
+		public void TagWithExpressionWithinAttribute ()
+		{
+			// Just test if it doesn't throw an exception
+			new WebTest ("TagWithExpressionWithinAttribute.aspx").Run ();
+		}
+
+		[Test (Description="Bug #578586")]
+		public void EnumConverter_Bug578586 ()
+		{
+			WebTest t = new WebTest ("EnumConverter_Bug578586.aspx");
+			string pageHtml = t.Run ();
+			string renderedHtml = HtmlDiff.GetControlFromPageHtml (pageHtml);
+			string originalHtml = @"<input type=""text"" value=""FlagOne"" name=""test"" id=""test"" />";
 
 			HtmlDiff.AssertAreEqual (originalHtml, renderedHtml, "#A1");
 		}

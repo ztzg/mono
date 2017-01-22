@@ -1,3 +1,34 @@
+2010-07-05 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* NetworkInterface.cs: avoid endless loop when a bad length is
+	received for AF_PACKET. Fixes bug #601783.
+
+2010-06-22 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Ping.cs: we need to read the output to give the process time
+	to start. Fixes bug #591136.
+
+2010-03-25  Marek Safar  <marek.safar@gmail.com>
+
+	* IPGlobalProperties.cs: Made Win32_IN6_ADDR verifiable.
+
+2009-12-07 Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* Ping.cs: Try to detect the path to the bin command, since different
+	Unix systems store it in different places.
+	Fixes #519272.
+
+2009-10-06 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* GatewayIPAddressInformationCollection.cs:
+	* IPInterfaceProperties.cs: implement GatewayAddresses for linux.
+	Original patch by Christoph von Wittich.
+	Fixes bug #544640.
+
+2009-09-29 Gonzalo Paniagua Javier <gonzalo@novell.com>
+
+	* Ping.cs: fix the check for a time-out return value from 'ping'.
+
 2009-09-24  Zoltan Varga  <vargaz@gmail.com>
 
 	* LinuxNetworkInterfaceMarshal.cs: Add StructLayout attribute to structures, so

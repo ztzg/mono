@@ -113,6 +113,9 @@ namespace System.Windows.Forms
 		private int virtual_list_size;
 		private bool right_to_left_layout;
 #endif
+		// selection is available after the first time the handle is created, *even* if later
+		// the handle is either recreated or destroyed - so keep this info around.
+		private bool is_selection_available;
 
 		// internal variables
 		internal ImageList large_image_list;
@@ -1027,9 +1030,10 @@ namespace System.Windows.Forms
 					return this.items [0];
 				// do a hit test for the scrolled position
 				else {
+					int header_offset = header_control.Height;
 					for (int i = 0; i < items.Count; i++) {
 						Point item_loc = GetItemLocation (i);
-						if (item_loc.X >= 0 && item_loc.Y >= 0)
+						if (item_loc.X >= 0 && item_loc.Y - header_offset >= 0)
 							return items [i];
 					}
 					return null;
@@ -1044,7 +1048,8 @@ namespace System.Windows.Forms
 				if (value == null || value.ListView != this)
 					return;
 
-				EnsureVisible (value.Index);
+				// Take advantage this property is only valid for Details view.
+				SetScrollValue (v_scroll, item_size.Height * value.Index);
 			}
 #endif
 		}
@@ -1077,6 +1082,10 @@ namespace System.Windows.Forms
 						throw new NotSupportedException ("CheckBoxes are not"
 							+ " supported in Tile view. Choose a different"
 							+ " view or set CheckBoxes to false.");
+					if (VirtualMode && value == View.Tile)
+						throw new NotSupportedException ("VirtualMode is"
+							+ " not supported in Tile view. Choose a different"
+							+ " view or set ViewMode to false.");
 #endif
 
 					h_scroll.Value = v_scroll.Value = 0;
@@ -1104,6 +1113,10 @@ namespace System.Windows.Forms
 
 				if (!virtual_mode && items.Count > 0)
 					throw new InvalidOperationException ();
+				if (value && view == View.Tile)
+					throw new NotSupportedException ("VirtualMode is"
+						+ " not supported in Tile view. Choose a different"
+						+ " view or set ViewMode to false.");
 
 				virtual_mode = value;
 				Redraw (true);
@@ -1145,6 +1158,29 @@ namespace System.Windows.Forms
 					return 0;
 				
 				Size item_size = ItemSize;
+#if NET_2_0
+				// In virtual mode we always have fixed positions, and we can infer the positon easily
+				if (virtual_mode) {
+					int first = 0;
+					switch (view) {
+						case View.Details:
+							first = v_marker / item_size.Height;
+							break;
+						case View.LargeIcon:
+						case View.SmallIcon:
+							first = (v_marker / (item_size.Height + y_spacing)) * cols;
+							break;
+						case View.List:
+							first = (h_marker / (item_size.Width * x_spacing)) * rows;
+							break;
+					}
+
+					if (first >= items.Count)
+						first = items.Count;
+
+					return first;
+				}
+#endif
 				for (int i = 0; i < items.Count; i++) {
 					Rectangle item_rect = new Rectangle (GetItemLocation (i), item_size);
 					if (item_rect.Right >= 0 && item_rect.Bottom >= 0)
@@ -1174,7 +1210,7 @@ namespace System.Windows.Forms
 
 		internal void OnSelectedIndexChanged ()
 		{
-			if (IsHandleCreated)
+			if (is_selection_available)
 				OnSelectedIndexChanged (EventArgs.Empty);
 		}
 
@@ -1344,23 +1380,28 @@ namespace System.Windows.Forms
 			text_size.Height += 2;
 		}
 
+		private void SetScrollValue (ScrollBar scrollbar, int val)
+		{
+			int max;
+			if (scrollbar == h_scroll)
+				max = h_scroll.Maximum - h_scroll.LargeChange + 1;
+			else
+				max = v_scroll.Maximum - v_scroll.LargeChange + 1;
+
+			if (val > max)
+				val = max;
+			else if (val < scrollbar.Minimum)
+				val = scrollbar.Minimum;
+
+			scrollbar.Value = val;
+		}
+
 		private void Scroll (ScrollBar scrollbar, int delta)
 		{
 			if (delta == 0 || !scrollbar.Visible)
 				return;
 
-			int max;
-			if (scrollbar == h_scroll)
-				max = h_scroll.Maximum - item_control.Width;
-			else
-				max = v_scroll.Maximum - item_control.Height;
-
-			int val = scrollbar.Value + delta;
-			if (val > max)
-				val = max;
-			else if (val < scrollbar.Minimum)
-				val = scrollbar.Minimum;
-			scrollbar.Value = val;
+			SetScrollValue (scrollbar, scrollbar.Value + delta);
 		}
 
 		private void CalculateScrollBars ()
@@ -1368,6 +1409,7 @@ namespace System.Windows.Forms
 			Rectangle client_area = ClientRectangle;
 			int height = client_area.Height;
 			int width = client_area.Width;
+			Size item_size;
 			
 			if (!scrollable) {
 				h_scroll.Visible = false;
@@ -1401,6 +1443,8 @@ namespace System.Windows.Forms
 			}
 
 
+			item_size = ItemSize;
+
 			if (h_scroll.is_visible) {
 				h_scroll.Location = new Point (client_area.X, client_area.Bottom - h_scroll.Height);
 				h_scroll.Minimum = 0;
@@ -1416,25 +1460,37 @@ namespace System.Windows.Forms
 					h_scroll.Width = client_area.Width;
 				}
 
+				if (view == View.List)
+					h_scroll.SmallChange = item_size.Width + ThemeEngine.Current.ListViewHorizontalSpacing;
+				else
+					h_scroll.SmallChange = Font.Height;
+
 				h_scroll.LargeChange = client_area.Width;
-				h_scroll.SmallChange = item_size.Width + ThemeEngine.Current.ListViewHorizontalSpacing;
 				height -= h_scroll.Height;
 			}
 
 			if (v_scroll.is_visible) {
 				v_scroll.Location = new Point (client_area.Right - v_scroll.Width, client_area.Y);
 				v_scroll.Minimum = 0;
-				v_scroll.Maximum = layout_ht;
 
 				// if h_scroll is visible, adjust the height of
 				// v_scroll to account for the height of h_scroll
-				if (h_scroll.Visible)
+				if (h_scroll.Visible) {
+					v_scroll.Maximum = layout_ht + h_scroll.Height;
 					v_scroll.Height = client_area.Height - h_scroll.Height;
-				else
+				} else {
+					v_scroll.Maximum = layout_ht;
 					v_scroll.Height = client_area.Height;
+				}
 
-				v_scroll.LargeChange = client_area.Height;
-				v_scroll.SmallChange = Font.Height;
+				if (view == View.Details) {
+					// Need to update Maximum if using LargeChange with value other than the visible area
+					v_scroll.LargeChange = v_scroll.Height - (header_control.Height + item_size.Height);
+					v_scroll.Maximum -= header_control.Height + item_size.Height;
+				} else
+					v_scroll.LargeChange = v_scroll.Height;
+
+				v_scroll.SmallChange = item_size.Height;
 				width -= v_scroll.Width;
 			}
 			
@@ -1719,6 +1775,11 @@ namespace System.Windows.Forms
 		}
 #endif
 
+#if NET_2_0
+		// cache the spacing to let virtualmode compute the positions on the fly
+		int x_spacing;
+		int y_spacing;
+#endif
 		int rows;
 		int cols;
 		int[,] item_index_matrix;
@@ -1804,21 +1865,29 @@ namespace System.Windows.Forms
 			item_control.Visible = true;
 			item_control.Location = Point.Empty;
 			ItemSize = item_size; // Cache item size
+#if NET_2_0
+			this.x_spacing = x_spacing;
+			this.y_spacing = y_spacing;
+#endif
 
 			if (items.Count == 0)
 				return;
 
 			Size sz = item_size;
-#if NET_2_0
-			bool using_groups = UsingGroups;
-#endif
 
 			CalculateRowsAndCols (sz, left_aligned, x_spacing, y_spacing);
 
 			layout_wd = UseCustomColumnWidth ? cols * custom_column_width : cols * (sz.Width + x_spacing) - x_spacing;
 			layout_ht = rows * (sz.Height + y_spacing) - y_spacing;
+
 #if NET_2_0
-			if (using_groups)
+			if (virtual_mode) { // no actual assignment is needed on items for virtual mode
+				item_control.Size = new Size (layout_wd, layout_ht);
+				return;
+			}
+
+			bool using_groups = UsingGroups;
+			if (using_groups) // the groups layout will override layout_ht
 				CalculateGroupsLayout (sz, y_spacing, 0);
 #endif
 
@@ -1827,9 +1896,10 @@ namespace System.Windows.Forms
 			int display_index = 0;
 
 			for (int i = 0; i < items.Count; i++) {
+				ListViewItem item = items [i];
 #if NET_2_0
 				if (using_groups) {
-					ListViewGroup group = items [i].Group;
+					ListViewGroup group = item.Group;
 					if (group == null)
 						group = groups.DefaultGroup;
 
@@ -1871,19 +1941,12 @@ namespace System.Windows.Forms
 						}
 					}
 				}
-#if NET_2_0
-				if (!virtual_mode) 
-#endif
-				{
-					ListViewItem item = items [i];
-					item.Layout ();
-					item.DisplayIndex = display_index;
+
+				item.Layout ();
+				item.DisplayIndex = display_index;
 #if NET_2_0					
-					item.SetPosition (new Point (x, y));
+				item.SetPosition (new Point (x, y));
 #endif					
-				}
-
-
 			}
 
 			item_control.Size = new Size (layout_wd, layout_ht);
@@ -1909,7 +1972,7 @@ namespace System.Windows.Forms
 		int LayoutGroupHeader (ListViewGroup group, int y_origin, int item_height, int y_spacing, int rows)
 		{
 			Rectangle client_area = ClientRectangle;
-			int header_height = text_size.Height + 10;
+			int header_height = Font.Height + 15; // one line height + some padding
 
 			group.HeaderBounds = new Rectangle (0, y_origin, client_area.Width - v_scroll.Width, header_height);
 			group.items_area_location = new Point (0, y_origin + header_height);
@@ -1978,21 +2041,33 @@ namespace System.Windows.Forms
 			item_control.Visible = true;
 			item_control.Location = Point.Empty;
 			item_control.Width = ClientRectangle.Width;
+			AdjustChildrenZOrder ();
 
 			int item_height = GetDetailsItemHeight ();
 			ItemSize = new Size (0, item_height); // We only cache Height for details view
 			int y = header_control.Height;
+			layout_ht = y + (item_height * items.Count);
+			if (items.Count > 0 && grid_lines) // some space for bottom gridline
+				layout_ht += 2;
+
 #if NET_2_0
 			bool using_groups = UsingGroups;
 			if (using_groups) {
+				// Observe that this routines will override our layout_ht value
 				CalculateDetailsGroupItemsCount ();
 				CalculateGroupsLayout (ItemSize, 2, y);
 			}
+
+			if (virtual_mode) // no assgination on items is needed
+				return;
 #endif
 
 			for (int i = 0; i < items.Count; i++) {
 				ListViewItem item = items [i];
+
 				int display_index;
+				int item_y;
+
 #if NET_2_0
 				if (using_groups) {
 					ListViewGroup group = item.Group;
@@ -2003,42 +2078,44 @@ namespace System.Windows.Forms
 					Point group_items_loc = group.items_area_location;
 					display_index = group.starting_item + current_item;
 
-					y = current_item * (item_height + 2) + group_items_loc.Y;
-					SetItemLocation (display_index, 0, y, 0, 0);
+					y = item_y = current_item * (item_height + 2) + group_items_loc.Y;
+					SetItemLocation (display_index, 0, item_y, 0, 0);
 					SetItemAtDisplayIndex (display_index, i);
-					item.SetPosition (new Point (0, y));
 				} else
 #endif
 				{
 					display_index = i;
-					SetItemLocation (i, 0, y, 0, 0);
-#if NET_2_0					
-					item.SetPosition (new Point (0, y));
-#endif					
+					item_y = y;
+					SetItemLocation (i, 0, item_y, 0, 0);
 					y += item_height;
 				}
-#if NET_2_0
-				if (!virtual_mode) // Virtual mode sets Layout until draw time
-#endif
-				{
-					item.Layout ();
-					item.DisplayIndex = display_index;
-				}
 
+				item.Layout ();
+				item.DisplayIndex = display_index;
+#if NET_2_0					
+				item.SetPosition (new Point (0, item_y));
+#endif					
 			}
+		}
 
-			// some space for bottom gridline
-			if (items.Count > 0 && grid_lines)
-				y += 2;
-
-#if NET_2_0
-			if (!using_groups) // With groups it has been previously computed
-#endif
-				layout_ht = y;
+		// Need to make sure HeaderControl is on top, and we can't simply use BringToFront since
+		// these controls are implicit, so we need to re-populate our collection.
+		void AdjustChildrenZOrder ()
+		{
+			SuspendLayout ();
+			Controls.ClearImplicit ();
+			Controls.AddImplicit (header_control);
+			Controls.AddImplicit (item_control);
+			ResumeLayout ();
 		}
 
 		private void AdjustItemsPositionArray (int count)
 		{
+#if  NET_2_0
+			// In virtual mode we compute the positions on the fly.
+			if (virtual_mode)
+				return;
+#endif
 			if (items_location.Length >= count)
 				return;
 
@@ -2092,20 +2169,60 @@ namespace System.Windows.Forms
 
 		internal Point GetItemLocation (int index)
 		{
-			Point loc = items_location [index];
+			Point loc = Point.Empty;
+#if NET_2_0
+			if (virtual_mode)
+				loc = GetFixedItemLocation (index);
+			else
+#endif
+				loc = items_location [index];
+
 			loc.X -= h_marker; // Adjust to scroll
 			loc.Y -= v_marker;
 
 			return loc;
 		}
 
+#if NET_2_0
+		Point GetFixedItemLocation (int index)
+		{
+			Point loc = Point.Empty;
+
+			switch (view) {
+				case View.LargeIcon:
+				case View.SmallIcon:
+					loc.X = index % cols * (item_size.Width + x_spacing);
+					loc.Y = index / cols * (item_size.Height + y_spacing);
+					break;
+				case View.List:
+					loc.X = index / rows * (item_size.Width + x_spacing);
+					loc.Y = index % rows * (item_size.Height + y_spacing);
+					break;
+				case View.Details:
+					loc.Y = header_control.Height + (index * item_size.Height);
+					break;
+			}
+
+			return loc;
+		}
+#endif
+
 		internal int GetItemIndex (int display_index)
 		{
+#if NET_2_0
+			if (virtual_mode)
+				return display_index; // no reordering in virtual mode.
+#endif
 			return reordered_items_indices [display_index];
 		}
 
 		internal ListViewItem GetItemAtDisplayIndex (int display_index)
 		{
+#if NET_2_0
+			// in virtual mode there's no reordering at all.
+			if (virtual_mode)
+				return items [display_index];
+#endif
 			return items [reordered_items_indices [display_index]];
 		}
 
@@ -2199,6 +2316,11 @@ namespace System.Windows.Forms
 				return result;
 			}
 
+#if NET_2_0
+			if (virtual_mode)
+				return GetFixedAdjustedIndex (key);
+#endif
+
 			ItemMatrixLocation item_matrix_location = items_matrix_location [FocusedItem.DisplayIndex];
 			int row = item_matrix_location.Row;
 			int col = item_matrix_location.Col;
@@ -2251,6 +2373,49 @@ namespace System.Windows.Forms
 
 			return items [adjusted_index].DisplayIndex;
 		}
+
+#if NET_2_0
+		// Used for virtual mode, where items *cannot* be re-arranged
+		int GetFixedAdjustedIndex (Keys key)
+		{
+			int result;
+
+			switch (key) {
+				case Keys.Left:
+					if (view == View.List)
+						result = focused_item_index - rows;
+					else
+						result = focused_item_index - 1;
+					break;
+				case Keys.Right:
+					if (view == View.List)
+						result = focused_item_index + rows;
+					else
+						result = focused_item_index + 1;
+					break;
+				case Keys.Up:
+					if (view != View.List)
+						result = focused_item_index - cols;
+					else
+						result = focused_item_index - 1;
+					break;
+				case Keys.Down:
+					if (view != View.List)
+						result = focused_item_index + cols;
+					else
+						result = focused_item_index + 1;
+					break;
+				default:
+					return -1;
+
+			}
+
+			if (result < 0 || result >= items.Count)
+				result = focused_item_index;
+
+			return result;
+		}
+#endif
 
 		ListViewItem selection_start;
 
@@ -2691,6 +2856,9 @@ namespace System.Windows.Forms
 						if (owner.LabelEdit && !changed)
 							BeginEdit (clicked_item); // this is probably not the correct place to execute BeginEdit
 					}
+
+					drag_begin = me.Location;
+					dragged_item_index = clicked_item.Index;
 				} else {
 					if (owner.MultiSelect)
 						box_selecting = true;
@@ -2757,13 +2925,7 @@ namespace System.Windows.Forms
 				}
 
 				if (me.Button == MouseButtons.Left || me.Button == MouseButtons.Right) {
-					if (drag_begin.X == -1 && drag_begin.Y == -1) {
-						if (item != null) {
-							drag_begin = new Point (me.X, me.Y);
-							dragged_item_index = item.Index;
-						}
-
-					} else {
+					if (drag_begin != new Point (-1, -1)) {
 						Rectangle r = new Rectangle (drag_begin, SystemInformation.DragSize);
 						if (!r.Contains (me.X, me.Y)) {
 							ListViewItem dragged_item  = owner.items [dragged_item_index];
@@ -3371,6 +3533,7 @@ namespace System.Windows.Forms
 		protected override void CreateHandle ()
 		{
 			base.CreateHandle ();
+			is_selection_available = true;
 			for (int i = 0; i < SelectedItems.Count; i++)
 				OnSelectedIndexChanged (EventArgs.Empty);
 		}
@@ -3378,9 +3541,6 @@ namespace System.Windows.Forms
 		protected override void Dispose (bool disposing)
 		{
 			if (disposing) {
-				h_scroll.Dispose ();
-				v_scroll.Dispose ();
-				
 				large_image_list = null;
 				small_image_list = null;
 				state_image_list = null;
@@ -5547,6 +5707,9 @@ namespace System.Windows.Forms
 				if (is_main_collection || item.ListView != null)
 					CollectionChanged (true);
 
+				// force an update of the selected info if the new item is selected.
+				if (item.Selected)
+					item.SetSelectedCore (true);
 #if NET_2_0
 				//UIA Framework event: Item Added
 				OnUIACollectionChangedEvent (new CollectionChangeEventArgs (CollectionChangeAction.Add, item));
@@ -5697,6 +5860,9 @@ namespace System.Windows.Forms
 
 				list.Add (value);
 
+				// force an update of the selected info if the new item is selected.
+				if (value.Selected)
+					value.SetSelectedCore (true);
 			}
 
 			void CollectionChanged (bool sort)
@@ -5719,6 +5885,7 @@ namespace System.Windows.Forms
 				ListViewItem retval = args.Item;
 				retval.Owner = owner;
 				retval.DisplayIndex = displayIndex;
+				retval.Layout ();
 
 				return retval;
 			}
@@ -5765,7 +5932,7 @@ namespace System.Windows.Forms
 			[Browsable (false)]
 			public int Count {
 				get {
-					if (!owner.IsHandleCreated)
+					if (!owner.is_selection_available)
 						return 0;
 
 					return List.Count;
@@ -5784,7 +5951,7 @@ namespace System.Windows.Forms
 
 			public int this [int index] {
 				get {
-					if (!owner.IsHandleCreated || index < 0 || index >= List.Count)
+					if (!owner.is_selection_available || index < 0 || index >= List.Count)
 						throw new ArgumentOutOfRangeException ("index");
 
 					return (int) List [index];
@@ -5822,12 +5989,12 @@ namespace System.Windows.Forms
 				if (itemIndex < 0 || itemIndex >= owner.Items.Count)
 					throw new ArgumentOutOfRangeException ("index");
 
-				if (owner.virtual_mode && !owner.IsHandleCreated)
+				if (owner.virtual_mode && !owner.is_selection_available)
 					return -1;
 
 				owner.Items [itemIndex].Selected = true;
 
-				if (!owner.IsHandleCreated)
+				if (!owner.is_selection_available)
 					return 0;
 
 				return List.Count;
@@ -5841,7 +6008,7 @@ namespace System.Windows.Forms
 #endif	
 			void Clear ()
 			{
-				if (!owner.IsHandleCreated)
+				if (!owner.is_selection_available)
 					return;
 
 				int [] indexes = (int []) List.ToArray (typeof (int));
@@ -5905,7 +6072,7 @@ namespace System.Windows.Forms
 
 			public int IndexOf (int selectedIndex)
 			{
-				if (!owner.IsHandleCreated)
+				if (!owner.is_selection_available)
 					return -1;
 
 				return List.IndexOf (selectedIndex);
@@ -6009,7 +6176,7 @@ namespace System.Windows.Forms
 
 			public ListViewItem this [int index] {
 				get {
-					if (!owner.IsHandleCreated || index < 0 || index >= Count)
+					if (!owner.is_selection_available || index < 0 || index >= Count)
 						throw new ArgumentOutOfRangeException ("index");
 
 					int item_index = owner.SelectedIndices [index];
@@ -6067,7 +6234,7 @@ namespace System.Windows.Forms
 
 			public void CopyTo (Array dest, int index)
 			{
-				if (!owner.IsHandleCreated)
+				if (!owner.is_selection_available)
 					return;
 				if (index > Count) // Throws ArgumentException instead of IOOR exception
 					throw new ArgumentException ("index");
@@ -6078,7 +6245,7 @@ namespace System.Windows.Forms
 
 			public IEnumerator GetEnumerator ()
 			{
-				if (!owner.IsHandleCreated)
+				if (!owner.is_selection_available)
 					return (new ListViewItem [0]).GetEnumerator ();
 
 				ListViewItem [] items = new ListViewItem [Count];
@@ -6124,7 +6291,7 @@ namespace System.Windows.Forms
 
 			public int IndexOf (ListViewItem item)
 			{
-				if (!owner.IsHandleCreated)
+				if (!owner.is_selection_available)
 					return -1;
 
 				for (int i = 0; i < Count; i++)
@@ -6137,7 +6304,7 @@ namespace System.Windows.Forms
 #if NET_2_0
 			public virtual int IndexOfKey (string key)
 			{
-				if (!owner.IsHandleCreated || key == null || key.Length == 0)
+				if (!owner.is_selection_available || key == null || key.Length == 0)
 					return -1;
 
 				for (int i = 0; i < Count; i++) {

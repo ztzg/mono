@@ -1,3 +1,74 @@
+2010-06-02  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : enable binary reader test for #601785.
+
+2010-06-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : added test for bug #601785, based on
+	  the test by Raja Harinath.
+
+2010-05-31  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : test PreserveObjectReferences too.
+
+2010-05-31  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : add test for bug #610036.
+
+2010-04-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : add test for bug #599899.
+
+2010-03-04  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : test for empty array deserialization.
+
+2010-03-01  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractExporterTest.cs : remove [NotWorking].
+
+2010-02-19  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporterTest.cs : added Dictionary export tests.
+
+2010-02-18  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporterTest.cs : enabled new tests.
+
+2010-02-17  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporterTest.cs : added a bunch of tests for new
+	  implementation. Disable yet.
+
+2010-02-09  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporterTest.cs : add test that it gives
+	  appropriate code namespaces.
+
+2010-02-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractImporterTest.cs : add test that ArrayOfxxx type
+	  is not added.
+
+2010-01-25  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : added test for bug #560155.
+
+2010-01-08  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : added test for bug #568763.
+
+2009-09-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XsdDataContractExporterTest.cs : disable some tests that started
+	  to fail due to correctly sorted fields while xsd exporter has
+	  some bugs that emits duplicate fields (hence ambiguity occurs).
+
+2009-09-28  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* XmlObjectSerializerTest.cs : Test nested type serialization type
+	  initialization.
+
 2009-09-07  Atsushi Enomoto  <atsushi@ximian.com>
 
 	* XmlObjectSerializerTest.cs : fix (here too) bad serialization-

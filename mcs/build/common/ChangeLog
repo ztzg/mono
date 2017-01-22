@@ -1,3 +1,42 @@
+2010-06-14  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Consts.cs.in: Track latest SL4 release
+
+2010-05-14  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Consts.cs.in: Update FX version for SL4 final version
+
+2010-04-16  Raja R Harinath  <harinath@hurrynot.org>
+
+	* basic-profile-check.cs: Add use of 'var' keyword.
+
+2010-04-15  Atsushi Enomoto  <atsushi@ximian.com>
+
+	* Consts.cs.in : Add AssemblyWindowsBase, AssemblyPresentationCore_3_5
+	  and AssemblyPresentationFramework_3_5.
+
+2010-04-06  Jb Evain  <jbevain@novell.com>
+
+	* Consts.cs.in: define Assembly_System_2_0 for TypeForwardedFrom
+	attributes in NET_4_0.
+
+2010-01-07  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Consts.cs.in: Update FX version for SL3 latest released version
+
+2009-12-03  Marek Safar  <marek.safar@gmail.com>
+
+	* Consts.cs.in: Add WindowsBase_3_0.
+
+2009-11-12  Jb Evain  <jbevain@novell.com>
+
+	* Consts.cs.in: add a AssemblySystem_Core constant.
+
+2009-10-26  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* Consts.cs.in: Update SL2 FX version to the second (and last)
+	released version.
+
 2009-08-11  Jérémie Laval  <jeremie.laval@gmail.com>
 
 	* Consts.cs.in: Add BOOTSTRAP_NET_4_0.

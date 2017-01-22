@@ -31,6 +31,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Xml;
@@ -64,7 +65,7 @@ namespace System.Runtime.Serialization.Json
 		}
 
 		public DataContractJsonSerializer (Type type, string rootName, IEnumerable<Type> knownTypes)
-			: this (type, rootName, knownTypes, int.MaxValue, false, null, true)
+			: this (type, rootName, knownTypes, int.MaxValue, false, false)
 		{
 		}
 
@@ -73,12 +74,7 @@ namespace System.Runtime.Serialization.Json
 		{
 		}
 
-		public DataContractJsonSerializer (Type type, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, IDataContractSurrogate dataContractSurrogate, bool alwaysEmitTypeInformation)
-			: this (type, default_root_name, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, dataContractSurrogate, alwaysEmitTypeInformation)
-		{
-		}
-
-		public DataContractJsonSerializer (Type type, string rootName, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, IDataContractSurrogate dataContractSurrogate, bool alwaysEmitTypeInformation)
+		DataContractJsonSerializer(Type type, string rootName, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, bool alwaysEmitTypeInformation)
 		{
 			if (type == null)
 				throw new ArgumentNullException ("type");
@@ -87,39 +83,48 @@ namespace System.Runtime.Serialization.Json
 			if (maxItemsInObjectGraph < 0)
 				throw new ArgumentOutOfRangeException ("maxItemsInObjectGraph");
 
-			List<Type> types = new List<Type> ();
-			types.Add (type);
-			if (knownTypes != null)
-				types.AddRange (knownTypes);
-
 			this.type = type;
-			known_types = new ReadOnlyCollection<Type> (types);
+			known_types = new ReadOnlyCollection<Type> (knownTypes != null ? knownTypes.ToArray () : Type.EmptyTypes);
 			root = rootName;
 			max_items = maxItemsInObjectGraph;
 			ignore_extension = ignoreExtensionDataObject;
-			surrogate = dataContractSurrogate;
 			always_emit_type = alwaysEmitTypeInformation;
 		}
 
-		public DataContractJsonSerializer (Type type, XmlDictionaryString rootName, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, IDataContractSurrogate dataContractSurrogate, bool alwaysEmitTypeInformation)
-			: this (type, rootName != null ? rootName.Value : null, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, dataContractSurrogate, alwaysEmitTypeInformation)
+#if !MOONLIGHT
+		public DataContractJsonSerializer (Type type, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, IDataContractSurrogate dataContractSurrogate, bool alwaysEmitTypeInformation)
+            : this (type, default_root_name, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, alwaysEmitTypeInformation)
 		{
+	}
+
+		public DataContractJsonSerializer (Type type, string rootName, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, IDataContractSurrogate dataContractSurrogate, bool alwaysEmitTypeInformation)
+			: this (type, rootName, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, alwaysEmitTypeInformation)
+		{
+			surrogate = dataContractSurrogate;
 		}
 
-		#endregion
+		public DataContractJsonSerializer (Type type, XmlDictionaryString rootName, IEnumerable<Type> knownTypes, int maxItemsInObjectGraph, bool ignoreExtensionDataObject, IDataContractSurrogate dataContractSurrogate, bool alwaysEmitTypeInformation)
+			: this (type, rootName != null ? rootName.Value : default_root_name, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, dataContractSurrogate, alwaysEmitTypeInformation)
+		{
+		}
+#endif
 
-		Type type;
+        #endregion
+
+        Type type;
 		string root;
 		ReadOnlyCollection<Type> known_types;
 		int max_items;
 		bool ignore_extension;
-		IDataContractSurrogate surrogate;
 		bool always_emit_type;
+#if !MOONLIGHT
+		IDataContractSurrogate surrogate;
 
 		[MonoTODO]
 		public IDataContractSurrogate DataContractSurrogate {
 			get { return surrogate; }
 		}
+#endif
 
 		[MonoTODO]
 		public bool IgnoreExtensionDataObject {
@@ -150,7 +155,13 @@ namespace System.Runtime.Serialization.Json
 
 		public override object ReadObject (Stream stream)
 		{
+#if NET_2_1
+			var r = (JsonReader) JsonReaderWriterFactory.CreateJsonReader(stream, XmlDictionaryReaderQuotas.Max);
+			r.LameSilverlightLiteralParser = true;
+			return ReadObject(r);
+#else
 			return ReadObject (JsonReaderWriterFactory.CreateJsonReader (stream, new XmlDictionaryReaderQuotas ()));
+#endif
 		}
 
 		public override object ReadObject (XmlDictionaryReader reader)

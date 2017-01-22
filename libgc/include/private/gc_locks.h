@@ -76,6 +76,12 @@
 #    define LOCK() RT0u__inCritical++
 #    define UNLOCK() RT0u__inCritical--
 #  endif
+#  ifdef SN_TARGET_PS3
+#    include <pthread.h>
+     extern pthread_mutex_t GC_allocate_ml;
+#      define LOCK()   pthread_mutex_lock(&GC_allocate_ml)
+#      define UNLOCK() pthread_mutex_unlock(&GC_allocate_ml)
+#  endif
 #  ifdef GC_SOLARIS_THREADS
 #    include <thread.h>
 #    include <signal.h>
@@ -218,6 +224,19 @@
 #    endif /* ALPHA */
 #    ifdef ARM32
         inline static int GC_test_and_set(volatile unsigned int *addr) {
+#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_7__)
+          int ret, tmp;
+          __asm__ __volatile__ (
+                                 "1:\n"
+                                 "ldrex %0, [%3]\n"
+                                 "strex %1, %2, [%3]\n" 
+                                 "teq %1, #0\n"
+                                 "bne 1b\n"
+                                 : "=&r" (ret), "=&r" (tmp)
+                                 : "r" (1), "r" (addr)
+                                 : "memory", "cc");
+          return ret;
+#else
           int oldval;
           /* SWP on ARM is very similar to XCHG on x86.  Doesn't lock the
            * bus because there are no SMP ARM machines.  If/when there are,
@@ -228,6 +247,7 @@
       			     : "r"(1), "r"(addr)
 			     : "memory");
           return oldval;
+#endif
         }
 #       define GC_TEST_AND_SET_DEFINED
 #    endif /* ARM32 */
@@ -403,7 +423,7 @@
          {
 	   char result;
 	   __asm__ __volatile__("lock; cmpxchgl %2, %0; setz %1"
-	    	: "+m"(*(addr)), "=r"(result)
+	    	: "+m"(*(addr)), "=q"(result)
 		: "r" (new_val), "a"(old) : "memory");
 	   return (GC_bool) result;
          }
@@ -493,6 +513,51 @@
             __asm__ __volatile__("sync" : : : "memory");
         }
 #     endif /* POWERPC */
+
+#     if defined(SPARC)
+#      if !defined(GENERIC_COMPARE_AND_SWAP)
+#       if CPP_WORDSZ == 64
+        /* Returns TRUE if the comparison succeeded. */
+        inline static GC_bool GC_compare_and_exchange(volatile GC_word *addr,
+            GC_word old, GC_word new_val)
+        {
+            unsigned long result;
+            __asm__ __volatile__(
+               "casx [%2], %3, %0"
+                :  "=r" (result)
+                :  "0" (new_val), "r" (addr), "r" (old)
+                : "memory");
+            return (GC_bool) (result == old);
+        }
+#       else
+        /* Returns TRUE if the comparison succeeded. */
+        inline static GC_bool GC_compare_and_exchange(volatile GC_word *_addr,
+            GC_word _old, GC_word _new_val)
+        {
+           register unsigned long result asm("o0");
+           register unsigned long old asm("o1");
+           register volatile GC_word *addr asm("o2");
+           result = _new_val;
+           old = _old;
+           addr = _addr;
+            __asm__ __volatile__(
+               /* We encode the instruction directly so that it
+                  doesn't taint the whole binary as v9-only.  */
+               ".word 0xd1e29009" /* cas [%o2], %o1, %o0 */
+                :  "=r" (result)
+                :  "0" (result), "r" (addr), "r"(old)
+                : "memory");
+            return (GC_bool) (result == old);
+        }
+#       endif
+#      endif /* !GENERIC_COMPARE_AND_SWAP */
+        inline static void GC_memory_barrier()
+        {
+           /* All sparc v9 chips provice procesor consistent ordering. */
+           /* Thus a compiler barrier should suffice.                  */
+            __asm__ __volatile__("" : : : "memory");
+        }
+#     endif /* SPARC */
 
 #     if defined(IA64)
 #      if !defined(GENERIC_COMPARE_AND_SWAP)

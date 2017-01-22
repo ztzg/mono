@@ -94,7 +94,7 @@ test_buildpath ()
 	g_free (s);
 
 	/* Null */
-	s = g_build_path ("/", NULL);
+	s = g_build_path ("/", NULL, NULL);
 	if (s == NULL)
 		return FAILED ("must get a non-NULL return");
 	if (s [0] != 0)
@@ -264,6 +264,7 @@ test_ppath2 ()
 	return OK;
 }
 
+#ifndef DISABLE_FILESYSTEM_TESTS
 gchar *
 test_cwd ()
 {
@@ -288,6 +289,13 @@ test_cwd ()
 	
 	return OK;
 }
+#else
+gchar *
+test_cwd ()
+{
+	return OK;
+}
+#endif
 
 gchar *
 test_misc ()

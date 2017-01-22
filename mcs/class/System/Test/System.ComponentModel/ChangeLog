@@ -1,3 +1,31 @@
+2010-05-21  Sebastien Pouliot  <sebastien@ximian.com>
+
+	* DefaultValueAttributeTest.cs: Change test case to compare the 
+	hash code of two DVA created with null (instead of comparing to 0)
+
+2010-02-05  Carlos Alberto Cortez <calberto.cortez@gmail.com>
+
+	* MaskedTextProviderTest.cs: New tests for ToString and
+	ToDisplayString, specifically when IsPassword is true. 
+
+2010-01-15  Alexandre Gomes  <alexmipego@gmail.com>
+
+	* ByteConverterTests.cs:
+	* DoubleConverterTests.cs:
+	* Int32ConverterTests.cs:
+	* Int16ConverterTests.cs:
+	* Int64ConverterTests.cs:
+	* SingleConverterTests.cs:
+	* UInt32ConverterTests.cs:
+	* SByteConverterTests.cs:
+	* UInt16ConverterTests.cs:
+	* UInt64ConverterTests.cs: Added tests to verify CanConvertTo when
+	targeting primitive types.
+	
+2009-09-29  Alan McGovern  <amcgovern@novell.com>
+
+	* CategoryAttributeTest.cs: Added new test file.
+	  
 2009-09-24  Ivan N. Zlatev  <contact@i-nz.net>
 
 	* EnumConverterTests.cs: Add a test to verify behaviour when converting

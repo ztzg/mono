@@ -289,6 +289,7 @@
 
 #define MONO_ARCH_HAVE_IMT 1
 #define MONO_ARCH_IMT_REG sh4_r2
+#define MONO_ARCH_THIS_AS_FIRST_ARG 1
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */

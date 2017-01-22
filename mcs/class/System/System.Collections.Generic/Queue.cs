@@ -31,14 +31,16 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 using System;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace System.Collections.Generic
 {
 	[ComVisible(false)]
 	[Serializable]
+	[DebuggerDisplay ("Count={Count}")]
+	[DebuggerTypeProxy (typeof (CollectionDebuggerView))]	
 	public class Queue<T> : IEnumerable <T>, ICollection, IEnumerable
 	{
 		T [] _array;
@@ -46,11 +48,10 @@ namespace System.Collections.Generic
 		int _tail;
 		int _size;
 		int _version;
-
-		private const int INITIAL_SIZE = 16;
 		
 		public Queue ()
 		{
+			_array = new T [0];
 		}
 		
 		public Queue (int count)
@@ -65,15 +66,19 @@ namespace System.Collections.Generic
 		{
 			if (collection == null)
 				throw new ArgumentNullException ("collection");
-			
+
+			var icoll = collection as ICollection<T>;
+			var size = icoll != null ? icoll.Count : 0;
+
+			_array = new T [size];
+
 			foreach (T t in collection)
 				Enqueue (t);
 		}
 		
 		public void Clear ()
 		{
-			if (_array != null)
-				Array.Clear (_array, 0, _array.Length);
+			Array.Clear (_array, 0, _array.Length);
 			
 			_head = _tail = _size = 0;
 			_version++;
@@ -98,25 +103,8 @@ namespace System.Collections.Generic
 		{
 			if (array == null)
 				throw new ArgumentNullException ();
-			
-			if ((uint) idx > (uint) array.Length)
-				throw new ArgumentOutOfRangeException ();
-			
-			if (array.Length - idx < _size)
-				throw new ArgumentOutOfRangeException ();
-			
-			if (_size == 0)
-				return;
-			
-			int contents_length = _array.Length;
-			int length_from_head = contents_length - _head;
-			
-			Array.Copy (_array, _head, array, idx, Math.Min (_size, length_from_head));
-			if (_size > length_from_head)
-				Array.Copy (_array, 0, array, 
-					    idx  + length_from_head,
-					    _size - length_from_head);
-			
+
+			((ICollection) this).CopyTo (array, idx);
 		}
 		
 		void ICollection.CopyTo (Array array, int idx)
@@ -124,7 +112,7 @@ namespace System.Collections.Generic
 			if (array == null)
 				throw new ArgumentNullException ();
 			
-			if ((uint) idx < (uint) array.Length)
+			if ((uint) idx > (uint) array.Length)
 				throw new ArgumentOutOfRangeException ();
 			
 			if (array.Length - idx < _size)
@@ -172,8 +160,8 @@ namespace System.Collections.Generic
 		
 		public void Enqueue (T item)
 		{
-			if (_array == null || _size == _array.Length)
-				SetCapacity (Math.Max (_size * 2, 4));
+			if (_size == _array.Length || _tail == _array.Length)
+				SetCapacity (Math.Max (Math.Max (_size, _tail) * 2, 4));
 			
 			_array [_tail] = item;
 			
@@ -193,13 +181,13 @@ namespace System.Collections.Generic
 
 		public void TrimExcess ()
 		{
-			if (_array != null && (_size < _array.Length * 0.9))
+			if (_size < _array.Length * 0.9)
 				SetCapacity (_size);
 		}
 		
 		void SetCapacity (int new_size)
 		{
-			if (_array != null && new_size == _array.Length)
+			if (new_size == _array.Length)
 				return;
 			
 			if (new_size < _size)
@@ -304,4 +292,3 @@ namespace System.Collections.Generic
 		}
 	}
 }
-#endif

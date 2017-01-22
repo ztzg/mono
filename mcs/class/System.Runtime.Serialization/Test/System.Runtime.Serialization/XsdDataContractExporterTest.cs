@@ -67,7 +67,6 @@ namespace MonoTests.System.Runtime.Serialization
 		}
 
 		[Test]
-		[Category ("NotWorking")]
 		public void CanExportTest ()
 		{
 			XsdDataContractExporter xdce = new XsdDataContractExporter ();

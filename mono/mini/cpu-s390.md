@@ -61,7 +61,7 @@ br: len:6
 br_reg: src1:i len:8
 break: len:6
 call: dest:o len:6 clob:c
-call_handler: len:12
+call_handler: len:12 clob:c
 call_membase: dest:o src1:b len:12 clob:c
 call_reg: dest:o src1:i len:8 clob:c
 ceq: dest:i len:12
@@ -262,7 +262,7 @@ subcc_imm: dest:i src1:i len:18
 xor_imm: dest:i src1:i len:16
 
 # Linear IR opcodes
-dummy_use: len:0
+dummy_use: src1:i len:0
 dummy_store: len:0
 not_reached: len:0
 not_null: src1:i len:0
