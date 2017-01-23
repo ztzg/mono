@@ -5,14 +5,14 @@ using System.Reflection;
 
 class Program {
 
-	static int Main ()
+	public static int Main ()
 	{
 		PortableExecutableKinds pekind;
 		ImageFileMachine machine;
 
 		typeof (Program).Module.GetPEKind (out pekind, out machine);
 
-		if ((pekind & PortableExecutableKinds.ILOnly) != 0)
+		if ((pekind & PortableExecutableKinds.ILOnly) == 0)
 			return 1;
 
 		if ((pekind & PortableExecutableKinds.Required32Bit) == 0)

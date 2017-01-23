@@ -28,7 +28,9 @@ using System.Runtime.CompilerServices;
 
 namespace System.Collections.Specialized
 {
+#if !MOBILE
 	[TypeForwardedFrom (Consts.WindowsBase_3_0)]
+#endif
 	public class NotifyCollectionChangedEventArgs : EventArgs
 	{
 		private NotifyCollectionChangedAction action;
@@ -111,7 +113,7 @@ namespace System.Collections.Specialized
 		{
 		}
 
-		public NotifyCollectionChangedEventArgs (NotifyCollectionChangedAction action, IList newItems, IList oldItems, int index)
+		public NotifyCollectionChangedEventArgs (NotifyCollectionChangedAction action, IList newItems, IList oldItems, int startingIndex)
 		{
 			this.action = action;
 
@@ -127,8 +129,8 @@ namespace System.Collections.Specialized
 			this.oldItems = oldItems;
 			this.newItems = newItems;
 
-			oldIndex = index;
-			newIndex = index;
+			oldIndex = startingIndex;
+			newIndex = startingIndex;
 		}
 
 		public NotifyCollectionChangedEventArgs (NotifyCollectionChangedAction action, IList changedItems, int index, int oldIndex)

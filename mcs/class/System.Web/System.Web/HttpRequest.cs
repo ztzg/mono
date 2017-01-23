@@ -10,6 +10,7 @@
 
 //
 // Copyright (C) 2005-2010 Novell, Inc (http://www.novell.com)
+// Copyright (C) 2011-2012 Xamarin, Inc (http://xamarin.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -108,15 +109,46 @@ namespace System.Web
 		static readonly UrlMappingCollection urlMappings;
 		readonly static char [] queryTrimChars = {'?'};
 #if NET_4_0
+		bool lazyFormValidation;
+		bool lazyQueryStringValidation;
+		bool inputValidationEnabled;
 		RequestContext requestContext;
+		BufferlessInputStream bufferlessInputStream;
 		
 		static bool validateRequestNewMode;
 		internal static bool ValidateRequestNewMode {
 			get { return validateRequestNewMode; }
 		}
 
-		internal static char[] RequestPathInvalidCharacters {
-			get; private set;
+		internal bool InputValidationEnabled {
+			get { return inputValidationEnabled; }
+		}
+		
+		private static char[] RequestPathInvalidCharacters {
+			get; set;
+		}
+
+		private static char[] CharsFromList (string list)
+		{
+			// List format is very strict and enforced by the Configuration	
+			// there must be a single char separated by commas with no trailing comma
+			// whitespace is allowed though and should be trimmed.
+			
+			string [] pieces = list.Split (',');
+
+			char [] chars = new char [pieces.Length];
+			for (int i = 0; i < chars.Length; i++) {
+				string trimmed = pieces [i].Trim ();
+				if (trimmed.Length != 1) {
+					// This should have been caught by System.Web.Configuration
+					// and throw a configuration error. This is just here for sanity
+					throw new System.Configuration.ConfigurationErrorsException ();
+				}
+
+				chars [i] = trimmed [0];
+			}
+
+			return chars;
 		}
 #endif
 
@@ -131,14 +163,13 @@ namespace System.Web
 				}
 
 #if NET_4_0
-				HttpRuntimeSection runtimeConfig = WebConfigurationManager.GetWebApplicationSection ("system.web/httpRuntime") as HttpRuntimeSection;
-				Version validationMode = runtimeConfig.RequestValidationMode;
+				Version validationMode = HttpRuntime.Section.RequestValidationMode;
 
 				if (validationMode >= new Version (4, 0)) {
 					validateRequestNewMode = true;
-					string invalidChars = runtimeConfig.RequestPathInvalidCharacters;
+					string invalidChars = HttpRuntime.Section.RequestPathInvalidCharacters;
 					if (!String.IsNullOrEmpty (invalidChars))
-						RequestPathInvalidCharacters = invalidChars.ToCharArray ();
+						RequestPathInvalidCharacters = CharsFromList (invalidChars);
 				}
 #endif
 			} catch {
@@ -285,8 +316,12 @@ namespace System.Web
 		public HttpBrowserCapabilities Browser {
 			get {
 				if (browser_capabilities == null)
+#if NET_4_0
+					browser_capabilities = HttpCapabilitiesBase.BrowserCapabilitiesProvider.GetBrowserCapabilities (this);
+#else
 					browser_capabilities = (HttpBrowserCapabilities)
 						HttpCapabilitiesBase.GetConfigCapabilities (null, this);
+#endif
 
 				return browser_capabilities;
 			}
@@ -664,8 +699,8 @@ namespace System.Web
 
 			return String.Compare (ContentType, ct, true, Helpers.InvariantCulture) == 0;
 		}
-		
-		public NameValueCollection Form {
+
+		internal WebROCollection FormUnvalidated {
 			get {
 				if (form == null){
 					form = new WebROCollection ();
@@ -680,12 +715,21 @@ namespace System.Web
 					form.Protect ();
 				}
 
+				return form;
+			}
+		}
+		
+		public NameValueCollection Form {
+			get {
+				NameValueCollection form = FormUnvalidated;
 #if NET_4_0
 				if (validateRequestNewMode && !checked_form) {
-					// Setting this before calling the validator prevents
-					// possible endless recursion
-					checked_form = true;
-					ValidateNameValueCollection ("Form", query_string_nvc, RequestValidationSource.Form);
+					if (!lazyFormValidation) {
+						// Setting this before calling the validator prevents
+						// possible endless recursion
+						checked_form = true;
+						ValidateNameValueCollection ("Form", form, RequestValidationSource.Form);
+					}
 				} else
 #endif
 					if (validate_form && !checked_form){
@@ -796,7 +840,7 @@ namespace System.Web
 			//
 			int content_length = ContentLength;
 			int content_length_kb = content_length / 1024;
-			HttpRuntimeSection config = (HttpRuntimeSection) WebConfigurationManager.GetWebApplicationSection ("system.web/httpRuntime");
+			HttpRuntimeSection config = HttpRuntime.Section;
 			if (content_length_kb > config.MaxRequestLength)
 				throw HttpException.NewWithCode (400, "Upload size exceeds httpRuntime limit.", WebEventCodes.RuntimeErrorPostTooLarge);
 
@@ -945,6 +989,159 @@ namespace System.Web
 				throw new PlatformNotSupportedException ("This property is not supported.");
 			}
 		}
+
+		public Stream GetBufferlessInputStream ()
+		{
+			if (bufferlessInputStream == null) {
+				if (input_stream != null)
+					throw new HttpException ("Input stream has already been created");
+
+				// we don't need to hook up the filter here, because the raw stream should be returned
+				bufferlessInputStream = new BufferlessInputStream (this);
+			}
+
+			return bufferlessInputStream;
+		}
+
+		//
+		// Stream that returns the data as it is read, without buffering
+		//
+		class BufferlessInputStream : Stream {
+			HttpRequest request;
+
+			// cached, the request content-length
+			int content_length;
+
+			// buffer that holds preloaded data
+			byte [] preloadedBuffer;
+
+			// indicates if we already served the whole preloaded buffer
+			bool preloaded_served;
+
+			// indicates if we already checked the request content-length against httpRuntime limit
+			bool checked_maxRequestLength;
+
+			// our stream position
+			long position;
+
+			//
+			// @request: the containing request that created us, used to find out content length
+			public BufferlessInputStream (HttpRequest request)
+			{
+				this.request = request;
+				content_length = request.ContentLength;
+			}
+
+			public override bool CanRead {
+				get { return true; }
+			}
+
+			public override bool CanSeek {
+				get { return false; }
+			}
+
+			public override bool CanWrite {
+				get { return false; }
+			}
+
+			public override long Length {
+				get {
+					return content_length;
+				}
+			}
+
+			public override long Position {
+				get {
+					return position;
+				}
+				set {
+					throw new NotSupportedException ("This is a readonly stream");
+				}
+			}
+
+			public override void Flush ()
+			{
+			}
+
+			public override int Read (byte [] buffer, int offset, int count)
+			{
+				if (buffer == null)
+					throw new ArgumentNullException ("buffer");
+
+				if (offset < 0 || count < 0)
+					throw new ArgumentOutOfRangeException ("offset or count less than zero.");
+
+				if (buffer.Length - offset < count )
+					throw new ArgumentException ("offset+count",
+								     "The size of the buffer is less than offset + count.");
+
+				if (count == 0 || request.worker_request == null)
+					return 0;
+
+				if (!checked_maxRequestLength) {
+					int content_length_kb = content_length / 1024;
+					HttpRuntimeSection config = HttpRuntime.Section;
+					if (content_length_kb > config.MaxRequestLength)
+						throw HttpException.NewWithCode (400, "Upload size exceeds httpRuntime limit.", WebEventCodes.RuntimeErrorPostTooLarge);
+					else
+						checked_maxRequestLength = true;
+				}
+
+				// Serve the bytes we might have preloaded already.
+				if (!preloaded_served) {
+					if (preloadedBuffer == null)
+						preloadedBuffer = request.worker_request.GetPreloadedEntityBody ();
+
+					if (preloadedBuffer != null) {
+						long bytes_left = preloadedBuffer.Length-position;
+						int n = (int) Math.Min (count, bytes_left);
+						Array.Copy (preloadedBuffer, position, buffer, offset, n);
+						position += n;
+
+						if (n == bytes_left)
+							preloaded_served = true;
+
+						return n;
+					}
+					else
+						preloaded_served = true;
+				}
+
+				// serve bytes from worker request if available
+				if (position < content_length) {
+					long bytes_left = content_length-position;
+					int n = count;
+
+					if (bytes_left < count)
+						n = (int) bytes_left;
+
+					int bytes_read = request.worker_request.ReadEntityBody (buffer, offset, n);
+					position += bytes_read;
+					return bytes_read;
+				}
+
+				return 0;
+			}
+
+			public override long Seek (long offset, SeekOrigin origin)
+			{
+				throw new NotSupportedException ("Can not seek on the HttpRequest.BufferlessInputStream");
+			}
+
+			public override void SetLength (long value)
+			{
+				throw new NotSupportedException ("Can not set length on the HttpRequest.BufferlessInputStream");
+			}
+
+			public override void Write (byte [] buffer, int offset, int count)
+			{
+				throw new NotSupportedException ("Can not write on the HttpRequest.BufferlessInputStream");
+			}
+
+			//
+			// TODO: explicitly support the async methods if there is a convenient way of doing it
+			//
+		}
 #endif
 		public Stream InputStream {
 			get {
@@ -1019,7 +1216,7 @@ namespace System.Web
 		public string Path {
 			get {
 				if (unescaped_path == null) {
-					unescaped_path = Uri.UnescapeDataString (PathNoValidation);
+					unescaped_path = PathNoValidation;
 #if NET_4_0
 					if (validateRequestNewMode) {
 						RequestValidator validator = RequestValidator.Current;
@@ -1101,7 +1298,7 @@ namespace System.Web
 			}
 		}
 
-		public NameValueCollection QueryString {
+		internal WebROCollection QueryStringUnvalidated {
 			get {
 				if (query_string_nvc == null) {
 					query_string_nvc = new WebROCollection ();
@@ -1115,17 +1312,29 @@ namespace System.Web
 					
 					query_string_nvc.Protect();
 				}
+
+				return query_string_nvc;
+			}
+		}
+		
+		public NameValueCollection QueryString {
+			get {
+				NameValueCollection query_string_nvc = QueryStringUnvalidated;
 #if NET_4_0
 				if (validateRequestNewMode && !checked_query_string) {
-					// Setting this before calling the validator prevents
-					// possible endless recursion
-					checked_query_string = true;
-					ValidateNameValueCollection ("QueryString", query_string_nvc, RequestValidationSource.QueryString);
+					if (!lazyQueryStringValidation) {
+						// Setting this before calling the validator prevents
+						// possible endless recursion
+						checked_query_string = true;
+						ValidateNameValueCollection ("QueryString", query_string_nvc, RequestValidationSource.QueryString);
+					}
 				} else
 #endif
 					if (validate_query_string && !checked_query_string) {
-						ValidateNameValueCollection ("QueryString", query_string_nvc);
+						// Setting this before calling the validator prevents
+						// possible endless recursion
 						checked_query_string = true;
+						ValidateNameValueCollection ("QueryString", query_string_nvc);
 					}
 				
 				return query_string_nvc;
@@ -1339,16 +1548,21 @@ namespace System.Web
 					baseVirtualDir = appVirtualPath;
 				virtualPath = VirtualPathUtility.Combine (VirtualPathUtility.AppendTrailingSlash (baseVirtualDir), virtualPath);
 				if (!VirtualPathUtility.IsAbsolute (virtualPath))
-					virtualPath = VirtualPathUtility.ToAbsolute (virtualPath);
+					virtualPath = VirtualPathUtility.ToAbsolute (virtualPath, false);
 			} else if (!VirtualPathUtility.IsAbsolute (virtualPath))
-				virtualPath = VirtualPathUtility.ToAbsolute (virtualPath);
+				virtualPath = VirtualPathUtility.ToAbsolute (virtualPath, false);
 
+			bool isAppVirtualPath = String.Compare (virtualPath, appVirtualPath, RuntimeHelpers.StringComparison) == 0;
+			appVirtualPath = VirtualPathUtility.AppendTrailingSlash (appVirtualPath);
 			if (!allowCrossAppMapping){
 				if (!StrUtils.StartsWith (virtualPath, appVirtualPath, true))
-					throw HttpException.NewWithCode ("MapPath: Mapping across applications not allowed", WebEventCodes.RuntimeErrorRequestAbort);
+					throw new ArgumentException ("MapPath: Mapping across applications not allowed");
 				if (appVirtualPath.Length > 1 && virtualPath.Length > 1 && virtualPath [0] != '/')
 					throw HttpException.NewWithCode ("MapPath: Mapping across applications not allowed", WebEventCodes.RuntimeErrorRequestAbort);
 			}
+			
+			if (!isAppVirtualPath && !virtualPath.StartsWith (appVirtualPath, RuntimeHelpers.StringComparison))
+				throw new InvalidOperationException (String.Format ("Failed to map path '{0}'", virtualPath));
 #if TARGET_JVM
 			return worker_request.MapPath (virtualPath);
 #else
@@ -1410,11 +1624,14 @@ namespace System.Web
 			validate_cookies = true;
 			validate_query_string = true;
 			validate_form = true;
+#if NET_4_0
+			inputValidationEnabled = true;
+#endif
 		}
 #if NET_4_0
 		internal void Validate ()
 		{
-			var cfg = WebConfigurationManager.GetSection ("system.web/httpRuntime") as HttpRuntimeSection;
+			var cfg = HttpRuntime.Section;
 			string query = UrlComponents.Query;
 			
 			if (query != null && query.Length > cfg.MaxQueryStringLength)
@@ -1435,6 +1652,9 @@ namespace System.Web
 						);
 				}
 			}
+
+			if (validateRequestNewMode)
+				ValidateInput ();
 		}
 #endif
 #region internal routines
@@ -1499,7 +1719,23 @@ namespace System.Web
 			string path = UrlComponents.Path;
 			UrlComponents.Path = path + PathInfo;
 		}
+#if NET_4_0
+		internal void SetFormCollection (WebROCollection coll, bool lazyValidation)
+		{
+			if (coll == null)
+				return;
+			form = coll;
+			lazyFormValidation = lazyValidation;
+		}
 
+		internal void SetQueryStringCollection (WebROCollection coll, bool lazyValidation)
+		{
+			if (coll == null)
+				return;
+			query_string_nvc = coll;
+			lazyQueryStringValidation = lazyValidation;
+		}
+#endif
 		// Headers is ReadOnly, so we need this hack for cookie-less sessions.
 		internal void SetHeader (string name, string value)
 		{
@@ -1640,12 +1876,23 @@ namespace System.Web
 		
 			throw new HttpRequestValidationException (msg);
 		}
-
-
+#if NET_4_0
+		internal static void ValidateString (string key, string value, RequestValidationSource source)
+		{
+			if (String.IsNullOrEmpty (value))
+				return;
+#pragma warning disable 219
+			int ignore;
+#pragma warning restore 219
+			if (IsInvalidString (value, out ignore))
+				ThrowValidationException (source.ToString (), key, value);
+		}
+#endif
 		internal static bool IsInvalidString (string val)
 		{
+#pragma warning disable 219
 			int validationFailureIndex;
-
+#pragma warning restore 219
 			return IsInvalidString (val, out validationFailureIndex);
 		}
 
@@ -1693,7 +1940,7 @@ namespace System.Web
 #endregion
 
 #region Helper classes
-	
+
 	//
 	// Stream-based multipart handling.
 	//

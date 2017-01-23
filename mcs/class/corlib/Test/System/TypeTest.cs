@@ -14,7 +14,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+#if !MONOTOUCH
 using System.Reflection.Emit;
+#endif
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Globalization;
@@ -168,6 +170,8 @@ namespace MonoTests.System
 		{
 			return a;
 		}
+		
+		public class Nested<K> {}
 	}
 	
 	class Foo<T, U>
@@ -230,12 +234,12 @@ namespace MonoTests.System
 		}
 	}
 
-
 	[TestFixture]
 	public class TypeTest
 	{
-		private AssemblyBuilder assembly;
+#if !MONOTOUCH
 		private ModuleBuilder module;
+#endif
 		const string ASSEMBLY_NAME = "MonoTests.System.TypeTest";
 		static int typeIndexer = 0;
 
@@ -244,9 +248,11 @@ namespace MonoTests.System
 		{
 			AssemblyName assemblyName = new AssemblyName ();
 			assemblyName.Name = ASSEMBLY_NAME;
-			assembly = AppDomain.CurrentDomain.DefineDynamicAssembly (
+#if !MONOTOUCH
+			var assembly = AppDomain.CurrentDomain.DefineDynamicAssembly (
 					assemblyName, AssemblyBuilderAccess.RunAndSave, Path.GetTempPath ());
 			module = assembly.DefineDynamicModule ("module1");
+#endif
 		}
 
 		private string genTypeName ()
@@ -258,7 +264,10 @@ namespace MonoTests.System
 		{
 		}
 
-		private void GenericMethod<Q> (Q q)
+		public interface IFace {
+		}
+
+		private void GenericMethod<Q, T1> (Q q, T1 t) where T1 : IFace
 		{
 		}
 
@@ -331,6 +340,10 @@ namespace MonoTests.System
 			mi = typeof (TypeTest).GetMethod ("GenericMethod", BindingFlags.Instance|BindingFlags.NonPublic);
 			Assert.IsTrue (mi.GetParameters ()[0].ParameterType.IsAssignableFrom (mi.GetParameters ()[0].ParameterType));
 			Assert.IsFalse (mi.GetParameters ()[0].ParameterType.IsAssignableFrom (typeof (int)));
+
+			// Tests for parameters with generic constraints
+			mi = typeof (TypeTest).GetMethod ("GenericMethod", BindingFlags.Instance|BindingFlags.NonPublic);
+			Assert.IsTrue (typeof (IFace).IsAssignableFrom (mi.GetParameters ()[1].ParameterType));
 		}
 
 		[Test]
@@ -1572,7 +1585,7 @@ namespace MonoTests.System
 			i.GetInterfaces ();
 		}
 
-		public static void GenericMethod<T> (T[] arr) where T: IComparable<T> {
+		public static void GenericMethod<T, T2> (T[] arr) where T: IComparable<T> {
 		}
 
 		public int AField;
@@ -1614,7 +1627,7 @@ namespace MonoTests.System
 			Type [] typeArgs = typeof (List<>).GetGenericArguments ();
 			Assert.IsFalse (typeArgs [0].IsAbstract, "#7");
 		}
-
+#if !MOBILE
 		[Test]
 		public void IsCOMObject ()
 		{
@@ -1641,7 +1654,7 @@ namespace MonoTests.System
 			type = tb.CreateType ();
 			Assert.IsTrue (type.IsImport, "#3");
 		}
-
+#endif
 		[Test]
 		public void IsInterface ()
 		{
@@ -1687,6 +1700,45 @@ PublicKeyToken=b77a5c561934e089"));
 		{
 			Type t = Type.GetType ("System.String[*]");
 			Assert.AreEqual ("System.String[*]", t.ToString ());
+		}
+
+#if MONOTOUCH
+		// feature not available when compiled under FULL_AOT_RUNTIME
+		[ExpectedException (typeof (NotImplementedException))]
+#endif
+		[Test]
+		public void TypeFromCLSID ()
+		{
+			Guid CLSID_ShellDesktop = new Guid("00021400-0000-0000-c000-000000000046");
+			Guid CLSID_Bogus = new Guid("1ea9d7a9-f7ab-443b-b486-30d285b21f1b");
+
+			Type t1 = Type.GetTypeFromCLSID (CLSID_ShellDesktop);
+
+			Type t2 = Type.GetTypeFromCLSID (CLSID_Bogus);
+
+			Assert.AreEqual (t1.FullName, "System.__ComObject");
+
+			if (Environment.OSVersion.Platform == PlatformID.Win32Windows ||
+				Environment.OSVersion.Platform == PlatformID.Win32NT)
+				Activator.CreateInstance(t1);
+
+			Assert.AreEqual (t2.FullName, "System.__ComObject");
+
+			Assert.AreNotEqual (t1, t2);
+		}
+
+		[Test]
+		[Category("NotWorking")] // Mono throws TargetInvokationException
+		[ExpectedException("System.Runtime.InteropServices.COMException")]
+		public void TypeFromCLSIDBogus ()
+		{
+			Guid CLSID_Bogus = new Guid("1ea9d7a9-f7ab-443b-b486-30d285b21f1b");
+			Type t = Type.GetTypeFromCLSID (CLSID_Bogus);
+			if (Environment.OSVersion.Platform == PlatformID.Win32Windows ||
+				Environment.OSVersion.Platform == PlatformID.Win32NT)
+				Activator.CreateInstance(t);
+			else
+				throw new COMException ();
 		}
 		
 		[Test]
@@ -1745,6 +1797,13 @@ PublicKeyToken=b77a5c561934e089"));
 				BindingFlags.Instance | BindingFlags.DeclaredOnly,
 				Type.FilterNameIgnoreCase, "NonExistingMethod");
 			Assert.AreEqual (0, mi.Length);
+		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidFilterCriteriaException))]
+		public void FilterAttribute_Invalid ()
+		{
+			Type.FilterAttribute (MethodBase.GetCurrentMethod (), (byte) 1);
 		}
 
 		[Test]
@@ -2674,7 +2733,7 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.IsNull (i);
 		}
 
-#if !TARGET_JVM // Reflection.Emit is not supported for TARGET_JVM
+#if !TARGET_JVM && !MOBILE // Reflection.Emit is not supported for TARGET_JVM
 		[Test]
 		public void EqualsUnderlyingType ()
 		{
@@ -2917,7 +2976,10 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual ("System.Int32", t.FullName);
 		}
 
-		[Test] //bug #331199
+		[Test]
+#if MONOTOUCH
+		[ExpectedException (typeof (NotSupportedException))]
+#endif
 		public void MakeGenericType_UserDefinedType ()
 		{
 			Type ut = new UserType (typeof (int));
@@ -2958,16 +3020,17 @@ PublicKeyToken=b77a5c561934e089"));
 		}
 		
 		[Test]
+#if MONOTOUCH
+		[ExpectedException (typeof (NotSupportedException))]
+#endif
 		public void MakeGenericType_BadUserType ()
 		{
 			Type ut = new UserType (null);
-			try {
-				Type t = typeof (Foo<>).MakeGenericType (ut);
-				Assert.Fail ("#1");
-			} catch (ArgumentException) {
-			}
+			Type t = typeof (Foo<>).MakeGenericType (ut);
+			var g0 = t.GetGenericArguments () [0];
+			Assert.AreSame (g0, ut, "#1");
 		}
-	
+
 		[Test]
 		public void MakeGenericType_WrongNumOfArguments ()
 		{
@@ -3093,7 +3156,7 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual (t1, t2);
 		}
 
-
+#if !MONOTOUCH
 		[Test]
 		public void Bug506757 ()
 		{
@@ -3138,7 +3201,7 @@ PublicKeyToken=b77a5c561934e089"));
 			foreach (var m in t2.GetMethods (BindingFlags.Instance | BindingFlags.NonPublic))
 				Assert.IsTrue (m.DeclaringType == typeof (object), String.Format ("{0}::{1}", m.DeclaringType, m.Name));
 		}
-
+#endif
 		[Test]
 		public void MakeArrayTypeOfOneDimension ()
 		{
@@ -3340,6 +3403,13 @@ PublicKeyToken=b77a5c561934e089"));
 		} catch (TypeLoadException) { }
 
 		}
+		
+		[Test] //Bug643890
+		public void DeclaringTypeOfGenericNestedTypeInstanceIsOpen ()
+		{
+			var type = typeof (Foo<int>.Nested<string>);
+			Assert.AreSame (typeof (Foo<>), type.DeclaringType, "#1");
+		}
 
 #if NET_4_0
 		interface IGetInterfaceMap<in T>
@@ -3475,6 +3545,22 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual ("C", res [2], "#7");
 		}
 
+		public enum OutOfOrderEnum : sbyte
+		{
+			D = -1, C = 2, B = 1, A = 0
+		}
+				
+		[Test]
+		public void GetEnumNamesSortsByUnsignedValue ()
+		{
+			string[] names = typeof (OutOfOrderEnum).GetEnumNames ();
+			Assert.AreEqual (4, names.Length);
+			Assert.AreEqual ("A", names [0]);
+			Assert.AreEqual ("B", names [1]);
+			Assert.AreEqual ("C", names [2]);
+			Assert.AreEqual ("D", names [3]);
+		}
+		
 		[Test]
 		public void GetEnumValues () {
 			try {
@@ -3752,6 +3838,10 @@ PublicKeyToken=b77a5c561934e089"));
 					return asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
 				}, false, false);
 			Assert.AreEqual (typeof (MyRealEnum).MakePointerType (), res, "#12");
+
+			// assembly resolve without type resolve
+			res = Type.GetType ("System.String,mscorlib", delegate (AssemblyName aname) { return typeof (int).Assembly; }, null);
+			Assert.AreEqual (typeof (string), res);
 		}
 
 
@@ -3880,6 +3970,17 @@ PublicKeyToken=b77a5c561934e089"));
 			MustTLE (string.Format ("{0}ZZZZ,{1}", typeof (MyRealEnum).FullName, aqn));
 		}
 
+	   	delegate void MyAction<in T>(T ag);
+
+		[Test] //bug #668506
+		public void IsAssignableFromWithVariantDelegate () {
+			Assert.IsFalse (typeof(MyAction<string>).IsAssignableFrom(typeof(MyAction<>)), "#1");
+		}
+
+		[Test] //bug #124
+		public void IsAssignableFromWithNullable () {
+            Console.WriteLine(typeof(IEnumerable<int?>).IsAssignableFrom(typeof(IEnumerable<int>)));
+		}
 #endif
 
 		public abstract class Stream : IDisposable

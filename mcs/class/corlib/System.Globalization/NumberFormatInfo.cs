@@ -51,6 +51,7 @@ namespace System.Globalization {
 
 	[ComVisible (true)]
 	[Serializable]
+	[StructLayout (LayoutKind.Sequential)]
 	public sealed class NumberFormatInfo : ICloneable, IFormatProvider {
 
 /* Keep in sync with object-internals.h */
@@ -106,10 +107,11 @@ namespace System.Globalization {
 		bool validForParseAsCurrency; // Unused, but MS.NET serializes this.
 #pragma warning restore 169
 		
+#if !MOBILE
 		string[] nativeDigits = invariantNativeDigits;
 		int digitSubstitution = 1; // DigitShapes.None.
-
 		static readonly string [] invariantNativeDigits = new string [] {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+#endif
 
 		internal NumberFormatInfo (int lcid, bool read_only)
 		{
@@ -119,13 +121,9 @@ namespace System.Globalization {
 			// CultureInfo uses this one also.
 			if (lcid != 0x007F)
 				lcid = 0x007F;
-			
-			switch (lcid){
 
-				// The Invariant Culture Info ID.
-			case 0x007f:
-				isReadOnly = false;
-				
+			// The Invariant Culture Info ID.
+			if (lcid == 0x007f) {
 				// Currency Related Format Info
 				currencyDecimalDigits =       2;
 				currencyDecimalSeparator =    ".";
@@ -133,7 +131,7 @@ namespace System.Globalization {
 				currencyGroupSizes =          new int[1] { 3 };
 				currencyNegativePattern =     0;
 				currencyPositivePattern =     0;
-				currencySymbol =              "$";
+				currencySymbol =              "\u00a4";
 				
 				nanSymbol =                   "NaN";
 				negativeInfinitySymbol =      "-Infinity";
@@ -158,7 +156,6 @@ namespace System.Globalization {
 				perMilleSymbol =              "\u2030";
 				positiveInfinitySymbol =      "Infinity";
 				positiveSign =                "+";
-				break;
 			}
 		}
 
@@ -424,7 +421,7 @@ namespace System.Globalization {
 					("The current instance is read-only and a set operation was attempted");
 				
 				if (value.Length == 0) {
-					currencyGroupSizes = new int [0];
+					currencyGroupSizes = EmptyArray<int>.Value;
 					return;
 				}
 				
@@ -513,11 +510,9 @@ namespace System.Globalization {
 		public static NumberFormatInfo InvariantInfo {
 			get {
 				// This uses invariant info, which is same as in the constructor
-				NumberFormatInfo nfi = new NumberFormatInfo ();
-				nfi.NumberNegativePattern = 1;
-				nfi.isReadOnly = true;
+				NumberFormatInfo nfi = new NumberFormatInfo (true);
 				return nfi;
-			}		       
+			}
 		}
 
 		public bool IsReadOnly {
@@ -689,7 +684,7 @@ namespace System.Globalization {
 					("The current instance is read-only and a set operation was attempted");
 				
 				if (value.Length == 0) {
-					numberGroupSizes = new int [0];
+					numberGroupSizes = EmptyArray<int>.Value;
 					return;
 				}
 				// All elements except last need to be in range 1 - 9, last can be 0.
@@ -812,7 +807,7 @@ namespace System.Globalization {
 					throw new Exception ("HERE the value was modified");
 				
 				if (value.Length == 0) {
-					percentGroupSizes = new int [0];
+					percentGroupSizes = EmptyArray<int>.Value;
 					return;
 				}
 

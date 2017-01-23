@@ -25,6 +25,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -41,6 +42,8 @@ namespace System.Web.Caching
 		CacheItem[] heap;
 		int heapSize = 0;
 		int heapCount = 0;
+
+		// See comment for the cacheLock field at top of System.Web.Caching/Cache.cs
 		ReaderWriterLockSlim queueLock;
 
 		public int Count {
@@ -50,6 +53,10 @@ namespace System.Web.Caching
 		public int Size {
 			get { return heapSize; }
 		}
+
+		public CacheItem[] Heap {
+			get { return heap; }
+		}
 		
 		public CacheItemPriorityQueue ()
 		{
@@ -57,6 +64,24 @@ namespace System.Web.Caching
 			InitDebugMode ();
 		}
 
+		void ResizeHeap (int newSize)
+		{
+			CacheItem[] oldHeap = heap;
+			Array.Resize <CacheItem> (ref heap, newSize);
+			heapSize = newSize;
+			
+			// TODO: The code helps the GC in case the array is pinned. In such instance clearing
+			// the old array will release references to the CacheItems stored in there. If the
+			// array is not pinned, otoh, this is a waste of time.
+			// Currently we don't know if the array is pinned or not so it's safer to always clear it.
+			// However when we have more precise stack scanning the code should be
+			// revisited.
+			if (oldHeap != null) {
+				((IList)oldHeap).Clear ();
+				oldHeap = null;
+			}
+		}
+		
 		CacheItem[] GetHeapWithGrow ()
 		{
 			if (heap == null) {
@@ -66,10 +91,8 @@ namespace System.Web.Caching
 				return heap;
 			}
 
-			if (heapCount >= heapSize) {
-				heapSize <<= 1;
-				Array.Resize <CacheItem> (ref heap, heapSize);
-			}
+			if (heapCount >= heapSize)
+				ResizeHeap (heapSize <<= 1);
 
 			return heap;
 		}
@@ -83,7 +106,7 @@ namespace System.Web.Caching
 				int halfTheSize = heapSize >> 1;
 
 				if (heapCount < halfTheSize)
-					Array.Resize <CacheItem> (ref heap, halfTheSize + (heapCount / 3));
+					ResizeHeap (halfTheSize + (heapCount / 3));
 			}
 			
 			return heap;
@@ -94,20 +117,19 @@ namespace System.Web.Caching
 			if (item == null)
 				return;
 
-			bool locked = false;
 			CacheItem[] heap;
 			
 			try {
 				queueLock.EnterWriteLock ();
-				locked = true;
 				heap = GetHeapWithGrow ();
-				heap [heapCount++] = item;
-				BubbleUp (heap);
-				
+				heap [heapCount] = item;
+				if (heapCount == 0)
+					item.PriorityQueueIndex = 0;
+				BubbleUp (heap, heapCount++);
 				AddSequenceEntry (item, EDSequenceEntryType.Enqueue);
 			} finally {
-				if (locked)
-					queueLock.ExitWriteLock ();
+				// See comment at the top of the file, above queueLock declaration
+				queueLock.ExitWriteLock ();
 			}
 		}
 
@@ -115,12 +137,10 @@ namespace System.Web.Caching
 		{
 			CacheItem ret = null;
 			CacheItem[] heap;
-			bool locked = false;
 			int index;
 			
 			try {
 				queueLock.EnterWriteLock ();
-				locked = true;
 				heap = GetHeapWithShrink ();
 				if (heap == null || heapCount == 0)
 					return null;
@@ -131,24 +151,51 @@ namespace System.Web.Caching
 				heap [index] = null;
 				
 				if (heapCount > 0)
-					BubbleDown (heap);
+					BubbleDown (heap, 0);
 
 				AddSequenceEntry (ret, EDSequenceEntryType.Dequeue);
 				return ret;
 			} finally {
-				if (locked)
-					queueLock.ExitWriteLock ();
+				// See comment at the top of the file, above queueLock declaration
+				queueLock.ExitWriteLock ();
 			}
 		}
 
+		public bool Update (CacheItem item)
+		{
+			if (item == null || item.PriorityQueueIndex <= 0 || item.PriorityQueueIndex >= heapCount - 1)
+				return false;
+
+			try {
+				queueLock.EnterWriteLock ();
+				CacheItem stored = heap [item.PriorityQueueIndex];
+				if (stored == null ||
+				    String.Compare (stored.Key, item.Key, StringComparison.Ordinal) != 0
+#if DEBUG
+				    || stored.Guid != item.Guid
+#endif
+				)
+					return false;
+
+				int oldIndex = item.PriorityQueueIndex;
+				int index = BubbleUp (heap, oldIndex);
+				if (index > -1 && index >= oldIndex) 
+					BubbleDown (heap, index);
+
+				AddSequenceEntry (item, EDSequenceEntryType.Update);
+			} finally {
+				queueLock.ExitWriteLock ();
+			}
+			
+			return true;
+		}
+		
 		public CacheItem Peek ()
 		{
-			bool locked = false;
 			CacheItem ret;
 			
 			try {
 				queueLock.EnterReadLock ();
-				locked = true;
 				if (heap == null || heapCount == 0)
 					return null;
 
@@ -157,38 +204,54 @@ namespace System.Web.Caching
 				
 				return ret;
 			} finally {
-				if (locked)
-					queueLock.ExitReadLock ();
+				// See comment at the top of the file, above queueLock declaration
+				queueLock.ExitReadLock ();
 			}
 		}
 		
-		void BubbleDown (CacheItem[] heap)
+		int BubbleDown (CacheItem[] heap, int startIndex)
 		{
-			int index = 0;
-			int left = 1;
-			int right = 2;
-			CacheItem item = heap [0];
+			int index = startIndex;
+			int left = startIndex + 1;
+			int right = startIndex + 2;
+			CacheItem item = heap [index], tmpItem;
+
 			int selected = (right < heapCount && heap [right].ExpiresAt < heap [left].ExpiresAt) ? 2 : 1;
 
-			while (selected < heapCount && heap [selected].ExpiresAt < item.ExpiresAt) {
-				heap [index] = heap [selected];
-				index = selected;
+			do {
+				selected = index;
 				left = (index << 1) + 1;
 				right = left + 1;
-				selected = right < heapCount && heap [right].ExpiresAt < heap [left].ExpiresAt ? right : left;
-			}
-			heap [index] = item;
+				if (heapCount > left && heap [index].ExpiresAt > heap [left].ExpiresAt)
+					index = left;
+				if (heapCount > right && heap [index].ExpiresAt > heap [right].ExpiresAt)
+					index = right;
+				if (index == selected)
+					break;
+				tmpItem = heap [index];
+				heap [index] = heap [selected];
+				heap [index].PriorityQueueIndex = index;
+				heap [selected] = tmpItem;
+				tmpItem.PriorityQueueIndex = selected;
+			} while (true);
+
+			item.PriorityQueueIndex = index;
+			return index;
 		}
 		
-		void BubbleUp (CacheItem[] heap)
+		int BubbleUp (CacheItem[] heap, int startIndex)
 		{
 			int index, parentIndex;
 			CacheItem parent, item;
-			
+
 			if (heapCount <= 1)
-				return;
+				return -1;
 			
-			index = heapCount - 1;
+			int maxIndex = heapCount - 1;
+			if (startIndex < 0 || startIndex > maxIndex)
+				return -1;
+			
+			index = startIndex;
 			parentIndex = (index - 1) >> 1;
 
 			item = heap [index];
@@ -198,11 +261,15 @@ namespace System.Web.Caching
 					break;
 				
 				heap [index] = parent;
+				parent.PriorityQueueIndex = index;
 				index = parentIndex;
 				parentIndex = (index - 1) >> 1;
 			}
 
 			heap [index] = item;
+			item.PriorityQueueIndex = index;
+
+			return index;
 		}
 	}
 }

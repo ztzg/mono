@@ -391,7 +391,7 @@ guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type,
  * trampoline which does unboxing before calling the method. Remember
  * this trampoline executes in the context of the caller.
  */
-gpointer mono_arch_get_unbox_trampoline(MonoGenericSharingContext *gsctx, MonoMethod *method, gpointer address)
+gpointer mono_arch_get_unbox_trampoline(MonoMethod *method, gpointer address)
 {
 	guint8 *code   = NULL;
 	guint8 *buffer = NULL;

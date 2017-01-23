@@ -146,6 +146,10 @@ struct _WapiShellExecuteInfo
 #define CREATE_DEFAULT_ERROR_MODE 0x04000000
 #define CREATE_NO_WINDOW 0x08000000
 
+#ifndef HOST_WIN32
+#define CREATE_NO_DETACH 0x10000000
+#endif
+
 #ifdef NEW_STUFF
 #define CREATE_PRESERVE_CODE_AUTHZ_LEVEL find out the value for this one...
 #endif
@@ -190,6 +194,7 @@ extern gpointer GetCurrentProcess (void);
 extern guint32 GetProcessId (gpointer handle);
 extern guint32 GetCurrentProcessId (void);
 extern gboolean EnumProcesses (guint32 *pids, guint32 len, guint32 *needed);
+extern gboolean CloseProcess (gpointer handle);
 extern gpointer OpenProcess (guint32 access, gboolean inherit, guint32 pid);
 extern gboolean GetExitCodeProcess (gpointer process, guint32 *code);
 extern gboolean GetProcessTimes (gpointer process, WapiFileTime *create_time,

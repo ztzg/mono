@@ -33,16 +33,20 @@
 //
 
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 using System.Runtime.Remoting;
 using System.Runtime.Remoting.Proxies;
 using System.Runtime.Remoting.Activation;
 using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Lifetime;
+using System.Runtime.InteropServices;
+
 
 namespace System.Runtime.Remoting.Contexts {
 
 	[System.Runtime.InteropServices.ComVisible (true)]
+	[StructLayout (LayoutKind.Sequential)]
 	public class Context 
 	{
 #pragma warning disable 169, 414
@@ -63,8 +67,8 @@ namespace System.Runtime.Remoting.Contexts {
 		IMessageSink client_context_sink_chain = null;
 
 		object[] datastore;
-		ArrayList context_properties;
-		bool frozen;
+		List<IContextProperty> context_properties;
+//		bool frozen;
 		
 		static int global_count;
 
@@ -103,8 +107,10 @@ namespace System.Runtime.Remoting.Contexts {
 		{
 			get 
 			{
-				if (context_properties == null) return new IContextProperty[0];
-				else return (IContextProperty[]) context_properties.ToArray (typeof(IContextProperty[]));
+				if (context_properties == null)
+					return new IContextProperty[0];
+				
+				return context_properties.ToArray ();
 			}
 		}
 		
@@ -212,11 +218,11 @@ namespace System.Runtime.Remoting.Contexts {
 			if (this == DefaultContext)
 				throw new InvalidOperationException ("Can not add properties to " +
 								     "default context");
-			if (frozen)
-				throw new InvalidOperationException ("Context is Frozen");
+//			if (frozen)
+//				throw new InvalidOperationException ("Context is Frozen");
 			
 			if (context_properties == null)
-				context_properties = new ArrayList ();
+				context_properties = new List<IContextProperty> ();
 
 			context_properties.Add (prop);
 		}
@@ -350,7 +356,6 @@ namespace System.Runtime.Remoting.Contexts {
 			callback_object.DoCallBack (deleg);
 		}
 		
-#if !MOONLIGHT
 		public static LocalDataStoreSlot AllocateDataSlot ()
 		{
 			return new LocalDataStoreSlot (false);
@@ -411,7 +416,6 @@ namespace System.Runtime.Remoting.Contexts {
 				ctx.datastore [slot.slot] = data;
 			}
 		}
-#endif
 	}
 
 	class DynamicPropertyCollection

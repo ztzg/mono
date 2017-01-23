@@ -17,8 +17,6 @@
 
 MONO_BEGIN_DECLS
 
-typedef void (*MonoThreadCleanupFunc) (MonoThread* thread);
-
 /* This callback should return TRUE if the runtime must wait for the thread, FALSE otherwise */
 typedef mono_bool (*MonoThreadManageCallback) (MonoThread* thread);
 
@@ -41,13 +39,14 @@ extern MonoThread *mono_thread_attach (MonoDomain *domain);
 extern void mono_thread_detach (MonoThread *thread);
 extern void mono_thread_exit (void);
 
-void     mono_threads_install_cleanup   (MonoThreadCleanupFunc func);
 void     mono_thread_set_manage_callback (MonoThread *thread, MonoThreadManageCallback func);
 
 extern void mono_threads_set_default_stacksize (uint32_t stacksize);
 extern uint32_t mono_threads_get_default_stacksize (void);
 
 void mono_threads_request_thread_dump (void);
+
+mono_bool mono_thread_is_foreign (MonoThread *thread);
 
 MONO_END_DECLS
 

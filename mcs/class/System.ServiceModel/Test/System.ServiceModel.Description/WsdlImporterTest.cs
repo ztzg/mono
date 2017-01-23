@@ -237,26 +237,6 @@ namespace MonoTests.System.ServiceModel.Description
 		}
 
 		[Test]
-		public void BindingsTest ()
-		{
-			NoExtensionsSetup ();
-			IEnumerable<SMBinding> bindings = wi.ImportAllBindings ();
-
-			int count = 0;
-			foreach (SMBinding b in bindings) {
-				Assert.AreEqual (typeof (CustomBinding), b.GetType (), "#B1");
-				Assert.AreEqual ("BasicHttpBinding_IEchoService", b.Name, "#B2");
-				Assert.AreEqual ("http://tempuri.org/", b.Namespace, "#B3");
-				Assert.AreEqual ("", b.Scheme, "#B4");
-
-				//FIXME: Test BindingElements
-
-				count++;
-			}
-			Assert.AreEqual (1, count);
-		}
-
-		[Test]
 		[Category ("NotWorking")]
 		public void ContractsTest ()
 		{
@@ -576,6 +556,41 @@ namespace MonoTests.System.ServiceModel.Description
 				cg.TargetCompileUnit, sw, null);
 			// sort of hacky test
 			Assert.IsTrue (sw.ToString ().IndexOf ("int[] GetSearchData") > 0, "#1");
+		}
+
+		[Test]
+		[Category ("NotWorking")]
+		public void ImportXmlTypes ()
+		{
+			// part of bug #670945
+			var mset = new MetadataSet ();
+			WSServiceDescription sd = null;
+
+			sd = WSServiceDescription.Read (XmlReader.Create ("Test/XmlFiles/670945.wsdl"));
+			mset.MetadataSections.Add (new MetadataSection () {
+				Dialect = MetadataSection.ServiceDescriptionDialect,
+				Metadata = sd });
+
+			var imp = new WsdlImporter (mset);
+			var sec = imp.ImportAllContracts ();
+			
+			// FIXME: examine resulting operations.
+		}
+
+		[Test]
+		[Ignore ("FIXME: Using external source")]
+		public void ImportMethodWithDateTime ()
+		{
+			var ms = GetMetadataSetFromWsdl ("Test/Resources/DateTime.wsdl");
+			var imp = new WsdlImporter (ms);
+			var cg = new ServiceContractGenerator ();
+			var cd = imp.ImportAllContracts () [0];
+			cg.GenerateServiceContractType (cd);
+			var sw = new StringWriter ();
+			new CSharpCodeProvider ().GenerateCodeFromCompileUnit (
+				cg.TargetCompileUnit, sw, null);
+			// sort of hacky test
+			Assert.IsTrue (sw.ToString ().IndexOf ("System.DateTime GetDate") > 0, "#1");
 		}
 	}
 }

@@ -349,6 +349,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestValueXml ()
 		{
 			BuildPropertyGroup [] bpgs = new BuildPropertyGroup [1];
@@ -374,9 +375,11 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 
 			xd = new XmlDocument ();
 			xd.LoadXml (project.Xml);
-			Console.WriteLine(project.Xml);
 			node = xd.SelectSingleNode ("tns:Project/tns:PropertyGroup/tns:XmlProp/tns:XmlStuff", TestNamespaceManager.NamespaceManager);
-			Assert.IsNotNull (node, "A1");
+			if (node == null) {
+				Console.WriteLine (project.Xml);
+				Assert.Fail ("Expected node to be non-null");
+			}
 		}
 
 	}

@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 
-class Tests {
-
+#if MOBILE
+class GenericsTests
+#else
+class Tests
+#endif
+{
 	struct TestStruct {
 		public int i;
 		public int j;
@@ -14,6 +21,7 @@ class Tests {
 		}
 	}
 
+#if !MOBILE
 	class Enumerator <T> : MyIEnumerator <T> {
 		T MyIEnumerator<T>.Current {
 			get {
@@ -31,11 +39,14 @@ class Tests {
 			return true;
 		}
 	}
+#endif
 
+#if !MOBILE
 	static int Main (string[] args)
 	{
 		return TestDriver.RunTests (typeof (Tests), args);
 	}
+#endif
 
 	public static int test_1_nullable_unbox ()
 	{
@@ -180,7 +191,11 @@ class Tests {
 	public static int test_0_constrained_vtype_box () {
 		GenericClass<TestStruct> t = new GenericClass<TestStruct> ();
 
+#if MOBILE
+		return t.toString (new TestStruct ()) == "GenericsTests+TestStruct" ? 0 : 1;
+#else
 		return t.toString (new TestStruct ()) == "Tests+TestStruct" ? 0 : 1;
+#endif
 	}
 
 	public static int test_0_constrained_vtype () {
@@ -307,6 +322,16 @@ class Tests {
 		public GenericClass<int> class_field;
 	}
 
+	public class MRO<T> : MarshalByRefObject {
+		public T gen_field;
+
+		public T stfld_ldfld (T t) {
+			var m = this;
+			m.gen_field = t;
+			return m.gen_field;
+		}
+	}
+
 	public static int test_0_ldfld_stfld_mro () {
 		MRO m = new MRO ();
 		GenericStruct<int> s = new GenericStruct<int> (5);
@@ -328,6 +353,11 @@ class Tests {
 		m.class_field = new GenericClass<int> (5);
 		if (m.class_field.t != 5)
 			return 4;
+
+		// gshared
+		var m2 = new MRO<string> ();
+		if (m2.stfld_ldfld ("A") != "A")
+			return 5;
 
 		return 0;
 	}
@@ -371,6 +401,7 @@ class Tests {
 		return 0;
 	}
 
+#if !MOBILE
 	public static int test_0_variance_reflection () {
 		// covariance on IEnumerator
 		if (!typeof (MyIEnumerator<object>).IsAssignableFrom (typeof (MyIEnumerator<string>)))
@@ -393,9 +424,10 @@ class Tests {
 			return 6;
 		return 0;
 	}
+#endif
 
 	public static int test_0_ldvirtftn_generic_method () {
-		new Tests ().ldvirtftn<string> ();		
+		new GenericsTests ().ldvirtftn<string> ();
 
 		return the_type == typeof (string) ? 0 : 1;
 	}
@@ -445,6 +477,29 @@ class Tests {
 		return 0;
 	}
 
+	public static int test_0_generic_virtual_on_interfaces_ref () {
+		Foo<string>.count1 = 0;
+		Foo<string>.count2 = 0;
+		Foo<string>.count3 = 0;
+		Foo<string>.count4 = 0;
+
+		IFoo f = new Foo<string> ("");
+		for (int i = 0; i < 1000; ++i) {
+			f.Bar <string> ();
+			f.Bar <object> ();
+			f.NonGeneric ();
+		}
+
+		if (Foo<string>.count2 != 1000)
+			return 2;
+		if (Foo<string>.count3 != 1000)
+			return 3;
+		if (Foo<string>.count4 != 1000)
+			return 4;
+
+		return 0;
+	}
+
 	//repro for #505375
 	[Category ("!FULLAOT")]
 	public static int test_2_cprop_bug () {
@@ -490,6 +545,11 @@ class Tests {
 		return l.Count;
 	}
 
+	public static int test_0_fullaot_comparer_t_2 () {
+		var l = new Dictionary <TimeSpan, int> ();
+		return l.Count;
+	}
+
 	static void enumerate<T> (IEnumerable<T> arr) {
 		foreach (var o in arr)
 			;
@@ -498,8 +558,8 @@ class Tests {
 
 	/* Test that treating arrays as generic collections works with full-aot */
 	public static int test_0_fullaot_array_wrappers () {
-		Tests[] arr = new Tests [10];
-		enumerate<Tests> (arr);
+		GenericsTests[] arr = new GenericsTests [10];
+		enumerate<GenericsTests> (arr);
 		return 0;
 	}
 
@@ -605,14 +665,48 @@ class Tests {
 		return 0;
 	}
 
+
+	struct RecStruct<T> {
+		public void foo (RecStruct<RecStruct<T>> baz) {
+		}
+	}
+
+	public static int test_0_infinite_generic_recursion () {
+		// Check that the AOT compile can deal with infinite generic recursion through
+		// parameter types
+		RecStruct<int> bla;
+
+		return 0;
+	}
+
+	struct FooStruct {
+	}
+
+	bool IsNull2 <T> (object value) where T : struct {
+		T? item = (T?) value;
+
+		if (item.HasValue)
+			return false;
+
+		return true;
+	}
+
+	public static int test_0_full_aot_nullable_unbox_from_gshared_code () {
+		if (!new GenericsTests ().IsNull2<FooStruct> (null))
+			return 1;
+		if (new GenericsTests ().IsNull2<FooStruct> (new FooStruct ()))
+			return 2;
+		return 0;
+	}
+
 	public static int test_0_partial_sharing () {
 		if (PartialShared1 (new List<string> (), 1) != typeof (string))
 			return 1;
-		if (PartialShared1 (new List<Tests> (), 1) != typeof (Tests))
+		if (PartialShared1 (new List<GenericsTests> (), 1) != typeof (GenericsTests))
 			return 2;
 		if (PartialShared2 (new List<string> (), 1) != typeof (int))
 			return 3;
-		if (PartialShared2 (new List<Tests> (), 1) != typeof (int))
+		if (PartialShared2 (new List<GenericsTests> (), 1) != typeof (int))
 			return 4;
 		return 0;
 	}
@@ -733,7 +827,7 @@ class Tests {
 			GenericEvent (this);
 		}
 
-		public static int count1, count2, count3;
+		public static int count1, count2, count3, count4;
 
 		public void NonGeneric () {
 			count3 ++;
@@ -744,6 +838,8 @@ class Tests {
 				count1 ++;
 			else if (typeof (T) == typeof (string))
 				count2 ++;
+			else if (typeof (T) == typeof (object))
+				count4 ++;
 			return null;
 		}
 	}
@@ -785,4 +881,194 @@ class Tests {
 	static T Unbox <T> (object o) {
 		return (T) o;
 	}
+
+	interface IDefaultRetriever
+	{
+		T GetDefault<T>();
+	}
+
+	class DefaultRetriever : IDefaultRetriever
+	{
+		[MethodImpl(MethodImplOptions.Synchronized)]
+		public T GetDefault<T>()
+		{
+			return default(T);
+		}
+	}
+
+	[Category ("!FULLAOT")]
+	public static int test_0_regress_668095_synchronized_gshared () {
+		return DoSomething (new DefaultRetriever ());
+	}
+
+    static int DoSomething(IDefaultRetriever foo) {
+		int result = foo.GetDefault<int>();
+		return result;
+	}
+
+	class Response {
+	}
+
+	public static int test_0_687865_isinst_with_cache_wrapper () {
+		object o = new object ();
+		if (o is Action<IEnumerable<Response>>)
+			return 1;
+		else
+			return 0;
+	}
+
+	enum DocType {
+		One,
+		Two,
+		Three
+	}
+
+	class Doc {
+		public string Name {
+			get; set;
+		}
+
+		public DocType Type {
+			get; set;
+		}
+	}
+
+	// #2155
+	public static int test_0_fullaot_sflda_cctor () {
+		List<Doc> documents = new List<Doc>();
+		documents.Add(new Doc { Name = "Doc1", Type = DocType.One } );
+		documents.Add(new Doc { Name = "Doc2", Type = DocType.Two } );
+		documents.Add(new Doc { Name = "Doc3", Type = DocType.Three } );
+		documents.Add(new Doc { Name = "Doc4", Type = DocType.One } );
+		documents.Add(new Doc { Name = "Doc5", Type = DocType.Two } );
+		documents.Add(new Doc { Name = "Doc6", Type = DocType.Three } );
+		documents.Add(new Doc { Name = "Doc7", Type = DocType.One } );
+		documents.Add(new Doc { Name = "Doc8", Type = DocType.Two } );
+		documents.Add(new Doc { Name = "Doc9", Type = DocType.Three } );
+
+		List<DocType> categories = documents.Select(d=>d.Type).Distinct().ToList<DocType>().OrderBy(d => d).ToList();
+		foreach(DocType cat in categories) {
+			List<Doc> catDocs = documents.Where(d => d.Type == cat).OrderBy(d => d.Name).ToList<Doc>();
+		}
+		return 0;
+	}
+
+	class A { }
+
+    static List<A> sources = new List<A>();
+
+	// #6112
+    public static int test_0_fullaot_imt () {
+        sources.Add(null);
+        sources.Add(null);
+
+        int a = sources.Count;
+        var enumerator = sources.GetEnumerator() as IEnumerator<object>;
+
+        while (enumerator.MoveNext())
+        {
+            object o = enumerator.Current;
+        }
+
+		return 0;
+	}
+
+	struct Record : Foo2<Record>.IRecord {
+		int counter;
+		int Foo2<Record>.IRecord.DoSomething () {
+			return counter++;
+		}
+	}
+
+	class Foo2<T> where T : Foo2<T>.IRecord {
+		public interface IRecord {
+			int DoSomething ();
+		}
+
+		public static int Extract (T[] t) {
+			return t[0].DoSomething ();
+		}
+	}
+
+	class Foo3<T> where T : IComparable {
+		public static int CompareTo (T[] t) {
+			// This is a constrained call to Enum.CompareTo ()
+			return t[0].CompareTo (t [0]);
+		}
+	}
+
+	public static int test_1_regress_constrained_iface_call_7571 () {
+        var r = new Record [10];
+        Foo2<Record>.Extract (r);
+		return Foo2<Record>.Extract (r);
+	}
+
+	enum ConstrainedEnum {
+		Val = 1
+	}
+
+	public static int test_0_regress_constrained_iface_call_enum () {
+		var r = new ConstrainedEnum [10];
+		return Foo3<ConstrainedEnum>.CompareTo (r);
+	}
+
+	public interface IFoo2 {
+		void MoveNext ();
+	}
+
+	public struct Foo2 : IFoo2 {
+		public void MoveNext () {
+		}
+	}
+
+	public static Action Dingus (ref Foo2 f) {
+		return new Action (f.MoveNext);
+	}
+
+	public static int test_0_delegate_unbox_full_aot () {
+		Foo2 foo = new Foo2 ();
+		Dingus (ref foo) ();
+		return 0;
+	}
+
+	public static int test_0_arrays_ireadonly () {
+		int[] arr = new int [10];
+		for (int i = 0; i < 10; ++i)
+			arr [i] = i;
+		IReadOnlyList<int> a = (IReadOnlyList<int>)(object)arr;
+		if (a.Count != 10)
+			return 1;
+		if (a [0] != 0)
+			return 2;
+		if (a [1] != 1)
+			return 3;
+		return 0;
+	}
+
+	public static int test_0_volatile_read_write () {
+		string foo = "ABC";
+		Volatile.Write (ref foo, "DEF");
+		return Volatile.Read (ref foo) == "DEF" ? 0 : 1;
+	}
+
+	// FIXME: Doesn't work with --regression as Interlocked.Add(ref long) is only implemented as an intrinsic
+#if FALSE
+	public static async Task<T> FooAsync<T> (int i, int j) {
+		Task<int> t = new Task<int> (delegate () { Console.WriteLine ("HIT!"); return 0; });
+		var response = await t;
+		return default(T);
+	}
+
+	public static int test_0_fullaot_generic_async () {
+		Task<string> t = FooAsync<string> (1, 2);
+		t.RunSynchronously ();
+		return 0;
+	}
+#endif
 }
+
+#if !MOBILE
+class GenericsTests : Tests
+{
+}
+#endif

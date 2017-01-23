@@ -31,7 +31,9 @@ using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+#if !MONOTOUCH
 using System.Reflection.Emit;
+#endif
 using System.IO;
 
 using NUnit.Framework;
@@ -354,7 +356,7 @@ namespace MonoTests.System.Reflection
 				get { return 99; }
 			}
 		}
-
+#if !MONOTOUCH
 		[Test]
 		public void ConstantValue () {
 			/*This test looks scary because we can't generate a default value with C# */
@@ -399,7 +401,7 @@ namespace MonoTests.System.Reflection
 			} catch (InvalidOperationException) {
 			}
 		}
-
+#endif
 #if NET_2_0
 		public class A<T>
 		{
@@ -503,6 +505,23 @@ namespace MonoTests.System.Reflection
 	
 		public class InheritsFromClassWithNullableDateTime : ClassWithNullableDateTime
 		{
+		}
+
+		public static int ThrowingProperty {
+			get {
+				throw new ObjectDisposedException("TestClass");
+			}
+		}
+
+		[Test]
+		public void GetException () {
+			var prop = typeof(PropertyInfoTest).GetProperty("ThrowingProperty");
+			try {
+				prop.GetValue (null, null);
+				Assert.Fail ();
+			} catch (TargetInvocationException ex) {
+				Assert.IsTrue (ex.InnerException is ObjectDisposedException);
+			}
 		}
 	}
 }

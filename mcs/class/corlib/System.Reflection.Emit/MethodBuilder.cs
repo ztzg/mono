@@ -30,6 +30,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#if !FULL_AOT_RUNTIME
 using System;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -45,6 +46,7 @@ namespace System.Reflection.Emit
 	[ComVisible (true)]
 	[ComDefaultInterface (typeof (_MethodBuilder))]
 	[ClassInterface (ClassInterfaceType.None)]
+	[StructLayout (LayoutKind.Sequential)]
 	public sealed class MethodBuilder : MethodInfo, _MethodBuilder
 	{
 #pragma warning disable 169, 414
@@ -60,7 +62,7 @@ namespace System.Reflection.Emit
 		private TypeBuilder type;
 		internal ParameterBuilder[] pinfo;
 		private CustomAttributeBuilder[] cattrs;
-		private MethodInfo override_method;
+		private MethodInfo[] override_methods;
 		private string pi_dll;
 		private string pi_entry;
 		private CharSet charset;
@@ -217,6 +219,12 @@ namespace System.Reflection.Emit
 		{
 			if (!type.is_created)
 				throw NotSupported ();
+
+			return GetParametersInternal ();
+		}
+
+		internal override ParameterInfo[] GetParametersInternal ()
+		{
 			if (parameters == null)
 				return null;
 
@@ -227,12 +235,16 @@ namespace System.Reflection.Emit
 			return retval;
 		}
 		
-		internal override int GetParameterCount ()
+		internal override int GetParametersCount ()
 		{
 			if (parameters == null)
 				return 0;
 			
 			return parameters.Length;
+		}
+
+		internal override Type GetParameterType (int pos) {
+			return parameters [pos];
 		}
 
 		public Module GetModule ()
@@ -324,8 +336,12 @@ namespace System.Reflection.Emit
 
 		internal void check_override ()
 		{
-			if (override_method != null && override_method.IsVirtual && !IsVirtual)
-				throw new TypeLoadException (String.Format("Method '{0}' override '{1}' but it is not virtual", name, override_method));
+			if (override_methods != null) {
+				foreach (var m in override_methods) {
+					if (m.IsVirtual && !IsVirtual)
+						throw new TypeLoadException (String.Format("Method '{0}' override '{1}' but it is not virtual", name, m));
+				}
+			}
 		}
 
 		internal void fixup ()
@@ -517,9 +533,20 @@ namespace System.Reflection.Emit
 			return type.get_next_table_index (obj, table, inc);
 		}
 
+		void ExtendArray<T> (ref T[] array, T elem) {
+			if (array == null) {
+				array = new T [1];
+			} else {
+				var newa = new T [array.Length + 1];
+				Array.Copy (array, newa, array.Length);
+				array = newa;
+			}
+			array [array.Length - 1] = elem;
+		}
+
 		internal void set_override (MethodInfo mdecl)
 		{
-			override_method = mdecl;
+			ExtendArray<MethodInfo> (ref override_methods, mdecl);
 		}
 
 		private void RejectIfCreated ()
@@ -533,20 +560,20 @@ namespace System.Reflection.Emit
 			return new NotSupportedException ("The invoked member is not supported in a dynamic module.");
 		}
 
-		public override MethodInfo MakeGenericMethod (params Type [] methodInstantiation)
+		public override MethodInfo MakeGenericMethod (params Type [] typeArguments)
 		{
 			if (!IsGenericMethodDefinition)
 				throw new InvalidOperationException ("Method is not a generic method definition");
-			if (methodInstantiation == null)
-				throw new ArgumentNullException ("methodInstantiation");
-			if (generic_params.Length != methodInstantiation.Length)
-				throw new ArgumentException ("Incorrect length", "methodInstantiation");
-			foreach (Type type in methodInstantiation) {
+			if (typeArguments == null)
+				throw new ArgumentNullException ("typeArguments");
+			if (generic_params.Length != typeArguments.Length)
+				throw new ArgumentException ("Incorrect length", "typeArguments");
+			foreach (Type type in typeArguments) {
 				if (type == null)
-					throw new ArgumentNullException ("methodInstantiation");
+					throw new ArgumentNullException ("typeArguments");
 			}
 
-			return new MethodOnTypeBuilderInst (this, methodInstantiation);
+			return new MethodOnTypeBuilderInst (this, typeArguments);
 		}
 
 		public override bool IsGenericMethodDefinition {
@@ -572,7 +599,7 @@ namespace System.Reflection.Emit
 		public override Type[] GetGenericArguments ()
 		{
 			if (generic_params == null)
-				return Type.EmptyTypes;
+				return null;
 
 			Type[] result = new Type [generic_params.Length];
 			for (int i = 0; i < generic_params.Length; i++)
@@ -651,5 +678,12 @@ namespace System.Reflection.Emit
 		{
 			throw new NotImplementedException ();
 		}
+
+#if NET_4_0
+		public override ParameterInfo ReturnParameter {
+			get { return base.ReturnParameter; }
+		}
+#endif
 	}
 }
+#endif

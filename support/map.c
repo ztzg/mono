@@ -45,6 +45,9 @@
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 #endif /* ndef HAVE_SYS_MMAN_H */
+#ifdef HAVE_SYS_UIO_H
+#include <sys/uio.h>
+#endif /* ndef HAVE_SYS_UIO_H */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif /* ndef HAVE_UNISTD_H */
@@ -289,6 +292,72 @@ int Mono_Posix_ToAccessModes (int x, int *r)
 	if ((x & X_OK) == X_OK)
 		*r |= Mono_Posix_AccessModes_X_OK;
 #endif /* ndef X_OK */
+	return 0;
+}
+
+int Mono_Posix_FromAtFlags (int x, int *r)
+{
+	*r = 0;
+	if ((x & Mono_Posix_AtFlags_AT_EMPTY_PATH) == Mono_Posix_AtFlags_AT_EMPTY_PATH)
+#ifdef AT_EMPTY_PATH
+		*r |= AT_EMPTY_PATH;
+#else /* def AT_EMPTY_PATH */
+		{errno = EINVAL; return -1;}
+#endif /* ndef AT_EMPTY_PATH */
+	if ((x & Mono_Posix_AtFlags_AT_NO_AUTOMOUNT) == Mono_Posix_AtFlags_AT_NO_AUTOMOUNT)
+#ifdef AT_NO_AUTOMOUNT
+		*r |= AT_NO_AUTOMOUNT;
+#else /* def AT_NO_AUTOMOUNT */
+		{errno = EINVAL; return -1;}
+#endif /* ndef AT_NO_AUTOMOUNT */
+	if ((x & Mono_Posix_AtFlags_AT_REMOVEDIR) == Mono_Posix_AtFlags_AT_REMOVEDIR)
+#ifdef AT_REMOVEDIR
+		*r |= AT_REMOVEDIR;
+#else /* def AT_REMOVEDIR */
+		{errno = EINVAL; return -1;}
+#endif /* ndef AT_REMOVEDIR */
+	if ((x & Mono_Posix_AtFlags_AT_SYMLINK_FOLLOW) == Mono_Posix_AtFlags_AT_SYMLINK_FOLLOW)
+#ifdef AT_SYMLINK_FOLLOW
+		*r |= AT_SYMLINK_FOLLOW;
+#else /* def AT_SYMLINK_FOLLOW */
+		{errno = EINVAL; return -1;}
+#endif /* ndef AT_SYMLINK_FOLLOW */
+	if ((x & Mono_Posix_AtFlags_AT_SYMLINK_NOFOLLOW) == Mono_Posix_AtFlags_AT_SYMLINK_NOFOLLOW)
+#ifdef AT_SYMLINK_NOFOLLOW
+		*r |= AT_SYMLINK_NOFOLLOW;
+#else /* def AT_SYMLINK_NOFOLLOW */
+		{errno = EINVAL; return -1;}
+#endif /* ndef AT_SYMLINK_NOFOLLOW */
+	if (x == 0)
+		return 0;
+	return 0;
+}
+
+int Mono_Posix_ToAtFlags (int x, int *r)
+{
+	*r = 0;
+	if (x == 0)
+		return 0;
+#ifdef AT_EMPTY_PATH
+	if ((x & AT_EMPTY_PATH) == AT_EMPTY_PATH)
+		*r |= Mono_Posix_AtFlags_AT_EMPTY_PATH;
+#endif /* ndef AT_EMPTY_PATH */
+#ifdef AT_NO_AUTOMOUNT
+	if ((x & AT_NO_AUTOMOUNT) == AT_NO_AUTOMOUNT)
+		*r |= Mono_Posix_AtFlags_AT_NO_AUTOMOUNT;
+#endif /* ndef AT_NO_AUTOMOUNT */
+#ifdef AT_REMOVEDIR
+	if ((x & AT_REMOVEDIR) == AT_REMOVEDIR)
+		*r |= Mono_Posix_AtFlags_AT_REMOVEDIR;
+#endif /* ndef AT_REMOVEDIR */
+#ifdef AT_SYMLINK_FOLLOW
+	if ((x & AT_SYMLINK_FOLLOW) == AT_SYMLINK_FOLLOW)
+		*r |= Mono_Posix_AtFlags_AT_SYMLINK_FOLLOW;
+#endif /* ndef AT_SYMLINK_FOLLOW */
+#ifdef AT_SYMLINK_NOFOLLOW
+	if ((x & AT_SYMLINK_NOFOLLOW) == AT_SYMLINK_NOFOLLOW)
+		*r |= Mono_Posix_AtFlags_AT_SYMLINK_NOFOLLOW;
+#endif /* ndef AT_SYMLINK_NOFOLLOW */
 	return 0;
 }
 
@@ -831,6 +900,188 @@ int Mono_Posix_ToDirectoryNotifyFlags (int x, int *r)
 	if ((x & DN_RENAME) == DN_RENAME)
 		*r |= Mono_Posix_DirectoryNotifyFlags_DN_RENAME;
 #endif /* ndef DN_RENAME */
+	return 0;
+}
+
+int Mono_Posix_FromEpollEvents (unsigned int x, unsigned int *r)
+{
+	*r = 0;
+	if ((x & Mono_Posix_EpollEvents_EPOLLERR) == Mono_Posix_EpollEvents_EPOLLERR)
+#ifdef EPOLLERR
+		*r |= EPOLLERR;
+#else /* def EPOLLERR */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLERR */
+	if ((x & Mono_Posix_EpollEvents_EPOLLET) == Mono_Posix_EpollEvents_EPOLLET)
+#ifdef EPOLLET
+		*r |= EPOLLET;
+#else /* def EPOLLET */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLET */
+	if ((x & Mono_Posix_EpollEvents_EPOLLHUP) == Mono_Posix_EpollEvents_EPOLLHUP)
+#ifdef EPOLLHUP
+		*r |= EPOLLHUP;
+#else /* def EPOLLHUP */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLHUP */
+	if ((x & Mono_Posix_EpollEvents_EPOLLIN) == Mono_Posix_EpollEvents_EPOLLIN)
+#ifdef EPOLLIN
+		*r |= EPOLLIN;
+#else /* def EPOLLIN */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLIN */
+	if ((x & Mono_Posix_EpollEvents_EPOLLMSG) == Mono_Posix_EpollEvents_EPOLLMSG)
+#ifdef EPOLLMSG
+		*r |= EPOLLMSG;
+#else /* def EPOLLMSG */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLMSG */
+	if ((x & Mono_Posix_EpollEvents_EPOLLONESHOT) == Mono_Posix_EpollEvents_EPOLLONESHOT)
+#ifdef EPOLLONESHOT
+		*r |= EPOLLONESHOT;
+#else /* def EPOLLONESHOT */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLONESHOT */
+	if ((x & Mono_Posix_EpollEvents_EPOLLOUT) == Mono_Posix_EpollEvents_EPOLLOUT)
+#ifdef EPOLLOUT
+		*r |= EPOLLOUT;
+#else /* def EPOLLOUT */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLOUT */
+	if ((x & Mono_Posix_EpollEvents_EPOLLPRI) == Mono_Posix_EpollEvents_EPOLLPRI)
+#ifdef EPOLLPRI
+		*r |= EPOLLPRI;
+#else /* def EPOLLPRI */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLPRI */
+	if ((x & Mono_Posix_EpollEvents_EPOLLRDBAND) == Mono_Posix_EpollEvents_EPOLLRDBAND)
+#ifdef EPOLLRDBAND
+		*r |= EPOLLRDBAND;
+#else /* def EPOLLRDBAND */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLRDBAND */
+	if ((x & Mono_Posix_EpollEvents_EPOLLRDHUP) == Mono_Posix_EpollEvents_EPOLLRDHUP)
+#ifdef EPOLLRDHUP
+		*r |= EPOLLRDHUP;
+#else /* def EPOLLRDHUP */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLRDHUP */
+	if ((x & Mono_Posix_EpollEvents_EPOLLRDNORM) == Mono_Posix_EpollEvents_EPOLLRDNORM)
+#ifdef EPOLLRDNORM
+		*r |= EPOLLRDNORM;
+#else /* def EPOLLRDNORM */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLRDNORM */
+	if ((x & Mono_Posix_EpollEvents_EPOLLWRBAND) == Mono_Posix_EpollEvents_EPOLLWRBAND)
+#ifdef EPOLLWRBAND
+		*r |= EPOLLWRBAND;
+#else /* def EPOLLWRBAND */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLWRBAND */
+	if ((x & Mono_Posix_EpollEvents_EPOLLWRNORM) == Mono_Posix_EpollEvents_EPOLLWRNORM)
+#ifdef EPOLLWRNORM
+		*r |= EPOLLWRNORM;
+#else /* def EPOLLWRNORM */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLLWRNORM */
+	if (x == 0)
+		return 0;
+	return 0;
+}
+
+int Mono_Posix_ToEpollEvents (unsigned int x, unsigned int *r)
+{
+	*r = 0;
+	if (x == 0)
+		return 0;
+#ifdef EPOLLERR
+	if ((x & EPOLLERR) == EPOLLERR)
+		*r |= Mono_Posix_EpollEvents_EPOLLERR;
+#endif /* ndef EPOLLERR */
+#ifdef EPOLLET
+	if ((x & EPOLLET) == EPOLLET)
+		*r |= Mono_Posix_EpollEvents_EPOLLET;
+#endif /* ndef EPOLLET */
+#ifdef EPOLLHUP
+	if ((x & EPOLLHUP) == EPOLLHUP)
+		*r |= Mono_Posix_EpollEvents_EPOLLHUP;
+#endif /* ndef EPOLLHUP */
+#ifdef EPOLLIN
+	if ((x & EPOLLIN) == EPOLLIN)
+		*r |= Mono_Posix_EpollEvents_EPOLLIN;
+#endif /* ndef EPOLLIN */
+#ifdef EPOLLMSG
+	if ((x & EPOLLMSG) == EPOLLMSG)
+		*r |= Mono_Posix_EpollEvents_EPOLLMSG;
+#endif /* ndef EPOLLMSG */
+#ifdef EPOLLONESHOT
+	if ((x & EPOLLONESHOT) == EPOLLONESHOT)
+		*r |= Mono_Posix_EpollEvents_EPOLLONESHOT;
+#endif /* ndef EPOLLONESHOT */
+#ifdef EPOLLOUT
+	if ((x & EPOLLOUT) == EPOLLOUT)
+		*r |= Mono_Posix_EpollEvents_EPOLLOUT;
+#endif /* ndef EPOLLOUT */
+#ifdef EPOLLPRI
+	if ((x & EPOLLPRI) == EPOLLPRI)
+		*r |= Mono_Posix_EpollEvents_EPOLLPRI;
+#endif /* ndef EPOLLPRI */
+#ifdef EPOLLRDBAND
+	if ((x & EPOLLRDBAND) == EPOLLRDBAND)
+		*r |= Mono_Posix_EpollEvents_EPOLLRDBAND;
+#endif /* ndef EPOLLRDBAND */
+#ifdef EPOLLRDHUP
+	if ((x & EPOLLRDHUP) == EPOLLRDHUP)
+		*r |= Mono_Posix_EpollEvents_EPOLLRDHUP;
+#endif /* ndef EPOLLRDHUP */
+#ifdef EPOLLRDNORM
+	if ((x & EPOLLRDNORM) == EPOLLRDNORM)
+		*r |= Mono_Posix_EpollEvents_EPOLLRDNORM;
+#endif /* ndef EPOLLRDNORM */
+#ifdef EPOLLWRBAND
+	if ((x & EPOLLWRBAND) == EPOLLWRBAND)
+		*r |= Mono_Posix_EpollEvents_EPOLLWRBAND;
+#endif /* ndef EPOLLWRBAND */
+#ifdef EPOLLWRNORM
+	if ((x & EPOLLWRNORM) == EPOLLWRNORM)
+		*r |= Mono_Posix_EpollEvents_EPOLLWRNORM;
+#endif /* ndef EPOLLWRNORM */
+	return 0;
+}
+
+int Mono_Posix_FromEpollFlags (int x, int *r)
+{
+	*r = 0;
+	if ((x & Mono_Posix_EpollFlags_EPOLL_CLOEXEC) == Mono_Posix_EpollFlags_EPOLL_CLOEXEC)
+#ifdef EPOLL_CLOEXEC
+		*r |= EPOLL_CLOEXEC;
+#else /* def EPOLL_CLOEXEC */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLL_CLOEXEC */
+	if ((x & Mono_Posix_EpollFlags_EPOLL_NONBLOCK) == Mono_Posix_EpollFlags_EPOLL_NONBLOCK)
+#ifdef EPOLL_NONBLOCK
+		*r |= EPOLL_NONBLOCK;
+#else /* def EPOLL_NONBLOCK */
+		{errno = EINVAL; return -1;}
+#endif /* ndef EPOLL_NONBLOCK */
+	if (x == 0)
+		return 0;
+	return 0;
+}
+
+int Mono_Posix_ToEpollFlags (int x, int *r)
+{
+	*r = 0;
+	if (x == 0)
+		return 0;
+#ifdef EPOLL_CLOEXEC
+	if ((x & EPOLL_CLOEXEC) == EPOLL_CLOEXEC)
+		*r |= Mono_Posix_EpollFlags_EPOLL_CLOEXEC;
+#endif /* ndef EPOLL_CLOEXEC */
+#ifdef EPOLL_NONBLOCK
+	if ((x & EPOLL_NONBLOCK) == EPOLL_NONBLOCK)
+		*r |= Mono_Posix_EpollFlags_EPOLL_NONBLOCK;
+#endif /* ndef EPOLL_NONBLOCK */
 	return 0;
 }
 
@@ -2582,6 +2833,38 @@ Mono_Posix_ToFlock (struct flock *from, struct Mono_Posix_Flock *to)
 #endif /* ndef HAVE_STRUCT_FLOCK */
 
 
+#ifdef HAVE_STRUCT_IOVEC
+int
+Mono_Posix_FromIovec (struct Mono_Posix_Iovec *from, struct iovec *to)
+{
+	_cnm_return_val_if_overflow (guint64, from->iov_len, -1);
+
+	memset (to, 0, sizeof(*to));
+
+	to->iov_base = from->iov_base;
+	to->iov_len  = from->iov_len;
+
+	return 0;
+}
+#endif /* ndef HAVE_STRUCT_IOVEC */
+
+
+#ifdef HAVE_STRUCT_IOVEC
+int
+Mono_Posix_ToIovec (struct iovec *from, struct Mono_Posix_Iovec *to)
+{
+	_cnm_return_val_if_overflow (guint64, from->iov_len, -1);
+
+	memset (to, 0, sizeof(*to));
+
+	to->iov_base = from->iov_base;
+	to->iov_len  = from->iov_len;
+
+	return 0;
+}
+#endif /* ndef HAVE_STRUCT_IOVEC */
+
+
 int Mono_Posix_FromLockType (short x, short *r)
 {
 	*r = 0;
@@ -3185,6 +3468,12 @@ int Mono_Posix_FromOpenFlags (int x, int *r)
 #else /* def O_ASYNC */
 		{errno = EINVAL; return -1;}
 #endif /* ndef O_ASYNC */
+	if ((x & Mono_Posix_OpenFlags_O_CLOEXEC) == Mono_Posix_OpenFlags_O_CLOEXEC)
+#ifdef O_CLOEXEC
+		*r |= O_CLOEXEC;
+#else /* def O_CLOEXEC */
+		{errno = EINVAL; return -1;}
+#endif /* ndef O_CLOEXEC */
 	if ((x & Mono_Posix_OpenFlags_O_CREAT) == Mono_Posix_OpenFlags_O_CREAT)
 #ifdef O_CREAT
 		*r |= O_CREAT;
@@ -3233,6 +3522,12 @@ int Mono_Posix_FromOpenFlags (int x, int *r)
 #else /* def O_NONBLOCK */
 		{errno = EINVAL; return -1;}
 #endif /* ndef O_NONBLOCK */
+	if ((x & Mono_Posix_OpenFlags_O_PATH) == Mono_Posix_OpenFlags_O_PATH)
+#ifdef O_PATH
+		*r |= O_PATH;
+#else /* def O_PATH */
+		{errno = EINVAL; return -1;}
+#endif /* ndef O_PATH */
 	if ((x & Mono_Posix_OpenFlags_O_RDONLY) == Mono_Posix_OpenFlags_O_RDONLY)
 #ifdef O_RDONLY
 		*r |= O_RDONLY;
@@ -3281,6 +3576,10 @@ int Mono_Posix_ToOpenFlags (int x, int *r)
 	if ((x & O_ASYNC) == O_ASYNC)
 		*r |= Mono_Posix_OpenFlags_O_ASYNC;
 #endif /* ndef O_ASYNC */
+#ifdef O_CLOEXEC
+	if ((x & O_CLOEXEC) == O_CLOEXEC)
+		*r |= Mono_Posix_OpenFlags_O_CLOEXEC;
+#endif /* ndef O_CLOEXEC */
 #ifdef O_CREAT
 	if ((x & O_CREAT) == O_CREAT)
 		*r |= Mono_Posix_OpenFlags_O_CREAT;
@@ -3313,6 +3612,10 @@ int Mono_Posix_ToOpenFlags (int x, int *r)
 	if ((x & O_NONBLOCK) == O_NONBLOCK)
 		*r |= Mono_Posix_OpenFlags_O_NONBLOCK;
 #endif /* ndef O_NONBLOCK */
+#ifdef O_PATH
+	if ((x & O_PATH) == O_PATH)
+		*r |= Mono_Posix_OpenFlags_O_PATH;
+#endif /* ndef O_PATH */
 #ifdef O_RDONLY
 	if ((x & O_RDONLY) == O_RDONLY)
 		*r |= Mono_Posix_OpenFlags_O_RDONLY;
@@ -4303,86 +4606,6 @@ int Mono_Posix_ToSignum (int x, int *r)
 #endif /* ndef SIGXFSZ */
 	errno = EINVAL; return -1;
 }
-
-#ifdef HAVE_STRUCT_STAT
-int
-Mono_Posix_FromStat (struct Mono_Posix_Stat *from, struct stat *to)
-{
-	_cnm_return_val_if_overflow (dev_t, from->st_dev, -1);
-	_cnm_return_val_if_overflow (ino_t, from->st_ino, -1);
-	_cnm_return_val_if_overflow (nlink_t, from->st_nlink, -1);
-	_cnm_return_val_if_overflow (uid_t, from->st_uid, -1);
-	_cnm_return_val_if_overflow (gid_t, from->st_gid, -1);
-	_cnm_return_val_if_overflow (dev_t, from->st_rdev, -1);
-	_cnm_return_val_if_overflow (off_t, from->st_size, -1);
-	_cnm_return_val_if_overflow (blksize_t, from->st_blksize, -1);
-	_cnm_return_val_if_overflow (blkcnt_t, from->st_blocks, -1);
-	_cnm_return_val_if_overflow (time_t, from->st_atime_, -1);
-	_cnm_return_val_if_overflow (time_t, from->st_mtime_, -1);
-	_cnm_return_val_if_overflow (time_t, from->st_ctime_, -1);
-
-	memset (to, 0, sizeof(*to));
-
-	to->st_dev     = from->st_dev;
-	to->st_ino     = from->st_ino;
-	if (Mono_Posix_FromFilePermissions (from->st_mode, &to->st_mode) != 0) {
-		return -1;
-	}
-	to->st_nlink   = from->st_nlink;
-	to->st_uid     = from->st_uid;
-	to->st_gid     = from->st_gid;
-	to->st_rdev    = from->st_rdev;
-	to->st_size    = from->st_size;
-	to->st_blksize = from->st_blksize;
-	to->st_blocks  = from->st_blocks;
-	to->st_atime   = from->st_atime_;
-	to->st_mtime   = from->st_mtime_;
-	to->st_ctime   = from->st_ctime_;
-
-	return 0;
-}
-#endif /* ndef HAVE_STRUCT_STAT */
-
-
-#ifdef HAVE_STRUCT_STAT
-int
-Mono_Posix_ToStat (struct stat *from, struct Mono_Posix_Stat *to)
-{
-	_cnm_return_val_if_overflow (guint64, from->st_dev, -1);
-	_cnm_return_val_if_overflow (guint64, from->st_ino, -1);
-	_cnm_return_val_if_overflow (guint64, from->st_nlink, -1);
-	_cnm_return_val_if_overflow (unsigned int, from->st_uid, -1);
-	_cnm_return_val_if_overflow (unsigned int, from->st_gid, -1);
-	_cnm_return_val_if_overflow (guint64, from->st_rdev, -1);
-	_cnm_return_val_if_overflow (gint64, from->st_size, -1);
-	_cnm_return_val_if_overflow (gint64, from->st_blksize, -1);
-	_cnm_return_val_if_overflow (gint64, from->st_blocks, -1);
-	_cnm_return_val_if_overflow (gint64, from->st_atime, -1);
-	_cnm_return_val_if_overflow (gint64, from->st_mtime, -1);
-	_cnm_return_val_if_overflow (gint64, from->st_ctime, -1);
-
-	memset (to, 0, sizeof(*to));
-
-	to->st_dev     = from->st_dev;
-	to->st_ino     = from->st_ino;
-	if (Mono_Posix_ToFilePermissions (from->st_mode, &to->st_mode) != 0) {
-		return -1;
-	}
-	to->st_nlink   = from->st_nlink;
-	to->st_uid     = from->st_uid;
-	to->st_gid     = from->st_gid;
-	to->st_rdev    = from->st_rdev;
-	to->st_size    = from->st_size;
-	to->st_blksize = from->st_blksize;
-	to->st_blocks  = from->st_blocks;
-	to->st_atime_  = from->st_atime;
-	to->st_mtime_  = from->st_mtime;
-	to->st_ctime_  = from->st_ctime;
-
-	return 0;
-}
-#endif /* ndef HAVE_STRUCT_STAT */
-
 
 int Mono_Posix_FromSysconfName (int x, int *r)
 {

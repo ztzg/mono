@@ -5,6 +5,7 @@
  *   Zoltan Varga (vargaz@gmail.com)
  *
  * (C) 2002 Ximian, Inc.
+ * Copyright 2011 Xamarin, Inc (http://www.xamarin.com)
  */
 
 #include "mini.h"
@@ -19,6 +20,238 @@
 MonoInst* mono_emit_native_call (MonoCompile *cfg, gconstpointer func, MonoMethodSignature *sig, MonoInst **args);
 void mini_emit_stobj (MonoCompile *cfg, MonoInst *dest, MonoInst *src, MonoClass *klass, gboolean native);
 void mini_emit_initobj (MonoCompile *cfg, MonoInst *dest, const guchar *ip, MonoClass *klass);
+
+/* Decompose complex long opcodes on 64 bit machines or when using LLVM */
+static gboolean
+decompose_long_opcode (MonoCompile *cfg, MonoInst *ins, MonoInst **repl_ins)
+{
+	MonoInst *repl = NULL;
+
+	*repl_ins = NULL;
+
+	switch (ins->opcode) {
+	case OP_LCONV_TO_I4:
+		ins->opcode = OP_SEXT_I4;
+		break;
+	case OP_LCONV_TO_I8:
+	case OP_LCONV_TO_I:
+	case OP_LCONV_TO_U8:
+	case OP_LCONV_TO_U:
+		ins->opcode = OP_MOVE;
+		break;
+	case OP_ICONV_TO_I8:
+		ins->opcode = OP_SEXT_I4;
+		break;
+	case OP_ICONV_TO_U8:
+		ins->opcode = OP_ZEXT_I4;
+		break;
+	case OP_LCONV_TO_U4:
+		/* Clean out the upper word */
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_ISHR_UN_IMM, ins->dreg, ins->sreg1, 0);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LADD_OVF:
+		if (COMPILE_LLVM (cfg))
+			break;
+		{
+			int opcode;
+#if defined(__mono_ilp32__) && SIZEOF_REGISTER == 8
+			opcode = OP_LADDCC;
+#else
+			opcode = OP_ADDCC;
+#endif
+			EMIT_NEW_BIALU (cfg, repl, opcode, ins->dreg, ins->sreg1, ins->sreg2);
+		}
+		MONO_EMIT_NEW_COND_EXC (cfg, OV, "OverflowException");
+		NULLIFY_INS (ins);
+		break;
+	case OP_LADD_OVF_UN:
+		if (COMPILE_LLVM (cfg))
+			break;
+		{
+			int opcode;
+#if defined(__mono_ilp32__) && SIZEOF_REGISTER == 8
+			opcode = OP_LADDCC;
+#else
+			opcode = OP_ADDCC;
+#endif
+			EMIT_NEW_BIALU (cfg, repl, opcode, ins->dreg, ins->sreg1, ins->sreg2);
+		}
+		MONO_EMIT_NEW_COND_EXC (cfg, C, "OverflowException");
+		NULLIFY_INS (ins);
+		break;
+#ifndef __mono_ppc64__
+	case OP_LSUB_OVF:
+		if (COMPILE_LLVM (cfg))
+			break;
+		{
+			int opcode;
+#if defined(__mono_ilp32__) && SIZEOF_REGISTER == 8
+			opcode = OP_LSUBCC;
+#else
+			opcode = OP_SUBCC;
+#endif
+			EMIT_NEW_BIALU (cfg, repl, opcode, ins->dreg, ins->sreg1, ins->sreg2);
+		}
+		MONO_EMIT_NEW_COND_EXC (cfg, OV, "OverflowException");
+		NULLIFY_INS (ins);
+		break;
+	case OP_LSUB_OVF_UN:
+		if (COMPILE_LLVM (cfg))
+			break;
+		{
+			int opcode;
+#if defined(__mono_ilp32__) && SIZEOF_REGISTER == 8
+			opcode = OP_LSUBCC;
+#else
+			opcode = OP_SUBCC;
+#endif
+			EMIT_NEW_BIALU (cfg, repl, opcode, ins->dreg, ins->sreg1, ins->sreg2);
+		}
+		MONO_EMIT_NEW_COND_EXC (cfg, C, "OverflowException");
+		NULLIFY_INS (ins);
+		break;
+#endif
+		
+	case OP_ICONV_TO_OVF_I8:
+	case OP_ICONV_TO_OVF_I:
+		ins->opcode = OP_SEXT_I4;
+		break;
+	case OP_ICONV_TO_OVF_U8:
+	case OP_ICONV_TO_OVF_U:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg,ins->sreg1, 0);
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_ZEXT_I4, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_ICONV_TO_OVF_I8_UN:
+	case OP_ICONV_TO_OVF_U8_UN:
+	case OP_ICONV_TO_OVF_I_UN:
+	case OP_ICONV_TO_OVF_U_UN:
+		/* an unsigned 32 bit num always fits in an (un)signed 64 bit one */
+		/* Clean out the upper word */
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_ISHR_UN_IMM, ins->dreg, ins->sreg1, 0);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I1:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 127);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, -128);
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I1, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I1_UN:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 127);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I1, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U1:
+		/* probe value to be within 0 to 255 */
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 255);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xff);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U1_UN:
+		/* probe value to be within 0 to 255 */
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 255);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xff);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I2:
+		/* Probe value to be within -32768 and 32767 */
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 32767);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, -32768);
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I2, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I2_UN:
+		/* Probe value to be within 0 and 32767 */
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 32767);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I2, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U2:
+		/* Probe value to be within 0 and 65535 */
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0xffff);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xffff);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U2_UN:
+		/* Probe value to be within 0 and 65535 */
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0xffff);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xffff);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I4:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0x7fffffff);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
+		/* The int cast is needed for the VS compiler.  See Compiler Warning (level 2) C4146. */
+#if SIZEOF_REGISTER == 8
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, ((int)-2147483648));
+#else
+		g_assert (COMPILE_LLVM (cfg));
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, -2147483648LL);
+#endif
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I4_UN:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0x7fffffff);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U4:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0xffffffffUL);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0);
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U4_UN:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0xffffffff);
+		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_I:
+	case OP_LCONV_TO_OVF_U_UN:
+	case OP_LCONV_TO_OVF_U8_UN:
+	case OP_LCONV_TO_OVF_I8:
+		ins->opcode = OP_MOVE;
+		break;
+	case OP_LCONV_TO_OVF_I_UN:
+	case OP_LCONV_TO_OVF_I8_UN:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0);
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	case OP_LCONV_TO_OVF_U8:
+	case OP_LCONV_TO_OVF_U:
+		MONO_EMIT_NEW_LCOMPARE_IMM (cfg, ins->sreg1, 0);
+		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
+		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
+		NULLIFY_INS (ins);
+		break;
+	default:
+		return FALSE;
+	}
+
+	*repl_ins = repl;
+	return TRUE;
+}
 
 /*
  * mono_decompose_opcode:
@@ -36,6 +269,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 	MonoInst *repl = NULL;
 	int type = ins->type;
 	int dreg = ins->dreg;
+	gboolean emulate = FALSE;
 
 	/* FIXME: Instead of = NOP, don't emit the original ins at all */
 
@@ -125,7 +359,7 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		break;
 	case OP_ICONV_TO_OVF_U4:
 	case OP_ICONV_TO_OVF_I4_UN:
-#if SIZEOF_REGISTER == 4
+#if SIZEOF_VOID_P == 4
 	case OP_ICONV_TO_OVF_U:
 	case OP_ICONV_TO_OVF_I_UN:
 #endif
@@ -138,21 +372,21 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 	case OP_ICONV_TO_U4:
 	case OP_ICONV_TO_OVF_I4:
 	case OP_ICONV_TO_OVF_U4_UN:
-#if SIZEOF_REGISTER == 4
+#if SIZEOF_VOID_P == 4
 	case OP_ICONV_TO_OVF_I:
 	case OP_ICONV_TO_OVF_U_UN:
 #endif
 		ins->opcode = OP_MOVE;
 		break;
 	case OP_ICONV_TO_I:
-#if SIZEOF_REGISTER == 8
+#if SIZEOF_VOID_P == 8
 		ins->opcode = OP_SEXT_I4;
 #else
 		ins->opcode = OP_MOVE;
 #endif
 		break;
 	case OP_ICONV_TO_U:
-#if SIZEOF_REGISTER == 8
+#if SIZEOF_VOID_P == 8
 		ins->opcode = OP_ZEXT_I4;
 #else
 		ins->opcode = OP_MOVE;
@@ -177,193 +411,55 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 		cfg->exception_message = g_strdup_printf ("float conv.ovf.un opcodes not supported.");
 		break;
 
-		/* Long opcodes on 64 bit machines */
+#if defined(MONO_ARCH_EMULATE_DIV) && defined(MONO_ARCH_HAVE_OPCODE_NEEDS_EMULATION)
+	case OP_IDIV:
+	case OP_IREM:
+	case OP_IDIV_UN:
+	case OP_IREM_UN:
+		if (!mono_arch_opcode_needs_emulation (cfg, ins->opcode)) {
+#ifdef MONO_ARCH_NEED_DIV_CHECK
+			int reg1 = alloc_ireg (cfg);
+			int reg2 = alloc_ireg (cfg);
+			/* b == 0 */
+			MONO_EMIT_NEW_ICOMPARE_IMM (cfg, ins->sreg2, 0);
+			MONO_EMIT_NEW_COND_EXC (cfg, IEQ, "DivideByZeroException");
+			if (ins->opcode == OP_IDIV || ins->opcode == OP_IREM) {
+				/* b == -1 && a == 0x80000000 */
+				MONO_EMIT_NEW_ICOMPARE_IMM (cfg, ins->sreg2, -1);
+				MONO_EMIT_NEW_UNALU (cfg, OP_ICEQ, reg1, -1);
+				MONO_EMIT_NEW_ICOMPARE_IMM (cfg, ins->sreg1, 0x80000000);
+				MONO_EMIT_NEW_UNALU (cfg, OP_ICEQ, reg2, -1);
+				MONO_EMIT_NEW_BIALU (cfg, OP_IAND, reg1, reg1, reg2);
+				MONO_EMIT_NEW_ICOMPARE_IMM (cfg, reg1, 1);
+				MONO_EMIT_NEW_COND_EXC (cfg, IEQ, "DivideByZeroException");
+			}
+#endif
+			MONO_EMIT_NEW_BIALU (cfg, ins->opcode, ins->dreg, ins->sreg1, ins->sreg2);
+			ins->opcode = OP_NOP;
+		} else {
+			emulate = TRUE;
+		}
+		break;
+#endif
+
+	default:
+		emulate = TRUE;
+		break;
+	}
+
+	if (emulate) {
+		MonoJitICallInfo *info = NULL;
+
 #if SIZEOF_REGISTER == 8
-	case OP_LCONV_TO_I4:
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_LSHR_IMM, ins->dreg, ins->sreg1, 0);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_I8:
-	case OP_LCONV_TO_I:
-	case OP_LCONV_TO_U8:
-	case OP_LCONV_TO_U:
-		ins->opcode = OP_MOVE;
-		break;
-	case OP_ICONV_TO_I8:
-		ins->opcode = OP_SEXT_I4;
-		break;
-	case OP_ICONV_TO_U8:
-		ins->opcode = OP_ZEXT_I4;
-		break;
-	case OP_LCONV_TO_U4:
-		/* Clean out the upper word */
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_ISHR_UN_IMM, ins->dreg, ins->sreg1, 0);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LADD_OVF:
-		if (COMPILE_LLVM (cfg))
-			break;
-		EMIT_NEW_BIALU (cfg, repl, OP_ADDCC, ins->dreg, ins->sreg1, ins->sreg2);
-		MONO_EMIT_NEW_COND_EXC (cfg, OV, "OverflowException");
-		NULLIFY_INS (ins);
-		break;
-	case OP_LADD_OVF_UN:
-		if (COMPILE_LLVM (cfg))
-			break;
-		EMIT_NEW_BIALU (cfg, repl, OP_ADDCC, ins->dreg, ins->sreg1, ins->sreg2);
-		MONO_EMIT_NEW_COND_EXC (cfg, C, "OverflowException");
-		NULLIFY_INS (ins);
-		break;
-#ifndef __mono_ppc64__
-	case OP_LSUB_OVF:
-		if (COMPILE_LLVM (cfg))
-			break;
-		EMIT_NEW_BIALU (cfg, repl, OP_SUBCC, ins->dreg, ins->sreg1, ins->sreg2);
-		MONO_EMIT_NEW_COND_EXC (cfg, OV, "OverflowException");
-		NULLIFY_INS (ins);
-		break;
-	case OP_LSUB_OVF_UN:
-		if (COMPILE_LLVM (cfg))
-			break;
-		EMIT_NEW_BIALU (cfg, repl, OP_SUBCC, ins->dreg, ins->sreg1, ins->sreg2);
-		MONO_EMIT_NEW_COND_EXC (cfg, C, "OverflowException");
-		NULLIFY_INS (ins);
-		break;
-#endif
-		
-	case OP_ICONV_TO_OVF_I8:
-	case OP_ICONV_TO_OVF_I:
-		ins->opcode = OP_SEXT_I4;
-		break;
-	case OP_ICONV_TO_OVF_U8:
-	case OP_ICONV_TO_OVF_U:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg,ins->sreg1, 0);
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_ZEXT_I4, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_ICONV_TO_OVF_I8_UN:
-	case OP_ICONV_TO_OVF_U8_UN:
-	case OP_ICONV_TO_OVF_I_UN:
-	case OP_ICONV_TO_OVF_U_UN:
-		/* an unsigned 32 bit num always fits in an (un)signed 64 bit one */
-		/* Clean out the upper word */
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_ISHR_UN_IMM, ins->dreg, ins->sreg1, 0);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I1:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 127);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, -128);
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I1, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I1_UN:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 127);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I1, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U1:
-		/* probe value to be within 0 to 255 */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 255);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xff);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U1_UN:
-		/* probe value to be within 0 to 255 */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 255);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xff);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I2:
-		/* Probe value to be within -32768 and 32767 */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 32767);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, -32768);
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I2, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I2_UN:
-		/* Probe value to be within 0 and 32767 */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 32767);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_LCONV_TO_I2, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U2:
-		/* Probe value to be within 0 and 65535 */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 0xffff);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xffff);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U2_UN:
-		/* Probe value to be within 0 and 65535 */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 0xffff);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_AND_IMM, ins->dreg, ins->sreg1, 0xffff);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I4:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 0x7fffffff);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
-		/* The int cast is needed for the VS compiler.  See Compiler Warning (level 2) C4146. */
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, ((int)-2147483648));
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I4_UN:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 0x7fffffff);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U4:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 0xffffffffUL);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT, "OverflowException");
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_COMPARE_IMM, -1, ins->sreg1, 0);
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U4_UN:
-		MONO_EMIT_NEW_COMPARE_IMM (cfg, ins->sreg1, 0xffffffff);
-		MONO_EMIT_NEW_COND_EXC (cfg, GT_UN, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_I:
-	case OP_LCONV_TO_OVF_U_UN:
-	case OP_LCONV_TO_OVF_U8_UN:
-	case OP_LCONV_TO_OVF_I8:
-		ins->opcode = OP_MOVE;
-		break;
-	case OP_LCONV_TO_OVF_I_UN:
-	case OP_LCONV_TO_OVF_I8_UN:
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_COMPARE_IMM, -1, ins->sreg1, 0);
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
-	case OP_LCONV_TO_OVF_U8:
-	case OP_LCONV_TO_OVF_U:
-		MONO_EMIT_NEW_BIALU_IMM (cfg, OP_COMPARE_IMM, -1, ins->sreg1, 0);
-		MONO_EMIT_NEW_COND_EXC (cfg, LT, "OverflowException");
-		MONO_EMIT_NEW_UNALU (cfg, OP_MOVE, ins->dreg, ins->sreg1);
-		NULLIFY_INS (ins);
-		break;
+		if (decompose_long_opcode (cfg, ins, &repl))
+			emulate = FALSE;
+#else
+		if (COMPILE_LLVM (cfg) && decompose_long_opcode (cfg, ins, &repl))
+			emulate = FALSE;
 #endif
 
-	default: {
-		MonoJitICallInfo *info;
-
-		info = mono_find_jit_opcode_emulation (ins->opcode);
+		if (emulate)
+			info = mono_find_jit_opcode_emulation (ins->opcode);
 		if (info) {
 			MonoInst **args;
 			MonoInst *call;
@@ -389,8 +485,6 @@ mono_decompose_opcode (MonoCompile *cfg, MonoInst *ins)
 
 			NULLIFY_INS (ins);
 		}
-		break;
-	}
 	}
 
 	if (ins->opcode == OP_NOP) {
@@ -1079,6 +1173,18 @@ mono_decompose_vtype_opts (MonoCompile *cfg)
 
 					EMIT_NEW_VARLOADA_VREG (cfg, dest, ins->dreg, &ins->klass->byval_arg);
 					mini_emit_initobj (cfg, dest, NULL, ins->klass);
+					
+					if (cfg->compute_gc_maps) {
+						MonoInst *tmp;
+
+						/* 
+						 * Tell the GC map code that the vtype is considered live after
+						 * the initialization.
+						 */
+						MONO_INST_NEW (cfg, tmp, OP_GC_LIVENESS_DEF);
+						tmp->inst_c1 = ins->dreg;
+						MONO_ADD_INS (cfg->cbb, tmp);
+					}
 					break;
 				case OP_STOREV_MEMBASE: {
 					src_var = get_vreg_to_inst (cfg, ins->sreg1);
@@ -1099,6 +1205,7 @@ mono_decompose_vtype_opts (MonoCompile *cfg)
 					g_assert (ins->klass);
 
 					dest_var = get_vreg_to_inst (cfg, ins->dreg);
+					// FIXME-VT:
 					// FIXME:
 					if (!dest_var)
 						dest_var = mono_compile_create_var_for_vreg (cfg, &ins->klass->byval_arg, OP_LOCAL, ins->dreg);
@@ -1179,9 +1286,13 @@ mono_decompose_vtype_opts (MonoCompile *cfg)
 						case 2:
 							MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI2_MEMBASE_REG, dest->dreg, 0, call2->inst.dreg);
 							break;
+						case 3:
 						case 4:
 							MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STOREI4_MEMBASE_REG, dest->dreg, 0, call2->inst.dreg);
 							break;
+						case 5:
+						case 6:
+						case 7:
 						case 8:
 #if SIZEOF_REGISTER == 4
 							/*
@@ -1322,8 +1433,9 @@ mono_decompose_array_access_opts (MonoCompile *cfg)
 						dest = mono_emit_jit_icall (cfg, mono_array_new, iargs);
 						dest->dreg = ins->dreg;
 					} else {
-						MonoVTable *vtable = mono_class_vtable (cfg->domain, mono_array_class_get (ins->inst_newa_class, 1));
-						MonoMethod *managed_alloc = mono_gc_get_managed_array_allocator (vtable, 1);
+						MonoClass *array_class = mono_array_class_get (ins->inst_newa_class, 1);
+						MonoVTable *vtable = mono_class_vtable (cfg->domain, array_class);
+						MonoMethod *managed_alloc = mono_gc_get_managed_array_allocator (array_class);
 
 						g_assert (vtable); /*This shall not fail since we check for this condition on OP_NEWARR creation*/
 						NEW_VTABLECONST (cfg, iargs [0], vtable);
@@ -1489,6 +1601,7 @@ mono_decompose_soft_float (MonoCompile *cfg)
 						MonoCallInst *call2;
 						MonoInst *iargs [1];
 						MonoInst *conv;
+						GSList *l;
 
 						/* Convert the call into a call returning an int */
 						MONO_INST_NEW_CALL (cfg, call2, OP_CALL);
@@ -1508,6 +1621,10 @@ mono_decompose_soft_float (MonoCompile *cfg)
 						}
 						call2->inst.dreg = mono_alloc_ireg (cfg);
 						MONO_ADD_INS (cfg->cbb, (MonoInst*)call2);
+
+						/* Remap OUTARG_VT instructions referencing this call */
+						for (l = call->outarg_vts; l; l = l->next)
+							((MonoInst*)(l->data))->inst_p0 = call2;
 
 						/* FIXME: Optimize this */
 
@@ -1542,8 +1659,18 @@ mono_decompose_soft_float (MonoCompile *cfg)
 
 					/* Convert fcompare+fbcc to icall+icompare+beq */
 
+					if (!ins->next) {
+						/* The branch might be optimized away */
+						NULLIFY_INS (ins);
+						break;
+					}
+
 					info = mono_find_jit_opcode_emulation (ins->next->opcode);
-					g_assert (info);
+					if (!info) {
+						/* The branch might be optimized away */
+						NULLIFY_INS (ins);
+						break;
+					}
 
 					/* Create dummy MonoInst's for the arguments */
 					MONO_INST_NEW (cfg, iargs [0], OP_ARG);

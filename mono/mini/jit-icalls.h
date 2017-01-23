@@ -57,6 +57,8 @@ MonoArray *mono_array_new_2 (MonoMethod *cm, guint32 length1, guint32 length2) M
 
 MonoArray *mono_array_new_3 (MonoMethod *cm, guint32 length1, guint32 length2, guint32 length3) MONO_INTERNAL;
 
+MonoArray *mono_array_new_4 (MonoMethod *cm, guint32 length1, guint32 length2, guint32 length3, guint32 length4) MONO_INTERNAL;
+
 gpointer mono_class_static_field_address (MonoDomain *domain, MonoClassField *field) MONO_INTERNAL;
 
 gpointer mono_ldtoken_wrapper (MonoImage *image, int token, MonoGenericContext *context) MONO_INTERNAL;
@@ -84,6 +86,10 @@ float mono_lconv_to_r4 (gint64 a) MONO_INTERNAL;
 double mono_conv_to_r8_un (guint32 a) MONO_INTERNAL;
 
 double mono_lconv_to_r8_un (guint64 a) MONO_INTERNAL;
+
+#if defined(__native_client_codegen__) || defined(__native_client__)
+double mono_fmod(double a, double b) MONO_INTERNAL;
+#endif
 
 gpointer mono_helper_compile_generic_method (MonoObject *obj, MonoMethod *method, gpointer *this_arg) MONO_INTERNAL;
 
@@ -162,6 +168,20 @@ MonoException *mono_create_corlib_exception_2 (guint32 token, MonoString *arg1, 
 MonoObject* mono_object_castclass (MonoObject *obj, MonoClass *klass) MONO_INTERNAL;
 
 gpointer mono_get_native_calli_wrapper (MonoImage *image, MonoMethodSignature *sig, gpointer func) MONO_INTERNAL;
+
+MonoObject*
+mono_object_isinst_with_cache (MonoObject *obj, MonoClass *klass, gpointer *cache);
+
+MonoObject*
+mono_object_castclass_with_cache (MonoObject *obj, MonoClass *klass, gpointer *cache);
+
+MonoObject* mono_object_tostring_gsharedvt (gpointer mp, MonoMethod *cmethod, MonoClass *klass) MONO_INTERNAL;
+
+int mono_object_gethashcode_gsharedvt (gpointer mp, MonoMethod *cmethod, MonoClass *klass) MONO_INTERNAL;
+
+MonoBoolean mono_object_equals_gsharedvt (gpointer mp, MonoMethod *cmethod, MonoClass *klass, MonoObject *arg) MONO_INTERNAL;
+
+void mono_gsharedvt_value_copy (gpointer dest, gpointer src, MonoClass *klass) MONO_INTERNAL;
 
 #endif /* __MONO_JIT_ICALLS_H__ */
 

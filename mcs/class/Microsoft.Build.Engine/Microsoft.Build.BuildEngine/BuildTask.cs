@@ -25,8 +25,6 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#if NET_2_0
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -37,7 +35,7 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
 namespace Microsoft.Build.BuildEngine {
-	public class BuildTask {
+	public class BuildTask : IBuildTask {
 	
 		ITaskHost		hostObject;
 		Target			parentTarget;
@@ -84,36 +82,38 @@ namespace Microsoft.Build.BuildEngine {
 		[MonoTODO]
 		public bool Execute ()
 		{
-			bool		result;
+			bool		result = false;
 			TaskEngine	taskEngine;
 
 			LogTaskStarted ();
 			ITask task = null;
 
 			try {
-				task = InitializeTask ();
-			} catch (Exception e) {
-				LogError ("Error initializing task {0}: {1}", taskElement.LocalName, e.Message);
-				LogMessage (MessageImportance.Low, "Error initializing task {0}: {1}",
-						taskElement.LocalName, e.ToString ());
-				return false;
+				try {
+					task = InitializeTask ();
+				} catch (Exception e) {
+					LogError ("Error initializing task {0}: {1}", taskElement.LocalName, e.Message);
+					LogMessage (MessageImportance.Low, "Error initializing task {0}: {1}",
+							taskElement.LocalName, e.ToString ());
+					return false;
+				}
+
+				try {
+					taskEngine = new TaskEngine (parentTarget.Project);
+					taskEngine.Prepare (task, this.taskElement, GetParameters (), this.Type);
+					result = taskEngine.Execute ();
+					if (result)
+						taskEngine.PublishOutput ();
+				} catch (Exception e) {
+					task_logger.LogError ("Error executing task {0}: {1}", taskElement.LocalName, e.Message);
+					task_logger.LogMessage (MessageImportance.Low,
+							"Error executing task {0}: {1}", taskElement.LocalName, e.ToString ());
+					result = false;
+				}
+			} finally {
+				LogTaskFinished (result);
 			}
 
-			try {
-				taskEngine = new TaskEngine (parentTarget.Project);		
-				taskEngine.Prepare (task, this.taskElement, GetParameters (), this.Type);
-				result = taskEngine.Execute ();
-				if (result)
-					taskEngine.PublishOutput ();
-			} catch (Exception e) {
-				task_logger.LogError ("Error executing task {0}: {1}", taskElement.LocalName, e.Message);
-				task_logger.LogMessage (MessageImportance.Low,
-						"Error executing task {0}: {1}", taskElement.LocalName, e.ToString ());
-				result = false;
-			}
-
-			LogTaskFinished (result);
-		
 			return result;
 		}
 
@@ -127,7 +127,7 @@ namespace Microsoft.Build.BuildEngine {
 					continue;
 				tempNames.Add (xmlAttribute.Name);
 			}
-			
+
 			return tempNames.ToArray ();
 		}
 		
@@ -156,7 +156,7 @@ namespace Microsoft.Build.BuildEngine {
 			else
 				taskElement.SetAttribute (parameterName, parameterValue);
 		}
-		
+
 		void LogTaskStarted ()
 		{
 			TaskStartedEventArgs tsea = new TaskStartedEventArgs ("Task started.", null,
@@ -266,13 +266,29 @@ namespace Microsoft.Build.BuildEngine {
 			get { return taskElement; }
 			set { taskElement = value; }
 		}
-		
+
 		[MonoTODO]
 		public Type Type {
 			get { return parentTarget.Project.TaskDatabase.GetTypeFromClassName (Name); }
 		}
+
+		public IEnumerable<string> GetAttributes ()
+		{
+			foreach (XmlAttribute attrib in TaskElement.Attributes)
+				yield return attrib.Value;
 		
+			foreach (XmlNode xn in TaskElement.ChildNodes) {
+				XmlElement xe = xn as XmlElement;
+				if (xe == null)
+					continue;
+			
+				//FIXME: error on any other child
+				if (String.Compare (xe.LocalName, "Output", StringComparison.Ordinal) == 0) {
+					foreach (XmlAttribute attrib in xe.Attributes)
+						yield return attrib.Value;
+				}
+			}
+		}
+
 	}
 }
-
-#endif

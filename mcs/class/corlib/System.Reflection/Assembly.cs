@@ -6,6 +6,7 @@
 //
 // (C) 2001 Ximian, Inc.  http://www.ximian.com
 // Copyright (C) 2004-2005 Novell, Inc (http://www.novell.com)
+// Copyright 2011 Xamarin Inc (http://www.xamarin.com).
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -32,12 +33,10 @@ using System.Security.Policy;
 using System.Security.Permissions;
 using System.Runtime.Serialization;
 using System.Reflection;
-using System.Reflection.Emit;
 using System.IO;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Collections;
 using System.Collections.Generic;
 using System.Configuration.Assemblies;
 
@@ -45,16 +44,13 @@ using Mono.Security;
 
 namespace System.Reflection {
 
-#pragma warning disable 659 // overrides Equals but not GetHashCode
-
 	[ComVisible (true)]
 	[ComDefaultInterfaceAttribute (typeof (_Assembly))]
 	[Serializable]
 	[ClassInterface(ClassInterfaceType.None)]
-#if MONOTOUCH
-	public partial class Assembly : ICustomAttributeProvider, _Assembly {
-#elif MOONLIGHT
-	public abstract class Assembly : ICustomAttributeProvider, _Assembly {
+	[StructLayout (LayoutKind.Sequential)]
+#if MOBILE
+	public partial class Assembly : ICustomAttributeProvider {
 #elif NET_4_0
 	public abstract class Assembly : ICustomAttributeProvider, _Assembly, IEvidenceFactory, ISerializable {
 #else
@@ -70,16 +66,20 @@ namespace System.Reflection {
 #pragma warning restore 649
 
 		private ResolveEventHolder resolve_event_holder;
+#if !MOBILE
 		private Evidence _evidence;
 		internal PermissionSet _minimum;	// for SecurityAction.RequestMinimum
 		internal PermissionSet _optional;	// for SecurityAction.RequestOptional
 		internal PermissionSet _refuse;		// for SecurityAction.RequestRefuse
 		private PermissionSet _granted;		// for the resolved assembly granted permissions
 		private PermissionSet _denied;		// for the resolved assembly denied permissions
+#else
+		object _evidence, _minimum, _optional, _refuse, _granted, _denied;
+#endif
 		private bool fromByteArray;
 		private string assemblyName;
 
-#if NET_4_0 || MOONLIGHT
+#if NET_4_0
 		protected
 #else
 		internal
@@ -154,7 +154,7 @@ namespace System.Reflection {
 			[MethodImplAttribute (MethodImplOptions.InternalCall)]
 			get;
 		}
-#if !MOONLIGHT
+
 		public virtual Evidence Evidence {
 			[SecurityPermission (SecurityAction.Demand, ControlEvidence = true)]
 			get { return UnprotectedGetEvidence (); }
@@ -163,6 +163,9 @@ namespace System.Reflection {
 		// note: the security runtime requires evidences but may be unable to do so...
 		internal Evidence UnprotectedGetEvidence ()
 		{
+#if MOBILE
+			return null;
+#else
 			// if the host (runtime) hasn't provided it's own evidence...
 			if (_evidence == null) {
 				// ... we will provide our own
@@ -171,12 +174,12 @@ namespace System.Reflection {
 				}
 			}
 			return _evidence;
+#endif
 		}
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		internal extern bool get_global_assembly_cache ();
 
-#endif
 		internal bool FromByteArray {
 			set { fromByteArray = value; }
 		}
@@ -240,7 +243,7 @@ namespace System.Reflection {
 		{
 			string[] names = (string[]) GetFilesInternal (null, getResourceModules);
 			if (names == null)
-				return new FileStream [0];
+				return EmptyArray<FileStream>.Value;
 
 			string location = Location;
 
@@ -284,8 +287,13 @@ namespace System.Reflection {
 					"name");
 
 			ManifestResourceInfo info = GetManifestResourceInfo (name);
-			if (info == null)
-				return null;
+			if (info == null) {
+				Assembly a = AppDomain.CurrentDomain.DoResourceResolve (name, this);
+				if (a != null && a != this)
+					return a.GetManifestResourceStream (name);
+				else
+					return null;
+			}
 
 			if (info.ReferencedAssembly != null)
 				return info.ReferencedAssembly.GetManifestResourceStream (name);
@@ -295,12 +303,6 @@ namespace System.Reflection {
 
 				string location = Path.GetDirectoryName (Location);
 				string filename = Path.Combine (location, info.FileName);
-#if MOONLIGHT
-				// we don't control the content of 'info.FileName' so we want to make sure we keep to ourselves
-				filename = Path.GetFullPath (filename);
-				if (!filename.StartsWith (location))
-					throw new SecurityException ("non-rooted access to manifest resource");
-#endif
 				return new FileStream (filename, FileMode.Open, FileAccess.Read);
 			}
 
@@ -375,10 +377,12 @@ namespace System.Reflection {
 		[MonoTODO ("copiedName == true is not supported")]
 		public virtual AssemblyName GetName (Boolean copiedName)
 		{
+#if !MOBILE
 			// CodeBase, which is restricted, will be copied into the AssemblyName object so...
 			if (SecurityManager.SecurityEnabled) {
 				GetCodeBase (true); // this will ensure the Demand is made
 			}
+#endif
 			return UnprotectedGetName ();
 		}
 
@@ -452,21 +456,20 @@ namespace System.Reflection {
 			// Try the assembly directory
 			string location = Path.GetDirectoryName (Location);
 			string fullName = Path.Combine (location, Path.Combine (culture.Name, aname.Name + ".dll"));
-#if MOONLIGHT
-			// it's unlikely that culture.Name or aname.Name could contain stuff like ".." but...
-			fullName = Path.GetFullPath (fullName);
-			if (!fullName.StartsWith (location)) {
-				if (throwOnError)
-					throw new SecurityException ("non-rooted access to satellite assembly");
-				return null;
-			}
-#endif
 			if (!throwOnError && !File.Exists (fullName))
 				return null;
 
 			return LoadFrom (fullName);
 		}
-		
+
+#if !MOBILE
+		Type _Assembly.GetType ()
+		{
+			// Required or object::GetType becomes virtual final
+			return base.GetType ();
+		}		
+#endif
+
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static Assembly LoadFrom (String assemblyFile, bool refonly);
 
@@ -505,6 +508,13 @@ namespace System.Reflection {
 		public static Assembly LoadFrom (String assemblyFile, byte [] hashValue, AssemblyHashAlgorithm hashAlgorithm)
 		{
 			throw new NotImplementedException ();
+		}
+#endif
+
+#if NET_4_0
+		public static Assembly UnsafeLoadFrom (String assemblyFile)
+		{
+			return LoadFrom (assemblyFile);
 		}
 #endif
 
@@ -597,9 +607,7 @@ namespace System.Reflection {
 			return LoadFrom (assemblyFile, true);
 		}
 
-#if NET_4_0
 		[Obsolete]
-#endif
 		public static Assembly LoadWithPartialName (string partialName)
 		{
 			return LoadWithPartialName (partialName, null);
@@ -613,7 +621,7 @@ namespace System.Reflection {
 
 		[MonoTODO ("Not implemented")]
 		public
-#if NET_4_0 || MOONLIGHT
+#if NET_4_0
 		virtual
 #endif
 		Module LoadModule (string moduleName, byte [] rawModule, byte [] rawSymbolStore)
@@ -624,9 +632,7 @@ namespace System.Reflection {
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private static extern Assembly load_with_partial_name (string name, Evidence e);
 
-#if NET_4_0
 		[Obsolete]
-#endif
 		public static Assembly LoadWithPartialName (string partialName, Evidence securityEvidence)
 		{
 			return LoadWithPartialName (partialName, securityEvidence, true);
@@ -670,7 +676,7 @@ namespace System.Reflection {
 		}
 
 		public
-#if NET_4_0 || MOONLIGHT
+#if NET_4_0
 		virtual
 #endif
 		Object CreateInstance (String typeName, Boolean ignoreCase,
@@ -701,10 +707,6 @@ namespace System.Reflection {
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		internal virtual extern Module[] GetModulesInternal ();
-
-
-		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		internal extern string[] GetNamespaces ();
 		
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		public extern virtual String[] GetManifestResourceNames ();
@@ -760,7 +762,7 @@ namespace System.Reflection {
 		[MonoTODO ("Currently it always returns zero")]
 		[ComVisible (false)]
 		public
-#if NET_4_0 || MOONLIGHT
+#if NET_4_0
 		virtual
 #endif
 		long HostContext {
@@ -780,6 +782,11 @@ namespace System.Reflection {
 			[MethodImplAttribute (MethodImplOptions.InternalCall)]
 			get;
 		}
+		
+		public override int GetHashCode ()
+		{
+			return base.GetHashCode ();
+		}
 
 		public override bool Equals (object o)
 		{
@@ -792,24 +799,8 @@ namespace System.Reflection {
 			Assembly other = (Assembly) o;
 			return other._mono_assembly == _mono_assembly;
 		}
-		
-#if NET_4_0
-#if MOONLIGHT
-		public virtual IList<CustomAttributeData> GetCustomAttributesData () {
-			return CustomAttributeData.GetCustomAttributes (this);
-		}
-#endif
-		public PermissionSet PermissionSet {
-			get { return this.GrantedPermissionSet; }
-		}
 
-		[MonoTODO]
-		public bool IsFullyTrusted {
-			get { return true; }
-		}
-#endif
-
-#if !MOONLIGHT
+#if !NET_2_1
 		// Code Access Security
 
 		internal void Resolve () 
@@ -890,12 +881,33 @@ namespace System.Reflection {
 				}
 			}
 		}
+		
+#if NET_4_0
+		public virtual PermissionSet PermissionSet {
+			get { return this.GrantedPermissionSet; }
+		}
+		
+		public virtual SecurityRuleSet SecurityRuleSet {
+			get { throw CreateNIE (); }
+		}
 #endif
 
-#if NET_4_0 || MOONLIGHT
+#endif
+
+#if NET_4_0
 		static Exception CreateNIE ()
 		{
 			return new NotImplementedException ("Derived classes must implement it");
+		}
+		
+		public virtual IList<CustomAttributeData> GetCustomAttributesData ()
+		{
+			return CustomAttributeData.GetCustomAttributes (this);
+		}
+
+		[MonoTODO]
+		public bool IsFullyTrusted {
+			get { return true; }
 		}
 
 		public virtual Type GetType (string name, bool throwOnError, bool ignoreCase)
@@ -946,11 +958,6 @@ namespace System.Reflection {
 			get { return false; }
 		}
 
-		public override int GetHashCode ()
-		{
-			return base.GetHashCode ();
-		}
-
 		public static bool operator == (Assembly left, Assembly right)
 		{
 			if ((object)left == (object)right)
@@ -969,7 +976,26 @@ namespace System.Reflection {
 			return !left.Equals (right);
 		}
 #endif
+
+#if NET_4_5
+		public virtual IEnumerable<TypeInfo> DefinedTypes {
+			get {
+				foreach (var type in GetTypes ())
+					yield return new TypeDelegator (type);
+			}
+		}
+
+		public virtual IEnumerable<Type> ExportedTypes {
+			get { return GetExportedTypes (); }
+		}
+
+		public virtual IEnumerable<Module> Modules {
+			get { return GetModules (); }
+		}
+
+		public virtual IEnumerable<CustomAttributeData> CustomAttributes {
+			get { return GetCustomAttributesData (); }
+		}
+#endif
 	}
 }
-
-#pragma warning restore 659

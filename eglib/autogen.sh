@@ -102,8 +102,8 @@ if grep "^AM_PROG_LIBTOOL" configure.ac >/dev/null; then
   fi
 fi
 
-echo "Running aclocal $ACLOCAL_FLAGS ..."
-aclocal $ACLOCAL_FLAGS || {
+echo "Running aclocal -I m4 $ACLOCAL_FLAGS ..."
+aclocal -I m4 $ACLOCAL_FLAGS || {
   echo
   echo "**Error**: aclocal failed. This may mean that you have not"
   echo "installed all of the packages you need, or you may need to"
@@ -113,7 +113,7 @@ aclocal $ACLOCAL_FLAGS || {
   exit 1
 }
 
-if grep "^AM_CONFIG_HEADER" configure.ac >/dev/null; then
+if grep "^AC_CONFIG_HEADERS" configure.ac >/dev/null; then
   echo "Running autoheader..."
   autoheader || { echo "**Error**: autoheader failed."; exit 1; }
 fi
@@ -125,7 +125,7 @@ echo "Running autoconf ..."
 autoconf || { echo "**Error**: autoconf failed."; exit 1; }
 
 
-conf_flags="--enable-maintainer-mode --enable-compile-warnings" #--enable-iso-c
+conf_flags="--enable-maintainer-mode" #--enable-compile-warnings --enable-iso-c
 
 if test x$NOCONFIGURE = x; then
   echo Running $srcdir/configure $conf_flags "$@" ...

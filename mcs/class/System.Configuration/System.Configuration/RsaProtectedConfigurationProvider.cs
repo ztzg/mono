@@ -26,7 +26,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 using System.Xml;
 using System.IO;
 using System.Collections.Specialized;
@@ -66,7 +65,7 @@ namespace System.Configuration
 		[MonoTODO]
 		public override XmlNode Decrypt (XmlNode encrypted_node)
 		{
-			XmlDocument doc = new XmlDocument ();
+			XmlDocument doc = new ConfigurationXmlDocument ();
 			
 			doc.Load (new StringReader (encrypted_node.OuterXml));
 
@@ -82,7 +81,7 @@ namespace System.Configuration
 		[MonoTODO]
 		public override XmlNode Encrypt (XmlNode node)
 		{
-			XmlDocument doc = new XmlDocument ();
+			XmlDocument doc = new ConfigurationXmlDocument ();
 			
 			doc.Load (new StringReader (node.OuterXml));
 
@@ -170,4 +169,4 @@ namespace System.Configuration
 		}
 	}
 }
-#endif
+

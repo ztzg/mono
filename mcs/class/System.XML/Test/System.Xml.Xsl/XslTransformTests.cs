@@ -36,10 +36,11 @@ namespace MonoTests.System.Xml.Xsl
 		[Test]
 		public void TestBasicTransform ()
 		{
+			string output = Path.Combine (Path.GetTempPath (), "result.xml");
 			doc.LoadXml ("<root/>");
 			xslt.Load ("Test/XmlFiles/xsl/empty.xsl");
-			xslt.Transform ("Test/XmlFiles/xsl/empty.xsl", "Test/XmlFiles/xsl/result.xml");
-			result.Load ("Test/XmlFiles/xsl/result.xml");
+			xslt.Transform ("Test/XmlFiles/xsl/empty.xsl", output);
+			result.Load (output);
 			Assert.AreEqual (2, result.ChildNodes.Count, "count");
 		}
 
@@ -414,9 +415,7 @@ xmlns:xsl='http://www.w3.org/1999/XSL/Transform' xmlns:msxsl='urn:schemas-micros
 
 		// http://support.microsoft.com/default.aspx?scid=kb;en-us;834667
 		[Test]
-#if NET_1_1
 		[Category ("NotDotNet")]
-#endif
 		public void LocalParameter ()
 		{
 			string xsltFragment = @"<?xml version=""1.0"" encoding=""UTF-8"" ?>

@@ -59,7 +59,7 @@ namespace MonoTests.System.Web.Services.Description
 		[Test]
 		public void Namespaces ()
 		{
-			FileStream fs = new FileStream ("Test/System.Web.Services.Description/test.wsdl", FileMode.Open);
+			FileStream fs = new FileStream ("Test/System.Web.Services.Description/test.wsdl", FileMode.Open, FileAccess.Read);
 			XmlTextReader xtr = new XmlTextReader (fs);
 
 			ServiceDescription sd = ServiceDescription.Read (xtr);
@@ -84,7 +84,7 @@ namespace MonoTests.System.Web.Services.Description
 		[Test]
 		public void ExtensibleAttributes ()
 		{
-		    FileStream fs = new FileStream("Test/System.Web.Services.Description/test.wsdl", FileMode.Open);
+		    FileStream fs = new FileStream ("Test/System.Web.Services.Description/test.wsdl", FileMode.Open, FileAccess.Read);
 		    XmlTextReader xtr = new XmlTextReader(fs);
 
 		    ServiceDescription sd = ServiceDescription.Read(xtr);
@@ -105,7 +105,7 @@ namespace MonoTests.System.Web.Services.Description
 		[Test]
 		public void Extensions ()
 		{
-		    FileStream fs = new FileStream("Test/System.Web.Services.Description/test.wsdl", FileMode.Open);
+			FileStream fs = new FileStream("Test/System.Web.Services.Description/test.wsdl", FileMode.Open, FileAccess.Read);
 		    XmlTextReader xtr = new XmlTextReader(fs);
 
 		    ServiceDescription sd = ServiceDescription.Read(xtr);
@@ -141,6 +141,14 @@ namespace MonoTests.System.Web.Services.Description
 		    Assert.AreEqual (typeof (SoapAddressBinding), sd.Services [0].Ports [0].Extensions [0].GetType ());	
 		    CheckXmlElement (sd.Services [0].Ports [0].Extensions [1], "portElem");
 
+		    string out_file = Path.GetTempFileName ();
+		    try {
+			    using (FileStream out_fs = new FileStream(out_file, FileMode.Create))
+				    sd.Write (out_fs);
+		    } finally {
+			    if (!String.IsNullOrEmpty (out_file))
+				    File.Delete (out_file);
+		    }
 		}
 
 		void CheckExtensions (DocumentableItem di, string elemName, string val)

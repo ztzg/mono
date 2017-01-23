@@ -124,9 +124,7 @@ public class UTF8Encoding : Encoding
 						break;
 					} else {
 						// We have a surrogate tail without 
-						// leading surrogate. In NET_2_0 it
-						// uses fallback. In NET_1_1 we output
-						// wrong surrogate.
+						// leading surrogate.
 						char [] fallback_chars = GetFallbackChars (chars, start, fallback, ref buffer);
 						fixed (char *fb_chars = fallback_chars) {
 							char dummy = '\0';
@@ -292,9 +290,7 @@ public class UTF8Encoding : Encoding
 						break;
 					} else {
 						// We have a surrogate tail without 
-						// leading surrogate. In NET_2_0 it
-						// uses fallback. In NET_1_1 we output
-						// wrong surrogate.
+						// leading surrogate.
 						char [] fallback_chars = GetFallbackChars (chars, start, fallback, ref buffer); 
 						char dummy = '\0';
 						if (bytes + InternalGetByteCount (fallback_chars, 0, fallback_chars.Length, fallback, ref dummy, true) > end_bytes)
@@ -667,7 +663,7 @@ fail_no_space:
 			throw new ArgumentOutOfRangeException ("charIndex", _("ArgRange_Array"));
 		}
 
-		if (charIndex == chars.Length)
+		if (charIndex == chars.Length && byteCount == 0)
 			return 0;
 
 		fixed (char* cptr = chars) {
@@ -692,10 +688,14 @@ fail_no_space:
 		if (leftOverCount == 0) {
 			int end = byteIndex + byteCount;
 			for (; byteIndex < end; posn++, byteIndex++, byteCount--) {
-				if (bytes [byteIndex] < 0x80)
+				if (bytes [byteIndex] < 0x80) {
+					if (posn >= length) {
+						throw new ArgumentException (_("Arg_InsufficientSpace"), "chars");
+					}
 					chars [posn] = (char) bytes [byteIndex];
-				else
+				} else {
 					break;
+				}
 			}
 		}
 
@@ -883,7 +883,7 @@ fail_no_space:
 		if (emitIdentifier)
 			return new byte [] { 0xEF, 0xBB, 0xBF };
 
-		return new byte [0];
+		return EmptyArray<byte>.Value;
 	}
 
 	// Determine if this object is equal to another.

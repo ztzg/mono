@@ -15,6 +15,10 @@ using System.Text;
 using System.Xml;
 using System.Xml.Schema;
 using System.Xml.XPath;
+#if NET_4_5
+using System.Threading;
+using System.Threading.Tasks;
+#endif
 
 using NUnit.Framework;
 
@@ -1536,7 +1540,7 @@ namespace MonoTests.System.Xml
 		// a bit revised version of bug #78706
 		public void CreateFromUrlClose ()
 		{
-			string file = "Test/XmlFiles/78706.xml";
+			string file = Path.Combine (Path.GetTempPath (), "78706.xml");
 			try {
 				if (!File.Exists (file))
 					File.Create (file).Close ();
@@ -1556,7 +1560,7 @@ namespace MonoTests.System.Xml
 		// a bit revised version of bug #385638
 		public void CreateFromUrlClose2 ()
 		{
-			string file = "Test/XmlFiles/385638.xml";
+			string file = Path.Combine (Path.GetTempPath (), "385638.xml");
 			try {
 				if (File.Exists (file))
 					File.Delete (file);
@@ -1721,6 +1725,35 @@ namespace MonoTests.System.Xml
 
 			while (reader.Read ())
 				reader.ReadToNextSibling ("book"); // should not result in an infinite loop
+		}
+
+		// bug #676020
+		[Test]
+		public void ReadToNextSibling4 ()
+		{
+			string xml = @"<SerializableStringDictionary>
+<SerializableStringDictionary>
+<DictionaryEntry Key=""Key1"" Value=""Value1""/>
+<DictionaryEntry Key=""Key2"" Value=""Value2""/>
+<DictionaryEntry Key=""Key3"" Value=""Value3""/>
+</SerializableStringDictionary>
+</SerializableStringDictionary>";
+
+			var reader = XmlReader.Create (new StringReader (xml));
+
+			Assert.IsTrue (reader.ReadToDescendant ("SerializableStringDictionary"), "#1");
+			Assert.IsTrue (reader.ReadToDescendant ("DictionaryEntry"), "#2");
+
+			int count = 0;
+			do {
+				reader.MoveToAttribute ("Key");
+				var key = reader.ReadContentAsString ();
+				reader.MoveToAttribute ("Value");
+				var value = reader.ReadContentAsString ();
+				count++;
+			}
+			while (reader.ReadToNextSibling ("DictionaryEntry"));
+			Assert.AreEqual (3, count, "#3");
 		}
 
 		[Test]
@@ -2236,6 +2269,57 @@ namespace MonoTests.System.Xml
 			Assert.AreEqual (arr [0], ret [0], "#2");
 			Assert.AreEqual (arr [1], ret [1], "#3");
 		}
+
+#if NET_4_5
+		[Test]
+		[ExpectedException(typeof(InvalidOperationException))]
+		public void MustSetAsyncFlag ()
+		{
+			var r = XmlReader.Create (new StringReader ("<root/>"));
+			r.ReadAsync ();
+		}
+
+		Exception RunAsync (Action action)
+		{
+			var task = Task<Exception>.Run (async () => {
+				try {
+					action ();
+					return null;
+				} catch (Exception ex) {
+					return ex;
+				}
+			});
+			task.Wait ();
+			Assert.That (task.IsCompleted);
+			return task.Result;
+		}
+
+		[Test]
+		public void SimpleAsync ()
+		{
+			var xml = "<root test=\"monkey\"/>";
+			var task = Task<Exception>.Run (async () => {
+				try {
+					var s = new XmlReaderSettings ();
+					s.Async = true;
+					var r = XmlReader.Create (new StringReader (xml), s);
+
+					Assert.That (await r.ReadAsync ());
+					Assert.That (r.MoveToFirstAttribute ());
+
+					Assert.AreEqual (await r.GetValueAsync (), "monkey");
+					r.Close ();
+					return null;
+				} catch (Exception ex) {
+					return ex;
+				}
+			});
+			task.Wait ();
+			Assert.That (task.IsCompleted);
+			if (task.Result != null)
+				throw task.Result;
+		}
+#endif
 #endif
 	}
 }

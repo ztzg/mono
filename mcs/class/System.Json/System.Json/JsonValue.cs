@@ -17,7 +17,7 @@ namespace System.Json
 		{
 			if (stream == null)
 				throw new ArgumentNullException ("stream");
-			return Load (new JavaScriptObjectDeserializer.BufferedStreamReader (stream));
+			return Load (new StreamReader (stream, true));
 		}
 
 		public static JsonValue Load (TextReader textReader)
@@ -25,7 +25,7 @@ namespace System.Json
 			if (textReader == null)
 				throw new ArgumentNullException ("textReader");
 
-			var ret = new JavaScriptObjectDeserializer (textReader.ReadToEnd (), true).BasicDeserialize ();
+			var ret = new JavaScriptReader (textReader, true).Read ();
 
 			return ToJsonValue (ret);
 		}
@@ -148,7 +148,10 @@ namespace System.Json
 					w.Write ('\"');
 					w.Write (EscapeString (pair.Key));
 					w.Write ("\": ");
-					pair.Value.SaveInternal (w);
+					if (pair.Value == null)
+						w.Write ("null");
+					else
+						pair.Value.SaveInternal (w);
 					following = true;
 				}
 				w.Write ('}');
@@ -159,7 +162,10 @@ namespace System.Json
 				foreach (JsonValue v in ((JsonArray) this)) {
 					if (following)
 						w.Write (", ");
-					v.SaveInternal (w);
+					if (v != null) 
+						v.SaveInternal (w);
+					else
+						w.Write ("null");
 					following = true;
 				}
 				w.Write (']');

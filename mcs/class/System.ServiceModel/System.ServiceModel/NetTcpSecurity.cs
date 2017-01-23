@@ -33,6 +33,13 @@ namespace System.ServiceModel
 {
 	public sealed class NetTcpSecurity
 	{
+#if NET_4_0
+		public NetTcpSecurity ()
+			: this (SecurityMode.Transport)
+		{
+		}
+#endif
+
 		internal NetTcpSecurity (SecurityMode mode)
 		{
 			this.mode = mode;

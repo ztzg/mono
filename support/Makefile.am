@@ -7,7 +7,7 @@ lib_LTLIBRARIES = 				\
 	libMonoPosixHelper.la			\
 	$(SUPPORT)
 
-INCLUDES =					\
+AM_CPPFLAGS =					\
 	$(GLIB_CFLAGS)				\
 	-I$(top_srcdir)
 
@@ -32,6 +32,9 @@ MPH_UNIX_SOURCE =				\
 	fstab.c					\
 	grp.c					\
 	macros.c				\
+	mac-reachability.c			\
+	nl.c					\
+	nl.h					\
 	old-map.c				\
 	old-map.h				\
 	pwd.c					\
@@ -41,6 +44,7 @@ MPH_UNIX_SOURCE =				\
 	sys-stat.c				\
 	sys-statvfs.c				\
 	sys-time.c				\
+	sys-uio.c				\
 	sys-utsname.c   \
 	sys-wait.c				\
 	sys-xattr.c				\
@@ -52,10 +56,10 @@ MPH_UNIX_SOURCE =				\
 
 if HOST_WIN32
 MPH_SOURCE = $(MPH_C_SOURCE)
-MPH_LIBS   = $(GLIB_LIBS)
+MPH_LIBS   = $(GLIB_LIBS) $(LIBICONV)
 else
 MPH_SOURCE = $(MPH_C_SOURCE) $(MPH_UNIX_SOURCE)
-MPH_LIBS   = $(GLIB_LIBS)
+MPH_LIBS   = $(GLIB_LIBS) $(LIBICONV)
 endif
 
 MINIZIP_SOURCE = \
@@ -71,7 +75,6 @@ ZLIB_SOURCES = \
 	adler32.c	\
 	compress.c	\
 	crc32.c		\
-	gzio.c		\
 	uncompr.c	\
 	deflate.c	\
 	trees.c		\
@@ -113,13 +116,17 @@ libMonoPosixHelper_la_LIBADD =			\
 libMonoPosixHelper_la_LDFLAGS = -no-undefined -avoid-version
 libMonoSupportW_la_LDFLAGS = -no-undefined -avoid-version
 
+if PLATFORM_DARWIN
+libMonoPosixHelper_la_LDFLAGS += -framework CoreFoundation -framework SystemConfiguration
+endif
+
 libMonoSupportW_la_SOURCES =			\
 		supportw.c			\
 		support-heap.c			\
 		supportw.h
 
 libMonoSupportW_la_LIBADD =			\
-		$(GLIB_LIBS)
+		$(GLIB_LIBS) $(LIBICONV)
 
 # 
 # Use this target to refresh the values in map.[ch]
@@ -140,6 +147,7 @@ refresh:
 	--autoconf-header="<sys/statvfs.h>"                   \
 	--autoconf-header="<sys/xattr.h>"                     \
 	--autoconf-header="<sys/mman.h>"                      \
+	--autoconf-header="<sys/uio.h>"                       \
 	--autoconf-header="<unistd.h>"                        \
 	--impl-header="<fcntl.h>"                             \
 	--impl-header="<signal.h>"                            \

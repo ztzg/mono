@@ -28,7 +28,9 @@ using System.Runtime.CompilerServices;
 
 namespace System.Collections.Specialized {
 
+#if !MOBILE
 	[TypeForwardedFrom (Consts.WindowsBase_3_0)]
+#endif
 	public interface INotifyCollectionChanged
 	{
 		event NotifyCollectionChangedEventHandler CollectionChanged;

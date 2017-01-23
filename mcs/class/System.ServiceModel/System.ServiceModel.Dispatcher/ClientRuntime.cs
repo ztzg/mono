@@ -127,5 +127,11 @@ namespace System.ServiceModel.Dispatcher
 		public ClientOperation UnhandledClientOperation {
 			get { throw new NotImplementedException (); }
 		}
+		
+		[MonoTODO]
+		public bool MessageVersionNoneFaultsEnabled {
+			get { throw new NotImplementedException (); }
+			set { throw new NotImplementedException (); }
+		}
 	}
 }

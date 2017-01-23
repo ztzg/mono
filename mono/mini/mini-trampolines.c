@@ -1,4 +1,8 @@
-
+/*
+ * (C) 2003 Ximian, Inc.
+ * (C) 2003-2011 Novell, Inc.
+ * Copyright 2011 Xamarin, Inc (http://www.xamarin.com)
+ */
 #include <config.h>
 #include <glib.h>
 
@@ -27,25 +31,7 @@ static guint32 trampoline_calls, jit_trampolines, unbox_trampolines, static_rgct
 #define mono_trampolines_unlock() LeaveCriticalSection (&trampolines_mutex)
 static CRITICAL_SECTION trampolines_mutex;
 
-static gpointer
-get_unbox_trampoline (MonoGenericSharingContext *gsctx, MonoMethod *m, gpointer addr, gboolean need_rgctx_tramp)
-{
-	if (mono_aot_only) {
-		if (need_rgctx_tramp)
-			/* 
-			 * The unbox trampolines call the method directly, so need to add
-			 * an rgctx tramp before them.
-			 */
-			return mono_create_static_rgctx_trampoline (m, mono_aot_get_unbox_trampoline (m));
-		else
-			return mono_aot_get_unbox_trampoline (m);
-	} else {
-		unbox_trampolines ++;
-		return mono_arch_get_unbox_trampoline (gsctx, m, addr);
-	}
-}
-
-#ifdef MONO_ARCH_HAVE_STATIC_RGCTX_TRAMPOLINE
+#ifdef MONO_ARCH_GSHARED_SUPPORTED
 
 typedef struct {
 	MonoMethod *m;
@@ -99,10 +85,7 @@ mono_create_static_rgctx_trampoline (MonoMethod *m, gpointer addr)
 	g_assert (((gpointer*)addr) [2] == 0);
 #endif
 
-	if (mini_method_get_context (m)->method_inst)
-		ctx = mono_method_lookup_rgctx (mono_class_vtable (mono_domain_get (), m->klass), mini_method_get_context (m)->method_inst);
-	else
-		ctx = mono_class_vtable (mono_domain_get (), m->klass);
+	ctx = mini_method_get_rgctx (m);
 
 	domain = mono_domain_get ();
 
@@ -142,11 +125,11 @@ mono_create_static_rgctx_trampoline (MonoMethod *m, gpointer addr)
 gpointer
 mono_create_static_rgctx_trampoline (MonoMethod *m, gpointer addr)
 {
-	/* 
-	 * This shouldn't happen as all arches which support generic sharing support
-	 * static rgctx trampolines as well.
-	 */
-	g_assert_not_reached ();
+       /* 
+        * This shouldn't happen as all arches which support generic sharing support
+        * static rgctx trampolines as well.
+        */
+       g_assert_not_reached ();
 }
 #endif
 
@@ -156,9 +139,18 @@ mono_create_static_rgctx_trampoline (MonoMethod *m, gpointer addr)
  * Either IMPL_METHOD or AOT_ADDR will be set on return.
  */
 static gpointer*
+#ifdef __GNUC__
+/*
+ * This works against problems when compiling with gcc 4.6 on arm. The 'then' part of
+ * this line gets executed, even when the condition is false:
+ *		if (impl && mono_method_needs_static_rgctx_invoke (impl, FALSE))
+ *			*need_rgctx_tramp = TRUE;
+ */
+__attribute__ ((noinline))
+#endif
 mono_convert_imt_slot_to_vtable_slot (gpointer* slot, mgreg_t *regs, guint8 *code, MonoMethod *method, MonoMethod **impl_method, gboolean *need_rgctx_tramp, gboolean *variance_used, gpointer *aot_addr)
 {
-	MonoObject *this_argument = mono_arch_get_this_arg_from_call (NULL, mono_method_signature (method), regs, code);
+	MonoObject *this_argument = mono_arch_get_this_arg_from_call (regs, code);
 	MonoVTable *vt = this_argument->vtable;
 	int displacement = slot - ((gpointer*)vt);
 
@@ -210,6 +202,16 @@ mono_convert_imt_slot_to_vtable_slot (gpointer* slot, mgreg_t *regs, guint8 *cod
 
 		if (impl && mono_method_needs_static_rgctx_invoke (impl, FALSE))
 			*need_rgctx_tramp = TRUE;
+		if (impl && impl->wrapper_type == MONO_WRAPPER_MANAGED_TO_MANAGED) {
+			WrapperInfo *info = mono_marshal_get_wrapper_info (impl);
+
+			if (info && info->subtype == WRAPPER_SUBTYPE_GENERIC_ARRAY_HELPER) {
+				// FIXME: This needs a gsharedvt-out trampoline, since the caller uses the gsharedvt calling conv, but the
+				// wrapper is a normal non-generic method.
+				*need_rgctx_tramp = TRUE;
+				//g_assert_not_reached ();
+			}
+		}
 
 		*impl_method = impl;
 #if DEBUG_IMT
@@ -265,6 +267,99 @@ is_generic_method_definition (MonoMethod *m)
 	return FALSE;
 }
 
+gboolean
+mini_jit_info_is_gsharedvt (MonoJitInfo *ji)
+{
+	if (ji && ji->has_generic_jit_info && (mono_jit_info_get_generic_sharing_context (ji)->var_is_vt ||
+										   mono_jit_info_get_generic_sharing_context (ji)->mvar_is_vt))
+		return TRUE;
+	else
+		return FALSE;
+}
+
+/*
+ * mini_add_method_trampoline:
+ *
+ *   Add static rgctx/gsharedvt_in/unbox trampolines to M/COMPILED_METHOD if needed. Return the trampoline address, or
+ * COMPILED_METHOD if no trampoline is needed.
+ * ORIG_METHOD is the method the caller originally called i.e. an iface method, or NULL.
+ */
+gpointer
+mini_add_method_trampoline (MonoMethod *orig_method, MonoMethod *m, gpointer compiled_method, gboolean add_static_rgctx_tramp, gboolean add_unbox_tramp)
+{
+	gpointer addr = compiled_method;
+	gboolean callee_gsharedvt, callee_array_helper;
+	MonoJitInfo *ji = 
+		mini_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (compiled_method), NULL);
+
+	// FIXME: This loads information from AOT
+	callee_gsharedvt = mini_jit_info_is_gsharedvt (ji);
+
+	callee_array_helper = FALSE;
+	if (m->wrapper_type == MONO_WRAPPER_MANAGED_TO_MANAGED) {
+		WrapperInfo *info = mono_marshal_get_wrapper_info (m);
+
+		/*
+		 * generic array helpers.
+		 * Have to replace the wrappers with the original generic instances.
+		 */
+		if (info && info->subtype == WRAPPER_SUBTYPE_GENERIC_ARRAY_HELPER) {
+			callee_array_helper = TRUE;
+			m = info->d.generic_array_helper.method;
+		}
+	} else if (m->wrapper_type == MONO_WRAPPER_UNKNOWN) {
+		WrapperInfo *info = mono_marshal_get_wrapper_info (m);
+
+		/* Same for synchronized inner wrappers */
+		if (info && info->subtype == WRAPPER_SUBTYPE_SYNCHRONIZED_INNER) {
+			m = info->d.synchronized_inner.method;
+		}
+	}
+
+	if (!orig_method)
+		orig_method = m;
+
+	if (callee_gsharedvt)
+		g_assert (m->is_inflated);
+
+	addr = compiled_method;
+
+	if (add_unbox_tramp) {
+		/* 
+		 * The unbox trampolines call the method directly, so need to add
+		 * an rgctx tramp before them.
+		 */
+		if (mono_aot_only) {
+			addr = mono_aot_get_unbox_trampoline (m);
+		} else {
+			unbox_trampolines ++;
+			addr = mono_arch_get_unbox_trampoline (m, addr);
+		}
+	}
+
+	if (callee_gsharedvt && mini_is_gsharedvt_variable_signature (mono_method_signature (ji->method))) {
+		MonoGenericSharingContext *gsctx;
+		MonoMethodSignature *sig, *gsig;
+
+		/* Here m is a generic instance, while ji->method is the gsharedvt method implementing it */
+
+		/* Call from normal/gshared code to gsharedvt code with variable signature */
+		gsctx = mono_jit_info_get_generic_sharing_context (ji);
+
+		sig = mono_method_signature (m);
+		gsig = mono_method_signature (ji->method); 
+
+		addr = mini_get_gsharedvt_wrapper (TRUE, addr, sig, gsig, gsctx, -1, FALSE);
+
+		//printf ("IN: %s\n", mono_method_full_name (m, TRUE));
+	}
+
+	if (add_static_rgctx_tramp && !callee_array_helper)
+		addr = mono_create_static_rgctx_trampoline (m, addr);
+
+	return addr;
+}
+
 /**
  * common_call_trampoline:
  *
@@ -276,10 +371,11 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 {
 	gpointer addr, compiled_method;
 	gboolean generic_shared = FALSE;
+	gboolean need_unbox_tramp = FALSE;
 	MonoMethod *declaring = NULL;
-	MonoMethod *generic_virtual = NULL, *variant_iface = NULL;
+	MonoMethod *generic_virtual = NULL, *variant_iface = NULL, *orig_method = NULL;
 	int context_used;
-	gboolean virtual, proxy = FALSE, variance_used = FALSE;
+	gboolean virtual, variance_used = FALSE;
 	gpointer *orig_vtable_slot, *vtable_slot_to_patch = NULL;
 	MonoJitInfo *ji = NULL;
 
@@ -301,11 +397,12 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 		vtable_slot = orig_vtable_slot;
 		g_assert (vtable_slot);
 
-		this_arg = mono_arch_get_this_arg_from_call (NULL, mono_method_signature (m), regs, code);
+		orig_method = m;
 
-		if (this_arg->vtable->klass == mono_defaults.transparent_proxy_class) {
+		this_arg = mono_arch_get_this_arg_from_call (regs, code);
+
+		if (mono_object_is_transparent_proxy (this_arg)) {
 			/* Use the slow path for now */
-			proxy = TRUE;
 		    m = mono_object_get_virtual_method (this_arg, m);
 			vtable_slot_to_patch = NULL;
 		} else {
@@ -399,7 +496,7 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 #endif
 		} else {
 #ifdef MONO_ARCH_HAVE_IMT
-			MonoObject *this_argument = mono_arch_get_this_arg_from_call (NULL, mono_method_signature (m), regs, code);
+			MonoObject *this_argument = mono_arch_get_this_arg_from_call (regs, code);
 
 			vt = this_argument->vtable;
 			vtable_slot = orig_vtable_slot;
@@ -407,8 +504,10 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 			g_assert (this_argument->vtable->klass->inited);
 			//mono_class_init (this_argument->vtable->klass);
 
-			if (!vtable_slot)
+			if (!vtable_slot) {
+				mono_class_setup_supertypes (this_argument->vtable->klass);
 				klass = this_argument->vtable->klass->supertypes [m->klass->idepth - 1];
+			}
 #else
 			NOT_IMPLEMENTED;
 #endif
@@ -458,16 +557,8 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 	}
 
 	if (m->iflags & METHOD_IMPL_ATTRIBUTE_SYNCHRONIZED) {
-		MonoJitInfo *ji;
-
-		if (code)
-			ji = mini_jit_info_table_find (mono_domain_get (), (char*)code, NULL);
-		else
-			ji = NULL;
-
-		/* Avoid recursion */
-		if (!(ji && ji->method->wrapper_type == MONO_WRAPPER_SYNCHRONIZED))
-			m = mono_marshal_get_synchronized_wrapper (m);
+		m = mono_marshal_get_synchronized_wrapper (m);
+		need_rgctx_tramp = FALSE;
 	}
 
 	/* Calls made through delegates on platforms without delegate trampolines */
@@ -479,17 +570,21 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 
 	mono_debugger_trampoline_compiled (code, m, addr);
 
-	if (need_rgctx_tramp)
-		addr = mono_create_static_rgctx_trampoline (m, addr);
+	if (generic_virtual || variant_iface) {
+		if (vt->klass->valuetype) /*FIXME is this required variant iface?*/
+			need_unbox_tramp = TRUE;
+	} else if (orig_vtable_slot) {
+		if (m->klass->valuetype)
+			need_unbox_tramp = TRUE;
+	}
+
+	addr = mini_add_method_trampoline (orig_method, m, compiled_method, need_rgctx_tramp, need_unbox_tramp);
 
 	if (generic_virtual || variant_iface) {
 		MonoMethod *target = generic_virtual ? generic_virtual : variant_iface;
 
 		vtable_slot = orig_vtable_slot;
 		g_assert (vtable_slot);
-
-		if (vt->klass->valuetype) /*FIXME is this required variant iface?*/
-			addr = get_unbox_trampoline (mono_get_generic_context_from_code (code), m, addr, need_rgctx_tramp);
 
 		mono_method_add_generic_virtual_invocation (mono_domain_get (), 
 													vt, vtable_slot,
@@ -529,9 +624,6 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 	vtable_slot = orig_vtable_slot;
 
 	if (vtable_slot) {
-		if (m->klass->valuetype)
-			addr = get_unbox_trampoline (mono_get_generic_context_from_code (code), m, addr, need_rgctx_tramp);
-
 		if (vtable_slot_to_patch && (mono_aot_is_got_entry (code, (guint8*)vtable_slot_to_patch) || mono_domain_owns_vtable_slot (mono_domain_get (), vtable_slot_to_patch))) {
 			g_assert (*vtable_slot_to_patch);
 			*vtable_slot_to_patch = mono_get_addr_from_ftnptr (addr);
@@ -539,27 +631,46 @@ common_call_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8* tram
 	}
 	else {
 		guint8 *plt_entry = mono_aot_get_plt_entry (code);
+		gboolean no_patch = FALSE;
+		MonoJitInfo *target_ji;
 
 		if (plt_entry) {
+			if (generic_shared) {
+				target_ji =
+					mini_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (compiled_method), NULL);
+				if (!ji)
+					ji = mini_jit_info_table_find (mono_domain_get (), (char*)code, NULL);
+
+				if (ji && target_ji && generic_shared && ji->has_generic_jit_info && !target_ji->has_generic_jit_info) {
+					no_patch = TRUE;
+				}
+			}
+			if (!no_patch)
 				mono_aot_patch_plt_entry (plt_entry, NULL, regs, addr);
 		} else {
 			if (generic_shared) {
 				if (m->wrapper_type != MONO_WRAPPER_NONE)
 					m = mono_marshal_method_from_wrapper (m);
-				g_assert (mono_method_is_generic_sharable_impl (m, FALSE));
+				//g_assert (mono_method_is_generic_sharable (m, FALSE));
 			}
 
 			/* Patch calling code */
-			{
-				MonoJitInfo *target_ji = 
-					mono_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (compiled_method));
+			target_ji =
+				mini_jit_info_table_find (mono_domain_get (), mono_get_addr_from_ftnptr (compiled_method), NULL);
+			if (!ji)
+				ji = mini_jit_info_table_find (mono_domain_get (), (char*)code, NULL);
 
-				if (!ji)
-					ji = mono_jit_info_table_find (mono_domain_get (), (char*)code);
-
-				if (mono_method_same_domain (ji, target_ji))
-					mono_arch_patch_callsite (ji->code_start, code, addr);
+			if (ji && target_ji && generic_shared && ji->has_generic_jit_info && !target_ji->has_generic_jit_info) {
+				/* 
+				 * Can't patch the call as the caller is gshared, but the callee is not. Happens when
+				 * generic sharing fails.
+				 * FIXME: Performance problem.
+				 */
+				no_patch = TRUE;
 			}
+
+			if (!no_patch && mono_method_same_domain (ji, target_ji))
+				mono_arch_patch_callsite (ji->code_start, code, addr);
 		}
 	}
 
@@ -611,7 +722,7 @@ mono_vcall_trampoline (mgreg_t *regs, guint8 *code, int slot, guint8 *tramp)
 	/*
 	 * Obtain the vtable from the 'this' arg.
 	 */
-	this = mono_arch_get_this_arg_from_call (NULL, NULL, regs, code);
+	this = mono_arch_get_this_arg_from_call (regs, code);
 	g_assert (this);
 
 	vt = this->vtable;
@@ -656,6 +767,7 @@ mono_vcall_trampoline (mgreg_t *regs, guint8 *code, int slot, guint8 *tramp)
 	return common_call_trampoline (regs, code, m, tramp, vt, vtable_slot, need_rgctx_tramp);
 }
 
+#ifndef DISABLE_REMOTING
 gpointer
 mono_generic_virtual_remoting_trampoline (mgreg_t *regs, guint8 *code, MonoMethod *m, guint8 *tramp)
 {
@@ -692,6 +804,7 @@ mono_generic_virtual_remoting_trampoline (mgreg_t *regs, guint8 *code, MonoMetho
 
 	return addr;
 }
+#endif
 
 /*
  * mono_aot_trampoline:
@@ -820,9 +933,9 @@ mono_rgctx_lazy_fetch_trampoline (mgreg_t *regs, guint8 *code, gpointer data, gu
 	num_lookups++;
 
 	if (mrgctx)
-		return mono_method_fill_runtime_generic_context (arg, index);
+		return mono_method_fill_runtime_generic_context (arg, code, index);
 	else
-		return mono_class_fill_runtime_generic_context (arg, index);
+		return mono_class_fill_runtime_generic_context (arg, code, index);
 #else
 	g_assert_not_reached ();
 #endif
@@ -858,21 +971,19 @@ mono_delegate_trampoline (mgreg_t *regs, guint8 *code, gpointer *tramp_data, gui
 	MonoMethod *method = NULL;
 	gboolean multicast, callvirt = FALSE;
 	gboolean need_rgctx_tramp = FALSE;
+	gboolean need_unbox_tramp = FALSE;
+	gboolean enable_caching = TRUE;
 	MonoMethod *invoke = tramp_data [0];
 	guint8 *impl_this = tramp_data [1];
 	guint8 *impl_nothis = tramp_data [2];
 	MonoError err;
 	MonoMethodSignature *sig;
+	gpointer addr, compiled_method;
 
 	trampoline_calls ++;
 
 	/* Obtain the delegate object according to the calling convention */
-
-	/* 
-	 * Avoid calling mono_get_generic_context_from_code () now since it is expensive, 
-	 * get_this_arg_from_call will call it if needed.
-	 */
-	delegate = mono_arch_get_this_arg_from_call (NULL, mono_method_signature (invoke), regs, code);
+	delegate = mono_arch_get_this_arg_from_call (regs, code);
 
 	if (delegate->method) {
 		method = delegate->method;
@@ -884,21 +995,27 @@ mono_delegate_trampoline (mgreg_t *regs, guint8 *code, gpointer *tramp_data, gui
 		 * (ctor_with_method () does this, but it doesn't store the wrapper back into
 		 * delegate->method).
 		 */
+#ifndef DISABLE_REMOTING
 		if (delegate->target && delegate->target->vtable->klass == mono_defaults.transparent_proxy_class) {
 #ifndef DISABLE_COM
-			if (((MonoTransparentProxy *)delegate->target)->remote_class->proxy_class != mono_defaults.com_object_class && 
-			   !((MonoTransparentProxy *)delegate->target)->remote_class->proxy_class->is_com_object)
+			if (((MonoTransparentProxy *)delegate->target)->remote_class->proxy_class != mono_class_get_com_object_class () &&
+			   !mono_class_is_com_object (((MonoTransparentProxy *)delegate->target)->remote_class->proxy_class))
 #endif
 				method = mono_marshal_get_remoting_invoke (method);
-		}
-		else {
+		} else
+#endif
+		{
 			mono_error_init (&err);
 			sig = mono_method_signature_checked (method, &err);
 			if (!sig)
 				mono_error_raise_exception (&err);
 				
-			if (sig->hasthis && method->klass->valuetype)
-				method = mono_marshal_get_unbox_wrapper (method);
+			if (sig->hasthis && method->klass->valuetype) {
+				if (mono_aot_only)
+					need_unbox_tramp = TRUE;
+				else
+					method = mono_marshal_get_unbox_wrapper (method);
+			}
 		}
 	} else {
 		ji = mono_jit_info_table_find (domain, mono_get_addr_from_ftnptr (delegate->method_ptr));
@@ -913,6 +1030,13 @@ mono_delegate_trampoline (mgreg_t *regs, guint8 *code, gpointer *tramp_data, gui
 			mono_error_raise_exception (&err);
 
 		callvirt = !delegate->target && sig->hasthis;
+		if (delegate->target && 
+			method->flags & METHOD_ATTRIBUTE_VIRTUAL && 
+			method->flags & METHOD_ATTRIBUTE_ABSTRACT &&
+			method->klass->flags & TYPE_ATTRIBUTE_ABSTRACT) {
+			method = mono_object_get_virtual_method (delegate->target, method);
+			enable_caching = FALSE;
+		}
 	}
 
 	if (method && method->iflags & METHOD_IMPL_ATTRIBUTE_SYNCHRONIZED)
@@ -927,13 +1051,13 @@ mono_delegate_trampoline (mgreg_t *regs, guint8 *code, gpointer *tramp_data, gui
 	 */
 	if (method && !callvirt) {
 		/* Avoid the overhead of looking up an already compiled method if possible */
-		if (delegate->method_code && *delegate->method_code) {
+		if (enable_caching && delegate->method_code && *delegate->method_code) {
 			delegate->method_ptr = *delegate->method_code;
 		} else {
-			delegate->method_ptr = mono_compile_method (method);
-			if (need_rgctx_tramp)
-				delegate->method_ptr = mono_create_static_rgctx_trampoline (method, delegate->method_ptr);
-			if (delegate->method_code)
+			compiled_method = addr = mono_compile_method (method);
+			addr = mini_add_method_trampoline (NULL, method, compiled_method, need_rgctx_tramp, need_unbox_tramp);
+			delegate->method_ptr = addr;
+			if (enable_caching && delegate->method_code)
 				*delegate->method_code = delegate->method_ptr;
 			mono_debugger_trampoline_compiled (NULL, method, delegate->method_ptr);
 		}
@@ -959,6 +1083,7 @@ mono_delegate_trampoline (mgreg_t *regs, guint8 *code, gpointer *tramp_data, gui
 	/* The general, unoptimized case */
 	m = mono_marshal_get_delegate_invoke (invoke, delegate);
 	code = mono_compile_method (m);
+	code = mini_add_method_trampoline (NULL, m, code, mono_method_needs_static_rgctx_invoke (m, FALSE), FALSE);
 	delegate->invoke_impl = mono_get_addr_from_ftnptr (code);
 	mono_debugger_trampoline_compiled (NULL, m, delegate->invoke_impl);
 
@@ -973,10 +1098,10 @@ mono_handler_block_guard_trampoline (mgreg_t *regs, guint8 *code, gpointer *tram
 {
 	MonoContext ctx;
 	MonoException *exc;
-	MonoJitTlsData *jit_tls = TlsGetValue (mono_jit_tls_id);
+	MonoJitTlsData *jit_tls = mono_native_tls_get_value (mono_jit_tls_id);
 	gpointer resume_ip = jit_tls->handler_block_return_address;
 
-	memcpy (&ctx, &jit_tls->ex_ctx, sizeof (MonoContext));
+	memcpy (&ctx, &jit_tls->handler_block_context, sizeof (MonoContext));
 	MONO_CONTEXT_SET_IP (&ctx, jit_tls->handler_block_return_address);
 
 	jit_tls->handler_block_return_address = NULL;
@@ -993,7 +1118,7 @@ mono_handler_block_guard_trampoline (mgreg_t *regs, guint8 *code, gpointer *tram
 		if (!restore_context)
 			restore_context = mono_get_restore_context ();
 
-		mono_handle_exception (&ctx, exc, NULL, FALSE);
+		mono_handle_exception (&ctx, exc);
 		restore_context (&ctx);
 	}
 
@@ -1052,8 +1177,10 @@ mono_get_trampoline_func (MonoTrampolineType tramp_type)
 #endif
 	case MONO_TRAMPOLINE_RESTORE_STACK_PROT:
 		return mono_altstack_restore_prot;
+#ifndef DISABLE_REMOTING
 	case MONO_TRAMPOLINE_GENERIC_VIRTUAL_REMOTING:
 		return mono_generic_virtual_remoting_trampoline;
+#endif
 	case MONO_TRAMPOLINE_MONITOR_ENTER:
 		return mono_monitor_enter_trampoline;
 	case MONO_TRAMPOLINE_MONITOR_EXIT:
@@ -1079,6 +1206,8 @@ create_trampoline_code (MonoTrampolineType tramp_type)
 	code = mono_arch_create_generic_trampoline (tramp_type, &info, FALSE);
 	if (info) {
 		mono_save_trampoline_xdebug_info (info);
+		if (mono_jit_map_is_enabled ())
+			mono_emit_jit_tramp (info->code, info->code_size, info->name);
 		mono_tramp_info_free (info);
 	}
 
@@ -1106,7 +1235,9 @@ mono_trampolines_init (void)
 	mono_trampoline_code [MONO_TRAMPOLINE_DELEGATE] = create_trampoline_code (MONO_TRAMPOLINE_DELEGATE);
 #endif
 	mono_trampoline_code [MONO_TRAMPOLINE_RESTORE_STACK_PROT] = create_trampoline_code (MONO_TRAMPOLINE_RESTORE_STACK_PROT);
+#ifndef DISABLE_REMOTING
 	mono_trampoline_code [MONO_TRAMPOLINE_GENERIC_VIRTUAL_REMOTING] = create_trampoline_code (MONO_TRAMPOLINE_GENERIC_VIRTUAL_REMOTING);
+#endif
 	mono_trampoline_code [MONO_TRAMPOLINE_MONITOR_ENTER] = create_trampoline_code (MONO_TRAMPOLINE_MONITOR_ENTER);
 	mono_trampoline_code [MONO_TRAMPOLINE_MONITOR_EXIT] = create_trampoline_code (MONO_TRAMPOLINE_MONITOR_EXIT);
 	mono_trampoline_code [MONO_TRAMPOLINE_VCALL] = create_trampoline_code (MONO_TRAMPOLINE_VCALL);
@@ -1205,6 +1336,8 @@ mono_create_generic_class_init_trampoline (void)
 
 			if (info) {
 				mono_save_trampoline_xdebug_info (info);
+				if (mono_jit_map_is_enabled ())
+					mono_emit_jit_tramp (info->code, info->code_size, info->name);
 				mono_tramp_info_free (info);
 			}
 		}
@@ -1230,8 +1363,9 @@ mono_create_jump_trampoline (MonoDomain *domain, MonoMethod *method, gboolean ad
 	 * We cannot recover the correct type of a shared generic
 	 * method from its native code address, so we use the
 	 * trampoline instead.
+	 * For synchronized methods, the trampoline adds the wrapper.
 	 */
-	if (code && !ji->has_generic_jit_info)
+	if (code && !ji->has_generic_jit_info && !(method->iflags & METHOD_IMPL_ATTRIBUTE_SYNCHRONIZED))
 		return code;
 
 	mono_domain_lock (domain);
@@ -1306,7 +1440,7 @@ mono_create_jit_trampoline_from_token (MonoImage *image, guint32 token)
 	MonoDomain *domain = mono_domain_get ();
 	guint8 *buf, *start;
 
-	buf = start = mono_domain_code_reserve (domain, 2 * sizeof (gpointer));
+	buf = start = mono_domain_alloc0 (domain, 2 * sizeof (gpointer));
 
 	*(gpointer*)(gpointer)buf = image;
 	buf += sizeof (gpointer);
@@ -1320,10 +1454,9 @@ mono_create_jit_trampoline_from_token (MonoImage *image, guint32 token)
 }	
 
 gpointer
-mono_create_delegate_trampoline (MonoClass *klass)
+mono_create_delegate_trampoline (MonoDomain *domain, MonoClass *klass)
 {
 #ifdef MONO_ARCH_HAVE_CREATE_DELEGATE_TRAMPOLINE
-	MonoDomain *domain = mono_domain_get ();
 	gpointer ptr;
 	guint32 code_size = 0;
 	gpointer *tramp_data;
@@ -1344,7 +1477,7 @@ mono_create_delegate_trampoline (MonoClass *klass)
 	tramp_data [1] = mono_arch_get_delegate_invoke_impl (mono_method_signature (invoke), TRUE);
 	tramp_data [2] = mono_arch_get_delegate_invoke_impl (mono_method_signature (invoke), FALSE);
 
-	ptr = mono_create_specific_trampoline (tramp_data, MONO_TRAMPOLINE_DELEGATE, mono_domain_get (), &code_size);
+	ptr = mono_create_specific_trampoline (tramp_data, MONO_TRAMPOLINE_DELEGATE, domain, &code_size);
 	g_assert (code_size);
 
 	/* store trampoline address */
@@ -1383,6 +1516,8 @@ mono_create_rgctx_lazy_fetch_trampoline (guint32 offset)
 	tramp = mono_arch_create_rgctx_lazy_fetch_trampoline (offset, &info, FALSE);
 	if (info) {
 		mono_save_trampoline_xdebug_info (info);
+		if (mono_jit_map_is_enabled ())
+			mono_emit_jit_tramp (info->code, info->code_size, info->name);
 		mono_tramp_info_free (info);
 	}
 	ptr = mono_create_ftnptr (mono_get_root_domain (), tramp);
@@ -1411,7 +1546,6 @@ gpointer
 mono_create_monitor_enter_trampoline (void)
 {
 	static gpointer code;
-	MonoTrampInfo *info;
 
 	if (mono_aot_only) {
 		if (!code)
@@ -1423,9 +1557,13 @@ mono_create_monitor_enter_trampoline (void)
 	mono_trampolines_lock ();
 
 	if (!code) {
+		MonoTrampInfo *info;
+
 		code = mono_arch_create_monitor_enter_trampoline (&info, FALSE);
 		if (info) {
 			mono_save_trampoline_xdebug_info (info);
+			if (mono_jit_map_is_enabled ())
+				mono_emit_jit_tramp (info->code, info->code_size, info->name);
 			mono_tramp_info_free (info);
 		}
 	}
@@ -1443,7 +1581,6 @@ gpointer
 mono_create_monitor_exit_trampoline (void)
 {
 	static gpointer code;
-	MonoTrampInfo *info;
 
 	if (mono_aot_only) {
 		if (!code)
@@ -1455,9 +1592,13 @@ mono_create_monitor_exit_trampoline (void)
 	mono_trampolines_lock ();
 
 	if (!code) {
+		MonoTrampInfo *info;
+
 		code = mono_arch_create_monitor_exit_trampoline (&info, FALSE);
 		if (info) {
 			mono_save_trampoline_xdebug_info (info);
+			if (mono_jit_map_is_enabled ())
+				mono_emit_jit_tramp (info->code, info->code_size, info->name);
 			mono_tramp_info_free (info);
 		}
 	}
@@ -1534,7 +1675,9 @@ static const char*tramp_names [MONO_TRAMPOLINE_NUM] = {
 	"aot_plt",
 	"delegate",
 	"restore_stack_prot",
+#ifndef DISABLE_REMOTING
 	"generic_virtual_remoting",
+#endif
 	"monitor_enter",
 	"monitor_exit",
 	"vcall",

@@ -180,10 +180,8 @@ namespace MonoTests.System.Security.Principal {
 
 			IDeserializationCallback dc = (id as IDeserializationCallback);
 			Assert.IsNotNull (dc, "IDeserializationCallback");
-#if NET_1_1
 			ISerializable s = (id as ISerializable);
 			Assert.IsNotNull (s, "ISerializable");
-#endif
 		}
 
 		// This is clearly a hack - but I've seen it too many times so I think we 
@@ -215,6 +213,9 @@ namespace MonoTests.System.Security.Principal {
 		}
 
 		[Test]
+#if __IOS__
+		[Ignore ("https://bugzilla.xamarin.com/show_bug.cgi?id=12789")]
+#endif
 		public void SerializeRoundTrip () 
 		{
 			WindowsIdentity wi = WindowsIdentity.GetCurrent ();

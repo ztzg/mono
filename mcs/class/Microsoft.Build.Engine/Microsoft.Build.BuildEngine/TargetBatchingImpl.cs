@@ -28,8 +28,6 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#if NET_2_0
-
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -120,7 +118,7 @@ namespace Microsoft.Build.BuildEngine {
 
 				for (int i = 0; i < target.BuildTasks.Count; i ++) {
 					//FIXME: parsing attributes repeatedly
-					BuildTask bt = target.BuildTasks [i];
+					IBuildTask bt = target.BuildTasks [i];
 
 					TaskBatchingImpl batchingImpl = new TaskBatchingImpl (project);
 					bool task_result = batchingImpl.Build (bt, out executeOnErrors);
@@ -241,8 +239,10 @@ namespace Microsoft.Build.BuildEngine {
 		void LogTargetSkipped (Target target, string reason)
 		{
 			BuildMessageEventArgs bmea;
-			bmea = new BuildMessageEventArgs (reason ?? String.Format ("Skipping target \"{0}\" because its outputs are up-to-date.", target.Name),
-				null, "MSBuild", MessageImportance.Normal);
+			bmea = new BuildMessageEventArgs (String.IsNullOrEmpty (reason)
+								? String.Format ("Skipping target \"{0}\" because its outputs are up-to-date.", target.Name)
+								: reason,
+							null, "MSBuild", MessageImportance.Normal);
 			target.Engine.EventSource.FireMessageRaised (this, bmea);
 		}
 
@@ -266,5 +266,3 @@ namespace Microsoft.Build.BuildEngine {
 
 	}
 }
-
-#endif

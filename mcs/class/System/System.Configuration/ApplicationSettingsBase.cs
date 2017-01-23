@@ -20,7 +20,6 @@
 // Copyright (C) 2005, 2006 Novell, Inc (http://www.novell.com)
 //
 
-#if NET_2_0
 #if CONFIGURATION_DEP && !TARGET_JVM
 extern alias PrebuiltSystem;
 using NameValueCollection = PrebuiltSystem.System.Collections.Specialized.NameValueCollection;
@@ -84,9 +83,8 @@ namespace System.Configuration {
 		{
 #if (CONFIGURATION_DEP)
 			foreach (SettingsProvider provider in Providers) {
-				IApplicationSettingsProvider iasp = provider as IApplicationSettingsProvider;
-				if (iasp != null)
-					iasp.Reset (Context);
+//				IApplicationSettingsProvider iasp = provider as IApplicationSettingsProvider;
+				CacheValuesByProvider(provider);
 			}
 #endif
 		}
@@ -94,14 +92,9 @@ namespace System.Configuration {
 		public void Reset()
 		{
 #if (CONFIGURATION_DEP)
-			// Code bellow is identical to code in Reload().
-			// foreach (SettingsProvider provider in Providers) {
-			//         IApplicationSettingsProvider iasp = provider as IApplicationSettingsProvider;
-			//         if (iasp != null)
-			//		iasp.Reset (Context);
-			// }
-                                                
 			Reload ();
+			foreach (SettingsPropertyValue pv in PropertyValues)
+				pv.PropertyValue = pv.Reset();
 #endif
 		}
 
@@ -191,7 +184,12 @@ namespace System.Configuration {
 
 			if (col.Count > 0) {
 				SettingsPropertyValueCollection vals = provider.GetPropertyValues (Context, col);
-				PropertyValues.Add (vals);
+				foreach (SettingsPropertyValue prop in vals) {
+					if (PropertyValues [prop.Name] != null)
+						PropertyValues [prop.Name].PropertyValue = prop.PropertyValue;
+					else
+						PropertyValues.Add (prop);
+				}
 			}
 
 			OnSettingsLoaded (this, new SettingsLoadedEventArgs (provider));
@@ -272,11 +270,24 @@ namespace System.Configuration {
 
 				try {
 					if (properties == null) {
-						LocalFileSettingsProvider local_provider = null;
+						SettingsProvider local_provider = null;
 
 						properties = new SettingsPropertyCollection ();
 
-						foreach (PropertyInfo prop in GetType ().GetProperties ()) { // only public properties
+						Type this_type = GetType();
+						SettingsProviderAttribute[] provider_attrs = (SettingsProviderAttribute[])this_type.GetCustomAttributes (typeof (SettingsProviderAttribute), false);;
+						if (provider_attrs != null && provider_attrs.Length != 0) {
+							Type provider_type = Type.GetType (provider_attrs[0].ProviderTypeName);
+							SettingsProvider provider = (SettingsProvider) Activator.CreateInstance (provider_type);
+							provider.Initialize (null, null);
+							if (provider != null && Providers [provider.Name] == null) {
+								Providers.Add (provider);
+								local_provider = provider;
+							}
+						}
+
+						PropertyInfo[] type_props = this_type.GetProperties ();
+						foreach (PropertyInfo prop in type_props) { // only public properties
 							SettingAttribute[] setting_attrs = (SettingAttribute[])prop.GetCustomAttributes (typeof (SettingAttribute), false);
 							if (setting_attrs == null || setting_attrs.Length == 0)
 								continue;
@@ -292,7 +303,7 @@ namespace System.Configuration {
 			}
 		}
 
-		void CreateSettingsProperty (PropertyInfo prop, SettingsPropertyCollection properties, ref LocalFileSettingsProvider local_provider)
+		void CreateSettingsProperty (PropertyInfo prop, SettingsPropertyCollection properties, ref SettingsProvider local_provider)
 		{
 			SettingsAttributeDictionary dict = new SettingsAttributeDictionary ();
 			SettingsProvider provider = null;
@@ -346,7 +357,7 @@ namespace System.Configuration {
 
 			if (provider == null) {
 				if (local_provider == null) {
-					local_provider = new LocalFileSettingsProvider ();
+					local_provider = new LocalFileSettingsProvider () as SettingsProvider;
 					local_provider.Initialize (null, null);
 				}
 				setting.Provider = local_provider;
@@ -427,5 +438,4 @@ namespace System.Configuration {
         }
 
 }
-#endif
 

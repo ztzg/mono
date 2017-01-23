@@ -1,3 +1,5 @@
+# Copyright 2003-2011 Novell, Inc (http://www.novell.com)
+# Copyright 2011 Xamarin, Inc (http://www.xamarin.com)
 # arm cpu description file
 # this file is read by genmdesc to pruduce a table with all the relevant information
 # about the cpu instructions that may be used by the regsiter allocator, the scheduler
@@ -46,20 +48,22 @@
 #
 # See the code in mini-x86.c for more details on how the specifiers are used.
 #
-memory_barrier: len:4
+memory_barrier: len:8 clob:a
 nop: len:4
 relaxed_nop: len:4
 break: len:4
 jmp: len:92
-br: len:4
-switch: src1:i len:8
-seq_point: len:38
+br: len:16
+switch: src1:i len:12
+# See the comment in resume_from_signal_handler, we can't copy the fp regs from sigctx to MonoContext on linux,
+# since the corresponding sigctx structures are not well defined.
+seq_point: len:38 clob:c
 
 throw: src1:i len:24
 rethrow: src1:i len:20
 start_handler: len:20
 endfinally: len:20
-call_handler: len:12 clob:c
+call_handler: len:16 clob:c
 endfilter: src1:i len:16
 
 ckfinite: dest:f src1:f len:64
@@ -77,21 +81,21 @@ setlret: src1:i src2:i len:12
 checkthis: src1:b len:4
 call: dest:a clob:c len:20
 call_reg: dest:a src1:i len:8 clob:c
-call_membase: dest:a src1:b len:12 clob:c
+call_membase: dest:a src1:b len:24 clob:c
 voidcall: len:20 clob:c
 voidcall_reg: src1:i len:8 clob:c
-voidcall_membase: src1:b len:12 clob:c
+voidcall_membase: src1:b len:16 clob:c
 fcall: dest:g len:28 clob:c
 fcall_reg: dest:g src1:i len:16 clob:c
-fcall_membase: dest:g src1:b len:20 clob:c
+fcall_membase: dest:g src1:b len:24 clob:c
 lcall: dest:l len:20 clob:c
 lcall_reg: dest:l src1:i len:8 clob:c
-lcall_membase: dest:l src1:b len:12 clob:c
+lcall_membase: dest:l src1:b len:16 clob:c
 vcall: len:20 clob:c
 vcall_reg: src1:i len:8 clob:c
-vcall_membase: src1:b len:12 clob:c
+vcall_membase: src1:b len:16 clob:c
 iconst: dest:i len:16
-r4const: dest:f len:20
+r4const: dest:f len:24
 r8const: dest:f len:20
 label: len:0
 store_membase_imm: dest:b len:20
@@ -202,16 +206,16 @@ sbb_imm: dest:i src1:i len:12
 br_reg: src1:i len:8
 bigmul: len:8 dest:l src1:i src2:i
 bigmul_un: len:8 dest:l src1:i src2:i
-tls_get: len:8 dest:i
+tls_get: len:8 dest:i clob:c
 
 # 32 bit opcodes
 int_add: dest:i src1:i src2:i len:4
 int_sub: dest:i src1:i src2:i len:4
 int_mul: dest:i src1:i src2:i len:4
-int_div: dest:i src1:i src2:i len:40
-int_div_un: dest:i src1:i src2:i len:16
-int_rem: dest:i src1:i src2:i len:48
-int_rem_un: dest:i src1:i src2:i len:24
+int_div: dest:i src1:i src2:i len:4
+int_div_un: dest:i src1:i src2:i len:4
+int_rem: dest:i src1:i src2:i len:8
+int_rem_un: dest:i src1:i src2:i len:8
 int_and: dest:i src1:i src2:i len:4
 int_or: dest:i src1:i src2:i len:4
 int_xor: dest:i src1:i src2:i len:4
@@ -229,16 +233,16 @@ int_conv_to_u4: dest:i src1:i
 int_conv_to_r_un: dest:f src1:i len:56
 int_conv_to_u2: dest:i src1:i len:8
 int_conv_to_u1: dest:i src1:i len:4
-int_beq: len:8
-int_bge: len:8
-int_bgt: len:8
-int_ble: len:8
-int_blt: len:8
-int_bne_un: len:8
-int_bge_un: len:8
-int_bgt_un: len:8
-int_ble_un: len:8
-int_blt_un: len:8
+int_beq: len:16
+int_bge: len:16
+int_bgt: len:16
+int_ble: len:16
+int_blt: len:16
+int_bne_un: len:16
+int_bge_un: len:16
+int_bgt_un: len:16
+int_ble_un: len:16
+int_blt_un: len:16
 int_add_ovf: dest:i src1:i src2:i len:16
 int_add_ovf_un: dest:i src1:i src2:i len:16
 int_mul_ovf: dest:i src1:i src2:i len:16
@@ -286,20 +290,20 @@ int_cgt_un: dest:i len:12
 int_clt: dest:i len:12
 int_clt_un: dest:i len:12
 
-cond_exc_ieq: len:8
-cond_exc_ine_un: len:8
-cond_exc_ilt: len:8
-cond_exc_ilt_un: len:8
-cond_exc_igt: len:8
-cond_exc_igt_un: len:8
-cond_exc_ige: len:8
-cond_exc_ige_un: len:8
-cond_exc_ile: len:8
-cond_exc_ile_un: len:8
-cond_exc_iov: len:12
-cond_exc_ino: len:8
-cond_exc_ic: len:12
-cond_exc_inc: len:8
+cond_exc_ieq: len:16
+cond_exc_ine_un: len:16
+cond_exc_ilt: len:16
+cond_exc_ilt_un: len:16
+cond_exc_igt: len:16
+cond_exc_igt_un: len:16
+cond_exc_ige: len:16
+cond_exc_ige_un: len:16
+cond_exc_ile: len:16
+cond_exc_ile_un: len:16
+cond_exc_iov: len:20
+cond_exc_ino: len:16
+cond_exc_ic: len:20
+cond_exc_inc: len:16
 
 icompare: src1:i src2:i len:4
 icompare_imm: src1:i len:12
@@ -309,16 +313,23 @@ long_conv_to_ovf_i4_2: dest:i src1:i src2:i len:36
 vcall2: len:20 clob:c
 vcall2_reg: src1:i len:8 clob:c
 vcall2_membase: src1:b len:12 clob:c
-dyn_call: src1:i src2:i len:128 clob:c
+dyn_call: src1:i src2:i len:120 clob:c
 
 # This is different from the original JIT opcodes
-float_beq: len:20
-float_bne_un: len:20
-float_blt: len:20
-float_blt_un: len:20
-float_bgt: len:20
-float_bgt_un: len:20
-float_bge: len:20
-float_bge_un: len:20
-float_ble: len:20
-float_ble_un: len:20
+float_beq: len:32
+float_bne_un: len:32
+float_blt: len:32
+float_blt_un: len:32
+float_bgt: len:32
+float_bgt_un: len:32
+float_bge: len:32
+float_bge_un: len:32
+float_ble: len:32
+float_ble_un: len:32
+
+liverange_start: len:0
+liverange_end: len:0
+gc_liveness_def: len:0
+gc_liveness_use: len:0
+gc_spill_slot_liveness_def: len:0
+gc_param_slot_liveness_def: len:0

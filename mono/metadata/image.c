@@ -31,6 +31,7 @@
 #include <mono/utils/mono-path.h>
 #include <mono/utils/mono-mmap.h>
 #include <mono/utils/mono-io-portability.h>
+#include <mono/utils/atomic.h>
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/object-internals.h>
@@ -196,7 +197,14 @@ mono_images_init (void)
 void
 mono_images_cleanup (void)
 {
+	GHashTableIter iter;
+	MonoImage *image;
+
 	DeleteCriticalSection (&images_mutex);
+
+	g_hash_table_iter_init (&iter, loaded_images_hash);
+	while (g_hash_table_iter_next (&iter, NULL, (void**)&image))
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Assembly image '%s' still loaded at shutdown.", image->name);
 
 	g_hash_table_destroy (loaded_images_hash);
 	g_hash_table_destroy (loaded_images_refonly_hash);
@@ -1013,6 +1021,12 @@ do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
 	image->raw_buffer_used = TRUE;
 	image->raw_data_len = mono_file_map_size (filed);
 	image->raw_data = mono_file_map (image->raw_data_len, MONO_MMAP_READ|MONO_MMAP_PRIVATE, mono_file_map_fd (filed), 0, &image->raw_data_handle);
+#if defined(HAVE_MMAP) && !defined (HOST_WIN32)
+	if (!image->raw_data) {
+		image->fileio_used = TRUE;
+		image->raw_data = mono_file_map_fileio (image->raw_data_len, MONO_MMAP_READ|MONO_MMAP_PRIVATE, mono_file_map_fd (filed), 0, &image->raw_data_handle);
+	}
+#endif
 	if (!image->raw_data) {
 		mono_file_map_close (filed);
 		g_free (image);
@@ -1254,8 +1268,12 @@ mono_image_open_full (const char *fname, MonoImageOpenStatus *status, gboolean r
 			if (status) {
 				if (last_error == ERROR_BAD_EXE_FORMAT || last_error == STATUS_INVALID_IMAGE_FORMAT)
 					*status = MONO_IMAGE_IMAGE_INVALID;
-				else
-					*status = MONO_IMAGE_ERROR_ERRNO;
+				else {
+					if (last_error == ERROR_FILE_NOT_FOUND || last_error == ERROR_PATH_NOT_FOUND)
+						errno = ENOENT;
+					else
+						errno = 0;
+				}
 			}
 			return NULL;
 		}
@@ -1416,12 +1434,6 @@ free_mr_signatures (gpointer key, gpointer val, gpointer user_data)
 */
 
 static void
-free_remoting_wrappers (gpointer key, gpointer val, gpointer user_data)
-{
-	g_free (val);
-}
-
-static void
 free_array_cache_entry (gpointer key, gpointer val, gpointer user_data)
 {
 	g_slist_free ((GSList*)val);
@@ -1524,10 +1536,7 @@ mono_image_close_except_pools (MonoImage *image)
 	 * MonoImage might outlive its associated MonoAssembly.
 	 */
 	if (image->references && !image->dynamic) {
-		MonoTableInfo *t = &image->tables [MONO_TABLE_ASSEMBLYREF];
-		int i;
-
-		for (i = 0; i < t->rows; i++) {
+		for (i = 0; i < image->nreferences; i++) {
 			if (image->references [i] && image->references [i] != REFERENCE_MISSING) {
 				if (!mono_assembly_close_except_image_pools (image->references [i]))
 					image->references [i] = NULL;
@@ -1548,8 +1557,14 @@ mono_image_close_except_pools (MonoImage *image)
 #endif
 
 	if (image->raw_buffer_used) {
-		if (image->raw_data != NULL)
-			mono_file_unmap (image->raw_data, image->raw_data_handle);
+		if (image->raw_data != NULL) {
+#ifndef HOST_WIN32
+			if (image->fileio_used)
+				mono_file_unmap_fileio (image->raw_data, image->raw_data_handle);
+			else
+#endif
+				mono_file_unmap (image->raw_data, image->raw_data_handle);
+		}
 	}
 	
 	if (image->raw_data_allocated) {
@@ -1603,8 +1618,10 @@ mono_image_close_except_pools (MonoImage *image)
 	free_hash (image->delegate_end_invoke_cache);
 	free_hash (image->delegate_invoke_cache);
 	free_hash (image->delegate_abstract_invoke_cache);
-	if (image->remoting_invoke_cache)
-		g_hash_table_foreach (image->remoting_invoke_cache, free_remoting_wrappers, NULL);
+	free_hash (image->delegate_bound_static_invoke_cache);
+	free_hash (image->delegate_invoke_generic_cache);
+	free_hash (image->delegate_begin_invoke_generic_cache);
+	free_hash (image->delegate_end_invoke_generic_cache);
 	free_hash (image->remoting_invoke_cache);
 	free_hash (image->runtime_invoke_cache);
 	free_hash (image->runtime_invoke_direct_cache);
@@ -1621,6 +1638,12 @@ mono_image_close_except_pools (MonoImage *image)
 	free_hash (image->castclass_cache);
 	free_hash (image->proxy_isinst_cache);
 	free_hash (image->thunk_invoke_cache);
+	free_hash (image->var_cache_slow);
+	free_hash (image->mvar_cache_slow);
+	free_hash (image->wrapper_param_names);
+	free_hash (image->native_wrapper_aot_cache);
+	free_hash (image->pinvoke_scopes);
+	free_hash (image->pinvoke_scope_filenames);
 
 	/* The ownership of signatures is not well defined */
 	//g_hash_table_foreach (image->memberref_signatures, free_mr_signatures, NULL);
@@ -1688,10 +1711,7 @@ mono_image_close_finish (MonoImage *image)
 	image->reflection_info_unregister_classes = NULL;
 
 	if (image->references && !image->dynamic) {
-		MonoTableInfo *t = &image->tables [MONO_TABLE_ASSEMBLYREF];
-		int i;
-
-		for (i = 0; i < t->rows; i++) {
+		for (i = 0; i < image->nreferences; i++) {
 			if (image->references [i] && image->references [i] != REFERENCE_MISSING)
 				mono_assembly_close_finish (image->references [i]);
 		}
@@ -1707,7 +1727,9 @@ mono_image_close_finish (MonoImage *image)
 	if (image->modules)
 		g_free (image->modules);
 
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes -= mono_mempool_get_allocated (image->mempool);
+#endif
 
 	if (!image->dynamic) {
 		if (debug_assembly_unload)
@@ -2203,7 +2225,9 @@ mono_image_alloc (MonoImage *image, guint size)
 {
 	gpointer res;
 
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes += size;
+#endif
 	mono_image_lock (image);
 	res = mono_mempool_alloc (image->mempool, size);
 	mono_image_unlock (image);
@@ -2216,7 +2240,9 @@ mono_image_alloc0 (MonoImage *image, guint size)
 {
 	gpointer res;
 
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes += size;
+#endif
 	mono_image_lock (image);
 	res = mono_mempool_alloc0 (image->mempool, size);
 	mono_image_unlock (image);
@@ -2229,7 +2255,9 @@ mono_image_strdup (MonoImage *image, const char *s)
 {
 	char *res;
 
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes += strlen (s);
+#endif
 	mono_image_lock (image);
 	res = mono_mempool_strdup (image->mempool, s);
 	mono_image_unlock (image);

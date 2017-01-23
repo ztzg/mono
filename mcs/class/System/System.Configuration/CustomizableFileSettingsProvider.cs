@@ -27,7 +27,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0 && CONFIGURATION_DEP
+#if CONFIGURATION_DEP
 
 #if !TARGET_JVM
 extern alias PrebuiltSystem;
@@ -80,7 +80,9 @@ namespace System.Configuration
 		// MachineConfigFilename will be used to set the ExeConfigFilename.
 		//
 		// This is necessary to fix bug #491531
+#pragma warning disable 649
 		private static Type webConfigurationFileMapType;
+#pragma warning restore 649
 		
 		private static string userRoamingPath = "";
 		private static string userLocalPath = "";
@@ -282,13 +284,11 @@ namespace System.Configuration
 				assembly = Assembly.GetCallingAssembly ();
 
 #if !TARGET_JVM
-
 			byte [] pkt = assembly.GetName ().GetPublicKeyToken ();
 			return String.Format ("{0}_{1}_{2}",
 				AppDomain.CurrentDomain.FriendlyName,
-				pkt != null ? "StrongName" : "Url",
+				pkt != null && pkt.Length > 0 ? "StrongName" : "Url",
 				GetEvidenceHash());
-
 #else // AssemblyProductAttribute-based code
 			AssemblyProductAttribute [] attrs = (AssemblyProductAttribute[]) assembly.GetCustomAttributes (typeof (AssemblyProductAttribute), true);
 		
@@ -299,8 +299,10 @@ namespace System.Configuration
 #endif
 		}
 
-		// FIXME: it seems that something else is used
-		// here, to convert hash bytes to string.
+		// Note: Changed from base64() to hex output to avoid unexpected chars like '\' or '/' with filesystem meaning.
+		//       Otherwise eventually filenames, which are invalid on linux or windows, might be created.
+		// Signed-off-by:  Carsten Schlote <schlote@vahanus.net>
+		// TODO: Compare with .NET. It might be also, that their way isn't suitable for Unix OS derivates (slahes in output)
 		private static string GetEvidenceHash ()
 		{
 			Assembly assembly = Assembly.GetEntryAssembly ();
@@ -308,9 +310,11 @@ namespace System.Configuration
 				assembly = Assembly.GetCallingAssembly ();
 
 			byte [] pkt = assembly.GetName ().GetPublicKeyToken ();
-			byte [] hash = SHA1.Create ().ComputeHash (pkt != null ? pkt : Encoding.UTF8.GetBytes (assembly.EscapedCodeBase));
-
-			return Convert.ToBase64String (hash);
+			byte [] hash = SHA1.Create ().ComputeHash (pkt != null && pkt.Length >0 ? pkt : Encoding.UTF8.GetBytes (assembly.EscapedCodeBase));
+			System.Text.StringBuilder evidence_string = new System.Text.StringBuilder();
+			foreach (byte b in hash)
+				evidence_string.AppendFormat("{0:x2}",b);
+			return evidence_string.ToString ();
 		}
 
 		private static string GetProductVersion ()
@@ -611,47 +615,49 @@ namespace System.Configuration
 			if (userGroup == null) {
 				userGroup = new UserSettingsGroup ();
 				config.SectionGroups.Add ("userSettings", userGroup);
-				ApplicationSettingsBase asb = context.CurrentSettings;
-				ClientSettingsSection cs = new ClientSettingsSection ();
-				string class_name = NormalizeInvalidXmlChars ((asb != null ? asb.GetType () : typeof (ApplicationSettingsBase)).FullName);
-				userGroup.Sections.Add (class_name, cs);
+			}
+			ApplicationSettingsBase asb = context.CurrentSettings;
+			string class_name = NormalizeInvalidXmlChars ((asb != null ? asb.GetType () : typeof (ApplicationSettingsBase)).FullName);
+			ClientSettingsSection userSection = null;
+			ConfigurationSection cnf = userGroup.Sections.Get (class_name);
+			userSection = cnf as ClientSettingsSection;
+			if (userSection == null) {
+				userSection = new ClientSettingsSection ();
+				userGroup.Sections.Add (class_name, userSection);
 			}
 
 			bool hasChanges = false;
 
-			foreach (ConfigurationSection section in userGroup.Sections) {
-				ClientSettingsSection userSection = section as ClientSettingsSection;
-				if (userSection == null)
+			if (userSection == null)
+				return;
+
+			foreach (SettingsPropertyValue value in collection) {
+				if (checkUserLevel && value.Property.Attributes.Contains (typeof (SettingsManageabilityAttribute)) != isRoaming)
+					continue;
+				// The default impl does not save the ApplicationScopedSetting properties
+				if (value.Property.Attributes.Contains (typeof (ApplicationScopedSettingAttribute)))
 					continue;
 
-				foreach (SettingsPropertyValue value in collection) {
-					if (checkUserLevel && value.Property.Attributes.Contains (typeof (SettingsManageabilityAttribute)) != isRoaming)
-						continue;
-					// The default impl does not save the ApplicationScopedSetting properties
-					if (value.Property.Attributes.Contains (typeof (ApplicationScopedSettingAttribute)))
-						continue;
-
-					hasChanges = true;
-					SettingElement element = userSection.Settings.Get (value.Name);
-					if (element == null) {
-						element = new SettingElement (value.Name, value.Property.SerializeAs);
-						userSection.Settings.Add (element);
-					}
-					if (element.Value.ValueXml == null)
-						element.Value.ValueXml = new XmlDocument ().CreateElement ("value");
-					switch (value.Property.SerializeAs) {
-					case SettingsSerializeAs.Xml:
-						element.Value.ValueXml.InnerXml = (value.SerializedValue as string) ?? string.Empty;
-						break;
-					case SettingsSerializeAs.String:
-						element.Value.ValueXml.InnerText = value.SerializedValue as string;
-						break;
-					case SettingsSerializeAs.Binary:
-						element.Value.ValueXml.InnerText = value.SerializedValue != null ? Convert.ToBase64String (value.SerializedValue as byte []) : string.Empty;
-						break;
-					default:
-						throw new NotImplementedException ();
-					}
+				hasChanges = true;
+				SettingElement element = userSection.Settings.Get (value.Name);
+				if (element == null) {
+					element = new SettingElement (value.Name, value.Property.SerializeAs);
+					userSection.Settings.Add (element);
+				}
+				if (element.Value.ValueXml == null)
+					element.Value.ValueXml = new XmlDocument ().CreateElement ("value");
+				switch (value.Property.SerializeAs) {
+				case SettingsSerializeAs.Xml:
+					element.Value.ValueXml.InnerXml = (value.SerializedValue as string) ?? string.Empty;
+					break;
+				case SettingsSerializeAs.String:
+					element.Value.ValueXml.InnerText = value.SerializedValue as string;
+					break;
+				case SettingsSerializeAs.Binary:
+					element.Value.ValueXml.InnerText = value.SerializedValue != null ? Convert.ToBase64String (value.SerializedValue as byte []) : string.Empty;
+					break;
+				default:
+					throw new NotImplementedException ();
 				}
 			}
 			if (hasChanges)
@@ -788,21 +794,19 @@ namespace System.Configuration
 		{
 			CreateExeMap ();
 
-			if (values == null) {
-				values = new SettingsPropertyValueCollection ();
-				string groupName = context ["GroupName"] as string;
-				groupName = NormalizeInvalidXmlChars (groupName); // we likely saved the element removing the non valid xml chars.
-				LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.None, "applicationSettings", false, groupName);
-				LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.None, "userSettings", false, groupName);
+			values = new SettingsPropertyValueCollection ();
+			string groupName = context ["GroupName"] as string;
+			groupName = NormalizeInvalidXmlChars (groupName); // we likely saved the element removing the non valid xml chars.
+			LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.None, "applicationSettings", false, groupName);
+			LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.None, "userSettings", false, groupName);
 
-				LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.PerUserRoaming, "userSettings", true, groupName);
-				LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.PerUserRoamingAndLocal, "userSettings", true, groupName);
+			LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.PerUserRoaming, "userSettings", true, groupName);
+			LoadProperties (exeMapCurrent, collection, ConfigurationUserLevel.PerUserRoamingAndLocal, "userSettings", true, groupName);
 
-				// create default values if not exist
-				foreach (SettingsProperty p in collection)
-					if (values [p.Name] == null)
-						values.Add (new SettingsPropertyValue (p));
-			}
+			// create default values if not exist
+			foreach (SettingsProperty p in collection)
+				if (values [p.Name] == null)
+					values.Add (new SettingsPropertyValue (p));
 			return values;
 		}
 
@@ -854,14 +858,13 @@ namespace System.Configuration
 
 		public void Reset (SettingsContext context)
 		{
-			SettingsPropertyCollection coll = new SettingsPropertyCollection ();
-			GetPropertyValues (context, coll);
-			foreach (SettingsPropertyValue propertyValue in values) {
-				// Can't use propertyValue.Property.DefaultValue
-				// as it may cause InvalidCastException (see bug# 532180)
-				propertyValue.PropertyValue = propertyValue.Reset ();
+			if (values != null) {
+				foreach (SettingsPropertyValue propertyValue in values) {
+					// Can't use propertyValue.Property.DefaultValue
+					// as it may cause InvalidCastException (see bug# 532180)
+					values[propertyValue.Name].PropertyValue = propertyValue.Reset ();
+				}
 			}
-			SetPropertyValues (context, values);
 		}
 
 		// FIXME: implement

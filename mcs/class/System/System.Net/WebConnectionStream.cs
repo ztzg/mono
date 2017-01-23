@@ -44,9 +44,10 @@ namespace System.Net
 		byte [] readBuffer;
 		int readBufferOffset;
 		int readBufferSize;
+		int stream_length; // -1 when CL not present
 		int contentLength;
 		int totalRead;
-		long totalWritten;
+		internal long totalWritten;
 		bool nextReadCalled;
 		int pendingReads;
 		int pendingWrites;
@@ -64,18 +65,27 @@ namespace System.Net
 		bool complete_request_written;
 		int read_timeout;
 		int write_timeout;
+		AsyncCallback cb_wrapper; // Calls to ReadCallbackWrapper or WriteCallbacWrapper
+		internal bool IgnoreIOErrors;
 
-		public WebConnectionStream (WebConnection cnc)
-		{
+		public WebConnectionStream (WebConnection cnc, WebConnectionData data)
+		{          
+			if (data == null)
+				throw new InvalidOperationException ("data was not initialized");
+			if (data.Headers == null)
+				throw new InvalidOperationException ("data.Headers was not initialized");
+			if (data.request == null)
+				throw new InvalidOperationException ("data.request was not initialized");
 			isRead = true;
+			cb_wrapper = new AsyncCallback (ReadCallbackWrapper);
 			pending = new ManualResetEvent (true);
-			this.request = cnc.Data.request;
+			this.request = data.request;
 			read_timeout = request.ReadWriteTimeout;
 			write_timeout = read_timeout;
 			this.cnc = cnc;
-			string contentType = cnc.Data.Headers ["Transfer-Encoding"];
-			bool chunkedRead = (contentType != null && contentType.ToLower ().IndexOf ("chunked") != -1);
-			string clength = cnc.Data.Headers ["Content-Length"];
+			string contentType = data.Headers ["Transfer-Encoding"];
+			bool chunkedRead = (contentType != null && contentType.IndexOf ("chunked", StringComparison.OrdinalIgnoreCase) != -1);
+			string clength = data.Headers ["Content-Length"];
 			if (!chunkedRead && clength != null && clength != "") {
 				try {
 					contentLength = Int32.Parse (clength);
@@ -88,6 +98,10 @@ namespace System.Net
 			} else {
 				contentLength = Int32.MaxValue;
 			}
+
+			// Negative numbers?
+			if (!Int32.TryParse (clength, out stream_length))
+				stream_length = -1;
 		}
 
 		public WebConnectionStream (WebConnection cnc, HttpWebRequest request)
@@ -95,6 +109,7 @@ namespace System.Net
 			read_timeout = request.ReadWriteTimeout;
 			write_timeout = read_timeout;
 			isRead = false;
+			cb_wrapper = new AsyncCallback (WriteCallbackWrapper);
 			this.cnc = cnc;
 			this.request = request;
 			allowBuffering = request.InternalAllowBuffering;
@@ -110,7 +125,7 @@ namespace System.Net
 			bool isProxy = (request.Proxy != null && !request.Proxy.IsBypassed (request.Address));
 			string header_name = (isProxy) ? "Proxy-Authenticate" : "WWW-Authenticate";
 			string authHeader = cnc.Data.Headers [header_name];
-			return (authHeader != null && authHeader.IndexOf ("NTLM") != -1);
+			return (authHeader != null && authHeader.IndexOf ("NTLM", StringComparison.Ordinal) != -1);
 		}
 
 		internal void CheckResponseInBuffer ()
@@ -128,16 +143,11 @@ namespace System.Net
 		internal WebConnection Connection {
 			get { return cnc; }
 		}
-#if NET_2_0
 		public override bool CanTimeout {
 			get { return true; }
 		}
-#endif
 
-#if NET_2_0
-		public override
-#endif
-		int ReadTimeout {
+		public override int ReadTimeout {
 			get {
 				return read_timeout;
 			}
@@ -149,10 +159,7 @@ namespace System.Net
 			}
 		}
 
-#if NET_2_0
-		public override
-#endif
-		int WriteTimeout {
+		public override int WriteTimeout {
 			get {
 				return write_timeout;
 			}
@@ -289,7 +296,10 @@ namespace System.Net
 				result.InnerAsyncResult = r;
 				result.DoCallback ();
 			} else {
-				EndWrite (r);
+				try {
+					EndWrite (r);
+				} catch {
+				}
 			}
 		}
 
@@ -310,7 +320,7 @@ namespace System.Net
 
 		public override int Read (byte [] buffer, int offset, int size)
 		{
-			AsyncCallback cb = new AsyncCallback (ReadCallbackWrapper);
+			AsyncCallback cb = cb_wrapper;
 			WebAsyncResult res = (WebAsyncResult) BeginRead (buffer, offset, size, cb, null);
 			if (!res.IsCompleted && !res.WaitUntilComplete (ReadTimeout, false)) {
 				nextReadCalled = true;
@@ -365,7 +375,7 @@ namespace System.Net
 			}
 
 			if (cb != null)
-				cb = new AsyncCallback (ReadCallbackWrapper);
+				cb = cb_wrapper;
 
 			if (contentLength != Int32.MaxValue && contentLength - totalRead < size)
 				size = contentLength - totalRead;
@@ -509,7 +519,7 @@ namespace System.Net
 
 			AsyncCallback callback = null;
 			if (cb != null)
-				callback = new AsyncCallback (WriteCallbackWrapper);
+				callback = cb_wrapper;
 
 			if (sendChunked) {
 				WriteRequest ();
@@ -527,7 +537,14 @@ namespace System.Net
 				size = chunkSize;
 			}
 
-			result.InnerAsyncResult = cnc.BeginWrite (request, buffer, offset, size, callback, result);
+			try {
+				result.InnerAsyncResult = cnc.BeginWrite (request, buffer, offset, size, callback, result);
+			} catch (Exception) {
+				if (!IgnoreIOErrors)
+					throw;
+				result.SetCompleted (true, 0);
+				result.DoCallback ();
+			}
 			totalWritten += size;
 			return result;
 		}
@@ -579,9 +596,13 @@ namespace System.Net
 				result.SetCompleted (false, 0);
 				result.DoCallback ();
 			} catch (Exception e) {
-				result.SetCompleted (false, e);
+				if (IgnoreIOErrors)
+					result.SetCompleted (false, 0);
+				else
+					result.SetCompleted (false, e);
 				result.DoCallback ();
-				throw;
+				if (!IgnoreIOErrors)
+					throw;
 			} finally {
 				if (sendChunked) {
 					lock (locker) {
@@ -595,7 +616,7 @@ namespace System.Net
 		
 		public override void Write (byte [] buffer, int offset, int size)
 		{
-			AsyncCallback cb = new AsyncCallback (WriteCallbackWrapper);
+			AsyncCallback cb = cb_wrapper;
 			WebAsyncResult res = (WebAsyncResult) BeginWrite (buffer, offset, size, cb, null);
 			if (!res.IsCompleted && !res.WaitUntilComplete (WriteTimeout, false)) {
 				KillBuffer ();
@@ -620,8 +641,11 @@ namespace System.Net
 			long cl = request.ContentLength;
 			string method = request.Method;
 			bool no_writestream = (method == "GET" || method == "CONNECT" || method == "HEAD" ||
-						method == "TRACE" || method == "DELETE");
-			if (sendChunked || cl > -1 || no_writestream) {
+						method == "TRACE");
+			bool webdav = (method == "PROPFIND" || method == "PROPPATCH" || method == "MKCOL" ||
+			               method == "COPY" || method == "MOVE" || method == "LOCK" ||
+			               method == "UNLOCK");
+			if (sendChunked || cl > -1 || no_writestream || webdav) {
 				WriteHeaders ();
 				if (!initRead) {
 					initRead = true;
@@ -680,7 +704,7 @@ namespace System.Net
 			if (!headersSent) {
 				string method = request.Method;
 				bool no_writestream = (method == "GET" || method == "CONNECT" || method == "HEAD" ||
-							method == "TRACE" || method == "DELETE");
+							method == "TRACE");
 				if (!no_writestream)
 					request.InternalContentLength = length;
 				request.SendRequestHeaders (true);
@@ -753,7 +777,8 @@ namespace System.Net
 				throw new WebException ("Request was cancelled.", io, WebExceptionStatus.RequestCanceled);
 			}
 
-			WriteRequest ();
+			// Commented out the next line to fix xamarin bug #1512
+			//WriteRequest ();
 			disposed = true;
 		}
 
@@ -785,7 +810,11 @@ namespace System.Net
 		}
 
 		public override long Length {
-			get { throw new NotSupportedException (); }
+			get {
+				if (!isRead)
+					throw new NotSupportedException ();
+				return stream_length;
+			}
 		}
 
 		public override long Position {

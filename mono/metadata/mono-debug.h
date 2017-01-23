@@ -88,6 +88,8 @@ struct _MonoDebugMethodJitInfo {
 	MonoDebugVarInfo *params;
 	uint32_t num_locals;
 	MonoDebugVarInfo *locals;
+	MonoDebugVarInfo *gsharedvt_info_var;
+	MonoDebugVarInfo *gsharedvt_locals_var;
 };
 
 struct _MonoDebugMethodAddressList {
@@ -121,6 +123,12 @@ struct _MonoDebugSourceLocation {
 
 /* The variable is dead. */
 #define MONO_DEBUG_VAR_ADDRESS_MODE_DEAD		0x30000000
+
+/* Same as REGOFFSET, but do an indirection */
+#define MONO_DEBUG_VAR_ADDRESS_MODE_REGOFFSET_INDIR		0x40000000
+
+/* gsharedvt local */
+#define MONO_DEBUG_VAR_ADDRESS_MODE_GSHAREDVT_LOCAL		0x50000000
 
 struct _MonoDebugVarInfo {
 	uint32_t index;
@@ -156,6 +164,9 @@ mono_bool mono_debug_using_mono_debugger (void);
 
 MonoDebugMethodAddress *
 mono_debug_add_method (MonoMethod *method, MonoDebugMethodJitInfo *jit, MonoDomain *domain);
+
+void
+mono_debug_remove_method (MonoMethod *method, MonoDomain *domain);
 
 MonoDebugMethodInfo *
 mono_debug_lookup_method (MonoMethod *method);

@@ -115,7 +115,10 @@ opt_funcs [sizeof (int) * 8] = {
 };
 
 #ifdef __native_client_codegen__
-extern guint8 nacl_align_byte;
+extern gint8 nacl_align_byte;
+#endif
+#ifdef __native_client__
+extern char *nacl_mono_path;
 #endif
 
 #define DEFAULT_OPTIMIZATIONS (	\
@@ -135,7 +138,7 @@ extern guint8 nacl_align_byte;
 	MONO_OPT_SIMD |	\
 	MONO_OPT_AOT)
 
-#define EXCLUDED_FROM_ALL (MONO_OPT_SHARED | MONO_OPT_PRECOMP | MONO_OPT_UNSAFE)
+#define EXCLUDED_FROM_ALL (MONO_OPT_SHARED | MONO_OPT_PRECOMP | MONO_OPT_UNSAFE | MONO_OPT_GSHAREDVT)
 
 static guint32
 parse_optimizations (const char* p)
@@ -147,7 +150,7 @@ parse_optimizations (const char* p)
 	int i, invert, len;
 
 	/* call out to cpu detection code here that sets the defaults ... */
-	opt |= mono_arch_cpu_optimizazions (&exclude);
+	opt |= mono_arch_cpu_optimizations (&exclude);
 	opt &= ~exclude;
 	if (!p)
 		return opt;
@@ -313,6 +316,7 @@ opt_sets [] = {
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_CFOLD,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS,
+       MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_TAILC,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_SSA,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_EXCEPTION,
        MONO_OPT_BRANCH | MONO_OPT_PEEPHOLE | MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP | MONO_OPT_DEADCE | MONO_OPT_LOOP | MONO_OPT_INLINE | MONO_OPT_INTRINS | MONO_OPT_EXCEPTION | MONO_OPT_CMOV,
@@ -347,7 +351,7 @@ mini_regression (MonoImage *image, int verbose, int *total_run)
 	MonoDomain *domain = mono_domain_get ();
 	guint32 exclude = 0;
 
-	mono_arch_cpu_optimizazions (&exclude);
+	mono_arch_cpu_optimizations (&exclude);
 
 	if (mini_stats_fd) {
 		fprintf (mini_stats_fd, "$stattitle = \'Mono Benchmark Results (various optimizations)\';\n");
@@ -830,10 +834,11 @@ typedef struct CompileAllThreadArgs {
 	MonoAssembly *ass;
 	int verbose;
 	guint32 opts;
+	guint32 recompilation_times;
 } CompileAllThreadArgs;
 
 static void
-compile_all_methods_thread_main (CompileAllThreadArgs *args)
+compile_all_methods_thread_main_inner (CompileAllThreadArgs *args)
 {
 	MonoAssembly *ass = args->ass;
 	int verbose = args->verbose;
@@ -891,13 +896,22 @@ compile_all_methods_thread_main (CompileAllThreadArgs *args)
 }
 
 static void
-compile_all_methods (MonoAssembly *ass, int verbose, guint32 opts)
+compile_all_methods_thread_main (CompileAllThreadArgs *args)
+{
+	guint32 i;
+	for (i = 0; i < args->recompilation_times; ++i)
+		compile_all_methods_thread_main_inner (args);
+}
+
+static void
+compile_all_methods (MonoAssembly *ass, int verbose, guint32 opts, guint32 recompilation_times)
 {
 	CompileAllThreadArgs args;
 
 	args.ass = ass;
 	args.verbose = verbose;
 	args.opts = opts;
+	args.recompilation_times = recompilation_times;
 
 	/* 
 	 * Need to create a mono thread since compilation might trigger
@@ -1077,7 +1091,7 @@ mini_usage_jitdeveloper (void)
 		 "    --break METHOD         Inserts a breakpoint at METHOD entry\n"
 		 "    --break-at-bb METHOD N Inserts a breakpoint in METHOD at BB N\n"
 		 "    --compile METHOD       Just compile METHOD in assembly\n"
-		 "    --compile-all          Compiles all the methods in the assembly\n"
+		 "    --compile-all=N        Compiles all the methods in the assembly multiple times (default: 1)\n"
 		 "    --ncompile N           Number of times to compile METHOD (default: 1)\n"
 		 "    --print-vtable         Print the vtable of all used classes\n"
 		 "    --regression           Runs the regression test contained in the assembly\n"
@@ -1085,7 +1099,7 @@ mini_usage_jitdeveloper (void)
 		 "    --stats                Print statistics about the JIT operations\n"
 		 "    --wapi=hps|semdel|seminfo IO-layer maintenance\n"
 		 "    --inject-async-exc METHOD OFFSET Inject an asynchronous exception at METHOD\n"
-		 "    --verify-all           Run the verifier on all methods\n"
+		 "    --verify-all           Run the verifier on all assemblies and methods\n"
 		 "    --full-aot             Avoid JITting any code\n"
 		 "    --agent=ASSEMBLY[:ARG] Loads the specific agent assembly and executes its Main method with the given argument before loading the main assembly.\n"
 		 "    --no-x86-stack-align   Don't align stack on x86\n"
@@ -1133,12 +1147,17 @@ mini_usage (void)
 		"    --runtime=VERSION      Use the VERSION runtime, instead of autodetecting\n"
 		"    --optimize=OPT         Turns on or off a specific optimization\n"
 		"                           Use --list-opt to get a list of optimizations\n"
+#ifndef DISABLE_SECURITY
 		"    --security[=mode]      Turns on the unsupported security manager (off by default)\n"
 		"                           mode is one of cas, core-clr, verifiable or validil\n"
+#endif
 		"    --attach=OPTIONS       Pass OPTIONS to the attach agent in the runtime.\n"
 		"                           Currently the only supported option is 'disable'.\n"
 		"    --llvm, --nollvm       Controls whenever the runtime uses LLVM to compile code.\n"
 	        "    --gc=[sgen,boehm]      Select SGen or Boehm GC (runs mono or mono-sgen)\n"
+#ifdef HOST_WIN32
+	        "    --mixed-mode           Enable mixed-mode image support.\n"
+#endif
 	  );
 }
 
@@ -1154,9 +1173,11 @@ mini_trace_usage (void)
 		 "    none                 No assemblies\n"
 		 "    program              Entry point assembly\n"
 		 "    assembly             Specifies an assembly\n"
+		 "    wrapper              All wrappers bridging native and managed code\n"
 		 "    M:Type:Method        Specifies a method\n"
 		 "    N:Namespace          Specifies a namespace\n"
 		 "    T:Type               Specifies a type\n"
+		 "    E:Type               Specifies stack traces for an exception type\n"
 		 "    EXPR                 Includes expression\n"
 		 "    -EXPR                Excludes expression\n"
 		 "    EXPR,EXPR            Multiple expressions\n"
@@ -1198,6 +1219,8 @@ static const char info[] =
 #endif
 #ifdef HAVE_EPOLL
     "\tNotifications: epoll\n"
+#elif defined(HAVE_KQUEUE)
+    "\tNotification:  kqueue\n"
 #else
     "\tNotification:  Thread + polling\n"
 #endif
@@ -1235,7 +1258,8 @@ static const char info[] =
 #ifdef HOST_WIN32
 BOOL APIENTRY DllMain (HMODULE module_handle, DWORD reason, LPVOID reserved)
 {
-	if (!GC_DllMain (module_handle, reason, reserved))
+	int dummy;
+	if (!mono_gc_dllmain (module_handle, reason, reserved))
 		return FALSE;
 
 	switch (reason)
@@ -1247,6 +1271,10 @@ BOOL APIENTRY DllMain (HMODULE module_handle, DWORD reason, LPVOID reserved)
 		if (coree_module_handle)
 			FreeLibrary (coree_module_handle);
 		break;
+	case DLL_THREAD_DETACH:
+		mono_thread_info_dettach ();
+		break;
+	
 	}
 	return TRUE;
 }
@@ -1264,6 +1292,8 @@ void
 mono_jit_parse_options (int argc, char * argv[])
 {
 	int i;
+	char *trace_options = NULL;
+	int mini_verbose = 0;
 
 	/* 
 	 * Some options have no effect here, since they influence the behavior of 
@@ -1280,11 +1310,63 @@ mono_jit_parse_options (int argc, char * argv[])
  			mono_debugger_agent_parse_options (argv [i] + 17);
 			opt->mdb_optimizations = TRUE;
 			enable_debugging = TRUE;
+		} else if (!strcmp (argv [i], "--soft-breakpoints")) {
+			MonoDebugOptions *opt = mini_get_debug_options ();
+
+			opt->soft_breakpoints = TRUE;
+			opt->explicit_null_checks = TRUE;
+		} else if (strncmp (argv [i], "--optimize=", 11) == 0) {
+			guint32 opt = parse_optimizations (argv [i] + 11);
+			mono_set_optimizations (opt);
+		} else if (strncmp (argv [i], "-O=", 3) == 0) {
+			guint32 opt = parse_optimizations (argv [i] + 3);
+			mono_set_optimizations (opt);
+		} else if (strcmp (argv [i], "--trace") == 0) {
+			trace_options = (char*)"";
+		} else if (strncmp (argv [i], "--trace=", 8) == 0) {
+			trace_options = &argv [i][8];
+		} else if (strcmp (argv [i], "--verbose") == 0 || strcmp (argv [i], "-v") == 0) {
+			mini_verbose++;
+		} else if (strcmp (argv [i], "--breakonex") == 0) {
+			MonoDebugOptions *opt = mini_get_debug_options ();
+
+			opt->break_on_exc = TRUE;
+		} else if (strcmp (argv [i], "--stats") == 0) {
+			mono_counters_enable (-1);
+			mono_stats.enabled = TRUE;
+			mono_jit_stats.enabled = TRUE;
+		} else if (strcmp (argv [i], "--break") == 0) {
+			if (i+1 >= argc){
+				fprintf (stderr, "Missing method name in --break command line option\n");
+				exit (1);
+			}
+			
+			if (!mono_debugger_insert_breakpoint (argv [++i], FALSE))
+				fprintf (stderr, "Error: invalid method name '%s'\n", argv [i]);
+		} else if (strcmp (argv [i], "--llvm") == 0) {
+#ifndef MONO_ARCH_LLVM_SUPPORTED
+			fprintf (stderr, "Mono Warning: --llvm not supported on this platform.\n");
+#else
+			mono_use_llvm = TRUE;
+#endif
 		} else {
 			fprintf (stderr, "Unsupported command line option: '%s'\n", argv [i]);
 			exit (1);
 		}
 	}
+
+	if (trace_options != NULL) {
+		/* 
+		 * Need to call this before mini_init () so we can trace methods 
+		 * compiled there too.
+		 */
+		mono_jit_trace_calls = mono_trace_parse_options (trace_options);
+		if (mono_jit_trace_calls == NULL)
+			exit (1);
+	}
+
+	if (mini_verbose)
+		mono_set_verbose_level (mini_verbose);
 }
 
 static void
@@ -1301,7 +1383,33 @@ mono_set_use_smp (int use_smp)
 	}
 #endif
 }
-	
+
+static void
+switch_gc (char* argv[], const char* target_gc)
+{
+	GString *path;
+
+	if (!strcmp (mono_gc_get_gc_name (), target_gc)) {
+		return;
+	}
+
+	path = g_string_new (argv [0]);
+
+	/*Running mono without any argument*/
+	if (strstr (argv [0], "-sgen"))
+		g_string_truncate (path, path->len - 5);
+	else if (strstr (argv [0], "-boehm"))
+		g_string_truncate (path, path->len - 6);
+
+	g_string_append_c (path, '-');
+	g_string_append (path, target_gc);
+
+#ifdef HAVE_EXECVP
+	execvp (path->str, argv);
+#else
+	fprintf (stderr, "Error: --gc=<NAME> option not supported on this platform.\n");
+#endif
+}
 
 /**
  * mono_main:
@@ -1324,7 +1432,7 @@ mono_main (int argc, char* argv[])
 	const char* aname, *mname = NULL;
 	char *config_file = NULL;
 	int i, count = 1;
-	guint32 opt, action = DO_EXEC;
+	guint32 opt, action = DO_EXEC, recompilation_times = 1;
 	MonoGraphOptions mono_graph_options = 0;
 	int mini_verbose = 0;
 	gboolean enable_profile = FALSE;
@@ -1336,6 +1444,12 @@ mono_main (int argc, char* argv[])
 	char *attach_options = NULL;
 #ifdef MONO_JIT_INFO_TABLE_TEST
 	int test_jit_info_table = FALSE;
+#endif
+#ifdef HOST_WIN32
+	int mixed_mode = FALSE;
+#endif
+#ifdef __native_client__
+	gboolean nacl_null_checks_off = FALSE;
 #endif
 
 #ifdef MOONLIGHT
@@ -1355,22 +1469,6 @@ mono_main (int argc, char* argv[])
 	if (!g_thread_supported ())
 		g_thread_init (NULL);
 
-	if (mono_running_on_valgrind () && getenv ("MONO_VALGRIND_LEAK_CHECK")) {
-		GMemVTable mem_vtable;
-
-		/* 
-		 * Instruct glib to use the system allocation functions so valgrind
-		 * can track the memory allocated by the g_... functions.
-		 */
-		memset (&mem_vtable, 0, sizeof (mem_vtable));
-		mem_vtable.malloc = malloc;
-		mem_vtable.realloc = realloc;
-		mem_vtable.free = free;
-		mem_vtable.calloc = calloc;
-
-		g_mem_set_vtable (&mem_vtable);
-	}
-
 	g_log_set_always_fatal (G_LOG_LEVEL_ERROR);
 	g_log_set_fatal_mask (G_LOG_DOMAIN, G_LOG_LEVEL_ERROR);
 
@@ -1387,7 +1485,7 @@ mono_main (int argc, char* argv[])
 			char *build = mono_get_runtime_build_info ();
 			char *gc_descr;
 
-			g_print ("Mono JIT compiler version %s\nCopyright (C) 2002-2010 Novell, Inc and Contributors. www.mono-project.com\n", build);
+			g_print ("Mono JIT compiler version %s\nCopyright (C) 2002-2012 Novell, Inc, Xamarin Inc and Contributors. www.mono-project.com\n", build);
 			g_free (build);
 			g_print (info);
 			gc_descr = mono_gc_get_description ();
@@ -1433,30 +1531,19 @@ mono_main (int argc, char* argv[])
 		} else if (strncmp (argv [i], "-O=", 3) == 0) {
 			opt = parse_optimizations (argv [i] + 3);
 		} else if (strcmp (argv [i], "--gc=sgen") == 0) {
-			if (!strcmp (mono_gc_get_gc_name (), "boehm")) {
-				GString *path = g_string_new (argv [0]);
-				g_string_append (path, "-sgen");
-				argv [0] = path->str;
-				execvp (path->str, argv);
-			}
+			switch_gc (argv, "sgen");
 		} else if (strcmp (argv [i], "--gc=boehm") == 0) {
-			if (!strcmp (mono_gc_get_gc_name (), "sgen")) {
-				char *copy = g_strdup (argv [0]);
-				char *p = strstr (copy, "-sgen");
-				if (p == NULL){
-					fprintf (stderr, "Error, this process is not named mono-sgen and the command line option --boehm was passed");
-					exit (1);
-				}
-				*p = 0;
-				argv [0] = p;
-				execvp (p, argv);
-			}
+			switch_gc (argv, "boehm");
 		} else if (strcmp (argv [i], "--config") == 0) {
 			if (i +1 >= argc){
 				fprintf (stderr, "error: --config requires a filename argument\n");
 				return 1;
 			}
 			config_file = argv [++i];
+#ifdef HOST_WIN32
+		} else if (strcmp (argv [i], "--mixed-mode") == 0) {
+			mixed_mode = TRUE;
+#endif
 		} else if (strcmp (argv [i], "--ncompile") == 0) {
 			if (i + 1 >= argc){
 				fprintf (stderr, "error: --ncompile requires an argument\n");
@@ -1469,7 +1556,9 @@ mono_main (int argc, char* argv[])
 		} else if (strncmp (argv [i], "--trace=", 8) == 0) {
 			trace_options = &argv [i][8];
 		} else if (strcmp (argv [i], "--breakonex") == 0) {
-			mono_break_on_exc = TRUE;
+			MonoDebugOptions *opt = mini_get_debug_options ();
+
+			opt->break_on_exc = TRUE;
 		} else if (strcmp (argv [i], "--break") == 0) {
 			if (i+1 >= argc){
 				fprintf (stderr, "Missing method name in --break command line option\n");
@@ -1519,6 +1608,9 @@ mono_main (int argc, char* argv[])
 			mono_compile_aot = TRUE;
 			aot_options = &argv [i][6];
 #endif
+		} else if (strncmp (argv [i], "--compile-all=", 14) == 0) {
+			action = DO_COMPILE;
+			recompilation_times = atoi (argv [i] + 14);
 		} else if (strcmp (argv [i], "--compile-all") == 0) {
 			action = DO_COMPILE;
 		} else if (strncmp (argv [i], "--runtime=", 10) == 0) {
@@ -1576,28 +1668,51 @@ mono_main (int argc, char* argv[])
 			opt->mdb_optimizations = TRUE;
 			enable_debugging = TRUE;
 		} else if (strcmp (argv [i], "--security") == 0) {
+#ifndef DISABLE_SECURITY
 			mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
 			mono_security_set_mode (MONO_SECURITY_MODE_CAS);
 			mono_activate_security_manager ();
+#else
+			fprintf (stderr, "error: --security: not compiled with security manager support");
+			return 1;
+#endif
 		} else if (strncmp (argv [i], "--security=", 11) == 0) {
+			/* Note: temporary-smcs-hack, validil, and verifiable need to be
+			   accepted even if DISABLE_SECURITY is defined. */
+
 			if (strcmp (argv [i] + 11, "temporary-smcs-hack") == 0) {
 				mono_security_set_mode (MONO_SECURITY_MODE_SMCS_HACK);
 			} else if (strcmp (argv [i] + 11, "core-clr") == 0) {
+#ifndef DISABLE_SECURITY
 				mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
 				mono_security_set_mode (MONO_SECURITY_MODE_CORE_CLR);
+#else
+				fprintf (stderr, "error: --security: not compiled with CoreCLR support");
+				return 1;
+#endif
 			} else if (strcmp (argv [i] + 11, "core-clr-test") == 0) {
+#ifndef DISABLE_SECURITY
 				/* fixme should we enable verifiable code here?*/
 				mono_security_set_mode (MONO_SECURITY_MODE_CORE_CLR);
 				mono_security_core_clr_test = TRUE;
-			} else if (strcmp (argv [i] + 11, "cas") == 0){
+#else
+				fprintf (stderr, "error: --security: not compiled with CoreCLR support");
+				return 1;
+#endif
+			} else if (strcmp (argv [i] + 11, "cas") == 0) {
+#ifndef DISABLE_SECURITY
 				mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
 				mono_security_set_mode (MONO_SECURITY_MODE_CAS);
 				mono_activate_security_manager ();
-			} else  if (strcmp (argv [i] + 11, "validil") == 0) {
+#else
+				fprintf (stderr, "error: --security: not compiled with CAS support");
+				return 1;
+#endif
+			} else if (strcmp (argv [i] + 11, "validil") == 0) {
 				mono_verifier_set_mode (MONO_VERIFIER_MODE_VALID);
-			} else  if (strcmp (argv [i] + 11, "verifiable") == 0) {
+			} else if (strcmp (argv [i] + 11, "verifiable") == 0) {
 				mono_verifier_set_mode (MONO_VERIFIER_MODE_VERIFIABLE);
-			} else  {
+			} else {
 				fprintf (stderr, "error: --security= option has invalid argument (cas, core-clr, verifiable or validil)\n");
 				return 1;
 			}
@@ -1635,7 +1750,13 @@ mono_main (int argc, char* argv[])
 			mono_use_llvm = FALSE;
 #ifdef __native_client_codegen__
 		} else if (strcmp (argv [i], "--nacl-align-mask-off") == 0){
-			nacl_align_byte = 0xff;	
+			nacl_align_byte = -1; /* 0xff */
+#endif
+#ifdef __native_client__
+		} else if (strcmp (argv [i], "--nacl-mono-path") == 0){
+			nacl_mono_path = g_strdup(argv[++i]);
+		} else if (strcmp (argv [i], "--nacl-null-checks-off") == 0){
+			nacl_null_checks_off = TRUE;
 #endif
 		} else {
 			fprintf (stderr, "Unknown command line option: '%s'\n", argv [i]);
@@ -1646,7 +1767,11 @@ mono_main (int argc, char* argv[])
 #ifdef __native_client_codegen__
 	if (getenv ("MONO_NACL_ALIGN_MASK_OFF"))
 	{
-		nacl_align_byte = 0xff;
+		nacl_align_byte = -1; /* 0xff */
+	}
+	if (!nacl_null_checks_off) {
+		MonoDebugOptions *opt = mini_get_debug_options ();
+		opt->explicit_null_checks = TRUE;
 	}
 #endif
 
@@ -1698,12 +1823,6 @@ mono_main (int argc, char* argv[])
 	}
 #endif
 
-	/*
-	 * This must be called before mono_debug_init(), because the
-	 * latter registers GC roots.
-	 */
-	mono_gc_base_init ();
-
 	if (action == DO_DEBUGGER) {
 		enable_debugging = TRUE;
 
@@ -1723,8 +1842,15 @@ mono_main (int argc, char* argv[])
 	}
 #endif
 
+#ifdef HOST_WIN32
+	if (mixed_mode)
+		mono_load_coree (argv [i]);
+#endif
+
 	mono_set_defaults (mini_verbose, opt);
 	domain = mini_init (argv [i], forced_version);
+
+	mono_gc_set_stack_end (&domain);
 
 	if (agents) {
 		int i;
@@ -1858,7 +1984,7 @@ mono_main (int argc, char* argv[])
 	 * This used to be an amd64 only crash, but it looks like now most glibc targets do unwinding
 	 * that requires reading the target code.
 	 */
-#ifdef __linux__
+#if defined( __linux__ ) || defined( __native_client__ )
 		mono_dont_free_global_codeman = TRUE;
 #endif
 
@@ -1868,7 +1994,7 @@ mono_main (int argc, char* argv[])
 		i = mono_environment_exitcode_get ();
 		return i;
 	} else if (action == DO_COMPILE) {
-		compile_all_methods (assembly, mini_verbose, opt);
+		compile_all_methods (assembly, mini_verbose, opt, recompilation_times);
 		mini_cleanup (domain);
 		return 0;
 	} else if (action == DO_DEBUGGER) {

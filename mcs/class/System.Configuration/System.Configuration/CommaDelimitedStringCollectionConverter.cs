@@ -26,8 +26,6 @@
 // Copyright (C) 2005 Novell, Inc (http://www.novell.com)
 //
 
-#if NET_2_0
-
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
@@ -48,6 +46,7 @@ namespace System.Configuration
 			foreach (string datum in datums)
 				col.Add (datum.Trim());
 
+			col.UpdateStringHash ();
 			return col;
 		}
 
@@ -62,4 +61,4 @@ namespace System.Configuration
 		}
 	}
 }
-#endif
+

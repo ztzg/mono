@@ -44,6 +44,10 @@ namespace System.ServiceModel.Channels
 			this.encoding = encoding;
 		}
 
+		internal Encoding Encoding {
+			get { return encoding; }
+		}
+
 		public override string ContentType {
 			get { return String.Concat (MediaType, "; charset=", encoding.WebName); }
 		}
@@ -60,26 +64,47 @@ namespace System.ServiceModel.Channels
 		public override Message ReadMessage (ArraySegment<byte> buffer,
 			BufferManager bufferManager, string contentType)
 		{
-			return Message.CreateMessage (
+			if (bufferManager == null)
+				throw new ArgumentNullException ("bufferManager");
+			var settings = new XmlReaderSettings ();
+			settings.CheckCharacters = false;
+			var ret = Message.CreateMessage (
 				XmlDictionaryReader.CreateDictionaryReader (
 					XmlReader.Create (new StreamReader (
 						new MemoryStream (
 						buffer.Array, buffer.Offset,
-						buffer.Count), encoding))),
+						buffer.Count), encoding), settings)),
 				// FIXME: supply max header size
 				int.MaxValue,
 				version);
+			FillActionContentType (ret, contentType);
+			return ret;
 		}
 
-		[MonoTODO]
 		public override Message ReadMessage (Stream stream,
 			int maxSizeOfHeaders, string contentType)
 		{
-			return Message.CreateMessage (
+			if (stream == null)
+				throw new ArgumentNullException ("stream");
+			var settings = new XmlReaderSettings ();
+			settings.CheckCharacters = false;
+			var ret = Message.CreateMessage (
 				XmlDictionaryReader.CreateDictionaryReader (
-					XmlReader.Create (new StreamReader (stream, encoding))),
+					XmlReader.Create (new StreamReader (stream, encoding), settings)),
 				maxSizeOfHeaders,
 				version);
+			ret.Properties.Encoder = this;
+			FillActionContentType (ret, contentType);
+			return ret;
+		}
+		
+		void FillActionContentType (Message msg, string contentType)
+		{
+			if (contentType.StartsWith ("application/soap+xml", StringComparison.Ordinal)) {
+				var ct = new ContentType (contentType);
+				if (ct.Parameters.ContainsKey ("action"))
+					msg.Headers.Action = ct.Parameters ["action"];
+			}
 		}
 
 		public override void WriteMessage (Message message, Stream stream)
@@ -92,6 +117,7 @@ namespace System.ServiceModel.Channels
 
 			XmlWriterSettings s = new XmlWriterSettings ();
 			s.Encoding = encoding;
+			s.CheckCharacters = false;
 			using (XmlWriter w = XmlWriter.Create (stream, s)) {
 				message.WriteMessage (
 					XmlDictionaryWriter.CreateDictionaryWriter (w));
@@ -110,6 +136,7 @@ namespace System.ServiceModel.Channels
 				messageOffset, maxMessageSize);
 			XmlWriterSettings s = new XmlWriterSettings ();
 			s.Encoding = encoding;
+			s.CheckCharacters = false;
 			using (XmlWriter w = XmlWriter.Create (
 				new MemoryStream (seg.Array, seg.Offset, seg.Count), s)) {
 				message.WriteMessage (

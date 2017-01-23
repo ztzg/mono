@@ -13,7 +13,7 @@ using System;
 using System.Configuration.Assemblies;
 using System.IO;
 using System.Reflection;
-#if !TARGET_JVM
+#if !TARGET_JVM && !MOBILE
 using System.Reflection.Emit;
 #endif
 using System.Runtime.Serialization;
@@ -429,7 +429,16 @@ public class AssemblyNameTest {
 	{
 		an = typeof(int).Assembly.GetName ();
 		Assert.IsNotNull (an.FullName, "#1");
-		Assert.AreEqual (Consts.AssemblyCorlib, an.FullName, "#2");
+
+		string AssemblyCorlib;
+#if MOBILE
+		AssemblyCorlib = "mscorlib, Version=2.0.5.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e";
+#elif NET_4_0
+		AssemblyCorlib = "mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089";
+#else
+		AssemblyCorlib = "mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089";
+#endif
+		Assert.AreEqual (AssemblyCorlib, an.FullName, "#2");
 	}
 
 	[Test]
@@ -889,7 +898,7 @@ public class AssemblyNameTest {
 		return assemblyName;
 	}
 
-#if !TARGET_JVM // Reflection.Emit is not supported for TARGET_JVM.
+#if !TARGET_JVM && !MOBILE // Reflection.Emit is not supported for TARGET_JVM.
 	private Assembly GenerateAssembly (AssemblyName name) 
 	{
 		AssemblyBuilder ab = domain.DefineDynamicAssembly (
@@ -1342,7 +1351,7 @@ public class AssemblyNameTest {
 		const string assemblyVersion = "1.2.3.4";
 
 		an = new AssemblyName (assemblyName + ", Version=" + assemblyVersion + 
-				", Culture=" + assemblyCulture + ", PublicKeyToken=" + GetTokenString (pk_token1));
+				", Culture=" + assemblyCulture + ", PublicKeyToken=" + GetTokenString (pk_token1) + ",ProcessorArchitecture=X86");
 		Assert.IsNull (an.CodeBase, "CodeBase");
 		Assert.AreEqual (CultureInfo.InvariantCulture, an.CultureInfo, "CultureInfo");
 		Assert.IsNull (an.EscapedCodeBase, "EscapedCodeBase");
@@ -1352,7 +1361,7 @@ public class AssemblyNameTest {
 		Assert.AreEqual (AssemblyHashAlgorithm.None, an.HashAlgorithm, "HashAlgorithm");
 		Assert.IsNull (an.KeyPair, "KeyPair");
 		Assert.AreEqual (assemblyName, an.Name, "Name");
-		Assert.AreEqual (ProcessorArchitecture.None, an.ProcessorArchitecture, "PA");
+		Assert.AreEqual (ProcessorArchitecture.X86, an.ProcessorArchitecture, "PA");
 		Assert.AreEqual (new Version (assemblyVersion), an.Version, "Version");
 		Assert.AreEqual (AssemblyVersionCompatibility.SameMachine, 
 			an.VersionCompatibility, "VersionCompatibility");
@@ -1468,6 +1477,10 @@ public class AssemblyNameTest {
 		try {
 			new AssemblyName (assemblyName + ", Culture=aa-AA");
 			Assert.Fail ("#1");
+#if NET_4_0
+		} catch (CultureNotFoundException ex) {
+		}
+#else
 		} catch (ArgumentException ex) {
 			// Culture name 'aa-aa' is not supported
 			Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#2");
@@ -1476,6 +1489,7 @@ public class AssemblyNameTest {
 			Assert.IsNotNull (ex.ParamName, "#5");
 			Assert.AreEqual ("name", ex.ParamName, "#6");
 		}
+#endif
 	}
 
 	[Test] // ctor (String)
@@ -1991,6 +2005,16 @@ public class AssemblyNameTest {
 			Assert.IsNull (ex.InnerException, "#3");
 			Assert.IsNotNull (ex.Message, "#4");
 		}
+	}
+
+	[Test (Description="Xamarin bug #99 - whitespaces in key=value")]
+	public void WhiteSpaceInKeyValue ()
+	{
+		string nameWithSpaces = String.Format ("MySql.Data.Tests, PublicKey      = \t  {0},  Culture   =\tneutral, Version=\t1.2.3.4", GetTokenString (publicKey1));
+		string fullName = "MySql.Data.Tests, Version=1.2.3.4, Culture=neutral, PublicKeyToken=ce5276d8687ec6dc";
+		var an = new AssemblyName (nameWithSpaces);
+
+		Assert.AreEqual (fullName, an.FullName);
 	}
 #endif
 }

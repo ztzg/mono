@@ -8,6 +8,10 @@ using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Linq;
 
+interface I<T>
+{
+}
+
 class C
 {
 	public C (dynamic d)
@@ -31,6 +35,8 @@ class C
 	public dynamic[] t;
 	public dynamic[,] t2;
 	public Func<dynamic, int, dynamic[]> v;
+	public I<dynamic>[] iface;
+	public Action<int[], object, dynamic> d2;
 }
 
 delegate dynamic Del (dynamic d);
@@ -123,6 +129,18 @@ class Test
 			return 44;
 		if (!da.TransformFlags.SequenceEqual (new bool[] { false, true, false, false, true }))
 			return 45;
+		
+		da = t.GetMember ("iface")[0].GetCustomAttributes (ca, false)[0] as DynamicAttribute;
+		if (da == null)
+			return 46;
+		if (!da.TransformFlags.SequenceEqual (new bool[] { false, false, true }))
+			return 47;
+
+		da = t.GetMember ("d2")[0].GetCustomAttributes (ca, false)[0] as DynamicAttribute;
+		if (da == null)
+			return 48;
+		if (!da.TransformFlags.SequenceEqual (new bool[] { false, false, false, false, true }))
+			return 49;
 
 		t = typeof (Del);
 

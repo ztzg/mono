@@ -26,8 +26,8 @@ using System.Runtime.CompilerServices;
 
 class Tests {
 
-	public static int Main () {
-		return TestDriver.RunTests (typeof (Tests));
+	public static int Main (string[] args) {
+		return TestDriver.RunTests (typeof (Tests), args);
 	}
 
 	public static int test_0_catch () {
@@ -1455,6 +1455,7 @@ class Tests {
 		return 0;
 	}
 	
+	[Category ("NaClDisable")]
 	public static int test_0_div_zero () {
 		int d = 1;
 		int q = 0;
@@ -1486,7 +1487,7 @@ class Tests {
 			val = d / q;
 		} catch (DivideByZeroException) {
 			/* wrong exception */
-		} catch (ArithmeticException) {
+		} catch (OverflowException) {
 			failed = false;
 		}
 		if (failed)
@@ -1499,7 +1500,7 @@ class Tests {
 			val = d % q;
 		} catch (DivideByZeroException) {
 			/* wrong exception */
-		} catch (ArithmeticException) {
+		} catch (OverflowException) {
 			failed = false;
 		}
 		if (failed)
@@ -1560,6 +1561,7 @@ class Tests {
 		return 0;
 	}
 
+	[Category ("NaClDisable")]
 	public static int test_0_long_div_zero () {
 		long d = 1;
 		long q = 0;
@@ -2240,6 +2242,8 @@ class Tests {
 
 		public static void rethrow2 () {
 			rethrow1 ();
+			/* This disables tailcall opts */
+			Console.WriteLine ();
 		}
 	}
 
@@ -2342,12 +2346,34 @@ class Tests {
 	}
 
 	/* Test that arguments are correctly popped off the stack during unwinding */
+	/* FIXME: Fails on x86 when llvm is enabled (#5432) */
+	/*
 	public static int test_0_stack_unwind () {
 		addr = new IntPtr [1000];
 		S s = new S ();
 		for (int j = 0; j < 1000; j++) {
 			try {
 				throw_func (j, s);
+			}
+			catch (Exception) {
+			}
+		}
+		return (addr [0].ToInt64 () - addr [100].ToInt64 () < 100) ? 0 : 1;
+	}
+	*/
+
+	static unsafe void get_sp (int i) {
+		addr [i] = new IntPtr (&i);
+	}
+
+	/* Test that the arguments to the throw trampoline are correctly popped off the stack */
+	public static int test_0_throw_unwind () {
+		addr = new IntPtr [1000];
+		S s = new S ();
+		for (int j = 0; j < 1000; j++) {
+			try {
+				get_sp (j);
+				throw new Exception ();
 			}
 			catch (Exception) {
 			}
@@ -2619,6 +2645,90 @@ class Tests {
 		int* pi = &Foo.pFoo->i;
 
 		return 0;
+	}
+
+	static int test_0_try_clause_in_finally_clause_regalloc () {
+		// Fill up registers with values
+		object a = new object ();
+		object[] arr1 = new object [1];
+		object[] arr2 = new object [1];
+		object[] arr3 = new object [1];
+		object[] arr4 = new object [1];
+		object[] arr5 = new object [1];
+
+		for (int i = 0; i < 10; ++i)
+			arr1 [0] = a;
+		for (int i = 0; i < 10; ++i)
+			arr2 [0] = a;
+		for (int i = 0; i < 10; ++i)
+			arr3 [0] = a;
+		for (int i = 0; i < 10; ++i)
+			arr4 [0] = a;
+		for (int i = 0; i < 10; ++i)
+			arr5 [0] = a;
+
+		int res = 1;
+		try {
+			try_clause_in_finally_clause_regalloc_inner (out res);
+		} catch (Exception) {
+		}
+		return res;		
+	}
+
+	public static object Throw () {
+		for (int i = 0; i < 10; ++i)
+			;
+		throw new Exception ();
+	}
+
+	static void try_clause_in_finally_clause_regalloc_inner (out int res) {
+		object o = null;
+
+		res = 1;
+		try {
+			o = Throw ();
+		} catch (Exception) {
+			/* Make sure this doesn't branch to the finally */
+			throw new DivideByZeroException ();
+		} finally {
+			try {
+				/* Make sure o is register allocated */
+				if (o == null)
+					res = 0;
+				else
+					res = 1;
+				if (o == null)
+					res = 0;
+				else
+					res = 1;
+				if (o == null)
+					res = 0;
+				else
+					res = 1;
+			} catch (DivideByZeroException) {
+			}
+		}
+	}
+
+    public static bool t_1835_inner () {
+        bool a = true;
+        if (a) throw new Exception();
+        return true;
+    }
+
+	[MethodImpl(MethodImplOptions.NoInlining)] 
+    public static bool t_1835_inner_2 () {
+		bool b = t_1835_inner ();
+		return b;
+	}
+
+	public static int test_0_inline_retval_throw_in_branch_1835 () {
+		try {
+			t_1835_inner_2 ();
+		} catch {
+			return 0;
+		}
+		return 1;
 	}
 }
 

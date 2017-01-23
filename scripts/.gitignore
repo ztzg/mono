@@ -5,9 +5,11 @@
 /caspol
 /cert2spc
 /certmgr
+/cccheck
 /ccrewrite
 /chktrust
 /cilc
+/crlupdate
 /csharp
 /csharp2
 /disco
@@ -35,6 +37,7 @@
 /mconfig
 /mcs
 /mcs1
+/mdbrebase
 /mdoc
 /mdoc-*
 /mjs
@@ -42,6 +45,7 @@
 /mkbundle1
 /mkbundle2
 /mod
+/mono-abi-info
 /mono-api-diff
 /mono-api-info
 /mono-api-info1
@@ -63,6 +67,7 @@
 /mozroots
 /nunit-console
 /nunit-console2
+/nunit-console4
 /pdb2mdb
 /permview
 /peverify
@@ -88,3 +93,4 @@
 /xbuild
 /xsd
 /xsd2
+/*.bat

@@ -66,11 +66,15 @@
     --> Macro replaced by USE_COMPILER_TLS
 # endif
 
+#ifndef USE_COMPILER_TLS
 # if (defined(GC_DGUX386_THREADS) || defined(GC_OSF1_THREADS) || \
       defined(GC_DARWIN_THREADS) || defined(GC_AIX_THREADS)) || \
-      defined(GC_NETBSD_THREADS) && !defined(USE_PTHREAD_SPECIFIC)
+      defined(GC_NETBSD_THREADS) && !defined(USE_PTHREAD_SPECIFIC) || \
+      defined(GC_FREEBSD_THREADS) && !defined(USE_PTHREAD_SPECIFIC) || \
+      defined(GC_OPENBSD_THREADS)
 #   define USE_PTHREAD_SPECIFIC
 # endif
+#endif
 
 # if defined(GC_DGUX386_THREADS) && !defined(_POSIX4A_DRAFT10_SOURCE)
 #   define _POSIX4A_DRAFT10_SOURCE 1
@@ -129,7 +133,7 @@
 # include <sys/sysctl.h>
 #endif /* GC_DARWIN_THREADS */
 
-#if defined(GC_NETBSD_THREADS)
+#if defined(GC_NETBSD_THREADS) || defined(GC_OPENBSD_THREADS)
 # include <sys/param.h>
 # include <sys/sysctl.h>
 #endif
@@ -163,6 +167,9 @@
 #   endif
 #   undef pthread_join
 #   undef pthread_detach
+#   if defined(NACL)
+#     undef pthread_exit
+#   endif
 #   if defined(GC_OSF1_THREADS) && defined(_PTHREAD_USE_MANGLED_NAMES_) \
        && !defined(_PTHREAD_USE_PTDNAM_)
 /* Restore the original mangled names on Tru64 UNIX.  */
@@ -177,6 +184,10 @@ void GC_thr_init();
 static GC_bool parallel_initialized = FALSE;
 
 void GC_init_parallel();
+
+static pthread_t main_pthread_self;
+static void *main_stack, *main_altstack;
+static int main_stack_size, main_altstack_size;
 
 # if defined(THREAD_LOCAL_ALLOC) && !defined(DBG_HDRS_ALL)
 
@@ -675,11 +686,76 @@ void GC_mark_thread_local_free_lists(void)
 
 static struct GC_Thread_Rep first_thread;
 
+#ifdef NACL
+extern volatile int nacl_thread_parked[MAX_NACL_GC_THREADS];
+extern volatile int nacl_thread_used[MAX_NACL_GC_THREADS];
+extern volatile int nacl_thread_parking_inited;
+extern volatile int nacl_num_gc_threads;
+extern pthread_mutex_t nacl_thread_alloc_lock;
+extern __thread int nacl_thread_idx;
+extern __thread GC_thread nacl_gc_thread_self;
+
+extern void nacl_pre_syscall_hook();
+extern void nacl_post_syscall_hook();
+extern void nacl_register_gc_hooks(void (*pre)(), void (*post)());
+
+#include <stdio.h>
+
+struct nacl_irt_blockhook {
+  int (*register_block_hooks)(void (*pre)(void), void (*post)(void));
+};
+
+extern size_t nacl_interface_query(const char *interface_ident,
+                            void *table, size_t tablesize);
+
+void nacl_initialize_gc_thread()
+{
+    int i;
+    static struct nacl_irt_blockhook gc_hook;
+
+    pthread_mutex_lock(&nacl_thread_alloc_lock);
+    if (!nacl_thread_parking_inited)
+    {
+        for (i = 0; i < MAX_NACL_GC_THREADS; i++) {
+            nacl_thread_used[i] = 0;
+            nacl_thread_parked[i] = 0;
+        }
+        // TODO: replace with public 'register hook' function when
+        // available from glibc
+        nacl_interface_query("nacl-irt-blockhook-0.1", &gc_hook, sizeof(gc_hook));
+        gc_hook.register_block_hooks(nacl_pre_syscall_hook, nacl_post_syscall_hook);
+        nacl_thread_parking_inited = 1;
+    }
+    GC_ASSERT(nacl_num_gc_threads <= MAX_NACL_GC_THREADS);
+    for (i = 0; i < MAX_NACL_GC_THREADS; i++) {
+        if (nacl_thread_used[i] == 0) {
+            nacl_thread_used[i] = 1;
+            nacl_thread_idx = i;
+            nacl_num_gc_threads++;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&nacl_thread_alloc_lock);
+}
+
+void nacl_shutdown_gc_thread()
+{
+    pthread_mutex_lock(&nacl_thread_alloc_lock);
+    GC_ASSERT(nacl_thread_idx >= 0 && nacl_thread_idx < MAX_NACL_GC_THREADS);
+    GC_ASSERT(nacl_thread_used[nacl_thread_idx] != 0);
+    nacl_thread_used[nacl_thread_idx] = 0;
+    nacl_thread_idx = -1;
+    nacl_num_gc_threads--;
+    pthread_mutex_unlock(&nacl_thread_alloc_lock);
+}
+
+#endif /* NACL */
+
 /* Add a thread to GC_threads.  We assume it wasn't already there.	*/
 /* Caller holds allocation lock.					*/
 GC_thread GC_new_thread(pthread_t id)
 {
-    int hv = ((word)id) % THREAD_TABLE_SZ;
+    int hv = ((unsigned long)id) % THREAD_TABLE_SZ;
     GC_thread result;
     static GC_bool first_thread_used = FALSE;
     
@@ -692,8 +768,15 @@ GC_thread GC_new_thread(pthread_t id)
     }
     if (result == 0) return(0);
     result -> id = id;
+#ifdef PLATFORM_ANDROID
+    result -> kernel_id = gettid();
+#endif
     result -> next = GC_threads[hv];
     GC_threads[hv] = result;
+#ifdef NACL
+    nacl_gc_thread_self = result;
+    nacl_initialize_gc_thread();
+#endif
     GC_ASSERT(result -> flags == 0 && result -> thread_blocked == 0);
     return(result);
 }
@@ -703,10 +786,15 @@ GC_thread GC_new_thread(pthread_t id)
 /* Caller holds allocation lock.				*/
 void GC_delete_thread(pthread_t id)
 {
-    int hv = ((word)id) % THREAD_TABLE_SZ;
+    int hv = ((unsigned long)id) % THREAD_TABLE_SZ;
     register GC_thread p = GC_threads[hv];
     register GC_thread prev = 0;
     
+#ifdef NACL
+    nacl_shutdown_gc_thread();
+    nacl_gc_thread_self = NULL;
+#endif
+
     while (!pthread_equal(p -> id, id)) {
         prev = p;
         p = p -> next;
@@ -734,7 +822,7 @@ void GC_delete_thread(pthread_t id)
 /* This is OK, but we need a way to delete a specific one.	*/
 void GC_delete_gc_thread(pthread_t id, GC_thread gc_id)
 {
-    int hv = ((word)id) % THREAD_TABLE_SZ;
+    int hv = ((unsigned long)id) % THREAD_TABLE_SZ;
     register GC_thread p = GC_threads[hv];
     register GC_thread prev = 0;
 
@@ -763,7 +851,7 @@ void GC_delete_gc_thread(pthread_t id, GC_thread gc_id)
 /* return the most recent one.					*/
 GC_thread GC_lookup_thread(pthread_t id)
 {
-    int hv = ((word)id) % THREAD_TABLE_SZ;
+    int hv = ((unsigned long)id) % THREAD_TABLE_SZ;
     register GC_thread p = GC_threads[hv];
     
     while (p != 0 && !pthread_equal(p -> id, id)) p = p -> next;
@@ -779,6 +867,30 @@ int GC_thread_is_registered (void)
 	UNLOCK();
 
 	return ptr ? 1 : 0;
+}
+
+void GC_register_altstack (void *stack, int stack_size, void *altstack, int altstack_size)
+{
+	GC_thread thread;
+
+	LOCK();
+	thread = (void *)GC_lookup_thread(pthread_self());
+	if (thread) {
+		thread->stack = stack;
+		thread->stack_size = stack_size;
+		thread->altstack = altstack;
+		thread->altstack_size = altstack_size;
+	} else {
+		/*
+		 * This happens if we are called before GC_thr_init ().
+		 */
+		main_pthread_self = pthread_self ();
+		main_stack = stack;
+		main_stack_size = stack_size;
+		main_altstack = altstack;
+		main_altstack_size = altstack_size;
+	}
+	UNLOCK();
 }
 
 #ifdef HANDLE_FORK
@@ -844,6 +956,7 @@ int GC_segment_is_thread_stack(ptr_t lo, ptr_t hi)
 /* Return the number of processors, or i<= 0 if it can't be determined.	*/
 int GC_get_nprocs()
 {
+#ifndef NACL
     /* Should be "return sysconf(_SC_NPROCESSORS_ONLN);" but that	*/
     /* appears to be buggy in many cases.				*/
     /* We look for lines "cpu<n>" in /proc/stat.			*/
@@ -873,6 +986,9 @@ int GC_get_nprocs()
     }
     close(f);
     return result;
+#else /* NACL */
+    return sysconf(_SC_NPROCESSORS_ONLN);
+#endif
 }
 #endif /* GC_LINUX_THREADS */
 
@@ -1016,6 +1132,12 @@ void GC_thr_init()
          gc_thread_vtable->thread_created (pthread_self (), &t->stop_info.stack_ptr);
 #     endif
 #endif
+		 if (pthread_self () == main_pthread_self) {
+			 t->stack = main_stack;
+			 t->stack_size = main_stack_size;
+			 t->altstack = main_altstack;
+			 t->altstack_size = main_altstack_size;
+		 }
 
     GC_stop_init();
 
@@ -1037,7 +1159,7 @@ void GC_thr_init()
 	  GC_nprocs = sysconf(_SC_NPROC_ONLN);
 	  if (GC_nprocs <= 0) GC_nprocs = 1;
 #       endif
-#       if defined(GC_DARWIN_THREADS) || defined(GC_FREEBSD_THREADS) || defined(GC_NETBSD_THREADS)
+#       if defined(GC_DARWIN_THREADS) || defined(GC_FREEBSD_THREADS) || defined(GC_NETBSD_THREADS) || defined(GC_OPENBSD_THREADS)
 	  int ncpus = 1;
 	  size_t len = sizeof(ncpus);
 	  sysctl((int[2]) {CTL_HW, HW_NCPU}, 2, &ncpus, &len, NULL, 0);
@@ -1113,7 +1235,8 @@ void GC_init_parallel()
 }
 
 
-#if !defined(GC_DARWIN_THREADS)
+#if !defined(GC_DARWIN_THREADS) && !defined(GC_OPENBSD_THREADS)
+#ifndef NACL
 int WRAP_FUNC(pthread_sigmask)(int how, const sigset_t *set, sigset_t *oset)
 {
     sigset_t fudged_set;
@@ -1125,6 +1248,7 @@ int WRAP_FUNC(pthread_sigmask)(int how, const sigset_t *set, sigset_t *oset)
     }
     return(REAL_FUNC(pthread_sigmask)(how, set, oset));
 }
+#endif
 #endif /* !GC_DARWIN_THREADS */
 
 /* Wrappers for functions that are likely to block for an appreciable	*/
@@ -1255,6 +1379,15 @@ int WRAP_FUNC(pthread_join)(pthread_t thread, void **retval)
     return result;
 }
 
+#ifdef NACL
+/* TODO: remove, NaCl glibc now supports pthread cleanup functions. */
+void
+WRAP_FUNC(pthread_exit)(void *status)
+{
+    REAL_FUNC(pthread_exit)(status);
+}
+#endif
+
 int
 WRAP_FUNC(pthread_detach)(pthread_t thread)
 {
@@ -1341,7 +1474,8 @@ void * GC_start_routine_head(void * arg, void *base_addr,
     if (start) *start = si -> start_routine;
     if (start_arg) *start_arg = si -> arg;
 
-    sem_post(&(si -> registered));	/* Last action on si.	*/
+	if (!(si->flags & FOREIGN_THREAD))
+		sem_post(&(si -> registered));	/* Last action on si.	*/
     					/* OK to deallocate.	*/
 #   if defined(THREAD_LOCAL_ALLOC) && !defined(DBG_HDRS_ALL)
  	LOCK();

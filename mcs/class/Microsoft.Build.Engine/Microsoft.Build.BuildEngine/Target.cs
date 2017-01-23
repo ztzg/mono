@@ -25,14 +25,15 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#if NET_2_0
-
 using System;
+using System.Text;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Xml;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
+using Mono.XBuild.Utilities;
 
 namespace Microsoft.Build.BuildEngine {
 	public class Target : IEnumerable {
@@ -45,7 +46,7 @@ namespace Microsoft.Build.BuildEngine {
 		Project		project;
 		XmlElement	targetElement;
 		List <XmlElement>	onErrorElements;
-		List <BuildTask>	buildTasks;
+		List <IBuildTask>	buildTasks;
 		
 		internal Target (XmlElement targetElement, Project project, ImportedProject importedProject)
 		{
@@ -63,7 +64,7 @@ namespace Microsoft.Build.BuildEngine {
 
 			this.onErrorElements  = new List <XmlElement> ();
 			this.buildState = BuildState.NotStarted;
-			this.buildTasks = new List <BuildTask> ();
+			this.buildTasks = new List <IBuildTask> ();
 			this.batchingImpl = new TargetBatchingImpl (project, this.targetElement);
 
 			bool onErrorFound = false;
@@ -76,12 +77,22 @@ namespace Microsoft.Build.BuildEngine {
 					} else if (onErrorFound)
 						throw new InvalidProjectFileException (
 							"The element <OnError> must be last under element <Target>. Found element <Error> instead.");
+#if NET_3_5
+					else if (xe.Name == "ItemGroup") {
+						var group = new BuildTaskItemGroup (xe, this);
+						buildTasks.AddRange (group.Items);
+						continue;
+					} else if (xe.Name == "PropertyGroup") {
+						buildTasks.Add (new BuildTaskPropertyGroup (xe, this));
+						continue;
+					}
+#endif
 					else
 						buildTasks.Add (new BuildTask (xe, this));
 				}
 			}
 		}
-		
+
 		[MonoTODO]
 		public BuildTask AddNewTask (string taskName)
 		{
@@ -98,8 +109,7 @@ namespace Microsoft.Build.BuildEngine {
 
 		public IEnumerator GetEnumerator ()
 		{
-			foreach (BuildTask bt in buildTasks)
-				yield return bt;
+			return buildTasks.ToArray ().GetEnumerator ();
 		}
 
 		// FIXME: shouldn't we remove it from XML?
@@ -122,6 +132,16 @@ namespace Microsoft.Build.BuildEngine {
 		}
 
 		bool Build (string built_targets_key, out bool executeOnErrors)
+		{
+			project.PushThisFileProperty (TargetFile);
+			try {
+				return BuildActual (built_targets_key, out executeOnErrors);
+			} finally {
+				project.PopThisFileProperty ();
+			}
+		}
+
+		bool BuildActual (string built_targets_key, out bool executeOnErrors)
 		{
 			bool result = false;
 			executeOnErrors = false;
@@ -147,14 +167,15 @@ namespace Microsoft.Build.BuildEngine {
 
 			try {
 				buildState = BuildState.Started;
-				result = BuildDependencies (GetDependencies (), out executeOnErrors);
 
-				if (!result && executeOnErrors)
-					ExecuteOnErrors ();
-
-				if (result)
-					// deps built fine, do main build
-					result = DoBuild (out executeOnErrors);
+#if NET_4_0
+				result = BuildDependencies (out executeOnErrors) &&
+						BuildBeforeThisTargets (out executeOnErrors) &&
+						DoBuild (out executeOnErrors) && // deps & Before targets built fine, do main build
+						BuildAfterThisTargets (out executeOnErrors);
+#else
+				result = BuildDependencies (out executeOnErrors) && DoBuild (out executeOnErrors);
+#endif
 
 				buildState = BuildState.Finished;
 			} catch (Exception e) {
@@ -164,42 +185,80 @@ namespace Microsoft.Build.BuildEngine {
 				project.PopBatch ();
 			}
 
-			project.ParentEngine.BuiltTargetsOutputByName [built_targets_key] = (ITaskItem[]) Outputs.Clone ();
-			project.BuiltTargetKeys.Add (built_targets_key);
+			ITaskItem[] outputs = (ITaskItem[]) OutputsAsITaskItems.Clone ();
+			foreach (ITaskItem item in outputs) {
+				item.SetMetadata ("MSBuildProjectFile", TargetFile);
+				item.SetMetadata ("MSBuildTargetName", Name);
+			}
+			project.ParentEngine.BuiltTargetsOutputByName [built_targets_key] = outputs;
 
 			return result;
 		}
 
-		List <Target> GetDependencies ()
-		{
-			List <Target> list = new List <Target> ();
-			Target t;
-			string [] targetNames;
-			Expression deps;
-
-			if (DependsOnTargets != String.Empty) {
-				deps = new Expression ();
-				deps.Parse (DependsOnTargets, ParseOptions.AllowItemsNoMetadataAndSplit);
-				targetNames = (string []) deps.ConvertTo (Project, typeof (string []));
-				foreach (string dep_name in targetNames) {
-					t = project.Targets [dep_name.Trim ()];
-					if (t == null)
-						throw new InvalidProjectFileException (String.Format (
-								"Target '{0}', a dependency of target '{1}', not found.",
-								dep_name.Trim (), Name));
-					list.Add (t);
-				}
-			}
-			return list;
-		}
-
-		bool BuildDependencies (List <Target> deps, out bool executeOnErrors)
+		bool BuildDependencies (out bool executeOnErrors)
 		{
 			executeOnErrors = false;
-			foreach (Target t in deps) {
+
+			if (String.IsNullOrEmpty (DependsOnTargets))
+				return true;
+
+			var expr = new Expression ();
+			expr.Parse (DependsOnTargets, ParseOptions.AllowItemsNoMetadataAndSplit);
+			string [] targetNames = (string []) expr.ConvertTo (Project, typeof (string []));
+
+			bool result = BuildOtherTargets (targetNames,
+							tname => engine.LogError ("Target '{0}', a dependency of target '{1}', not found.",
+										tname, Name),
+							out executeOnErrors);
+			if (!result && executeOnErrors)
+				ExecuteOnErrors ();
+
+			return result;
+		}
+
+#if NET_4_0
+		bool BuildBeforeThisTargets (out bool executeOnErrors)
+		{
+			executeOnErrors = false;
+			bool result = BuildOtherTargets (BeforeThisTargets, null, out executeOnErrors);
+			if (!result && executeOnErrors)
+				ExecuteOnErrors ();
+
+			return result;
+		}
+
+		bool BuildAfterThisTargets (out bool executeOnErrors)
+		{
+			executeOnErrors = false;
+			//missing_target handler not required as these are picked from actual target's
+			//"Before/AfterTargets attributes!
+			bool result = BuildOtherTargets (AfterThisTargets, null, out executeOnErrors);
+			if (!result && executeOnErrors)
+				ExecuteOnErrors ();
+
+			return result;
+		}
+#endif
+
+		bool BuildOtherTargets (IEnumerable<string> targetNames, Action<string> missing_target, out bool executeOnErrors)
+		{
+			executeOnErrors = false;
+			if (targetNames == null)
+				// nothing to build
+				return true;
+
+			foreach (string target_name in targetNames) {
+				var t = project.Targets [target_name.Trim ()];
+				if (t == null) {
+					if (missing_target != null)
+						missing_target (target_name);
+					return false;
+				}
+
 				if (t.BuildState == BuildState.NotStarted)
 					if (!t.Build (null, out executeOnErrors))
 						return false;
+
 				if (t.BuildState == BuildState.Started)
 					throw new InvalidProjectFileException ("Cycle in target dependencies detected");
 			}
@@ -312,7 +371,20 @@ namespace Microsoft.Build.BuildEngine {
 			}
 		}
 
-		internal List<BuildTask> BuildTasks {
+#if NET_4_0
+		internal string BeforeTargets {
+			get { return targetElement.GetAttribute ("BeforeTargets"); }
+		}
+
+		internal string AfterTargets {
+			get { return targetElement.GetAttribute ("AfterTargets"); }
+		}
+
+		internal List<string> BeforeThisTargets { get; set; }
+		internal List<string> AfterThisTargets { get; set; }
+#endif
+
+		internal List<IBuildTask> BuildTasks {
 			get { return buildTasks; }
 		}
 
@@ -324,7 +396,12 @@ namespace Microsoft.Build.BuildEngine {
 			get { return buildState; }
 		}
 
-		internal ITaskItem [] Outputs {
+		public string Outputs {
+			get { return targetElement.GetAttribute ("Outputs"); }
+			set { targetElement.SetAttribute ("Outputs", value); }
+		}
+
+		ITaskItem [] OutputsAsITaskItems {
 			get {
 				string outputs = targetElement.GetAttribute ("Outputs");
 				if (outputs == String.Empty)
@@ -345,5 +422,3 @@ namespace Microsoft.Build.BuildEngine {
 		Skipped
 	}
 }
-
-#endif

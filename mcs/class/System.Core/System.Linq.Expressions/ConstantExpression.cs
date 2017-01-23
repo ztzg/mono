@@ -50,6 +50,7 @@ namespace System.Linq.Expressions {
 			this.value = value;
 		}
 
+#if !FULL_AOT_RUNTIME
 		internal override void Emit (EmitContext ec)
 		{
 			if (Type.IsNullable ()) {
@@ -63,7 +64,6 @@ namespace System.Linq.Expressions {
 		void EmitNullableConstant (EmitContext ec, Type type, object value)
 		{
 			if (value == null) {
-				var ig = ec.ig;
 				var local = ec.ig.DeclareLocal (type);
 				ec.EmitNullableInitialize (local);
 			} else {
@@ -191,5 +191,6 @@ namespace System.Linq.Expressions {
 
 			emit (ec);
 		}
+#endif
 	}
 }

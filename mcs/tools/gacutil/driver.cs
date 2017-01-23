@@ -299,6 +299,14 @@ namespace Mono.Tools {
 			string full_path = Path.Combine (Path.Combine (gacdir, an.Name), version_token);
 			string asmb_file = Path.GetFileName (name);
 			string asmb_path = Path.Combine (full_path, asmb_file);
+			string asmb_name = assembly.GetName ().Name;
+			
+			if (Path.GetFileNameWithoutExtension (asmb_file) != asmb_name) {
+				WriteLine (string.Format (failure_msg, name) +
+				    string.Format ("the filename \"{0}\" doesn't match the assembly name \"{1}\"",
+				    	asmb_file, asmb_name));
+				return false;
+			}
 
 			try {
 				if (Directory.Exists (full_path)) {
@@ -419,15 +427,29 @@ namespace Mono.Tools {
 					break;
 
 				string dir = directories [i];
+				string extension = null;
+
+				if (File.Exists (Path.Combine (dir, assembly_name + ".dll"))) {
+					extension = ".dll";
+				} else if (File.Exists (Path.Combine (dir, assembly_name + ".exe"))) {
+					extension = ".exe";
+				} else {
+					failures++;
+					WriteLine("Cannot find the assembly: " + assembly_name);
+					continue;
+				}
+
+				string assembly_filename = assembly_name + extension;
 
 				AssemblyName an = AssemblyName.GetAssemblyName (
-					Path.Combine (dir, assembly_name + ".dll"));
+					Path.Combine (dir, assembly_filename));
 				WriteLine ("Assembly: " + an.FullName);
 
 				Directory.Delete (dir, true);
 				if (package != null) {
 					string link_dir = Path.Combine (libdir, package);
-					string link = Path.Combine (link_dir, assembly_name + ".dll");
+					string link = Path.Combine (link_dir, assembly_filename);
+
 					try { 
 						File.Delete (link);
 					} catch {
@@ -723,7 +745,7 @@ namespace Mono.Tools {
 
 		private static bool IsSwitch (string arg)
 		{
-			return (arg [0] == '-' || (arg [0] == '/' && !arg.EndsWith(".dll") && arg.IndexOf('/', 1) < 0 ) );
+			return (arg [0] == '-' || (arg [0] == '/' && !arg.EndsWith (".dll") && !arg.EndsWith (".exe") && arg.IndexOf ('/', 1) < 0 ) );
 		}
 
 		private static Command GetCommand (string arg)

@@ -27,8 +27,6 @@
 // Copyright (C) 2004-2005 Novell, Inc (http://www.novell.com)
 //
 
-#if NET_2_0
-
 using System.IO;
 using System.Xml;
 
@@ -69,7 +67,7 @@ namespace System.Configuration
 
 		internal string EncryptSection (string clearXml, ProtectedConfigurationProvider protectionProvider)
 		{
-			XmlDocument doc = new XmlDocument ();
+			XmlDocument doc = new ConfigurationXmlDocument ();
 			doc.LoadXml (clearXml);
 
 			XmlNode encryptedNode = protectionProvider.Encrypt (doc.DocumentElement);
@@ -79,7 +77,7 @@ namespace System.Configuration
 
 		internal string DecryptSection (string encryptedXml, ProtectedConfigurationProvider protectionProvider)
 		{
-			XmlDocument doc = new XmlDocument ();
+			XmlDocument doc = new ConfigurationXmlDocument ();
 			doc.InnerXml = encryptedXml;
 
 			XmlNode decryptedNode = protectionProvider.Decrypt (doc.DocumentElement);
@@ -113,4 +111,4 @@ namespace System.Configuration
 		}
 	}
 }
-#endif
+

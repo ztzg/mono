@@ -26,6 +26,8 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#if !MOBILE
+
 using System;
 using System.Collections.Generic;
 
@@ -45,6 +47,13 @@ namespace MonoTests.System.Runtime.Serialization
 	[TestFixture]
 	public class XsdDataContractExporterTest
 	{
+		internal const string MSSimpleNamespace =
+			"http://schemas.microsoft.com/2003/10/Serialization/";
+		internal const string MSArraysNamespace =
+			"http://schemas.microsoft.com/2003/10/Serialization/Arrays";
+		internal const string DefaultClrNamespaceBase =
+			"http://schemas.datacontract.org/2004/07/";
+
 		[Test]
 		public void Ctor1 ()
 		{
@@ -151,6 +160,14 @@ namespace MonoTests.System.Runtime.Serialization
 			xdce.Export (typeof (dc3));
 			xdce.Export (typeof (dc3));
 			CheckDcFull (xdce.Schemas);
+		}
+
+		[Test]
+		public void GetSchemaTypeName ()
+		{
+			var xdce = new XsdDataContractExporter ();
+			// bug #670539
+			Assert.AreEqual (new XmlQualifiedName ("ArrayOfstring", MSArraysNamespace), xdce.GetSchemaTypeName (typeof (IEnumerable<string>)), "#1");
 		}
 
 		//Helper methods
@@ -394,3 +411,4 @@ namespace OtherNs
 	}
 }
 
+#endif

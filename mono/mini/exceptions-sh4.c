@@ -38,34 +38,30 @@
  * frame and stores the resulting context into 'new_ctx'. It modifies
  * the 'lmf' if necessary.
  */
-MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls, MonoJitInfo *result,
-				     MonoJitInfo *previous_jit_info, MonoContext *context, MonoContext *new_context,
-				     MonoLMF **lmf, gboolean *managed)
+gboolean
+mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
+			 MonoJitInfo *ji, MonoContext *context,
+			 MonoContext *new_context, MonoLMF **lmf,
+			 mgreg_t **save_locations,
+			 StackFrameInfo *frame_info)
 {
-	MonoJitInfo *jit_info = NULL;
-	gpointer pc = (gpointer)context->pc;
+	memset (frame_info, 0, sizeof (StackFrameInfo));
+	frame_info->ji = ji;
 
-	jit_info = mono_jit_info_table_find(domain, pc);
+	*new_context = *context;
 
-	if (managed != NULL)
-		*managed = FALSE;
-
-	if (jit_info != NULL) {
+	if (ji != NULL) {
 		int i = 0;
 		guint stack_offset = 0;
 		guint saved_regs   = 0;
 		guint16 *code = NULL;
 		guint32 *registers = NULL;
 
-		*new_context = *context;
-
-		if (managed != NULL &&
-		    jit_info->method->wrapper_type == 0)
-			*managed = TRUE;
+		frame_info->type = FRAME_TYPE_MANAGED;
 
 		/*
 		 * Unwind one stack frame, here comes a typical one:
-		 *	:              :
+		 *	:	       :
 		 *	|==============|
 		 *	|  saved reg.  |
 		 *	|--------------|
@@ -73,39 +69,39 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		 *	|--------------| <- FP
 		 *	|    MonoLMF   |
 		 *	|--------------| <- SP (only if method->save_lmf is set)
-		 *	:              :
+		 *	:	       :
 		 *
 		 * A prologue looks like that on Mono/SH4:
 		 *
-		 * 	mov.l	r8, @-r15	// if r8 is used
-		 * 	mov.l	r9, @-r15	// if r9 is used
-		 * 	mov.l	r10, @-r15	// if r10 is used
-		 * 	mov.l	r11, @-r15	// if r11 is used
-		 * 	mov.l	r12, @-r15	// if r12 is used
-		 * 	mov.l	r13, @-r15	// if r13 is used
-		 * 	mov.l	r14, @-r15
-		 * 	sts.l	pr, @-r15
-		 * 	mov	r15, r14
+		 *	mov.l	r8, @-r15	// if r8 is used
+		 *	mov.l	r9, @-r15	// if r9 is used
+		 *	mov.l	r10, @-r15	// if r10 is used
+		 *	mov.l	r11, @-r15	// if r11 is used
+		 *	mov.l	r12, @-r15	// if r12 is used
+		 *	mov.l	r13, @-r15	// if r13 is used
+		 *	mov.l	r14, @-r15
+		 *	sts.l	pr, @-r15
+		 *	mov	r15, r14
 		 * #if stack_offset is small
-		 * 	add	-#stack_offset, r14
+		 *	add	-#stack_offset, r14
 		 * #else if stack_offset is medium
-		 * 	mov	#stack_offset, temp
-		 * 	sub	temp, r14
+		 *	mov	#stack_offset, temp
+		 *	sub	temp, r14
 		 * #else if stack_offset is large
-		 * 	LOAD	#stack_offset, temp
-		 * 	sub	temp, r14
+		 *	LOAD	#stack_offset, temp
+		 *	sub	temp, r14
 		 * #else if stack_offset is 0
 		 * #endif
-		 *      [...]
-		 * 	mov	r14, r15	// if stack_offset != 0
+		 *	[...]
+		 *	mov	r14, r15	// if stack_offset != 0
 		 */
 
-		SH4_EXTRA_DEBUG("start: %p", jit_info->code_start);
+		SH4_EXTRA_DEBUG("start: %p", ji->code_start);
 
 		/* Walk forward to find the space used by local variables. */
-		for (code = jit_info->code_start; !is_sh4_mov(*code, sh4_sp, sh4_fp); code++) {
+		for (code = ji->code_start; !is_sh4_mov(*code, sh4_sp, sh4_fp); code++) {
 			/* Sanity check. */
-			g_assert((guint8 *)code < (guint8 *)jit_info->code_start + jit_info->code_size);
+			g_assert((guint8 *)code < (guint8 *)ji->code_start + ji->code_size);
 		}
 		code++;
 
@@ -160,7 +156,7 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		/* Extract the previous value of global floating-point registers. */
 		for (i = MONO_MAX_FREGS - 1; i >= 0; i--) {
 			if ((MONO_ARCH_CALLEE_SAVED_FREGS & (1 << i)) != 0 &&
-			    (jit_info->used_fregs         & (1 << i)) != 0) {
+			    (ji->used_fregs		  & (1 << i)) != 0) {
 				new_context->fregisters[i] = registers[saved_regs];
 				saved_regs++;
 
@@ -175,7 +171,7 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		/* Restore global registers. */
 		for (i = MONO_MAX_IREGS - 1; i >= 0; i--) {
 			if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0 &&
-			    (jit_info->used_regs         & (1 << i)) != 0) {
+			    (ji->used_regs		 & (1 << i)) != 0) {
 				new_context->registers[i] = registers[saved_regs];
 				saved_regs++;
 
@@ -197,39 +193,36 @@ MonoJitInfo *mono_arch_find_jit_info(MonoDomain *domain, MonoJitTlsData *jit_tls
 		    context->registers[sh4_fp] >= (*lmf)->registers[sh4_fp])
 			*lmf = (*lmf)->previous_lmf;
 
-		return jit_info;
+		return TRUE;
 	}
 	else if (*lmf != NULL) {
-		*new_context = *context;
 
-		/* Top LMF entry? */
-		if (*lmf == jit_tls->first_lmf)
-			return (gpointer)-1;
+		ji = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
 
-		/* Check if it is a trampoline LMF. */
-		jit_info = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
-		if (jit_info == NULL) {
-			if ((*lmf)->method == NULL)
-				return (gpointer)-1;
+		if (!ji) {
+			if (!(*lmf)->method)
+				return FALSE;
 
-			bzero(result, sizeof(MonoJitInfo));
-			result->method = (*lmf)->method;
+			frame_info->method = (*lmf)->method;
+
+			return FALSE;
 		}
 
+		frame_info->ji = ji;
+		frame_info->type = FRAME_TYPE_MANAGED_TO_NATIVE;
+
 		/* Adjust the new context with information from the LMF. */
-		new_context->pc = (*lmf)->pc;
 		memcpy(new_context->registers, (*lmf)->registers, sizeof(new_context->registers));
+		memcpy(new_context->fregisters, (*lmf)->fregisters, sizeof(new_context->fregisters));
+		MONO_CONTEXT_SET_IP (new_context, (*lmf)->pc);
 
 		/* Remove the current LMF. */
 		*lmf = (*lmf)->previous_lmf;
 
-		if (jit_info != NULL)
-			return jit_info;
-		else
-			return result;
+		return TRUE;
 	}
 
-	return NULL;
+	return FALSE;
 }
 
 /**
@@ -480,7 +473,7 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 			((MonoException*)exception)->stack_trace = NULL;
 	}
 
-	mono_handle_exception(&context, exception, (gpointer)pc, FALSE);
+	mono_handle_exception(&context, exception);
 	restore_context(&context);
 
 	g_assert_not_reached();
@@ -809,13 +802,13 @@ void mono_arch_monoctx_to_sigctx(MonoContext *mono_context, void *context)
 /**
  * This is the function called from the signal handler
  */
-gboolean mono_arch_handle_exception(void *ucontext, gpointer object, gboolean test_only)
+gboolean mono_arch_handle_exception(void *ucontext, gpointer object)
 {
 	MonoContext mono_context;
 
 	mono_arch_sigctx_to_monoctx(ucontext, &mono_context);
 
-	mono_handle_exception(&mono_context, object, (gpointer)mono_context.pc, test_only);
+	mono_handle_exception(&mono_context, object);
 
 	/* Restore the context so that returning from the signal handler
 	   will invoke the catch clause. */

@@ -1,3 +1,16 @@
+2011-01-04  Veerapuram Varadhan  <v.varadhan@gmail.com>
+
+	* assembly.c (framework_assemblies): Map System.Transactions to
+	4.0 framework assemblies.
+
+	Fixes #635335
+
+2010-11-03  Martin Baulig  <martin@ximian.com>
+
+	* mono-debug.c (mono_register_symfile_for_assembly): New method.
+	This is used together with mono_register_bundled_assemblies() and
+	mono_register_config_for_assembly() to support bundles.
+
 2010-07-30  Mark Probst  <mark.probst@gmail.com>
 
 	* sgen-archdep.h (ARCH_COPY_SIGCTX_REGS): Add casts to fix
@@ -654,6 +667,28 @@ Wed Jun 30 12:08:36 CEST 2010 Paolo Molaro <lupus@ximian.com>
 	major heap allowance for minor collections, instead of two
 	separate ones for small and large objects.  This reduces the
 	number of major collections.
+
+2010-06-04  Damien Diederen  <dd@crosstwine.com>
+
+	* icall.c (ves_icall_System_Char_GetDataTablePointers),
+	char-conversions.h: New Unicode category tables compatible with MS .NET
+
+	These new category tables, generated using create-category-table(.cs)
+	available in the mcs sources, make the Mono runtime understand the
+	same Unicode category codes as recent versions of Microsoft's runtime.
+
+	CategoryData_v2 matches versions v2.0.50727 and v3.5.21022 of .NET.
+
+	CategoryData_v4 matches version v4.0.30319 of .NET.  The v4 tables
+	can be disabled by defining the DISABLE_NET_4_0 preprocessor symbol.
+
+	Similarly, the astral portions of both tables can be disabled by
+	defining the DISABLE_ASTRAL preprocessor symbol.
+
+	CAUTION: Mcs has to be updated with the corresponding patches, or
+	Mono will suffer a low-level (internal call) crash when
+	initializing System.Char.
+
 
 2010-06-04  Marek Habersack  <mhabersack@novell.com>
 

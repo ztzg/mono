@@ -1,12 +1,12 @@
 //
 // TraceSource.cs
 //
-// Author:
+// Authors:
 //	Atsushi Enomoto  <atsushi@ximian.com>
+//	Marek Safar (marek.safar@gmail.com)
 //
 // Copyright (C) 2007 Novell, Inc.
-//
-
+// Copyright 2013 Xamarin Inc
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -28,8 +28,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
-
 using System;
 using System.Collections;
 using System.Collections.Specialized;
@@ -47,17 +45,21 @@ namespace System.Diagnostics
 		{
 		}
 
-		public TraceSource (string name, SourceLevels sourceLevels)
+		public TraceSource (string name, SourceLevels defaultLevel)
 		{
 			if (name == null)
 				throw new ArgumentNullException ("name");
+			if (name.Length == 0)
+				throw new ArgumentException ("name");
+			
 			Hashtable sources = DiagnosticsConfiguration.Settings ["sources"] as Hashtable;
 			TraceSourceInfo info = sources != null ? sources [name] as TraceSourceInfo : null;
 			source_switch = new SourceSwitch (name);
 
-			if (info == null)
+			if (info == null) {
 				listeners = new TraceListenerCollection ();
-			else {
+				source_switch.Level = defaultLevel;
+			} else {
 				source_switch.Level = info.Levels;
 				listeners = info.Listeners;
 			}
@@ -108,7 +110,7 @@ namespace System.Diagnostics
 				return;
 			lock (((ICollection) listeners).SyncRoot) {
 				foreach (TraceListener tl in listeners)
-					tl.TraceData (null, Name, eventType, id, data);
+					tl.TraceData (new TraceEventCache(), Name, eventType, id, data);
 			}
 		}
 
@@ -120,7 +122,7 @@ namespace System.Diagnostics
 				return;
 			lock (((ICollection) listeners).SyncRoot) {
 				foreach (TraceListener tl in listeners)
-					tl.TraceData (null, Name, eventType, id, data);
+					tl.TraceData (new TraceEventCache(), Name, eventType, id, data);
 			}
 		}
 
@@ -131,7 +133,7 @@ namespace System.Diagnostics
 				return;
 			lock (((ICollection) listeners).SyncRoot) {
 				foreach (TraceListener tl in listeners)
-					tl.TraceEvent (null, Name, eventType, id);
+					tl.TraceEvent (new TraceEventCache(), Name, eventType, id);
 			}
 		}
 
@@ -143,7 +145,7 @@ namespace System.Diagnostics
 				return;
 			lock (((ICollection) listeners).SyncRoot) {
 				foreach (TraceListener tl in listeners)
-					tl.TraceEvent (null, Name, eventType, id, message);
+					tl.TraceEvent (new TraceEventCache(), Name, eventType, id, message);
 			}
 		}
 
@@ -155,7 +157,7 @@ namespace System.Diagnostics
 				return;
 			lock (((ICollection) listeners).SyncRoot) {
 				foreach (TraceListener tl in listeners)
-					tl.TraceEvent (null, Name, eventType, id, format, args);
+					tl.TraceEvent (new TraceEventCache(), Name, eventType, id, format, args);
 			}
 		}
 
@@ -179,7 +181,7 @@ namespace System.Diagnostics
 				return;
 			lock (((ICollection) listeners).SyncRoot) {
 				foreach (TraceListener tl in listeners)
-					tl.TraceTransfer (null, Name, id, message, relatedActivityId);
+					tl.TraceTransfer (new TraceEventCache(), Name, id, message, relatedActivityId);
 			}
 		}
 
@@ -190,4 +192,3 @@ namespace System.Diagnostics
 	}
 }
 
-#endif

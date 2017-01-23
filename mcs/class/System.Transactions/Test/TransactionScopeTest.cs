@@ -17,6 +17,7 @@ namespace MonoTests.System.Transactions
 	[TestFixture]
 	public class TransactionScopeTest
 	{
+
 		[Test]
 		public void TransactionScopeCommit ()
 		{
@@ -454,8 +455,6 @@ namespace MonoTests.System.Transactions
 		}
 
 		[Test]
-		[Category("NotWorking")]
-		[Ignore("NotWorking")]
 		public void RMFail2 ()
 		{
 			IntResourceManager irm = new IntResourceManager (1);

@@ -284,6 +284,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestCondition10 ()
 		{
 			Engine engine = new Engine (Consts.BinPath);
@@ -335,6 +336,27 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 			Assert.AreEqual ("fr_b.txt", bgp [1].FinalItemSpec, "A3");
 			Assert.AreEqual ("fr_c.txt", bgp [2].FinalItemSpec, "A4");
 		}
+
+		// Test shortcircuiting
+		[Test]
+		public void TestCondition12 ()
+		{
+			Engine engine = new Engine (Consts.BinPath);
+			Project proj = engine.CreateNewProject ();
+
+			string documentString = @"
+				<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">
+					<PropertyGroup>
+						<A Condition=""'$(NonExistant)' != '' and $(NonExistant)""></A>
+					</PropertyGroup>
+				</Project>
+			";
+
+			proj.LoadXml (documentString);
+
+			Assert.IsNull (proj.EvaluatedProperties ["A"], "A1");
+		}
+
 
 		[Test]
 		public void TestHasTrailingSlash1 ()
@@ -481,5 +503,24 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 
 			proj.LoadXml (documentString);
 		}
+
+		[Test]
+		[ExpectedException (typeof (InvalidProjectFileException))]
+		public void TestIncorrectCondition6 ()
+		{
+			Engine engine = new Engine (Consts.BinPath);
+			Project proj = engine.CreateNewProject ();
+
+			string documentString = @"
+				<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">
+					<ItemGroup>
+						<A Include='a' Condition=""'$(NonExistant)' != '' or $(NonExistant)""/>
+					</ItemGroup>
+				</Project>
+			";
+
+			proj.LoadXml (documentString);
+		}
+
 	}
 }

@@ -3,6 +3,9 @@
  *
  * (C) 2003 Ximian, Inc.
  */
+
+#include <config.h>
+
 #include "mini.h"
 #include <ctype.h>
 #include <mono/metadata/opcodes.h>
@@ -10,6 +13,8 @@
 #ifndef HOST_WIN32
 #include <unistd.h>
 #endif
+
+#ifndef DISABLE_JIT
 
 #ifndef DISABLE_LOGGING
 
@@ -66,6 +71,13 @@ opnames[] = {
 #define emit_debug_info  FALSE
 #endif
 
+/*This enables us to use the right tooling when building the cross compiler for iOS.*/
+#if defined (__APPLE__) && defined (TARGET_ARM) && (defined(__i386__) || defined(__x86_64__))
+
+#define ARCH_PREFIX "/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/"
+
+#endif
+
 #define ARCH_PREFIX ""
 //#define ARCH_PREFIX "powerpc64-linux-gnu-"
 
@@ -118,6 +130,9 @@ mono_blockset_print (MonoCompile *cfg, MonoBitSet *set, const char *name, guint 
 void
 mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 {
+#if defined(__native_client__)
+	return;
+#endif
 #ifndef DISABLE_LOGGING
 	GHashTable *offset_to_bb_hash = NULL;
 	int i, cindex, bb_num;
@@ -129,6 +144,7 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 	char *as_file;
 	char *o_file;
 	char *cmd;
+	int unused;
 
 #ifdef HOST_WIN32
 	as_file = g_strdup_printf ("%s/test.s", tmp);    
@@ -203,12 +219,24 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 
 #if defined(sparc)
 #define AS_CMD "as -xarch=v9"
-#elif defined(__i386__) || defined(__x86_64__)
+#elif defined (TARGET_X86)
 #  if defined(__APPLE__)
-#    define AS_CMD "as"
+#    define AS_CMD "as -arch i386"
 #  else
 #    define AS_CMD "as -gstabs"
-#endif
+#  endif
+#elif defined (TARGET_AMD64)
+#  if defined (__APPLE__)
+#    define AS_CMD "as -arch x86_64"
+#  else
+#    define AS_CMD "as -gstabs"
+#  endif
+#elif defined (TARGET_ARM)
+#  if defined (__APPLE__)
+#    define AS_CMD "as -arch arm"
+#  else
+#    define AS_CMD "as -gstabs"
+#  endif
 #elif defined(__mips__) && (_MIPS_SIM == _ABIO32)
 #define AS_CMD "as -mips32"
 #elif defined(__ppc64__)
@@ -227,7 +255,7 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 #endif
 
 	cmd = g_strdup_printf (ARCH_PREFIX AS_CMD " %s -o %s", as_file, o_file);
-	system (cmd); 
+	unused = system (cmd); 
 	g_free (cmd);
 	if (!objdump_args)
 		objdump_args = "";
@@ -240,12 +268,12 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 	 * everything as data.
 	 */
 	cmd = g_strdup_printf (ARCH_PREFIX "strip -x %s", o_file);
-	system (cmd);
+	unused = system (cmd);
 	g_free (cmd);
 #endif
 	
 	cmd = g_strdup_printf (ARCH_PREFIX DIS_CMD " %s %s", objdump_args, o_file);
-	system (cmd);
+	unused = system (cmd);
 	g_free (cmd);
 	
 #ifndef HOST_WIN32
@@ -257,3 +285,11 @@ mono_disassemble_code (MonoCompile *cfg, guint8 *code, int size, char *id)
 #endif
 }
 
+#else /* DISABLE_JIT */
+
+void
+mono_blockset_print (MonoCompile *cfg, MonoBitSet *set, const char *name, guint idom)
+{
+}
+
+#endif /* DISABLE_JIT */

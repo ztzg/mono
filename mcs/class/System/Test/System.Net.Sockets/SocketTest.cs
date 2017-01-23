@@ -14,6 +14,7 @@ using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 using NUnit.Framework;
+using System.IO;
 
 #if NET_2_0
 using System.Collections.Generic;
@@ -33,6 +34,7 @@ namespace MonoTests.System.Net.Sockets
 		{
 			IPEndPoint ep = new IPEndPoint (IPAddress.Any, 0);
 
+			/* UDP sockets use Any to disconnect
 			try {
 				using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)) {
 					s.Connect (ep);
@@ -42,6 +44,7 @@ namespace MonoTests.System.Net.Sockets
 			} catch (SocketException ex) {
 				Assert.AreEqual (10049, ex.ErrorCode, "#2");
 			}
+			*/
 
 			try {
 				using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
@@ -82,7 +85,7 @@ namespace MonoTests.System.Net.Sockets
 
 		[Test]
 		[Category ("InetAccess")]
-		public void EndConnect ()
+		public void BogusEndConnect ()
 		{
 			IPAddress ipOne = IPAddress.Parse (BogusAddress);
 			IPEndPoint ipEP = new IPEndPoint (ipOne, BogusPort);
@@ -94,7 +97,12 @@ namespace MonoTests.System.Net.Sockets
 				sock.EndConnect (ar);
 				Assert.Fail ("#1");
 			} catch (SocketException ex) {
-				Assert.AreEqual (10060, ex.ErrorCode, "#2");
+				// Actual error code depends on network configuration.
+				var error = (SocketError) ex.ErrorCode;
+				Assert.That (error == SocketError.TimedOut ||
+				             error == SocketError.ConnectionRefused ||
+				             error == SocketError.NetworkUnreachable ||
+				             error == SocketError.HostUnreachable, "#2");
 			}
 		}
 
@@ -495,7 +503,7 @@ namespace MonoTests.System.Net.Sockets
 		}
 
 		[Test]
-		[Category ("NotOnMac")] // DontFragment doesn't work on Mac
+		[Category ("NotWorking")] // DontFragment doesn't work
 		public void DontFragmentChangeTcp ()
 		{
 			Socket sock = new Socket (AddressFamily.InterNetwork,
@@ -522,7 +530,7 @@ namespace MonoTests.System.Net.Sockets
 		}
 
 		[Test]
-		[Category ("NotOnMac")] // DontFragment doesn't work on Mac
+		[Category ("NotWorking")] // DontFragment doesn't work
 		public void DontFragmentChangeUdp ()
 		{
 			Socket sock = new Socket (AddressFamily.InterNetwork,
@@ -886,6 +894,21 @@ namespace MonoTests.System.Net.Sockets
 			Assert.AreEqual (16384, sock.ReceiveBufferSize, "ReceiveBufferSizeChange");
 			
 			sock.Close ();
+		}
+
+		[Test]
+		[Category("NotWorking")] // We cannot totally remove buffers (minimum is set to 256
+		public void BuffersCheck_None ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				int original = s.ReceiveBufferSize;
+				s.ReceiveBufferSize = 0;
+				Assert.AreEqual (0, s.ReceiveBufferSize, "ReceiveBufferSize " + original.ToString ());
+
+				original = s.SendBufferSize;
+				s.SendBufferSize = 0;
+				Assert.AreEqual (0, s.SendBufferSize, "SendBufferSize " + original.ToString ());
+			}
 		}
 
 		[Test]
@@ -1720,7 +1743,17 @@ namespace MonoTests.System.Net.Sockets
 		}
 		
 		[Test]
-		[Category ("NotOnMac")] // MacOSX will block attempting to connect to 127.0.0.4 causing the test to fail
+		[Category ("NotOnMac")]
+		/*
+		 * This is not a Mono bug.
+		 * 
+		 * By default, only 127.0.0.1 is enabled and you must explicitly
+		 * enable additional addresses using 'sudo ifconfig lo0 alias 127.0.0.1'.
+		 * 
+		 * I tested this on Mac OS 10.7.4; a 'ping 127.0.0.2' does not work
+		 * until I add that alias.
+		 * 
+		 */
 		public void BeginConnectMultiple ()
 		{
 			Socket sock = new Socket (AddressFamily.InterNetwork,
@@ -1763,6 +1796,60 @@ namespace MonoTests.System.Net.Sockets
 			sock.Close ();
 			listen.Close ();
 		}
+
+		[Test]
+		public void BeginConnectMultiple2 ()
+		{
+			Socket sock = new Socket (AddressFamily.InterNetwork,
+						  SocketType.Stream,
+						  ProtocolType.Tcp);
+			Socket listen = new Socket (AddressFamily.InterNetwork,
+						    SocketType.Stream,
+						    ProtocolType.Tcp);
+
+			// Need at least two addresses.
+			var ips = Dns.GetHostAddresses (string.Empty);
+			if (ips.Length < 1)
+				return;
+
+			var allIps = new IPAddress [ips.Length + 1];
+			allIps [0] = IPAddress.Loopback;
+			ips.CopyTo (allIps, 1);
+
+			/*
+			 * Only bind to the loopback interface, so all the non-loopback
+			 * IP addresses will fail.  BeginConnect()/EndConnect() should
+			 * succeed it it can connect to at least one of the requested
+			 * addresses.
+			 */
+			IPEndPoint ep = new IPEndPoint (IPAddress.Loopback, 1246);
+
+			listen.Bind (ep);
+			listen.Listen (1);
+			
+			BCCalledBack.Reset ();
+			
+			BCConnected = false;
+			
+			sock.BeginConnect (allIps, 1246, BCCallback, sock);
+			
+			/* Longer wait here, because the ms runtime
+			 * takes a lot longer to not connect
+			 */
+			if (BCCalledBack.WaitOne (10000, false) == false) {
+				Assert.Fail ("BeginConnectMultiple2 wait failed");
+			}
+			
+			Assert.AreEqual (true, BCConnected, "BeginConnectMultiple2 #1");
+			Assert.AreEqual (AddressFamily.InterNetwork, sock.RemoteEndPoint.AddressFamily, "BeginConnectMultiple2 #2");
+			IPEndPoint remep = (IPEndPoint)sock.RemoteEndPoint;
+
+			Assert.AreEqual (IPAddress.Loopback, remep.Address, "BeginConnectMultiple2 #2");
+
+			sock.Close ();
+			listen.Close ();
+		}
+
 
 		[Test]
 		public void BeginConnectMultipleNull ()
@@ -2155,6 +2242,23 @@ namespace MonoTests.System.Net.Sockets
 		
 		[Test]
 		[Category ("NotOnMac")] // MacOSX trashes the fd after the failed connect attempt to 127.0.0.4
+		/*
+		 * This is not a Mono bug.
+		 * 
+		 * By default, only 127.0.0.1 is enabled and you must explicitly
+		 * enable additional addresses using 'sudo ifconfig lo0 alias 127.0.0.1'.
+		 * 
+		 * I tested this on Mac OS 10.7.4; a 'ping 127.0.0.2' does not work
+		 * until I add that alias.
+		 * 
+		 * However, after doing so, Mac OS treats these as separate addresses, ie. attempting
+		 * to connect to 127.0.0.4 yields a connection refused.
+		 * 
+		 * When using Connect(), the .NET runtime also throws an exception if connecting to
+		 * any of the IP addresses fails.  This is different with BeginConnect()/EndConnect()
+		 * which succeeds when it can connect to at least one of the addresses.
+		 * 
+		 */
 		public void ConnectMultiple ()
 		{
 			Socket sock = new Socket (AddressFamily.InterNetwork,
@@ -2182,6 +2286,46 @@ namespace MonoTests.System.Net.Sockets
 			IPEndPoint remep = (IPEndPoint)sock.RemoteEndPoint;
 			
 			Assert.AreEqual (IPAddress.Loopback, remep.Address, "ConnectMultiple #2");
+			
+			sock.Close ();
+			listen.Close ();
+		}
+
+		[Test]
+		public void ConnectMultiple2 ()
+		{
+			Socket sock = new Socket (AddressFamily.InterNetwork,
+						  SocketType.Stream,
+						  ProtocolType.Tcp);
+			Socket listen = new Socket (AddressFamily.InterNetwork,
+						    SocketType.Stream,
+						    ProtocolType.Tcp);
+
+			// Need at least two addresses.
+			var ips = Dns.GetHostAddresses (string.Empty);
+			if (ips.Length < 1)
+				return;
+
+			var allIps = new IPAddress [ips.Length + 1];
+			allIps [0] = IPAddress.Loopback;
+			ips.CopyTo (allIps, 1);
+
+			/*
+			 * Bind to IPAddress.Any; Connect() will fail unless it can
+			 * connect to all the addresses in allIps.
+			 */
+			IPEndPoint ep = new IPEndPoint (IPAddress.Any, 1251);
+
+			listen.Bind (ep);
+			listen.Listen (1);
+			
+			sock.Connect (allIps, 1251);
+			
+			Assert.AreEqual (true, sock.Connected, "ConnectMultiple2 #1");
+			Assert.AreEqual (AddressFamily.InterNetwork, sock.RemoteEndPoint.AddressFamily, "ConnectMultiple2 #2");
+			IPEndPoint remep = (IPEndPoint)sock.RemoteEndPoint;
+
+			Assert.AreEqual (IPAddress.Loopback, remep.Address, "ConnectMultiple2 #3");
 			
 			sock.Close ();
 			listen.Close ();
@@ -3325,6 +3469,7 @@ namespace MonoTests.System.Net.Sockets
 		
 #if NET_2_0
 		[Test]
+		[Category ("NotOnMac")]
                 public void ConnectedProperty ()
                 {
 			TcpListener listener = new TcpListener (IPAddress.Loopback, 23456);
@@ -4013,6 +4158,152 @@ namespace MonoTests.System.Net.Sockets
 				s.Close ();
 			}
 		}
-	}
+
+		[Test]
+		[ExpectedException (typeof (NullReferenceException))]
+		public void ReceiveAsync_Null ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				s.ReceiveAsync (null);
+			}
+		}
+
+		[Test]
+		[ExpectedException (typeof (NullReferenceException))]
+		public void ReceiveAsync_Default ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				SocketAsyncEventArgs saea = new SocketAsyncEventArgs ();
+				s.ReceiveAsync (saea);
+			}
+		}
+
+
+		[Test]
+		[ExpectedException (typeof (NullReferenceException))]
+		public void ReceiveAsync_NullBuffer ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				SocketAsyncEventArgs saea = new SocketAsyncEventArgs ();
+				saea.SetBuffer (null, 0, 0);
+				s.ReceiveAsync (null);
+			}
+		}
+
+		[Test]
+		[ExpectedException (typeof (ObjectDisposedException))]
+		public void ReceiveAsync_ClosedSocket ()
+		{
+			Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			s.Close ();
+			s.ReceiveAsync (null);
+		}
+
+		[Test]
+		[ExpectedException (typeof (NullReferenceException))]
+		public void SendAsync_Null ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				s.SendAsync (null);
+			}
+		}
+
+		[Test]
+		[ExpectedException (typeof (NullReferenceException))]
+		public void SendAsync_Default ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				SocketAsyncEventArgs saea = new SocketAsyncEventArgs ();
+				s.SendAsync (saea);
+			}
+		}
+
+
+		[Test]
+		[ExpectedException (typeof (NullReferenceException))]
+		public void SendAsync_NullBuffer ()
+		{
+			using (Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)) {
+				SocketAsyncEventArgs saea = new SocketAsyncEventArgs ();
+				saea.SetBuffer (null, 0, 0);
+				s.SendAsync (null);
+			}
+		}
+
+		[Test]
+		[ExpectedException (typeof (ObjectDisposedException))]
+		public void SendAsync_ClosedSocket ()
+		{
+			Socket s = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			s.Close ();
+			s.SendAsync (null);
+		}
+		
+		[Test]
+		public void SendAsyncFile ()
+		{
+			Socket serverSocket = StartSocketServer ();
+			
+			Socket clientSocket = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			clientSocket.Connect (serverSocket.LocalEndPoint);
+			clientSocket.NoDelay = true;
+						
+			// Initialize buffer used to create testing file
+			var buffer = new byte [1024];
+			for (int i = 0; i < 1024; ++i)
+				buffer [i] = (byte) (i % 256);
+			
+			string temp = Path.GetTempFileName ();
+			try {
+				// Testing file creation
+				using (StreamWriter sw = new StreamWriter (temp)) {
+					sw.Write (buffer);
+				}
+
+				var m = new ManualResetEvent (false);
+
+				// Async Send File to server
+				clientSocket.BeginSendFile(temp, (ar) => {
+					Socket client = (Socket) ar.AsyncState;
+					client.EndSendFile (ar);
+					m.Set ();
+				}, clientSocket);
+
+				if (!m.WaitOne (1500))
+					throw new TimeoutException ();
+				m.Reset ();
+			} finally {
+				if (File.Exists (temp))
+					File.Delete (temp);
+					
+				clientSocket.Close ();
+				serverSocket.Close ();
+			}
+		}
+		
+		Socket StartSocketServer ()
+		{
+
+			Socket listenSocket = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+			
+			listenSocket.Bind (new IPEndPoint (IPAddress.Loopback, 8001));
+			listenSocket.Listen (1);
+
+			listenSocket.BeginAccept (new AsyncCallback (ReceiveCallback), listenSocket);
+			
+			return listenSocket;
+		}
+
+		public static void ReceiveCallback (IAsyncResult AsyncCall)
+		{
+			byte[] bytes = new byte [1024];
+
+			Socket listener = (Socket)AsyncCall.AsyncState;
+			Socket client = listener.EndAccept (AsyncCall);
+ 
+			client.Receive (bytes, bytes.Length, 0);
+			client.Close ();
+		}
+ 	}
 }
 

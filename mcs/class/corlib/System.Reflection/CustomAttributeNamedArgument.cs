@@ -37,12 +37,23 @@ namespace System.Reflection {
 	public struct CustomAttributeNamedArgument {
 		CustomAttributeTypedArgument typedArgument;
 		MemberInfo memberInfo;
-
-		internal CustomAttributeNamedArgument (MemberInfo memberInfo, object typedArgument)
+		
+#if NET_4_0
+		public
+#endif
+		CustomAttributeNamedArgument (MemberInfo memberInfo, object value)
 		{
 			this.memberInfo = memberInfo;
-			this.typedArgument = (CustomAttributeTypedArgument) typedArgument;
+			this.typedArgument = (CustomAttributeTypedArgument) value;
 		}
+		
+#if NET_4_0
+		public CustomAttributeNamedArgument (MemberInfo memberInfo, CustomAttributeTypedArgument typedArgument)
+		{
+			this.memberInfo = memberInfo;
+			this.typedArgument = typedArgument;
+		}
+#endif
 
 		public MemberInfo MemberInfo {
 			get {
@@ -55,6 +66,16 @@ namespace System.Reflection {
 				return typedArgument;
 			}
 		}
+
+#if NET_4_5
+		public bool IsField {
+			get { return memberInfo.MemberType == MemberTypes.Field; }
+		}
+
+		public string MemberName {
+			get { return memberInfo.Name; }
+		}
+#endif
 
 		public override string ToString ()
 		{

@@ -48,8 +48,21 @@ namespace System {
 
 			_platform = platform;
 			_version = version;
+
+			if (platform == PlatformID.Win32NT) {
+				// The service pack is encoded in the upper bits of the revision
+				if (version.Revision != 0)
+					_servicePack = "Service Pack " + (version.Revision >> 16);
+			}
 		}
 
+		private OperatingSystem (SerializationInfo information, StreamingContext context)
+		{
+			_platform = (System.PlatformID)information.GetValue("_platform", typeof(System.PlatformID));
+			_version = (Version)information.GetValue("_version", typeof(Version));
+			_servicePack = information.GetString("_servicePack");
+		}
+		
 		public PlatformID Platform {
 			get {
 				return _platform;
@@ -118,7 +131,11 @@ namespace System {
 				break;
 			}
 
-			return str + " " + _version.ToString();
+			string sstr = "";
+			if (ServicePack != String.Empty)
+				sstr = " " + ServicePack;
+
+			return str + " " + _version.ToString() + sstr;
 		}
 	}
 }

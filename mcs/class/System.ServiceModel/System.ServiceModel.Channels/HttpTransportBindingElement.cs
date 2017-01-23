@@ -4,7 +4,7 @@
 // Author:
 //	Atsushi Enomoto <atsushi@ximian.com>
 //
-// Copyright (C) 2005 Novell, Inc.  http://www.novell.com
+// Copyright (C) 2005-2010 Novell, Inc.  http://www.novell.com
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -27,13 +27,21 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Net;
 using System.Net.Security;
+#if NET_4_0
+using System.Security.Authentication.ExtendedProtection;
+#endif
 using System.ServiceModel.Channels;
 #if !NET_2_1
 using System.ServiceModel.Channels.Http;
 #endif
 using System.ServiceModel.Description;
+#if !MOBILE
+using WS = System.Web.Services.Description;
+#endif
+using System.Xml;
 
 namespace System.ServiceModel.Channels
 {
@@ -49,13 +57,14 @@ namespace System.ServiceModel.Channels
 		string realm = String.Empty;
 		TransferMode transfer_mode;
 		IDefaultCommunicationTimeouts timeouts;
-#if !MOONLIGHT
 		AuthenticationSchemes auth_scheme =
 			AuthenticationSchemes.Anonymous;
 		AuthenticationSchemes proxy_auth_scheme =
 			AuthenticationSchemes.Anonymous;
-#endif
 		// If you add fields, do not forget them in copy constructor.
+#if NET_4_0
+		HttpCookieContainerManager cookie_manager;
+#endif
 
 		public HttpTransportBindingElement ()
 		{
@@ -77,54 +86,91 @@ namespace System.ServiceModel.Channels
 			transfer_mode = other.transfer_mode;
 			// FIXME: it does not look safe
 			timeouts = other.timeouts;
-#if !MOONLIGHT
 			auth_scheme = other.auth_scheme;
 			proxy_auth_scheme = other.proxy_auth_scheme;
+
+#if NET_4_0
+			DecompressionEnabled = other.DecompressionEnabled;
+			LegacyExtendedProtectionPolicy = other.LegacyExtendedProtectionPolicy;
+			ExtendedProtectionPolicy = other.ExtendedProtectionPolicy;
+			cookie_manager = other.cookie_manager;
 #endif
 		}
 
-#if !MOONLIGHT
+#if NET_4_0
+		[DefaultValue (AuthenticationSchemes.Anonymous)]
+#endif
 		public AuthenticationSchemes AuthenticationScheme {
 			get { return auth_scheme; }
 			set { auth_scheme = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (AuthenticationSchemes.Anonymous)]
+#endif
 		public AuthenticationSchemes ProxyAuthenticationScheme {
 			get { return proxy_auth_scheme; }
 			set { proxy_auth_scheme = value; }
 		}
-#endif
 
+#if NET_4_0
+		[DefaultValue (false)]
+#endif
 		public bool AllowCookies {
 			get { return allow_cookies; }
 			set { allow_cookies = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (false)]
+#endif
 		public bool BypassProxyOnLocal {
 			get { return bypass_proxy_on_local; }
 			set { bypass_proxy_on_local = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (false)]
+		[MonoTODO]
+		public bool DecompressionEnabled { get; set; }
+#endif
+
+#if NET_4_0
+		[DefaultValue (HostNameComparisonMode.StrongWildcard)]
+#endif
 		public HostNameComparisonMode HostNameComparisonMode {
 			get { return host_cmp_mode; }
 			set { host_cmp_mode = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (true)]
+#endif
 		public bool KeepAliveEnabled {
 			get { return keep_alive_enabled; }
 			set { keep_alive_enabled = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (0x10000)]
+#endif
 		public int MaxBufferSize {
 			get { return max_buffer_size; }
 			set { max_buffer_size = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (null)]
+		[TypeConverter (typeof (UriTypeConverter))]
+#endif
 		public Uri ProxyAddress {
 			get { return proxy_address; }
 			set { proxy_address = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue ("")]
+#endif
 		public string Realm {
 			get { return realm; }
 			set { realm = value; }
@@ -134,20 +180,38 @@ namespace System.ServiceModel.Channels
 			get { return Uri.UriSchemeHttp; }
 		}
 
+#if NET_4_0
+		[DefaultValue (TransferMode.Buffered)]
+#endif
 		public TransferMode TransferMode {
 			get { return transfer_mode; }
 			set { transfer_mode = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (false)]
+#endif
 		public bool UnsafeConnectionNtlmAuthentication {
 			get { return unsafe_ntlm_auth; }
 			set { unsafe_ntlm_auth = value; }
 		}
 
+#if NET_4_0
+		[DefaultValue (true)]
+#endif
 		public bool UseDefaultWebProxy {
 			get { return use_default_proxy; }
 			set { use_default_proxy = value; }
 		}
+
+#if NET_4_0
+		[Obsolete ("Use ExtendedProtectionPolicy")]
+		[MonoTODO]
+		public object LegacyExtendedProtectionPolicy { get; set; }
+
+		[MonoTODO]
+		public ExtendedProtectionPolicy ExtendedProtectionPolicy { get; set; }
+#endif
 
 		public override bool CanBuildChannelFactory<TChannel> (
 			BindingContext context)
@@ -191,24 +255,90 @@ namespace System.ServiceModel.Channels
 		public override T GetProperty<T> (BindingContext context)
 		{
 			// http://blogs.msdn.com/drnick/archive/2007/04/10/interfaces-for-getproperty-part-1.aspx
-#if !NET_2_1
 			if (typeof (T) == typeof (ISecurityCapabilities))
 				return (T) (object) new HttpBindingProperties (this);
 			if (typeof (T) == typeof (IBindingDeliveryCapabilities))
 				return (T) (object) new HttpBindingProperties (this);
-#endif
 			if (typeof (T) == typeof (TransferMode))
 				return (T) (object) TransferMode;
+#if NET_4_0
+			if (typeof(T) == typeof(IHttpCookieContainerManager)) {
+				if (!AllowCookies)
+					return null;
+				if (cookie_manager == null)
+					cookie_manager = new HttpCookieContainerManager ();
+				return (T) (object) cookie_manager;
+			}
+#endif
 			return base.GetProperty<T> (context);
 		}
+		
+#if NET_4_5
+		public WebSocketTransportSettings WebSocketSettings {
+			get { throw new NotImplementedException (); }
+			set { throw new NotImplementedException (); }
+		}
+#endif
 
 #if !NET_2_1
-		[MonoTODO]
 		void IPolicyExportExtension.ExportPolicy (
 			MetadataExporter exporter,
 			PolicyConversionContext context)
 		{
-			throw new NotImplementedException ();
+			if (exporter == null)
+				throw new ArgumentNullException ("exporter");
+			if (context == null)
+				throw new ArgumentNullException ("context");
+
+			PolicyAssertionCollection assertions = context.GetBindingAssertions ();
+			XmlDocument doc = new XmlDocument ();
+
+			ExportAddressingPolicy (context);
+
+			switch (auth_scheme) {
+			case AuthenticationSchemes.Basic:
+			case AuthenticationSchemes.Digest:
+			case AuthenticationSchemes.Negotiate:
+			case AuthenticationSchemes.Ntlm:
+				assertions.Add (doc.CreateElement ("http", 
+						auth_scheme.ToString () + "Authentication", 
+						"http://schemas.microsoft.com/ws/06/2004/policy/http"));
+				break;
+			}
+
+			var transportProvider = this as ITransportTokenAssertionProvider;
+			if (transportProvider != null) {
+				var token = transportProvider.GetTransportTokenAssertion ();
+				assertions.Add (CreateTransportBinding (token));
+			}
+		}
+
+		XmlElement CreateTransportBinding (XmlElement transportToken)
+		{
+			var doc = new XmlDocument ();
+			var transportBinding = doc.CreateElement (
+				"sp", "TransportBinding", PolicyImportHelper.SecurityPolicyNS);
+
+			var token = doc.CreateElement (
+				"sp", "TransportToken", PolicyImportHelper.SecurityPolicyNS);
+			PolicyImportHelper.AddWrappedPolicyElement (token, transportToken);
+
+			var algorithmSuite = doc.CreateElement (
+				"sp", "AlgorithmSuite", PolicyImportHelper.SecurityPolicyNS);
+			var basic256 = doc.CreateElement (
+				"sp", "Basic256", PolicyImportHelper.SecurityPolicyNS);
+			PolicyImportHelper.AddWrappedPolicyElement (algorithmSuite, basic256);
+
+			var layout = doc.CreateElement (
+				"sp", "Layout", PolicyImportHelper.SecurityPolicyNS);
+			var strict = doc.CreateElement (
+				"sp", "Strict", PolicyImportHelper.SecurityPolicyNS);
+			PolicyImportHelper.AddWrappedPolicyElement (layout, strict);
+
+			PolicyImportHelper.AddWrappedPolicyElements (
+				transportBinding, token, algorithmSuite, layout);
+
+			return transportBinding;
 		}
 
 		[MonoTODO]
@@ -222,12 +352,19 @@ namespace System.ServiceModel.Channels
 		void IWsdlExportExtension.ExportEndpoint (WsdlExporter exporter,
 			WsdlEndpointConversionContext context)
 		{
-			throw new NotImplementedException ();
+			var soap_binding = new WS.SoapBinding ();
+			soap_binding.Transport = WS.SoapBinding.HttpTransport;
+			soap_binding.Style = WS.SoapBindingStyle.Document;
+			context.WsdlBinding.Extensions.Add (soap_binding);
+
+			var soap_address = new WS.SoapAddressBinding ();
+			soap_address.Location = context.Endpoint.Address.Uri.AbsoluteUri;
+			
+			context.WsdlPort.Extensions.Add (soap_address);
 		}
 #endif
 	}
 
-#if !NET_2_1
 	class HttpBindingProperties : ISecurityCapabilities, IBindingDeliveryCapabilities
 	{
 		HttpTransportBindingElement source;
@@ -282,5 +419,4 @@ namespace System.ServiceModel.Channels
 			}
 		}
 	}
-#endif
 }

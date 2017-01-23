@@ -28,7 +28,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if !MOONLIGHT
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -169,12 +168,14 @@ namespace System.IO.IsolatedStorage {
 		[MonoTODO ("requires manifest support")]
 		protected void InitStore (IsolatedStorageScope scope, Type appEvidenceType)
 		{
+#if !MOBILE
 			if (AppDomain.CurrentDomain.ApplicationIdentity == null)
 				throw new IsolatedStorageException (Locale.GetText ("No ApplicationIdentity available for AppDomain."));
 
 			if (appEvidenceType == null) {
 				// TODO - Choose evidence
 			}
+#endif
 
 			// no exception here because this can work without CAS
 			storage_scope = scope;
@@ -190,5 +191,3 @@ namespace System.IO.IsolatedStorage {
 #endif
 	}
 }
-/* MOONLIGHT */
-#endif 

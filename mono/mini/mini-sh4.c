@@ -889,9 +889,9 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->used_int_regs |= 1 << sh4_fp;
 
 	/* Compute space used by local variables. */
-	locals_offsets = mono_allocate_stack_slots_full(cfg, FALSE,
-							(guint32 *)&cfg->stack_offset,
-							&locals_alignement);
+	locals_offsets = mono_allocate_stack_slots(cfg, FALSE,
+						   (guint32 *)&cfg->stack_offset,
+						   &locals_alignement);
 	if (locals_alignement != 0)
 		locals_padding = ALIGN_TO(locals_padding, locals_alignement);
 
@@ -1029,11 +1029,9 @@ void mono_arch_cleanup(void)
 	return;
 }
 
-gpointer mono_arch_context_get_int_reg(MonoContext *ctx, int reg)
+mgreg_t mono_arch_context_get_int_reg(MonoContext *ctx, int reg)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	return ctx->registers [reg];
 }
 
 /**
@@ -1063,7 +1061,7 @@ void mono_arch_cpu_init(void)
 /**
  * This function returns the optimizations supported on this cpu.
  */
-guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
+guint32 mono_arch_cpu_optimizations(guint32 *exclude_mask)
 {
 	/* A generic optimization break a SH4 specific assumption:
 	 * http://code.google.com/p/mono-sh4/issues/detail?id=12 */
@@ -1071,6 +1069,18 @@ guint32 mono_arch_cpu_optimizazions(guint32 *exclude_mask)
 	*exclude_mask &= ~MONO_OPT_BRANCH;
 
 	/* no SH4-specific optimizations yet. */
+	return 0;
+}
+
+/*
+ * This function test for all SIMD functions supported.
+ *
+ * Returns a bitmask corresponding to all supported versions.
+ */
+guint32
+mono_arch_cpu_enumerate_simd_versions (void)
+{
+	/* SIMD is currently unimplemented */
 	return 0;
 }
 
@@ -1943,7 +1953,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 	return vars;
 }
 
-int mono_arch_get_argument_info(MonoMethodSignature *csig, int arg_count, MonoJitArgumentInfo *arg_info)
+int mono_arch_get_argument_info(MonoGenericSharingContext *gsctx, MonoMethodSignature *csig, int param_count, MonoJitArgumentInfo *arg_info)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -1995,122 +2005,6 @@ MonoInst* mono_arch_get_domain_intrinsic(MonoCompile* cfg)
 	MONO_INST_NEW(cfg, ins, OP_TLS_GET);
 	ins->inst_offset = appdomain_tls_offset;
 	return ins;
-}
-
-MonoInst* mono_arch_get_thread_intrinsic(MonoCompile* cfg)
-{
-	MonoInst* ins;
-
-	if (thread_tls_offset == -1)
-		return NULL;
-
-	MONO_INST_NEW(cfg, ins, OP_TLS_GET);
-	ins->inst_offset = thread_tls_offset;
-	return ins;
-}
-
-/**
- * Determine the address of the vtable slot used by the [virtual] call
- * which invoked the [magic] trampoline.
- *
- * Technically, a virtual call is a "call VTable[index]" where the
- * "call" opcode is a "call_membase". Remember the lowering pass does
- * the following transformation:
- *
- *     call_membase => load_membase + call_reg
- *
- * We have to analyse the following calling sequence backward because
- * we don't known [yet] if a constant-pool is required:
- *
- *   // Load the VTable
- *
- *   // Load the method address, that is, VTable[method_index] (load_membase):
- *
- *       #if index is small
- *           mov.l @(small_index, rY), rX
- *       #else
- *           #if index is medium
- *               mov  medium_index, rW
- *           #else
- *               LOAD big_index, rW
- *           #endif
- *           add   rY, rW
- *           mov.l @rW, rX
- *       #endif
- *
- *   // Jump to the method (call_reg):
- *
- *           jsr  @rX
- *           nop
- *             <- code points here
- */
-gpointer
-mono_arch_get_vcall_slot (guint8 *code, mgreg_t *regs, int *displacement)
-{
-	guint16 *code16 = (void *)code;
-	SH4IntRegister sh4_rW = sh4_r0;
-	SH4IntRegister sh4_rX = sh4_r0;
-	SH4IntRegister sh4_rY = sh4_r0;
-	int offset = 0;
-	int index = 0;
-
-	/* Check if it is not a jump to the method (call_reg):
-	 *
-	 *         jsr  @rX
-	 *         nop
-	 */
-	sh4_rX = get_Rx_sh4_jsr_indRx(code16[-2]);
-	if (!is_sh4_nop(code16[-1]) ||
-	    !is_sh4_jsr_indRx(code16[-2], sh4_rX))
-		return NULL;
-
-	/* Check if it is not a load of the method address, that is,
-	 * VTable[method_index] (load_membase) with a medium/big index:
-	 *
-	 *         #if index is medium
-	 *             mov  medium_index, rW
-	 *         #else
-	 *             LOAD big_index, rW
-	 *         #endif
-	 *         add   rY, rW
-	 *         mov.l @rW, rX
-	 */
-	sh4_rW = get_Ry_sh4_movl_indRy(code16[-3]);
-	if (is_sh4_movl_indRy(code16[-3], sh4_rW, sh4_rX)) {
-		sh4_rY = get_Ry_sh4_add(code16[-4]);
-		if (!is_sh4_add(code16[-4], sh4_rY, sh4_rW))
-			return NULL;
-
-		index = get_imm_sh4_mov_imm(code16[-5]);
-		if (is_sh4_mov_imm(code16[-5], index, sh4_rW)) {
-			offset = -6;
-		}
-		else {
-			offset = is_sh4_load(&code16[-5], sh4_rW);
-			if (offset == 0)
-				return NULL;
-
-			index = get_sh4_load_value(&code16[-5]);
-			offset = -offset - 5;
-		}
-	}
-	else {
-	/* Check if it is not a load of the method address, that is,
-	 * VTable[method_index] (load_membase) with a small index:
-	 *
-	 *         mov.l @(small_index, rY), rX
-	 */
-		sh4_rY = get_Ry_sh4_movl_dispRy(code16[-3]);
-		index  = get_imm_sh4_movl_dispRy(code16[-3]);
-		if (!is_sh4_movl_dispRy(code16[-3], index, sh4_rY, sh4_rX))
-			return NULL;
-
-		offset = -4;
-	}
-
-	/* So far, so good! */
-	*displacement = index;
-	return (gpointer)regs[sh4_rY];
 }
 
 /**
@@ -4318,7 +4212,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
  *
  * That's why all resolutions are absolute.
  */
-void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, gboolean run_cctors)
+void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, MonoCodeManager *dyn_code_mp, gboolean run_cctors)
 {
 	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
 
@@ -4464,7 +4358,7 @@ const char *mono_arch_fregname(int reg)
 	return "unknown";
 }
 
-void mono_arch_setup_jit_tls_data (MonoJitTlsData *tls)
+void mono_arch_finish_init (void)
 {
 	return;
 #if 0 /* Not yet implemented. */
@@ -4558,7 +4452,7 @@ void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
 #define DEBUG_IMT 0
 
 gpointer
-mono_arch_get_this_arg_from_call (MonoGenericSharingContext *gsctx, MonoMethodSignature *sig, gssize *regs, guint8 *code)
+mono_arch_get_this_arg_from_call(mgreg_t *regs, guint8 *code)
 {
 	/* Currently, valuetypes are always transmitted onto the stack. */
 	return (gpointer)regs [MONO_SH4_REG_FIRST_ARG];
@@ -4568,12 +4462,6 @@ MonoMethod*
 mono_arch_find_imt_method (mgreg_t *regs, guint8 *code)
 {
 	return (MonoMethod*) regs [MONO_ARCH_IMT_REG];
-}
-
-MonoObject*
-mono_arch_find_this_argument (mgreg_t *regs, MonoMethod *method, MonoGenericSharingContext *gsctx)
-{
-	return mono_arch_get_this_arg_from_call (gsctx, mono_method_signature (method), (gssize*)regs, NULL);
 }
 
 gpointer

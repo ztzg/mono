@@ -45,6 +45,7 @@ using System.Configuration.Internal;
 using _Configuration = System.Configuration.Configuration;
 using System.Web.Util;
 using System.Threading;
+using System.Web.Hosting;
 
 namespace System.Web.Configuration {
 
@@ -63,16 +64,18 @@ namespace System.Web.Configuration {
 		}
 		
 		const int SAVE_LOCATIONS_CHECK_INTERVAL = 6000; // milliseconds
+		const int SECTION_CACHE_LOCK_TIMEOUT = 200; // milliseconds
 
 		static readonly char[] pathTrimChars = { '/' };
 		static readonly object suppressAppReloadLock = new object ();
 		static readonly object saveLocationsCacheLock = new object ();
-		static readonly ReaderWriterLockSlim sectionCacheLock;
 		
+		// See comment for the cacheLock field at top of System.Web.Caching/Cache.cs
+		static readonly ReaderWriterLockSlim sectionCacheLock;
+
 #if !TARGET_J2EE
 		static IInternalConfigConfigurationFactory configFactory;
 		static Hashtable configurations = Hashtable.Synchronized (new Hashtable ());
-		static Dictionary <int, object> sectionCache = new Dictionary <int, object> ();
 		static Hashtable configPaths = Hashtable.Synchronized (new Hashtable ());
 		static bool suppressAppReload;
 #else
@@ -184,9 +187,28 @@ namespace System.Web.Configuration {
 				}
 			}
 		}
+
+		const int DEFAULT_SECTION_CACHE_SIZE = 100;
+		const string CACHE_SIZE_OVERRIDING_KEY = "MONO_ASPNET_WEBCONFIG_CACHESIZE";
+		static LruCache<int, object> sectionCache;
 		
 		static WebConfigurationManager ()
 		{
+			var section_cache_size = DEFAULT_SECTION_CACHE_SIZE;
+			int section_cache_size_override;
+			bool size_overriden = false;
+			if (int.TryParse (Environment.GetEnvironmentVariable (CACHE_SIZE_OVERRIDING_KEY), out section_cache_size_override)) {
+				section_cache_size = section_cache_size_override;
+				size_overriden = true;
+				Console.WriteLine ("WebConfigurationManager's LRUcache Size overriden to: {0} (via {1})", section_cache_size_override, CACHE_SIZE_OVERRIDING_KEY);
+			}
+			sectionCache = new LruCache<int, object> (section_cache_size);
+			string eviction_warning = "WebConfigurationManager's LRUcache evictions count reached its max size";
+			if (!size_overriden)
+				eviction_warning += String.Format ("{0}Cache Size: {1} (overridable via {2})",
+				                                   Environment.NewLine, section_cache_size, CACHE_SIZE_OVERRIDING_KEY);
+			sectionCache.EvictionWarning = eviction_warning;
+
 			configFactory = ConfigurationManager.ConfigurationFactory;
 			_Configuration.SaveStart += ConfigurationSaveHandler;
 			_Configuration.SaveEnd += ConfigurationSaveHandler;
@@ -225,14 +247,11 @@ namespace System.Web.Configuration {
 		
 		static void ConfigurationSaveHandler (_Configuration sender, ConfigurationSaveEventArgs args)
 		{
-			bool locked = false;
 			try {
 				sectionCacheLock.EnterWriteLock ();
-				locked = true;
 				sectionCache.Clear ();
 			} finally {
-				if (locked)
-					sectionCacheLock.ExitWriteLock ();
+				sectionCacheLock.ExitWriteLock ();
 			}
 			
 			lock (suppressAppReloadLock) {
@@ -442,7 +461,6 @@ namespace System.Web.Configuration {
 			int cacheKey;
 			bool pathPresent = !String.IsNullOrEmpty (path);
 			string locationPath = null;
-			bool locked = false;
 
 			if (pathPresent)
 				locationPath = "location_" + path;
@@ -452,8 +470,7 @@ namespace System.Web.Configuration {
 				baseCacheKey ^= configPath.GetHashCode ();
 			
 			try {
-				sectionCacheLock.EnterReadLock ();
-				locked = true;
+				sectionCacheLock.EnterWriteLock ();
 				
 				object o;
 				if (pathPresent) {
@@ -469,8 +486,7 @@ namespace System.Web.Configuration {
 				if (sectionCache.TryGetValue (baseCacheKey, out o))
 					return o;
 			} finally {
-				if (locked)
-					sectionCacheLock.ExitReadLock ();
+				sectionCacheLock.ExitWriteLock ();
 			}
 
 			string cachePath = null;
@@ -577,6 +593,12 @@ namespace System.Web.Configuration {
 			
 			if (String.IsNullOrEmpty (path))
 				return path;
+				
+			if (HostingEnvironment.VirtualPathProvider != null) {
+				if (HostingEnvironment.VirtualPathProvider.DirectoryExists (path))
+					path = VirtualPathUtility.AppendTrailingSlash (path);
+			}
+				
 			
 			string rootPath = HttpRuntime.AppDomainAppVirtualPath;
 			ConfigPath curPath;
@@ -589,8 +611,9 @@ namespace System.Web.Configuration {
 			HttpContext ctx = HttpContext.Current;
 			HttpRequest req = ctx != null ? ctx.Request : null;
 			string physPath = req != null ? VirtualPathUtility.AppendTrailingSlash (MapPath (req, path)) : null;
+			string appDomainPath = HttpRuntime.AppDomainAppPath;
 			
-			if (physPath != null && !physPath.StartsWith (HttpRuntime.AppDomainAppPath, StringComparison.Ordinal))
+			if (physPath != null && appDomainPath != null && !physPath.StartsWith (appDomainPath, StringComparison.Ordinal))
 				inAnotherApp = true;
 			
 			string dir;
@@ -687,27 +710,21 @@ namespace System.Web.Configuration {
 		static void AddSectionToCache (int key, object section)
 		{
 			object cachedSection;
-			bool locked = false;
 
+			bool locked = false;
 			try {
-				sectionCacheLock.EnterUpgradeableReadLock ();
+				if (!sectionCacheLock.TryEnterWriteLock (SECTION_CACHE_LOCK_TIMEOUT))
+					return;
 				locked = true;
-					
+
 				if (sectionCache.TryGetValue (key, out cachedSection) && cachedSection != null)
 					return;
 
-				bool innerLocked = false;
-				try {
-					sectionCacheLock.EnterWriteLock ();
-					innerLocked = true;
-					sectionCache.Add (key, section);
-				} finally {
-					if (innerLocked)
-						sectionCacheLock.ExitWriteLock ();
-				}
+				sectionCache.Add (key, section);
 			} finally {
-				if (locked)
-					sectionCacheLock.ExitUpgradeableReadLock ();
+				if (locked) {
+					sectionCacheLock.ExitWriteLock ();
+				}
 			}
 		}
 		

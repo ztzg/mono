@@ -95,6 +95,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 
 		// Parameter "itemInclude" cannot have zero length.
 		[Test]
+		[Category ("NotDotNet")]
 		[ExpectedException (typeof (ArgumentException))]
 		public void TestCtor6 ()
 		{
@@ -783,7 +784,6 @@ namespace MonoTests.Microsoft.Build.BuildEngine {
 				logger.DumpMessages ();
 				Assert.Fail ("Build failed");
 			}
-			logger.DumpMessages ();
 
 			CheckMetadata (project, "A", "Meta", new string[] { "@(B)", "" }, "K1");
 			CheckEvaluatedMetadata (project, "A", "Meta", new string[] { "", "" }, "K2");

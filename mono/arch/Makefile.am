@@ -1,6 +1,6 @@
-DIST_SUBDIRS = x86 ppc sparc arm s390 s390x alpha hppa amd64 ia64 mips sh4
+DIST_SUBDIRS = x86 ppc sparc arm s390x amd64 ia64 mips sh4
 
-INCLUDES = $(GLIB_CFLAGS) -I$(top_srcdir)
+AM_CPPFLAGS = $(GLIB_CFLAGS) -I$(top_srcdir)
 
 if INTERP_SUPPORTED
 SUBDIRS = $(arch_target)

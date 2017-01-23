@@ -21,17 +21,30 @@ using Mono.CompilerServices.SymbolWriter;
 
 namespace Pdb2Mdb {
 
-	class Converter {
+	public class Converter {
 
 		MonoSymbolWriter mdb;
 		Dictionary<string, SourceFile> files = new Dictionary<string, SourceFile> ();
 
-		public Converter (MonoSymbolWriter mdb)
+		public static void Convert (string filename)
+		{
+			var asm = AssemblyDefinition.ReadAssembly (filename);
+
+			var pdb = asm.Name.Name + ".pdb";
+			pdb = Path.Combine (Path.GetDirectoryName (filename), pdb);
+
+			using (var stream = File.OpenRead (pdb)) {
+				var funcs = PdbFile.LoadFunctions (stream, true);
+				Converter.Convert (asm, funcs, new MonoSymbolWriter (filename));
+			}
+		}
+
+		internal Converter (MonoSymbolWriter mdb)
 		{
 			this.mdb = mdb;
 		}
 
-		public static void Convert (AssemblyDefinition assembly, IEnumerable<PdbFunction> functions, MonoSymbolWriter mdb)
+		internal static void Convert (AssemblyDefinition assembly, IEnumerable<PdbFunction> functions, MonoSymbolWriter mdb)
 		{
 			var converter = new Converter (mdb);
 
@@ -43,6 +56,9 @@ namespace Pdb2Mdb {
 
 		void ConvertFunction (PdbFunction function)
 		{
+			if (function.lines == null)
+				return;
+
 			var method = new SourceMethod { Name = function.name, Token = (int) function.token };
 
 			var file = GetSourceFile (mdb, function);
@@ -58,15 +74,18 @@ namespace Pdb2Mdb {
 
 		void ConvertSequencePoints (PdbFunction function, SourceFile file, SourceMethodBuilder builder)
 		{
-			if (function.lines == null)
-				return;
-
-			foreach (var line in function.lines.SelectMany (lines => lines.lines))
+			int last_line = 0;
+			foreach (var line in function.lines.SelectMany (lines => lines.lines)) {
+				// 0xfeefee is an MS convention, we can't pass it into mdb files, so we use the last non-hidden line
+				bool is_hidden = line.lineBegin == 0xfeefee;
 				builder.MarkSequencePoint (
 					(int) line.offset,
 					file.CompilationUnit.SourceFile,
-					(int) line.lineBegin,
-					(int) line.colBegin, line.lineBegin == 0xfeefee);
+					is_hidden ? last_line : (int) line.lineBegin,
+					(int) line.colBegin, is_hidden);
+				if (!is_hidden)
+					last_line = (int) line.lineBegin;
+			}
 		}
 
 		void ConvertVariables (PdbFunction function)
@@ -146,9 +165,10 @@ namespace Pdb2Mdb {
 			if (!File.Exists (asm))
 				Usage ();
 
-			var assembly = AssemblyFactory.GetAssembly (asm);
+			var assembly = AssemblyDefinition.ReadAssembly (asm);
 
 			var pdb = assembly.Name.Name + ".pdb";
+			pdb = Path.Combine (Path.GetDirectoryName (asm), pdb);
 
 			if (!File.Exists (pdb))
 				Usage ();

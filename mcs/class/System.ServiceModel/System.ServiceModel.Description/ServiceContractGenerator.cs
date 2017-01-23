@@ -51,20 +51,60 @@ namespace System.ServiceModel.Description
 	{
 		CodeCompileUnit ccu;
 		ConfigurationType config;
+		CodeIdentifiers identifiers = new CodeIdentifiers ();
 		Collection<MetadataConversionError> errors
 			= new Collection<MetadataConversionError> ();
 		Dictionary<string,string> nsmappings
 			= new Dictionary<string,string> ();
 		Dictionary<ContractDescription,Type> referenced_types
 			= new Dictionary<ContractDescription,Type> ();
+		Dictionary<ContractDescription,ContractCacheEntry> generated_contracts
+			= new Dictionary<ContractDescription,ContractCacheEntry> ();
 		ServiceContractGenerationOptions options;
-		Dictionary<QName, QName> imported_names = null;
+		Dictionary<QName, QName> imported_names
+			= new Dictionary<QName, QName> ();
 		ServiceContractGenerationContext contract_context;
 		List<OPair> operation_contexts = new List<OPair> ();
 
-#if USE_DATA_CONTRACT_IMPORTER
-		XsdDataContractImporter xsd_data_importer;
-#endif
+		XsdDataContractImporter data_contract_importer;
+		XmlSerializerMessageContractImporterInternal xml_serialization_importer;
+
+		class ContractCacheEntry {
+			public ContractDescription Contract {
+				get;
+				private set;
+			}
+
+			public string ConfigurationName {
+				get;
+				private set;
+			}
+
+			public CodeTypeDeclaration TypeDeclaration {
+				get;
+				private set;
+			}
+
+			public bool GeneratedContractType {
+				get; set;
+			}
+
+			public CodeTypeReference GetReference ()
+			{
+				return reference;
+			}
+
+			public ContractCacheEntry (ContractDescription cd, string config,
+			                           CodeTypeDeclaration tdecl)
+			{
+				Contract = cd;
+				ConfigurationName = config;
+				TypeDeclaration = tdecl;
+				reference = new CodeTypeReference (tdecl.Name);
+			}
+
+			readonly CodeTypeReference reference;
+		}
 
 		public ServiceContractGenerator ()
 			: this (null, null)
@@ -125,12 +165,26 @@ namespace System.ServiceModel.Description
 			get { return ccu; }
 		}
 
-		[MonoTODO]
 		public void GenerateBinding (Binding binding,
 			out string bindingSectionName,
 			out string configurationName)
 		{
-			throw new NotImplementedException ();
+			if (config == null)
+				throw new InvalidOperationException ();
+
+			var element = ConfigUtil.FindCollectionElement (binding, config);
+			if (element == null)
+				throw new InvalidOperationException ();
+
+			bindingSectionName = element.BindingName;
+
+			int idx = 0;
+			configurationName = binding.Name;
+			while (element.ContainsKey (configurationName))
+				configurationName = binding.Name + (++idx);
+
+			if (!element.TryAdd (configurationName, binding, config))
+				throw new InvalidOperationException ();
 		}
 
 		#region Service Contract Type
@@ -143,8 +197,9 @@ namespace System.ServiceModel.Description
 			ContractDescription contractDescription)
 		{
 			CodeNamespace cns = GetNamespace (contractDescription.Namespace);
-			imported_names = new Dictionary<QName, QName> ();
-			var ret = ExportInterface (contractDescription, cns);
+			var cache = ExportInterface_internal (contractDescription, cns);
+			if (cache.GeneratedContractType)
+				return cache.GetReference ();
 
 			// FIXME: handle duplex callback
 
@@ -154,10 +209,10 @@ namespace System.ServiceModel.Description
 			if ((Options & ServiceContractGenerationOptions.ClientClass) != 0)
 				GenerateProxyClass (contractDescription, cns);
 
-#if USE_DATA_CONTRACT_IMPORTER
-			if (xsd_data_importer != null)
-				MergeCompileUnit (xsd_data_importer.CodeCompileUnit, ccu);
-#endif
+			if (data_contract_importer != null)
+				MergeCompileUnit (data_contract_importer.CodeCompileUnit, ccu);
+			if (xml_serialization_importer != null)
+				MergeCompileUnit (xml_serialization_importer.CodeCompileUnit, ccu);
 
 			// Process extensions. Class first, then methods.
 			// (built-in ones must present before processing class extensions).
@@ -169,18 +224,26 @@ namespace System.ServiceModel.Description
 			foreach (var opair in operation_contexts)
 				opair.Key.GenerateOperation (opair.Value);
 
-			return ret;
+			cache.GeneratedContractType = true;
+			return cache.GetReference ();
 		}
 
-		CodeNamespace GetNamespace (string ns)
+		CodeNamespace GetNamespace (string contractNs)
 		{
-			if (ns == null)
-				ns = String.Empty;
+			if (contractNs == null)
+				contractNs = String.Empty;
+			string csharpNs;
+			if (nsmappings.ContainsKey (contractNs))
+				csharpNs = nsmappings [contractNs];
+			else if (nsmappings.ContainsKey ("*"))
+				csharpNs = nsmappings ["*"];
+			else
+				csharpNs = string.Empty;
 			foreach (CodeNamespace cns in ccu.Namespaces)
-				if (cns.Name == ns)
+				if (cns.Name == csharpNs)
 					return cns;
 			CodeNamespace ncns = new CodeNamespace ();
-			//ncns.Name = ns;
+			ncns.Name = csharpNs;
 			ccu.Namespaces.Add (ncns);
 			return ncns;
 		}
@@ -198,6 +261,7 @@ namespace System.ServiceModel.Description
 			string name = cd.Name + "Client";
 			if (name [0] == 'I')
 				name = name.Substring (1);
+			name = identifiers.AddUnique (name, null);
 			CodeTypeDeclaration type = GetTypeDeclaration (cns, name);
 			if (type != null)
 				return; // already imported
@@ -280,6 +344,7 @@ namespace System.ServiceModel.Description
 		void GenerateChannelInterface (ContractDescription cd, CodeNamespace cns)
 		{
 			string name = cd.Name + "Channel";
+			name = identifiers.AddUnique (name, null);
 			CodeTypeDeclaration type = GetTypeDeclaration (cns, name);
 			if (type != null)
 				return;
@@ -295,25 +360,36 @@ namespace System.ServiceModel.Description
 
 		CodeTypeReference ExportInterface (ContractDescription cd, CodeNamespace cns)
 		{
-			CodeTypeDeclaration type = GetTypeDeclaration (cns, cd.Name);
-			if (type != null)
-				return new CodeTypeReference (type.Name);
-			type = new CodeTypeDeclaration ();
+			var cache = ExportInterface_internal (cd, cns);
+			return cache.GetReference ();
+		}
+
+		ContractCacheEntry ExportInterface_internal (ContractDescription cd, CodeNamespace cns)
+		{
+			if (generated_contracts.ContainsKey (cd))
+				return generated_contracts [cd];
+
+			var type = new CodeTypeDeclaration ();
 			type.TypeAttributes = TypeAttributes.Interface;
 			type.TypeAttributes |= TypeAttributes.Public;
 			cns.Types.Add (type);
-			type.Name = cd.Name;
+			type.Name = identifiers.AddUnique (cd.Name, null);
+
+			var configName = type.Name;
 			CodeAttributeDeclaration ad = 
 				new CodeAttributeDeclaration (
 					new CodeTypeReference (
-						typeof (ServiceContractAttribute)));
+					typeof (ServiceContractAttribute)));
 			ad.Arguments.Add (new CodeAttributeArgument ("Namespace", new CodePrimitiveExpression (cd.Namespace)));
+			ad.Arguments.Add (new CodeAttributeArgument ("ConfigurationName", new CodePrimitiveExpression (configName)));
 			type.CustomAttributes.Add (ad);
 			contract_context = new ServiceContractGenerationContext (this, cd, type);
-
+			
 			AddOperationMethods (type, cd);
 
-			return new CodeTypeReference (type.Name);
+			var cache = new ContractCacheEntry (cd, configName, type);
+			generated_contracts.Add (cd, cache);
+			return cache;
 		}
 
 		void AddBeginAsyncArgs (CodeMemberMethod cm)
@@ -363,6 +439,9 @@ namespace System.ServiceModel.Description
 		{
 			CodeMemberMethod cm = new CodeMemberMethod ();
 
+			if (od.Behaviors.Find<XmlSerializerMappingBehavior> () != null)
+				cm.CustomAttributes.Add (new CodeAttributeDeclaration (new CodeTypeReference (typeof (XmlSerializerFormatAttribute))));
+
 			if (async)
 				cm.Name = "Begin" + od.Name;
 			else
@@ -389,7 +468,7 @@ namespace System.ServiceModel.Description
 			// [OperationContract (Action = "...", ReplyAction = "..")]
 			var ad = new CodeAttributeDeclaration (new CodeTypeReference (typeof (OperationContractAttribute)));
 			foreach (MessageDescription md in od.Messages) {
-				if (md.IsRequest)
+				if (md.Direction == MessageDirection.Input)
 					ad.Arguments.Add (new CodeAttributeArgument ("Action", new CodePrimitiveExpression (md.Action)));
 				else
 					ad.Arguments.Add (new CodeAttributeArgument ("ReplyAction", new CodePrimitiveExpression (md.Action)));
@@ -518,6 +597,7 @@ namespace System.ServiceModel.Description
 			var method = FindByName (type, od.Name) ?? FindByName (type, "Begin" + od.Name);
 			var endMethod = method.Name == od.Name ? null : FindByName (type, "End" + od.Name);
 			bool methodAsync = method.Name.StartsWith ("Begin", StringComparison.Ordinal);
+			var resultType = endMethod != null ? endMethod.ReturnType : method.ReturnType;
 
 			var thisExpr = new CodeThisReferenceExpression ();
 			var baseExpr = new CodeBaseReferenceExpression ();
@@ -573,9 +653,13 @@ namespace System.ServiceModel.Description
 				new CodeArgumentReferenceExpression ("result"));
 			call.Parameters.AddRange (outArgRefs.Cast<CodeExpression> ().ToArray ()); // questionable
 
-			cm.Statements.Add (new CodeVariableDeclarationStatement (typeof (object), "__ret", call));
 			var retCreate = new CodeArrayCreateExpression (typeof (object));
-			retCreate.Initializers.Add (new CodeVariableReferenceExpression ("__ret"));
+			if (resultType.BaseType == "System.Void")
+				cm.Statements.Add (call);
+			else {
+				cm.Statements.Add (new CodeVariableDeclarationStatement (typeof (object), "__ret", call));
+				retCreate.Initializers.Add (new CodeVariableReferenceExpression ("__ret"));
+			}
 			foreach (var outArgRef in outArgRefs)
 				retCreate.Initializers.Add (new CodeVariableReferenceExpression (outArgRef.VariableName));
 
@@ -589,9 +673,10 @@ namespace System.ServiceModel.Description
 
 			AddMethodParam (cm, typeof (object), "state");
 
+			string argsname = identifiers.AddUnique (od.Name + "CompletedEventArgs", null);
 			var iaargs = new CodeTypeReference ("InvokeAsyncCompletedEventArgs"); // avoid messy System.Type instance for generic nested type :|
 			var iaref = new CodeVariableReferenceExpression ("args");
-			var methodEventArgs = new CodeObjectCreateExpression (new CodeTypeReference (od.Name + "CompletedEventArgs"),
+			var methodEventArgs = new CodeObjectCreateExpression (new CodeTypeReference (argsname),
 				new CodePropertyReferenceExpression (iaref, "Results"),
 				new CodePropertyReferenceExpression (iaref, "Error"),
 				new CodePropertyReferenceExpression (iaref, "Cancelled"),
@@ -608,7 +693,7 @@ namespace System.ServiceModel.Description
 			type.Members.Add (new CodeMemberField (new CodeTypeReference (typeof (SendOrPostCallback)), "on" + od.Name + "CompletedDelegate"));
 
 			// XxxCompletedEventArgs class
-			var argsType = new CodeTypeDeclaration (od.Name + "CompletedEventArgs");
+			var argsType = new CodeTypeDeclaration (argsname);
 			argsType.BaseTypes.Add (new CodeTypeReference (typeof (AsyncCompletedEventArgs)));
 			cns.Types.Add (argsType);
 
@@ -627,12 +712,14 @@ namespace System.ServiceModel.Description
 
 			argsType.Members.Add (new CodeMemberField (typeof (object []), "results"));
 
-			var resultProp = new CodeMemberProperty {
-				Name = "Result",
-				Type = endMethod != null ? endMethod.ReturnType : method.ReturnType,
-				Attributes = MemberAttributes.Public | MemberAttributes.Final };
-			resultProp.GetStatements.Add (new CodeMethodReturnStatement (new CodeCastExpression (resultProp.Type, new CodeArrayIndexerExpression (resultsField, new CodePrimitiveExpression (0)))));
-			argsType.Members.Add (resultProp);
+			if (resultType.BaseType != "System.Void") {
+				var resultProp = new CodeMemberProperty {
+					Name = "Result",
+					Type = resultType,
+					Attributes = MemberAttributes.Public | MemberAttributes.Final };
+				resultProp.GetStatements.Add (new CodeMethodReturnStatement (new CodeCastExpression (resultProp.Type, new CodeArrayIndexerExpression (resultsField, new CodePrimitiveExpression (0)))));
+				argsType.Members.Add (resultProp);
+			}
 
 			// event field
 			var handlerType = new CodeTypeReference (typeof (EventHandler<>));
@@ -714,25 +801,14 @@ namespace System.ServiceModel.Description
 
 		const string ms_arrays_ns = "http://schemas.microsoft.com/2003/10/Serialization/Arrays";
 
-		string GetCodeTypeName (QName mappedTypeName)
-		{
-			if (mappedTypeName.Namespace == ms_arrays_ns)
-				return DataContractSerializerMessageContractImporter.GetCLRTypeName (mappedTypeName.Name.Substring ("ArrayOf".Length)) + "[]";
-			return mappedTypeName.Name;
-		}
-
 		private CodeExpression[] ExportMessages (MessageDescriptionCollection messages, CodeMemberMethod method, bool return_args)
 		{
 			CodeExpression [] args = null;
 			foreach (MessageDescription md in messages) {
-				if (!md.IsRequest) {
+				if (md.Direction == MessageDirection.Output) {
 					if (md.Body.ReturnValue != null) {
 						ExportDataContract (md.Body.ReturnValue);
-#if USE_DATA_CONTRACT_IMPORTER
 						method.ReturnType = md.Body.ReturnValue.CodeTypeReference;
-#else
-						method.ReturnType = new CodeTypeReference (GetCodeTypeName (md.Body.ReturnValue.TypeName));
-#endif
 					}
 					continue;
 				}
@@ -746,11 +822,7 @@ namespace System.ServiceModel.Description
 
 					method.Parameters.Add (
 						new CodeParameterDeclarationExpression (
-#if USE_DATA_CONTRACT_IMPORTER
 							parts [i].CodeTypeReference,
-#else
-							new CodeTypeReference (GetCodeTypeName (parts [i].TypeName)),
-#endif
 							parts [i].Name));
 
 					if (return_args)
@@ -763,15 +835,33 @@ namespace System.ServiceModel.Description
 
 		#endregion
 
-		[MonoTODO]
 		public CodeTypeReference GenerateServiceEndpoint (
 			ServiceEndpoint endpoint,
 			out ChannelEndpointElement channelElement)
 		{
-			throw new NotImplementedException ();
+			if (config == null)
+				throw new InvalidOperationException ();
+
+			var cd = endpoint.Contract;
+			var cns = GetNamespace (cd.Namespace);
+			var cache = ExportInterface_internal (cd, cns);
+
+			string bindingSectionName, configurationName;
+			GenerateBinding (endpoint.Binding, out bindingSectionName, out configurationName);
+
+			channelElement = new ChannelEndpointElement ();
+			channelElement.Binding = bindingSectionName;
+			channelElement.BindingConfiguration = configurationName;
+			channelElement.Name = configurationName;
+			channelElement.Contract = cache.ConfigurationName;
+			channelElement.Address = endpoint.Address.Uri;
+
+			var section = (ClientSection)config.GetSection ("system.serviceModel/client");
+			section.Endpoints.Add (channelElement);
+
+			return cache.GetReference ();
 		}
 
-#if USE_DATA_CONTRACT_IMPORTER
 		void MergeCompileUnit (CodeCompileUnit from, CodeCompileUnit to)
 		{
 			if (from == to)
@@ -804,123 +894,17 @@ namespace System.ServiceModel.Description
 					to.Types.Add (ftd);
 			}
 		}
-#endif
 
 		private void ExportDataContract (MessagePartDescription md)
 		{
-#if USE_DATA_CONTRACT_IMPORTER
-			if (xsd_data_importer == null)
-				xsd_data_importer = md.Importer;
-#else
-			var mapping = md.XmlTypeMapping;
-
-			if (mapping == null)
-				return;
-
-			QName qname = new QName (mapping.TypeName, mapping.Namespace);
-			if (imported_names.ContainsKey (qname))
-				return;
-
-			CodeNamespace cns = new CodeNamespace ();
-
-			XmlCodeExporter xce = new XmlCodeExporter (cns);
-			xce.ExportTypeMapping (mapping);
-
-			List <CodeTypeDeclaration> to_remove = new List <CodeTypeDeclaration> ();
-			
-			//Process the types just generated
-			//FIXME: Iterate and assign the types to correct namespaces
-			//At the end, add all those namespaces to the ccu
-			foreach (CodeTypeDeclaration type in cns.Types) {
-				string ns = GetXmlNamespace (type);
-				if (ns == null)
-					//FIXME: do what here?
-					continue;
-
-				QName type_name = new QName (type.Name, ns);
-				if (imported_names.ContainsKey (type_name)) {
-					//Type got reemitted, so remove it!
-					to_remove.Add (type);
-					continue;
-				}
-				if (ns == ms_arrays_ns) {
-					//Do not emit arrays as an independent type.
-					to_remove.Add (type);
-					continue;
-				}
-
-				imported_names [type_name] = type_name;
-
-				type.Comments.Clear ();
-				//Custom Attributes
-				type.CustomAttributes.Clear ();
-
-				if (type.IsEnum)
-					continue;
-	
-				type.CustomAttributes.Add (
-					new CodeAttributeDeclaration (
-						new CodeTypeReference ("System.CodeDom.Compiler.GeneratedCodeAttribute"),
-						new CodeAttributeArgument (new CodePrimitiveExpression ("System.Runtime.Serialization")),
-						new CodeAttributeArgument (new CodePrimitiveExpression ("3.0.0.0"))));
-			
-				type.CustomAttributes.Add (
-					new CodeAttributeDeclaration (
-						new CodeTypeReference ("System.Runtime.Serialization.DataContractAttribute")));
-
-				//BaseType and interface
-				type.BaseTypes.Add (new CodeTypeReference (typeof (object)));
-				type.BaseTypes.Add (new CodeTypeReference ("System.Runtime.Serialization.IExtensibleDataObject"));
-
-				foreach (CodeTypeMember mbr in type.Members) {
-					CodeMemberProperty p = mbr as CodeMemberProperty;
-					if (p == null)
-						continue;
-
-					if ((p.Attributes & MemberAttributes.Public) == MemberAttributes.Public) {
-						//FIXME: Clear all attributes or only XmlElementAttribute?
-						p.CustomAttributes.Clear ();
-						p.CustomAttributes.Add (new CodeAttributeDeclaration (
-							new CodeTypeReference ("System.Runtime.Serialization.DataMemberAttribute")));
-
-						p.Comments.Clear ();
-					}
-				}
-
-				//Fields
-				CodeMemberField field = new CodeMemberField (
-					new CodeTypeReference ("System.Runtime.Serialization.ExtensionDataObject"),
-					"extensionDataField");
-				field.Attributes = MemberAttributes.Private | MemberAttributes.Final;
-				type.Members.Add (field);
-
-				//Property 
-				CodeMemberProperty prop = new CodeMemberProperty ();
-				prop.Type = new CodeTypeReference ("System.Runtime.Serialization.ExtensionDataObject");
-				prop.Name = "ExtensionData";
-				prop.Attributes = MemberAttributes.Public | MemberAttributes.Final;
-
-				//Get
-				prop.GetStatements.Add (new CodeMethodReturnStatement (
-					new CodeFieldReferenceExpression (
-					new CodeThisReferenceExpression (),
-					"extensionDataField")));
-
-				//Set
-				prop.SetStatements.Add (new CodeAssignStatement (
-					new CodeFieldReferenceExpression (
-					new CodeThisReferenceExpression (),
-					"extensionDataField"),
-					new CodePropertySetValueReferenceExpression ()));
-
-				type.Members.Add (prop);
-			}
-
-			foreach (CodeTypeDeclaration type in to_remove)
-				cns.Types.Remove (type);
-
-			ccu.Namespaces.Add (cns);
-#endif
+			if (data_contract_importer == null)
+				data_contract_importer = md.DataContractImporter;
+			else if (md.DataContractImporter != null && data_contract_importer != md.DataContractImporter)
+				throw new Exception ("INTERNAL ERROR: should not happen");
+			if (xml_serialization_importer == null)
+				xml_serialization_importer = md.XmlSerializationImporter;
+			else if (md.XmlSerializationImporter != null && xml_serialization_importer != md.XmlSerializationImporter)
+				throw new Exception ("INTERNAL ERROR: should not happen");
 		}
 		
 		private string GetXmlNamespace (CodeTypeDeclaration type)

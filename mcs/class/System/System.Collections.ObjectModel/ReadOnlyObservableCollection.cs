@@ -30,7 +30,9 @@ using System.Runtime.CompilerServices;
 
 namespace System.Collections.ObjectModel
 {
+#if !MOBILE
 	[TypeForwardedFrom (Consts.WindowsBase_3_0)]
+#endif
 	public class ReadOnlyObservableCollection<T> : ReadOnlyCollection<T>, INotifyCollectionChanged, INotifyPropertyChanged {
 		
 		public ReadOnlyObservableCollection(ObservableCollection<T> list)

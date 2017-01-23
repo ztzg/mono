@@ -31,7 +31,7 @@
 //
 
 // Since 4.0 (both FX and SL) this type is defined in mscorlib - before 4.0 it was in System.Core.dll
-#if (INSIDE_CORLIB && (NET_4_0 || BOOTSTRAP_NET_4_0 || MOONLIGHT)) || (!INSIDE_CORLIB && !NET_4_0 && !BOOTSTRAP_NET_4_0 && !MOONLIGHT)
+#if (INSIDE_CORLIB && (NET_4_0)) || (!INSIDE_CORLIB && !NET_4_0 && !MOBILE)
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -44,10 +44,10 @@ namespace System.Security.Cryptography {
 
 #if INSIDE_CORLIB
 	// since 4.0 (both FX and SL) this type now resides inside mscorlib.dll and link back to System.Core.dll
-	#if MOONLIGHT
+	#if MOBILE
 	// version has not changed between SL3 (System.Core) and SL4
 	[TypeForwardedFrom (Consts.AssemblySystem_Core)]
-	#elif NET_4_0 || BOOTSTRAP_NET_4_0
+	#elif NET_4_0
 	// use 3.5 version
 	[TypeForwardedFrom ("System.Core, Version=3.5.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
 	#endif
@@ -56,22 +56,26 @@ namespace System.Security.Cryptography {
 
 		public static new Aes Create () 
 		{
-			return Create ("System.Security.Cryptography.AesManaged, " + Consts.AssemblySystem_Core);
+#if FULL_AOT_RUNTIME
+			// The Aes base class was moved from System.Core to mscorlib - so we can't just return a new AesCryptoServiceProvider instance
+			// note: the linker is aware of this condition
+			return (Aes) Activator.CreateInstance (Type.GetType ("System.Security.Cryptography.AesManaged, " + Consts.AssemblySystem_Core));
+#else
+			return Create ("System.Security.Cryptography.AesCryptoServiceProvider, " + Consts.AssemblySystem_Core);
+#endif
 		}
 
-		public static new Aes Create (string algName) 
+		public static new Aes Create (string algorithmName) 
 		{
-			return (Aes) CryptoConfig.CreateFromName (algName);
+			return (Aes) CryptoConfig.CreateFromName (algorithmName);
 		}
 
 		protected Aes ()
 		{
 			KeySizeValue = 256;
 			BlockSizeValue = 128;
-#if !NET_2_1
-			// Silverlight 2.0 only supports CBC mode (i.e. no feedback)
 			FeedbackSizeValue = 128;
-#endif
+
 			LegalKeySizesValue = new KeySizes [1];
 			LegalKeySizesValue [0] = new KeySizes (128, 256, 64);
 

@@ -31,7 +31,9 @@ using NUnit.Framework;
 using System;
 using System.Threading;
 using System.Reflection;
+#if !MONOTOUCH
 using System.Reflection.Emit;
+#endif
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
@@ -77,6 +79,20 @@ namespace MonoTests.System.Reflection
 				Assert.IsNotNull (ex.Message, "#4");
 				Assert.IsNotNull (ex.ParamName, "#5");
 				Assert.AreEqual ("attributeType", ex.ParamName, "#6");
+			}
+		}
+
+		[Test]
+		public void TestInvokeByRefReturnMethod ()
+		{
+			try {
+				MethodInfo m = typeof (int[]).GetMethod ("Address");
+				m.Invoke (new int[1], new object[] { 0 });
+				Assert.Fail ("#1");
+			} catch (NotSupportedException e) {
+				Assert.AreEqual (typeof (NotSupportedException), e.GetType (), "#2");
+				Assert.IsNull (e.InnerException, "#3");
+				Assert.IsNotNull (e.Message, "#4");
 			}
 		}
 
@@ -538,7 +554,7 @@ namespace MonoTests.System.Reflection
 			} catch (InvalidOperationException ex) {
 			}
 		}
-
+#if !MONOTOUCH
 		public TFoo SimpleGenericMethod2<TFoo, TBar> () { return default (TFoo); }
 		/*Test for the uggly broken behavior of SRE.*/
 		[Test]
@@ -557,7 +573,7 @@ namespace MonoTests.System.Reflection
 			/*broken ReturnType*/
 			Assert.AreSame (gmi.GetGenericArguments () [0], ins.ReturnType, "#2");
 		}
-
+#endif
 		public static int? pass_nullable (int? i)
 		{
 			return i;
@@ -691,6 +707,21 @@ namespace MonoTests.System.Reflection
 			Assert.AreSame (gmd, oi);
 		}
 
+		[Test]
+		[ExpectedException (typeof (ArgumentException))]
+#if MOBILE
+		[Category ("NotWorking")] // #10552
+#endif
+		public void MakeGenericMethodRespectConstraints ()
+		{
+			var m = typeof (MethodInfoTest).GetMethod ("TestMethod");
+			m.MakeGenericMethod (typeof (Type));
+		}
+
+		public void TestMethod <T> () where T : Exception
+		{
+		}
+
 		public class MyList<T>
 		{
 			public TOutput ConvertAll<TOutput> (Foo<T,TOutput> arg)
@@ -740,6 +771,18 @@ namespace MonoTests.System.Reflection
 		}
 #endif
 
+
+		public int? Bug12856 ()
+		{
+			return null;
+		}
+
+		[Test] //Bug #12856
+		public void MethodToStringShouldPrintFullNameOfGenericStructs ()
+		{
+			var m = GetType ().GetMethod ("Bug12856");
+			Assert.AreEqual ("System.Nullable`1[System.Int32] Bug12856()", m.ToString (), "#1");
+		}
 	}
 	
 #if NET_2_0

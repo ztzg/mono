@@ -1,6 +1,8 @@
 /*
  * arm-codegen.h
- * Copyright (c) 2002 Sergey Chaban <serge@wildwestsoftware.com>
+ * Copyright (c) 2002-2003 Sergey Chaban <serge@wildwestsoftware.com>
+ * Copyright 2005-2011 Novell Inc
+ * Copyright 2011 Xamarin Inc
  */
 
 
@@ -948,8 +950,7 @@ typedef struct {
 
 
 
-
-#include "arm_dpimacros.h"
+#include "mono/arch/arm/arm_dpimacros.h"
 
 #define ARM_NOP(p) ARM_MOV_REG_REG(p, ARMREG_R0, ARMREG_R0)
 
@@ -1030,12 +1031,17 @@ typedef struct {
 	ARM_RORS_REG_COND(p, rd, rm, rs, ARMCOND_AL)
 #define ARM_RORS_REG_REG(p, rd, rm, rs) ARM_RORS_REG(p, rd, rm, rs)
 
+#ifdef __native_client_codegen__
+#define ARM_DBRK(p) ARM_EMIT(p, 0xE7FEDEF0)
+#else
 #define ARM_DBRK(p) ARM_EMIT(p, 0xE6000010)
+#endif
 #define ARM_IASM_DBRK() ARM_IASM_EMIT(0xE6000010)
 
 #define ARM_INC(p, reg) ARM_ADD_REG_IMM8(p, reg, reg, 1)
 #define ARM_DEC(p, reg) ARM_SUB_REG_IMM8(p, reg, reg, 1)
 
+#define ARM_MLS(p, rd, rn, rm, ra) ARM_EMIT((p), (ARMCOND_AL << 28) | (0x6 << 20) | ((rd) << 16) | ((ra) << 12) | ((rm) << 8) | (0x9 << 4) | ((rn) << 0))
 
 /* ARM V5 */
 
@@ -1083,6 +1089,23 @@ typedef union {
 
 #define ARM_MOVT_REG_IMM_COND(p, rd, imm16, cond) ARM_EMIT(p, (((cond) << 28) | (3 << 24) | (4 << 20) | ((((guint32)(imm16)) >> 12) << 16) | ((rd) << 12) | (((guint32)(imm16)) & 0xfff)))
 #define ARM_MOVT_REG_IMM(p, rd, imm16) ARM_MOVT_REG_IMM_COND ((p), (rd), (imm16), ARMCOND_AL)
+
+/* MCR */
+#define ARM_DEF_MCR_COND(coproc, opc1, rt, crn, crm, opc2, cond)	\
+	ARM_DEF_COND ((cond)) | ((0xe << 24) | (((opc1) & 0x7) << 21) | (0 << 20) | (((crn) & 0xf) << 16) | (((rt) & 0xf) << 12) | (((coproc) & 0xf) << 8) | (((opc2) & 0x7) << 5) | (1 << 4) | (((crm) & 0xf) << 0))
+
+#define ARM_MCR_COND(p, coproc, opc1, rt, crn, crm, opc2, cond)	\
+	ARM_EMIT(p, ARM_DEF_MCR_COND ((coproc), (opc1), (rt), (crn), (crm), (opc2), (cond)))
+
+#define ARM_MCR(p, coproc, opc1, rt, crn, crm, opc2) \
+	ARM_MCR_COND ((p), (coproc), (opc1), (rt), (crn), (crm), (opc2), ARMCOND_AL)
+
+/* ARMv7VE */
+#define ARM_SDIV_COND(p, rd, rn, rm, cond) ARM_EMIT (p, (((cond) << 28) | (0xe << 23) | (0x1 << 20) | ((rd) << 16) | (0xf << 12) | ((rm) << 8) | (0x0 << 5) | (0x1 << 4) | ((rn) << 0)))
+#define ARM_SDIV(p, rd, rn, rm) ARM_SDIV_COND ((p), (rd), (rn), (rm), ARMCOND_AL)
+
+#define ARM_UDIV_COND(p, rd, rn, rm, cond) ARM_EMIT (p, (((cond) << 28) | (0xe << 23) | (0x3 << 20) | ((rd) << 16) | (0xf << 12) | ((rm) << 8) | (0x0 << 5) | (0x1 << 4) | ((rn) << 0)))
+#define ARM_UDIV(p, rd, rn, rm) ARM_UDIV_COND ((p), (rd), (rn), (rm), ARMCOND_AL)
 
 #ifdef __cplusplus
 }

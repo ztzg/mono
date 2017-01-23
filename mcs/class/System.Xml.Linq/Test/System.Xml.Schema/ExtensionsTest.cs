@@ -9,6 +9,8 @@
 // (C) Stefan Prutianu
 // 
 
+#if !MOBILE
+
 using NUnit.Framework;
 using System;
 using System.Xml;
@@ -128,7 +130,6 @@ namespace MonoTests.System.Xml.Schema
 
 		// test succesfull validation
 		[Test]
-		[Category ("NotWorking")]
 		public void XDocumentSuccessValidate () 
 		{       
 			validationSucceded = true;
@@ -139,7 +140,6 @@ namespace MonoTests.System.Xml.Schema
 
 		// test failed validation
 		[Test]
-		[Category ("NotWorking")]
 		public void XDocumentFailValidate ()
 		{       
 			String elementName = "AlteringElementName";
@@ -161,7 +161,6 @@ namespace MonoTests.System.Xml.Schema
 		 */
 		[Test]
 		[ExpectedException (typeof (XmlSchemaValidationException))]
-		[Category ("NotWorking")]
 		public void XDocumentThrowExceptionValidate ()
 		{
 			String elementName = "AlteringElementName";
@@ -179,7 +178,6 @@ namespace MonoTests.System.Xml.Schema
 		 * the post-schema-validation infoset (PSVI)
 		 */
 		[Test]
-		[Category ("NotWorking")]
 		public void XDocumentAddSchemaInfoValidate ()
 		{      
 			// no. of elements before validation
@@ -231,7 +229,6 @@ namespace MonoTests.System.Xml.Schema
 		 * the post-schema-validation infoset (PSVI).
 		 */
 		[Test]
-		[Category ("NotWorking")]
 		public void XDocumentNoSchemaInfoValidate ()
 		{
 			// no. of elements before validation
@@ -281,7 +278,6 @@ namespace MonoTests.System.Xml.Schema
 
 		// attribute validation succeeds after change
 		[Test]
-		[Category ("NotWorking")]
 		public void XAttributeSuccessValidate ()
 		{
 			String elementName = "note";
@@ -304,7 +300,6 @@ namespace MonoTests.System.Xml.Schema
 
 		// attribute validation fails after change
 		[Test]
-		[Category ("NotWorking")]
 		public void XAttributeFailValidate ()
 		{
 			String elementName = "note";
@@ -331,7 +326,6 @@ namespace MonoTests.System.Xml.Schema
 		 */
 		[Test]
 		[ExpectedException (typeof (XmlSchemaValidationException))]
-		[Category ("NotWorking")]
 		public void XAttributeThrowExceptionValidate ()
 		{
 			String elementName = "note";
@@ -475,3 +469,5 @@ namespace MonoTests.System.Xml.Schema
 
 	}
 }
+
+#endif

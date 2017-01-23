@@ -7,6 +7,7 @@
  *
  * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ * Copyright 2011-2012 Xamarin, Inc (http://www.xamarin.com)
  */
 
 #include <config.h>
@@ -20,6 +21,8 @@
 #include <mono/utils/mono-logger-internal.h>
 #include <mono/utils/mono-membar.h>
 #include <mono/utils/mono-counters.h>
+#include <mono/utils/hazard-pointer.h>
+#include <mono/utils/mono-tls.h>
 #include <mono/metadata/object.h>
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/domain-internals.h>
@@ -32,6 +35,7 @@
 #include <mono/metadata/mono-debug-debugger.h>
 #include <mono/metadata/mono-config.h>
 #include <mono/metadata/threads-types.h>
+#include <mono/metadata/runtime.h>
 #include <metadata/threads.h>
 #include <metadata/profiler-private.h>
 #include <mono/metadata/coree.h>
@@ -43,37 +47,27 @@
  * or the other (we used to do it because tls slots were GC-tracked,
  * but we can't depend on this).
  */
-static guint32 appdomain_thread_id = -1;
+static MonoNativeTlsKey appdomain_thread_id;
 
-/* 
- * Avoid calling TlsSetValue () if possible, since in the io-layer, it acquires
- * a global lock (!) so it is a contention point.
- */
-#if (defined(__i386__) || defined(__x86_64__)) && !defined(HOST_WIN32)
-#define NO_TLS_SET_VALUE
-#endif
- 
-#ifdef HAVE_KW_THREAD
+#ifdef MONO_HAVE_FAST_TLS
 
-static __thread MonoDomain * tls_appdomain MONO_TLS_FAST;
+MONO_FAST_TLS_DECLARE(tls_appdomain);
 
-#define GET_APPDOMAIN() tls_appdomain
+#define GET_APPDOMAIN() ((MonoDomain*)MONO_FAST_TLS_GET(tls_appdomain))
 
-#ifdef NO_TLS_SET_VALUE
 #define SET_APPDOMAIN(x) do { \
-	tls_appdomain = x; \
+	MONO_FAST_TLS_SET (tls_appdomain,x); \
+	mono_native_tls_set_value (appdomain_thread_id, x); \
+	mono_gc_set_current_thread_appdomain (x); \
 } while (FALSE)
-#else
-#define SET_APPDOMAIN(x) do { \
-	tls_appdomain = x; \
-	TlsSetValue (appdomain_thread_id, x); \
-} while (FALSE)
-#endif
 
-#else /* !HAVE_KW_THREAD */
+#else /* !MONO_HAVE_FAST_TLS */
 
-#define GET_APPDOMAIN() ((MonoDomain *)TlsGetValue (appdomain_thread_id))
-#define SET_APPDOMAIN(x) TlsSetValue (appdomain_thread_id, x);
+#define GET_APPDOMAIN() ((MonoDomain *)mono_native_tls_get_value (appdomain_thread_id))
+#define SET_APPDOMAIN(x) do {						\
+		mono_native_tls_set_value (appdomain_thread_id, x);	\
+		mono_gc_set_current_thread_appdomain (x);		\
+	} while (FALSE)
 
 #endif
 
@@ -128,11 +122,12 @@ static MonoAotModuleInfoTable *aot_modules = NULL;
 /* This is the list of runtime versions supported by this JIT.
  */
 static const MonoRuntimeInfo supported_runtimes[] = {
-	{"v2.0.50215","2.0", { {2,0,0,0},    {8,0,0,0}, { 3, 5, 0, 0 } }	},
-	{"v2.0.50727","2.0", { {2,0,0,0},    {8,0,0,0}, { 3, 5, 0, 0 } }	},
-	{"v4.0.30128","4.0", { {4,0,0,0},    {10,0,0,0}, { 4, 0, 0, 0 } }   },
-	{"v4.0.30319","4.0", { {4,0,0,0},    {10,0,0,0}, { 4, 0, 0, 0 } }   },
-	{"moonlight", "2.1", { {2,0,5,0},    {9,0,0,0}, { 3, 5, 0, 0 } }    },
+	{"v2.0.50215","2.0", { {2,0,0,0}, { 8,0,0,0}, {3,5,0,0}, {3,0,0,0} } },
+	{"v2.0.50727","2.0", { {2,0,0,0}, { 8,0,0,0}, {3,5,0,0}, {3,0,0,0} } },
+	{"v4.0.30319","4.5", { {4,0,0,0}, {10,0,0,0}, {4,0,0,0}, {4,0,0,0} } },
+	{"v4.0.30128","4.0", { {4,0,0,0}, {10,0,0,0}, {4,0,0,0}, {4,0,0,0} } },
+	{"v4.0.20506","4.0", { {4,0,0,0}, {10,0,0,0}, {4,0,0,0}, {4,0,0,0} } },
+	{"moonlight", "2.1", { {2,0,5,0}, { 9,0,0,0}, {3,5,0,0}, {3,0,0,0} } },
 };
 
 
@@ -155,7 +150,7 @@ get_runtime_by_version (const char *version);
 static MonoImage*
 mono_jit_info_find_aot_module (guint8* addr);
 
-guint32
+MonoNativeTlsKey
 mono_domain_get_tls_key (void)
 {
 	return appdomain_thread_id;
@@ -271,36 +266,6 @@ jit_info_table_free (MonoJitInfoTable *table)
 	mono_domain_unlock (domain);
 
 	g_free (table);
-}
-
-/* Can be called with hp==NULL, in which case it acts as an ordinary
-   pointer fetch.  It's used that way indirectly from
-   mono_jit_info_table_add(), which doesn't have to care about hazards
-   because it holds the respective domain lock. */
-static gpointer
-get_hazardous_pointer (gpointer volatile *pp, MonoThreadHazardPointers *hp, int hazard_index)
-{
-	gpointer p;
-
-	for (;;) {
-		/* Get the pointer */
-		p = *pp;
-		/* If we don't have hazard pointers just return the
-		   pointer. */
-		if (!hp)
-			return p;
-		/* Make it hazardous */
-		mono_hazard_pointer_set (hp, hazard_index, p);
-		/* Check that it's still the same.  If not, try
-		   again. */
-		if (*pp != p) {
-			mono_hazard_pointer_clear (hp, hazard_index);
-			continue;
-		}
-		break;
-	}
-
-	return p;
 }
 
 /* The jit_info_table is sorted in ascending order by the end
@@ -499,6 +464,11 @@ jit_info_table_realloc (MonoJitInfoTable *old)
 	/* number of needed places for elements needed */
 	required_size = (int)((long)num_elements * JIT_INFO_TABLE_FILL_RATIO_DENOM / JIT_INFO_TABLE_FILL_RATIO_NOM);
 	num_chunks = (required_size + MONO_JIT_INFO_TABLE_CHUNK_SIZE - 1) / MONO_JIT_INFO_TABLE_CHUNK_SIZE;
+	if (num_chunks == 0) {
+		g_assert (num_elements == 0);
+		return jit_info_table_new (old->domain);
+	}
+	g_assert (num_chunks > 0);
 
 	new = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*) * num_chunks);
 	new->domain = old->domain;
@@ -726,7 +696,7 @@ mono_jit_info_table_add (MonoDomain *domain, MonoJitInfo *ji)
 		domain->jit_info_table = new_table;
 		mono_memory_barrier ();
 		domain->num_jit_info_tables++;
-		mono_thread_hazardous_free_or_queue (table, (MonoHazardousFreeFunc)jit_info_table_free);
+		mono_thread_hazardous_free_or_queue (table, (MonoHazardousFreeFunc)jit_info_table_free, TRUE, FALSE);
 		table = new_table;
 
 		goto restart;
@@ -790,7 +760,7 @@ mono_jit_info_free_or_queue (MonoDomain *domain, MonoJitInfo *ji)
 	if (domain->num_jit_info_tables <= 1) {
 		/* Can it actually happen that we only have one table
 		   but ji is still hazardous? */
-		mono_thread_hazardous_free_or_queue (ji, g_free);
+		mono_thread_hazardous_free_or_queue (ji, g_free, TRUE, FALSE);
 	} else {
 		domain->jit_info_free_queue = g_slist_prepend (domain->jit_info_free_queue, ji);
 	}
@@ -1031,6 +1001,39 @@ mono_jit_info_get_try_block_hole_table_info (MonoJitInfo *ji)
 		return NULL;
 	}
 }
+
+MonoArchEHJitInfo*
+mono_jit_info_get_arch_eh_info (MonoJitInfo *ji)
+{
+	if (ji->has_arch_eh_info) {
+		char *ptr = (char*)&ji->clauses [ji->num_clauses];
+		if (ji->has_generic_jit_info)
+			ptr += sizeof (MonoGenericJitInfo);
+		if (ji->has_try_block_holes)
+			ptr += sizeof (MonoTryBlockHoleTableJitInfo);
+		return (MonoArchEHJitInfo*)ptr;
+	} else {
+		return NULL;
+	}
+}
+
+MonoMethodCasInfo*
+mono_jit_info_get_cas_info (MonoJitInfo *ji)
+{
+	if (ji->has_cas_info) {
+		char *ptr = (char*)&ji->clauses [ji->num_clauses];
+		if (ji->has_generic_jit_info)
+			ptr += sizeof (MonoGenericJitInfo);
+		if (ji->has_try_block_holes)
+			ptr += sizeof (MonoTryBlockHoleTableJitInfo);
+		if (ji->has_arch_eh_info)
+			ptr += sizeof (MonoArchEHJitInfo);
+		return (MonoMethodCasInfo*)ptr;
+	} else {
+		return NULL;
+	}
+}
+
 void
 mono_install_create_domain_hook (MonoCreateDomainFunc func)
 {
@@ -1216,9 +1219,7 @@ mono_domain_create (void)
 	domain->jit_info_table = jit_info_table_new (domain);
 	domain->jit_info_free_queue = NULL;
 	domain->finalizable_objects_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-#ifndef HAVE_SGEN_GC
-	domain->track_resurrection_handles_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
-#endif
+	domain->ftnptrs_hash = g_hash_table_new (mono_aligned_addr_hash, NULL);
 
 	InitializeCriticalSection (&domain->lock);
 	InitializeCriticalSection (&domain->assemblies_lock);
@@ -1231,8 +1232,10 @@ mono_domain_create (void)
 	domain_id_alloc (domain);
 	mono_appdomains_unlock ();
 
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_appdomains++;
 	mono_perfcounters->loader_total_appdomains++;
+#endif
 
 	mono_debug_domain_create (domain);
 
@@ -1272,11 +1275,15 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 #ifdef HOST_WIN32
 	/* Avoid system error message boxes. */
 	SetErrorMode (SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
-
-	mono_load_coree (exe_filename);
 #endif
 
+#ifndef HOST_WIN32
+	wapi_init ();
+#endif
+
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters_init ();
+#endif
 
 	mono_counters_register ("Max native code in a domain", MONO_COUNTER_INT|MONO_COUNTER_JIT, &max_domain_code_size);
 	mono_counters_register ("Max code space allocated in a domain", MONO_COUNTER_INT|MONO_COUNTER_JIT, &max_domain_code_alloc);
@@ -1284,7 +1291,8 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 
 	mono_gc_base_init ();
 
-	appdomain_thread_id = TlsAlloc ();
+	MONO_FAST_TLS_INIT (tls_appdomain);
+	mono_native_tls_alloc (&appdomain_thread_id, NULL);
 
 	InitializeCriticalSection (&appdomains_mutex);
 
@@ -1294,9 +1302,10 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	mono_classes_init ();
 	mono_loader_init ();
 	mono_reflection_init ();
+	mono_runtime_init_tls ();
 
 	/* FIXME: When should we release this memory? */
-	MONO_GC_REGISTER_ROOT (appdomains_list);
+	MONO_GC_REGISTER_ROOT_FIXED (appdomains_list);
 
 	domain = mono_domain_create ();
 	mono_root_domain = domain;
@@ -1506,6 +1515,7 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
                 mono_defaults.corlib, "System", "AppDomain");
 	g_assert (mono_defaults.appdomain_class != 0);
 
+#ifndef DISABLE_REMOTING
 	mono_defaults.transparent_proxy_class = mono_class_from_name (
                 mono_defaults.corlib, "System.Runtime.Remoting.Proxies", "TransparentProxy");
 	g_assert (mono_defaults.transparent_proxy_class != 0);
@@ -1513,6 +1523,15 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	mono_defaults.real_proxy_class = mono_class_from_name (
                 mono_defaults.corlib, "System.Runtime.Remoting.Proxies", "RealProxy");
 	g_assert (mono_defaults.real_proxy_class != 0);
+
+	mono_defaults.marshalbyrefobject_class =  mono_class_from_name (
+	        mono_defaults.corlib, "System", "MarshalByRefObject");
+	g_assert (mono_defaults.marshalbyrefobject_class != 0);
+
+	mono_defaults.iremotingtypeinfo_class = mono_class_from_name (
+	        mono_defaults.corlib, "System.Runtime.Remoting", "IRemotingTypeInfo");
+	g_assert (mono_defaults.iremotingtypeinfo_class != 0);
+#endif
 
 	mono_defaults.mono_method_message_class = mono_class_from_name (
                 mono_defaults.corlib, "System.Runtime.Remoting.Messaging", "MonoMethodMessage");
@@ -1546,18 +1565,6 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	        mono_defaults.corlib, "System.Runtime.InteropServices", "Marshal");
 	g_assert (mono_defaults.marshal_class != 0);
 
-	mono_defaults.iserializeable_class = mono_class_from_name (
-	        mono_defaults.corlib, "System.Runtime.Serialization", "ISerializable");
-	g_assert (mono_defaults.iserializeable_class != 0);
-
-	mono_defaults.serializationinfo_class = mono_class_from_name (
-	        mono_defaults.corlib, "System.Runtime.Serialization", "SerializationInfo");
-	g_assert (mono_defaults.serializationinfo_class != 0);
-
-	mono_defaults.streamingcontext_class = mono_class_from_name (
-	        mono_defaults.corlib, "System.Runtime.Serialization", "StreamingContext");
-	g_assert (mono_defaults.streamingcontext_class != 0);
-
 	mono_defaults.typed_reference_class =  mono_class_from_name (
 	        mono_defaults.corlib, "System", "TypedReference");
 	g_assert (mono_defaults.typed_reference_class != 0);
@@ -1566,17 +1573,9 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	        mono_defaults.corlib, "System", "RuntimeArgumentHandle");
 	g_assert (mono_defaults.argumenthandle_class != 0);
 
-	mono_defaults.marshalbyrefobject_class =  mono_class_from_name (
-	        mono_defaults.corlib, "System", "MarshalByRefObject");
-	g_assert (mono_defaults.marshalbyrefobject_class != 0);
-
 	mono_defaults.monitor_class =  mono_class_from_name (
 	        mono_defaults.corlib, "System.Threading", "Monitor");
 	g_assert (mono_defaults.monitor_class != 0);
-
-	mono_defaults.iremotingtypeinfo_class = mono_class_from_name (
-	        mono_defaults.corlib, "System.Runtime.Remoting", "IRemotingTypeInfo");
-	g_assert (mono_defaults.iremotingtypeinfo_class != 0);
 
 	mono_defaults.runtimesecurityframe_class = mono_class_from_name (
 	        mono_defaults.corlib, "System.Security", "RuntimeSecurityFrame");
@@ -1609,21 +1608,14 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 		mono_defaults.corlib, "System.Reflection", "CustomAttributeData");
 
 	/* these are initialized lazily when COM features are used */
-	mono_defaults.variant_class = NULL;
-	mono_defaults.com_object_class = NULL;
-	mono_defaults.com_interop_proxy_class = NULL;
-	mono_defaults.iunknown_class = NULL;
-	mono_defaults.idispatch_class = NULL;
 
-	/*
-	 * Note that mono_defaults.generic_*_class is only non-NULL if we're
-	 * using the 2.0 corlib.
-	 */
 	mono_class_init (mono_defaults.array_class);
 	mono_defaults.generic_nullable_class = mono_class_from_name (
 		mono_defaults.corlib, "System", "Nullable`1");
 	mono_defaults.generic_ilist_class = mono_class_from_name (
 	        mono_defaults.corlib, "System.Collections.Generic", "IList`1");
+	mono_defaults.generic_ireadonlylist_class = mono_class_from_name (
+	        mono_defaults.corlib, "System.Collections.Generic", "IReadOnlyList`1");
 
 	domain->friendly_name = g_path_get_basename (filename);
 
@@ -1690,46 +1682,6 @@ mono_init_version (const char *domain_name, const char *version)
 }
 
 /**
- * mono_init_com_types:
- *
- * Initializes all types needed for COM Interop in mono_defaults structure. 
- */
-void 
-mono_init_com_types (void)
-{
-	static gboolean initialized = FALSE;
-
-	if (initialized)
-		return;
-	
-	/* FIXME: do I need some threading protection here */
-
-	g_assert (mono_defaults.corlib);
-
-	mono_defaults.variant_class = mono_class_from_name (
-	        mono_defaults.corlib, "System", "Variant");
-	g_assert (mono_defaults.variant_class != 0);
-
-	mono_defaults.com_object_class = mono_class_from_name (
-	        mono_defaults.corlib, "System", "__ComObject");
-	g_assert (mono_defaults.com_object_class != 0);
-
-	mono_defaults.com_interop_proxy_class = mono_class_from_name (
-	        mono_defaults.corlib, "Mono.Interop", "ComInteropProxy");
-	g_assert (mono_defaults.com_interop_proxy_class != 0);
-
-	mono_defaults.iunknown_class = mono_class_from_name (
-	        mono_defaults.corlib, "Mono.Interop", "IUnknown");
-	g_assert (mono_defaults.iunknown_class != 0);
-
-	mono_defaults.idispatch_class = mono_class_from_name (
-	        mono_defaults.corlib, "Mono.Interop", "IDispatch");
-	g_assert (mono_defaults.idispatch_class != 0);
-
-	initialized = TRUE;
-}
-
-/**
  * mono_cleanup:
  *
  * Cleans up all metadata modules. 
@@ -1749,15 +1701,11 @@ mono_cleanup (void)
 	mono_debug_cleanup ();
 	mono_metadata_cleanup ();
 
-	TlsFree (appdomain_thread_id);
+	mono_native_tls_free (appdomain_thread_id);
 	DeleteCriticalSection (&appdomains_mutex);
 
-	/*
-	 * This should be called last as TlsGetValue ()/TlsSetValue () can be called during
-	 * shutdown.
-	 */
 #ifndef HOST_WIN32
-	_wapi_cleanup ();
+	wapi_cleanup ();
 #endif
 }
 
@@ -1898,24 +1846,14 @@ mono_domain_assembly_open (MonoDomain *domain, const char *name)
 	return ass;
 }
 
-#ifndef HAVE_SGEN_GC
-static void
-free_slist (gpointer key, gpointer value, gpointer user_data)
-{
-	g_slist_free (value);
-}
-#endif
-
-#if HAVE_SGEN_GC
 static void
 unregister_vtable_reflection_type (MonoVTable *vtable)
 {
 	MonoObject *type = vtable->type;
 
 	if (type->vtable->klass != mono_defaults.monotype_class)
-		mono_gc_deregister_root ((char*)&vtable->type);
+		MONO_GC_UNREGISTER_ROOT_IF_MOVING (vtable->type);
 }
-#endif
 
 void
 mono_domain_free (MonoDomain *domain, gboolean force)
@@ -1958,6 +1896,11 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	mono_g_hash_table_destroy (domain->env);
 	domain->env = NULL;
 
+	if (domain->tlsrec_list) {
+		mono_thread_destroy_domain_tls (domain);
+		domain->tlsrec_list = NULL;
+	}
+
 	mono_reflection_cleanup_domain (domain);
 
 	if (domain->type_hash) {
@@ -1969,22 +1912,40 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 		domain->type_init_exception_hash = NULL;
 	}
 
-	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
-		MonoAssembly *ass = tmp->data;
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Unloading domain %s %p, assembly %s %p, refcount=%d\n", domain->friendly_name, domain, ass->aname.name, ass, ass->ref_count);
-		if (!mono_assembly_close_except_image_pools (ass))
-			tmp->data = NULL;
-	}
-
-#if HAVE_SGEN_GC
 	if (domain->class_vtable_array) {
 		int i;
 		for (i = 0; i < domain->class_vtable_array->len; ++i)
 			unregister_vtable_reflection_type (g_ptr_array_index (domain->class_vtable_array, i));
 	}
-#endif
 
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		MonoAssembly *ass = tmp->data;
+		mono_assembly_release_gc_roots (ass);
+	}
+
+	/* This needs to be done before closing assemblies */
 	mono_gc_clear_domain (domain);
+
+	/* Close dynamic assemblies first, since they have no ref count */
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		MonoAssembly *ass = tmp->data;
+		if (!ass->image || !ass->image->dynamic)
+			continue;
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Unloading domain %s[%p], assembly %s[%p], ref_count=%d", domain->friendly_name, domain, ass->aname.name, ass, ass->ref_count);
+		if (!mono_assembly_close_except_image_pools (ass))
+			tmp->data = NULL;
+	}
+
+	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
+		MonoAssembly *ass = tmp->data;
+		if (!ass)
+			continue;
+		if (!ass->image || ass->image->dynamic)
+			continue;
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Unloading domain %s[%p], assembly %s[%p], ref_count=%d", domain->friendly_name, domain, ass->aname.name, ass, ass->ref_count);
+		if (!mono_assembly_close_except_image_pools (ass))
+			tmp->data = NULL;
+	}
 
 	for (tmp = domain->domain_assemblies; tmp; tmp = tmp->next) {
 		MonoAssembly *ass = tmp->data;
@@ -2050,7 +2011,9 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	mono_mempool_invalidate (domain->mp);
 	mono_code_manager_invalidate (domain->code_mp);
 #else
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes -= mono_mempool_get_allocated (domain->mp);
+#endif
 	mono_mempool_destroy (domain->mp);
 	domain->mp = NULL;
 	mono_code_manager_destroy (domain->code_mp);
@@ -2059,14 +2022,6 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 
 	g_hash_table_destroy (domain->finalizable_objects_hash);
 	domain->finalizable_objects_hash = NULL;
-#ifndef HAVE_SGEN_GC
-	if (domain->track_resurrection_objects_hash) {
-		g_hash_table_foreach (domain->track_resurrection_objects_hash, free_slist, NULL);
-		g_hash_table_destroy (domain->track_resurrection_objects_hash);
-	}
-	if (domain->track_resurrection_handles_hash)
-		g_hash_table_destroy (domain->track_resurrection_handles_hash);
-#endif
 	if (domain->method_rgctx_hash) {
 		g_hash_table_destroy (domain->method_rgctx_hash);
 		domain->method_rgctx_hash = NULL;
@@ -2074,6 +2029,14 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 	if (domain->generic_virtual_cases) {
 		g_hash_table_destroy (domain->generic_virtual_cases);
 		domain->generic_virtual_cases = NULL;
+	}
+	if (domain->generic_virtual_thunks) {
+		g_hash_table_destroy (domain->generic_virtual_thunks);
+		domain->generic_virtual_thunks = NULL;
+	}
+	if (domain->ftnptrs_hash) {
+		g_hash_table_destroy (domain->ftnptrs_hash);
+		domain->ftnptrs_hash = NULL;
 	}
 
 	DeleteCriticalSection (&domain->finalizable_objects_hash_lock);
@@ -2088,9 +2051,11 @@ mono_domain_free (MonoDomain *domain, gboolean force)
 
 	mono_gc_free_fixed (domain);
 
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_appdomains--;
+#endif
 
-	if ((domain == mono_root_domain))
+	if (domain == mono_root_domain)
 		mono_root_domain = NULL;
 }
 
@@ -2132,7 +2097,9 @@ mono_domain_alloc (MonoDomain *domain, guint size)
 	gpointer res;
 
 	mono_domain_lock (domain);
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes += size;
+#endif
 	res = mono_mempool_alloc (domain->mp, size);
 	mono_domain_unlock (domain);
 
@@ -2150,7 +2117,9 @@ mono_domain_alloc0 (MonoDomain *domain, guint size)
 	gpointer res;
 
 	mono_domain_lock (domain);
+#ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters->loader_bytes += size;
+#endif
 	res = mono_mempool_alloc0 (domain->mp, size);
 	mono_domain_unlock (domain);
 
@@ -2204,6 +2173,58 @@ mono_domain_code_commit (MonoDomain *domain, void *data, int size, int newsize)
 	mono_domain_unlock (domain);
 }
 
+#if defined(__native_client_codegen__) && defined(__native_client__)
+/*
+ * Given the temporary buffer (allocated by mono_domain_code_reserve) into which
+ * we are generating code, return a pointer to the destination in the dynamic 
+ * code segment into which the code will be copied when mono_domain_code_commit
+ * is called.
+ * LOCKING: Acquires the domain lock.
+ */
+void *
+nacl_domain_get_code_dest (MonoDomain *domain, void *data)
+{
+	void *dest;
+	mono_domain_lock (domain);
+	dest = nacl_code_manager_get_code_dest (domain->code_mp, data);
+	mono_domain_unlock (domain);
+	return dest;
+}
+
+/* 
+ * Convenience function which calls mono_domain_code_commit to validate and copy
+ * the code. The caller sets *buf_base and *buf_size to the start and size of
+ * the buffer (allocated by mono_domain_code_reserve), and *code_end to the byte
+ * after the last instruction byte. On return, *buf_base will point to the start
+ * of the copied in the code segment, and *code_end will point after the end of 
+ * the copied code.
+ */
+void
+nacl_domain_code_validate (MonoDomain *domain, guint8 **buf_base, int buf_size, guint8 **code_end)
+{
+	guint8 *tmp = nacl_domain_get_code_dest (domain, *buf_base);
+	mono_domain_code_commit (domain, *buf_base, buf_size, *code_end - *buf_base);
+	*code_end = tmp + (*code_end - *buf_base);
+	*buf_base = tmp;
+}
+
+#else
+
+/* no-op versions of Native Client functions */
+
+void *
+nacl_domain_get_code_dest (MonoDomain *domain, void *data)
+{
+	return data;
+}
+
+void
+nacl_domain_code_validate (MonoDomain *domain, guint8 **buf_base, int buf_size, guint8 **code_end)
+{
+}
+
+#endif
+
 /*
  * mono_domain_code_foreach:
  * Iterate over the code thunks of the code manager of @domain.
@@ -2246,8 +2267,9 @@ mono_domain_add_class_static_data (MonoDomain *domain, MonoClass *klass, gpointe
 		int size = GPOINTER_TO_INT (domain->static_data_array [1]);
 		next = GPOINTER_TO_INT (domain->static_data_array [0]);
 		if (next >= size) {
-			gpointer *new_array = mono_gc_alloc_fixed (sizeof (gpointer) * (size * 2), NULL);
-			memcpy (new_array, domain->static_data_array, sizeof (gpointer) * size);
+			/* 'data' is allocated by alloc_fixed */
+			gpointer *new_array = mono_gc_alloc_fixed (sizeof (gpointer) * (size * 2), MONO_GC_ROOT_DESCR_FOR_FIXED (size * 2));
+			mono_gc_memmove (new_array, domain->static_data_array, sizeof (gpointer) * size);
 			size *= 2;
 			new_array [1] = GINT_TO_POINTER (size);
 			mono_gc_free_fixed (domain->static_data_array);
@@ -2255,7 +2277,7 @@ mono_domain_add_class_static_data (MonoDomain *domain, MonoClass *klass, gpointe
 		}
 	} else {
 		int size = 32;
-		gpointer *new_array = mono_gc_alloc_fixed (sizeof (gpointer) * size, NULL);
+		gpointer *new_array = mono_gc_alloc_fixed (sizeof (gpointer) * size, MONO_GC_ROOT_DESCR_FOR_FIXED (size));
 		next = 2;
 		new_array [0] = GINT_TO_POINTER (next);
 		new_array [1] = GINT_TO_POINTER (size);
@@ -2519,11 +2541,24 @@ get_runtime_by_version (const char *version)
 {
 	int n;
 	int max = G_N_ELEMENTS (supported_runtimes);
-	
+	int vlen;
+
+	if (!version)
+		return NULL;
+
 	for (n=0; n<max; n++) {
 		if (strcmp (version, supported_runtimes[n].runtime_version) == 0)
 			return &supported_runtimes[n];
 	}
+	
+	vlen = strlen (version);
+	if (vlen >= 4 && version [1] - '0' >= 4) {
+		for (n=0; n<max; n++) {
+			if (strncmp (version, supported_runtimes[n].runtime_version, 4) == 0)
+				return &supported_runtimes[n];
+		}
+	}
+	
 	return NULL;
 }
 
@@ -2631,4 +2666,3 @@ mono_framework_version (void)
 {
 	return current_runtime->framework_version [0] - '0';
 }
-

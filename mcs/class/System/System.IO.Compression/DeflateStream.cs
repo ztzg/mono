@@ -28,7 +28,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -88,6 +87,22 @@ namespace System.IO.Compression {
 			this.mode = mode;
 			this.leaveOpen = leaveOpen;
 		}
+		
+#if NET_4_5
+		[MonoTODO]
+		public DeflateStream (Stream stream, CompressionLevel compressionLevel)
+			: this (stream, CompressionMode.Compress)
+		{
+			throw new NotImplementedException ();
+		}
+		
+		[MonoTODO]
+		public DeflateStream (Stream stream, CompressionLevel compressionLevel, bool leaveOpen)
+			: this (stream, CompressionMode.Compress, leaveOpen)
+		{
+			throw new NotImplementedException ();
+		}
+#endif
 
 		protected override void Dispose (bool disposing)
 		{
@@ -416,7 +431,7 @@ namespace System.IO.Compression {
 			set { throw new NotSupportedException(); }
 		}
 
-#if MONOTOUCH
+#if MONOTOUCH || MONODROID
 		const string LIBNAME = "__Internal";
 #else
 		const string LIBNAME = "MonoPosixHelper";
@@ -438,5 +453,4 @@ namespace System.IO.Compression {
 		static extern int WriteZStream (IntPtr stream, IntPtr buffer, int length);
 	}
 }
-#endif
 

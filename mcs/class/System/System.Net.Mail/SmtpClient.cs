@@ -28,10 +28,15 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
-
 #if SECURITY_DEP
+
+#if MONOTOUCH
+using System.Security.Cryptography.X509Certificates;
+#else
 extern alias PrebuiltSystem;
+using X509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
+#endif
+
 #endif
 
 using System;
@@ -51,12 +56,11 @@ using System.Configuration;
 using System.Net.Security;
 using System.Security.Authentication;
 
-#if SECURITY_DEP
-using X509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-#endif
-
 namespace System.Net.Mail {
 	public class SmtpClient
+#if NET_4_0
+	: IDisposable
+#endif
 	{
 		#region Fields
 
@@ -118,6 +122,9 @@ namespace System.Net.Mail {
 			if (cfg != null) {
 				this.host = cfg.Network.Host;
 				this.port = cfg.Network.Port;
+#if NET_4_0
+				this.enableSsl = cfg.Network.EnableSsl;
+#endif
 				TargetName = cfg.Network.TargetName;
 				if (this.TargetName == null)
 					TargetName = "SMTPSVC/" + (host != null ? host : "");
@@ -132,7 +139,7 @@ namespace System.Net.Mail {
 					Credentials = new CCredentialsByHost (cfg.Network.UserName, password);
 				}
 
-				if (cfg.From != null)
+				if (!String.IsNullOrEmpty (cfg.From))
 					defaultFrom = new MailAddress (cfg.From);
 			}
 #else
@@ -145,6 +152,8 @@ namespace System.Net.Mail {
 
 			if (port != 0)
 				this.port = port;
+			else if (this.port == 0)
+				this.port = 25;
 		}
 
 		#endregion // Constructors
@@ -252,7 +261,18 @@ namespace System.Net.Mail {
 		#endregion // Events 
 
 		#region Methods
+#if NET_4_0
+		public void Dispose ()
+		{
+			Dispose (true);
+		}
 
+		[MonoTODO ("Does nothing at the moment.")]
+		protected virtual void Dispose (bool disposing)
+		{
+			// TODO: We should close all the connections and abort any async operations here
+		}
+#endif
 		private void CheckState ()
 		{
 			if (messageInProcess != null)
@@ -261,8 +281,11 @@ namespace System.Net.Mail {
 		
 		private static string EncodeAddress(MailAddress address)
 		{
-			string encodedDisplayName = ContentType.EncodeSubjectRFC2047 (address.DisplayName, Encoding.UTF8);
-			return "\"" + encodedDisplayName + "\" <" + address.Address + ">";
+			if (!String.IsNullOrEmpty (address.DisplayName)) {
+				string encodedDisplayName = ContentType.EncodeSubjectRFC2047 (address.DisplayName, Encoding.UTF8);
+				return "\"" + encodedDisplayName + "\" <" + address.Address + ">";
+			}
+			return address.ToString ();
 		}
 
 		private static string EncodeAddresses(MailAddressCollection addresses)
@@ -901,10 +924,10 @@ try {
 					
 					contentType.Parameters ["type"] = av.ContentType.ToString ();
 					StartSection (inner_boundary, contentType);
-					StartSection (alt_boundary, av.ContentType, av.TransferEncoding);
+					StartSection (alt_boundary, av.ContentType, av);
 				} else {
 					contentType = new ContentType (av.ContentType.ToString ());
-					StartSection (inner_boundary, contentType, av.TransferEncoding);
+					StartSection (inner_boundary, contentType, av);
 				}
 
 				switch (av.TransferEncoding) {
@@ -949,7 +972,7 @@ try {
 		private void SendLinkedResources (MailMessage message, LinkedResourceCollection resources, string boundary)
 		{
 			foreach (LinkedResource lr in resources) {
-				StartSection (boundary, lr.ContentType, lr.TransferEncoding, lr);
+				StartSection (boundary, lr.ContentType, lr);
 
 				switch (lr.TransferEncoding) {
 				case TransferEncoding.Base64:
@@ -985,7 +1008,7 @@ try {
 						contentType.CharSet = att.NameEncoding.HeaderName;
 					att.ContentDisposition.FileName = att.Name;
 				}
-				StartSection (boundary, contentType, att.TransferEncoding, att == body ? null : att.ContentDisposition);
+				StartSection (boundary, contentType, att, att != body);
 
 				byte [] content = new byte [att.ContentStream.Length];
 				att.ContentStream.Read (content, 0, content.Length);
@@ -1031,35 +1054,27 @@ try {
 			SendData (string.Empty);
 		}
 
-		private void StartSection (string section, ContentType sectionContentType,TransferEncoding transferEncoding)
+		private void StartSection (string section, ContentType sectionContentType, AttachmentBase att)
 		{
 			SendData (String.Format ("--{0}", section));
 			SendHeader ("content-type", sectionContentType.ToString ());
-			SendHeader ("content-transfer-encoding", GetTransferEncodingName (transferEncoding));
+			SendHeader ("content-transfer-encoding", GetTransferEncodingName (att.TransferEncoding));
+			if (!string.IsNullOrEmpty (att.ContentId))
+				SendHeader("content-ID", "<" + att.ContentId + ">");
 			SendData (string.Empty);
 		}
 
-		private void StartSection(string section, ContentType sectionContentType, TransferEncoding transferEncoding, LinkedResource lr)
-		{
-			SendData (String.Format("--{0}", section));
-			SendHeader ("content-type", sectionContentType.ToString ());
-			SendHeader ("content-transfer-encoding", GetTransferEncodingName (transferEncoding));
-
-			if (lr.ContentId != null && lr.ContentId.Length > 0)
-				SendHeader("content-ID", "<" + lr.ContentId + ">");
-
-			SendData (string.Empty);
-		}
-
-		private void StartSection (string section, ContentType sectionContentType, TransferEncoding transferEncoding, ContentDisposition contentDisposition) {
+		private void StartSection (string section, ContentType sectionContentType, Attachment att, bool sendDisposition) {
 			SendData (String.Format ("--{0}", section));
+			if (!string.IsNullOrEmpty (att.ContentId))
+				SendHeader("content-ID", "<" + att.ContentId + ">");
 			SendHeader ("content-type", sectionContentType.ToString ());
-			SendHeader ("content-transfer-encoding", GetTransferEncodingName (transferEncoding));
-			if (contentDisposition != null)
-				SendHeader ("content-disposition", contentDisposition.ToString ());
+			SendHeader ("content-transfer-encoding", GetTransferEncodingName (att.TransferEncoding));
+			if (sendDisposition)
+				SendHeader ("content-disposition", att.ContentDisposition.ToString ());
 			SendData (string.Empty);
 		}
-
+		
 		// use proper encoding to escape input
 		private string ToQuotedPrintable (string input, Encoding enc)
 		{
@@ -1278,4 +1293,3 @@ try {
 	}
 }
 
-#endif // NET_2_0

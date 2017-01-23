@@ -28,19 +28,17 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-using System.Xml;
-using System.Xml.Serialization;
 using System.Collections;
-using System;
+using System.Collections.Generic;
 
 namespace System.Xml.Serialization
 {
 	/// <summary>
 	/// Summary description for XmlAnyElementAttributes.
 	/// </summary>
-	public class XmlAnyElementAttributes : CollectionBase
-	{
-		
+
+	public class XmlAnyElementAttributes : CollectionBase {
+
 		public XmlAnyElementAttribute this[int index] 
 		{
 			get 
@@ -55,7 +53,7 @@ namespace System.Xml.Serialization
 
 		public int Add(XmlAnyElementAttribute attribute)
 		{
-			return List.Add(attribute);
+			return (List as IList).Add (attribute);
 		}
 
 		public bool Contains(XmlAnyElementAttribute attribute)
@@ -91,6 +89,15 @@ namespace System.Xml.Serialization
 			for (int n=0; n<Count; n++)
 				this[n].AddKeyHash (sb);
 			sb.Append ('|');
+		}
+
+		internal int Order {
+			get {
+				foreach (XmlAnyElementAttribute e in this)
+					if (e.Order >= 0)
+						return e.Order;
+				return -1;
+			}
 		}
 	}
 }

@@ -6,6 +6,7 @@
 //
 // (C) 2006 Jb Evain
 // (C) 2007 Novell, Inc.
+// Copyright 2013 Xamarin Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -52,11 +53,11 @@ namespace Mono.Linker.Steps {
 			_document = document;
 		}
 
-		public override void Process (LinkContext context)
+		protected override void Process ()
 		{
 			XPathNavigator nav = _document.CreateNavigator ();
 			nav.MoveToFirstChild ();
-			ProcessAssemblies (context, nav.SelectChildren ("assembly", _ns));
+			ProcessAssemblies (Context, nav.SelectChildren ("assembly", _ns));
 		}
 
 		void ProcessAssemblies (LinkContext context, XPathNodeIterator iterator)
@@ -81,7 +82,7 @@ namespace Mono.Linker.Steps {
 			}
 		}
 
-		static void MarkAndPreserveAll (TypeDefinition type)
+		void MarkAndPreserveAll (TypeDefinition type)
 		{
 			Annotations.Mark (type);
 			Annotations.SetPreserve (type, TypePreserve.All);
@@ -104,7 +105,7 @@ namespace Mono.Linker.Steps {
 					continue;
 				}
 
-				TypeDefinition type = assembly.MainModule.Types [fullname];
+				TypeDefinition type = assembly.MainModule.GetType (fullname);
 				if (type == null)
 					continue;
 
@@ -195,17 +196,18 @@ namespace Mono.Linker.Steps {
 		void ProcessFields (TypeDefinition type, XPathNodeIterator iterator)
 		{
 			while (iterator.MoveNext ()) {
-				if (GetAttribute (iterator.Current, "signature") != null)
-					ProcessFieldSignature (type, iterator.Current);
+				string value = GetSignature (iterator.Current);
+				if (!String.IsNullOrEmpty (value))
+					ProcessFieldSignature (type, value);
 
-				if (GetAttribute (iterator.Current, "name") != null)
-					ProcessFieldName (type, iterator.Current);
+				value = GetAttribute (iterator.Current, "name");
+				if (!String.IsNullOrEmpty (value))
+					ProcessFieldName (type, value);
 			}
 		}
 
-		void ProcessFieldSignature (TypeDefinition type, XPathNavigator nav)
+		void ProcessFieldSignature (TypeDefinition type, string signature)
 		{
-			string signature = GetSignature (nav);
 			FieldDefinition field = GetField (type, signature);
 			MarkField (type, field, signature);
 		}
@@ -218,12 +220,11 @@ namespace Mono.Linker.Steps {
 				AddUnresolveMarker (string.Format ("T: {0}; F: {1}", type, signature));
 		}
 
-		void ProcessFieldName (TypeDefinition type, XPathNavigator nav)
+		void ProcessFieldName (TypeDefinition type, string name)
 		{
 			if (!type.HasFields)
 				return;
 
-			string name = GetAttribute (nav, "name");
 			foreach (FieldDefinition field in type.Fields)
 				if (field.Name == name)
 					MarkField (type, field, name);
@@ -249,17 +250,18 @@ namespace Mono.Linker.Steps {
 		void ProcessMethods (TypeDefinition type, XPathNodeIterator iterator)
 		{
 			while (iterator.MoveNext()) {
-				if (GetAttribute (iterator.Current, "signature") != null)
-					ProcessMethodSignature (type, iterator.Current);
+				string value = GetSignature (iterator.Current);
+				if (!String.IsNullOrEmpty (value))
+					ProcessMethodSignature (type, value);
 
-				if (GetAttribute (iterator.Current, "name") != null)
-					ProcessMethodName (type, iterator.Current);
+				value = GetAttribute (iterator.Current, "name");
+				if (!String.IsNullOrEmpty (value))
+					ProcessMethodName (type, value);
 			}
 		}
 
-		void ProcessMethodSignature (TypeDefinition type, XPathNavigator nav)
+		void ProcessMethodSignature (TypeDefinition type, string signature)
 		{
-			string signature = GetSignature (nav);
 			MethodDefinition meth = GetMethod (type, signature);
 			MarkMethod (type, meth, signature);
 		}
@@ -273,18 +275,14 @@ namespace Mono.Linker.Steps {
 				AddUnresolveMarker (string.Format ("T: {0}; M: {1}", type, signature));
 		}
 
-		void ProcessMethodName (TypeDefinition type, XPathNavigator nav)
+		void ProcessMethodName (TypeDefinition type, string name)
 		{
-			string name = GetAttribute (nav, "name");
-			if (name == ".ctor" || name == ".cctor" && type.HasConstructors)
-				foreach (MethodDefinition ctor in type.Constructors)
-					if (name == ctor.Name)
-						MarkMethod (type, ctor, name);
+			if (!type.HasMethods)
+				return;
 
-			if (type.HasMethods)
-				foreach (MethodDefinition method in type.Methods)
-					if (name == method.Name)
-						MarkMethod (type, method, name);
+			foreach (MethodDefinition method in type.Methods)
+				if (name == method.Name)
+					MarkMethod (type, method, name);
 		}
 
 		static MethodDefinition GetMethod (TypeDefinition type, string signature)
@@ -294,18 +292,13 @@ namespace Mono.Linker.Steps {
 					if (signature == GetMethodSignature (meth))
 						return meth;
 
-			if (type.HasConstructors)
-				foreach (MethodDefinition ctor in type.Constructors)
-					if (signature == GetMethodSignature (ctor))
-						return ctor;
-
 			return null;
 		}
 
 		static string GetMethodSignature (MethodDefinition meth)
 		{
 			StringBuilder sb = new StringBuilder ();
-			sb.Append (meth.ReturnType.ReturnType.FullName);
+			sb.Append (meth.ReturnType.FullName);
 			sb.Append (" ");
 			sb.Append (meth.Name);
 			sb.Append ("(");

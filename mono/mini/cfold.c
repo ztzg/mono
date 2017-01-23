@@ -7,9 +7,12 @@
  *
  * (C) 2003 Ximian, Inc.  http://www.ximian.com
  */
+#include <config.h>
+
 #include "mini.h"
 #include "ir-emit.h"
 
+/* WTF is this doing here?!?!? */
 int
 mono_is_power_of_two (guint32 val)
 {
@@ -65,6 +68,8 @@ mono_is_power_of_two (guint32 val)
         (dest)->dreg = (ins)->dreg; \
     } \
 } while (0)
+
+#ifndef DISABLE_JIT
 
 /**
  * mono_constant_fold_ins:
@@ -202,8 +207,10 @@ mono_constant_fold_ins (MonoCompile *cfg, MonoInst *ins, MonoInst *arg1, MonoIns
 	case OP_INEG:
 		if (arg1->opcode == OP_ICONST) {
 			/* INEG sets cflags on x86, and the LNEG decomposition depends on that */
-			if ((ins->opcode == OP_INEG) && ins->next && (ins->next->opcode == OP_ADC_IMM))
+#if SIZEOF_REGISTER == 4
+			if (ins->opcode == OP_INEG)
 				return NULL;
+#endif
 			ALLOC_DEST (cfg, dest, ins);
 			switch (ins->opcode) {
 				FOLD_UNOP (OP_INEG,-);
@@ -364,3 +371,6 @@ mono_constant_fold_ins (MonoCompile *cfg, MonoInst *ins, MonoInst *arg1, MonoIns
 		
     return dest;
 }	
+
+
+#endif /* DISABLE_JIT */

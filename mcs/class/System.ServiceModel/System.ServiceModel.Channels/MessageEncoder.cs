@@ -51,13 +51,30 @@ namespace System.ServiceModel.Channels
 
 		public virtual bool IsContentTypeSupported (string contentType)
 		{
-			return contentType == ContentType;
+			if (contentType == null)
+				throw new ArgumentNullException ("contentType");
+
+			var expected = new ContentType (ContentType.ToLowerInvariant ());
+			expected.MediaType = MediaType.ToLowerInvariant ();
+			var check = new ContentType (contentType.ToLowerInvariant ());
+
+			if (!string.Equals (expected.MediaType, check.MediaType, StringComparison.InvariantCultureIgnoreCase))
+				return false;
+
+			foreach (string param in expected.Parameters.Keys) {
+				if (!check.Parameters.ContainsKey (param))
+					continue;
+				if (!object.Equals (expected.Parameters [param], check.Parameters [param]))
+					return false;
+			}
+
+			return true;
 		}
 
 		public Message ReadMessage (ArraySegment<byte> buffer,
 			BufferManager bufferManager)
 		{
-			return ReadMessage (buffer, bufferManager, null);
+			return ReadMessage (buffer, bufferManager, ContentType);
 		}
 
 		public abstract Message ReadMessage (ArraySegment<byte> buffer,
@@ -65,7 +82,7 @@ namespace System.ServiceModel.Channels
 
 		public Message ReadMessage (Stream stream, int maxSizeOfHeaders)
 		{
-			return ReadMessage (stream, maxSizeOfHeaders, null);
+			return ReadMessage (stream, maxSizeOfHeaders, ContentType);
 		}
 
 		public abstract Message ReadMessage (Stream stream,

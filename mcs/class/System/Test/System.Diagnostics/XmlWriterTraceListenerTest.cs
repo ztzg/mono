@@ -28,11 +28,14 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#if !MOBILE
+
 using NUnit.Framework;
 using System;
 using System.IO;
 using System.Diagnostics;
 using System.Threading;
+using System.Xml;
 
 namespace MonoTests.System.Diagnostics
 {
@@ -135,7 +138,24 @@ namespace MonoTests.System.Diagnostics
 			x.Close ();
 			Assert.AreEqual (sample7.Replace ('\'', '"'), sw.ToString ());
 		}
+
+		[Test]
+		public void XPathNavigatorAsData ()
+		{
+			// While XmlReader, XmlDocument and XDocument are not supported as direct xml content (i.e. to not get escaped), XPathNavigator is.
+			var sw = new StringWriter ();
+			var xl = new XmlWriterTraceListener (sw);
+			var doc = new XmlDocument ();
+			string xml = "<root><child xmlns=\"urn:foo\">text</child></root>";
+			doc.LoadXml (xml);
+			xl.TraceData (null, "my source", TraceEventType.Information, 1, doc.CreateNavigator (), doc.CreateNavigator ());
+			// Note that it does not result in "<root xmlns=''>...".
+			// See XmlWriterTraceListener.TraceCore() for details.
+			Assert.IsTrue (sw.ToString ().IndexOf (xml) > 0, "#1");
+			Assert.IsTrue (sw.ToString ().IndexOf ("</DataItem><DataItem>") > 0, "#2");
+		}
 #endif
 	}
 }
 
+#endif

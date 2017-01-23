@@ -6,7 +6,6 @@
 //
 // (c) Copyright 2006 Novell, Inc. (http://www.novell.com)
 //
-#if NET_2_0
 
 using System;
 using System.IO;
@@ -174,6 +173,7 @@ namespace System.Net
 			}
 		}
 
+#if !NET_2_1
 		[MonoTODO]
 		public static new RequestCachePolicy DefaultCachePolicy
 		{
@@ -184,6 +184,7 @@ namespace System.Net
 				throw GetMustImplement ();
 			}
 		}
+#endif
 
 		public bool EnableSsl {
 			get {
@@ -248,9 +249,6 @@ namespace System.Net
 			}
 			set {
 				CheckRequestStarted ();
-				if (value == null)
-					throw new ArgumentNullException ();
-
 				proxy = value;
 			}
 		}
@@ -512,7 +510,8 @@ namespace System.Net
 					asyncResult.SetCompleted (false, ftpResponse);
 				}
 				catch (Exception e) {
-					State = RequestState.Error;
+					if (!GetServicePoint ().UsesProxy)
+						State = RequestState.Error;
 					SetCompleteWithError (e);
 				}
 			}
@@ -579,6 +578,19 @@ namespace System.Net
 
 		void ProcessMethod ()
 		{
+			ServicePoint sp = GetServicePoint ();
+			if (sp.UsesProxy) {
+				if (method != WebRequestMethods.Ftp.DownloadFile)
+					throw new NotSupportedException ("FTP+proxy only supports RETR");
+
+				HttpWebRequest req = (HttpWebRequest) WebRequest.Create (proxy.GetProxy (requestUri));
+				req.Address = requestUri;
+				requestState = RequestState.Finished;
+				WebResponse response = req.GetResponse ();
+				ftpResponse.Stream = new FtpDataStream (this, response.GetResponseStream (), true);
+				ftpResponse.StatusCode = FtpStatusCode.CommandOK;
+				return;
+			}
 			State = RequestState.Connecting;
 
 			ResolveHost ();
@@ -982,7 +994,7 @@ namespace System.Net
 				}
 
 				s.Close ();
-				origDataStream = new NetworkStream (s, true);
+				origDataStream = new NetworkStream (incoming, true);
 				dataStream = origDataStream;
 				if (EnableSsl)
 					ChangeToSSLSocket (ref dataStream);
@@ -1183,5 +1195,4 @@ namespace System.Net
 	}
 }
 
-#endif
 

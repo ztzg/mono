@@ -24,7 +24,6 @@ using System.Security.Permissions;
 using System.Runtime.InteropServices;
 using NUnit.Framework;
 using System.Runtime.CompilerServices;
-
 using System.Collections.Generic;
 
 namespace MonoTests.System.Reflection.Emit
@@ -2099,12 +2098,14 @@ namespace MonoTests.System.Reflection.Emit
 			ig = mb.GetILGenerator ();
 
 			ConstructorInfo ci = TypeBuilder.GetConstructor (t, cb);
-
+			
 			ig.Emit (OpCodes.Newobj, ci);
 			ig.Emit (OpCodes.Ret);
 
 			// Finish the ctorbuilder
 			ig = cb.GetILGenerator ();
+			ig.Emit(OpCodes.Ldarg_0);
+			ig.Emit(OpCodes.Call, tb.BaseType.GetConstructor(Type.EmptyTypes));		
 			ig.Emit (OpCodes.Ret);
 
 			Type t2 = tb.CreateType ();
@@ -10417,6 +10418,10 @@ namespace MonoTests.System.Reflection.Emit
 			TypeBuilder tb2 = module.DefineType("Bar");
 			ConstructorBuilder cb = tb2.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
 			ILGenerator ilgen = cb.GetILGenerator();
+			
+			ilgen.Emit(OpCodes.Ldarg_0);
+			ilgen.Emit(OpCodes.Call, tb2.BaseType.GetConstructor(Type.EmptyTypes));
+
 			ilgen.Emit(OpCodes.Ldsfld, field);
 			ilgen.Emit(OpCodes.Pop);
 			ilgen.Emit(OpCodes.Ret);
@@ -10710,9 +10715,8 @@ namespace MonoTests.System.Reflection.Emit
 				tb.CreateType ();
 			} catch {
 			}
-
+/* this is mono only
 			try {
-				/* This is mono only */
 				UnmanagedMarshal m = UnmanagedMarshal.DefineCustom (t, "foo", "bar", Guid.Empty);
 				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
 				FieldBuilder fb = tb.DefineField ("Foo", typeof (int), FieldAttributes.Public);
@@ -10720,7 +10724,7 @@ namespace MonoTests.System.Reflection.Emit
 				tb.CreateType ();
 			} catch {
 			}
-
+*/
 			try {
 				/* Properties */
 				TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Public, typeof (object));
@@ -10893,6 +10897,181 @@ namespace MonoTests.System.Reflection.Emit
 			TypeBuilder tb = module.DefineType (genTypeName (), TypeAttributes.Class, null, new Type[] { typeof (IComparable) });
 			Type proxyType = tb.CreateType();
 			Activator.CreateInstance(proxyType);
+		}
+
+		[Test] //Test for #640780
+		public void StaticMethodNotUsedInIfaceVtable ()
+		{
+			TypeBuilder tb1 = module.DefineType("Interface", TypeAttributes.Interface | TypeAttributes.Abstract);
+			tb1.DefineTypeInitializer().GetILGenerator().Emit(OpCodes.Ret);
+			tb1.DefineMethod("m", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract);
+			tb1.CreateType();
+			
+			TypeBuilder tb2 = module.DefineType("Class", TypeAttributes.Sealed);
+			tb2.AddInterfaceImplementation(tb1);
+			tb2.DefineMethod("m", MethodAttributes.Public | MethodAttributes.Virtual)
+			    .GetILGenerator().Emit(OpCodes.Ret);
+			tb2.DefineDefaultConstructor(MethodAttributes.Public);
+			
+			Activator.CreateInstance(tb2.CreateType());
+		}
+
+		[Test] //Test for #648391
+		public void GetConstructorCheckCtorDeclaringType ()
+		{
+			TypeBuilder myType = module.DefineType ("Sample", TypeAttributes.Public);
+			string[] typeParamNames = { "TFirst" };
+			GenericTypeParameterBuilder[] typeParams = myType.DefineGenericParameters (typeParamNames);
+			var ctor = myType.DefineDefaultConstructor (MethodAttributes.Public);
+			var ctori = TypeBuilder.GetConstructor (myType.MakeGenericType (typeof (int)), ctor);
+			try {
+				TypeBuilder.GetConstructor (myType.MakeGenericType (typeof (bool)), ctori);
+				Assert.Fail ("#1");
+			} catch (ArgumentException) {
+				//OK
+			}
+		}
+
+		[Test] //Test for #649237
+		public void GetFieldCheckFieldDeclaringType () {
+			TypeBuilder myType = module.DefineType ("Sample", TypeAttributes.Public);
+			myType.DefineGenericParameters ( "TFirst");
+			TypeBuilder otherType = module.DefineType ("Sample2", TypeAttributes.Public);
+			otherType.DefineGenericParameters ( "TFirst");
+
+			var field = myType.DefineField ("field", typeof (object), FieldAttributes.Public);
+
+			try {
+				TypeBuilder.GetField (otherType.MakeGenericType (typeof (int)), field);
+				Assert.Fail ("#1");
+			} catch (ArgumentException) {
+				//OK
+			}
+		}
+
+		[Test]
+		public void TypeWithFieldRVAWorksUnderSgen () {
+	        AssemblyName an = new AssemblyName("MAIN");
+	        AssemblyBuilder ab = AppDomain.CurrentDomain.DefineDynamicAssembly(an,
+	            AssemblyBuilderAccess.Run, ".");
+	        ModuleBuilder mob = ab.DefineDynamicModule("MAIN");
+	        TypeBuilder tb = mob.DefineType("MAIN", TypeAttributes.Public |
+	            TypeAttributes.Sealed | TypeAttributes.Abstract |
+	            TypeAttributes.Class | TypeAttributes.BeforeFieldInit);
+
+	        byte[] source = new byte[] { 42 };
+	        FieldBuilder fb = tb.DefineInitializedData("A0", source, 0);
+
+	        MethodBuilder mb = tb.DefineMethod("EVAL", MethodAttributes.Static |
+	            MethodAttributes.Public, typeof(byte[]), new Type[] { });
+	        ILGenerator il = mb.GetILGenerator();
+
+	        il.Emit(OpCodes.Ldc_I4_1);
+	        il.Emit(OpCodes.Newarr, typeof(byte));
+	        il.Emit(OpCodes.Dup);
+	        il.Emit(OpCodes.Ldtoken, fb);
+	        il.Emit(OpCodes.Call, typeof(RuntimeHelpers).GetMethod("InitializeArray"));
+	        il.Emit(OpCodes.Ret);
+
+	        Type t = tb.CreateType();
+
+	        GC.Collect();
+
+	        byte[] res = (byte[]) t.InvokeMember("EVAL", BindingFlags.Public |
+	            BindingFlags.Static | BindingFlags.InvokeMethod, null, null,
+	            new object[] { });
+
+	        Assert.AreEqual (42, res[0]);
+	    }
+
+
+		[Test]
+		public void Ldfld_Regress_9531 () {
+			Build<Example<int>> ();
+		}
+
+		void Build<T> () {
+            var base_class = typeof(T);
+
+            var builder = module.DefineType(genTypeName (),
+                TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Public,
+                base_class);
+
+            var field = builder.BaseType.GetField("Field", BindingFlags.Instance | BindingFlags.Public);
+            
+            var cb = builder.DefineConstructor(
+                MethodAttributes.Public | MethodAttributes.SpecialName,
+                CallingConventions.HasThis,
+                new[] { typeof(string) });
+            
+            var il = cb.GetILGenerator();
+            
+            if (field == null)
+            {
+                throw new InvalidOperationException("wtf");
+            }
+            
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, field);
+            il.Emit(OpCodes.Ret);
+            
+            builder.CreateType();
+		}
+
+		public class Example<T> {
+			public string Field;
+			public T Field2;
+		}
+
+		[Test]
+		public void Ldfld_Encoding_10122 () {
+			Build2<Example<int>> ();
+		}
+
+		void Build2<T> () {
+			var base_class = typeof(T);
+
+	        string AssemblyName = genTypeName ();
+	        string AssemblyFileName = AssemblyName + ".dll";
+
+			var assemblyBuilderAccess = AssemblyBuilderAccess.Save;
+			var assemblyName = new AssemblyName(AssemblyName);
+			var assemblyBuilder = AppDomain.CurrentDomain.DefineDynamicAssembly(assemblyName, assemblyBuilderAccess);
+			var moduleBuilder = assemblyBuilder.DefineDynamicModule(AssemblyName, AssemblyFileName);
+
+
+			var builder = moduleBuilder.DefineType("Wrapped",
+                TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Public,
+                base_class);
+
+            var field = builder.BaseType.GetField("Field", BindingFlags.Instance | BindingFlags.Public);
+            
+            var cb = builder.DefineConstructor(
+                MethodAttributes.Public | MethodAttributes.SpecialName,
+                CallingConventions.HasThis,
+                new[] { typeof(string) });
+            
+            var il = cb.GetILGenerator();
+            
+            if (field == null)
+            {
+                throw new InvalidOperationException("wtf");
+            }
+            
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, field);
+            il.Emit(OpCodes.Ret);
+            
+            builder.CreateType();
+
+			assemblyBuilder.Save (AssemblyFileName);
+
+			var fromDisk = Assembly.Load (AssemblyName);
+			Console.WriteLine (fromDisk);
+			var t = fromDisk.GetType ("Wrapped");
+			Activator.CreateInstance (t, new object[] { "string"});
 		}
 
 	}

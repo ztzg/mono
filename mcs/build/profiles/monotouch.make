@@ -1,17 +1,18 @@
 #! -*- makefile -*-
 
-my_runtime = $(RUNTIME) $(RUNTIME_FLAGS) --security=temporary-smcs-hack
-INTERNAL_SMCS = $(my_runtime) $(topdir)/class/lib/$(PROFILE)/smcs.exe
+BOOTSTRAP_PROFILE = build
 
-BOOTSTRAP_PROFILE = monotouch_bootstrap
+BOOTSTRAP_MCS = MONO_PATH="$(topdir)/class/lib/$(BOOTSTRAP_PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(INTERNAL_GMCS)
+MCS = MONO_PATH="$(topdir)/class/lib/$(BOOTSTRAP_PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(INTERNAL_GMCS)
 
-BOOTSTRAP_MCS = MONO_PATH="$(topdir)/class/lib/$(BOOTSTRAP_PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(my_runtime) $(topdir)/class/lib/$(BOOTSTRAP_PROFILE)/smcs.exe
-MCS = MONO_PATH="$(topdir)/class/lib/$(PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(INTERNAL_SMCS)
+# Use system resgen as we don't want local System.Windows.Forms dependency
+RESGEN = resgen2
 
 profile-check:
 	@:
 
-PROFILE_MCS_FLAGS = -d:NET_1_1 -d:NET_2_0 -d:NET_2_1 -d:MONOTOUCH
+DEFAULT_REFERENCES = -r:mscorlib.dll
+PROFILE_MCS_FLAGS = -d:NET_1_1 -d:NET_2_0 -d:NET_2_1 -d:NET_3_5 -d:NET_4_0 -d:NET_4_5 -d:MOBILE -d:MONOTOUCH -d:DISABLE_REMOTING -nowarn:1699 -nostdlib -lib:$(topdir)/class/lib/$(PROFILE) $(DEFAULT_REFERENCES) $(PLATFORM_DEBUG_FLAGS)
 FRAMEWORK_VERSION = 2.1
 NO_TEST = yes
 

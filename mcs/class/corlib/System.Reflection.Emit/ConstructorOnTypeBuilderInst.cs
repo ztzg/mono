@@ -27,15 +27,18 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#if !FULL_AOT_RUNTIME
 using System;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace System.Reflection.Emit
 {
 	/*
 	 * This class represents a ctor of an instantiation of a generic type builder.
 	 */
+	[StructLayout (LayoutKind.Sequential)]
 	internal class ConstructorOnTypeBuilderInst : ConstructorInfo
 	{
 		#region Keep in sync with object-internals.h
@@ -98,9 +101,14 @@ namespace System.Reflection.Emit
 		public override ParameterInfo[] GetParameters ()
 		{
 			/*FIXME, maybe the right thing to do when the type is creates is to retrieve from the inflated type*/
-			if (!instantiation.IsCompilerContext && !instantiation.IsCreated)
+			if (!instantiation.IsCreated)
 				throw new NotSupportedException ();
 
+			return GetParametersInternal ();
+		}
+
+		internal override ParameterInfo[] GetParametersInternal ()
+		{
 			ParameterInfo [] res;
 			if (cb is ConstructorBuilder) {
 				ConstructorBuilder cbuilder = (ConstructorBuilder)cb;
@@ -122,15 +130,13 @@ namespace System.Reflection.Emit
 
 		public override int MetadataToken {
 			get {
-				if (!instantiation.IsCompilerContext)
-					return base.MetadataToken;
-				return cb.MetadataToken;
+				return base.MetadataToken;
 			}
 		}
 
-		internal override int GetParameterCount ()
+		internal override int GetParametersCount ()
 		{
-			return cb.GetParameterCount ();
+			return cb.GetParametersCount ();
 		}
 
 		public override Object Invoke (Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
@@ -192,3 +198,4 @@ namespace System.Reflection.Emit
 	}
 }
 
+#endif

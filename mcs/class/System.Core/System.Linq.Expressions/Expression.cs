@@ -871,6 +871,8 @@ namespace System.Linq.Expressions {
 				return AddChecked (left, right, method);
 			case ExpressionType.AndAlso:
 				return AndAlso (left, right);
+			case ExpressionType.ArrayIndex:
+				return ArrayIndex (left, right);
 			case ExpressionType.Coalesce:
 				return Coalesce (left, right, conversion);
 			case ExpressionType.Divide:
@@ -1181,7 +1183,7 @@ namespace System.Linq.Expressions {
 		static bool IsConvertiblePrimitive (Type type)
 		{
 			var t = type.GetNotNullableType ();
-
+	
 			if (t == typeof (bool))
 				return false;
 
@@ -1217,6 +1219,9 @@ namespace System.Linq.Expressions {
 				return true;
 
 			if (type.IsInterface || target.IsInterface)
+				return true;
+
+			if (type.IsEnum && target == typeof (Enum))
 				return true;
 
 			if (type.IsValueType || target.IsValueType)
@@ -1328,7 +1333,7 @@ namespace System.Linq.Expressions {
 				throw new ArgumentNullException ("addMethod");
 			if (arguments == null)
 				throw new ArgumentNullException ("arguments");
-			if (addMethod.Name.ToLower (CultureInfo.InvariantCulture) != "add")
+			if (addMethod.Name.ToLowerInvariant () != "add")
 				throw new ArgumentException ("addMethod");
 			if (addMethod.IsStatic)
 				throw new ArgumentException ("addMethod must be an instance method", "addMethod");
@@ -1708,7 +1713,7 @@ namespace System.Linq.Expressions {
 			var inits = CheckListInit (newExpression, initializers);
 
 			if (addMethod != null) {
-				if (addMethod.Name.ToLower (CultureInfo.InvariantCulture) != "add")
+				if (addMethod.Name.ToLowerInvariant () != "add")
 					throw new ArgumentException ("addMethod");
 
 				var parameters = addMethod.GetParameters ();
@@ -2263,9 +2268,11 @@ namespace System.Linq.Expressions {
 		// This method must be overwritten by derived classes to
 		// compile the expression
 		//
+#if !FULL_AOT_RUNTIME
 		internal virtual void Emit (EmitContext ec)
 		{
 			throw new NotImplementedException (String.Format ("Emit method is not implemented in expression type {0}", GetType ()));
 		}
+#endif
 	}
 }

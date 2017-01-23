@@ -575,7 +575,6 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 				Assert.Fail ("Build failed");
 			}
 
-			logger.DumpMessages ();
 			logger.CheckLoggedMessageHead ("Prop2: File1", "A1");
 			logger.CheckLoggedMessageHead ("Files: File1", "A1");
 			logger.CheckLoggedMessageHead ("Files: File1", "A1");
@@ -710,7 +709,6 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 				Assert.Fail ("Build failed");
 			}
 
-			logger.DumpMessages ();
 			logger.CheckLoggedMessageHead ("Item1: Item1OldVal", "A1");
 			logger.CheckLoggedMessageHead ("Item1: Val", "A2");
 			logger.CheckLoggedMessageHead ("Item2: Item2OldVal", "A3");
@@ -720,6 +718,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestEmptyItemsWithBatching ()
 		{
 			string project_xml = @"<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">
@@ -787,7 +786,6 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 				Assert.Fail ("Build failed");
 			}
 
-			logger.DumpMessages ();
 			logger.CheckLoggedMessageHead ("output1: property: null ## array: null", "A1");
 			logger.CheckLoggedMessageHead ("output2: property:    ## array: null", "A2");
 			logger.CheckLoggedMessageHead ("output3: property: null ## array: null", "A3");
@@ -802,6 +800,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestItemsInTarget1 ()
 		{
 			Engine engine = new Engine (Consts.BinPath);
@@ -894,6 +893,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestItemsInTarget3 ()
 		{
 			Engine engine = new Engine (Consts.BinPath);
@@ -937,6 +937,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		//Test with ITaskItem[]
 		public void TestItemsInTarget3a ()
 		{
@@ -985,6 +986,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		//Test with string[]
 		public void TestItemsInTarget3b ()
 		{
@@ -1027,6 +1029,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		//Test with string
 		public void TestItemsInTarget3c ()
 		{
@@ -1134,6 +1137,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestSingleTaskItem1 ()
 		{
 			Project proj = BuildProjectForSingleTaskItem ("$(D)$(C)");
@@ -1141,6 +1145,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestSingleTaskItem2 ()
 		{
 			Project proj = BuildProjectForSingleTaskItem ("@(Item1)");
@@ -1148,6 +1153,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestSingleTaskItem3 ()
 		{
 			Project proj = BuildProjectForSingleTaskItem ("$(A).foo");
@@ -1155,6 +1161,7 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 		}
 
 		[Test]
+		[Category ("NotDotNet")]
 		public void TestSingleTaskItem4 ()
 		{
 			Project proj = BuildProjectForSingleTaskItem ("$(C)");
@@ -1494,7 +1501,6 @@ namespace MonoTests.Microsoft.Build.BuildEngine.Various {
 				logger.DumpMessages ();
 				Assert.Fail ("Build failed");
 			}
-			logger.DumpMessages ();
 
 			logger.CheckLoggedMessageHead ("file1: " + Path.Combine ("bar", "foo.dll"), "A1");
 

@@ -27,10 +27,16 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if SECURITY_DEP || MOONLIGHT
+#if SECURITY_DEP
+
+#if MONOTOUCH
+using MX = Mono.Security.X509;
+#else
+extern alias MonoSecurity;
+using MX = MonoSecurity::Mono.Security.X509;
+#endif
 
 using System.Security.Permissions;
-using MX = Mono.Security.X509;
 
 namespace System.Security.Cryptography.X509Certificates {
 
@@ -225,7 +231,9 @@ namespace System.Security.Cryptography.X509Certificates {
 			_flags = flags;
 
 			foreach (MX.X509Certificate x in store.Certificates) {
-				Certificates.Add (new X509Certificate2 (x.RawData));
+				var cert2 = new X509Certificate2 (x.RawData);
+				cert2.PrivateKey = x.RSA;
+				Certificates.Add (cert2);
 			}
 		}
 

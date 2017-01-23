@@ -27,8 +27,6 @@
 // Copyright (C) 2004 Novell, Inc (http://www.novell.com)
 //
 
-#if NET_2_0
-
 using System.Xml;
 using System.IO;
 
@@ -107,6 +105,9 @@ namespace System.Configuration {
 		
 		internal void SetParentConfiguration (Configuration parent)
 		{
+			if (parentResolved)
+				return;
+
 			parentResolved = true;
 			this.parent = parent;
 			if (configuration != null)
@@ -115,4 +116,3 @@ namespace System.Configuration {
 	}
 }
 
-#endif

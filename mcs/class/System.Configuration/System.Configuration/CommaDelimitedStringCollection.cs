@@ -26,7 +26,6 @@
 // Copyright (C) 2005 Novell, Inc (http://www.novell.com)
 //
 
-#if NET_2_0
 using System;
 using System.Collections.Specialized;
 
@@ -39,9 +38,19 @@ namespace System.Configuration {
 
 		bool modified;
 		bool readOnly;
+		int originalStringHash = 0;
 
 		public bool IsModified {
-			get { return modified; }
+			get { 
+				if (modified)
+					return true;
+
+				string str = ToString ();
+				if (str == null)
+					return false;
+
+				return str.GetHashCode () != originalStringHash;
+			}
 		}
 
 		public new bool IsReadOnly {
@@ -89,6 +98,7 @@ namespace System.Configuration {
 			CopyTo (contents, 0);
 			
 			col.AddRange (contents);
+			col.originalStringHash = originalStringHash;
 
 			return col;
 		}
@@ -125,8 +135,15 @@ namespace System.Configuration {
 
 			return String.Join (",", contents);
 		}
+
+		internal void UpdateStringHash ()
+		{
+			string str = ToString ();
+			if (str == null)
+				originalStringHash = 0;
+			else
+				originalStringHash = str.GetHashCode ();
+		}
 	}
 
 }
-
-#endif

@@ -6,6 +6,7 @@
 //
 // (C) 2003 Motus Technologies Inc. (http://www.motus.com)
 // Copyright (C) 2004-2006 Novell Inc. (http://www.novell.com)
+// Copyright (C) 2011 Xamarin Inc. (http://www.xamarin.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -27,12 +28,17 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if SECURITY_DEP || MOONLIGHT
+#if SECURITY_DEP
+
+#if MONOTOUCH
+using MX = Mono.Security.X509;
+#else
+extern alias MonoSecurity;
+using MX = MonoSecurity::Mono.Security.X509;
+#endif
 
 using System.Collections;
 using System.Text;
-
-using MX = Mono.Security.X509;
 
 namespace System.Security.Cryptography.X509Certificates {
 
@@ -205,14 +211,24 @@ namespace System.Security.Cryptography.X509Certificates {
 				status = null;
 			if (elements.Count > 0)
 				elements.Clear ();
-			if (roots != null) {
-				roots.Close ();
-				roots = null;
+			if (user_root_store != null) {
+				user_root_store.Close ();
+				user_root_store = null;
 			}
-			if (cas != null) {
-				cas.Close ();
-				cas = null;
+			if (root_store != null) {
+				root_store.Close ();
+				root_store = null;
 			}
+			if (user_ca_store != null) {
+				user_ca_store.Close ();
+				user_ca_store = null;
+			}
+			if (ca_store != null) {
+				ca_store.Close ();
+				ca_store = null;
+			}
+			roots = null;
+			cas = null;
 			collection = null;
 			bce_restriction = null;
 			working_public_key = null;
@@ -222,34 +238,101 @@ namespace System.Security.Cryptography.X509Certificates {
 
 		public static X509Chain Create ()
 		{
+#if FULL_AOT_RUNTIME
+			return new X509Chain ();
+#else
 			return (X509Chain) CryptoConfig.CreateFromName ("X509Chain");
+#endif
 		}
 
 		// private stuff
 
-		private X509Store roots;
-		private X509Store cas;
+		private X509Certificate2Collection roots;
+		private X509Certificate2Collection cas;
+		private X509Store root_store;
+		private X509Store ca_store;
+		private X509Store user_root_store;
+		private X509Store user_ca_store;
 
-		private X509Store Roots {
+		private X509Certificate2Collection Roots {
 			get {
 				if (roots == null) {
-					roots = new X509Store (StoreName.Root, location);
-					roots.Open (OpenFlags.ReadOnly);
+					X509Certificate2Collection c = new X509Certificate2Collection ();
+					X509Store store = LMRootStore;
+					if (location == StoreLocation.CurrentUser)
+						c.AddRange (UserRootStore.Certificates);
+					c.AddRange (store.Certificates);
+					roots = c;
 				}
 				return roots;
 			}
 		}
 
-		private X509Store CertificateAuthorities {
+		private X509Certificate2Collection CertificateAuthorities {
 			get {
 				if (cas == null) {
-					cas = new X509Store (StoreName.CertificateAuthority, location);
-					cas.Open (OpenFlags.ReadOnly);
+					X509Certificate2Collection c = new X509Certificate2Collection ();
+					X509Store store = LMCAStore;
+					if (location == StoreLocation.CurrentUser)
+						c.AddRange (UserCAStore.Certificates);
+					c.AddRange (store.Certificates);
+					cas = c;
 				}
 				return cas;
 			}
 		}
 
+		private X509Store LMRootStore {
+			get {
+				if (root_store == null) {
+					root_store = new X509Store (StoreName.Root, StoreLocation.LocalMachine);
+					try {
+						root_store.Open (OpenFlags.OpenExistingOnly | OpenFlags.ReadOnly);
+					} catch {
+					}
+				}
+				return root_store;
+			}
+		}
+
+		private X509Store UserRootStore {
+			get {
+				if (user_root_store == null) {
+					user_root_store = new X509Store (StoreName.Root, StoreLocation.CurrentUser);
+					try {
+						user_root_store.Open (OpenFlags.OpenExistingOnly | OpenFlags.ReadOnly);
+					} catch {
+					}
+				}
+				return user_root_store;
+			}
+		}
+
+		private X509Store LMCAStore {
+			get {
+				if (ca_store == null) {
+					ca_store = new X509Store (StoreName.CertificateAuthority, StoreLocation.LocalMachine);
+					try {
+						ca_store.Open (OpenFlags.OpenExistingOnly | OpenFlags.ReadOnly);
+					} catch {
+					}
+				}
+				return ca_store;
+			}
+		}
+
+		private X509Store UserCAStore {
+			get {
+				if (user_ca_store == null) {
+					user_ca_store = new X509Store (StoreName.CertificateAuthority, StoreLocation.CurrentUser);
+					try {
+						user_ca_store.Open (OpenFlags.OpenExistingOnly | OpenFlags.ReadOnly);
+					} catch {
+					}
+				}
+				return user_ca_store;
+			}
+		}
 		// *** certificate chain/path building stuff ***
 
 		private X509Certificate2Collection collection;
@@ -260,10 +343,8 @@ namespace System.Security.Cryptography.X509Certificates {
 			get {
 				if (collection == null) {
 					collection = new X509Certificate2Collection (ChainPolicy.ExtraStore);
-					if (Roots.Certificates.Count > 0)
-						collection.AddRange (Roots.Certificates);
-					if (CertificateAuthorities.Certificates.Count > 0)
-						collection.AddRange (CertificateAuthorities.Certificates);
+					collection.AddRange (Roots);
+					collection.AddRange (CertificateAuthorities);
 				}
 				return collection;
 			}
@@ -295,7 +376,7 @@ namespace System.Security.Cryptography.X509Certificates {
 
 			// roots may be supplied (e.g. in the ExtraStore) so we need to confirm their
 			// trustiness (what a cute word) in the trusted root collection
-			if (!Roots.Certificates.Contains (certificate))
+			if (!Roots.Contains (certificate))
 				elements [elements.Count - 1].StatusFlags |= X509ChainStatusFlags.UntrustedRoot;
 
 			return X509ChainStatusFlags.NoError;
@@ -530,7 +611,7 @@ namespace System.Security.Cryptography.X509Certificates {
 			// TODO 6.1.4.g-j
 
 			// 6.1.4.k - Verify that the certificate is a CA certificate
-			X509BasicConstraintsExtension bce = (X509BasicConstraintsExtension) certificate.Extensions["2.5.29.19"];
+			X509BasicConstraintsExtension bce = (certificate.Extensions["2.5.29.19"] as X509BasicConstraintsExtension);
 			if (bce != null) {
 				if (!bce.CertificateAuthority) {
 					element.StatusFlags |= X509ChainStatusFlags.InvalidBasicConstraints;
@@ -565,7 +646,7 @@ namespace System.Security.Cryptography.X509Certificates {
 			}
 
 			// 6.1.4.n - if key usage extension is present...
-			X509KeyUsageExtension kue = (X509KeyUsageExtension) certificate.Extensions["2.5.29.15"];
+			X509KeyUsageExtension kue = (certificate.Extensions["2.5.29.15"] as X509KeyUsageExtension);
 			if (kue != null) {
 				// ... verify keyCertSign is set
 				X509KeyUsageFlags success = X509KeyUsageFlags.KeyCertSign;
@@ -632,23 +713,23 @@ namespace System.Security.Cryptography.X509Certificates {
 
 		private string GetSubjectKeyIdentifier (X509Certificate2 certificate)
 		{
-			X509SubjectKeyIdentifierExtension ski = (X509SubjectKeyIdentifierExtension) certificate.Extensions["2.5.29.14"];
+			X509SubjectKeyIdentifierExtension ski = (certificate.Extensions["2.5.29.14"] as X509SubjectKeyIdentifierExtension);
 			return (ski == null) ? String.Empty : ski.SubjectKeyIdentifier;
 		}
 
 		// System.dll v2 doesn't have a class to deal with the AuthorityKeyIdentifier extension
-		private string GetAuthorityKeyIdentifier (X509Certificate2 certificate)
+		static string GetAuthorityKeyIdentifier (X509Certificate2 certificate)
 		{
 			return GetAuthorityKeyIdentifier (certificate.MonoCertificate.Extensions ["2.5.29.35"]);
 		}
 
 		// but anyway System.dll v2 doesn't expose CRL in any way so...
-		private string GetAuthorityKeyIdentifier (MX.X509Crl crl)
+		static string GetAuthorityKeyIdentifier (MX.X509Crl crl)
 		{
 			return GetAuthorityKeyIdentifier (crl.Extensions ["2.5.29.35"]);
 		}
 
-		private string GetAuthorityKeyIdentifier (MX.X509Extension ext)
+		static string GetAuthorityKeyIdentifier (MX.X509Extension ext)
 		{
 			if (ext == null)
 				return String.Empty;
@@ -745,7 +826,7 @@ namespace System.Security.Cryptography.X509Certificates {
 		private X509ChainStatusFlags CheckRevocation (X509Certificate2 certificate, X509Certificate2 ca_cert, bool online)
 		{
 			// change this if/when we support OCSP
-			X509KeyUsageExtension kue = (X509KeyUsageExtension) ca_cert.Extensions["2.5.29.15"];
+			X509KeyUsageExtension kue = (ca_cert.Extensions["2.5.29.15"] as X509KeyUsageExtension);
 			if (kue != null) {
 				// ... verify CrlSign is set
 				X509KeyUsageFlags success = X509KeyUsageFlags.CrlSign;
@@ -763,7 +844,7 @@ namespace System.Security.Cryptography.X509Certificates {
 				// crl = FindCrl (ca_cert, ref valid, ref out_of_date);
 
 				// We need to get the subjectAltName and an URI from there (or use OCSP)	
-				// X509KeyUsageExtension subjectAltName = (X509KeyUsageExtension) ca_cert.Extensions["2.5.29.17"];
+				// X509KeyUsageExtension subjectAltName = (ca_cert.Extensions["2.5.29.17"] as X509KeyUsageExtension);
 			}
 
 			if (crl != null) {
@@ -804,21 +885,42 @@ namespace System.Security.Cryptography.X509Certificates {
 			return X509ChainStatusFlags.NoError;
 		}
 
+		static MX.X509Crl CheckCrls (string subject, string ski, MX.X509Store store)
+		{
+			if (store == null)
+				return null;
+
+			var crls = store.Crls;
+			foreach (MX.X509Crl crl in crls) {
+				if (crl.IssuerName == subject && (ski.Length == 0 || ski == GetAuthorityKeyIdentifier (crl)))
+					return crl;
+			}
+			return null; // No CRL found
+		}
+
 		private MX.X509Crl FindCrl (X509Certificate2 caCertificate)
 		{
 			string subject = caCertificate.SubjectName.Decode (X500DistinguishedNameFlags.None);
 			string ski = GetSubjectKeyIdentifier (caCertificate);
-			foreach (MX.X509Crl crl in CertificateAuthorities.Store.Crls) {
-				if (crl.IssuerName == subject) {
-					if ((ski.Length == 0) || (ski == GetAuthorityKeyIdentifier (crl)))
-						return crl;
-				}
+
+			// consider that the LocalMachine directories could not exists... and cannot be created by the user
+			MX.X509Crl result = CheckCrls (subject, ski, LMCAStore.Store);
+			if (result != null)
+				return result;
+			if (location == StoreLocation.CurrentUser) {
+				result = CheckCrls (subject, ski, UserCAStore.Store);
+				if (result != null)
+					return result;
 			}
-			foreach (MX.X509Crl crl in Roots.Store.Crls) {
-				if (crl.IssuerName == subject) {
-					if ((ski.Length == 0) || (ski == GetAuthorityKeyIdentifier (crl)))
-						return crl;
-				}
+
+			// consider that the LocalMachine directories could not exists... and cannot be created by the user
+			result = CheckCrls (subject, ski, LMRootStore.Store);
+			if (result != null)
+				return result;
+			if (location == StoreLocation.CurrentUser) {
+				result = CheckCrls (subject, ski, UserRootStore.Store);
+				if (result != null)
+					return result;
 			}
 			return null;
 		}

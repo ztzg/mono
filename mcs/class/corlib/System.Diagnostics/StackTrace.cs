@@ -28,7 +28,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -76,19 +76,19 @@ namespace System.Diagnostics {
 				throw new ArgumentOutOfRangeException ("< 0", "skipFrames");
 
 			StackFrame sf;
-			ArrayList al = new ArrayList ();
+			var l = new List<StackFrame> ();
 
 			skipFrames += 2;
 			
 			while ((sf = new StackFrame (skipFrames, fNeedFileInfo)) != null &&
 			       sf.GetMethod () != null) {
 				
-				al.Add (sf);
+				l.Add (sf);
 				skipFrames++;
 			};
 
 			debug_info = fNeedFileInfo;
-			frames = (StackFrame [])al.ToArray (typeof (StackFrame));	
+			frames = l.ToArray ();
 		}
 		
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
@@ -130,13 +130,13 @@ namespace System.Diagnostics {
 						resize = true;
 
 				if (resize) {
-					ArrayList al = new ArrayList ();
+					var l = new List<StackFrame> ();
 
 					for (int i = 0; i < frames.Length; ++i)
 						if (frames [i].GetMethod () != null)
-							al.Add (frames [i]);
+							l.Add (frames [i]);
 
-					frames = (StackFrame [])al.ToArray (typeof (StackFrame));
+					frames = l.ToArray ();
 				}
 			}
 		}
@@ -148,6 +148,9 @@ namespace System.Diagnostics {
 		}
 
 		[MonoLimitation ("Not possible to create StackTraces from other threads")]
+#if NET_4_5
+		[Obsolete]
+#endif
 		public StackTrace (Thread targetThread, bool needFileInfo)
 		{
 			if (targetThread == Thread.CurrentThread){
@@ -197,7 +200,7 @@ namespace System.Diagnostics {
 					sb.AppendFormat ("{0}.{1}", method.DeclaringType.FullName, method.Name);
 					/* Append parameter information */
 					sb.Append ("(");
-					ParameterInfo[] p = method.GetParameters ();
+					ParameterInfo[] p = method.GetParametersInternal ();
 					for (int j = 0; j < p.Length; ++j) {
 						if (j > 0)
 							sb.Append (", ");

@@ -5,6 +5,7 @@
 //	Atsushi Enomoto  <atsushi@ximian.com>
 //
 // Copyright (C) 2008 Novell, Inc (http://www.novell.com)
+// Copyright 2011 Xamarin Inc (http://www.xamarin.com).
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -218,6 +219,48 @@ namespace MonoTests.System
 		}
 
 		[Test]
+		public void BindByName2 ()
+		{
+			var t = new UriTemplate ("{foo}/{bar}");
+			var n = new NameValueCollection ();
+			n.Add ("Bar", "value1"); // case insensitive
+			n.Add ("FOO", "value2"); // case insensitive
+			var u = t.BindByName (new Uri ("http://localhost/x"), n);
+			Assert.AreEqual ("http://localhost/x/value2/value1", u.ToString ());
+		}
+
+		[Test]
+		public void BindByName3 ()
+		{
+			var t = new UriTemplate ("Login?clientLoginData={clientLoginData}&credentials={credentials}");
+			var n = new NameValueCollection ();
+			var u = t.BindByName (new Uri ("http://localhost"), n);
+			Assert.AreEqual ("http://localhost/Login", u.ToString (), "#1");
+		}
+
+		[Test]
+		public void BindByNameManySlashes ()
+		{
+			var t = new UriTemplate ("////{foo}/{bar}/");
+			var n = new NameValueCollection ();
+			n.Add ("Bar", "value1"); // case insensitive
+			n.Add ("FOO", "value2"); // case insensitive
+			var u = t.BindByName (new Uri ("http://localhost/"), n);
+			Assert.AreEqual ("http://localhost////value2/value1/", u.ToString ());
+		}
+
+		[Test]
+		public void BindByNameManySlashes2 ()
+		{
+			var t = new UriTemplate ("////{foo}/{bar}/");
+			var n = new NameValueCollection ();
+			n.Add ("Bar", "value1"); // case insensitive
+			n.Add ("FOO", "value2"); // case insensitive
+			var u = t.BindByName (new Uri ("http://localhost//"), n);
+			Assert.AreEqual ("http://localhost/////value2/value1/", u.ToString ());
+		}
+		
+		[Test]
 		public void BindByNameWithDefaults ()
 		{
 			var d = new Dictionary<string,string> ();
@@ -298,6 +341,22 @@ namespace MonoTests.System
 		}
 
 		[Test]
+		[ExpectedException (typeof (ArgumentNullException))]
+		public void MatchNullArgument1 ()
+		{
+			var t = new UriTemplate ("/hooray");
+			t.Match (null, new Uri ("http://localhost/"));
+		}
+
+		[Test]
+		[ExpectedException (typeof (ArgumentNullException))]
+		public void MatchNullArgument2 ()
+		{
+			var t = new UriTemplate ("/hooray");
+			t.Match (new Uri ("http://localhost/"), null);
+		}
+
+		[Test]
 		public void MatchNoTemplateItem ()
 		{
 			var t = new UriTemplate ("/hooray");
@@ -353,6 +412,16 @@ namespace MonoTests.System
 		}
 
 		[Test]
+		public void Match3 ()
+		{
+			var template = new UriTemplate ("test");
+			var match1 = template.Match (new Uri ("http://something"), new Uri ("http://something/test"));
+			var match2 = template.Match (new Uri ("http://something/something2"), new Uri ("http://something/something2/test"));
+			Assert.IsNotNull (match1, "#1");
+			Assert.IsNotNull (match2, "#2");
+		}
+		
+		[Test]
 		public void MatchWildcard ()
 		{
 			var t = new UriTemplate ("/hoge/*?p1={foo}");
@@ -364,6 +433,32 @@ namespace MonoTests.System
 			Assert.AreEqual (2, m.WildcardPathSegments.Count, "#2");
 			Assert.AreEqual ("ppp", m.WildcardPathSegments [0], "#3");
 			Assert.AreEqual ("qqq", m.WildcardPathSegments [1], "#4");
+		}
+
+		[Test]
+		public void MatchWildcard2 ()
+		{
+			var t = new UriTemplate ("*");
+			var m = t.Match (new Uri ("http://localhost"), new Uri ("http://localhost/hoge/ppp"));
+			Assert.IsNotNull (m, "#0");
+			Assert.IsEmpty (m.QueryParameters, "#1.0");
+			Assert.AreEqual ("hoge", m.WildcardPathSegments [0], "#2");
+			Assert.AreEqual ("ppp", m.WildcardPathSegments [1], "#3");
+		}
+
+		[Test]
+		public void MatchWildcard3 ()
+		{
+			var t = new UriTemplate ("*?p1={foo}");
+			var m = t.Match (new Uri ("http://localhost"), new Uri ("http://localhost/hoge/ppp/qqq?p1=v1"));
+			Assert.IsNotNull (m, "#0");
+			Assert.IsNotNull (m.QueryParameters, "#1.0");
+			Assert.AreEqual ("v1", m.QueryParameters ["p1"], "#1");
+			Assert.IsNotNull (m.WildcardPathSegments, "#2.0");
+			Assert.AreEqual (3, m.WildcardPathSegments.Count, "#2");
+			Assert.AreEqual ("hoge", m.WildcardPathSegments [0], "#3");
+			Assert.AreEqual ("ppp", m.WildcardPathSegments [1], "#4");
+			Assert.AreEqual ("qqq", m.WildcardPathSegments [2], "#5");
 		}
 
 		[Test]
@@ -379,6 +474,7 @@ namespace MonoTests.System
 		}
 
 		[Test]
+		[Category ("NotWorking")]
 		public void SimpleWebGet () {
 			UriTemplate t = new UriTemplate ("GetBlog");
 			Assert.IsNotNull(t.Match(new Uri("http://localhost:8000/BlogService"),
@@ -409,5 +505,28 @@ namespace MonoTests.System
 			Assert.AreEqual ("http://localhost:8080/id-aaa/bbb", uri.ToString ());
 		}
 
+		[Test]
+		public void NamedWildcard ()
+		{
+			UriTemplate template = new UriTemplate ("{*path}");
+			UriTemplateMatch match = template.Match (new Uri ("http://localhost"), new Uri ("http://localhost/something"));
+			Assert.IsNotNull (match, "#1");
+			Assert.AreEqual ("something", match.BoundVariables ["path"], "#2");
+		}
+
+        [Test]
+	[Category ("NotWorking")]
+        public void EscapedUriCandidate ()
+        {
+            var candidateUri = new Uri (@"https://somehost:12345/path1/path2/path3/endprefix/tpath1/guid1/tpath2/~|~~|~%3F~|~Path{guid2}~|~/tpath3");
+            var matchUri = new Uri (candidateUri.Scheme + "://" + candidateUri.Host + ":" + candidateUri.Port + @"/path1/path2/path3/endprefix");
+            
+            var template = new UriTemplate (@"tpath1/{guid}/tpath2/{encodedGuidString}/tpath3");
+            var match = template.Match (matchUri, candidateUri);
+
+            Assert.IsNotNull (match);
+            Assert.That (match.BoundVariables ["GUID"] == "guid1");
+            Assert.That (match.BoundVariables ["ENCODEDGUIDSTRING"] == "~|~~|~?~|~Path{guid2}~|~");
+        }
 	}
 }

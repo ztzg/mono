@@ -52,6 +52,8 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
 
+using SysConfig = System.Configuration.Configuration;
+
 namespace System.ServiceModel.Configuration
 {
 	public sealed class CustomBindingCollectionElement
@@ -86,16 +88,26 @@ namespace System.ServiceModel.Configuration
 		}
 
 
-		public override bool ContainsKey (string name) {
-			throw new NotImplementedException ();
+		public override bool ContainsKey (string name)
+		{
+			return Bindings.ContainsKey (name);
 		}
 
-		protected internal override Binding GetDefault () {
-			throw new NotImplementedException ();
+		protected internal override Binding GetDefault ()
+		{
+			return new CustomBinding ();
 		}
 
-		protected internal override bool TryAdd (string name, Binding binding, System.Configuration.Configuration config) {
-			throw new NotImplementedException ();
+		protected internal override bool TryAdd (string name, Binding binding, SysConfig config)
+		{
+			if (!binding.GetType ().Equals (typeof (CustomBinding)))
+				return false;
+			
+			var element = new CustomBindingElement ();
+			element.Name = name;
+			element.InitializeFrom (binding);
+			Bindings.Add (element);
+			return true;
 		}
 	}
 

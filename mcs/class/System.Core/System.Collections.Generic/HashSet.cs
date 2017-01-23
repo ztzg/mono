@@ -40,11 +40,11 @@ using System.Diagnostics;
 
 namespace System.Collections.Generic {
 
-	[Serializable, HostProtection (SecurityAction.LinkDemand, MayLeakOnAbort = true)]
+	[Serializable]
 	[DebuggerDisplay ("Count={Count}")]
 	[DebuggerTypeProxy (typeof (CollectionDebuggerView<,>))]
 	public class HashSet<T> : ICollection<T>, ISerializable, IDeserializationCallback
-#if NET_4_0 || MOONLIGHT
+#if NET_4_0
 							, ISet<T>
 #endif
 	{
@@ -176,32 +176,32 @@ namespace System.Collections.Generic {
 		{
 			CopyTo (array, 0, count);
 		}
-
-		public void CopyTo (T [] array, int index)
+		
+		public void CopyTo (T [] array, int arrayIndex)
 		{
-			CopyTo (array, index, count);
+			CopyTo (array, arrayIndex, count);
 		}
 
-		public void CopyTo (T [] array, int index, int count)
+		public void CopyTo (T [] array, int arrayIndex, int count)
 		{
 			if (array == null)
 				throw new ArgumentNullException ("array");
-			if (index < 0)
-				throw new ArgumentOutOfRangeException ("index");
-			if (index > array.Length)
+			if (arrayIndex < 0)
+				throw new ArgumentOutOfRangeException ("arrayIndex");
+			if (arrayIndex > array.Length)
 				throw new ArgumentException ("index larger than largest valid index of array");
-			if (array.Length - index < count)
+			if (array.Length - arrayIndex < count)
 				throw new ArgumentException ("Destination array cannot hold the requested elements!");
 
 			for (int i = 0, items = 0; i < touched && items < count; i++) {
 				if (GetLinkHashCode (i) != 0)
-					array [index++] = slots [i];
+					array [arrayIndex++] = slots [i];
 			}
 		}
 
 		void Resize ()
 		{
-			int newSize = PrimeHelper.ToPrime ((table.Length << 1) | 1);
+			int newSize = HashPrimeNumbers.ToPrime ((table.Length << 1) | 1);
 
 			// allocate new hash table and link slots array
 			var newTable = new int [newSize];
@@ -352,17 +352,15 @@ namespace System.Collections.Generic {
 			return true;
 		}
 
-		public int RemoveWhere (Predicate<T> predicate)
+		public int RemoveWhere (Predicate<T> match)
 		{
-			if (predicate == null)
-				throw new ArgumentNullException ("predicate");
-
-			int counter = 0;
+			if (match == null)
+				throw new ArgumentNullException ("match");
 
 			var candidates = new List<T> ();
 
 			foreach (var item in this)
-				if (predicate (item)) 
+				if (match (item)) 
 					candidates.Add (item);
 
 			foreach (var item in candidates)
@@ -440,7 +438,7 @@ namespace System.Collections.Generic {
 		{
 			var set = enumerable as HashSet<T>;
 			if (set == null || !Comparer.Equals (set.Comparer))
-				set = new HashSet<T> (enumerable);
+				set = new HashSet<T> (enumerable, Comparer);
 
 			return set;
 		}
@@ -536,27 +534,55 @@ namespace System.Collections.Generic {
 			return CheckIsSupersetOf (other_set);
 		}
 
-		[MonoTODO]
 		public static IEqualityComparer<HashSet<T>> CreateSetComparer ()
 		{
-			throw new NotImplementedException ();
+			return HashSetEqualityComparer<T>.Instance;
 		}
 
-		[MonoTODO]
 		[SecurityPermission (SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.SerializationFormatter)]
 		public virtual void GetObjectData (SerializationInfo info, StreamingContext context)
 		{
-			throw new NotImplementedException ();
+			if (info == null) {
+				throw new ArgumentNullException("info");
+			}
+			info.AddValue("Version", generation);
+			info.AddValue("Comparer", comparer, typeof(IEqualityComparer<T>));
+			info.AddValue("Capacity", (table == null) ? 0 : table.Length);
+			if (table != null) {
+				T[] tableArray = new T[count];
+				CopyTo(tableArray);
+				info.AddValue("Elements", tableArray, typeof(T[]));
+			}
 		}
 
-		[MonoTODO]
 		public virtual void OnDeserialization (object sender)
 		{
-			if (si == null)
-				return;
+			if (si != null)
+			{
+				generation = (int) si.GetValue("Version", typeof(int));
+				comparer = (IEqualityComparer<T>) si.GetValue("Comparer", 
+									      typeof(IEqualityComparer<T>));
+				int capacity = (int) si.GetValue("Capacity", typeof(int));
 
-			throw new NotImplementedException ();
+				empty_slot = NO_SLOT;
+				if (capacity > 0) {
+					table = new int[capacity];
+					slots = new T[capacity];
+
+					T[] tableArray = (T[]) si.GetValue("Elements", typeof(T[]));
+					if (tableArray == null) 
+						throw new SerializationException("Missing Elements");
+
+					for (int iElement = 0; iElement < tableArray.Length; iElement++) {
+						Add(tableArray[iElement]);
+					}
+				} else 
+					table = null;
+
+				si = null;
+			}
 		}
+
 
 		IEnumerator<T> IEnumerable<T>.GetEnumerator ()
 		{
@@ -565,11 +591,6 @@ namespace System.Collections.Generic {
 
 		bool ICollection<T>.IsReadOnly {
 			get { return false; }
-		}
-
-		void ICollection<T>.CopyTo (T [] array, int index)
-		{
-			CopyTo (array, index);
 		}
 
 		void ICollection<T>.Add (T item)
@@ -654,81 +675,38 @@ namespace System.Collections.Generic {
 					throw new InvalidOperationException ("HashSet have been modified while it was iterated over");
 			}
 		}
+	}
+	
+	sealed class HashSetEqualityComparer<T> : IEqualityComparer<HashSet<T>>
+	{
+		public static readonly HashSetEqualityComparer<T> Instance = new HashSetEqualityComparer<T> ();
+			
+		public bool Equals (HashSet<T> lhs, HashSet<T> rhs)
+		{
+			if (lhs == rhs)
+				return true;
 
-		// borrowed from System.Collections.HashTable
-		static class PrimeHelper {
+			if (lhs == null || rhs == null || lhs.Count != rhs.Count)
+				return false;
 
-			static readonly int [] primes_table = {
-				11,
-				19,
-				37,
-				73,
-				109,
-				163,
-				251,
-				367,
-				557,
-				823,
-				1237,
-				1861,
-				2777,
-				4177,
-				6247,
-				9371,
-				14057,
-				21089,
-				31627,
-				47431,
-				71143,
-				106721,
-				160073,
-				240101,
-				360163,
-				540217,
-				810343,
-				1215497,
-				1823231,
-				2734867,
-				4102283,
-				6153409,
-				9230113,
-				13845163
-			};
+			foreach (var item in lhs)
+				if (!rhs.Contains (item))
+					return false;
 
-			static bool TestPrime (int x)
-			{
-				if ((x & 1) != 0) {
-					int top = (int) Math.Sqrt (x);
+			return true;
+		}
 
-					for (int n = 3; n < top; n += 2) {
-						if ((x % n) == 0)
-							return false;
-					}
+		public int GetHashCode (HashSet<T> hashset)
+		{
+			if (hashset == null)
+				return 0;
 
-					return true;
-				}
+			IEqualityComparer<T> comparer = EqualityComparer<T>.Default;
+			int hash = 0;
+			foreach (var item in hashset)
+				hash ^= comparer.GetHashCode (item);
 
-				// There is only one even prime - 2.
-				return x == 2;
-			}
-
-			static int CalcPrime (int x)
-			{
-				for (int i = (x & (~1)) - 1; i < Int32.MaxValue; i += 2)
-					if (TestPrime (i))
-						return i;
-
-				return x;
-			}
-
-			public static int ToPrime (int x)
-			{
-				for (int i = 0; i < primes_table.Length; i++)
-					if (x <= primes_table [i])
-						return primes_table [i];
-
-				return CalcPrime (x);
-			}
+			return hash;
 		}
 	}
 }

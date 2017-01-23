@@ -44,9 +44,8 @@ using System.Text;
 using Mono.Xml;
 #if NET_2_1
 using XmlSchemaException = System.Xml.XmlException;
-#else
-using System.Xml.Schema;
 #endif
+using System.Xml.Schema;
 
 namespace System.Xml
 {
@@ -936,9 +935,6 @@ namespace System.Xml
 
 		private DTDAttributeDefinition ReadAttributeDefinition ()
 		{
-#if NET_2_1_HACK
-			throw new NotImplementedException ();
-#else
 			DTDAttributeDefinition def = new DTDAttributeDefinition (DTD);
 			def.IsInternalSubset = this.processingInternalSubset;
 
@@ -1049,7 +1045,6 @@ namespace System.Xml
 			ReadAttributeDefaultValue (def);
 
 			return def;
-#endif
 		}
 
 		private void ReadAttributeDefaultValue (DTDAttributeDefinition def)

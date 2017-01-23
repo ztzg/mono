@@ -3,11 +3,14 @@
 
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/reflection.h>
+#include <mono/metadata/socket-io.h>
 
 /* No managed code here */
 void mono_thread_pool_init (void) MONO_INTERNAL;
+void mono_thread_pool_init_tls (void) MONO_INTERNAL;
 
 void icall_append_job (MonoObject *ar) MONO_INTERNAL;
+void icall_append_io_job (MonoObject *target, MonoSocketAsyncResult *state) MONO_INTERNAL;
 MonoAsyncResult *
 mono_thread_pool_add     (MonoObject *target, MonoMethodMessage *msg, 
 			  MonoDelegate *async_callback, MonoObject *state) MONO_INTERNAL;
@@ -19,6 +22,9 @@ mono_thread_pool_finish (MonoAsyncResult *ares, MonoArray **out_args,
 void mono_thread_pool_cleanup (void) MONO_INTERNAL;
 
 gboolean mono_thread_pool_remove_domain_jobs (MonoDomain *domain, int timeout) MONO_INTERNAL;
+
+void mono_thread_pool_suspend (void) MONO_INTERNAL;
+void mono_thread_pool_resume (void) MONO_INTERNAL;
 
 void
 ves_icall_System_Threading_ThreadPool_GetAvailableThreads (int *workerThreads,
