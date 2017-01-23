@@ -465,6 +465,67 @@ typedef struct ucontext MonoContext;
 		: "memory"			\
 	)
 
+#elif defined(__SH4__)
+
+#define MONO_ARCH_HAS_MONO_CONTEXT 1
+
+typedef struct {
+	guint32 pc;
+	guint32 registers[16];
+	guint32 fregisters[16];
+} MonoContext;
+
+#define MONO_CONTEXT_SET_IP(ctx,ip) \
+	do { (ctx)->pc = (guint32)(ip); } while (0)
+
+#define MONO_CONTEXT_SET_SP(ctx,sp) \
+	do { (ctx)->registers[sh4_sp] = (guint32)(sp); } while (0)
+
+#define MONO_CONTEXT_SET_BP(ctx, bp) \
+	do { (ctx)->registers[sh4_fp] = (guint32)(bp); } while (0)
+
+#define MONO_CONTEXT_GET_IP(ctx) ((gpointer)((ctx)->pc))
+#define MONO_CONTEXT_GET_SP(ctx) ((gpointer)((ctx)->registers[sh4_sp]))
+#define MONO_CONTEXT_GET_BP(ctx) ((gpointer)((ctx)->registers[sh4_fp]))
+
+#define MONO_CONTEXT_GET_CURRENT(ctx)		\
+	__asm__ __volatile__(			\
+		"mov.l r0,@(4,%0)\n\t"		\
+		"mov.l r1,@(8,%0)\n\t"		\
+		"mov.l r2,@(12,%0)\n\t"		\
+		"mov.l r3,@(16,%0)\n\t"		\
+		"mov.l r4,@(20,%0)\n\t"		\
+		"mov.l r5,@(24,%0)\n\t"		\
+		"mov.l r6,@(28,%0)\n\t"		\
+		"mov.l r7,@(32,%0)\n\t"		\
+		"mov.l r8,@(36,%0)\n\t"		\
+		"mov.l r9,@(40,%0)\n\t"		\
+		"mov.l r10,@(44,%0)\n\t"	\
+		"mov.l r11,@(48,%0)\n\t"	\
+		"mov.l r12,@(52,%0)\n\t"	\
+		"mov.l r13,@(56,%0)\n\t"	\
+		"mov.l r14,@(60,%0)\n\t"	\
+		/* Getting a bit far. */	\
+		"mov %0,r0\n\t"			\
+		"add #64,r0\n\t"		\
+		"mov.l r15,@r0\n\t"		\
+		/* Save PR. */			\
+		"sts pr,r1\n\t"			\
+		/* PC->PR. */			\
+		"bsr 1f\n\t"			\
+		"nop\n"				\
+		"1:\n\t"			\
+		/* PR->R0. */			\
+		"sts pr,r0\n\t"			\
+		/* Restore PR. */		\
+		"lds r1,pr\n\t"			\
+		/* Save PC. */			\
+		"mov.l r0,@(0,%0)\n\t"		\
+		:				\
+		: "r" (&(ctx))			\
+		: "r0", "r1", "memory"		\
+	)
+
 #else
 
 #error "Implement mono-context for the current arch"

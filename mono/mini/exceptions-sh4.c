@@ -767,37 +767,19 @@ gpointer mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean ao
 	return code;
 }
 
-void mono_arch_sigctx_to_monoctx(void *context, MonoContext *mono_context)
+#if MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX
+void
+mono_arch_sigctx_to_monoctx (void *sigctx, MonoContext *mctx)
 {
-	ucontext_t *ucontext = context;
-	int i = 0;
-
-	mono_context->pc = ucontext->uc_mcontext.pc;
-
-	for (i = 0; i < MONO_MAX_IREGS; i++)
-		mono_context->registers[i] = ucontext->uc_mcontext.gregs[i];
-
-	for (i = 0; i < MONO_MAX_FREGS; i++)
-		mono_context->fregisters[i] = ucontext->uc_mcontext.fpregs[i];
-
-	return;
+	mono_sigctx_to_monoctx (sigctx, mctx);
 }
 
-void mono_arch_monoctx_to_sigctx(MonoContext *mono_context, void *context)
+void
+mono_arch_monoctx_to_sigctx (MonoContext *mctx, void *ctx)
 {
-	ucontext_t *ucontext = context;
-	int i = 0;
-
-	ucontext->uc_mcontext.pc = mono_context->pc;
-
-	for (i = 0; i < MONO_MAX_IREGS; i++)
-		ucontext->uc_mcontext.gregs[i] = mono_context->registers[i];
-
-	for (i = 0; i < MONO_MAX_FREGS; i++)
-		ucontext->uc_mcontext.fpregs[i] = mono_context->fregisters[i];
-
-	return;
+	mono_monoctx_to_sigctx (mctx, ctx);
 }
+#endif /* MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX */
 
 /**
  * This is the function called from the signal handler

@@ -317,4 +317,43 @@ mono_monoctx_to_sigctx (MonoContext *mctx, void *sigctx)
 	}
 }
 
+#elif defined(__SH4__)
+
+#include <mono/utils/mono-context.h>
+#include <mono/arch/sh4/sh4-codegen.h>
+
+void
+mono_sigctx_to_monoctx (void *sigctx, MonoContext *mctx)
+{
+#ifdef MONO_CROSS_COMPILE
+	g_assert_not_reached ();
+#else
+	ucontext_t *ctx = (ucontext_t*)sigctx;
+
+	mctx->pc = ctx->uc_mcontext.pc;
+	g_assert(sizeof(ctx->uc_mcontext.gregs) == sizeof(mctx->registers));
+	memcpy(&mctx->registers, &ctx->uc_mcontext.gregs, sizeof(mctx->registers));
+	g_assert(sizeof(ctx->uc_mcontext.fpregs) == sizeof(mctx->fregisters));
+	memcpy(&mctx->fregisters, &ctx->uc_mcontext.fpregs, sizeof(mctx->fregisters));
+#endif
+}
+
+void
+mono_monoctx_to_sigctx (MonoContext *mctx, void *sigctx)
+{
+#ifdef MONO_CROSS_COMPILE
+	g_assert_not_reached ();
+#else
+	ucontext_t *ctx = (ucontext_t*)sigctx;
+
+	ctx->uc_mcontext.pc = mctx->pc;
+	ctx->uc_stack.ss_sp = (void*)mctx->registers[sh4_sp];
+
+	g_assert(sizeof(ctx->uc_mcontext.gregs) == sizeof(mctx->registers));
+	memcpy(&ctx->uc_mcontext.gregs, &mctx->registers, sizeof(ctx->uc_mcontext.gregs));
+	g_assert(sizeof(ctx->uc_mcontext.fpregs) == sizeof(mctx->fregisters));
+	memcpy(&ctx->uc_mcontext.fpregs, &mctx->fregisters, sizeof(ctx->uc_mcontext.fpregs));
+#endif
+}
+
 #endif /* #if defined(__i386__) */
