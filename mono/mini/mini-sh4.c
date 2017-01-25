@@ -2887,27 +2887,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			   load_membase + call*_reg. */
 			MonoCallInst *call = (MonoCallInst *)inst;
 
-			/*
-			 * The runtime sometimes asks us to retrieve
-			 * vtables from the code stream and register
-			 * set (cf. mono_arch_get_vcall_slot).
-			 *
-			 * We cannot do that from destructive
-			 * sequences such as the following, which
-			 * overwrite the "vtable register" rX with the
-			 * slot value:
-			 *
-			 *     mov.l @(slot_offset, rX), rX
-			 *     jsr   @rX
-			 *     nop
-			 *
-			 * So we replace the normal *CALL_REG with
-			 * *CALL_VIRT_REG, which take *two* distinct
-			 * registers: one for the jump and one for the
-			 * vtable.
-			 */
-			guint virtual = call->virtual;
-
 			MONO_INST_NEW(cfg, new_inst, OP_LOAD_MEMBASE);
 			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 
@@ -2926,25 +2905,18 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			case OP_VOIDCALL_MEMBASE:
 			case OP_VCALL_MEMBASE:
 			case OP_VCALL2_MEMBASE:
-				inst->opcode = virtual ? OP_SH4_VOIDCALL_VIRT_REG : OP_VOIDCALL_REG;
+				inst->opcode = OP_VOIDCALL_REG;
 				break;
 			case OP_LCALL_MEMBASE:
-				inst->opcode = virtual ? OP_SH4_LCALL_VIRT_REG : OP_LCALL_REG;
+				inst->opcode = OP_LCALL_REG;
 				break;
 			case OP_FCALL_MEMBASE:
-				inst->opcode = virtual ? OP_SH4_FCALL_VIRT_REG : OP_FCALL_REG;
+				inst->opcode = OP_FCALL_REG;
 				break;
 			default:
-				inst->opcode = virtual ? OP_SH4_CALL_VIRT_REG : OP_CALL_REG;
+				inst->opcode = OP_CALL_REG;
 				break;
 			}
-
-			/*
-			 * *CALL_VIRT_REG take an additional vtable
-			 * register argument (cf. note above).
-			 */
-			if (virtual)
-				inst->sreg2 = new_inst->inst_basereg;
 
 			/* See comment about OP_SH4_LOAD*. */
 			if (SH4_CHECK_RANGE_movl_dispRy(new_inst->inst_offset)) {
@@ -3685,26 +3657,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: lcall_reg: dest:Z src1:i clob:c len:18 */
 		case OP_CALL_REG:
 			/* MD: call_reg: dest:z src1:i clob:c len:18 */
-		case OP_SH4_VOIDCALL_VIRT_REG:
-			/* MD: sh4_voidcall_virt_reg: src1:i src2:i clob:c len:18 */
-		case OP_SH4_CALL_VIRT_REG:
-			/* MD: sh4_call_virt_reg: dest:z src1:i src2:i clob:c len:18 */
-		case OP_SH4_FCALL_VIRT_REG:
-			/* MD: sh4_fcall_virt_reg: dest:y src1:i src2:i clob:c len:18 */
-		case OP_SH4_LCALL_VIRT_REG:
-			/* MD: sh4_lcall_virt_reg: dest:Z src1:i src2:i clob:c len:18 */
 			call = (MonoCallInst*)inst;
 
-			/*
-			 * Note that *CALL_VIRT_REG take an additional
-			 * vtable register argument, which we ignore.
-			 *
-			 * We only need its value to be preserved up
-			 * to the call for runtime introspection
-			 * services such as mono_arch_get_vcall_slot.
-			 *
-			 * (cf. note above about call->virtual).
-			 */
 			sh4_jsr_indRx(&buffer, inst->sreg1);
 			sh4_nop(&buffer); /* delay slot */
 
@@ -4463,6 +4417,12 @@ MonoMethod*
 mono_arch_find_imt_method (mgreg_t *regs, guint8 *code)
 {
 	return (MonoMethod*) regs [MONO_ARCH_IMT_REG];
+}
+
+MonoVTable*
+mono_arch_find_static_call_vtable (mgreg_t *regs, guint8 *code)
+{
+	return (MonoVTable*) regs [MONO_ARCH_RGCTX_REG];
 }
 
 gpointer
