@@ -255,9 +255,11 @@
 #define MONO_SH4_FREG_LAST_ARG sh4_fr11
 
 #define MONO_ARCH_HAVE_IMT 1
-#define MONO_ARCH_IMT_REG sh4_r2
 #define MONO_ARCH_THIS_AS_FIRST_ARG 1
 #define MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX 1
+
+#define MONO_ARCH_IMT_REG sh4_r1
+#define MONO_ARCH_RGCTX_REG MONO_ARCH_IMT_REG
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */
