@@ -4233,6 +4233,7 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 		case MONO_PATCH_INFO_ABS:
 		case MONO_PATCH_INFO_INTERNAL_METHOD:
 		case MONO_PATCH_INFO_CLASS_INIT:
+		case MONO_PATCH_INFO_JIT_ICALL_ADDR:
 			/* Absolute. */
 			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
 			break;
