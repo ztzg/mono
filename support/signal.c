@@ -107,24 +107,15 @@ int Mono_Posix_FromRealTimeSignum (int offset, int *r)
 
 #ifndef HOST_WIN32
 
-#ifndef WAPI_NO_ATOMIC_ASM
-	#define mph_int_get(p)     InterlockedExchangeAdd ((p), 0)
-	#define mph_int_inc(p)     InterlockedIncrement ((p))
-	#define mph_int_dec_test(p)     (InterlockedDecrement ((p)) == 0)
-	#define mph_int_set(p,o,n) InterlockedExchange ((p), (n))
-#elif GLIB_CHECK_VERSION(2,4,0)
-	#define mph_int_get(p) g_atomic_int_get ((p))
- 	#define mph_int_inc(p) do {g_atomic_int_inc ((p));} while (0)
-	#define mph_int_dec_test(p) g_atomic_int_dec_and_test ((p))
-	#define mph_int_set(p,o,n) do {                                 \
-		while (!g_atomic_int_compare_and_exchange ((p), (o), (n))) {} \
-	} while (0)
-#else
-	#define mph_int_get(p) (*(p))
-	#define mph_int_inc(p) do { (*(p))++; } while (0)
-	#define mph_int_dec_test(p) (--(*(p)) == 0)
-	#define mph_int_set(p,o,n) do { *(p) = n; } while (0)
+/* TODO(dd): Add SH-4 implementation of Interlocked*. */
+#ifdef WAPI_NO_ATOMIC_ASM
+# warning Using slow Interlocked* functions
 #endif
+
+	#define mph_int_get(p)	   InterlockedExchangeAdd ((p), 0)
+	#define mph_int_inc(p)	   InterlockedIncrement ((p))
+	#define mph_int_dec_test(p)	(InterlockedDecrement ((p)) == 0)
+	#define mph_int_set(p,o,n) InterlockedExchange ((p), (n))
 
 #if HAVE_PSIGNAL
 int
