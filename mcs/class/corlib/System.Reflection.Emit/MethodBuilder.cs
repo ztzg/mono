@@ -230,7 +230,7 @@ namespace System.Reflection.Emit
 
 			ParameterInfo[] retval = new ParameterInfo [parameters.Length];
 			for (int i = 0; i < parameters.Length; i++) {
-				retval [i] = new ParameterInfo (pinfo == null ? null : pinfo [i + 1], parameters [i], this, i + 1);
+				retval [i] = ParameterInfo.New (pinfo == null ? null : pinfo [i + 1], parameters [i], this, i + 1);
 			}
 			return retval;
 		}
@@ -354,7 +354,7 @@ namespace System.Reflection.Emit
 											    DeclaringType.FullName, Name));
 			}
 			if (ilgen != null)
-				ilgen.label_fixup ();
+				ilgen.label_fixup (this);
 		}
 		
 		internal void GenerateDebugInfo (ISymbolWriter symbolWriter)
@@ -679,11 +679,9 @@ namespace System.Reflection.Emit
 			throw new NotImplementedException ();
 		}
 
-#if NET_4_0
 		public override ParameterInfo ReturnParameter {
 			get { return base.ReturnParameter; }
 		}
-#endif
 	}
 }
 #endif

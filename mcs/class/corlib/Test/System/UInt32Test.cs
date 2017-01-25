@@ -188,18 +188,30 @@ public class UInt32Test
 		try {
 			UInt32.Parse("$42", NumberStyles.Integer, Nfi);
 			Assert.Fail("Should raise a System.FormatException");
+		} catch (FormatException e) {
 		}
-		catch (Exception e) {
-			Assert.IsTrue(typeof(FormatException) == e.GetType());
+
+		try {
+			UInt32.Parse ("５", NumberStyles.Any, CultureInfo.InvariantCulture);
+			Assert.Fail ("C#42");
+		} catch (FormatException) {
 		}
+
 		// Pass a DateTimeFormatInfo, it is unable to format
-		// numbers, but we should not crash
-		
+		// numbers, but we should not crash		
 		UInt32.Parse ("123", new DateTimeFormatInfo ());
 
 		Assert.AreEqual (734561, UInt32.Parse ("734561\0"), "C#43");
-		Assert.AreEqual (734561, UInt32.Parse ("734561\0\0\0    \0"), "C#44");
-		Assert.AreEqual (734561, UInt32.Parse ("734561\0\0\0    "), "C#45");
+		try {
+			UInt32.Parse ("734561\0\0\0    \0");
+			Assert.Fail ("C#44");
+		} catch (FormatException) {}
+
+		try {		
+			UInt32.Parse ("734561\0\0\0    ");
+			Assert.Fail ("C#45");
+		} catch (FormatException) {}
+
 		Assert.AreEqual (734561, UInt32.Parse ("734561\0\0\0"), "C#46");
 
 		Assert.AreEqual (0, UInt32.Parse ("0+", NumberStyles.Any), "#50");
@@ -317,7 +329,7 @@ public class UInt32Test
 		Assert.AreEqual (false, UInt32.TryParse ("$42", NumberStyles.Integer, Nfi, out result));
 		Assert.AreEqual (false, UInt32.TryParse (" - 1 ", out result));
 		Assert.AreEqual (false, UInt32.TryParse (" - ", out result));
-		Assert.AreEqual (true, UInt32.TryParse ("100000000", NumberStyles.HexNumber, Nfi, out result));
+		Assert.AreEqual (false, UInt32.TryParse ("100000000", NumberStyles.HexNumber, Nfi, out result));
 		Assert.AreEqual (false, UInt32.TryParse ("10000000000", out result));
 		Assert.AreEqual (false, UInt32.TryParse ("-10000000000", out result));
 		Assert.AreEqual (true, UInt32.TryParse ("7fffffff", NumberStyles.HexNumber, Nfi, out result));
@@ -326,7 +338,6 @@ public class UInt32Test
 		Assert.AreEqual (Int32.MaxValue + (uint)1, result);
 		Assert.AreEqual (true, UInt32.TryParse ("ffffffff", NumberStyles.HexNumber, Nfi, out result));
 		Assert.AreEqual (uint.MaxValue, result);
-		Assert.AreEqual (true, UInt32.TryParse ("100000000", NumberStyles.HexNumber, Nfi, out result));
 		Assert.IsFalse (uint.TryParse ("-", NumberStyles.AllowLeadingSign, Nfi, out result));
 		Assert.IsFalse (uint.TryParse (Nfi.CurrencySymbol + "-", NumberStyles.AllowLeadingSign | NumberStyles.AllowCurrencySymbol, Nfi, out result));
 	}	

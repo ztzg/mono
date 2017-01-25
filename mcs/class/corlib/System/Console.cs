@@ -94,12 +94,6 @@ namespace System
 		private static TextWriter stderr;
 		private static TextReader stdin;
 
-#if NET_4_5 && !MOBILE
-		static TextWriter console_stdout;
-		static TextWriter console_stderr;
-		static TextReader console_stdin;
-#endif
-
 		static Console ()
 		{
 #if NET_2_1
@@ -131,11 +125,11 @@ namespace System
 				// UTF-8 ZWNBSP (zero-width non-breaking space).
 				//
 				int code_page = 0;
-				Encoding.InternalCodePage (ref code_page);
+				EncodingHelper.InternalCodePage (ref code_page);
 
 				if (code_page != -1 && ((code_page & 0x0fffffff) == 3 // UTF8Encoding.UTF8_CODE_PAGE
 					|| ((code_page & 0x10000000) != 0)))
-					inputEncoding = outputEncoding = Encoding.UTF8Unmarked;
+					inputEncoding = outputEncoding = EncodingHelper.UTF8Unmarked;
 				else
 					inputEncoding = outputEncoding = Encoding.Default;
 			}
@@ -147,13 +141,13 @@ namespace System
 		{
 #if !NET_2_1
 			if (!Environment.IsRunningOnWindows && ConsoleDriver.IsConsole) {
-				StreamWriter w = new CStreamWriter (OpenStandardOutput (0), outputEncoding);
+				StreamWriter w = new CStreamWriter (OpenStandardOutput (0), outputEncoding, true);
 				w.AutoFlush = true;
-				stdout = TextWriter.Synchronized (w, true);
+				stdout = TextWriter.Synchronized (w);
 
-				w = new CStreamWriter (OpenStandardOutput (0), outputEncoding);
+				w = new CStreamWriter (OpenStandardOutput (0), outputEncoding, true);
 				w.AutoFlush = true;
-				stderr = TextWriter.Synchronized (w, true);
+				stderr = TextWriter.Synchronized (w);
 				
 				stdin = new CStreamReader (OpenStandardInput (0), inputEncoding);
 			} else {
@@ -161,32 +155,26 @@ namespace System
 // FULL_AOT_RUNTIME is used (instead of MONOTOUCH) since we only want this code when running on 
 // iOS (simulator or devices) and *not* when running tools (e.g. btouch #12179) that needs to use 
 // the mscorlib.dll shipped with Xamarin.iOS
-#if FULL_AOT_RUNTIME
+#if MONOTOUCH && FULL_AOT_RUNTIME
 				stdout = new NSLogWriter ();
 #else
 				stdout = new UnexceptionalStreamWriter (OpenStandardOutput (0), outputEncoding);
 				((StreamWriter)stdout).AutoFlush = true;
 #endif
-				stdout = TextWriter.Synchronized (stdout, true);
+				stdout = TextWriter.Synchronized (stdout);
 
-#if FULL_AOT_RUNTIME
+#if MONOTOUCH && FULL_AOT_RUNTIME
 				stderr = new NSLogWriter ();
 #else
 				stderr = new UnexceptionalStreamWriter (OpenStandardError (0), outputEncoding); 
 				((StreamWriter)stderr).AutoFlush = true;
 #endif
-				stderr = TextWriter.Synchronized (stderr, true);
+				stderr = TextWriter.Synchronized (stderr);
 
 				stdin = new UnexceptionalStreamReader (OpenStandardInput (0), inputEncoding);
 				stdin = TextReader.Synchronized (stdin);
 #if !NET_2_1
 			}
-#endif
-
-#if NET_4_5 && !MOBILE
-			console_stderr = stderr;
-			console_stdout = stdout;
-			console_stdin = stdin;
 #endif
 
 #if MONODROID
@@ -224,7 +212,7 @@ namespace System
 			try {
 				return new FileStream (handle, access, false, bufferSize, false, bufferSize == 0);
 			} catch (IOException) {
-				return new NullStream ();
+				return Stream.Null;
 			}
 		}
 
@@ -673,25 +661,23 @@ namespace System
 			set { ConsoleDriver.WindowWidth = value; }
 		}
 
-#if NET_4_5
 		public static bool IsErrorRedirected {
 			get {
-				return stderr != console_stderr || ConsoleDriver.IsErrorRedirected;
+				return ConsoleDriver.IsErrorRedirected;
 			}
 		}
 
 		public static bool IsOutputRedirected {
 			get {
-				return stdout != console_stdout || ConsoleDriver.IsOutputRedirected;
+				return ConsoleDriver.IsOutputRedirected;
 			}
 		}
 
 		public static bool IsInputRedirected {
 			get {
-				return stdin != console_stdin || ConsoleDriver.IsInputRedirected;
+				return ConsoleDriver.IsInputRedirected;
 			}
 		}
-#endif
 
 		public static void Beep ()
 		{

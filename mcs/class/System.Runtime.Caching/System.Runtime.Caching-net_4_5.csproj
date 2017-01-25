@@ -5,10 +5,10 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{C18ABE89-33D2-4780-93BE-AB89B8187581}</ProjectGuid>
+    <ProjectGuid>{CB3E9225-3DFF-4930-BFED-1E8AE5319C32}</ProjectGuid>
     <OutputType>Library</OutputType>
     <NoWarn>1699</NoWarn>
-    <OutputPath>bin\Debug\System.Runtime.Caching-net_4_5</OutputPath>
+    <OutputPath>./../../class/lib/net_4_5</OutputPath>
     <NoStdLib>True</NoStdLib>
     <NoConfig>True</NoConfig>
     
@@ -19,12 +19,13 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
+  
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <NoWarn>1699</NoWarn>
     <Optimize>false</Optimize>
-    <DefineConstants>DEBUG;TRACE;NET_1_1;NET_2_0;NET_3_0;NET_3_5;NET_4_0;NET_4_5</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NET_1_1;NET_2_0;NET_3_0;NET_3_5;NET_4_0;NET_4_5;MONO;DISABLE_CAS_USE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -32,7 +33,7 @@
     <DebugType>pdbonly</DebugType>
     <NoWarn>1699</NoWarn>
     <Optimize>true</Optimize>
-    <DefineConstants>NET_1_1;NET_2_0;NET_3_0;NET_3_5;NET_4_0;NET_4_5</DefineConstants>
+    <DefineConstants>NET_1_1;NET_2_0;NET_3_0;NET_3_5;NET_4_0;NET_4_5;MONO;DISABLE_CAS_USE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -44,44 +45,58 @@
   </PropertyGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\Resources\RH.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheEntryChangeMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheEntryRemovedArguments.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheEntryRemovedCallback.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheEntryRemovedReason.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheEntryUpdateArguments.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheEntryUpdateCallback.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheItem.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheItemPolicy.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheItemPriority.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\CacheMemoryMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\ChangeMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Configuration\CachingSectionGroup.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Configuration\ConfigUtil.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Configuration\MemoryCacheElement.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Configuration\MemoryCacheSection.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Configuration\MemoryCacheSettingsCollection.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Dbg.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\DefaultCacheCapabilities.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\EntryState.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\FileChangeMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\FileChangeNotificationSystem.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\HostFileChangeMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Hosting\IApplicationIdentifier.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Hosting\IFileChangeNotificationSystem.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\Hosting\IMemoryCacheManager.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCache.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCacheEntry.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCacheEntryChangeMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCacheKey.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCacheKeyEqualityComparer.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCacheStatistics.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryCacheStore.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\MemoryMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\ObjectCache.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\OnChangedCallback.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\PerfCounterName.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\PerfCounters.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\PhysicalMemoryMonitor.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\SafeBitVector32.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\SafeRegistryHandle.cs" />
+    <Compile Include="..\..\..\external\referencesource\System.Runtime.Caching\System\Caching\SqlChangeMonitor.cs" />
     <Compile Include="..\..\build\common\Consts.cs" />
     <Compile Include="..\..\build\common\Locale.cs" />
     <Compile Include="..\..\build\common\MonoTODOAttribute.cs" />
     <Compile Include="..\System.Web\System.Web.Configuration_2.0\NullableStringValidator.cs" />
     <Compile Include="Assembly\AssemblyInfo.cs" />
-    <Compile Include="System.Runtime.Caching.Configuration\CachingSectionGroup.cs" />
-    <Compile Include="System.Runtime.Caching.Configuration\MemoryCacheElement.cs" />
-    <Compile Include="System.Runtime.Caching.Configuration\MemoryCacheSection.cs" />
-    <Compile Include="System.Runtime.Caching.Configuration\MemoryCacheSettingsCollection.cs" />
-    <Compile Include="System.Runtime.Caching.Hosting\IApplicationIdentifier.cs" />
-    <Compile Include="System.Runtime.Caching.Hosting\IFileChangeNotificationSystem.cs" />
-    <Compile Include="System.Runtime.Caching.Hosting\IMemoryCacheManager.cs" />
-    <Compile Include="System.Runtime.Caching\CacheEntryChangeMonitor.cs" />
-    <Compile Include="System.Runtime.Caching\CacheEntryRemovedArguments.cs" />
-    <Compile Include="System.Runtime.Caching\CacheEntryRemovedCallback.cs" />
-    <Compile Include="System.Runtime.Caching\CacheEntryRemovedReason.cs" />
-    <Compile Include="System.Runtime.Caching\CacheEntryUpdateArguments.cs" />
-    <Compile Include="System.Runtime.Caching\CacheEntryUpdateCallback.cs" />
-    <Compile Include="System.Runtime.Caching\CacheItem.cs" />
-    <Compile Include="System.Runtime.Caching\CacheItemPolicy.cs" />
-    <Compile Include="System.Runtime.Caching\CacheItemPriority.cs" />
-    <Compile Include="System.Runtime.Caching\ChangeMonitor.cs" />
-    <Compile Include="System.Runtime.Caching\DefaultCacheCapabilities.cs" />
-    <Compile Include="System.Runtime.Caching\FileChangeMonitor.cs" />
-    <Compile Include="System.Runtime.Caching\FileChangeNotificationSystem.cs" />
-    <Compile Include="System.Runtime.Caching\FileChangeNotificationSystemEntry.cs" />
-    <Compile Include="System.Runtime.Caching\Helpers.cs" />
-    <Compile Include="System.Runtime.Caching\HostFileChangeMonitor.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCache.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCacheContainer.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCacheEntry.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCacheEntryChangeMonitor.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCacheEntryPriorityQueue.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCacheLRU.cs" />
-    <Compile Include="System.Runtime.Caching\MemoryCachePerformanceCounters.cs" />
-    <Compile Include="System.Runtime.Caching\ObjectCache.cs" />
-    <Compile Include="System.Runtime.Caching\OnChangedCallback.cs" />
-    <Compile Include="System.Runtime.Caching\SqlChangeMonitor.cs" />  </ItemGroup>
+    <Compile Include="ReferenceSources\CacheEntryCollection.cs" />
+    <Compile Include="ReferenceSources\CacheExpires.cs" />
+    <Compile Include="ReferenceSources\CacheUsage.cs" />
+    <Compile Include="ReferenceSources\R.Designer.cs" />
+    <Compile Include="ReferenceSources\SRef.cs" />  </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
@@ -90,36 +105,44 @@
   </Target>
   -->
   <PropertyGroup>
-    <PreBuildEvent>
+    <PreBuildEvent Condition=" '$(OS)' != 'Windows_NT' ">
 
     </PreBuildEvent>
-    <PostBuildEvent>
-      xcopy $(TargetName).* $(ProjectDir)..\lib\net_4_5\ /Y /R /D
-  </PostBuildEvent>
+    <PreBuildEvent Condition=" '$(OS)' == 'Windows_NT' ">
+
+    </PreBuildEvent>
+
+    <PostBuildEvent Condition=" '$(OS)' != 'Windows_NT' ">
+
+    </PostBuildEvent>
+    <PostBuildEvent Condition=" '$(OS)' == 'Windows_NT' ">
+
+    </PostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\corlib\corlib-net_4_5.csproj">
-      <Project>{07C1F58B-9E99-47F8-A847-79EDA5157DA8}</Project>
-      <Name>corlib\corlib-net_4_5</Name>
+    <ProjectReference Include="../corlib/corlib-net_4_5.csproj">
+      <Project>{33BF0182-AC5C-464C-995B-C9CFE74E1A95}</Project>
+      <Name>corlib-net_4_5</Name>
     </ProjectReference>
-    <ProjectReference Include="..\System\System-net_4_5-2.csproj">
-      <Project>{38FCD731-0E11-46F7-A31B-DCBE853AD8D7}</Project>
-      <Name>System\System-net_4_5-2</Name>
+    <ProjectReference Include="../System/System-net_4_5.csproj">
+      <Project>{FFAC0B73-D997-493B-9C62-27656CD858BB}</Project>
+      <Name>System-net_4_5</Name>
     </ProjectReference>
-    <ProjectReference Include="..\System.Data\System.Data-net_4_5.csproj">
-      <Project>{663D8C81-B74E-4D44-8C59-2264C6942B30}</Project>
-      <Name>System.Data\System.Data-net_4_5</Name>
+    <ProjectReference Include="../System.Data/System.Data-net_4_5.csproj">
+      <Project>{9A33954F-57A8-4D75-B1D8-0F81808A0DD4}</Project>
+      <Name>System.Data-net_4_5</Name>
     </ProjectReference>
-    <ProjectReference Include="..\System.Configuration\System.Configuration-net_4_5.csproj">
-      <Project>{CA2CD67B-1308-460D-BDBA-498F63DEAA31}</Project>
-      <Name>System.Configuration\System.Configuration-net_4_5</Name>
+    <ProjectReference Include="../System.Configuration/System.Configuration-net_4_5.csproj">
+      <Project>{D52A2CEA-245E-4877-950E-3EAC5F541B8E}</Project>
+      <Name>System.Configuration-net_4_5</Name>
     </ProjectReference>
-    <ProjectReference Include="..\System.Core\System.Core-net_4_5.csproj">
-      <Project>{D8260595-C32F-4AC3-9C01-2CD2528CFA1D}</Project>
-      <Name>System.Core\System.Core-net_4_5</Name>
+    <ProjectReference Include="../System.Core/System.Core-net_4_5.csproj">
+      <Project>{D92530F4-3F2B-4351-BD21-9D6BEE6D2A4E}</Project>
+      <Name>System.Core-net_4_5</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />
   </ItemGroup>
 </Project>
+

@@ -98,6 +98,16 @@ namespace System.ServiceModel.Dispatcher
 		}
 #endif
 
+		[MonoTODO]
+		public ICollection<ClientOperation> ClientOperations {
+			get { throw new NotImplementedException (); }
+		}
+
+		[MonoTODO]
+		public ICollection<IClientMessageInspector> ClientMessageInspectors {
+			get { throw new NotImplementedException (); }
+		}
+
 		public bool ManualAddressing {
 			get { return manual_addressing; }
 			set { manual_addressing = value; }

@@ -51,6 +51,7 @@ using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using Mono.Globalization.Unicode;
 
+using System.Diagnostics.Contracts;
 
 namespace System
 {
@@ -65,6 +66,12 @@ namespace System
 		public static readonly String Empty = "";
 
 		internal static readonly int LOS_limit = GetLOSLimit ();
+
+		internal static bool LegacyMode {
+			get {
+				return false;
+			}
+		}
 
 		public static unsafe bool Equals (string a, string b)
 		{
@@ -312,22 +319,9 @@ namespace System
 		}
 
 		// .NET 2.0 compatibility only
-#if !NET_4_0 && !MOBILE
-		static readonly char[] WhiteChars = {
-			(char) 0x9, (char) 0xA, (char) 0xB, (char) 0xC, (char) 0xD,
-			(char) 0x85, (char) 0x1680, (char) 0x2028, (char) 0x2029,
-			(char) 0x20, (char) 0xA0, (char) 0x2000, (char) 0x2001, (char) 0x2002, (char) 0x2003, (char) 0x2004,
-			(char) 0x2005, (char) 0x2006, (char) 0x2007, (char) 0x2008, (char) 0x2009, (char) 0x200A, (char) 0x200B,
-			(char) 0x3000, (char) 0xFEFF
-		};
-#endif
 
 		unsafe string[] SplitByCharacters (char[] sep, int count, bool removeEmpty)
 		{
-#if !NET_4_0 && !MOBILE
-			if (sep == null || sep.Length == 0)
-				sep = WhiteChars;
-#endif
 
 			int[] split_points = null;
 			int total_points = 0;
@@ -539,7 +533,6 @@ namespace System
 
 		unsafe int FindNotWhiteSpace (int pos, int target, int change)
 		{
-#if NET_4_0
 			fixed (char* src = this) {
 				while (pos != target) {
 					if (!char.IsWhiteSpace (src[pos]))
@@ -548,25 +541,6 @@ namespace System
 					pos += change;
 				}
 			}
-#else
-			while (pos != target) {
-				char c = this[pos];
-				if (c < 0x85) {
-					if (c != 0x20) {
-						if (c < 0x9 || c > 0xD)
-							return pos;
-					}
-				}
-				else {
-					if (c != 0xA0 && c != 0xFEFF && c != 0x3000) {
-						if (c != 0x85 && c != 0x1680 && c != 0x2028 && c != 0x2029)
-							if (c < 0x2000 || c > 0x200B)
-								return pos;
-					}
-				}
-				pos += change;
-			}
-#endif
 			return pos;
 		}
 
@@ -1596,7 +1570,13 @@ namespace System
 
 			fixed (char* dest = tmp, src = this) {
 				char* padPos = dest;
-				char* padTo = dest + (totalWidth - length);
+				char* padTo;
+				try {
+					padTo = checked (dest + (totalWidth - length));
+				} catch (OverflowException) {
+					throw new OutOfMemoryException ();
+				}
+
 				while (padPos != padTo)
 					*padPos++ = paddingChar;
 
@@ -1627,10 +1607,14 @@ namespace System
 			fixed (char* dest = tmp, src = this) {
 				CharCopy (dest, src, length);
 
-				char* padPos = dest + length;
-				char* padTo = dest + totalWidth;
-				while (padPos != padTo)
-					*padPos++ = paddingChar;
+				try {
+					char* padPos = checked (dest + length);
+					char* padTo = checked (dest + totalWidth);
+					while (padPos != padTo)
+						*padPos++ = paddingChar;
+				} catch (OverflowException) {
+					throw new OutOfMemoryException ();
+				}
 			}
 			return tmp;
 		}
@@ -1694,9 +1678,9 @@ namespace System
 			case StringComparison.InvariantCultureIgnoreCase:
 				return CultureInfo.InvariantCulture.CompareInfo.IsSuffix (this, value, CompareOptions.IgnoreCase);
 			case StringComparison.Ordinal:
-				return CultureInfo.CurrentCulture.CompareInfo.IsSuffix (this, value, CompareOptions.Ordinal);
+				return CultureInfo.InvariantCulture.CompareInfo.IsSuffix (this, value, CompareOptions.Ordinal);
 			case StringComparison.OrdinalIgnoreCase:
-				return CultureInfo.CurrentCulture.CompareInfo.IsSuffix (this, value, CompareOptions.OrdinalIgnoreCase);
+				return CultureInfo.InvariantCulture.CompareInfo.IsSuffix (this, value, CompareOptions.OrdinalIgnoreCase);
 			default:
 				string msg = Locale.GetText ("Invalid value '{0}' for StringComparison", comparisonType);
 				throw new ArgumentException (msg, "comparisonType");
@@ -1795,7 +1779,14 @@ namespace System
 				}
 				if (count == 0)
 					return this;
-				int nlen = this.length + ((newValue.length - oldValue.length) * count);
+				int nlen = 0;
+				checked {
+					try {
+						nlen = this.length + ((newValue.length - oldValue.length) * count);
+					} catch (OverflowException) {
+						throw new OutOfMemoryException ();
+					}
+				}
 				String tmp = InternalAllocateStr (nlen);
 
 				int curPos = 0, lastReadPos = 0;
@@ -2029,7 +2020,7 @@ namespace System
 						if (arg is IFormattable)
 							str = ((IFormattable)arg).ToString (arg_format, provider);
 						else
-							str = arg.ToString ();
+							str = arg.ToString () ?? Empty;
 					}
 
 					// pad formatted string and append to result
@@ -2165,7 +2156,10 @@ namespace System
 			if (str1 == null || str1.Length == 0)
 				return str0; 
 
-			String tmp = InternalAllocateStr (str0.length + str1.length);
+			int nlen = str0.length + str1.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
+			String tmp = InternalAllocateStr (nlen);
 
 			fixed (char *dest = tmp, src = str0)
 				CharCopy (dest, src, str0.length);
@@ -2199,7 +2193,13 @@ namespace System
 				}
 			}
 
-			String tmp = InternalAllocateStr (str0.length + str1.length + str2.length);
+			int nlen = str0.length + str1.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
+			nlen += str2.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
+			String tmp = InternalAllocateStr (nlen);
 
 			if (str0.Length != 0) {
 				fixed (char *dest = tmp, src = str0) {
@@ -2234,6 +2234,15 @@ namespace System
 			if (str3 == null)
 				str3 = Empty;
 
+			int nlen = str0.length + str1.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
+			nlen += str2.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
+			nlen += str3.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
 			String tmp = InternalAllocateStr (str0.length + str1.length + str2.length + str3.length);
 
 			if (str0.Length != 0) {
@@ -2275,6 +2284,8 @@ namespace System
 				if (args[i] != null) {
 					strings[i] = args[i].ToString ();
 					len += strings[i].length;
+					if (len < 0)
+						throw new OutOfMemoryException ();
 				}
 			}
 
@@ -2291,6 +2302,8 @@ namespace System
 				String s = values[i];
 				if (s != null)
 					len += s.length;
+					if (len < 0)
+						throw new OutOfMemoryException ();
 			}
 
 			return ConcatInternal (values, len);
@@ -2300,6 +2313,8 @@ namespace System
 		{
 			if (length == 0)
 				return Empty;
+			if (length < 0)
+				throw new OutOfMemoryException ();
 
 			String tmp = InternalAllocateStr (length);
 
@@ -2330,7 +2345,12 @@ namespace System
 				return this;
 			if (this.Length == 0)
 				return value;
-			String tmp = InternalAllocateStr (this.length + value.length);
+
+			int nlen = this.length + value.length;
+			if (nlen < 0)
+				throw new OutOfMemoryException ();
+
+			String tmp = InternalAllocateStr (nlen);
 
 			fixed (char *dest = tmp, src = this, val = value) {
 				char *dst = dest;
@@ -2359,11 +2379,7 @@ namespace System
 			return InternalIsInterned (str);
 		}
 	
-#if NET_4_0
 		public static string Join (string separator, params string [] value)
-#else
-		public static string Join (string separator, string [] value)
-#endif
 		{
 			if (value == null)
 				throw new ArgumentNullException ("value");
@@ -2497,11 +2513,9 @@ namespace System
 			return Convert.ToSingle (this, provider);
 		}
 
-		object IConvertible.ToType (Type targetType, IFormatProvider provider)
+		object IConvertible.ToType (Type type, IFormatProvider provider)
 		{
-			if (targetType == null)
-				throw new ArgumentNullException ("type");
-			return Convert.ToType (this, targetType, provider, false);
+			return Convert.DefaultToType ((IConvertible)this, type, provider);
 		}
 
 		ushort IConvertible.ToUInt16 (IFormatProvider provider)
@@ -2584,9 +2598,22 @@ namespace System
 			
 			if (ptr < max && str[ptr] == ':') {
 				int start = ++ ptr;
-				while (ptr < max && str[ptr] != '}')
-					++ ptr;
-				
+				while (ptr < max) {
+					if (str [ptr] == '}') {
+						if (ptr + 1 < max && str [ptr + 1] == '}') {
+							++ptr;
+							format += str.Substring (start, ptr - start);
+							++ptr;
+							start = ptr;
+							continue;
+						}
+
+						break;
+					}
+
+					++ptr;
+				}
+
 				format += str.Substring (start, ptr - start);
 			}
 			else
@@ -2629,24 +2656,8 @@ namespace System
 			}
 		}
 
-		internal unsafe void InternalSetLength (int newLength)
-		{
-			if (newLength > length)
-				throw new ArgumentOutOfRangeException ("newLength", "newLength as to be <= length");
-
-			// zero terminate, we can pass string objects directly via pinvoke
-			// we also zero the rest of the string, since the new GC needs to be
-			// able to handle the changing size (it will skip the 0 bytes).
-			fixed (char * pStr = &start_char) {
-				char *p = pStr + newLength;
-				char *end = pStr + length;
-				while (p < end) {
-					p [0] = '\0';
-					p++;
-				}
-			}
-			length = newLength;
-		}
+		[MethodImplAttribute(MethodImplOptions.InternalCall)]
+		internal extern void InternalSetLength (int newLength);
 
 		[ReliabilityContractAttribute (Consistency.WillNotCorruptState, Cer.MayFail)]
 		// When modifying it, GetCaseInsensitiveHashCode() should be modified as well.
@@ -2667,7 +2678,6 @@ namespace System
 			}
 		}
 
-#if NET_4_0
 		[ComVisible(false)]
 		public static string Concat (IEnumerable<string> values)
 		{
@@ -2680,6 +2690,8 @@ namespace System
 				if (v == null)
 					continue;
 				len += v.Length;
+				if (len < 0)
+					throw new OutOfMemoryException ();
 				stringList.Add (v);
 			}
 			return ConcatInternal (stringList.ToArray (), len);
@@ -2696,6 +2708,8 @@ namespace System
 			foreach (var v in values){
 				string sr = v.ToString ();
 				len += sr.Length;
+				if (len < 0)
+					throw new OutOfMemoryException ();
 				stringList.Add (sr);
 			}
 			return ConcatInternal (stringList.ToArray (), len);
@@ -2710,9 +2724,7 @@ namespace System
 			if (values == null)
 				throw new ArgumentNullException ("values");
 			
-			var stringList = new List<string> ();
-			foreach (var v in values)
-				stringList.Add (v);
+			var stringList = new List<string> (values);
 
 			return JoinUnchecked (separator, stringList.ToArray (), 0, stringList.Count);
 		}
@@ -2743,17 +2755,16 @@ namespace System
 			if (values == null)
 				throw new ArgumentNullException ("values");
 			
-			var stringList = new List<string> ();
-			foreach (var v in values)
-				stringList.Add (v.ToString ());
+			var stringList = values as IList<T> ?? new List<T> (values);
+			var strCopy = new string [stringList.Count];
+			int i = 0;
+			foreach (var v in stringList)
+				strCopy [i++] = v.ToString ();
 
-			return JoinUnchecked (separator, stringList.ToArray (), 0, stringList.Count);
+			return JoinUnchecked (separator, strCopy, 0, strCopy.Length);
 		}
 
 		public static bool IsNullOrWhiteSpace (string value)
-#else
-		internal static bool IsNullOrWhiteSpace (string value)
-#endif
 		{
 			if ((value == null) || (value.Length == 0))
 				return true;
@@ -2829,6 +2840,8 @@ namespace System
 			if (length != 0)
 				fixed (byte* bytePtr = bytes)
 					try {
+						if (value == null)
+							throw new ArgumentOutOfRangeException ("ptr", "Value, startIndex and length do not refer to a valid string.");
 						memcpy (bytePtr, (byte*) (value + startIndex), length);
 					} catch (NullReferenceException) {
 						throw new ArgumentOutOfRangeException ("ptr", "Value, startIndex and length do not refer to a valid string.");
@@ -3170,6 +3183,11 @@ namespace System
 				CharCopyReverse (dest + targetIndex, src + sourceIndex, count);
 		}
 
+		internal static String FastAllocateString (int length)
+		{
+        		return InternalAllocateStr (length);
+		}
+
 		[CLSCompliant (false), MethodImplAttribute (MethodImplOptions.InternalCall)]
 		unsafe public extern String (char *value);
 
@@ -3205,5 +3223,51 @@ namespace System
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static int GetLOSLimit ();
+
+#region "from referencesource" // and actually we replaced some parts.
+
+        // Helper for encodings so they can talk to our buffer directly
+        // stringLength must be the exact size we'll expect
+        [System.Security.SecurityCritical]  // auto-generated
+        unsafe static internal String CreateStringFromEncoding(
+            byte* bytes, int byteLength, Encoding encoding)
+        {
+            Contract.Requires(bytes != null);
+            Contract.Requires(byteLength >= 0);
+
+            // Get our string length
+            int stringLength = encoding.GetCharCount(bytes, byteLength, null);
+            Contract.Assert(stringLength >= 0, "stringLength >= 0");
+            
+            // They gave us an empty string if they needed one
+            // 0 bytelength might be possible if there's something in an encoder
+            if (stringLength == 0)
+                return String.Empty;
+            
+            String s = FastAllocateString(stringLength);
+            fixed(char* pTempChars = &s.start_char)
+            {
+                int doubleCheck = encoding.GetChars(bytes, byteLength, pTempChars, stringLength, null);
+                Contract.Assert(stringLength == doubleCheck, 
+                    "Expected encoding.GetChars to return same length as encoding.GetCharCount");
+            }
+
+            return s;
+        }
+
+		// our own implementation for CLR icall.
+		unsafe internal static int nativeCompareOrdinalIgnoreCaseWC (string name, sbyte *strBBytes)
+		{
+			for (int i = 0; i < name.Length; i++) {
+				sbyte b = *(strBBytes + i);
+				if (b < 0)
+					throw new ArgumentException ();
+				int ret = char.ToUpper ((char) b) - char.ToUpper (name [i]);
+				if (ret != 0)
+					return ret;
+			}
+			return 0;
+		}
+#endregion
 	}
 }

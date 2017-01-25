@@ -42,9 +42,7 @@ namespace System.Net.Sockets
 		int in_progress;
 		internal Socket.Worker Worker;
 		EndPoint remote_ep;
-#if NET_4_0
 		public Exception ConnectByNameError { get; internal set; }
-#endif
 
 		public event EventHandler<SocketAsyncEventArgs> Completed;
 
@@ -82,7 +80,6 @@ namespace System.Net.Sockets
 		public SocketFlags SocketFlags { get; set; }
 		public object UserToken { get; set; }
 		internal Socket curSocket;
-#if NET_2_1
 		public Socket ConnectSocket {
 			get {
 				switch (SocketError) {
@@ -101,7 +98,6 @@ namespace System.Net.Sockets
 		{
 			PolicyRestricted = policy;
 		}
-#endif
 		
 		public SocketAsyncEventArgs ()
 		{
@@ -231,7 +227,7 @@ namespace System.Net.Sockets
 			else if (op == SocketAsyncOperation.Disconnect)
 				args.DisconnectCallback (ares);
 			else if (op == SocketAsyncOperation.Connect)
-				args.ConnectCallback ();
+				args.ConnectCallback (ares);
 			/*
 			else if (op == Socket.SocketOperation.ReceiveMessageFrom)
 			else if (op == Socket.SocketOperation.SendPackets)
@@ -254,10 +250,14 @@ namespace System.Net.Sockets
 			}
 		}
 
-		void ConnectCallback ()
+		void ConnectCallback (IAsyncResult ares)
 		{
 			try {
-				SocketError = (SocketError) Worker.result.error;
+				curSocket.EndConnect (ares);
+ 			} catch (SocketException se) {
+				SocketError = se.SocketErrorCode;
+			} catch (ObjectDisposedException) {
+				SocketError = SocketError.OperationAborted;
 			} finally {
 				OnCompleted (this);
 			}

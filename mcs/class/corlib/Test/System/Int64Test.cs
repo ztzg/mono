@@ -308,14 +308,30 @@ public class Int64Test
 		Assert.IsTrue(typeof(OverflowException) == e.GetType(), "#20");
 	}
 
+		try {
+			Int64.Parse ("５", NumberStyles.Any, CultureInfo.InvariantCulture);
+			Assert.Fail ("C#42");
+		} catch (FormatException) {
+		}
+
 	// Pass a DateTimeFormatInfo, it is unable to format
 	// numbers, but we should not crash
 	
 	Int64.Parse ("123", new DateTimeFormatInfo ());
 	
 	Assert.AreEqual (734561, Int64.Parse ("734561\0"), "#21");
-	Assert.AreEqual (734561, Int64.Parse ("734561\0\0\0    \0"), "#22");
-	Assert.AreEqual (734561, Int64.Parse ("734561\0\0\0    "), "#23");
+	try {
+		Int64.Parse ("734561\0\0\0    \0");
+		Assert.Fail ("#22");
+	} catch (FormatException) {		
+	}
+
+	try {
+		Int64.Parse ("734561\0\0\0    ");
+		Assert.Fail ("#23");
+	} catch (FormatException) {
+	}
+
 	Assert.AreEqual (734561, Int64.Parse ("734561\0\0\0"), "#24");
 
 	Assert.AreEqual (0, Int64.Parse ("0+", NumberStyles.Any), "#30");

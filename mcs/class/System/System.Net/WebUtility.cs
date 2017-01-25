@@ -1,8 +1,10 @@
 //
 // System.Net.WebUtility
 //
-// Author: Mike Kestner  <mkestner@novell.com>
+// Authors: Mike Kestner  <mkestner@novell.com>
+//          Marek Safar (marek.safar@gmail.com)
 //
+// Copyright (C) 2014 Xamarin Inc (http://www.xamarin.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -24,7 +26,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_4_0
 using System;
 using System.IO;
 using System.Runtime.Serialization;
@@ -37,11 +38,17 @@ namespace System.Net
 		
 		public static string HtmlDecode (string value)
 		{
+			if (string.IsNullOrEmpty (value))
+				return value;
+
 			return HttpUtility.HtmlDecode (value);
 		}
 		
 		public static void HtmlDecode (string value, TextWriter output)
 		{
+			if (output == null)
+				throw new ArgumentNullException ("output");
+
 			output.Write (HtmlDecode (value));
 		}
 		
@@ -52,6 +59,9 @@ namespace System.Net
 		
 		public static void HtmlEncode (string value, TextWriter output)
 		{
+			if (output == null)
+				throw new ArgumentNullException ("output");
+
 			output.Write (HtmlEncode (value));
 		}
 		
@@ -78,4 +88,3 @@ namespace System.Net
 		}
 	}
 }
-#endif

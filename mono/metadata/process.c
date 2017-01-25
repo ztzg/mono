@@ -23,21 +23,7 @@
 #include <mono/utils/strenc.h>
 #include <mono/utils/mono-proclib.h>
 #include <mono/io-layer/io-layer.h>
-#if defined (MINGW_CROSS_COMPILE) && defined (HAVE_GETPROCESSID)
-#undef HAVE_GETPROCESSID
-#endif
-#ifndef HAVE_GETPROCESSID
-#if defined(_MSC_VER) || defined(HAVE_WINTERNL_H)
-#include <winternl.h>
-#ifndef NT_SUCCESS
-#define NT_SUCCESS(status) ((NTSTATUS) (status) >= 0)
-#endif /* !NT_SUCCESS */
-#else /* ! (defined(_MSC_VER) || defined(HAVE_WINTERNL_H)) */
-#include <ddk/ntddk.h>
-#include <ddk/ntapi.h>
-#endif /* (defined(_MSC_VER) || defined(HAVE_WINTERNL_H)) */
-#endif /* !HAVE_GETPROCESSID */
-/* FIXME: fix this code to not depend so much on the inetrnals */
+/* FIXME: fix this code to not depend so much on the internals */
 #include <mono/metadata/class-internals.h>
 
 #define LOGDEBUG(...)  
@@ -48,8 +34,6 @@ HANDLE ves_icall_System_Diagnostics_Process_GetProcess_internal (guint32 pid)
 {
 	HANDLE handle;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	/* GetCurrentProcess returns a pseudo-handle, so use
 	 * OpenProcess instead
 	 */
@@ -63,18 +47,15 @@ HANDLE ves_icall_System_Diagnostics_Process_GetProcess_internal (guint32 pid)
 	return(handle);
 }
 
-guint32 ves_icall_System_Diagnostics_Process_GetPid_internal (void)
+guint32
+ves_icall_System_Diagnostics_Process_GetPid_internal (void)
 {
-	MONO_ARCH_SAVE_REGS;
-
-	return(GetCurrentProcessId ());
+	return mono_process_current_pid ();
 }
 
 void ves_icall_System_Diagnostics_Process_Process_free_internal (MonoObject *this,
 								 HANDLE process)
 {
-	MONO_ARCH_SAVE_REGS;
-
 #ifdef THREAD_DEBUG
 	g_message ("%s: Closing process %p, handle %p", __func__, this, process);
 #endif
@@ -277,11 +258,11 @@ static void process_get_fileversion (MonoObject *filever, gunichar2 *filename)
 				process_set_field_int (filever, "productbuildpart", HIWORD (ffi->dwProductVersionLS));
 				process_set_field_int (filever, "productprivatepart", LOWORD (ffi->dwProductVersionLS));
 
-				process_set_field_bool (filever, "isdebug", (ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_DEBUG);
-				process_set_field_bool (filever, "isprerelease", (ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_PRERELEASE);
-				process_set_field_bool (filever, "ispatched", (ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_PATCHED);
-				process_set_field_bool (filever, "isprivatebuild", (ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_PRIVATEBUILD);
-				process_set_field_bool (filever, "isspecialbuild", (ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_SPECIALBUILD);
+				process_set_field_bool (filever, "isdebug", ((ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_DEBUG) != 0);
+				process_set_field_bool (filever, "isprerelease", ((ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_PRERELEASE) != 0);
+				process_set_field_bool (filever, "ispatched", ((ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_PATCHED) != 0);
+				process_set_field_bool (filever, "isprivatebuild", ((ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_PRIVATEBUILD) != 0);
+				process_set_field_bool (filever, "isspecialbuild", ((ffi->dwFileFlags & ffi->dwFileFlagsMask) & VS_FF_SPECIALBUILD) != 0);
 			}
 			g_free (query);
 
@@ -369,9 +350,9 @@ static void process_get_fileversion (MonoObject *filever, gunichar2 *filename)
 	}
 }
 
-static MonoObject* process_add_module (HANDLE process, HMODULE mod, gunichar2 *filename, gunichar2 *modulename)
+static MonoObject* process_add_module (HANDLE process, HMODULE mod, gunichar2 *filename, gunichar2 *modulename, MonoClass *proc_class)
 {
-	MonoClass *proc_class, *filever_class;
+	MonoClass *filever_class;
 	MonoObject *item, *filever;
 	MonoDomain *domain=mono_domain_get ();
 	MODULEINFO modinfo;
@@ -379,8 +360,6 @@ static MonoObject* process_add_module (HANDLE process, HMODULE mod, gunichar2 *f
 	
 	/* Build a System.Diagnostics.ProcessModule with the data.
 	 */
-	proc_class=mono_class_from_name (system_assembly, "System.Diagnostics",
-					 "ProcessModule");
 	item=mono_object_new (domain, proc_class);
 
 	filever_class=mono_class_from_name (system_assembly,
@@ -422,17 +401,19 @@ MonoArray *ves_icall_System_Diagnostics_Process_GetModules_internal (MonoObject 
 	DWORD needed;
 	guint32 count = 0;
 	guint32 i, num_added = 0;
+	MonoClass *proc_class;
 
 	STASH_SYS_ASS (this);
 
 	if (EnumProcessModules (process, mods, sizeof(mods), &needed)) {
 		count = needed / sizeof(HMODULE);
-		temp_arr = mono_array_new (mono_domain_get (), mono_get_object_class (), count);
+		proc_class = mono_class_from_name (system_assembly, "System.Diagnostics", "ProcessModule");
+		temp_arr = mono_array_new (mono_domain_get (), proc_class, count);
 		for (i = 0; i < count; i++) {
 			if (GetModuleBaseName (process, mods[i], modname, MAX_PATH) &&
 					GetModuleFileNameEx (process, mods[i], filename, MAX_PATH)) {
 				MonoObject *module = process_add_module (process, mods[i],
-						filename, modname);
+						filename, modname, proc_class);
 				mono_array_setref (temp_arr, num_added++, module);
 			}
 		}
@@ -442,7 +423,7 @@ MonoArray *ves_icall_System_Diagnostics_Process_GetModules_internal (MonoObject 
 		arr = temp_arr;
 	} else {
 		/* shorter version of the array */
-		arr = mono_array_new (mono_domain_get (), mono_get_object_class (), num_added);
+		arr = mono_array_new (mono_domain_get (), proc_class, num_added);
 
 		for (i = 0; i < num_added; i++)
 			mono_array_setref (arr, i, mono_array_get (temp_arr, MonoObject*, i));
@@ -453,8 +434,6 @@ MonoArray *ves_icall_System_Diagnostics_Process_GetModules_internal (MonoObject 
 
 void ves_icall_System_Diagnostics_FileVersionInfo_GetVersionInfo_internal (MonoObject *this, MonoString *filename)
 {
-	MONO_ARCH_SAVE_REGS;
-
 	STASH_SYS_ASS (this);
 	
 	process_get_fileversion (this, mono_string_chars (filename));
@@ -527,76 +506,6 @@ complete_path (const gunichar2 *appname, gchar **completed)
 	g_free (utf8appmemory);
 	return TRUE;
 }
-
-#ifndef HAVE_GETPROCESSID
-/* Run-time GetProcessId detection for Windows */
-#ifdef TARGET_WIN32
-#define HAVE_GETPROCESSID
-
-typedef DWORD (WINAPI *GETPROCESSID_PROC) (HANDLE);
-typedef DWORD (WINAPI *NTQUERYINFORMATIONPROCESS_PROC) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
-typedef DWORD (WINAPI *RTLNTSTATUSTODOSERROR_PROC) (NTSTATUS);
-
-static DWORD WINAPI GetProcessId_detect (HANDLE process);
-
-static GETPROCESSID_PROC GetProcessId = &GetProcessId_detect;
-static NTQUERYINFORMATIONPROCESS_PROC NtQueryInformationProcess_proc = NULL;
-static RTLNTSTATUSTODOSERROR_PROC RtlNtStatusToDosError_proc = NULL;
-
-static DWORD WINAPI GetProcessId_ntdll (HANDLE process)
-{
-	PROCESS_BASIC_INFORMATION pi;
-	NTSTATUS status;
-
-	status = NtQueryInformationProcess_proc (process, ProcessBasicInformation, &pi, sizeof (pi), NULL);
-	if (NT_SUCCESS (status)) {
-		return pi.UniqueProcessId;
-	} else {
-		SetLastError (RtlNtStatusToDosError_proc (status));
-		return 0;
-	}
-}
-
-static DWORD WINAPI GetProcessId_stub (HANDLE process)
-{
-	SetLastError (ERROR_CALL_NOT_IMPLEMENTED);
-	return 0;
-}
-
-static DWORD WINAPI GetProcessId_detect (HANDLE process)
-{
-	HMODULE module_handle;
-	GETPROCESSID_PROC GetProcessId_kernel;
-
-	/* Windows XP SP1 and above have GetProcessId API */
-	module_handle = GetModuleHandle (L"kernel32.dll");
-	if (module_handle != NULL) {
-		GetProcessId_kernel = (GETPROCESSID_PROC) GetProcAddress (module_handle, "GetProcessId");
-		if (GetProcessId_kernel != NULL) {
-			GetProcessId = GetProcessId_kernel;
-			return GetProcessId (process);
-		}
-	}
-
-	/* Windows 2000 and above have deprecated NtQueryInformationProcess API */
-	module_handle = GetModuleHandle (L"ntdll.dll");
-	if (module_handle != NULL) {
-		NtQueryInformationProcess_proc = (NTQUERYINFORMATIONPROCESS_PROC) GetProcAddress (module_handle, "NtQueryInformationProcess");
-		if (NtQueryInformationProcess_proc != NULL) {
-			RtlNtStatusToDosError_proc = (RTLNTSTATUSTODOSERROR_PROC) GetProcAddress (module_handle, "RtlNtStatusToDosError");
-			if (RtlNtStatusToDosError_proc != NULL) {
-				GetProcessId = &GetProcessId_ntdll;
-				return GetProcessId (process);
-			}
-		}
-	}
-
-	/* Fall back to ERROR_CALL_NOT_IMPLEMENTED */
-	GetProcessId = &GetProcessId_stub;
-	return GetProcessId (process);
-}
-#endif /* HOST_WIN32 */
-#endif /* !HAVE_GETPROCESSID */
 
 MonoBoolean ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoProcessStartInfo *proc_start_info, MonoProcInfo *process_info)
 {
@@ -783,8 +692,6 @@ MonoBoolean ves_icall_System_Diagnostics_Process_WaitForExit_internal (MonoObjec
 {
 	guint32 ret;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	if(ms<0) {
 		/* Wait forever */
 		ret=WaitForSingleObjectEx (process, INFINITE, TRUE);
@@ -802,8 +709,6 @@ MonoBoolean ves_icall_System_Diagnostics_Process_WaitForInputIdle_internal (Mono
 {
 	guint32 ret;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	if(ms<0) {
 		/* Wait forever */
 		ret=WaitForInputIdle (process, INFINITE);
@@ -814,52 +719,42 @@ MonoBoolean ves_icall_System_Diagnostics_Process_WaitForInputIdle_internal (Mono
 	return (ret) ? FALSE : TRUE;
 }
 
+static guint64
+file_time_to_guint64 (FILETIME *time)
+{
+	return ((guint64)time->dwHighDateTime << 32) | ((guint64)time->dwLowDateTime);
+}
+
 gint64 ves_icall_System_Diagnostics_Process_ExitTime_internal (HANDLE process)
 {
 	gboolean ret;
-	gint64 ticks;
 	FILETIME create_time, exit_time, kernel_time, user_time;
 	
-	MONO_ARCH_SAVE_REGS;
-
-	ret=GetProcessTimes (process, &create_time, &exit_time, &kernel_time,
-			     &user_time);
-	if(ret==TRUE) {
-		ticks=((guint64)exit_time.dwHighDateTime << 32) +
-			exit_time.dwLowDateTime;
-		
-		return(ticks);
-	} else {
-		return(0);
-	}
+	ret = GetProcessTimes (process, &create_time, &exit_time, &kernel_time,
+						   &user_time);
+	if (ret)
+		return file_time_to_guint64 (&exit_time);
+	else
+		return 0;
 }
 
 gint64 ves_icall_System_Diagnostics_Process_StartTime_internal (HANDLE process)
 {
 	gboolean ret;
-	gint64 ticks;
 	FILETIME create_time, exit_time, kernel_time, user_time;
 	
-	MONO_ARCH_SAVE_REGS;
-
-	ret=GetProcessTimes (process, &create_time, &exit_time, &kernel_time,
-			     &user_time);
-	if(ret==TRUE) {
-		ticks=((guint64)create_time.dwHighDateTime << 32) +
-			create_time.dwLowDateTime;
-		
-		return(ticks);
-	} else {
-		return(0);
-	}
+	ret = GetProcessTimes (process, &create_time, &exit_time, &kernel_time,
+						   &user_time);
+	if (ret)
+		return file_time_to_guint64 (&create_time);
+	else
+		return 0;
 }
 
 gint32 ves_icall_System_Diagnostics_Process_ExitCode_internal (HANDLE process)
 {
 	DWORD code;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	GetExitCodeProcess (process, &code);
 	
 	LOGDEBUG (g_message ("%s: process exit code is %d", __func__, code));
@@ -876,8 +771,6 @@ MonoString *ves_icall_System_Diagnostics_Process_ProcessName_internal (HANDLE pr
 	DWORD needed;
 	guint32 len;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	ok=EnumProcessModules (process, &mod, sizeof(mod), &needed);
 	if(ok==FALSE) {
 		return(NULL);
@@ -898,13 +791,30 @@ MonoString *ves_icall_System_Diagnostics_Process_ProcessName_internal (HANDLE pr
 /* Returns an array of pids */
 MonoArray *ves_icall_System_Diagnostics_Process_GetProcesses_internal (void)
 {
+#if !defined(HOST_WIN32)
+	MonoArray *procs;
+	gpointer *pidarray;
+	int i, count;
+
+	pidarray = mono_process_list (&count);
+	if (!pidarray)
+		mono_raise_exception (mono_get_exception_not_supported ("This system does not support EnumProcesses"));
+	procs = mono_array_new (mono_domain_get (), mono_get_int32_class (), count);
+	if (sizeof (guint32) == sizeof (gpointer)) {
+		memcpy (mono_array_addr (procs, guint32, 0), pidarray, count);
+	} else {
+		for (i = 0; i < count; ++i)
+			*(mono_array_addr (procs, guint32, i)) = GPOINTER_TO_UINT (pidarray [i]);
+	}
+	g_free (pidarray);
+
+	return procs;
+#else
 	MonoArray *procs;
 	gboolean ret;
 	DWORD needed;
-	guint32 count;
+	int count;
 	guint32 *pids;
-
-	MONO_ARCH_SAVE_REGS;
 
 	count = 512;
 	do {
@@ -933,6 +843,7 @@ MonoArray *ves_icall_System_Diagnostics_Process_GetProcesses_internal (void)
 	pids = NULL;
 	
 	return procs;
+#endif
 }
 
 MonoBoolean ves_icall_System_Diagnostics_Process_GetWorkingSet_internal (HANDLE process, guint32 *min, guint32 *max)
@@ -940,8 +851,6 @@ MonoBoolean ves_icall_System_Diagnostics_Process_GetWorkingSet_internal (HANDLE 
 	gboolean ret;
 	SIZE_T ws_min, ws_max;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	ret=GetProcessWorkingSetSize (process, &ws_min, &ws_max);
 	*min=(guint32)ws_min;
 	*max=(guint32)ws_max;
@@ -955,8 +864,6 @@ MonoBoolean ves_icall_System_Diagnostics_Process_SetWorkingSet_internal (HANDLE 
 	SIZE_T ws_min;
 	SIZE_T ws_max;
 	
-	MONO_ARCH_SAVE_REGS;
-
 	ret=GetProcessWorkingSetSize (process, &ws_min, &ws_max);
 	if(ret==FALSE) {
 		return(FALSE);
@@ -976,8 +883,6 @@ MonoBoolean ves_icall_System_Diagnostics_Process_SetWorkingSet_internal (HANDLE 
 MonoBoolean
 ves_icall_System_Diagnostics_Process_Kill_internal (HANDLE process, gint32 sig)
 {
-	MONO_ARCH_SAVE_REGS;
-
 	/* sig == 1 -> Kill, sig == 2 -> CloseMainWindow */
 
 	return TerminateProcess (process, -sig);
@@ -989,12 +894,15 @@ ves_icall_System_Diagnostics_Process_Times (HANDLE process, gint32 type)
 	FILETIME create_time, exit_time, kernel_time, user_time;
 	
 	if (GetProcessTimes (process, &create_time, &exit_time, &kernel_time, &user_time)) {
+		guint64 ktime = file_time_to_guint64 (&kernel_time);
+		guint64 utime = file_time_to_guint64 (&user_time);
+
 		if (type == 0)
-			return *(gint64*)&user_time;
+			return utime;
 		else if (type == 1)
-			return *(gint64*)&kernel_time;
-		/* system + user time: FILETIME can be (memory) cast to a 64 bit int */
-		return *(gint64*)&kernel_time + *(gint64*)&user_time;
+			return ktime;
+		else
+			return ktime + utime;
 	}
 	return 0;
 }
@@ -1020,8 +928,6 @@ ves_icall_System_Diagnostics_Process_ProcessHandle_duplicate (HANDLE process)
 {
 	HANDLE ret;
 
-	MONO_ARCH_SAVE_REGS;
-
 	LOGDEBUG (g_message ("%s: Duplicating process handle %p", __func__, process));
 	
 	DuplicateHandle (GetCurrentProcess (), process, GetCurrentProcess (),
@@ -1033,8 +939,6 @@ ves_icall_System_Diagnostics_Process_ProcessHandle_duplicate (HANDLE process)
 void
 ves_icall_System_Diagnostics_Process_ProcessHandle_close (HANDLE process)
 {
-	MONO_ARCH_SAVE_REGS;
-
 	LOGDEBUG (g_message ("%s: Closing process handle %p", __func__, process));
 
 	CloseHandle (process);

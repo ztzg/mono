@@ -289,9 +289,8 @@ namespace System.IO {
 			return fullpath;
 		}
 
-		[DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		// http://msdn.microsoft.com/en-us/library/windows/desktop/aa364963%28v=vs.85%29.aspx
-		// http://www.codeproject.com/Tips/223321/Win32-API-GetFullPathName
+		[DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		private static extern int GetFullPathName(string path, int numBufferChars, StringBuilder buffer, ref IntPtr lpFilePartOrNull); 
 
 		internal static string GetFullPathName(string path)
@@ -363,8 +362,8 @@ namespace System.IO {
 
 			var canonicalize = true;
 			if (path.Length >= 2 &&
-				IsDsc (path [0]) &&
-				IsDsc (path [1])) {
+				IsDirectorySeparator (path [0]) &&
+				IsDirectorySeparator (path [1])) {
 				if (path.Length == 2 || path.IndexOf (path [0], 2) < 0)
 					throw new ArgumentException ("UNC paths should be of the form \\\\server\\share.");
 
@@ -384,11 +383,15 @@ namespace System.IO {
 						canonicalize = start > 0;
 					}
 
-					path = Directory.InsecureGetCurrentDirectory() + DirectorySeparatorStr + path;
+					var cwd = Directory.InsecureGetCurrentDirectory();
+					if (cwd [cwd.Length - 1] == DirectorySeparatorChar)
+						path = cwd + path;
+					else
+						path = cwd + DirectorySeparatorChar + path;					
 				} else if (DirectorySeparatorChar == '\\' &&
 					path.Length >= 2 &&
-					IsDsc (path [0]) &&
-					!IsDsc (path [1])) { // like `\abc\def'
+					IsDirectorySeparator (path [0]) &&
+					!IsDirectorySeparator (path [1])) { // like `\abc\def'
 					string current = Directory.InsecureGetCurrentDirectory();
 					if (current [1] == VolumeSeparatorChar)
 						path = current.Substring (0, 2) + path;
@@ -401,16 +404,16 @@ namespace System.IO {
 			    path = CanonicalizePath (path);
 
 			// if the original ended with a [Alt]DirectorySeparatorChar then ensure the full path also ends with one
-			if (IsDsc (end) && (path [path.Length - 1] != DirectorySeparatorChar))
+			if (IsDirectorySeparator (end) && (path [path.Length - 1] != DirectorySeparatorChar))
 				path += DirectorySeparatorChar;
 
 			return path;
 		}
 
-		static bool IsDsc (char c) {
+		internal static bool IsDirectorySeparator (char c) {
 			return c == DirectorySeparatorChar || c == AltDirectorySeparatorChar;
 		}
-		
+
 		public static string GetPathRoot (string path)
 		{
 			if (path == null)
@@ -424,36 +427,36 @@ namespace System.IO {
 			
 			if (DirectorySeparatorChar == '/') {
 				// UNIX
-				return IsDsc (path [0]) ? DirectorySeparatorStr : String.Empty;
+				return IsDirectorySeparator (path [0]) ? DirectorySeparatorStr : String.Empty;
 			} else {
 				// Windows
 				int len = 2;
 
-				if (path.Length == 1 && IsDsc (path [0]))
+				if (path.Length == 1 && IsDirectorySeparator (path [0]))
 					return DirectorySeparatorStr;
 				else if (path.Length < 2)
 					return String.Empty;
 
-				if (IsDsc (path [0]) && IsDsc (path[1])) {
+				if (IsDirectorySeparator (path [0]) && IsDirectorySeparator (path[1])) {
 					// UNC: \\server or \\server\share
 					// Get server
-					while (len < path.Length && !IsDsc (path [len])) len++;
+					while (len < path.Length && !IsDirectorySeparator (path [len])) len++;
 
 					// Get share
 					if (len < path.Length) {
 						len++;
-						while (len < path.Length && !IsDsc (path [len])) len++;
+						while (len < path.Length && !IsDirectorySeparator (path [len])) len++;
 					}
 
 					return DirectorySeparatorStr +
 						DirectorySeparatorStr +
 						path.Substring (2, len - 2).Replace (AltDirectorySeparatorChar, DirectorySeparatorChar);
-				} else if (IsDsc (path [0])) {
+				} else if (IsDirectorySeparator (path [0])) {
 					// path starts with '\' or '/'
 					return DirectorySeparatorStr;
 				} else if (path[1] == VolumeSeparatorChar) {
 					// C:\folder
-					if (path.Length >= 3 && (IsDsc (path [2]))) len++;
+					if (path.Length >= 3 && (IsDirectorySeparator (path [2]))) len++;
 				} else
 					return Directory.GetCurrentDirectory ().Substring (0, 2);// + path.Substring (0, len);
 				return path.Substring (0, len);
@@ -467,26 +470,25 @@ namespace System.IO {
 			FileStream f = null;
 			string path;
 			Random rnd;
-			int num = 0;
+			int num;
 			int count = 0;
 
 			SecurityManager.EnsureElevatedPermissions (); // this is a no-op outside moonlight
 
 			rnd = new Random ();
+			var tmp_path = GetTempPath ();
 			do {
 				num = rnd.Next ();
 				num++;
-				path = Path.Combine (GetTempPath(), "tmp" + num.ToString("x") + ".tmp");
+				path = Path.Combine (tmp_path, "tmp" + num.ToString ("x", CultureInfo.InvariantCulture) + ".tmp");
 
 				try {
 					f = new FileStream (path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
 							    8192, false, (FileOptions) 1);
-				}
-				catch (IOException ex){
+				} catch (IOException ex){
 					if (ex.hresult != MonoIO.FileAlreadyExistsHResult || count ++ > 65536)
 						throw;
-				}
-				catch (UnauthorizedAccessException ex) {
+				} catch (UnauthorizedAccessException ex) {
 					if (count ++ > 65536)
 						throw new IOException (ex.Message, ex);
 				}
@@ -626,11 +628,11 @@ namespace System.IO {
 		static string GetServerAndShare (string path)
 		{
 			int len = 2;
-			while (len < path.Length && !IsDsc (path [len])) len++;
+			while (len < path.Length && !IsDirectorySeparator (path [len])) len++;
 
 			if (len < path.Length) {
 				len++;
-				while (len < path.Length && !IsDsc (path [len])) len++;
+				while (len < path.Length && !IsDirectorySeparator (path [len])) len++;
 			}
 
 			return path.Substring (2, len - 2).Replace (AltDirectorySeparatorChar, DirectorySeparatorChar);
@@ -644,8 +646,8 @@ namespace System.IO {
 				return false;
 
 			// UNC handling
-			if (IsDsc (root[0]) && IsDsc (root[1])) {
-				if (!(IsDsc (path[0]) && IsDsc (path[1])))
+			if (IsDirectorySeparator (root[0]) && IsDirectorySeparator (root[1])) {
+				if (!(IsDirectorySeparator (path[0]) && IsDirectorySeparator (path[1])))
 					return false;
 
 				string rootShare = GetServerAndShare (root);
@@ -662,7 +664,7 @@ namespace System.IO {
 				return false;
 			if ((root.Length > 2) && (path.Length > 2)) {
 				// but don't directory compare the directory separator
-				return (IsDsc (root[2]) && IsDsc (path[2]));
+				return (IsDirectorySeparator (root[2]) && IsDirectorySeparator (path[2]));
 			}
 			return true;
 		}
@@ -690,7 +692,7 @@ namespace System.IO {
 			int target = 0;
 
 			bool isUnc = Environment.IsRunningOnWindows &&
-				root.Length > 2 && IsDsc (root[0]) && IsDsc (root[1]);
+				root.Length > 2 && IsDirectorySeparator (root[0]) && IsDirectorySeparator (root[1]);
 
 			// Set an overwrite limit for UNC paths since '\' + server + share
 			// must not be eliminated by the '..' elimination algorithm.
@@ -726,7 +728,7 @@ namespace System.IO {
 
 					if (isUnc) {
 						return ret;
-					} else if (!IsDsc (path[0]) && SameRoot (root, path)) {
+					} else if (!IsDirectorySeparator (path[0]) && SameRoot (root, path)) {
 						if (ret.Length <= 2 && !ret.EndsWith (DirectorySeparatorStr)) // '\' after "c:"
 							ret += Path.DirectorySeparatorChar;
 						return ret;
@@ -734,14 +736,17 @@ namespace System.IO {
 						string current = Directory.GetCurrentDirectory ();
 						if (current.Length > 1 && current[1] == Path.VolumeSeparatorChar) {
 							// DOS local file path
-							if (ret.Length == 0 || IsDsc (ret[0]))
+							if (ret.Length == 0 || IsDirectorySeparator (ret[0]))
 								ret += '\\';
 							return current.Substring (0, 2) + ret;
-						} else if (IsDsc (current[current.Length - 1]) && IsDsc (ret[0]))
+						} else if (IsDirectorySeparator (current[current.Length - 1]) && IsDirectorySeparator (ret[0]))
 							return current + ret.Substring (1);
 						else
 							return current + ret;
 					}
+				} else {
+					if (root != "" && ret.Length > 0 && ret [0] != '/')
+						ret = root + ret;
 				}
 				return ret;
 			}
@@ -771,11 +776,7 @@ namespace System.IO {
 			return String.Compare (subset, slast, path, slast, subset.Length - slast) == 0;
 		}
 
-#if NET_4_0
 		public
-#else
-                internal
-#endif
 		static string Combine (params string [] paths)
 		{
 			if (paths == null)
@@ -785,13 +786,21 @@ namespace System.IO {
 			var ret = new StringBuilder ();
 			int pathsLen = paths.Length;
 			int slen;
+			need_sep = false;
+
 			foreach (var s in paths) {
-				need_sep = false;
 				if (s == null)
 					throw new ArgumentNullException ("One of the paths contains a null value", "paths");
+				if (s.Length == 0)
+					continue;
 				if (s.IndexOfAny (InvalidPathChars) != -1)
 					throw new ArgumentException ("Illegal characters in path.");
-				
+
+				if (need_sep) {
+					need_sep = false;
+					ret.Append (DirectorySeparatorStr);
+				}
+
 				pathsLen--;
 				if (IsPathRooted (s))
 					ret.Length = 0;
@@ -803,19 +812,12 @@ namespace System.IO {
 					if (p1end != DirectorySeparatorChar && p1end != AltDirectorySeparatorChar && p1end != VolumeSeparatorChar)
 						need_sep = true;
 				}
-				
-				if (need_sep)
-					ret.Append (DirectorySeparatorStr);
 			}
 
 			return ret.ToString ();
 		}
 
-#if NET_4_0
 		public
-#else
-                internal
-#endif
 		static string Combine (string path1, string path2, string path3)
 		{
 			if (path1 == null)
@@ -830,11 +832,7 @@ namespace System.IO {
 			return Combine (new string [] { path1, path2, path3 });
 		}
 
-#if NET_4_0
 		public
-#else
-                internal
-#endif
 		static string Combine (string path1, string path2, string path3, string path4)
 		{
 			if (path1 == null)

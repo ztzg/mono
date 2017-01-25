@@ -25,7 +25,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#if NET_4_5
 using System.Collections.Generic;
 
 namespace System.Reflection
@@ -41,7 +40,7 @@ namespace System.Reflection
 			return this;
 		}
 
-		static readonly BindingFlags declaredFlags = BindingFlags.DeclaredOnly |
+		const BindingFlags declaredFlags = BindingFlags.DeclaredOnly |
 			BindingFlags.Public | BindingFlags.NonPublic |
 				BindingFlags.Static | BindingFlags.Instance;
 		
@@ -67,13 +66,7 @@ namespace System.Reflection
 		
 		public virtual IEnumerable<MemberInfo> DeclaredMembers {
 			get {
-				var ret = new List<MemberInfo> ();
-				ret.AddRange (DeclaredConstructors);
-				ret.AddRange (DeclaredEvents);
-				ret.AddRange (DeclaredFields);
-				ret.AddRange (DeclaredMethods);
-				ret.AddRange (DeclaredProperties);
-				return ret.AsReadOnly ();
+				return GetMembers (declaredFlags);
 			}
 		}
 		
@@ -87,28 +80,15 @@ namespace System.Reflection
 		public virtual Type[] GenericTypeParameters {
 			get {
 				if (!ContainsGenericParameters)
-					return new Type [0];
+					return EmptyTypes;
+
 				return GetGenericArguments ();
 			}
 		}
 
-		static bool list_contains (IEnumerable<Type> types, Type type)
-		{
-			foreach (var t in types) {
-				if (t == type)
-					return true;
-			}
-
-			return false;
-		}
-		
 		public virtual IEnumerable<Type> ImplementedInterfaces {
 			get {
-				var all = GetInterfaces ();
-				var baseIfaces = BaseType != null ? BaseType.GetInterfaces () : new Type [0];
-				foreach (var iface in all)
-					if (!list_contains (baseIfaces, iface))
-						yield return iface;
+				return GetInterfaces ();
 			}
 		}
 
@@ -159,4 +139,3 @@ namespace System.Reflection
 		}
 	}
 }
-#endif

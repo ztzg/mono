@@ -1,4 +1,3 @@
-
 //
 // Copyright (C) 2004 Novell, Inc (http://www.novell.com)
 //
@@ -534,7 +533,7 @@ namespace System.Reflection.Emit {
 			if (resourceFileName == String.Empty)
 				throw new ArgumentException ("resourceFileName");
 			if (!File.Exists (resourceFileName) || Directory.Exists (resourceFileName))
-				throw new FileNotFoundException ("File '" + resourceFileName + "' does not exists or is a directory.");
+				throw new FileNotFoundException ("File '" + resourceFileName + "' does not exist or is a directory.");
 
 			throw new NotImplementedException ();
 		}
@@ -584,8 +583,7 @@ namespace System.Reflection.Emit {
 		{
 			if (method == null)
 				throw new ArgumentNullException ("method");
-			if (method.DeclaringType.Module != this)
-				throw new InvalidOperationException ("The method is not in this module");
+
 			return new MethodToken (GetToken (method));
 		}
 
@@ -656,7 +654,7 @@ namespace System.Reflection.Emit {
 		private static extern int getToken (ModuleBuilder mb, object obj, bool create_open_instance);
 
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		private static extern int getMethodToken (ModuleBuilder mb, MethodInfo method,
+		private static extern int getMethodToken (ModuleBuilder mb, MethodBase method,
 							  Type[] opt_param_types);
 
 		internal int GetToken (string str)
@@ -678,7 +676,7 @@ namespace System.Reflection.Emit {
 			return getToken (this, member, create_open_instance);
 		}
 
-		internal int GetToken (MethodInfo method, Type[] opt_param_types) {
+		internal int GetToken (MethodBase method, Type[] opt_param_types) {
 			return getMethodToken (this, method, opt_param_types);
 		}
 
@@ -822,7 +820,6 @@ namespace System.Reflection.Emit {
 			throw new NotImplementedException ();
 		}
 
-#if NET_4_0
 		public override	Assembly Assembly {
 			get { return assemblyb; }
 		}
@@ -962,7 +959,6 @@ namespace System.Reflection.Emit {
 				return base.MetadataToken;
 			}
 		}
-#endif
 	}
 
 	internal class ModuleBuilderTokenGenerator : TokenGenerator {
@@ -981,7 +977,7 @@ namespace System.Reflection.Emit {
 			return mb.GetToken (member, create_open_instance);
 		}
 
-		public int GetToken (MethodInfo method, Type[] opt_param_types) {
+		public int GetToken (MethodBase method, Type[] opt_param_types) {
 			return mb.GetToken (method, opt_param_types);
 		}
 

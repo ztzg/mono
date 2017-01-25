@@ -58,11 +58,10 @@ namespace System.IO {
 		private bool m_disposed;
 		
 		public BinaryReader(Stream input) 
-			: this(input, Encoding.UTF8UnmarkedUnsafe)
+			: this(input, EncodingHelper.UTF8UnmarkedUnsafe)
 		{
 		}
 		
-#if NET_4_5
 		readonly bool leave_open;
 		
 		public BinaryReader(Stream input, Encoding encoding)
@@ -71,11 +70,6 @@ namespace System.IO {
 		}
 		
 		public BinaryReader(Stream input, Encoding encoding, bool leaveOpen)
-#else
-		const bool leave_open = false;
-		
-		public BinaryReader(Stream input, Encoding encoding)
-#endif
 		{
 			if (input == null || encoding == null) 
 				throw new ArgumentNullException(Locale.GetText ("Input or Encoding is a null reference."));
@@ -84,9 +78,7 @@ namespace System.IO {
 
 			m_stream = input;
 			m_encoding = encoding;
-#if NET_4_5
 			leave_open = leaveOpen;
-#endif
 			decoder = encoding.GetDecoder ();
 			
 			// internal buffer size is documented to be between 16 and the value
@@ -117,11 +109,7 @@ namespace System.IO {
 			charBuffer = null;
 		}
 
-#if NET_4_0
 		public void Dispose ()
-#else
-		void IDisposable.Dispose() 
-#endif
 		{
 			Dispose (true);
 		}
@@ -517,11 +505,11 @@ namespace System.IO {
 			do {
 				int readLen = Math.Min (MaxBufferSize, len);
 				
-				int n = m_stream.Read (charByteBuffer, 0, readLen);
-				if (n == 0)
+				readLen = m_stream.Read (charByteBuffer, 0, readLen);
+				if (readLen == 0)
 					throw new EndOfStreamException();
 				
-				int cch = decoder.GetChars (charByteBuffer, 0, n, charBuffer, 0);
+				int cch = decoder.GetChars (charByteBuffer, 0, readLen, charBuffer, 0);
 
 				if (sb == null && readLen == len) // ok, we got out the easy way, dont bother with the sb
 					return new String (charBuffer, 0, cch);

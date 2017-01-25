@@ -26,7 +26,6 @@
 //
 //
 
-#if NET_4_5
 
 using System;
 using System.Runtime.CompilerServices;
@@ -35,10 +34,9 @@ namespace System.Net.WebSockets
 {
 	public enum WebSocketMessageType
 	{
-		Text,
-		Binary,
-		Close
+		Text = 0,
+		Binary = 1,
+		Close = 2
 	}
 }
 
-#endif

@@ -33,7 +33,9 @@ typedef int (STDCALL *SimpleDelegate) (int a);
 
 #if defined(WIN32) && defined (_MSC_VER)
 #define LIBTEST_API __declspec(dllexport)
-#else 
+#elif defined(__GNUC__)
+#define LIBTEST_API  __attribute__ ((visibility ("default")))
+#else
 #define LIBTEST_API
 #endif
 
@@ -254,6 +256,28 @@ LIBTEST_API int STDCALL
 mono_return_int_su (union su a) {
 	// printf ("Got value %d\n", a.i1);
 	return a.i1;
+}
+
+struct FI {
+	float f1;
+	float f2;
+	float f3;
+};
+
+struct NestedFloat {
+	struct FI fi;
+	float f4;
+};
+
+LIBTEST_API struct NestedFloat STDCALL
+mono_return_nested_float (void)
+{
+	struct NestedFloat f;
+	f.fi.f1 = 1.0;
+	f.fi.f2 = 2.0;
+	f.fi.f3 = 3.0;
+	f.f4 = 4.0;
+	return f;
 }
 
 LIBTEST_API int STDCALL  
@@ -576,6 +600,29 @@ mono_test_marshal_out_struct (int a, simplestruct *ss, int b, OutVTypeDelegate f
 	func (a, ss, b);
 
 	if (ss->a && ss->b && ss->c && !strcmp (ss->d, "TEST3"))
+		return 0;
+	else
+		return 1;
+}
+
+typedef int (STDCALL *InVTypeDelegate) (int a, simplestruct *ss, int b);
+
+LIBTEST_API int STDCALL 
+mono_test_marshal_in_struct (int a, simplestruct *ss, int b, InVTypeDelegate func)
+{
+	simplestruct ss2;
+	int res;
+
+	memcpy (&ss2, ss, sizeof (simplestruct));
+
+	res = func (a, ss, b);
+	if (res) {
+		printf ("mono_test_marshal_in_struct () failed: %d\n", res);
+		return 1;
+	}
+
+	/* Check that no modifications is made to the struct */
+	if (ss2.a == ss->a && ss2.b == ss->b && ss2.c == ss->c && ss2.d == ss->d)
 		return 0;
 	else
 		return 1;
@@ -1950,6 +1997,18 @@ mono_test_stdcall_name_mangling (int a, int b, int c)
         return a + b + c;
 }
 
+LIBTEST_API int
+mono_test_stdcall_mismatch_1 (int a, int b, int c)
+{
+        return a + b + c;
+}
+
+LIBTEST_API int STDCALL
+mono_test_stdcall_mismatch_2 (int a, int b, int c)
+{
+        return a + b + c;
+}
+
 /*
  * PASSING AND RETURNING SMALL STRUCTURES FROM DELEGATES TESTS
  */
@@ -2856,7 +2915,7 @@ mono_test_marshal_variant_out_bstr_byref(VARIANT* variant)
 {
 	variant->vt = VT_BSTR|VT_BYREF;
 	variant->byref = marshal_alloc(sizeof(gpointer));
-	*((gunichar**)variant->byref) = marshal_bstr_alloc("PI");
+	*((gunichar**)variant->byref) = (gunichar*)marshal_bstr_alloc("PI");
 
 	return 0;
 }
@@ -3482,7 +3541,6 @@ test_method_thunk (int test_id, gpointer test_method_handle, gpointer create_obj
 
 	gpointer test_method, ex = NULL;
 	gpointer (STDCALL *CreateObject)(gpointer*);
-
 
 	if (!mono_method_get_unmanaged_thunk)
 		return 1;
@@ -5277,3 +5335,95 @@ mono_test_marshal_return_lpwstr (void)
 
 	return res;
 }
+
+typedef struct {
+	double d;
+} SingleDoubleStruct;
+
+LIBTEST_API SingleDoubleStruct STDCALL
+mono_test_marshal_return_single_double_struct (void)
+{
+	SingleDoubleStruct res;
+
+	res.d = 3.0;
+
+	return res;
+}
+
+
+#ifndef TARGET_X86
+
+LIBTEST_API int STDCALL
+mono_test_has_thiscall (void)
+{
+	return 1;
+}
+
+LIBTEST_API int
+_mono_test_native_thiscall1 (int arg)
+{
+	return arg;
+}
+
+LIBTEST_API int
+_mono_test_native_thiscall2 (int arg, int arg2)
+{
+	return arg + (arg2^1);
+}
+
+LIBTEST_API int
+_mono_test_native_thiscall3 (int arg, int arg2, int arg3)
+{
+	return arg + (arg2^1) + (arg3^2);
+}
+
+#elif defined(__GNUC__)
+
+LIBTEST_API int STDCALL
+mono_test_has_thiscall (void)
+{
+	return 1;
+}
+
+#define def_asm_fn(name) \
+	"\t.align 4\n" \
+	"\t.globl _" #name "\n" \
+	"_" #name ":\n" \
+	"\t.globl __" #name "\n" \
+	"__" #name ":\n"
+
+asm(".text\n"
+
+def_asm_fn(mono_test_native_thiscall1)
+"\tmovl %ecx,%eax\n"
+"\tret\n"
+
+def_asm_fn(mono_test_native_thiscall2)
+"\tmovl %ecx,%eax\n"
+"\tmovl 4(%esp),%ecx\n"
+"\txorl $1,%ecx\n"
+"\taddl %ecx,%eax\n"
+"\tret $4\n"
+
+def_asm_fn(mono_test_native_thiscall3)
+"\tmovl %ecx,%eax\n"
+"\tmovl 4(%esp),%ecx\n"
+"\txorl $1,%ecx\n"
+"\taddl %ecx,%eax\n"
+"\tmovl 8(%esp),%ecx\n"
+"\txorl $2,%ecx\n"
+"\taddl %ecx,%eax\n"
+"\tret $8\n"
+
+);
+
+#else
+
+LIBTEST_API int STDCALL
+mono_test_has_thiscall (void)
+{
+	return 0;
+}
+
+#endif
+

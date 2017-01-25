@@ -25,7 +25,6 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_2_0
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -261,7 +260,7 @@ namespace System.Runtime.Serialization
 			if (name.StartsWith ("ArrayOf", StringComparison.Ordinal)) {
 				name = name.Substring (7); // strip "ArrayOf"
 				if (ns == KnownTypeCollection.MSArraysNamespace)
-					return GetTypeFromNamePair (name, String.Empty).MakeArrayType ();
+					return GetTypeFromNamePair (name, KnownTypeCollection.MSSimpleNamespace).MakeArrayType ();
 				makeArray = true;
 			}
 
@@ -303,4 +302,3 @@ namespace System.Runtime.Serialization
 		}
 	}
 }
-#endif

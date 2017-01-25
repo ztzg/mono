@@ -146,7 +146,7 @@ namespace System.Net.Http
 
 		public Task<HttpResponseMessage> GetAsync (string requestUri, CancellationToken cancellationToken)
 		{
-			return SendAsync (new HttpRequestMessage (HttpMethod.Get, requestUri));
+			return SendAsync (new HttpRequestMessage (HttpMethod.Get, requestUri), cancellationToken);
 		}
 
 		public Task<HttpResponseMessage> GetAsync (string requestUri, HttpCompletionOption completionOption)
@@ -303,14 +303,14 @@ namespace System.Net.Http
 
 		public async Task<Stream> GetStreamAsync (string requestUri)
 		{
-			var resp = await GetAsync (requestUri, HttpCompletionOption.ResponseContentRead).ConfigureAwait (false);
+			var resp = await GetAsync (requestUri, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait (false);
 			resp.EnsureSuccessStatusCode ();
 			return await resp.Content.ReadAsStreamAsync ().ConfigureAwait (false);
 		}
 
 		public async Task<Stream> GetStreamAsync (Uri requestUri)
 		{
-			var resp = await GetAsync (requestUri, HttpCompletionOption.ResponseContentRead).ConfigureAwait (false);
+			var resp = await GetAsync (requestUri, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait (false);
 			resp.EnsureSuccessStatusCode ();
 			return await resp.Content.ReadAsStreamAsync ().ConfigureAwait (false);
 		}

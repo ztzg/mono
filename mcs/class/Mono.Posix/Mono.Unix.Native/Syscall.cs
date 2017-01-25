@@ -223,6 +223,7 @@ namespace Mono.Unix.Native {
 		F_GETOWN   =    9, // Get owner of socket (receiver of SIGIO).
 		F_SETSIG   =   10, // Set number of signal to be sent.
 		F_GETSIG   =   11, // Get number of signal to be sent.
+		F_NOCACHE  =   48, // OSX: turn data caching off/on for this fd.
 		F_SETLEASE = 1024, // Set a lease.
 		F_GETLEASE = 1025, // Enquire what lease is active.
 		F_NOTIFY   = 1026, // Required notifications on a directory
@@ -732,9 +733,7 @@ namespace Mono.Unix.Native {
 
 	[Map ("struct flock")]
 	public struct Flock
-#if NET_2_0
 		: IEquatable <Flock>
-#endif
 	{
 		[CLSCompliant (false)]
 		public LockType         l_type;    // Type of lock: F_RDLCK, F_WRLCK, F_UNLCK
@@ -781,9 +780,7 @@ namespace Mono.Unix.Native {
 
 	[Map ("struct pollfd")]
 	public struct Pollfd
-#if NET_2_0
 		: IEquatable <Pollfd>
-#endif
 	{
 		public int fd;
 		[CLSCompliant (false)]
@@ -822,9 +819,7 @@ namespace Mono.Unix.Native {
 
 	// Use manually written To/From methods to handle fields st_atime_nsec etc.
 	public struct Stat
-#if NET_2_0
 		: IEquatable <Stat>
-#endif
 	{
 		[CLSCompliant (false)]
 		[dev_t]     public ulong    st_dev;     // device
@@ -962,9 +957,7 @@ namespace Mono.Unix.Native {
 	[Map]
 	[CLSCompliant (false)]
 	public struct Statvfs
-#if NET_2_0
 		: IEquatable <Statvfs>
-#endif
 	{
 		public                  ulong f_bsize;	  // file system block size
 		public                  ulong f_frsize;   // fragment size
@@ -1039,9 +1032,7 @@ namespace Mono.Unix.Native {
 
 	[Map ("struct timeval")]
 	public struct Timeval
-#if NET_2_0
 		: IEquatable <Timeval>
-#endif
 	{
 		[time_t]      public long tv_sec;   // seconds
 		[suseconds_t] public long tv_usec;  // microseconds
@@ -1077,9 +1068,7 @@ namespace Mono.Unix.Native {
 
 	[Map ("struct timezone")]
 	public struct Timezone
-#if NET_2_0
 		: IEquatable <Timezone>
-#endif
 	{
 		public  int tz_minuteswest; // minutes W of Greenwich
 #pragma warning disable 169		
@@ -1117,9 +1106,7 @@ namespace Mono.Unix.Native {
 
 	[Map ("struct utimbuf")]
 	public struct Utimbuf
-#if NET_2_0
 		: IEquatable <Utimbuf>
-#endif
 	{
 		[time_t] public long    actime;   // access time
 		[time_t] public long    modtime;  // modification time
@@ -1155,9 +1142,7 @@ namespace Mono.Unix.Native {
 
 	[Map ("struct timespec")]
 	public struct Timespec
-#if NET_2_0
 		: IEquatable <Timespec>
-#endif
 	{
 		[time_t] public long    tv_sec;   // Seconds.
 		public          long    tv_nsec;  // Nanoseconds.
@@ -1248,9 +1233,7 @@ namespace Mono.Unix.Native {
 	#region Classes
 
 	public sealed class Dirent
-#if NET_2_0
 		: IEquatable <Dirent>
-#endif
 	{
 		[CLSCompliant (false)]
 		public /* ino_t */ ulong  d_ino;
@@ -1301,9 +1284,7 @@ namespace Mono.Unix.Native {
 	}
 
 	public sealed class Fstab
-#if NET_2_0
 		: IEquatable <Fstab>
-#endif
 	{
 		public string fs_spec;
 		public string fs_file;
@@ -1355,9 +1336,7 @@ namespace Mono.Unix.Native {
 	}
 
 	public sealed class Group
-#if NET_2_0
 		: IEquatable <Group>
-#endif
 	{
 		public string           gr_name;
 		public string           gr_passwd;
@@ -1437,9 +1416,7 @@ namespace Mono.Unix.Native {
 	}
 
 	public sealed class Passwd
-#if NET_2_0
 		: IEquatable <Passwd>
-#endif
 	{
 		public string           pw_name;
 		public string           pw_passwd;
@@ -1496,9 +1473,7 @@ namespace Mono.Unix.Native {
 	}
 
 	public sealed class Utsname
-#if NET_2_0
 		: IEquatable <Utsname>
-#endif
 	{
 		public string sysname;
 		public string nodename;
@@ -2085,6 +2060,14 @@ namespace Mono.Unix.Native {
 				EntryPoint="Mono_Posix_Syscall_fcntl_arg")]
 		public static extern int fcntl (int fd, FcntlCommand cmd, long arg);
 
+		[DllImport (MPH, SetLastError=true, 
+				EntryPoint="Mono_Posix_Syscall_fcntl_arg_int")]
+		public static extern int fcntl (int fd, FcntlCommand cmd, int arg);
+
+		[DllImport (MPH, SetLastError=true, 
+				EntryPoint="Mono_Posix_Syscall_fcntl_arg_ptr")]
+		public static extern int fcntl (int fd, FcntlCommand cmd, IntPtr ptr);
+
 		public static int fcntl (int fd, FcntlCommand cmd, DirectoryNotifyFlags arg)
 		{
 			if (cmd != FcntlCommand.F_NOTIFY) {
@@ -2305,7 +2288,7 @@ namespace Mono.Unix.Native {
 			// Syscall to getpwnam to retrieve user uid
 			Passwd pw = Syscall.getpwnam (username);
 			if (pw == null)
-				throw new ArgumentException (string.Format ("User {0} does not exists",username), "username");
+				throw new ArgumentException (string.Format ("User {0} does not exist", username), "username");
 			return getgrouplist (pw);
 		}
 
@@ -2842,7 +2825,7 @@ namespace Mono.Unix.Native {
 			ee.events = events;
 			ee.fd = fd;
 
-			return sys_epoll_ctl (epfd, op, fd, ref ee);
+			return epoll_ctl (epfd, op, fd, ref ee);
 		}
 
 		public static int epoll_wait (int epfd, EpollEvent [] events, int max_events, int timeout)
@@ -2860,7 +2843,7 @@ namespace Mono.Unix.Native {
 		private static extern int sys_epoll_create1 (EpollFlags flags);
 
 		[DllImport (LIBC, SetLastError=true, EntryPoint="epoll_ctl")]
-		private static extern int sys_epoll_ctl (int epfd, EpollOp op, int fd, ref EpollEvent ee);
+		public static extern int epoll_ctl (int epfd, EpollOp op, int fd, ref EpollEvent ee);
 
 		[DllImport (LIBC, SetLastError=true, EntryPoint="epoll_wait")]
 		private static extern int sys_epoll_wait (int epfd, EpollEvent [] ee, int maxevents, int timeout);
@@ -3937,17 +3920,51 @@ namespace Mono.Unix.Native {
 				[MarshalAs (UnmanagedType.CustomMarshaler, MarshalTypeRef=typeof(FileNameMarshaler))]
 				string newpath);
 
+		delegate long DoReadlinkFun (byte[] target);
+
+		// Helper function for readlink(string, StringBuilder) and readlinkat (int, string, StringBuilder)
+		static int ReadlinkIntoStringBuilder (DoReadlinkFun doReadlink, [Out] StringBuilder buf, ulong bufsiz)
+		{
+			// bufsiz > int.MaxValue can't work because StringBuilder can store only int.MaxValue chars
+			int bufsizInt = checked ((int) bufsiz);
+			var target = new byte [bufsizInt];
+
+			var r = doReadlink (target);
+			if (r < 0)
+				return checked ((int) r);
+
+			buf.Length = 0;
+			var chars = UnixEncoding.Instance.GetChars (target, 0, checked ((int) r));
+			// Make sure that at more bufsiz chars are written
+			buf.Append (chars, 0, System.Math.Min (bufsizInt, chars.Length));
+			if (r == bufsizInt) {
+				// may not have read full contents; fill 'buf' so that caller can properly check
+				buf.Append (new string ('\x00', bufsizInt - buf.Length));
+			}
+			return buf.Length;
+		}
+
 		// readlink(2)
-		//    int readlink(const char *path, char *buf, size_t bufsize);
-		[DllImport (MPH, SetLastError=true,
-				EntryPoint="Mono_Posix_Syscall_readlink")]
-		public static extern int readlink (
-				[MarshalAs (UnmanagedType.CustomMarshaler, MarshalTypeRef=typeof(FileNameMarshaler))]
-				string path, [Out] StringBuilder buf, ulong bufsiz);
+		//    ssize_t readlink(const char *path, char *buf, size_t bufsize);
+		public static int readlink (string path, [Out] StringBuilder buf, ulong bufsiz)
+		{
+			return ReadlinkIntoStringBuilder (target => readlink (path, target), buf, bufsiz);
+		}
 
 		public static int readlink (string path, [Out] StringBuilder buf)
 		{
 			return readlink (path, buf, (ulong) buf.Capacity);
+		}
+
+		[DllImport (MPH, SetLastError=true,
+				EntryPoint="Mono_Posix_Syscall_readlink")]
+		private static extern long readlink (
+				[MarshalAs (UnmanagedType.CustomMarshaler, MarshalTypeRef=typeof(FileNameMarshaler))]
+				string path, byte[] buf, ulong bufsiz);
+
+		public static long readlink (string path, byte[] buf)
+		{
+			return readlink (path, buf, (ulong) buf.LongLength);
 		}
 
 		[DllImport (LIBC, SetLastError=true)]
@@ -4226,16 +4243,26 @@ namespace Mono.Unix.Native {
 		}
 
 		// readlinkat(2)
-		//    int readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsize);
-		[DllImport (MPH, SetLastError=true,
-				EntryPoint="Mono_Posix_Syscall_readlinkat")]
-		public static extern int readlinkat (int dirfd,
-				[MarshalAs (UnmanagedType.CustomMarshaler, MarshalTypeRef=typeof(FileNameMarshaler))]
-				string pathname, [Out] StringBuilder buf, ulong bufsiz);
+		//    ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsize);
+		public static int readlinkat (int dirfd, string pathname, [Out] StringBuilder buf, ulong bufsiz)
+		{
+			return ReadlinkIntoStringBuilder (target => readlinkat (dirfd, pathname, target), buf, bufsiz);
+		}
 
 		public static int readlinkat (int dirfd, string pathname, [Out] StringBuilder buf)
 		{
 			return readlinkat (dirfd, pathname, buf, (ulong) buf.Capacity);
+		}
+
+		[DllImport (MPH, SetLastError=true,
+				EntryPoint="Mono_Posix_Syscall_readlinkat")]
+		private static extern long readlinkat (int dirfd,
+				[MarshalAs (UnmanagedType.CustomMarshaler, MarshalTypeRef=typeof(FileNameMarshaler))]
+				string pathname, byte[] buf, ulong bufsiz);
+
+		public static long readlinkat (int dirfd, string pathname, byte[] buf)
+		{
+			return readlinkat (dirfd, pathname, buf, (ulong) buf.LongLength);
 		}
 
 		[DllImport (LIBC, SetLastError=true)]

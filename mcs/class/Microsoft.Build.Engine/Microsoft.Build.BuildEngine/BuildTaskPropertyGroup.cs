@@ -38,7 +38,7 @@ namespace Microsoft.Build.BuildEngine {
 		}
 		
 		internal BuildTaskPropertyGroup (XmlElement element, Target target)
-			: base (element, target.Project, null, false)
+			: base (element, target.Project, null, false, true)
 		{
 		}
 		
@@ -48,12 +48,15 @@ namespace Microsoft.Build.BuildEngine {
 			return true;
 		}
 
-		public IEnumerable<string> GetAttributes ()
+		IEnumerable<string> IBuildTask.GetAttributes ()
 		{
-			foreach (XmlAttribute attrib in XmlElement.Attributes)
-				yield return attrib.Value;
+			return GetAttributes ();
 		}
-		
+
+		public bool ResolveOutputItems ()
+		{
+			return true;
+		}
 	}
 }
 

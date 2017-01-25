@@ -75,6 +75,9 @@
 #elif defined(__arm__)
 #define CONFIG_CPU "arm"
 #define CONFIG_WORDSIZE "32"
+#elif defined(__aarch64__)
+#define CONFIG_CPU "armv8"
+#define CONFIG_WORDSIZE "64"
 #elif defined(__ia64__)
 #define CONFIG_CPU "ia64"
 #define CONFIG_WORDSIZE "64"
@@ -357,6 +360,55 @@ legacyUEP_handler = {
 	NULL, /* finish */
 };
 
+static void
+aot_cache_start (gpointer user_data,
+				 const gchar         *element_name,
+				 const gchar        **attribute_names,
+				 const gchar        **attribute_values)
+{
+	int i;
+	MonoAotCacheConfig *config;
+
+	if (strcmp (element_name, "aotcache") != 0)
+		return;
+
+	config = mono_get_aot_cache_config ();
+
+	/* Per-app configuration */
+	for (i = 0; attribute_names [i]; ++i) {
+		if (!strcmp (attribute_names [i], "app")) {
+			config->apps = g_slist_prepend (config->apps, g_strdup (attribute_values [i]));
+		}
+	}
+
+	/* Global configuration */
+	for (i = 0; attribute_names [i]; ++i) {
+		if (!strcmp (attribute_names [i], "assemblies")) {
+			char **parts, **ptr;
+			char *part;
+
+			parts = g_strsplit (attribute_values [i], " ", -1);
+			for (ptr = parts; ptr && *ptr; ptr ++) {
+				part = *ptr;
+				config->assemblies = g_slist_prepend (config->assemblies, g_strdup (part));
+			}
+			g_strfreev (parts);
+		} else if (!strcmp (attribute_names [i], "options")) {
+			config->aot_options = g_strdup (attribute_values [i]);
+		}
+	}
+}
+
+static const MonoParseHandler
+aot_cache_handler = {
+	"aotcache",
+	NULL, /* init */
+	aot_cache_start,
+	NULL, /* text */
+	NULL, /* end */
+	NULL, /* finish */
+};
+
 static int inited = 0;
 
 static void
@@ -366,6 +418,7 @@ mono_config_init (void)
 	config_handlers = g_hash_table_new (g_str_hash, g_str_equal);
 	g_hash_table_insert (config_handlers, (gpointer) dllmap_handler.element_name, (gpointer) &dllmap_handler);
 	g_hash_table_insert (config_handlers, (gpointer) legacyUEP_handler.element_name, (gpointer) &legacyUEP_handler);
+	g_hash_table_insert (config_handlers, (gpointer) aot_cache_handler.element_name, (gpointer) &aot_cache_handler);
 }
 
 void
@@ -406,7 +459,6 @@ mono_config_parse_file_with_context (ParseState *state, const char *filename)
 
 	if (!g_file_get_contents (filename, &text, &len, NULL))
 		return 0;
-
 
 	offset = 0;
 	if (len > 3 && text [0] == '\xef' && text [1] == (gchar) '\xbb' && text [2] == '\xbf')
@@ -791,5 +843,19 @@ mono_config_parse_assembly_bindings (const char *filename, int amajor, int amino
 	state.inited = TRUE; /* We are already inited */
 
 	mono_config_parse_file_with_context (&state, filename);
+}
+
+static mono_bool mono_server_mode = FALSE;
+
+void
+mono_config_set_server_mode (mono_bool server_mode)
+{
+	mono_server_mode = server_mode;
+}
+
+mono_bool
+mono_config_is_server_mode (void)
+{
+	return mono_server_mode;
 }
 

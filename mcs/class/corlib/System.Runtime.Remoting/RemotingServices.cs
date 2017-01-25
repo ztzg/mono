@@ -52,11 +52,7 @@ using System.Runtime.Serialization.Formatters;
 namespace System.Runtime.Remoting
 {
 	[System.Runtime.InteropServices.ComVisible (true)]
-#if NET_4_0
 	static
-#else
-	sealed
-#endif
 	public class RemotingServices 
 	{
 		// Holds the identities of the objects, using uri as index
@@ -95,9 +91,6 @@ namespace System.Runtime.Remoting
 			FieldSetterMethod = typeof(object).GetMethod ("FieldSetter", BindingFlags.NonPublic|BindingFlags.Instance);
 			FieldGetterMethod = typeof(object).GetMethod ("FieldGetter", BindingFlags.NonPublic|BindingFlags.Instance);
 		}
-#if !NET_4_0
-		private RemotingServices () {}
-#endif
 
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		internal extern static object InternalExecute (MethodBase method, Object obj,
@@ -169,7 +162,7 @@ namespace System.Runtime.Remoting
 						returnArgs [n++] = null; 
 				}
 				
-				result = new ReturnMessage (rval, returnArgs, n, CallContext.CreateLogicalCallContext (true), reqMsg);
+				result = new ReturnMessage (rval, returnArgs, n, ExecutionContext.CreateLogicalCallContext (true), reqMsg);
 			} 
 			catch (Exception e) 
 			{
@@ -770,7 +763,7 @@ namespace System.Runtime.Remoting
 		[SecurityPermission (SecurityAction.Assert, SerializationFormatter = true)] // FIXME: to be reviewed
 		internal static byte[] SerializeCallData (object obj)
 		{
-			LogicalCallContext ctx = CallContext.CreateLogicalCallContext (false);
+			LogicalCallContext ctx = ExecutionContext.CreateLogicalCallContext (false);
 			if (ctx != null) {
 				CACD cad = new CACD ();
 				cad.d = obj;
@@ -796,7 +789,7 @@ namespace System.Runtime.Remoting
 			if (obj is CACD) {
 				CACD cad = (CACD) obj;
 				obj = cad.d;
-				CallContext.UpdateCurrentCallContext ((LogicalCallContext) cad.c);
+				CallContext.UpdateCurrentLogicalCallContext ((LogicalCallContext) cad.c);
 			}
 			return obj;
 		}

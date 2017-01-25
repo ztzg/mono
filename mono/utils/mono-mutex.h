@@ -11,6 +11,8 @@
 #ifndef __MONO_MUTEX_H__
 #define __MONO_MUTEX_H__
 
+#include <config.h>
+
 #include <glib.h>
 #ifdef HAVE_PTHREAD_H
 #include <pthread.h>
@@ -18,6 +20,7 @@
 #include <time.h>
 
 #ifdef HOST_WIN32
+#include <winsock2.h>
 #include <windows.h>
 #endif
 
@@ -83,7 +86,7 @@ typedef HANDLE mono_cond_t;
 #define mono_mutex_init(mutex) (InitializeCriticalSection((mutex)), 0)
 #define mono_mutex_init_recursive(mutex) (InitializeCriticalSection((mutex)), 0)
 #define mono_mutex_lock(mutex) EnterCriticalSection((mutex))
-#define mono_mutex_trylock(mutex) TryEnterCriticalSection((mutex))
+#define mono_mutex_trylock(mutex) (!TryEnterCriticalSection((mutex)))
 #define mono_mutex_unlock(mutex)  LeaveCriticalSection((mutex))
 #define mono_mutex_destroy(mutex) DeleteCriticalSection((mutex))
 

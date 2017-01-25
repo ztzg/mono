@@ -171,7 +171,7 @@ mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
 		/* Restore global registers. */
 		for (i = MONO_MAX_IREGS - 1; i >= 0; i--) {
 			if ((MONO_ARCH_CALLEE_SAVED_REGS & (1 << i)) != 0 &&
-			    (ji->used_regs		 & (1 << i)) != 0) {
+			    (ji->unwind_info		 & (1 << i)) != 0) {
 				new_context->registers[i] = registers[saved_regs];
 				saved_regs++;
 
@@ -767,20 +767,6 @@ gpointer mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean ao
 	return code;
 }
 
-#if MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX
-void
-mono_arch_sigctx_to_monoctx (void *sigctx, MonoContext *mctx)
-{
-	mono_sigctx_to_monoctx (sigctx, mctx);
-}
-
-void
-mono_arch_monoctx_to_sigctx (MonoContext *mctx, void *ctx)
-{
-	mono_monoctx_to_sigctx (mctx, ctx);
-}
-#endif /* MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX */
-
 /**
  * This is the function called from the signal handler
  */
@@ -788,13 +774,13 @@ gboolean mono_arch_handle_exception(void *ucontext, gpointer object)
 {
 	MonoContext mono_context;
 
-	mono_arch_sigctx_to_monoctx(ucontext, &mono_context);
+	mono_sigctx_to_monoctx(ucontext, &mono_context);
 
 	mono_handle_exception(&mono_context, object);
 
 	/* Restore the context so that returning from the signal handler
 	   will invoke the catch clause. */
-	mono_arch_monoctx_to_sigctx(&mono_context, ucontext);
+	mono_monoctx_to_sigctx(&mono_context, ucontext);
 
 	return TRUE;
 }

@@ -75,6 +75,12 @@ gint64 mono_fconv_ovf_i8 (double v) MONO_INTERNAL;
 
 guint64 mono_fconv_ovf_u8 (double v) MONO_INTERNAL;
 
+gint64 mono_rconv_i8 (float v) MONO_INTERNAL;
+
+gint64 mono_rconv_ovf_i8 (float v) MONO_INTERNAL;
+
+guint64 mono_rconv_ovf_u8 (float v) MONO_INTERNAL;
+
 double mono_lconv_to_r8 (gint64 a) MONO_INTERNAL;
 
 double mono_conv_to_r8 (gint32 a) MONO_INTERNAL;
@@ -165,7 +171,7 @@ MonoException *mono_create_corlib_exception_1 (guint32 token, MonoString *arg) M
 
 MonoException *mono_create_corlib_exception_2 (guint32 token, MonoString *arg1, MonoString *arg2) MONO_INTERNAL;
 
-MonoObject* mono_object_castclass (MonoObject *obj, MonoClass *klass) MONO_INTERNAL;
+MonoObject* mono_object_castclass_unbox (MonoObject *obj, MonoClass *klass) MONO_INTERNAL;
 
 gpointer mono_get_native_calli_wrapper (MonoImage *image, MonoMethodSignature *sig, gpointer func) MONO_INTERNAL;
 
@@ -175,11 +181,8 @@ mono_object_isinst_with_cache (MonoObject *obj, MonoClass *klass, gpointer *cach
 MonoObject*
 mono_object_castclass_with_cache (MonoObject *obj, MonoClass *klass, gpointer *cache);
 
-MonoObject* mono_object_tostring_gsharedvt (gpointer mp, MonoMethod *cmethod, MonoClass *klass) MONO_INTERNAL;
-
-int mono_object_gethashcode_gsharedvt (gpointer mp, MonoMethod *cmethod, MonoClass *klass) MONO_INTERNAL;
-
-MonoBoolean mono_object_equals_gsharedvt (gpointer mp, MonoMethod *cmethod, MonoClass *klass, MonoObject *arg) MONO_INTERNAL;
+MonoObject*
+mono_gsharedvt_constrained_call (gpointer mp, MonoMethod *cmethod, MonoClass *klass, gboolean deref_arg, gpointer *args) MONO_INTERNAL;
 
 void mono_gsharedvt_value_copy (gpointer dest, gpointer src, MonoClass *klass) MONO_INTERNAL;
 

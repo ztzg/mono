@@ -460,13 +460,6 @@ void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 	return;
 }
 
-void mono_arch_nullify_plt_entry(guint8 *code, mgreg_t *regs)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return;
-}
-
 /**
  * Search for and patch the calling sequence pointed to by 'code'
  * so it calls 'address'.

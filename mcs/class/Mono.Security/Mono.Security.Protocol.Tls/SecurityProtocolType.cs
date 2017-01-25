@@ -1,5 +1,6 @@
 // Transport Security Layer (TLS)
 // Copyright (c) 2003-2004 Carlos Guzman Alvarez
+// Copyright (C) 2014 Xamarin Inc. (http://www.xamarin.com)
 
 //
 // Permission is hereby granted, free of charge, to any person obtaining
@@ -38,6 +39,8 @@ namespace Mono.Security.Protocol.Tls
 		Default = -1073741824,
 		Ssl2	= 12,
 		Ssl3	= 48,
-		Tls		= 192
+		Tls		= 192,
+		Tls11	= 768,
+		Tls12	= 3072,
 	}
 }

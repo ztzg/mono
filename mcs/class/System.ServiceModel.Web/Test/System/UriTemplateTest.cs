@@ -441,7 +441,7 @@ namespace MonoTests.System
 			var t = new UriTemplate ("*");
 			var m = t.Match (new Uri ("http://localhost"), new Uri ("http://localhost/hoge/ppp"));
 			Assert.IsNotNull (m, "#0");
-			Assert.IsEmpty (m.QueryParameters, "#1.0");
+			Assert.AreEqual (0, m.QueryParameters.Count, "#1.0");
 			Assert.AreEqual ("hoge", m.WildcardPathSegments [0], "#2");
 			Assert.AreEqual ("ppp", m.WildcardPathSegments [1], "#3");
 		}
@@ -459,6 +459,14 @@ namespace MonoTests.System
 			Assert.AreEqual ("hoge", m.WildcardPathSegments [0], "#3");
 			Assert.AreEqual ("ppp", m.WildcardPathSegments [1], "#4");
 			Assert.AreEqual ("qqq", m.WildcardPathSegments [2], "#5");
+		}
+
+		[Test]
+		public void MatchIgnoreQueryParamNoValue ()
+		{
+			var t = new UriTemplate ("/{a}/*", true);
+			var m = t.Match (new Uri ("http://s"), new Uri ("http://s/a/b?foo"));
+			Assert.AreEqual (1, m.QueryParameters.Keys.Count, "#1");
 		}
 
 		[Test]

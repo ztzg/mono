@@ -55,7 +55,7 @@ _ReSharper*/
 ~$*
 
 # Autotools-generated files
-Makefile
+/Makefile
 Makefile.in
 aclocal.m4
 autom4te.cache
@@ -69,6 +69,7 @@ config.status
 config.sub
 configure
 configure.scan
+cygconfig.h
 depcomp
 install-sh
 libtool
@@ -79,6 +80,7 @@ releases
 stamp-h
 stamp-h1
 stamp-h.in
+/test-driver
 *~
 *.swp
 *.o
@@ -107,11 +109,16 @@ GRTAGS
 GSYMS
 GTAGS
 
+# Doxygen
+docs/doxygen*
+docs/perlmod*
+
 
 ##############################################################################
 # Mono-specific patterns
 ##############################################################################
 
+.dirstamp
 compile
 mono.h
 mono-*.tar.*

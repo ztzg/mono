@@ -24,8 +24,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if !NET_2_1
-
 using System;
 using System.Xml;
 using System.Xml.Linq;
@@ -86,14 +84,26 @@ namespace System.Xml.Schema
 			while (xr.Read ()) {
 				if (addSchemaInfo) {
 					if (xr.NodeType == XmlNodeType.Element) {
-						xsource.CurrentNode.AddAnnotation (xr.SchemaInfo);
+						xsource.CurrentNode.AddAnnotation (CopySchemaInfo (xr.SchemaInfo));
 						while (xr.MoveToNextAttribute ())
 							if (xr.NamespaceURI != XUtil.XmlnsNamespace)
-								xsource.GetCurrentAttribute ().AddAnnotation (xr.SchemaInfo);
+								xsource.GetCurrentAttribute ().AddAnnotation (CopySchemaInfo (xr.SchemaInfo));
 						xr.MoveToElement ();
 					}
 				}
 			}
+		}
+		
+		static XmlSchemaInfo CopySchemaInfo (IXmlSchemaInfo src)
+		{
+			return new XmlSchemaInfo () {
+				IsDefault = src.IsDefault,
+				IsNil = src.IsNil,
+				MemberType = src.MemberType,
+				SchemaAttribute = src.SchemaAttribute,
+				SchemaElement = src.SchemaElement,
+				SchemaType = src.SchemaType,
+				Validity = src.Validity };
 		}
 
 		[MonoTODO]
@@ -109,5 +119,3 @@ namespace System.Xml.Schema
 		}
 	}
 }
-
-#endif

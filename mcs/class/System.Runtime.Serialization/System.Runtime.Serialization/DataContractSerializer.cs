@@ -35,6 +35,7 @@ using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
 using System.Xml.Schema;
+using System.Xml.Serialization;
 
 using QName = System.Xml.XmlQualifiedName;
 
@@ -172,7 +173,6 @@ namespace System.Runtime.Serialization
 				dataContractSurrogate);
 		}
 
-#if NET_4_0
 		public DataContractSerializer (Type type,
 			IEnumerable<Type> knownTypes,
 			int maxObjectsInGraph,
@@ -212,9 +212,7 @@ namespace System.Runtime.Serialization
 		{
 			DataContractResolver = dataContractResolver;
 		}
-#endif
 
-#if NET_4_5
 		public DataContractSerializer (Type type, DataContractSerializerSettings settings)
 			: this (type, settings.RootName, settings.RootNamespace, settings.KnownTypes,
 			        settings.MaxItemsInObjectGraph, settings.IgnoreExtensionDataObject,
@@ -222,7 +220,6 @@ namespace System.Runtime.Serialization
 			        settings.DataContractResolver)
 		{
 		}
-#endif
 
 		void PopulateTypes (IEnumerable<Type> knownTypes)
 		{
@@ -248,8 +245,10 @@ namespace System.Runtime.Serialization
 				return;
 
 			Type elementType = type;
-			if (type.HasElementType)
+			if (type.HasElementType) {
+				known_types.Add (type);
 				elementType = type.GetElementType ();
+			}
 
 			known_types.Add (elementType);
 
@@ -284,11 +283,7 @@ namespace System.Runtime.Serialization
 			surrogate = dataContractSurrogate;
 		}
 
-#if NET_4_0
 		public
-#else
-		internal
-#endif
 		DataContractResolver DataContractResolver {
 			get { return resolver; }
 			private set {
@@ -368,7 +363,6 @@ namespace System.Runtime.Serialization
 			return ret;
 		}
 
-#if NET_4_0
 		public object ReadObject (XmlDictionaryReader reader, bool verifyObjectName, DataContractResolver resolver)
 		{
 			var bak = DataContractResolver;
@@ -379,7 +373,6 @@ namespace System.Runtime.Serialization
 				DataContractResolver = bak;
 			}
 		}
-#endif
 
 		// SP1
 		public override void WriteObject (XmlWriter writer, object graph)
@@ -388,7 +381,6 @@ namespace System.Runtime.Serialization
 			WriteObject (w, graph);
 		}
 
-#if NET_4_0
 		public void WriteObject (XmlDictionaryWriter writer, object graph, DataContractResolver resolver)
 		{
 			var bak = DataContractResolver;
@@ -399,7 +391,6 @@ namespace System.Runtime.Serialization
 				DataContractResolver = bak;
 			}
 		}
-#endif
 
 		[MonoTODO ("use DataContractSurrogate")]
 		/*
@@ -449,10 +440,12 @@ namespace System.Runtime.Serialization
 		{
 			Type rootType = type;
 
+			if (IsAny())
+				return;
+
 			if (root_name.Value == "")
 				throw new InvalidDataContractException ("Type '" + type.ToString () +
 					"' cannot have a DataContract attribute Name set to null or empty string.");
-
 
 			if (graph == null) {
 				if (names_filled)
@@ -542,6 +535,9 @@ namespace System.Runtime.Serialization
 
 		public override void WriteEndObject (XmlDictionaryWriter writer)
 		{
+			if (IsAny())
+				return;
+
 			writer.WriteEndElement ();
 		}
 
@@ -551,11 +547,19 @@ namespace System.Runtime.Serialization
 			WriteEndObject (XmlDictionaryWriter.CreateDictionaryWriter (writer));
 		}
 
-#if NET_4_5
 		[MonoTODO]
 		public bool SerializeReadOnlyTypes {
 			get { throw new NotImplementedException (); }
 		}
-#endif
+
+		private bool IsAny ()
+		{
+			var xpa = type.GetCustomAttribute<XmlSchemaProviderAttribute> (true);
+
+			if (xpa != null)
+				return xpa.IsAny;
+
+			return false;
+		}
 	}
 }

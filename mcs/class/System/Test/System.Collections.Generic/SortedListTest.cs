@@ -29,7 +29,6 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_2_0
 
 using System;
 using System.Collections;
@@ -516,7 +515,14 @@ namespace MonoTests.System.Collections.Generic
 				Assert.That (ex.InnerException, Is.TypeOf (typeof (DivideByZeroException)), "UC #8");
 			}
 		}
+
+		[Test]
+		public void IDictionaryNullOnNonExistingKey ()
+		{
+			IDictionary list = new SortedList<long, string> ();
+			object val = list [1234L];
+			Assert.IsNull (val);
+		}
 	}
 }
 
-#endif

@@ -32,6 +32,7 @@ using System.Linq;
 using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
+using System.Xml.Serialization;
 
 using NUnit.Framework;
 
@@ -2049,6 +2050,60 @@ namespace MonoTests.System.Xml.Linq
 			XNamespace ns = "http://jabber.org/protocol/geoloc";
 			XElement newElement = new XElement(ns + "geoloc");
 			Assert.AreEqual ("<geoloc xmlns=\"http://jabber.org/protocol/geoloc\" />", newElement.ToString (), "#1");
+		}
+		
+		[Test] // bug #10194
+		public void SetElementValueNullOnNonExistingElement ()
+		{
+			var xd = XDocument.Parse ("<foo />");
+			xd.Root.SetElementValue (XName.Get ("bar"), null);
+		}
+		
+		[Test] // bug #11298
+		public void ReplaceAttributesIteratesContentsFirstThenRemove ()
+		{
+			var xmlString = "<Class Id='1' Name='' Cluster='' xmlns='urn:x' />";
+			var e = XDocument.Parse (xmlString).Root;
+			var attrs = e.Attributes ()
+				.Where (a => !a.IsNamespaceDeclaration)
+				.Select (a => a.Name.Namespace != XNamespace.None ?
+						 new XAttribute (XName.Get(a.Name.LocalName), a.Value) : a);
+			e.ReplaceAttributes (attrs);
+			Assert.IsNotNull (e.Attribute ("Id"), "#1");
+			Assert.IsNotNull (e.Attribute ("Name"), "#2");
+			Assert.IsNotNull (e.Attribute ("Cluster"), "#3");
+		}
+
+		[XmlType ("Root")]
+		public class SerializableClass
+		{
+			[XmlAnyElement]
+			public XElement Content;
+		}
+
+#if NET_4_5
+		[Test]
+		// Bug #12571
+		public void DeserializeXElement ()
+		{
+			var xmlString = "<Root><Data /></Root>";
+
+			var serializer = new XmlSerializer (typeof (SerializableClass));
+			var res = serializer.Deserialize (new StringReader (xmlString));
+
+			Assert.IsNotNull (res, "#1");
+			Assert.AreEqual (typeof (SerializableClass), res.GetType (), "#2");
+			var xe = (SerializableClass)res;
+			Assert.AreEqual (xe.Content.ToString (), "<Data />", "#3");
+		}
+#endif
+
+		[Test] // Bug #20151
+		public void XElementFromArrayWithNullValuesAsObject ()
+		{
+			string[] content = {null, "content1", null, "content2"};
+			var el = new XElement ("test", (object)content);
+			Assert.AreEqual ("<test>content1content2</test>", el.ToString ());
 		}
 	}
 }

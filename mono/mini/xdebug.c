@@ -51,6 +51,8 @@
 #include "image-writer.h"
 #include "dwarfwriter.h"
 
+#include "mono/utils/mono-compiler.h"
+
 #define USE_GDB_JIT_INTERFACE
 
 /* The recommended gdb macro is: */
@@ -95,17 +97,10 @@ struct jit_descriptor
   struct jit_code_entry *first_entry;
 };
 
-
-#ifdef _MSC_VER
-#define MONO_NOINLINE __declspec (noinline)
-#else
-#define MONO_NOINLINE __attribute__((noinline))
-#endif
-
 /* GDB puts a breakpoint in this function.  */
-void MONO_NOINLINE __jit_debug_register_code(void);
+void MONO_NEVER_INLINE __jit_debug_register_code(void);
 
-#if !defined(MONO_LLVM_LOADED) && defined(ENABLE_LLVM)
+#if !defined(MONO_LLVM_LOADED) && defined(ENABLE_LLVM) && !defined(MONO_CROSS_COMPILE)
 
 /* LLVM already defines these */
 
@@ -114,7 +109,7 @@ extern struct jit_descriptor __jit_debug_descriptor;
 #else
 
 /* gcc seems to inline/eliminate calls to noinline functions, thus the asm () */
-void MONO_NOINLINE __jit_debug_register_code(void) {
+void MONO_NEVER_INLINE __jit_debug_register_code(void) {
 #if defined(__GNUC__)
 	asm ("");
 #endif
@@ -134,7 +129,7 @@ static int il_file_line_index;
 static GHashTable *xdebug_syms;
 
 void
-mono_xdebug_init (char *options)
+mono_xdebug_init (const char *options)
 {
 	MonoImageWriter *w;
 	char **args, **ptr;
@@ -173,7 +168,7 @@ mono_xdebug_init (char *options)
 	img_writer_emit_section_change (w, ".text", 0);
 	img_writer_emit_string (w, "");
 
-	mono_dwarf_writer_emit_base_info (xdebug_writer, mono_unwind_get_cie_program ());
+	mono_dwarf_writer_emit_base_info (xdebug_writer, "JITted code", mono_unwind_get_cie_program ());
 }
 
 static void
@@ -192,7 +187,7 @@ xdebug_begin_emit (MonoImageWriter **out_w, MonoDwarfWriter **out_dw)
 
 	dw = mono_dwarf_writer_create (w, il_file, il_file_line_index, FALSE, TRUE);
 
-	mono_dwarf_writer_emit_base_info (dw, mono_unwind_get_cie_program ());
+	mono_dwarf_writer_emit_base_info (dw, "JITted code", mono_unwind_get_cie_program ());
 
 	*out_w = w;
 	*out_dw = dw;
@@ -294,8 +289,9 @@ mono_save_xdebug_info (MonoCompile *cfg)
 
 		xdebug_method_count ++;
 
-		dmji = mono_debug_find_method (cfg->jit_info->method, mono_domain_get ());;
-		mono_dwarf_writer_emit_method (xdebug_writer, cfg, cfg->jit_info->method, NULL, NULL, cfg->jit_info->code_start, cfg->jit_info->code_size, cfg->args, cfg->locals, cfg->unwind_ops, dmji);
+		dmji = mono_debug_find_method (jinfo_get_method (cfg->jit_info), mono_domain_get ());;
+		mono_dwarf_writer_emit_method (xdebug_writer, cfg, jinfo_get_method (cfg->jit_info), NULL, NULL, NULL,
+									   cfg->jit_info->code_start, cfg->jit_info->code_size, cfg->args, cfg->locals, cfg->unwind_ops, dmji);
 		mono_debug_free_method_jit_info (dmji);
 
 #if 0
@@ -323,8 +319,9 @@ mono_save_xdebug_info (MonoCompile *cfg)
 			return;
 
 		mono_loader_lock ();
-		dmji = mono_debug_find_method (cfg->jit_info->method, mono_domain_get ());;
-		mono_dwarf_writer_emit_method (xdebug_writer, cfg, cfg->jit_info->method, NULL, NULL, cfg->jit_info->code_start, cfg->jit_info->code_size, cfg->args, cfg->locals, cfg->unwind_ops, dmji);
+		dmji = mono_debug_find_method (jinfo_get_method (cfg->jit_info), mono_domain_get ());
+		mono_dwarf_writer_emit_method (xdebug_writer, cfg, jinfo_get_method (cfg->jit_info), NULL, NULL, NULL,
+									   cfg->jit_info->code_start, cfg->jit_info->code_size, cfg->args, cfg->locals, cfg->unwind_ops, dmji);
 		mono_debug_free_method_jit_info (dmji);
 		fflush (xdebug_fp);
 		mono_loader_unlock ();
@@ -369,7 +366,7 @@ mono_save_trampoline_xdebug_info (MonoTrampInfo *info)
 #else /* !defined(DISABLE_AOT) && !defined(DISABLE_JIT) */
 
 void
-mono_xdebug_init (char *options)
+mono_xdebug_init (const char *options)
 {
 }
 

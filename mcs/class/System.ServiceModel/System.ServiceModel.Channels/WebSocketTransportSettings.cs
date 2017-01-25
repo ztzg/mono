@@ -23,7 +23,6 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_4_5
 using System;
 
 namespace System.ServiceModel.Channels {
@@ -35,10 +34,10 @@ namespace System.ServiceModel.Channels {
 		}
 		
 		public const string BinaryEncoderTransferModeHeader = null;
-		public const string BinaryMessageReceivedAction = null;
+		public const string BinaryMessageReceivedAction = "http://schemas.microsoft.com/2011/02/websockets/onbinarymessage";
 		public const string ConnectionOpenedAction = null;
 		public const string SoapContentTypeHeader = null;
-		public const string TextMessageReceivedAction = null;
+		public const string TextMessageReceivedAction = "http://schemas.microsoft.com/2011/02/websockets/ontextmessage";
 
 		public bool CreateNotificationOnConnection { get; set; }
 		public bool DisablePayloadMasking { get; set; }
@@ -64,4 +63,3 @@ namespace System.ServiceModel.Channels {
 		
 	}
 }
-#endif

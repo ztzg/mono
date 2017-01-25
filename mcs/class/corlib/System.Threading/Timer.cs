@@ -31,6 +31,7 @@
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Collections;
+using System.Runtime.CompilerServices;
 
 namespace System.Threading
 {
@@ -153,7 +154,7 @@ namespace System.Threading
 					return true;
 				}
 			} else {
-				nr = dueTime * TimeSpan.TicksPerMillisecond + DateTime.GetTimeMonotonic ();
+				nr = dueTime * TimeSpan.TicksPerMillisecond + GetTimeMonotonic ();
 			}
 
 			scheduler.Change (this, nr);
@@ -168,6 +169,15 @@ namespace System.Threading
 			NativeEventCalls.SetEvent_internal (notifyObject.Handle);
 			return true;
 		}
+
+		// extracted from ../../../../external/referencesource/mscorlib/system/threading/timer.cs
+		internal void KeepRootedWhileScheduled()
+		{
+		}
+
+		// TODO: Environment.TickCount should be enough as is everywhere else
+		[MethodImplAttribute(MethodImplOptions.InternalCall)]
+		static extern long GetTimeMonotonic ();
 
 		sealed class TimerComparer : IComparer {
 			public int Compare (object x, object y)
@@ -311,13 +321,10 @@ namespace System.Threading
 				return idx;
 			}
 
-			static WaitCallback TimerCaller = new WaitCallback (TimerCB);
 			static void TimerCB (object o)
 			{
 				Timer timer = (Timer) o;
-				try {
-					timer.callback (timer.state);
-				} catch {}
+				timer.callback (timer.state);
 			}
 
 			void SchedulerThread ()
@@ -326,7 +333,7 @@ namespace System.Threading
 				var new_time = new List<Timer> (512);
 				while (true) {
 					int ms_wait = -1;
-					long ticks = DateTime.GetTimeMonotonic ();
+					long ticks = GetTimeMonotonic ();
 					lock (this) {
 						changed.Reset ();
 						//PrintList ();
@@ -340,14 +347,14 @@ namespace System.Threading
 							list.RemoveAt (i);
 							count--;
 							i--;
-							ThreadPool.UnsafeQueueUserWorkItem (TimerCaller, timer);
+							ThreadPool.QueueWorkItem (TimerCB, timer);
 							long period = timer.period_ms;
 							long due_time = timer.due_time_ms;
 							bool no_more = (period == -1 || ((period == 0 || period == Timeout.Infinite) && due_time != Timeout.Infinite));
 							if (no_more) {
 								timer.next_run = Int64.MaxValue;
 							} else {
-								timer.next_run = DateTime.GetTimeMonotonic () + TimeSpan.TicksPerMillisecond * timer.period_ms;
+								timer.next_run = GetTimeMonotonic () + TimeSpan.TicksPerMillisecond * timer.period_ms;
 								new_time.Add (timer);
 							}
 						}
@@ -374,7 +381,7 @@ namespace System.Threading
 						//PrintList ();
 						ms_wait = -1;
 						if (min_next_run != Int64.MaxValue) {
-							long diff = (min_next_run - DateTime.GetTimeMonotonic ())  / TimeSpan.TicksPerMillisecond;
+							long diff = (min_next_run - GetTimeMonotonic ())  / TimeSpan.TicksPerMillisecond;
 							if (diff > Int32.MaxValue)
 								ms_wait = Int32.MaxValue - 1;
 							else {

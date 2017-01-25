@@ -199,6 +199,10 @@ namespace MonoTests.System.IO
 			testPath = Path.Combine (testPath, "two" + DSC);
 			expected = "one" + DSC + "two" + DSC;
 			Assert.AreEqual (expected, testPath, "Combine #07");
+
+#if NET_4_0
+			Assert.AreEqual ("a", Path.Combine (new [] { "a", "" }), "Combine #08");
+#endif
 		}
 
 		[Test]
@@ -487,13 +491,18 @@ namespace MonoTests.System.IO
 
 			testFullPath = Path.GetFullPath ("a//./.././foo.txt");
 			Assert.AreEqual (expected, testFullPath, "GetFullPath #02");
+
+			if (!Windows){
+				Assert.AreEqual ("/bin/bash", Path.GetFullPath ("/../bin/bash"));
+			}
+				
 		}
 
 		[Test]
 		public void GetFullPath_Unix ()
 		{
 			if (Windows)
-				return;
+				Assert.Ignore ("Running on Windows.");
 
 			string root =  "/";
 			string [,] test = new string [,] {
@@ -536,13 +545,23 @@ namespace MonoTests.System.IO
 			Assert.AreEqual (Environment.CurrentDirectory, Path.GetFullPath ("."), "#03");
 			Assert.AreEqual (Path.Combine (Environment.CurrentDirectory, "hey"),
 					     Path.GetFullPath ("hey"), "#04");
+			Assert.AreEqual ("/", Path.GetFullPath ("/"), "#01");
+
+			string curdir = Directory.GetCurrentDirectory ();
+			try {
+				Directory.SetCurrentDirectory ("/");
+				Assert.AreEqual ("/test.txt", Path.GetFullPath ("test.txt"), "xambug #833");
+			}
+			finally {
+				Directory.SetCurrentDirectory (curdir);
+			}
 		}
 
 		[Test]
 		public void GetFullPath_Windows ()
 		{
 			if (!Windows)
-				return;
+				Assert.Ignore ("Not running on Windows.");
 
 			string root =  "C:\\";
 			string [,] test = new string [,] {
@@ -565,10 +584,6 @@ namespace MonoTests.System.IO
 				{"root//dir", "root\\dir"},
 				{"root/.              /", "root\\"},
 				{"root/..             /", ""},
-#if !NET_2_0
-				{"root/      .              /", "root\\"},
-				{"root/      ..             /", ""},
-#endif
 				{"root/./", "root\\"},
 				{"root/..                      /", ""},
 				{".//", ""}
@@ -607,10 +622,6 @@ namespace MonoTests.System.IO
 				{"root//dir", "root\\dir"},
 				{"root/.              /", "root\\"},
 				{"root/..             /", ""},
-#if !NET_2_0
-				{"root/      .              /", "root\\"},
-				{"root/      ..             /", ""},
-#endif
 				{"root/./", "root\\"},
 				{"root/..                      /", ""},
 				{".//", ""}
@@ -652,10 +663,6 @@ namespace MonoTests.System.IO
 				{"root//dir", "root\\dir"},
 				{"root/.              /", "root\\"},
 				{"root/..             /", ""},
-#if !NET_2_0
-				{"root/      .              /", "root\\"},
-				{"root/      ..             /", ""},
-#endif
 				{"root/./", "root\\"},
 				{"root/..                      /", ""},
 				{".//", ""}
@@ -756,9 +763,7 @@ namespace MonoTests.System.IO
 		{
 			if (Windows) {
 				Assert.AreEqual (@"Z:\", Path.GetFullPath ("Z:"), "GetFullPath w#01");
-#if !TARGET_JVM // Java full (canonical) path always starts with caps drive letter
 				Assert.AreEqual (@"c:\abc\def", Path.GetFullPath (@"c:\abc\def"), "GetFullPath w#02");
-#endif
 				Assert.IsTrue (Path.GetFullPath (@"\").EndsWith (@"\"), "GetFullPath w#03");
 				// "\\\\" is not allowed
 				Assert.IsTrue (Path.GetFullPath ("/").EndsWith (@"\"), "GetFullPath w#05");
@@ -849,12 +854,8 @@ namespace MonoTests.System.IO
 		}
 
 		[Test]
-#if ONLY_1_1
-		[Category ("NotWorking")] // we also throw ArgumentException on 1.0 profile
-#endif
 		public void GetPathRoot_Path_InvalidPathChars ()
 		{
-#if NET_2_0
 			try {
 				Path.GetPathRoot ("hi\0world");
 				Assert.Fail ("#1");
@@ -865,9 +866,6 @@ namespace MonoTests.System.IO
 				Assert.IsNotNull (ex.Message, "#4");
 				Assert.IsNull (ex.ParamName, "#5");
 			}
-#else
-			Assert.AreEqual (String.Empty, Path.GetPathRoot ("hi\0world"));
-#endif
 		}
 
 		[Test]
@@ -1024,15 +1022,11 @@ namespace MonoTests.System.IO
 			// http://www.mono-project.com/FAQ:_Technical#How_to_detect_the_execution_platform_.3F
 			int platform = (int) Environment.OSVersion.Platform;
 			if ((platform == 4) || (platform == 128) || (platform == 6))
-				return;
+				Assert.Ignore ("Running on Unix.");
 
 			string curdir = Directory.GetCurrentDirectory ();
 			try {
-#if TARGET_JVM
-				string system = "C:\\WINDOWS\\system32\\";
-#else
 				string system = Environment.SystemDirectory;
-#endif
 				Directory.SetCurrentDirectory (system);
 				string drive = system.Substring (0, 2);
 				Assert.AreEqual (system, Path.GetFullPath (drive), "current dir");
@@ -1049,15 +1043,11 @@ namespace MonoTests.System.IO
 			// http://www.mono-project.com/FAQ:_Technical#How_to_detect_the_execution_platform_.3F
 			int platform = (int) Environment.OSVersion.Platform;
 			if ((platform == 4) || (platform == 128) || (platform == 6))
-				return;
+				Assert.Ignore ("Running on Unix.");
 
 			string curdir = Directory.GetCurrentDirectory ();
 			try {
-#if TARGET_JVM
-				string system = "C:\\WINDOWS\\system32\\";
-#else
 				string system = Environment.SystemDirectory;
-#endif
 				Directory.SetCurrentDirectory (system);
 				// e.g. C:dir (no backslash) will return CurrentDirectory + dir
 				string dir = system.Substring (0, 2) + "dir";
@@ -1069,16 +1059,13 @@ namespace MonoTests.System.IO
 		}
 #endif
 		[Test]
-#if TARGET_JVM
-		[Ignore("Java full (canonical) path always returns windows dir in caps")]
-#endif
 		public void WindowsDriveC14N_77058 ()
 		{
 			// check for Unix platforms - see FAQ for more details
 			// http://www.mono-project.com/FAQ:_Technical#How_to_detect_the_execution_platform_.3F
 			int platform = (int) Environment.OSVersion.Platform;
 			if ((platform == 4) || (platform == 128) || (platform == 6))
-				return;
+				Assert.Ignore ("Running on Unix.");
 
 			Assert.AreEqual (@"C:\Windows\dir", Path.GetFullPath (@"C:\Windows\System32\..\dir"), "1");
 			Assert.AreEqual (@"C:\dir", Path.GetFullPath (@"C:\Windows\System32\..\..\dir"), "2");
@@ -1092,20 +1079,14 @@ namespace MonoTests.System.IO
 		{
 			char[] invalid = Path.InvalidPathChars;
 			if (Windows) {
-#if NET_2_0
 				Assert.AreEqual (36, invalid.Length, "Length");
-#else
-				Assert.AreEqual (15, invalid.Length, "Length");
-#endif
+
 				foreach (char c in invalid) {
 					int i = (int) c;
-#if NET_2_0
+
 					if (i < 32)
 						continue;
-#else
-					if ((i == 0) || (i == 8) || ((i > 15) && (i < 19)) || ((i > 19) && (i < 26)))
-						continue;
-#endif
+
 					// in both 1.1 SP1 and 2.0
 					if ((i == 34) || (i == 60) || (i == 62) || (i == 124))
 						continue;
@@ -1137,7 +1118,6 @@ namespace MonoTests.System.IO
 			}
 		}
 
-#if NET_2_0
 		[Test]
 		public void GetInvalidFileNameChars_Values ()
 		{
@@ -1260,7 +1240,7 @@ namespace MonoTests.System.IO
 				}
 			}
 		}
-#endif
+
 #if NET_4_0
 		string Concat (string sep, params string [] parms)
 		{

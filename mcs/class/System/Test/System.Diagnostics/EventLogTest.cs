@@ -58,10 +58,8 @@ namespace MonoTests.System.Diagnostics
 	[TestFixture]
 	public class EventLogTest
 	{
-#if NET_2_0
 		private string _originalEventLogImpl;
 		private string _eventLogStore;
-#endif
 
 		private const string EVENTLOG_TYPE_VAR = "MONO_EVENTLOG_TYPE";
 
@@ -70,7 +68,6 @@ namespace MonoTests.System.Diagnostics
 		private const string WIN32_IMPL = "win32";
 		private const string NULL_IMPL = "null";
 
-#if NET_2_0 // Environment.SetEnvironmentVariable is only available in 2.0 profile
 		[SetUp]
 		public void SetUp ()
 		{
@@ -104,14 +101,13 @@ namespace MonoTests.System.Diagnostics
 			if (Directory.Exists (_eventLogStore))
 				Directory.Delete (_eventLogStore, true);
 		}
-#endif
 
 		[Test]
 		public void Clear ()
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -167,9 +163,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#D7");
 					Assert.AreEqual (0, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -188,9 +182,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#E6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#E7");
 					Assert.AreEqual (0, entry.EventID, "#E8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#E9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#E10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#E11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#E12");
@@ -219,7 +211,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.Exists ("monologtemp", "."))
 				Assert.Ignore ("Event log 'monologtemp' should not exist.");
@@ -245,7 +237,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -308,7 +300,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -344,7 +336,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -375,7 +367,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -406,7 +398,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			EventLog eventLog = new EventLog ();
 			Assert.IsFalse (eventLog.EnableRaisingEvents, "#1");
@@ -423,7 +415,6 @@ namespace MonoTests.System.Diagnostics
 			}
 			Assert.IsNotNull (eventLog.Log, "#4");
 			Assert.AreEqual (string.Empty, eventLog.Log, "#5");
-#if NET_2_0
 			try {
 				string displayName = eventLog.LogDisplayName;
 				Assert.Fail ("#6a: " + displayName);
@@ -434,10 +425,6 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsNotNull (ex.Message, "#6c");
 				Assert.IsNull (ex.InnerException, "#6d");
 			}
-#else
-			Assert.IsNotNull (eventLog.LogDisplayName, "#6a");
-			Assert.AreEqual (string.Empty, eventLog.LogDisplayName, "#6b");
-#endif
 			Assert.IsNotNull (eventLog.MachineName, "#7");
 			Assert.AreEqual (".", eventLog.MachineName, "#8");
 			Assert.IsNotNull (eventLog.Source, "#9");
@@ -450,7 +437,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -482,7 +469,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.Exists ("monologtemp", "."))
 				Assert.Ignore ("Event log 'monologtemp' should not exist.");
@@ -526,7 +513,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			EventLog eventLog = new EventLog (string.Empty);
 			Assert.IsFalse (eventLog.EnableRaisingEvents, "#A1");
@@ -543,7 +530,6 @@ namespace MonoTests.System.Diagnostics
 			}
 			Assert.IsNotNull (eventLog.Log, "#A4");
 			Assert.AreEqual (string.Empty, eventLog.Log, "#A5");
-#if NET_2_0
 			try {
 				string displayName = eventLog.LogDisplayName;
 				Assert.Fail ("#A6a: " + displayName);
@@ -554,10 +540,6 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsNotNull (ex.Message, "#A6c");
 				Assert.IsNull (ex.InnerException, "#A6d");
 			}
-#else
-			Assert.IsNotNull (eventLog.LogDisplayName, "#A6a");
-			Assert.AreEqual (string.Empty, eventLog.LogDisplayName, "#A6b");
-#endif
 			Assert.IsNotNull (eventLog.MachineName, "#A7");
 			Assert.AreEqual (".", eventLog.MachineName, "#A8");
 			Assert.IsNotNull (eventLog.Source, "#A9");
@@ -577,7 +559,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -609,7 +591,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.Exists ("monologtemp", "."))
 				Assert.Ignore ("Event log 'monologtemp' should not exist.");
@@ -653,7 +635,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			EventLog eventLog = new EventLog (string.Empty, ".");
 			Assert.IsFalse (eventLog.EnableRaisingEvents, "#A1");
@@ -670,7 +652,6 @@ namespace MonoTests.System.Diagnostics
 			}
 			Assert.IsNotNull (eventLog.Log, "#A4");
 			Assert.AreEqual (string.Empty, eventLog.Log, "#A5");
-#if NET_2_0
 			try {
 				string displayName = eventLog.LogDisplayName;
 				Assert.Fail ("#A6a: " + displayName);
@@ -681,10 +662,6 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsNotNull (ex.Message, "#A6c");
 				Assert.IsNull (ex.InnerException, "#A6d");
 			}
-#else
-			Assert.IsNotNull (eventLog.LogDisplayName, "#A6a");
-			Assert.AreEqual (string.Empty, eventLog.LogDisplayName, "#A6b");
-#endif
 			Assert.IsNotNull (eventLog.MachineName, "#A7");
 			Assert.AreEqual (".", eventLog.MachineName, "#A8");
 			Assert.IsNotNull (eventLog.Source, "#A9");
@@ -708,15 +685,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				// Invalid value '' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				// Invalid value  for parameter MachineName
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -727,15 +698,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#B2");
 				Assert.IsNotNull (ex.Message, "#B3");
-#if NET_2_0
 				// Invalid value ' \t\n' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("' \t\n'") != -1, "#B4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#B5");
-#else
-				// Invalid value  \t\n for parameter MachineName
-				Assert.IsTrue (ex.Message.IndexOf ("  \t\n ") != -1, "#B4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#B5");
-#endif
 				Assert.IsNull (ex.InnerException, "#B6");
 				Assert.IsNull (ex.ParamName, "#B7");
 			}
@@ -751,13 +716,8 @@ namespace MonoTests.System.Diagnostics
 				// Invalid value '' for parameter 'machineName'
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -768,7 +728,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -805,7 +765,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.Exists ("monologtemp", "."))
 				Assert.Ignore ("Event log 'monologtemp' should not exist.");
@@ -849,7 +809,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -871,7 +831,6 @@ namespace MonoTests.System.Diagnostics
 				}
 				Assert.IsNotNull (eventLog.Log, "#A4");
 				Assert.AreEqual (string.Empty, eventLog.Log, "#A5");
-#if NET_2_0
 				try {
 					string displayName = eventLog.LogDisplayName;
 					Assert.Fail ("#A6a: " + displayName);
@@ -882,10 +841,6 @@ namespace MonoTests.System.Diagnostics
 					Assert.IsNotNull (ex.Message, "#A6c");
 					Assert.IsNull (ex.InnerException, "#A6d");
 				}
-#else
-				Assert.IsNotNull (eventLog.LogDisplayName, "#A6a");
-				Assert.AreEqual (string.Empty, eventLog.LogDisplayName, "#A6b");
-#endif
 				Assert.IsNotNull (eventLog.MachineName, "#A7");
 				Assert.AreEqual (".", eventLog.MachineName, "#A8");
 				Assert.IsNotNull (eventLog.Source, "#A9");
@@ -918,15 +873,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				// Invalid value '' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				// Invalid value  for parameter MachineName
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -937,15 +886,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#B2");
 				Assert.IsNotNull (ex.Message, "#B3");
-#if NET_2_0
 				// Invalid value ' \t\n' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("' \t\n'") != -1, "#B4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#B5");
-#else
-				// Invalid value  \t\n for parameter MachineName
-				Assert.IsTrue (ex.Message.IndexOf ("  \t\n ") != -1, "#B4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#B5");
-#endif
 				Assert.IsNull (ex.InnerException, "#B6");
 				Assert.IsNull (ex.ParamName, "#B7");
 			}
@@ -961,13 +904,8 @@ namespace MonoTests.System.Diagnostics
 				// Invalid value '' for parameter 'machineName'
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -978,7 +916,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monoothersource", "."))
 				Assert.Ignore ("Event log source 'monoothersource' should not exist.");
@@ -1019,7 +957,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1055,7 +993,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1090,7 +1028,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1188,7 +1126,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1216,7 +1154,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1263,7 +1201,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType != NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1400,7 +1338,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType != NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1460,7 +1398,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1487,7 +1425,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1545,7 +1483,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1584,7 +1522,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1642,7 +1580,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1725,7 +1663,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1769,7 +1707,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1814,7 +1752,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1862,15 +1800,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				// Invalid value '' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				// Invalid value  for parameter machineName
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("machineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -1881,15 +1813,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#B2");
 				Assert.IsNotNull (ex.Message, "#B3");
-#if NET_2_0
 				// Invalid value ' \t\n' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("' \t\n'") != -1, "#B4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#B5");
-#else
-				// Invalid value  \t\n for parameter machineName
-				Assert.IsTrue (ex.Message.IndexOf ("  \t\n ") != -1, "#B4");
-				Assert.IsTrue (ex.Message.IndexOf ("machineName") != -1, "#B5");
-#endif
 				Assert.IsNull (ex.InnerException, "#B6");
 				Assert.IsNull (ex.ParamName, "#B7");
 			}
@@ -1905,13 +1831,8 @@ namespace MonoTests.System.Diagnostics
 				// Invalid value '' for parameter 'machineName'
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("machineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -1922,7 +1843,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -1970,7 +1891,7 @@ namespace MonoTests.System.Diagnostics
 
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -2018,7 +1939,6 @@ namespace MonoTests.System.Diagnostics
 
 					EventLog.WriteEntry ("monotempsource", "Entries1");
 
-#if NET_2_0
 					try {
 						current = enumerator.Current;
 						Assert.Fail ("#G1: " + current);
@@ -2030,15 +1950,6 @@ namespace MonoTests.System.Diagnostics
 						Assert.IsNotNull (ex.Message, "#G3");
 						Assert.IsNull (ex.InnerException, "#G4");
 					}
-#else
-					entry = (EventLogEntry) enumerator.Current;
-					Assert.IsNotNull (entry, "#G1");
-					Assert.IsNotNull (entry.Source, "#G2");
-					Assert.AreEqual ("monotempsource", entry.Source, "#G3");
-					Assert.IsNotNull (entry.ReplacementStrings, "#G4");
-					Assert.AreEqual (1, entry.ReplacementStrings.Length, "#G5");
-					Assert.AreEqual ("Entries1", entry.ReplacementStrings [0], "#G6");
-#endif
 
 					Assert.IsFalse (enumerator.MoveNext (), "#H1");
 					Assert.AreEqual (1, eventLog.Entries.Count, "#H2");
@@ -2054,11 +1965,7 @@ namespace MonoTests.System.Diagnostics
 						Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#I2");
 						Assert.IsNotNull (ex.Message, "#I3");
 						Assert.IsNull (ex.InnerException, "#I4");
-#if NET_2_0
 						Assert.AreEqual ("", ex.ParamName, "#I5");
-#else
-						Assert.IsNull (ex.ParamName, "#I5");
-#endif
 					}
 
 					entries = new EventLogEntry [1];
@@ -2094,21 +2001,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual ("Entries3", entry.ReplacementStrings [0], "#M6");
 
 					enumerator.Reset ();
-#if NET_2_0
 					Assert.IsNotNull (enumerator.Current, "#N1");
-#else
-					try {
-						current = enumerator.Current;
-						Assert.Fail ("#N1a: " + current);
-					} catch (InvalidOperationException ex) {
-						// No current EventLog entry available, cursor is located
-						// before the first or after the last element of the
-						// enumeration
-						Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#N1b");
-						Assert.IsNotNull (ex.Message, "#N1c");
-						Assert.IsNull (ex.InnerException, "#N1d");
-					}
-#endif
 					Assert.IsTrue (enumerator.MoveNext (), "#N2");
 					Assert.IsNotNull (enumerator.Current, "#N3");
 					Assert.IsTrue (enumerator.MoveNext (), "#N4");
@@ -2133,21 +2026,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.IsTrue (enumerator.MoveNext (), "#P1");
 					Assert.IsNotNull (enumerator.Current, "#P2");
 					eventLog.Clear ();
-#if NET_2_0
 					Assert.IsNotNull (enumerator.Current, "#P3");
-#else
-					try {
-						current = enumerator.Current;
-						Assert.Fail ("#P3a: " + current);
-					} catch (InvalidOperationException ex) {
-						// No current EventLog entry available, cursor is located
-						// before the first or after the last element of the
-						// enumeration
-						Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#P3b");
-						Assert.IsNotNull (ex.Message, "#P3c");
-						Assert.IsNull (ex.InnerException, "#P3d");
-					}
-#endif
 					Assert.IsFalse (enumerator.MoveNext (), "#P4");
 					Assert.AreEqual (0, eventLog.Entries.Count, "#P5");
 
@@ -2178,7 +2057,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.Exists ("monologtemp", "."))
 				Assert.Ignore ("Event log 'monologtemp' should not exist.");
@@ -2247,7 +2126,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -2412,7 +2291,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -2487,7 +2366,6 @@ namespace MonoTests.System.Diagnostics
 
 					EventLog.WriteEntry ("monotempsource", "Entries_Source_DoesNotExist2");
 
-#if NET_2_0
 					try {
 						object current = enumerator.Current;
 						Assert.Fail ("#G1: " + current);
@@ -2499,15 +2377,6 @@ namespace MonoTests.System.Diagnostics
 						Assert.IsNotNull (ex.Message, "#G3");
 						Assert.IsNull (ex.InnerException, "#G4");
 					}
-#else
-					entry = (EventLogEntry) enumerator.Current;
-					Assert.IsNotNull (entry, "#G1");
-					Assert.IsNotNull (entry.Source, "#G2");
-					Assert.AreEqual ("monotempsource", entry.Source, "#G3");
-					Assert.IsNotNull (entry.ReplacementStrings, "#G4");
-					Assert.AreEqual (1, entry.ReplacementStrings.Length, "#G5");
-					Assert.AreEqual ("Entries_Source_DoesNotExist2", entry.ReplacementStrings [0], "#G6");
-#endif
 
 					Assert.IsFalse (enumerator.MoveNext (), "#H1");
 					Assert.AreEqual (2, eventLog.Entries.Count, "#H2");
@@ -2522,11 +2391,7 @@ namespace MonoTests.System.Diagnostics
 						Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#I2");
 						Assert.IsNotNull (ex.Message, "#I3");
 						Assert.IsNull (ex.InnerException, "#I4");
-#if NET_2_0
 						Assert.AreEqual (string.Empty, ex.ParamName, "#I5");
-#else
-						Assert.IsNull (ex.ParamName, "#I5");
-#endif
 					}
 
 					entries = new EventLogEntry [2];
@@ -2559,21 +2424,7 @@ namespace MonoTests.System.Diagnostics
 					enumerator.Reset ();
 					Assert.IsTrue (enumerator.MoveNext (), "#M2");
 					eventLog.Clear ();
-#if NET_2_0
 					Assert.IsNotNull (enumerator.Current, "#M3");
-#else
-					try {
-						object current = enumerator.Current;
-						Assert.Fail ("#M3a: " + current);
-					} catch (InvalidOperationException ex) {
-						// No current EventLog entry available, cursor is located
-						// before the first or after the last element of the
-						// enumeration
-						Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#M3b");
-						Assert.IsNotNull (ex.Message, "#M3c");
-						Assert.IsNull (ex.InnerException, "#M3d");
-					}
-#endif
 					Assert.IsFalse (enumerator.MoveNext (), "#M4");
 
 					try {
@@ -2603,7 +2454,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -2663,7 +2514,6 @@ namespace MonoTests.System.Diagnostics
 
 					EventLog.WriteEntry ("monotempsource", "Entries_Source_Empty2");
 
-#if NET_2_0
 					try {
 						object current = enumerator.Current;
 						Assert.Fail ("#G1: " + current);
@@ -2675,15 +2525,6 @@ namespace MonoTests.System.Diagnostics
 						Assert.IsNotNull (ex.Message, "#G3");
 						Assert.IsNull (ex.InnerException, "#G4");
 					}
-#else
-					entry = (EventLogEntry) enumerator.Current;
-					Assert.IsNotNull (entry, "#G1");
-					Assert.IsNotNull (entry.Source, "#G2");
-					Assert.AreEqual ("monotempsource", entry.Source, "#G3");
-					Assert.IsNotNull (entry.ReplacementStrings, "#G4");
-					Assert.AreEqual (1, entry.ReplacementStrings.Length, "#G5");
-					Assert.AreEqual ("Entries_Source_Empty2", entry.ReplacementStrings [0], "#G6");
-#endif
 
 					Assert.IsFalse (enumerator.MoveNext (), "#H1");
 					Assert.AreEqual (2, eventLog.Entries.Count, "#H2");
@@ -2698,11 +2539,7 @@ namespace MonoTests.System.Diagnostics
 						Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#I2");
 						Assert.IsNotNull (ex.Message, "#I3");
 						Assert.IsNull (ex.InnerException, "#I4");
-#if NET_2_0
 						Assert.AreEqual ("", ex.ParamName, "#I5");
-#else
-						Assert.IsNull (ex.ParamName, "#I5");
-#endif
 					}
 
 					entries = new EventLogEntry [2];
@@ -2735,21 +2572,7 @@ namespace MonoTests.System.Diagnostics
 					enumerator.Reset ();
 					Assert.IsTrue (enumerator.MoveNext (), "#M2");
 					eventLog.Clear ();
-#if NET_2_0
 					Assert.IsNotNull (enumerator.Current, "#M3");
-#else
-					try {
-						object current = enumerator.Current;
-						Assert.Fail ("#M3a: " + current);
-					} catch (InvalidOperationException ex) {
-						// No current EventLog entry available, cursor is located
-						// before the first or after the last element of the
-						// enumeration
-						Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#M3b");
-						Assert.IsNotNull (ex.Message, "#M3c");
-						Assert.IsNull (ex.InnerException, "#M3d");
-					}
-#endif
 					Assert.IsFalse (enumerator.MoveNext (), "#M4");
 
 					try {
@@ -2779,7 +2602,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -2851,7 +2674,6 @@ namespace MonoTests.System.Diagnostics
 
 					EventLog.WriteEntry ("monotempsource", "Entries_Source_Null2");
 
-#if NET_2_0
 					try {
 						object current = enumerator.Current;
 						Assert.Fail ("#G1: " + current);
@@ -2863,15 +2685,6 @@ namespace MonoTests.System.Diagnostics
 						Assert.IsNotNull (ex.Message, "#G3");
 						Assert.IsNull (ex.InnerException, "#G4");
 					}
-#else
-					entry = (EventLogEntry) enumerator.Current;
-					Assert.IsNotNull (entry, "#G1");
-					Assert.IsNotNull (entry.Source, "#G2");
-					Assert.AreEqual ("monotempsource", entry.Source, "#G3");
-					Assert.IsNotNull (entry.ReplacementStrings, "#G4");
-					Assert.AreEqual (1, entry.ReplacementStrings.Length, "#G5");
-					Assert.AreEqual ("Entries_Source_Null2", entry.ReplacementStrings [0], "#G6");
-#endif
 
 					Assert.IsFalse (enumerator.MoveNext (), "#H1");
 					Assert.AreEqual (2, eventLog.Entries.Count, "#H2");
@@ -2886,11 +2699,7 @@ namespace MonoTests.System.Diagnostics
 						Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#I2");
 						Assert.IsNotNull (ex.Message, "#I3");
 						Assert.IsNull (ex.InnerException, "#I4");
-#if NET_2_0
 						Assert.AreEqual ("", ex.ParamName, "#I5");
-#else
-						Assert.IsNull (ex.ParamName, "#I5");
-#endif
 					}
 
 					entries = new EventLogEntry [2];
@@ -2923,21 +2732,7 @@ namespace MonoTests.System.Diagnostics
 					enumerator.Reset ();
 					Assert.IsTrue (enumerator.MoveNext (), "#M2");
 					eventLog.Clear ();
-#if NET_2_0
 					Assert.IsNotNull (enumerator.Current, "#M3");
-#else
-					try {
-						object current = enumerator.Current;
-						Assert.Fail ("#M3a: " + current);
-					} catch (InvalidOperationException ex) {
-						// No current EventLog entry available, cursor is located
-						// before the first or after the last element of the
-						// enumeration
-						Assert.AreEqual (typeof (InvalidOperationException), ex.GetType (), "#M3b");
-						Assert.IsNotNull (ex.Message, "#M3c");
-						Assert.IsNull (ex.InnerException, "#M3d");
-					}
-#endif
 					Assert.IsFalse (enumerator.MoveNext (), "#M4");
 
 					try {
@@ -2967,7 +2762,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType != WIN32_IMPL)
 				// test can only pass with win32 implementation
-				return;
+				Assert.Ignore ("Wrong EventLogImplType.");
 
 			using (RegistryKey logKey = FindLogKeyByName ("monotempsource")) {
 				if (logKey != null)
@@ -3035,7 +2830,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType != WIN32_IMPL)
 				// test can only pass with win32 implementation
-				return;
+				Assert.Ignore ("Wrong EventLogImplType.");
 
 			using (RegistryKey logKey = FindLogKeyByName ("monotempsource")) {
 				if (logKey != null)
@@ -3242,7 +3037,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3272,15 +3067,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				// Invalid value '' for parameter 'MachineName'
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'MachineName'") != -1, "#A5");
-#else
-				// Invalid value  for parameter MachineName
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -3291,15 +3080,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#B2");
 				Assert.IsNotNull (ex.Message, "#B3");
-#if NET_2_0
 				// Invalid value ' \t\n' for parameter 'MachineName'
 				Assert.IsTrue (ex.Message.IndexOf ("' \t\n'") != -1, "#B4");
 				Assert.IsTrue (ex.Message.IndexOf ("'MachineName'") != -1, "#B5");
-#else
-				// Invalid value  \t\n for parameter MachineName
-				Assert.IsTrue (ex.Message.IndexOf ("  \t\n ") != -1, "#B4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#B5");
-#endif
 				Assert.IsNull (ex.InnerException, "#B6");
 				Assert.IsNull (ex.ParamName, "#B7");
 			}
@@ -3315,13 +3098,8 @@ namespace MonoTests.System.Diagnostics
 				// Invalid value '' for parameter 'MachineName'
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'MachineName'") != -1, "#A5");
-#else
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("MachineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -3332,7 +3110,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3347,7 +3125,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			string logName = EventLog.LogNameFromSourceName (string.Empty, ".");
 			Assert.IsNotNull (logName, "#1");
@@ -3359,7 +3137,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			string logName = EventLog.LogNameFromSourceName (null, ".");
 			Assert.IsNotNull (logName, "#1");
@@ -3438,7 +3216,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3489,7 +3267,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType != WIN32_IMPL)
 				// test can only pass with win32 implementation
-				return;
+				Assert.Ignore ("Wrong EventLogImplType.");
 
 			using (RegistryKey logKey = FindLogKeyByName ("monotempsource")) {
 				if (logKey != null)
@@ -3562,7 +3340,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType != WIN32_IMPL)
 				// test can only pass with win32 implementation
-				return;
+				Assert.Ignore ("Wrong EventLogImplType.");
 
 			using (RegistryKey logKey = FindLogKeyByName ("monotempsource")) {
 				if (logKey != null)
@@ -3624,15 +3402,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#A2");
 				Assert.IsNotNull (ex.Message, "#A3");
-#if NET_2_0
 				// Invalid value '' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#A4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#A5");
-#else
-				// Invalid value '' for parameter machineName
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#A4");
-				Assert.IsTrue (ex.Message.IndexOf ("machineName") != -1, "#A5");
-#endif
 				Assert.IsNull (ex.InnerException, "#A6");
 				Assert.IsNull (ex.ParamName, "#A7");
 			}
@@ -3643,15 +3415,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#B2");
 				Assert.IsNotNull (ex.Message, "#B3");
-#if NET_2_0
 				// Invalid value ' \t\n' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("' \t\n'") != -1, "#B4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#B5");
-#else
-				// Invalid value  \t\n for parameter machineName
-				Assert.IsTrue (ex.Message.IndexOf ("  \t\n ") != -1, "#B4");
-				Assert.IsTrue (ex.Message.IndexOf ("machineName") != -1, "#B5");
-#endif
 				Assert.IsNull (ex.InnerException, "#B6");
 				Assert.IsNull (ex.ParamName, "#B7");
 			}
@@ -3666,15 +3432,9 @@ namespace MonoTests.System.Diagnostics
 			} catch (ArgumentException ex) {
 				Assert.AreEqual (typeof (ArgumentException), ex.GetType (), "#2");
 				Assert.IsNotNull (ex.Message, "#3");
-#if NET_2_0
 				// Invalid value '' for parameter 'machineName'
 				Assert.IsTrue (ex.Message.IndexOf ("''") != -1, "#4");
 				Assert.IsTrue (ex.Message.IndexOf ("'machineName'") != -1, "#5");
-#else
-				// Invalid value  for parameter machineName
-				Assert.IsTrue (ex.Message.IndexOf ("  ") != -1, "#4");
-				Assert.IsTrue (ex.Message.IndexOf ("machineName") != -1, "#5");
-#endif
 				Assert.IsNull (ex.InnerException, "#6");
 				Assert.IsNull (ex.ParamName, "#7");
 			}
@@ -3697,7 +3457,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3726,9 +3486,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -3749,9 +3507,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -3772,7 +3528,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3806,7 +3562,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3848,7 +3604,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3876,9 +3632,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -3899,7 +3653,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3927,9 +3681,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -3950,7 +3702,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -3981,9 +3733,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4012,7 +3762,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4041,9 +3791,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4064,9 +3812,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -4087,7 +3833,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4121,7 +3867,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4176,7 +3922,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4204,9 +3950,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4227,7 +3971,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4255,9 +3999,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4278,7 +4020,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4309,9 +4051,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Warning, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4348,7 +4088,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4377,9 +4117,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4401,9 +4139,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -4424,7 +4160,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4446,9 +4182,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#A7");
 					Assert.AreEqual (0, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -4469,7 +4203,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4491,9 +4225,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#A7");
 					Assert.AreEqual (0, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -4514,7 +4246,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4542,9 +4274,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4584,7 +4314,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4612,9 +4342,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (56, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4635,9 +4363,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -4658,9 +4384,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#D7");
 					Assert.AreEqual (ushort.MaxValue, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -4681,7 +4405,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4702,15 +4426,9 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#A5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#A6");
 				Assert.IsNull (ex.InnerException, "#A7");
-#if NET_2_0
 				Assert.IsFalse (EventLog.Exists ("monologtemp"), "#A8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#A9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#else
-				Assert.IsTrue (EventLog.Exists ("monologtemp"), "#A8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#A9");
-				Assert.AreEqual ("monologtemp", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (EventLog.Exists ("monologtemp"))
 					EventLog.Delete ("monologtemp");
@@ -4727,15 +4445,9 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#B5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#B6");
 				Assert.IsNull (ex.InnerException, "#B7");
-#if NET_2_0
 				Assert.IsFalse (EventLog.Exists ("monologtemp"), "#B8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#B9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#else
-				Assert.IsTrue (EventLog.Exists ("monologtemp"), "#B8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#B9");
-				Assert.AreEqual ("monologtemp", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (EventLog.Exists ("monologtemp"))
 					EventLog.Delete ("monologtemp");
@@ -4747,7 +4459,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4781,7 +4493,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4858,7 +4570,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4886,9 +4598,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (888, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4909,7 +4619,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4937,9 +4647,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (343, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -4960,7 +4668,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -4996,9 +4704,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Warning, entry.EntryType, "#B7");
 					Assert.AreEqual (2, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5035,7 +4741,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5065,9 +4771,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5089,9 +4793,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -5112,7 +4814,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5134,9 +4836,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#A7");
 					Assert.AreEqual (0, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -5157,7 +4857,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5179,9 +4879,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#A7");
 					Assert.AreEqual (0, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -5202,7 +4900,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5230,9 +4928,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (0, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5279,7 +4975,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5308,9 +5004,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (56, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5332,9 +5026,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -5356,9 +5048,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#D7");
 					Assert.AreEqual (ushort.MaxValue, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -5379,7 +5069,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5400,15 +5090,9 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#A5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#A6");
 				Assert.IsNull (ex.InnerException, "#A7");
-#if NET_2_0
 				Assert.IsFalse (EventLog.Exists ("monologtemp"), "#A8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#A9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#else
-				Assert.IsTrue (EventLog.Exists ("monologtemp"), "#A8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#A9");
-				Assert.AreEqual ("monologtemp", EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#endif
 			} finally {
 				if (EventLog.Exists ("monologtemp"))
 					EventLog.Delete ("monologtemp");
@@ -5425,15 +5109,9 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#B5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#B6");
 				Assert.IsNull (ex.InnerException, "#B7");
-#if NET_2_0
 				Assert.IsFalse (EventLog.Exists ("monologtemp"), "#B8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#B9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#else
-				Assert.IsTrue (EventLog.Exists ("monologtemp"), "#B8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#B9");
-				Assert.AreEqual ("monologtemp", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (EventLog.Exists ("monologtemp"))
 					EventLog.Delete ("monologtemp");
@@ -5445,7 +5123,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5479,7 +5157,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5556,7 +5234,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5584,9 +5262,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (888, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5607,7 +5283,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5635,9 +5311,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (343, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5658,7 +5332,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5689,9 +5363,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Warning, entry.EntryType, "#B7");
 					Assert.AreEqual (2, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5728,7 +5400,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5758,9 +5430,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (54, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -5782,9 +5452,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -5807,9 +5475,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#D7");
 					Assert.AreEqual (ushort.MaxValue, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -5830,7 +5496,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5848,16 +5514,10 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#A5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#A6");
 				Assert.IsNull (ex.InnerException, "#A7");
-#if NET_2_0
 				if (!applicationLogExists)
 					Assert.IsFalse (EventLog.Exists ("Application"), "#A8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#A9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#else
-				Assert.IsTrue (EventLog.Exists ("Application"), "#A8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#A9");
-				Assert.AreEqual ("Application", EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#endif
 			} finally {
 				if (!applicationLogExists) {
 					if (EventLog.Exists ("Application", "."))
@@ -5880,16 +5540,10 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#B5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#B6");
 				Assert.IsNull (ex.InnerException, "#B7");
-#if NET_2_0
 				if (!applicationLogExists)
 					Assert.IsFalse (EventLog.Exists ("Application"), "#B8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#B9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#else
-				Assert.IsTrue (EventLog.Exists ("Application"), "#B8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#B9");
-				Assert.AreEqual ("Application", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (!applicationLogExists) {
 					if (EventLog.Exists ("Application", "."))
@@ -5906,7 +5560,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5929,9 +5583,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#A7");
 					Assert.AreEqual (56, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -5952,7 +5604,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -5975,9 +5627,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#A7");
 					Assert.AreEqual (76, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -5998,7 +5648,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6027,9 +5677,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (89, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6076,7 +5724,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6107,9 +5755,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (data, entry.Data, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (56, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6131,9 +5777,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -6155,9 +5799,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#D7");
 					Assert.AreEqual (ushort.MaxValue, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -6178,7 +5820,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6200,15 +5842,9 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#A5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#A6");
 				Assert.IsNull (ex.InnerException, "#A7");
-#if NET_2_0
 				Assert.IsFalse (EventLog.Exists ("monologtemp"), "#A8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#A9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#else
-				Assert.IsTrue (EventLog.Exists ("monologtemp"), "#A8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#A9");
-				Assert.AreEqual ("monologtemp", EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#endif
 			} finally {
 				if (EventLog.Exists ("monologtemp"))
 					EventLog.Delete ("monologtemp");
@@ -6226,15 +5862,9 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#B5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#B6");
 				Assert.IsNull (ex.InnerException, "#B7");
-#if NET_2_0
 				Assert.IsFalse (EventLog.Exists ("monologtemp"), "#B8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#B9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#else
-				Assert.IsTrue (EventLog.Exists ("monologtemp"), "#B8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#B9");
-				Assert.AreEqual ("monologtemp", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (EventLog.Exists ("monologtemp"))
 					EventLog.Delete ("monologtemp");
@@ -6246,7 +5876,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6280,7 +5910,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6357,7 +5987,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6385,9 +6015,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (888, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6408,7 +6036,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6436,9 +6064,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (343, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6459,7 +6085,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6490,9 +6116,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Warning, entry.EntryType, "#B7");
 					Assert.AreEqual (2, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6529,7 +6153,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6559,9 +6183,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (54, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6584,9 +6206,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -6609,9 +6229,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#D7");
 					Assert.AreEqual (ushort.MaxValue, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -6632,7 +6250,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6650,16 +6268,10 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#A5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#A6");
 				Assert.IsNull (ex.InnerException, "#A7");
-#if NET_2_0
 				if (!applicationLogExists)
 					Assert.IsFalse (EventLog.Exists ("Application"), "#A8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#A9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#else
-				Assert.IsTrue (EventLog.Exists ("Application"), "#A8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#A9");
-				Assert.AreEqual ("Application", EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#endif
 			} finally {
 				if (!applicationLogExists) {
 					if (EventLog.Exists ("Application", "."))
@@ -6682,16 +6294,10 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#B5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#B6");
 				Assert.IsNull (ex.InnerException, "#B7");
-#if NET_2_0
 				if (!applicationLogExists)
 					Assert.IsFalse (EventLog.Exists ("Application"), "#B8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#B9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#else
-				Assert.IsTrue (EventLog.Exists ("Application"), "#B8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#B9");
-				Assert.AreEqual ("Application", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (!applicationLogExists) {
 					if (EventLog.Exists ("Application", "."))
@@ -6708,7 +6314,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6731,9 +6337,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#A7");
 					Assert.AreEqual (56, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -6754,7 +6358,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6777,9 +6381,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#A7");
 					Assert.AreEqual (76, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -6800,7 +6402,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6829,9 +6431,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (89, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6879,7 +6479,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -6911,9 +6511,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (data, entry.Data, "#B6");
 					Assert.AreEqual (EventLogEntryType.Information, entry.EntryType, "#B7");
 					Assert.AreEqual (54, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -6936,9 +6534,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#C6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#C7");
 					Assert.AreEqual (0, entry.EventID, "#C8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#C9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#C10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#C11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#C12");
@@ -6961,9 +6557,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#D6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#D7");
 					Assert.AreEqual (ushort.MaxValue, entry.EventID, "#D8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#D9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#D10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#D11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#D12");
@@ -6984,7 +6578,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -7002,16 +6596,10 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#A5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#A6");
 				Assert.IsNull (ex.InnerException, "#A7");
-#if NET_2_0
 				if (!applicationLogExists)
 					Assert.IsFalse (EventLog.Exists ("Application"), "#A8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#A9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#else
-				Assert.IsTrue (EventLog.Exists ("Application"), "#A8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#A9");
-				Assert.AreEqual ("Application", EventLog.LogNameFromSourceName ("monotempsource", "."), "#A10");
-#endif
 			} finally {
 				if (!applicationLogExists) {
 					if (EventLog.Exists ("Application", "."))
@@ -7034,16 +6622,10 @@ namespace MonoTests.System.Diagnostics
 				Assert.IsTrue (ex.Message.IndexOf ("'0'") != -1, "#B5");
 				Assert.IsTrue (ex.Message.IndexOf ("'65535'") != -1, "#B6");
 				Assert.IsNull (ex.InnerException, "#B7");
-#if NET_2_0
 				if (!applicationLogExists)
 					Assert.IsFalse (EventLog.Exists ("Application"), "#B8");
 				Assert.IsFalse (EventLog.SourceExists ("monotempsource"), "#B9");
 				Assert.AreEqual (string.Empty, EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#else
-				Assert.IsTrue (EventLog.Exists ("Application"), "#B8");
-				Assert.IsTrue (EventLog.SourceExists ("monotempsource"), "#B9");
-				Assert.AreEqual ("Application", EventLog.LogNameFromSourceName ("monotempsource", "."), "#B10");
-#endif
 			} finally {
 				if (!applicationLogExists) {
 					if (EventLog.Exists ("Application", "."))
@@ -7060,7 +6642,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -7083,9 +6665,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.Error, entry.EntryType, "#A7");
 					Assert.AreEqual (56, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -7106,7 +6686,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -7129,9 +6709,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#A6");
 					Assert.AreEqual (EventLogEntryType.FailureAudit, entry.EntryType, "#A7");
 					Assert.AreEqual (76, entry.EventID, "#A8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#A9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#A10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#A11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#A12");
@@ -7152,7 +6730,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -7181,9 +6759,7 @@ namespace MonoTests.System.Diagnostics
 					Assert.AreEqual (0, entry.Data.Length, "#B6");
 					Assert.AreEqual (EventLogEntryType.SuccessAudit, entry.EntryType, "#B7");
 					Assert.AreEqual (89, entry.EventID, "#B8");
-#if NET_2_0
 					Assert.AreEqual (entry.EventID, entry.InstanceId, "#B9");
-#endif
 					Assert.IsNotNull (entry.MachineName, "#B10");
 					Assert.AreEqual (Environment.MachineName, entry.MachineName, "#B11");
 					Assert.IsNotNull (entry.ReplacementStrings, "#B12");
@@ -7228,7 +6804,6 @@ namespace MonoTests.System.Diagnostics
 				4, 3, new byte [0]);
 		}
 
-#if NET_2_0
 		[Test]
 		public void WriteEvent1 ()
 		{
@@ -7326,7 +6901,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -7576,7 +7151,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -7772,7 +7347,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -8019,7 +7594,7 @@ namespace MonoTests.System.Diagnostics
 		{
 			if (EventLogImplType == NULL_IMPL)
 				// test cannot pass with NULL implementation
-				return;
+				Assert.Ignore ("No EventLogImplType.");
 
 			if (EventLog.SourceExists ("monotempsource", "."))
 				Assert.Ignore ("Event log source 'monotempsource' should not exist.");
@@ -8121,7 +7696,6 @@ namespace MonoTests.System.Diagnostics
 					EventLog.Delete ("monologtemp");
 			}
 		}
-#endif
 
 		private static RegistryKey EventLogKey {
 			get {

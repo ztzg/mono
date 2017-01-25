@@ -27,6 +27,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using MonoTests.System.Threading.Tasks;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
@@ -334,7 +335,15 @@ namespace MonoTests.System.Collections.Concurrent
 			AssertThrowsArgumentNullException (() => map.TryGetValue (null, out value));
 			AssertThrowsArgumentNullException (() => map.TryRemove (null, out value));
 			AssertThrowsArgumentNullException (() => map.TryUpdate (null, 0, 0));
-		} 
+		}
+
+		[Test]
+		public void IDictionaryNullOnNonExistingKey ()
+		{
+			IDictionary dict = new ConcurrentDictionary<long, string> ();
+			object val = dict [1234L];
+			Assert.IsNull (val);
+		}
 
 		void AssertThrowsArgumentNullException (Action action)
 		{
@@ -343,6 +352,19 @@ namespace MonoTests.System.Collections.Concurrent
 				Assert.Fail ("Expected ArgumentNullException.");
 			} catch (ArgumentNullException ex) {
 			}
+		}
+		
+		[Test]
+		public void ContainsKeyPairTest ()
+		{
+			var validKeyPair = new KeyValuePair<string, string> ("key", "validValue");
+			var wrongKeyPair = new KeyValuePair<string, string> ("key", "wrongValue");
+
+			IDictionary<string, string> dict = new ConcurrentDictionary<string, string> ();
+			dict.Add (validKeyPair);
+
+			Assert.IsTrue (dict.Contains (validKeyPair));
+			Assert.IsFalse (dict.Contains (wrongKeyPair));
 		}
 	}
 }

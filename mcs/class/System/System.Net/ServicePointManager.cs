@@ -31,7 +31,7 @@
 
 #if SECURITY_DEP
 
-#if MONOTOUCH
+#if MONOTOUCH || MONODROID
 using Mono.Security.Protocol.Tls;
 using MSX = Mono.Security.X509;
 using Mono.Security.X509.Extensions;
@@ -46,7 +46,9 @@ using System.Text.RegularExpressions;
 #endif
 
 using System;
+using System.Threading;
 using System.Collections;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Configuration;
 using System.Net.Configuration;
@@ -54,6 +56,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using System.Globalization;
 using System.Net.Security;
+using System.Diagnostics;
 
 //
 // notes:
@@ -75,7 +78,7 @@ using System.Net.Security;
 
 namespace System.Net 
 {
-	public class ServicePointManager {
+	public partial class ServicePointManager {
 		class SPKey {
 			Uri uri; // schema/host/port
 			Uri proxy;
@@ -129,16 +132,12 @@ namespace System.Net
 		
 		private static ICertificatePolicy policy = new DefaultCertificatePolicy ();
 		private static int defaultConnectionLimit = DefaultPersistentConnectionLimit;
-		private static int maxServicePointIdleTime = 900000; // 15 minutes
+		private static int maxServicePointIdleTime = 100000; // 100 seconds
 		private static int maxServicePoints = 0;
 		private static bool _checkCRL = false;
 		private static SecurityProtocolType _securityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls;
 
-#if TARGET_JVM
-		static bool expectContinue = false;
-#else
 		static bool expectContinue = true;
-#endif
 		static bool useNagle;
 		static RemoteCertificateValidationCallback server_cert_cb;
 		static bool tcp_keepalive;
@@ -261,7 +260,6 @@ namespace System.Net
 					throw new ArgumentException ("value");				
 
 				maxServicePoints = value;
-				RecycleServicePoints ();
 			}
 		}
 
@@ -326,8 +324,6 @@ namespace System.Net
 			if (address == null)
 				throw new ArgumentNullException ("address");
 
-			RecycleServicePoints ();
-
 			var origAddress = new Uri (address.Scheme + "://" + address.Authority);
 			
 			bool usesProxy = false;
@@ -346,8 +342,8 @@ namespace System.Net
 			address = new Uri (address.Scheme + "://" + address.Authority);
 			
 			ServicePoint sp = null;
+			SPKey key = new SPKey (origAddress, usesProxy ? address : null, useConnect);
 			lock (servicePoints) {
-				SPKey key = new SPKey (origAddress, usesProxy ? address : null, useConnect);
 				sp = servicePoints [key] as ServicePoint;
 				if (sp != null)
 					return sp;
@@ -373,43 +369,16 @@ namespace System.Net
 			
 			return sp;
 		}
-		
-		// Internal Methods
 
-		internal static void RecycleServicePoints ()
+		internal static void CloseConnectionGroup (string connectionGroupName)
 		{
-			ArrayList toRemove = new ArrayList ();
 			lock (servicePoints) {
-				IDictionaryEnumerator e = servicePoints.GetEnumerator ();
-				while (e.MoveNext ()) {
-					ServicePoint sp = (ServicePoint) e.Value;
-					if (sp.AvailableForRecycling) {
-						toRemove.Add (e.Key);
-					}
+				foreach (ServicePoint sp in servicePoints.Values) {
+					sp.CloseConnectionGroup (connectionGroupName);
 				}
-				
-				for (int i = 0; i < toRemove.Count; i++) 
-					servicePoints.Remove (toRemove [i]);
-
-				if (maxServicePoints == 0 || servicePoints.Count <= maxServicePoints)
-					return;
-
-				// get rid of the ones with the longest idle time
-				SortedList list = new SortedList (servicePoints.Count);
-				e = servicePoints.GetEnumerator ();
-				while (e.MoveNext ()) {
-					ServicePoint sp = (ServicePoint) e.Value;
-					if (sp.CurrentConnections == 0) {
-						while (list.ContainsKey (sp.IdleSince))
-							sp.IdleSince = sp.IdleSince.AddMilliseconds (1);
-						list.Add (sp.IdleSince, sp.Address);
-					}
-				}
-				
-				for (int i = 0; i < list.Count && servicePoints.Count > maxServicePoints; i++)
-					servicePoints.Remove (list.GetByIndex (i));
 			}
 		}
+		
 #if SECURITY_DEP
 		internal class ChainValidationHelper {
 			object sender;

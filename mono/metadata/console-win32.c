@@ -44,9 +44,9 @@ mono_console_handle_async_ops (void)
 MonoBoolean
 ves_icall_System_ConsoleDriver_Isatty (HANDLE handle)
 {
-	MONO_ARCH_SAVE_REGS;
+	DWORD mode;
 
-	return (GetFileType (handle) == FILE_TYPE_CHAR);
+	return GetConsoleMode (handle, &mode) != 0;
 }
 
 MonoBoolean

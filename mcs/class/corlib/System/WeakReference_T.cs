@@ -24,7 +24,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#if NET_4_5
 using System.Runtime.Serialization;
 using System.Runtime.InteropServices;
 
@@ -86,7 +85,7 @@ namespace System {
 			}
 
 			target = (T)handle.Target;
-			return true;
+			return target != null;
 		}
 
 		//Methods
@@ -96,4 +95,3 @@ namespace System {
 		}
 	}
 }
-#endif

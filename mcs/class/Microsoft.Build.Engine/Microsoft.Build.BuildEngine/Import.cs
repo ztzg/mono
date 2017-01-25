@@ -152,6 +152,15 @@ namespace Microsoft.Build.BuildEngine {
 						project_attribute.IndexOf ("$(MSBuildExtensionsPath32)") >= 0 ||
 						project_attribute.IndexOf ("$(MSBuildExtensionsPath64)") >= 0;
 
+			bool condn_has_extn_ref = condition_attribute.IndexOf ("$(MSBuildExtensionsPath)") >= 0 ||
+						condition_attribute.IndexOf ("$(MSBuildExtensionsPath32)") >= 0 ||
+						condition_attribute.IndexOf ("$(MSBuildExtensionsPath64)") >= 0;
+
+			// we can skip the following logic in case the condition doesn't reference any extension paths
+			// and it evaluates to false since nothing would change anyway
+			if (!condn_has_extn_ref && !ConditionParser.ParseAndEvaluate (condition_attribute, project))
+				return;
+
 			string importingFile = importingProject != null ? importingProject.FullFileName : project.FullFileName;
 			DirectoryInfo base_dir_info = null;
 			if (!String.IsNullOrEmpty (importingFile))
@@ -159,12 +168,23 @@ namespace Microsoft.Build.BuildEngine {
 			else
 				base_dir_info = new DirectoryInfo (Directory.GetCurrentDirectory ());
 
-			IEnumerable<string> extn_paths = has_extn_ref ? GetExtensionPaths (project) : new string [] {null};
+			var importPaths = GetImportPathsFromString (project_attribute, project, base_dir_info);
+			var extensionPaths = GetExtensionPaths (project);
+
+			if (!has_extn_ref) {
+				foreach (var importPath in importPaths) {
+					foreach (var extensionPath in extensionPaths) {
+						has_extn_ref = has_extn_ref || importPath.IndexOf (extensionPath) >= 0;
+					}
+				}
+			}
+
+			IEnumerable<string> extn_paths = has_extn_ref ? extensionPaths : new string [] { null };
 			bool import_needed = false;
 			var currentLoadSettings = project.ProjectLoadSettings;
-			
+
 			try {
-				foreach (var settings in new ProjectLoadSettings [] { ProjectLoadSettings.None, currentLoadSettings}) {
+				foreach (var settings in new ProjectLoadSettings [] { ProjectLoadSettings.None, currentLoadSettings }) {
 					foreach (string path in extn_paths) {
 						string extn_msg = null;
 						if (has_extn_ref) {
@@ -183,7 +203,7 @@ namespace Microsoft.Build.BuildEngine {
 						// We stop if atleast one file got imported.
 						// Remaining extension paths are *not* tried
 						bool atleast_one = false;
-						foreach (string importPath in GetImportPathsFromString (project_attribute, project, base_dir_info)) {
+						foreach (string importPath in importPaths) {
 							try {
 								if (func (importPath, extn_msg))
 									atleast_one = true;
@@ -220,7 +240,6 @@ namespace Microsoft.Build.BuildEngine {
 			if (String.IsNullOrEmpty (parsed_import))
 				throw new InvalidProjectFileException ("The required attribute \"Project\" in Import is empty");
 
-#if NET_4_0
 			if (DirectoryScanner.HasWildcard (parsed_import)) {
 				var directoryScanner = new DirectoryScanner () {
 					Includes = new ITaskItem [] { new TaskItem (parsed_import) },
@@ -231,7 +250,6 @@ namespace Microsoft.Build.BuildEngine {
 				foreach (ITaskItem matchedItem in directoryScanner.MatchedItems)
 					yield return matchedItem.ItemSpec;
 			} else
-#endif
 				yield return parsed_import;
 		}
 
@@ -263,7 +281,11 @@ namespace Microsoft.Build.BuildEngine {
 					continue;
 
 				if (!Directory.Exists (extn_path)) {
-					project.ParentEngine.LogMessage (MessageImportance.Low, "Extension path '{0}' not found, ignoring.", extn_path);
+					if (extn_path != DotConfigExtensionsPath)
+						project.ParentEngine.LogMessage (
+							MessageImportance.Low,
+							"Extension path '{0}' not found, ignoring.",
+							extn_path);
 					continue;
 				}
 

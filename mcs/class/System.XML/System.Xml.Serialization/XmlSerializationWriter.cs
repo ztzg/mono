@@ -42,9 +42,7 @@ using System.Reflection;
 namespace System.Xml.Serialization 
 {
 	public abstract class XmlSerializationWriter 
-#if NET_2_0
 		: XmlSerializationGeneratedCode
-#endif
 	{
 
 		#region Fields
@@ -315,6 +313,8 @@ namespace System.Xml.Serialization
 					if (isNullable)
 						WriteNullTagEncoded (name, ns);
 				}
+				else if (any)
+					WriteXmlNode (node);
 				else
 				{
 					Writer.WriteStartElement (name, ns);
@@ -335,6 +335,8 @@ namespace System.Xml.Serialization
 					if (isNullable)
 						WriteNullTagLiteral (name, ns);
 				}
+				else if (any)
+					WriteXmlNode (node);
 				else
 				{
 					Writer.WriteStartElement (name, ns);
@@ -759,9 +761,7 @@ namespace System.Xml.Serialization
 			WriteSerializable (serializable, name, ns, isNullable, true);
 		}
 
-#if NET_2_0
 		protected
-#endif
 		void WriteSerializable (IXmlSerializable serializable, string name, string ns, bool isNullable, bool wrapped)
 		{
 			if (serializable == null)
@@ -810,12 +810,10 @@ namespace System.Xml.Serialization
 			WriteStartElement (name, ns, o, writePrefixed, namespaces);
 		}
 
-#if NET_2_0
 		protected void WriteStartElement (string name, string ns, Object o, bool writePrefixed, XmlSerializerNamespaces xmlns)
 		{
 			WriteStartElement (name, ns, o, writePrefixed, xmlns != null ? xmlns.ToArray () : null);
 		}
-#endif
 
 		void WriteStartElement (string name, string ns, object o, bool writePrefixed, ICollection namespaces)
 		{
@@ -944,7 +942,6 @@ namespace System.Xml.Serialization
 				WriteAttribute ("type", XmlSchema.InstanceNamespace, name);
 		}
 		
-#if NET_2_0
 
 		protected Exception CreateInvalidAnyTypeException (object o)
 		{
@@ -988,7 +985,6 @@ namespace System.Xml.Serialization
 			get { throw new NotImplementedException(); }
 			set { throw new NotImplementedException(); }
 		}
-#endif
 
 		#endregion
 

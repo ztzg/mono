@@ -45,9 +45,6 @@ namespace MonoTests.System.Net
 		}
 
 		[Test]
-#if TARGET_JVM
-		[Ignore ("Ignore failures in Sys.Net")]
-#endif
 		public void Proxy_Null ()
 		{
 			HttpWebRequest req = (HttpWebRequest) WebRequest.Create ("http://www.google.com");
@@ -58,9 +55,6 @@ namespace MonoTests.System.Net
 
 		[Test]
 		[Category("InetAccess")]
-#if TARGET_JVM
-		[Ignore ("NMA - wrong cookies number returned")]
-#endif
 		public void Sync ()
 		{
 			HttpWebRequest req = (HttpWebRequest) WebRequest.Create ("http://www.google.com");
@@ -151,7 +145,7 @@ namespace MonoTests.System.Net
 			}
 		}
 
-#if !TARGET_JVM && !MOBILE
+#if !MOBILE
 		[Test]
 		[Ignore ("Fails on MS.NET")]
 		public void SslClientBlock ()
@@ -186,9 +180,6 @@ namespace MonoTests.System.Net
 		}
 #endif
 		[Test]
-#if TARGET_JVM
-		[Category("NotWorking")]
-#endif
 		public void Missing_ContentEncoding ()
 		{
 			ServicePointManager.CertificatePolicy = new AcceptAllPolicy ();
@@ -211,9 +202,6 @@ namespace MonoTests.System.Net
 		}
 
 		[Test]
-#if TARGET_JVM
-		[Category ("NotWorking")]
-#endif
 		public void BadServer_ChunkedClose ()
 		{
 			// The server will send a chunked response without a 'last-chunked' mark
@@ -1002,9 +990,6 @@ namespace MonoTests.System.Net
 		}
 
 		[Test]
-#if TARGET_JVM
-		[Category("NotWorking")]
-#endif
 		[Ignore ("This does not timeout any more. That's how MS works when reading small responses")]
 		public void ReadTimeout ()
 		{
@@ -1039,9 +1024,6 @@ namespace MonoTests.System.Net
 		}
 
 		[Test] // bug #324300
-#if TARGET_JVM
-		[Category("NotWorking")]
-#endif
 		public void AllowAutoRedirect ()
 		{
 			IPEndPoint localEP = new IPEndPoint (IPAddress.Loopback, 8765);
@@ -1472,7 +1454,7 @@ namespace MonoTests.System.Net
 			}
 		}
 
-		void TestTimeOut (string url)
+		void TestTimeOut (string url, WebExceptionStatus expectedExceptionStatus)
 		{
 			var timeoutWorker = new TimeoutTestHelper (url, three_seconds_in_milliseconds);
 			var threadStart = new ThreadStart (timeoutWorker.LaunchWebRequest);
@@ -1492,15 +1474,14 @@ namespace MonoTests.System.Net
 				Assert.Fail ("Should not be reached, timeout exception was not thrown and webrequest managed to retrieve an incorrect body: " + timeoutWorker.Body);
 			}
 
-			Assert.IsNotNull (timeoutWorker.Exception,
-			                  "Timeout exception was not thrown");
+			Assert.IsNotNull (timeoutWorker.Exception, "Exception was not thrown");
 
 			var webEx = timeoutWorker.Exception as WebException;
 			Assert.IsNotNull (webEx, "Exception thrown should be WebException, but was: " +
 			                  timeoutWorker.Exception.GetType ().FullName);
 
-			Assert.AreEqual (webEx.Status, WebExceptionStatus.Timeout,
-			                 "WebException was thrown, but with a wrong status (should be timeout): " + webEx.Status);
+			Assert.AreEqual (expectedExceptionStatus, webEx.Status,
+			                 "WebException was thrown, but with a wrong status (should be " + expectedExceptionStatus + "): " + webEx.Status);
 
 			Assert.IsFalse (timeoutWorker.End > (timeoutWorker.Start + TimeSpan.FromMilliseconds (three_seconds_in_milliseconds + 500)),
 			                "Timeout exception should have been thrown shortly after timeout is reached, however it was at least half-second late");
@@ -1516,18 +1497,19 @@ namespace MonoTests.System.Net
 			{
 				responder.Start ();
 
-				TestTimeOut (url);
+				TestTimeOut (url, WebExceptionStatus.Timeout);
 
 				responder.Stop ();
 			}
 		}
 
 		[Test] // 2nd possible case of https://bugzilla.novell.com/show_bug.cgi?id=MONO74177
-		public void TestTimeoutPropertyWithServerThatDoesntExist ()
+		public void TestTimeoutWithEndpointThatDoesntExistThrowsConnectFailureBeforeTimeout ()
 		{
-			string url = "http://10.128.200.100:8271/"; // some endpoint that is unlikely to exist
+			string url = "http://127.0.0.1:8271/"; // some endpoint that is unlikely to exist
 
-			TestTimeOut (url);
+			// connecting to a non-existing endpoint should throw a ConnectFailure before the timeout is reached
+			TestTimeOut (url, WebExceptionStatus.ConnectFailure);
 		}
 
 		const string response_of_timeout_handler = "RESPONSE_OF_TIMEOUT_HANDLER";
@@ -2319,7 +2301,7 @@ namespace MonoTests.System.Net
 
 		void DoRequest (Action<HttpWebRequest, EventWaitHandle> request)
 		{
-			int port = rand.Next (20000, 65535);
+			int port = 30158;
 
 			ManualResetEvent completed = new ManualResetEvent (false);
 			Uri address = new Uri (string.Format ("http://localhost:{0}", port));
@@ -2333,7 +2315,7 @@ namespace MonoTests.System.Net
 
 		void DoRequest (Action<HttpWebRequest, EventWaitHandle> request, Action<HttpListenerContext> processor)
 		{
-			int port = rand.Next (20000, 65535);
+			int port = 30158;
 
 			ManualResetEvent [] completed = new ManualResetEvent [2];
 			completed [0] = new ManualResetEvent (false);
@@ -2513,6 +2495,19 @@ namespace MonoTests.System.Net
 		}
 #endif
 
+#if NET_4_5
+		[Test]
+		public void AllowReadStreamBuffering ()
+		{
+			var hr = WebRequest.CreateHttp ("http://www.google.com");
+			Assert.IsFalse (hr.AllowReadStreamBuffering, "#1");
+			try {
+				hr.AllowReadStreamBuffering = true;
+				Assert.Fail ("#2");
+			} catch (InvalidOperationException) {
+			}
+		}
+#endif
 
 		class ListenerScope : IDisposable {
 			EventWaitHandle completed;
@@ -2563,7 +2558,7 @@ namespace MonoTests.System.Net
 			}
 		}
 
-#if !TARGET_JVM && !MOBILE
+#if !MOBILE
 		class SslHttpServer : HttpServer {
 			X509Certificate _certificate;
 
@@ -2894,9 +2889,6 @@ namespace MonoTests.System.Net
 		}
 
 		[Test] // bug #324182
-#if TARGET_JVM
-		[Category ("NotWorking")]
-#endif
 		public void CanTimeout ()
 		{
 			IPEndPoint ep = new IPEndPoint (IPAddress.Loopback, 9128);

@@ -49,6 +49,30 @@ namespace MonoTests.System.Numerics
 			huge_add
 		};
 
+		private NumberFormatInfo Nfi = NumberFormatInfo.InvariantInfo;
+		private NumberFormatInfo NfiUser;
+
+		[TestFixtureSetUp]
+		public void SetUpFixture() 
+		{
+			NfiUser = new NumberFormatInfo ();
+			NfiUser.CurrencyDecimalDigits = 3;
+			NfiUser.CurrencyDecimalSeparator = ":";
+			NfiUser.CurrencyGroupSeparator = "/";
+			NfiUser.CurrencyGroupSizes = new int[] { 2, 1, 0 };
+			NfiUser.CurrencyNegativePattern = 10;  // n $-
+			NfiUser.CurrencyPositivePattern = 3;  // n $
+			NfiUser.CurrencySymbol = "XYZ";
+			NfiUser.PercentDecimalDigits = 1;
+			NfiUser.PercentDecimalSeparator = ";";
+			NfiUser.PercentGroupSeparator = "~";
+			NfiUser.PercentGroupSizes = new int[] { 1 };
+			NfiUser.PercentNegativePattern = 2;
+			NfiUser.PercentPositivePattern = 2;
+			NfiUser.PercentSymbol = "%%%";
+			NfiUser.NumberDecimalSeparator = ".";
+		}
+
 		[Test]
 		public void Mul () {
 			long[] values = new long [] { -1000000000L, -1000, -1, 0, 1, 1000, 100000000L };
@@ -527,13 +551,18 @@ namespace MonoTests.System.Numerics
 		{
 			long[] values = new long [] {
 				0, long.MinValue, long.MaxValue, -1, 1L + int.MaxValue, -1L + int.MinValue, 0x1234, 0xFFFFFFFFL, 0x1FFFFFFFFL, -0xFFFFFFFFL, -0x1FFFFFFFFL,
-				0x100000000L, -0x100000000L, 0x100000001L, -0x100000001L };
+				0x100000000L, -0x100000000L, 0x100000001L, -0x100000001L, 4294967295L, -4294967295L, 4294967296L, -4294967296L };
 			foreach (var val in values) {
-				var a = new BigInteger (val);
-				var b = new BigInteger (a.ToByteArray ());
+				try {
+					var a = new BigInteger (val);
+					var b = new BigInteger (a.ToByteArray ());
 
-				Assert.AreEqual (val, (long)a, "#a_" + val);
-				Assert.AreEqual (val, (long)b, "#b_" + val);
+					Assert.AreEqual (val, (long)a, "#a_" + val);
+					Assert.AreEqual (val, (long)b, "#b_" + val);
+					Assert.AreEqual (a, b, "#a  == #b (" + val + ")");
+				} catch (Exception e) {
+					Assert.Fail ("could not roundtrip {0}", val);
+				}
 			}
 		}
 
@@ -597,10 +626,12 @@ namespace MonoTests.System.Numerics
 			Assert.IsTrue (new BigInteger (1).IsOne, "#7");
 			Assert.IsTrue (new BigInteger (32).IsPowerOfTwo, "#8");
 			Assert.IsTrue (new BigInteger (0).IsZero, "#9");
+			Assert.IsTrue (new BigInteger ().IsZero, "#9b");
 			Assert.AreEqual (0, new BigInteger (0).Sign, "#10");
 			Assert.AreEqual (-1, new BigInteger (-99999).Sign, "#11");
 
 			Assert.IsFalse (new BigInteger (0).IsPowerOfTwo, "#12");
+			Assert.IsFalse (new BigInteger ().IsPowerOfTwo, "#12b");
 			Assert.IsFalse (new BigInteger (-16).IsPowerOfTwo, "#13");
 			Assert.IsTrue (new BigInteger (1).IsPowerOfTwo, "#14");
 		}
@@ -619,6 +650,7 @@ namespace MonoTests.System.Numerics
 			Assert.AreEqual ("0000000005", new BigInteger (5).ToString ("d10"), "#2");
 			Assert.AreEqual ("0A8", new BigInteger (168).ToString ("X"), "#3");
 			Assert.AreEqual ("0", new BigInteger (0).ToString ("X"), "#4");
+			Assert.AreEqual ("0", new BigInteger ().ToString ("X"), "#4b");
 			Assert.AreEqual ("1", new BigInteger (1).ToString ("X"), "#5");
 			Assert.AreEqual ("0A", new BigInteger (10).ToString ("X"), "#6");
 			Assert.AreEqual ("F6", new BigInteger (-10).ToString ("X"), "#7");
@@ -722,6 +754,7 @@ namespace MonoTests.System.Numerics
 			Assert.AreEqual (new byte[] { 0x7F }, new BigInteger (0x7F).ToByteArray (), "#10");
 			Assert.AreEqual (new byte[] { 0x45, 0xCC, 0xD0 }, new BigInteger (-0x2F33BB).ToByteArray (), "#11");
 			Assert.AreEqual (new byte[] { 0 }, new BigInteger (0).ToByteArray (), "#12");
+			Assert.AreEqual (new byte[] { 0 }, new BigInteger ().ToByteArray (), "#13");
 		}
 
 		[Test]
@@ -805,6 +838,31 @@ namespace MonoTests.System.Numerics
 			Assert.AreEqual (double.PositiveInfinity, (double)BigInteger.Pow (2, 1024), "#2");
 			Assert.AreEqual (double.NegativeInfinity, (double)BigInteger.Pow (-2, 1025), "#3");
 
+			Assert.AreEqual (0d, (double)BigInteger.Zero, "#4");
+			Assert.AreEqual (1d, (double)BigInteger.One, "#5");
+			Assert.AreEqual (-1d, (double)BigInteger.MinusOne, "#6");
+			
+			var result1 = BitConverter.Int64BitsToDouble (-4337852273739220173);
+			Assert.AreEqual (result1, (double)new BigInteger (new byte[]{53, 152, 137, 177, 240, 81, 75, 198}), "#7");
+			var result2 = BitConverter.Int64BitsToDouble (4893382453283402035);
+			Assert.AreEqual (result2, (double)new BigInteger (new byte[]{53, 152, 137, 177, 240, 81, 75, 198, 0}), "#8");
+			
+			var result3 = BitConverter.Int64BitsToDouble (5010775143622804480);
+			var result4 = BitConverter.Int64BitsToDouble (5010775143622804481);
+			var result5 = BitConverter.Int64BitsToDouble (5010775143622804482);
+			Assert.AreEqual (result3, (double)new BigInteger (new byte[]{0, 0, 0, 0, 16, 128, 208, 159, 60, 46, 59, 3}), "#9");
+			Assert.AreEqual (result3, (double)new BigInteger (new byte[]{0, 0, 0, 0, 17, 128, 208, 159, 60, 46, 59, 3}), "#10");
+			Assert.AreEqual (result3, (double)new BigInteger (new byte[]{0, 0, 0, 0, 24, 128, 208, 159, 60, 46, 59, 3}), "#11");
+			Assert.AreEqual (result4, (double)new BigInteger (new byte[]{0, 0, 0, 0, 32, 128, 208, 159, 60, 46, 59, 3}), "#12");
+			Assert.AreEqual (result4, (double)new BigInteger (new byte[]{0, 0, 0, 0, 48, 128, 208, 159, 60, 46, 59, 3}), "#13");
+			Assert.AreEqual (result5, (double)new BigInteger (new byte[]{0, 0, 0, 0, 64, 128, 208, 159, 60, 46, 59, 3}), "#14");
+			
+			Assert.AreEqual (BitConverter.Int64BitsToDouble (-2748107935317889142), (double)new BigInteger (huge_a), "#15");
+			Assert.AreEqual (BitConverter.Int64BitsToDouble (-2354774254443231289), (double)new BigInteger (huge_b), "#16");
+			Assert.AreEqual (BitConverter.Int64BitsToDouble (8737073938546854790), (double)new BigInteger (huge_mul), "#17");
+			
+			Assert.AreEqual (BitConverter.Int64BitsToDouble (6912920136897069886), (double)(2278888483353476799 * BigInteger.Pow (2, 451)), "#18");
+			Assert.AreEqual (double.PositiveInfinity, (double)(843942696292817306 * BigInteger.Pow (2, 965)), "#19");
 		}
 
 		[Test]
@@ -833,6 +891,14 @@ namespace MonoTests.System.Numerics
 			Assert.AreEqual (-1m, (decimal)new BigInteger (-1), "#6");
 			Assert.AreEqual (9999999999999999999999999999m,
 				(decimal)new BigInteger (9999999999999999999999999999m), "#7");
+			Assert.AreEqual (0m, (decimal)new BigInteger (), "#8");
+		}
+
+		[SetCulture ("pt-BR")]
+		[Test]
+		public void Parse_pt_BR () 
+		{
+			Parse ();
 		}
 
 		[Test]
@@ -871,6 +937,38 @@ namespace MonoTests.System.Numerics
 			Assert.AreEqual (10, (int)BigInteger.Parse("+10"), "#7");
 			Assert.AreEqual (10, (int)BigInteger.Parse("10 "), "#8");
 			Assert.AreEqual (-10, (int)BigInteger.Parse("-10 "), "#9");
+			Assert.AreEqual (10, (int)BigInteger.Parse("    10 "), "#10");
+			Assert.AreEqual (-10, (int)BigInteger.Parse("  -10 "), "#11");
+
+			Assert.AreEqual (-1, (int)BigInteger.Parse("F", NumberStyles.AllowHexSpecifier), "#12");
+			Assert.AreEqual (-8, (int)BigInteger.Parse("8", NumberStyles.AllowHexSpecifier), "#13");
+			Assert.AreEqual (8, (int)BigInteger.Parse("08", NumberStyles.AllowHexSpecifier), "#14");
+			Assert.AreEqual (15, (int)BigInteger.Parse("0F", NumberStyles.AllowHexSpecifier), "#15");
+			Assert.AreEqual (-1, (int)BigInteger.Parse("FF", NumberStyles.AllowHexSpecifier), "#16");
+			Assert.AreEqual (255, (int)BigInteger.Parse("0FF", NumberStyles.AllowHexSpecifier), "#17");
+
+			Assert.AreEqual (-17, (int)BigInteger.Parse("   (17)   ", NumberStyles.AllowParentheses | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite), "#18");
+			Assert.AreEqual (-23, (int)BigInteger.Parse("  -23  ", NumberStyles.AllowLeadingSign | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite), "#19");
+
+			Assert.AreEqual (300000, (int)BigInteger.Parse("3E5", NumberStyles.AllowExponent), "#20");
+			var dsep = NumberFormatInfo.CurrentInfo.NumberDecimalSeparator;
+			Assert.AreEqual (250, (int)BigInteger.Parse("2" + dsep + "5E2", NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint), "#21");//2.5E2 = 250
+			Assert.AreEqual (25, (int)BigInteger.Parse("2500E-2", NumberStyles.AllowExponent), "#22");
+
+			Assert.AreEqual ("136236974127783066520110477975349088954559032721408", BigInteger.Parse("136236974127783066520110477975349088954559032721408", NumberStyles.None).ToString(), "#23");
+			Assert.AreEqual ("136236974127783066520110477975349088954559032721408", BigInteger.Parse("136236974127783066520110477975349088954559032721408").ToString(), "#24");
+
+			try {
+				BigInteger.Parse ("2E3.0", NumberStyles.AllowExponent); // decimal notation for the exponent
+				Assert.Fail ("#25");
+			} catch (FormatException) {
+			}
+
+			try {
+				Int32.Parse ("2" + dsep + "09E1",  NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent);
+				Assert.Fail ("#26");
+			} catch (OverflowException) {
+			}
 		}
 
 		[Test]
@@ -892,6 +990,54 @@ namespace MonoTests.System.Numerics
 
 			Assert.IsTrue (BigInteger.TryParse ("-010", out x), "#11");
 			Assert.AreEqual (-10, (int)x, "#12");
+
+			//Number style and format provider
+
+			Assert.IsFalse (BigInteger.TryParse ("null", NumberStyles.None, null, out x), "#13");
+			Assert.AreEqual (0, (int)x, "#14");
+			Assert.IsFalse (BigInteger.TryParse ("-10", NumberStyles.None, null, out x), "#15");
+			Assert.IsFalse (BigInteger.TryParse ("(10)", NumberStyles.None, null, out x), "#16");
+			Assert.IsFalse (BigInteger.TryParse (" 10", NumberStyles.None, null, out x), "#17");
+			Assert.IsFalse (BigInteger.TryParse ("10 ", NumberStyles.None, null, out x), "#18");
+			
+			Assert.IsTrue (BigInteger.TryParse ("-10", NumberStyles.AllowLeadingSign, null, out x), "#19");
+			Assert.AreEqual (-10, (int)x, "#20");
+			Assert.IsTrue (BigInteger.TryParse ("(10)", NumberStyles.AllowParentheses, null, out x), "#21");
+			Assert.AreEqual (-10, (int)x, "#22");
+			Assert.IsTrue (BigInteger.TryParse (" 10", NumberStyles.AllowLeadingWhite, null, out x), "#23");
+			Assert.AreEqual (10, (int)x, "#24");
+			Assert.IsTrue (BigInteger.TryParse ("10 ", NumberStyles.AllowTrailingWhite, null, out x), "#25");
+			Assert.AreEqual (10, (int)x, "#26");
+
+			Assert.IsFalse (BigInteger.TryParse ("$10", NumberStyles.None, null, out x), "#26");
+			Assert.IsFalse (BigInteger.TryParse ("$10", NumberStyles.None, Nfi, out x), "#27");
+			Assert.IsFalse (BigInteger.TryParse ("%10", NumberStyles.None, Nfi, out x), "#28");
+			Assert.IsFalse (BigInteger.TryParse ("10 ", NumberStyles.None, null, out x), "#29");
+
+			Assert.IsTrue (BigInteger.TryParse ("10", NumberStyles.None, null, out x), "#30");
+			Assert.AreEqual (10, (int)x, "#31");
+			Assert.IsTrue (BigInteger.TryParse (Nfi.CurrencySymbol + "10", NumberStyles.AllowCurrencySymbol, Nfi, out x), "#32");
+			Assert.AreEqual (10, (int)x, "#33");
+			Assert.IsFalse (BigInteger.TryParse ("%10", NumberStyles.AllowCurrencySymbol, Nfi, out x), "#34");
+		}
+
+		[Test]
+		public void TestUserCurrency ()
+		{
+			const int val1 = -1234567;
+			const int val2 = 1234567;
+
+			string s = "";
+			BigInteger v;
+			s = val1.ToString ("c", NfiUser);
+			Assert.AreEqual ("1234/5/67:000 XYZ-", s, "Currency value type 1 is not what we want to try to parse");
+			v = BigInteger.Parse ("1234/5/67:000   XYZ-", NumberStyles.Currency, NfiUser);
+			Assert.AreEqual (val1, (int)v);
+
+			s = val2.ToString ("c", NfiUser);
+			Assert.AreEqual ("1234/5/67:000 XYZ", s, "Currency value type 2 is not what we want to try to parse");
+			v = BigInteger.Parse (s, NumberStyles.Currency, NfiUser);
+			Assert.AreEqual (val2, (int)v);
 		}
 
 		[Test]
@@ -930,7 +1076,7 @@ namespace MonoTests.System.Numerics
 		}
 
 		[Test]
-		public void LeftShitByInt ()
+		public void LeftShiftByInt ()
 		{
 			var v = BigInteger.Parse("230794411440927908251127453634");
 
@@ -1008,7 +1154,7 @@ namespace MonoTests.System.Numerics
 
 
 		[Test]
-		public void RightShitByInt ()
+		public void RightShiftByInt ()
 		{
 			var v = BigInteger.Parse("230794411440927908251127453634");
 			v = v * BigInteger.Pow (2, 70);
@@ -1144,6 +1290,23 @@ namespace MonoTests.System.Numerics
 
 			a = new BigInteger ();
 			Assert.AreEqual (BigInteger.Zero.GetHashCode (), a.GetHashCode (), "#15");
+
+			a = new BigInteger ();
+			Assert.AreEqual (BigInteger.Zero, a, "#16");
+		}
+
+		[Test]
+		public void Bug16526 ()
+		{
+			var x = BigInteger.Pow(2, 63);
+			x *= -1;
+			x -= 1;
+			Assert.AreEqual ("-9223372036854775809", x.ToString (), "#1");
+			try {
+				x = (long)x;
+				Assert.Fail ("#2 Must OVF");
+			} catch (OverflowException) {
+			}
 		}
 	}
 }

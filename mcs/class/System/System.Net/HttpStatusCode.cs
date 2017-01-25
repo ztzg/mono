@@ -73,6 +73,7 @@ namespace System.Net {
 		UnsupportedMediaType = 415,
 		RequestedRangeNotSatisfiable = 416,
 		ExpectationFailed = 417,
+		UpgradeRequired = 426,
 		InternalServerError = 500,
 		NotImplemented = 501,
 		BadGateway = 502,

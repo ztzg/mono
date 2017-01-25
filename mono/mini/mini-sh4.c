@@ -76,8 +76,10 @@ struct call_info {
 	struct arg_info *args;
 };
 
+#if 0 /* Not yet implemented. */
 static gint32 appdomain_tls_offset = -1;
 static gint32 thread_tls_offset    = -1;
+#endif
 
 /* Prevent following arguments from being passed into registers */
 static inline void force_stack(SH4IntRegister *arg_reg)
@@ -1993,20 +1995,6 @@ MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
 	return NULL;
 }
 
-MonoInst* mono_arch_get_domain_intrinsic(MonoCompile* cfg)
-{
-	MonoInst* ins;
-
-	return NULL;
-
-	if (appdomain_tls_offset == -1)
-		return NULL;
-
-	MONO_INST_NEW(cfg, ins, OP_TLS_GET);
-	ins->inst_offset = appdomain_tls_offset;
-	return ins;
-}
-
 /**
  * Initialize architecture specific code.
  */
@@ -2882,11 +2870,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_VCALL2_MEMBASE:
 		case OP_VOIDCALL_MEMBASE:
 		case OP_LCALL_MEMBASE:
-		case OP_CALL_MEMBASE: {
-			/* The opcodes call*_membase are splitted into
-			   load_membase + call*_reg. */
-			MonoCallInst *call = (MonoCallInst *)inst;
-
+		case OP_CALL_MEMBASE:
 			MONO_INST_NEW(cfg, new_inst, OP_LOAD_MEMBASE);
 			mono_bblock_insert_before_ins(basic_block, inst, new_inst);
 
@@ -2927,7 +2911,6 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				new_inst->opcode = OP_SH4_LOADI4;
 			}
 			break;
-		}
 
 		case OP_COND_EXC_IC:
 		case OP_COND_EXC_C:
@@ -4402,6 +4385,12 @@ void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
 	}
 }
 
+gpointer
+mono_arch_get_delegate_virtual_invoke_impl (MonoMethodSignature *sig, MonoMethod *method, int offset, gboolean load_imt_reg)
+{
+	return NULL;
+}
+
 #ifdef MONO_ARCH_HAVE_IMT
 
 #define DEBUG_IMT 0
@@ -4531,3 +4520,30 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 }
 
 #endif
+
+gboolean
+mono_arch_opcode_supported (int opcode)
+{
+	return FALSE;
+}
+
+gpointer
+mono_arch_get_nullified_class_init_trampoline (MonoTrampInfo **info)
+{
+	guint8 *buf, *code;
+	guint32 tramp_size = 4;
+
+	code = buf = mono_global_codeman_reserve (tramp_size);
+
+	sh4_rts(&code);
+	sh4_nop(&code);
+
+	mono_arch_flush_icache (buf, code - buf);
+
+	g_assert (code - buf <= tramp_size);
+
+	if (info)
+		*info = mono_tramp_info_create ("nullified_class_init_trampoline", buf, code - buf, NULL, NULL);
+
+	return buf;
+}

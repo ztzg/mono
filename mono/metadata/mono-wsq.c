@@ -24,6 +24,7 @@ struct _MonoWSQ {
 	volatile gint tail;
 	MonoArray *queue;
 	gint32 mask;
+	gint32 suspended;
 	MonoSemType lock;
 };
 
@@ -61,6 +62,7 @@ mono_wsq_create ()
 
 	wsq = g_new0 (MonoWSQ, 1);
 	wsq->mask = INITIAL_LENGTH - 1;
+	wsq->suspended = 0;
 	MONO_GC_REGISTER_ROOT_SINGLE (wsq->queue);
 	root = mono_get_root_domain ();
 	wsq->queue = mono_array_new_cached (root, mono_defaults.object_class, INITIAL_LENGTH);
@@ -70,6 +72,12 @@ mono_wsq_create ()
 		wsq = NULL;
 	}
 	return wsq;
+}
+
+gboolean
+mono_wsq_suspend (MonoWSQ *wsq)
+{
+	return InterlockedCompareExchange (&wsq->suspended, 1, 0) == 0;
 }
 
 void
@@ -112,6 +120,11 @@ mono_wsq_local_push (void *obj)
 		return FALSE;
 	}
 
+	if (wsq->suspended) {
+		WSQ_DEBUG ("local_push: wsq suspended\n");
+		return FALSE;
+	}
+
 	tail = wsq->tail;
 	if (tail < wsq->head + wsq->mask) {
 		mono_array_setref (wsq->queue, tail & wsq->mask, (MonoObject *) obj);
@@ -133,7 +146,7 @@ mono_wsq_local_push (void *obj)
 		for (i = 0; i < length; i++)
 			mono_array_setref (new_array, i, mono_array_get (wsq->queue, MonoObject*, (i + head) & wsq->mask));
 
-		mono_gc_bzero (mono_array_addr (wsq->queue, MonoObject *, 0), sizeof (MonoObject*) * length);
+		mono_gc_bzero_aligned (mono_array_addr (wsq->queue, MonoObject *, 0), sizeof (MonoObject*) * length);
 		wsq->queue = new_array;
 		wsq->head = 0;
 		wsq->tail = tail = count;

@@ -185,6 +185,23 @@ namespace System.ServiceModel.Dispatcher
 			}
 			throw new InvalidOperationException ("Cannot change this property after the service host is opened");
 		}
+
+		[MonoTODO]
+		public ICollection<IParameterInspector> ClientParameterInspectors {
+			get { throw new NotImplementedException (); }
+		}
+
+		[MonoTODO]
+		public MethodInfo TaskMethod {
+			get { throw new NotImplementedException (); }
+			set { throw new NotImplementedException (); }
+		}
+
+		[MonoTODO]
+		public Type TaskTResult {
+			get { throw new NotImplementedException (); }
+			set { throw new NotImplementedException (); }
+		}
 		
 	}
 }

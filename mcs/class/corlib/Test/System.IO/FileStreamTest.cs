@@ -15,6 +15,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace MonoTests.System.IO
 {
@@ -705,7 +706,6 @@ namespace MonoTests.System.IO
 			}
 		}
 
-#if !TARGET_JVM // No support IntPtr file handles under TARGET_JVM
 		[Test, ExpectedException (typeof (IOException))]
 		public void CtorIOException2 ()
 		{
@@ -717,9 +717,7 @@ namespace MonoTests.System.IO
 					stream.Close ();
 			}
 		}
-#endif // TARGET_JVM
 
-		[Category("TargetJvmNotSupported")] // File sharing not supported for TARGET_JVM
 		[Test, ExpectedException (typeof (IOException))]
 		public void CtorIOException ()
 		{
@@ -767,7 +765,6 @@ namespace MonoTests.System.IO
 		}
 
 		[Test]
-		[Category("TargetJvmNotSupported")] // File sharing not supported for TARGET_JVM
 		[ExpectedException (typeof (IOException))]
 		public void CtorAccess1Read2Write ()
 		{
@@ -793,7 +790,6 @@ namespace MonoTests.System.IO
 		}
 
 		[Test]
-		[Category("TargetJvmNotSupported")] // File sharing not supported for TARGET_JVM
 		[ExpectedException (typeof (IOException))]
 		public void CtorAccess1Write2Write ()
 		{
@@ -1021,7 +1017,6 @@ namespace MonoTests.System.IO
 			DeleteFile (path);
 		}
 
-		[Category("TargetJvmNotSupported")] // File locking not supported for TARGET_JVM
 		public void TestLock ()
 		{
 			string path = TempFolder + Path.DirectorySeparatorChar + "TestLock";
@@ -1310,7 +1305,6 @@ namespace MonoTests.System.IO
 			}
 		}
 
-#if !TARGET_JVM // No support IntPtr file handles under TARGET_JVM
 		// Check that the stream is flushed even when it doesn't own the
 		// handle
 		[Test]
@@ -1330,7 +1324,6 @@ namespace MonoTests.System.IO
 			Assert.AreEqual ((int) '1', s.ReadByte ());
 			s.Close ();
 		}
-#endif // TARGET_JVM
 
 		private void DeleteFile (string path)
 		{
@@ -1446,14 +1439,12 @@ namespace MonoTests.System.IO
 			}
 		}
 
-#if !TARGET_JVM // No support IntPtr file handles under TARGET_JVM
 		[Test]
 		[ExpectedException (typeof (ArgumentException))]
 		public void Constructor_InvalidFileHandle ()
 		{
 			new FileStream ((IntPtr) (-1L), FileAccess.Read);
 		}
-#endif // TARGET_JVM
 
 		[Test]
 		public void PositionAfterSetLength ()
@@ -1492,7 +1483,6 @@ namespace MonoTests.System.IO
 		}
 
 		[Test]
-		[Category("TargetJvmNotSupported")] // Async IO not supported for TARGET_JVM
 		[ExpectedException (typeof (ObjectDisposedException))]
 		public void BeginRead_Disposed ()
 		{
@@ -1504,7 +1494,6 @@ namespace MonoTests.System.IO
 		}
 
 		[Test]
-		[Category("TargetJvmNotSupported")] // Async IO not supported for TARGET_JVM
 		[ExpectedException (typeof (ObjectDisposedException))]
 		public void BeginWrite_Disposed ()
 		{
@@ -1515,8 +1504,36 @@ namespace MonoTests.System.IO
 			stream.EndWrite (stream.BeginWrite (new byte[8], 0, 8, null, null));
 		}
 
+		static IAsyncResult DoBeginWrite(Stream stream, ManualResetEvent mre, byte[] RandomBuffer)
+		{
+			return stream.BeginWrite (RandomBuffer, 0, RandomBuffer.Length, ar => {
+				stream.EndWrite (ar);
+
+				// we don't supply an ManualResetEvent so this will throw an NRE on the second run
+				// which nunit-console will ignore (but other test runners don't like that)
+				if (mre == null)
+					return;
+
+				DoBeginWrite (stream, null, RandomBuffer).AsyncWaitHandle.WaitOne ();
+				mre.Set ();
+			}, null);
+		}
+
 		[Test]
-		[Category("TargetJvmNotSupported")] // File locking not supported for TARGET_JVM
+		public void BeginWrite_Recursive ()
+		{
+			string path = TempFolder + Path.DirectorySeparatorChar + "temp";
+			DeleteFile (path);
+	
+			using (FileStream stream = new FileStream (path, FileMode.OpenOrCreate, FileAccess.Write)) {
+				var mre = new ManualResetEvent (false);	
+				var RandomBuffer = new byte[1024];			
+				DoBeginWrite (stream, mre, RandomBuffer);
+				Assert.IsTrue (mre.WaitOne (5000), "#1");
+			}
+		}
+
+		[Test]
 		[ExpectedException (typeof (ObjectDisposedException))]
 		public void Lock_Disposed ()
 		{
@@ -1528,7 +1545,6 @@ namespace MonoTests.System.IO
 		}
 
 		[Test]
-		[Category("TargetJvmNotSupported")] // File locking not supported for TARGET_JVM
 		[ExpectedException (typeof (ObjectDisposedException))]
 		public void Unlock_Disposed ()
 		{
@@ -1591,7 +1607,6 @@ namespace MonoTests.System.IO
 			}
 		}
 
-		[Category("TargetJvmNotSupported")] // FileOptions.DeleteOnClose not supported for TARGET_JVM
 		[Test]
 		public void DeleteOnClose ()
 		{
