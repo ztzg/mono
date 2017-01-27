@@ -8,6 +8,7 @@
  *
  * Note: this profiler is completely unsafe wrt handling managed objects,
  * don't use and don't copy code from here.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include "config.h"
 
@@ -17,13 +18,14 @@
 #include <mono/metadata/metadata-internals.h>
 #include <mono/metadata/class.h>
 #include <mono/metadata/class-internals.h>
+#include <mono/metadata/object-internals.h>
 #include <mono/metadata/image.h>
 #include <mono/metadata/mono-debug.h>
 #include <mono/metadata/debug-helpers.h>
 #include <mono/metadata/threads.h>
 #include <mono/metadata/profiler.h>
 #include <mono/metadata/loader.h>
-#include <mono/utils/mono-mutex.h>
+#include <mono/utils/mono-os-mutex.h>
 
 #define LOCATION_INDENT "        "
 #define BACKTRACE_SIZE 64
@@ -112,7 +114,7 @@ static void mismatched_stats_foreach_func (gpointer key, gpointer value, gpointe
 		return;
 	}
 
-	location = g_hash_table_lookup (prof->string_locations_hash, &hash);
+	location = (StringLocation *)g_hash_table_lookup (prof->string_locations_hash, &hash);
 	while (location) {
 		if (location->hint && strlen (location->hint) > 0) {
 			if (!bannerShown) {
@@ -184,6 +186,7 @@ static inline guint32 calc_strings_hash (const gchar *str1, const gchar *str2, g
 
 static inline void print_report (const gchar *format, ...)
 {
+	MonoError error;
 	MonoClass *klass;
 	MonoProperty *prop;
 	MonoString *str;
@@ -195,11 +198,13 @@ static inline void print_report (const gchar *format, ...)
 	vfprintf (stdout, format, ap);
 	fprintf (stdout, "\n");
 	va_end (ap);
-	klass = mono_class_from_name (mono_get_corlib (), "System", "Environment");
+	klass = mono_class_load_from_name (mono_get_corlib (), "System", "Environment");
 	mono_class_init (klass);
 	prop = mono_class_get_property_from_name (klass, "StackTrace");
-	str = (MonoString*)mono_property_get_value (prop, NULL, NULL, NULL);
-	stack_trace = mono_string_to_utf8 (str);
+	str = (MonoString*)mono_property_get_value_checked (prop, NULL, NULL, &error);
+	mono_error_assert_ok (&error);
+	stack_trace = mono_string_to_utf8_checked (str, &error);
+	mono_error_assert_ok (&error);
 
 	fprintf (stdout, "-= Stack Trace =-\n%s\n\n", stack_trace);
 	g_free (stack_trace);
@@ -208,7 +213,6 @@ static inline void print_report (const gchar *format, ...)
 
 static inline void append_report (GString **report, const gchar *format, ...)
 {
-#if defined (_EGLIB_MAJOR) || GLIB_CHECK_VERSION(2,14,0)
 	va_list ap;
 	if (!*report)
 		*report = g_string_new ("");
@@ -216,13 +220,11 @@ static inline void append_report (GString **report, const gchar *format, ...)
 	va_start (ap, format);
 	g_string_append_vprintf (*report, format, ap);
 	va_end (ap);
-#else
-	g_assert_not_reached ();
-#endif
 }
 
 static gboolean saved_strings_find_func (gpointer key, gpointer value, gpointer user_data)
 {
+	MonoError error;
 	SavedStringFindInfo *info = (SavedStringFindInfo*)user_data;
 	SavedString *saved = (SavedString*)value;
 	gchar *utf_str;
@@ -231,7 +233,8 @@ static gboolean saved_strings_find_func (gpointer key, gpointer value, gpointer 
 	if (!info || !saved || mono_string_length (saved->string) != info->len)
 		return FALSE;
 
-	utf_str = mono_string_to_utf8 (saved->string);
+	utf_str = mono_string_to_utf8_checked (saved->string, &error);
+	mono_error_assert_ok (&error);
 	hash = do_calc_string_hash (0, utf_str);
 	g_free (utf_str);
 
@@ -243,7 +246,7 @@ static gboolean saved_strings_find_func (gpointer key, gpointer value, gpointer 
 
 static inline void store_string_location (MonoProfiler *prof, const gchar *string, guint32 hash, size_t len)
 {
-	StringLocation *location = g_hash_table_lookup (prof->string_locations_hash, &hash);
+	StringLocation *location = (StringLocation *)g_hash_table_lookup (prof->string_locations_hash, &hash);
 	SavedString *saved;
 	SavedStringFindInfo info;
 	guint32 *hashptr;
@@ -461,7 +464,7 @@ static void mono_portability_remember_string (MonoProfiler *prof, MonoDomain *do
 		return;
 	}
 
-	mono_mutex_lock (&mismatched_files_section);
+	mono_os_mutex_lock (&mismatched_files_section);
 	head = (SavedString*)g_hash_table_lookup (prof->saved_strings_hash, (gpointer)str);
 	if (head) {
 		while (head->next)
@@ -469,7 +472,7 @@ static void mono_portability_remember_string (MonoProfiler *prof, MonoDomain *do
 		head->next = entry;
 	} else
 		g_hash_table_insert (prof->saved_strings_hash, (gpointer)str, (gpointer)entry);
-	mono_mutex_unlock (&mismatched_files_section);
+	mono_os_mutex_unlock (&mismatched_files_section);
 }
 
 static MonoClass *string_class = NULL;
@@ -489,7 +492,7 @@ static void mono_portability_iomap_event (MonoProfiler *prof, const char *report
 	if (!runtime_initialized)
 		return;
 
-	mono_mutex_lock (&mismatched_files_section);
+	mono_os_mutex_lock (&mismatched_files_section);
 	hash = calc_strings_hash (pathname, new_pathname, &pathnameHash);
 	stats = (MismatchedFilesStats*)g_hash_table_lookup (prof->mismatched_files_hash, &hash);
 	if (stats == NULL) {
@@ -507,11 +510,11 @@ static void mono_portability_iomap_event (MonoProfiler *prof, const char *report
 			g_error ("Out of memory allocating integer pointer for mismatched files hash table.");
 
 		store_string_location (prof, (const gchar*)stats->requestedName, pathnameHash, strlen (stats->requestedName));
-		mono_mutex_unlock (&mismatched_files_section);
+		mono_os_mutex_unlock (&mismatched_files_section);
 
 		print_report ("%s -     Found file path: '%s'\n", report, new_pathname);
 	} else {
-		mono_mutex_unlock (&mismatched_files_section);
+		mono_os_mutex_unlock (&mismatched_files_section);
 		stats->count++;
 	}
 }
@@ -525,14 +528,14 @@ static void runtime_initialized_cb (MonoProfiler *prof)
 static void profiler_shutdown (MonoProfiler *prof)
 {
 	print_mismatched_stats (prof);
-	mono_mutex_destroy (&mismatched_files_section);
+	mono_os_mutex_destroy (&mismatched_files_section);
 }
 
 void mono_profiler_startup (const char *desc)
 {
 	MonoProfiler *prof = g_new0 (MonoProfiler, 1);
 
-	mono_mutex_init (&mismatched_files_section);
+	mono_os_mutex_init (&mismatched_files_section);
 	prof->mismatched_files_hash = g_hash_table_new (mismatched_files_guint32_hash, mismatched_files_guint32_equal);
 	prof->saved_strings_hash = g_hash_table_new (NULL, NULL);
 	prof->string_locations_hash = g_hash_table_new (mismatched_files_guint32_hash, mismatched_files_guint32_equal);
@@ -542,5 +545,5 @@ void mono_profiler_startup (const char *desc)
 	mono_profiler_install_iomap (mono_portability_iomap_event);
 	mono_profiler_install_allocation (mono_portability_remember_alloc);
 
-	mono_profiler_set_events (MONO_PROFILE_ALLOCATIONS | MONO_PROFILE_IOMAP_EVENTS);
+	mono_profiler_set_events ((MonoProfileFlags)(MONO_PROFILE_ALLOCATIONS | MONO_PROFILE_IOMAP_EVENTS));
 }

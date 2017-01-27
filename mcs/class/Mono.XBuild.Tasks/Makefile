@@ -7,10 +7,8 @@ include $(XBUILD_DIR)/xbuild.make
 
 LIBRARY = Mono.XBuild.Tasks.dll
 
-LIB_MCS_FLAGS = \
-	/r:$(corlib)				\
-	/r:System.dll				\
-	/r:System.Xml.dll
+LIB_REFS = $(PARENT_PROFILE)System $(PARENT_PROFILE)System.Xml
+LIB_MCS_FLAGS =
 
 include $(XBUILD_DIR)/xbuild_test.make
 

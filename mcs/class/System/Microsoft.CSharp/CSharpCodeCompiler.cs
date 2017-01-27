@@ -50,6 +50,7 @@ namespace Mono.CSharp
 	{
 		static string windowsMcsPath;
 		static string windowsMonoPath;
+		static string unixMcsCommand;
 
 		Mutex mcsOutMutex;
 		StringCollection mcsOutput;
@@ -85,6 +86,13 @@ namespace Mono.CSharp
 				
 				if (!File.Exists (windowsMcsPath))
 					throw new FileNotFoundException ("Windows mcs path not found: " + windowsMcsPath);
+			} else {
+				var mscorlibPath = new Uri (typeof (object).Assembly.CodeBase).LocalPath;
+				var unixMcsPath = Path.GetFullPath (Path.Combine (mscorlibPath, "..", "..", "..", "..", "bin", "mcs"));
+				if (File.Exists (unixMcsPath))
+					unixMcsCommand = unixMcsPath;
+				else
+					unixMcsCommand = "mcs";
 			}
 		}
 
@@ -173,7 +181,7 @@ namespace Mono.CSharp
 				mcs.StartInfo.Arguments = "\"" + windowsMcsPath + "\" " +
 					BuildArgs (options, fileNames, ProviderOptions);
 			} else {
-				mcs.StartInfo.FileName="mcs";
+				mcs.StartInfo.FileName=unixMcsCommand;
 				mcs.StartInfo.Arguments=BuildArgs(options, fileNames, ProviderOptions);
 			}
 
@@ -358,7 +366,7 @@ namespace Mono.CSharp
 				}
 			}
 
-			args.Append("/sdk:4.5");
+			args.Append ("/noconfig ");
 
 			args.Append (" -- ");
 			foreach (string source in fileNames)
@@ -379,6 +387,12 @@ namespace Mono.CSharp
 			\s*
 			(?<message>.*)$";
 
+		static readonly Regex RelatedSymbolsRegex = new Regex(
+			@"
+            \(Location\ of\ the\ symbol\ related\ to\ previous\ (warning|error)\)
+			",
+			RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.IgnorePatternWhitespace);
+
 		private static CompilerError CreateErrorFromString(string error_string)
 		{
 			if (error_string.StartsWith ("BETA"))
@@ -391,11 +405,17 @@ namespace Mono.CSharp
 			Regex reg = new Regex (ErrorRegexPattern, RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.IgnorePatternWhitespace);
 			Match match=reg.Match(error_string);
 			if (!match.Success) {
-				// We had some sort of runtime crash
-				error.ErrorText = error_string;
-				error.IsWarning = false;
-				error.ErrorNumber = "";
-				return error;
+				match = RelatedSymbolsRegex.Match (error_string);
+				if (!match.Success) {
+					// We had some sort of runtime crash
+					error.ErrorText = error_string;
+					error.IsWarning = false;
+					error.ErrorNumber = "";
+					return error;
+				} else {
+					// This line is a continuation of previous warning of error
+					return null;
+				}
 			}
 			if (String.Empty != match.Result("${file}"))
 				error.FileName=match.Result("${file}");

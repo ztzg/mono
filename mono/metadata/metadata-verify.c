@@ -5,6 +5,7 @@
  *	Mono Project (http://www.mono-project.com)
  *
  * Copyright (C) 2005-2008 Novell, Inc. (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/verify.h>
@@ -332,7 +333,7 @@ bounds_check_virtual_address (VerifyContext *ctx, guint32 rva, guint32 size)
 		return FALSE;
 
 	if (ctx->stage > STAGE_PE) {
-		MonoCLIImageInfo *iinfo = ctx->image->image_info;
+		MonoCLIImageInfo *iinfo = (MonoCLIImageInfo *)ctx->image->image_info;
 		const int top = iinfo->cli_section_count;
 		MonoSectionTable *tables = iinfo->cli_section_tables;
 		int i;
@@ -659,7 +660,7 @@ verify_resources_table (VerifyContext *ctx)
 	DataDirectory it = ctx->data_directories [RESOURCE_TABLE_IDX];
 	guint32 offset;
 	guint16 named_entries, id_entries;
-	const char *ptr, *root, *end;
+	const char *ptr;
 
 	if (it.rva == 0)
 		return;
@@ -668,8 +669,7 @@ verify_resources_table (VerifyContext *ctx)
 		ADD_ERROR (ctx, g_strdup_printf ("Resource section is too small, must be at least 16 bytes long but it's %d long", it.size));
 
 	offset = it.translated_offset;
-	root = ptr = ctx->data + offset;
-	end = root + it.size;
+	ptr = ctx->data + offset;
 
 	g_assert (offset != INVALID_OFFSET);
 
@@ -690,7 +690,7 @@ verify_resources_table (VerifyContext *ctx)
 static DataDirectory
 get_data_dir (VerifyContext *ctx, int idx)
 {
-	MonoCLIImageInfo *iinfo = ctx->image->image_info;
+	MonoCLIImageInfo *iinfo = (MonoCLIImageInfo *)ctx->image->image_info;
 	MonoPEDirEntry *entry= &iinfo->cli_header.datadir.pe_export_table;
 	DataDirectory res;
 
@@ -1070,7 +1070,7 @@ search_sorted_table (VerifyContext *ctx, int table, int column, guint32 coded_to
 	base = tinfo->base;
 
 	VERIFIER_DEBUG ( printf ("looking token %x table %d col %d rsize %d roff %d\n", coded_token, table, column, locator.col_size, locator.col_offset) );
-	res = mono_binary_search (&locator, base, tinfo->rows, tinfo->row_size, token_locator);
+	res = (const char *)mono_binary_search (&locator, base, tinfo->rows, tinfo->row_size, token_locator);
 	if (!res)
 		return -1;
 
@@ -1788,7 +1788,7 @@ get_enum_by_encoded_name (VerifyContext *ctx, const char **_ptr, const char *end
 		return NULL;
 	}
 
-	enum_name = g_memdup (str_start, str_len + 1);
+	enum_name = (char *)g_memdup (str_start, str_len + 1);
 	enum_name [str_len] = 0;
 	type = mono_reflection_type_from_name (enum_name, ctx->image);
 	if (!type) {
@@ -1882,7 +1882,7 @@ handle_enum:
 			} else if (etype == 0x50 || etype == MONO_TYPE_CLASS) {
 				klass = mono_defaults.systemtype_class;
 			} else if ((etype >= MONO_TYPE_BOOLEAN && etype <= MONO_TYPE_STRING) || etype == 0x51) {
-				simple_type.type = etype == 0x51 ? MONO_TYPE_OBJECT : etype;
+				simple_type.type = etype == 0x51 ? MONO_TYPE_OBJECT : (MonoTypeEnum)etype;
 				klass = mono_class_from_mono_type (&simple_type);
 			} else
 				FAIL (ctx, g_strdup_printf ("CustomAttribute: Invalid array element type %x", etype));
@@ -1987,7 +1987,7 @@ is_valid_cattr_content (VerifyContext *ctx, MonoMethod *ctor, const char *ptr, g
 			FAIL (ctx, g_strdup_printf ("CustomAttribute: Not enough space for named parameter %d type", i));
 
 		if (kind >= MONO_TYPE_BOOLEAN && kind <= MONO_TYPE_STRING) {
-			simple_type.type = kind;
+			simple_type.type = (MonoTypeEnum)kind;
 			type = &simple_type;
 		} else if (kind == MONO_TYPE_ENUM) {
 			MonoClass *klass = get_enum_by_encoded_name (ctx, &ptr, end);
@@ -2011,7 +2011,7 @@ is_valid_cattr_content (VerifyContext *ctx, MonoMethod *ctor, const char *ptr, g
 			} else if (etype == 0x50 || etype == MONO_TYPE_CLASS) {
 				klass = mono_defaults.systemtype_class;
 			} else if ((etype >= MONO_TYPE_BOOLEAN && etype <= MONO_TYPE_STRING) || etype == 0x51) {
-				simple_type.type = etype == 0x51 ? MONO_TYPE_OBJECT : etype;
+				simple_type.type = etype == 0x51 ? MONO_TYPE_OBJECT : (MonoTypeEnum)etype;
 				klass = mono_class_from_mono_type (&simple_type);
 			} else
 				FAIL (ctx, g_strdup_printf ("CustomAttribute: Invalid array element type %x", etype));
@@ -2926,6 +2926,7 @@ verify_cattr_table (VerifyContext *ctx)
 static void
 verify_cattr_table_full (VerifyContext *ctx)
 {
+	MonoError error;
 	MonoTableInfo *table = &ctx->image->tables [MONO_TABLE_CUSTOMATTRIBUTE];
 	MonoMethod *ctor;
 	const char *ptr;
@@ -2950,7 +2951,12 @@ verify_cattr_table_full (VerifyContext *ctx)
 			ADD_ERROR (ctx, g_strdup_printf ("Invalid CustomAttribute constructor row %d Token 0x%08x", i, data [MONO_CUSTOM_ATTR_TYPE]));
 		}
 
-		ctor = mono_get_method (ctx->image, mtoken, NULL);
+		ctor = mono_get_method_checked (ctx->image, mtoken, NULL, NULL, &error);
+
+		if (!ctor) {
+			ADD_ERROR (ctx, g_strdup_printf ("Invalid CustomAttribute content row %d Could not load ctor due to %s", i, mono_error_get_message (&error)));
+			mono_error_cleanup (&error);
+		}
 
 		/*This can't fail since this is checked in is_valid_cattr_blob*/
 		g_assert (decode_signature_header (ctx, data [MONO_CUSTOM_ATTR_VALUE], &size, &ptr));
@@ -3488,7 +3494,7 @@ verify_exportedtype_table (VerifyContext *ctx)
 static void
 verify_manifest_resource_table (VerifyContext *ctx)
 {
-	MonoCLIImageInfo *iinfo = ctx->image->image_info;
+	MonoCLIImageInfo *iinfo = (MonoCLIImageInfo *)ctx->image->image_info;
 	MonoCLIHeader *ch = &iinfo->cli_cli_header;
 	MonoTableInfo *table = &ctx->image->tables [MONO_TABLE_MANIFESTRESOURCE];
 	guint32 data [MONO_MANIFEST_SIZE], impl_table, token, resources_size;
@@ -3663,15 +3669,15 @@ typedef struct {
 static guint
 typedef_hash (gconstpointer _key)
 {
-	const TypeDefUniqueId *key = _key;
+	const TypeDefUniqueId *key = (const TypeDefUniqueId *)_key;
 	return g_str_hash (key->name) ^ g_str_hash (key->name_space) ^ key->resolution_scope; /*XXX better salt the int key*/
 }
 
 static gboolean
 typedef_equals (gconstpointer _a, gconstpointer _b)
 {
-	const TypeDefUniqueId *a = _a;
-	const TypeDefUniqueId *b = _b;
+	const TypeDefUniqueId *a = (const TypeDefUniqueId *)_a;
+	const TypeDefUniqueId *b = (const TypeDefUniqueId *)_b;
 	return !strcmp (a->name, b->name) && !strcmp (a->name_space, b->name_space) && a->resolution_scope == b->resolution_scope;
 }
 
@@ -3879,7 +3885,7 @@ cleanup_context_checked (VerifyContext *ctx, MonoError *error)
 {
 	g_free (ctx->sections);
 	if (ctx->errors) {
-		MonoVerifyInfo *info = ctx->errors->data;
+		MonoVerifyInfo *info = (MonoVerifyInfo *)ctx->errors->data;
 		mono_error_set_bad_image (error, ctx->image, "%s", info->message);
 		mono_free_verify_list (ctx->errors);
 	}

@@ -6,6 +6,7 @@
  *
  * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include <config.h>
 #include <stdio.h>
@@ -333,7 +334,7 @@ dump_methoddef (MonoImage *metadata, guint32 token)
 static void
 dump_dotnet_iinfo (MonoImage *image)
 {
-	MonoCLIImageInfo *iinfo = image->image_info;
+	MonoCLIImageInfo *iinfo = (MonoCLIImageInfo *)image->image_info;
 
 	dump_dotnet_header (&iinfo->cli_header);
 	dump_sections (iinfo);
@@ -361,7 +362,6 @@ dump_verify_info (MonoImage *image, int flags)
 		for (i = 0; i < m->rows; ++i) {
 			MonoMethod *method;
 			MonoError error;
-			mono_loader_clear_error ();
 
 			method = mono_get_method_checked (image, MONO_TOKEN_METHOD_DEF | (i+1), NULL, NULL, &error);
 			if (!method) {
@@ -385,7 +385,7 @@ dump_verify_info (MonoImage *image, int flags)
 			}
 
 			for (tmp = errors; tmp; tmp = tmp->next) {
-				MonoVerifyInfo *info = tmp->data;
+				MonoVerifyInfo *info = (MonoVerifyInfo *)tmp->data;
 				g_print ("%s: %s\n", desc [info->status], info->message);
 				if (info->status == MONO_VERIFY_ERROR) {
 					count++;
@@ -467,6 +467,7 @@ verify_image_file (const char *fname)
 
 	mono_install_assembly_preload_hook (pedump_preload, GUINT_TO_POINTER (FALSE));
 
+	mono_icall_init ();
 	mono_marshal_init ();
 
 
@@ -478,23 +479,21 @@ verify_image_file (const char *fname)
 	for (i = 1; i <= table->rows; ++i) {
 		MonoError error;
 		guint32 token = i | MONO_TOKEN_TYPE_DEF;
-		MonoClass *class = mono_class_get_checked (image, token, &error);
-		if (!class) {
+		MonoClass *klass = mono_class_get_checked (image, token, &error);
+		if (!klass) {
 			printf ("Could not load class with token %x due to %s\n", token, mono_error_get_message (&error));
 			mono_error_cleanup (&error);
 			continue;
 		}
-		mono_class_init (class);
-		if (class->exception_type != MONO_EXCEPTION_NONE || mono_loader_get_last_error ()) {
-			printf ("Error verifying class(0x%08x) %s.%s a type load error happened\n", token, class->name_space, class->name);
-			mono_loader_clear_error ();
+		mono_class_init (klass);
+		if (mono_class_has_failure (klass)) {
+			printf ("Error verifying class(0x%08x) %s.%s a type load error happened\n", token, klass->name_space, klass->name);
 			++count;
 		}
 
-		mono_class_setup_vtable (class);
-		if (class->exception_type != MONO_EXCEPTION_NONE || mono_loader_get_last_error ()) {
-			printf ("Error verifying class(0x%08x) %s.%s a type load error happened\n", token, class->name_space, class->name);
-			mono_loader_clear_error ();
+		mono_class_setup_vtable (klass);
+		if (mono_class_has_failure (klass)) {
+			printf ("Error verifying class(0x%08x) %s.%s a type load error happened\n", token, klass->name_space, klass->name);
 			++count;
 		}
 	}
@@ -504,7 +503,7 @@ verify_image_file (const char *fname)
 
 invalid_image:
 	for (tmp = errors; tmp; tmp = tmp->next) {
-		MonoVerifyInfo *info = tmp->data;
+		MonoVerifyInfo *info = (MonoVerifyInfo *)tmp->data;
 		g_print ("%s: %s\n", desc [info->status], info->message);
 		if (info->status == MONO_VERIFY_ERROR)
 			count++;
@@ -610,7 +609,7 @@ pedump_assembly_search_hook (MonoAssemblyName *aname, gpointer user_data)
         GList *tmp;
 
        for (tmp = loaded_assemblies; tmp; tmp = tmp->next) {
-               MonoAssembly *ass = tmp->data;
+               MonoAssembly *ass = (MonoAssembly *)tmp->data;
                if (mono_assembly_names_equal (aname, &ass->aname))
 		       return ass;
        }

@@ -7,18 +7,24 @@
 
 /* The architecture this is running on */
 #if defined(_M_IA64)
-#define ARCHITECTURE "ia64"
+#define MONO_ARCHITECTURE "ia64"
 #elif defined(_M_AMD64)
-#define ARCHITECTURE "amd64"
+#define MONO_ARCHITECTURE "amd64"
 #elif defined(_M_IX86)
-#define ARCHITECTURE "x86"
+#define MONO_ARCHITECTURE "x86"
 #else
 #error Unknown architecture
 #endif
 
-#if _WIN32_WINNT < 0x0502
-#error "Mono requires WinXP SP2 or later"
-#endif /* _WIN32_WINNT < 0x0502 */
+#ifndef WINVER
+#define WINVER 0x0A00
+#endif
+
+#include <SDKDDKVer.h>
+
+#if _WIN32_WINNT < 0x0600
+#error "Mono requires Windows Vista or later"
+#endif /* _WIN32_WINNT < 0x0600 */
 
 /*
  * Features that are not required in the Windows port
@@ -61,9 +67,6 @@
 /* Disable reflection emit support */
 /* #undef DISABLE_REFLECTION_EMIT */
 
-/* Disable inter-process shared handles */
-/* #undef DISABLE_SHARED_HANDLES */
-
 /* Disable advanced SSA JIT optimizations */
 /* #undef DISABLE_SSA */
 
@@ -93,6 +96,12 @@
 
 /* Define to 1 if you have the <checklist.h> header file. */
 /* #undef HAVE_CHECKLIST_H */
+
+/* Define to 1 if you have the <complex.h> header file. */
+#define HAVE_COMPLEX_H 1
+
+/* Define to 1 if you have the `system' function. */
+#define HAVE_SYSTEM 1
 
 /* Have /dev/random */
 #define HAVE_CRYPT_RNG 1
@@ -167,18 +176,6 @@
 /* Define to 1 if you have the `fstatvfs' function. */
 /* #undef HAVE_FSTATVFS */
 
-/* Have GC_enable */
-/* #define HAVE_GC_ENABLE 1 */
-
-/* Have GC_gcj_malloc */
-/* #define HAVE_GC_GCJ_MALLOC 1 */
-
-/* Define to 1 if you have the <gc/gc.h> header file. */
-/* #undef HAVE_GC_GC_H */
-
-/* Have gc.h */
-/* #define HAVE_GC_H 1 */
-
 /* Define to 1 if you have the `getaddrinfo' function. */
 #define HAVE_GETADDRINFO 1
 
@@ -231,7 +228,7 @@
 /* #undef HAVE_INET_ATON */
 
 /* Define to 1 if you have the `inet_pton' function. */
-/* #undef HAVE_INET_PTON */
+#define HAVE_INET_PTON 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
@@ -302,9 +299,6 @@
 /* No GC support. */
 /* #undef HAVE_NULL_GC */
 
-/* Have oprofile support */
-/* #undef HAVE_OPROFILE */
-
 /* Define to 1 if you have the `poll' function. */
 /* #undef HAVE_POLL */
 
@@ -370,6 +364,12 @@
 
 /* Using the simple generational GC. */
 /* #undef HAVE_SGEN_GC */
+
+ /* Have signal */
+#define HAVE_SIGNAL 1
+
+ /* Define to 1 if you have the <signal.h> header file. */
+#define HAVE_SIGNAL_H 1
 
 /* Have signbit */
 /* #undef HAVE_SIGNBIT */
@@ -642,5 +642,5 @@
 /* #undef USE_MONO_MUTEX */
 
 /* Version number of package */
-#define VERSION "3.12.1"
+#define VERSION "#MONO_VERSION#"
 #endif

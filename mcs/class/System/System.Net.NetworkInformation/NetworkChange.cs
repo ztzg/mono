@@ -101,6 +101,9 @@ namespace System.Net.NetworkInformation {
 
 		static void MaybeCreate ()
 		{
+#if MONOTOUCH_WATCH
+			throw new PlatformNotSupportedException ("NetworkInformation.NetworkChange is not supported on the current platform.");
+#else
 			if (networkChange != null)
 				return;
 
@@ -111,6 +114,7 @@ namespace System.Net.NetworkInformation {
 				networkChange = new LinuxNetworkChange ();
 #endif
 			}
+#endif // MONOTOUCH_WATCH
 		}
 
 		static void MaybeDispose ()
@@ -122,6 +126,7 @@ namespace System.Net.NetworkInformation {
 		}
 	}
 
+#if !MONOTOUCH_WATCH
 	internal sealed class MacNetworkChange : INetworkChange
 	{
 		const string DL_LIB = "/usr/lib/libSystem.dylib";
@@ -317,6 +322,7 @@ namespace System.Net.NetworkInformation {
 				availabilityChanged (null, new NetworkAvailabilityEventArgs (instance.IsAvailable));
 		}
 	}
+#endif // !MONOTOUCH_WATCH
 
 #if !NETWORK_CHANGE_STANDALONE && !MONOTOUCH
 
@@ -365,7 +371,9 @@ namespace System.Net.NetworkInformation {
 				if (fd.ToInt64 () == -1)
 					return false;
 
-				nl_sock = new Socket (0, SocketType.Raw, ProtocolType.Udp, fd);
+				var safeHandle = new SafeSocketHandle (fd, true);
+
+				nl_sock = new Socket (0, SocketType.Raw, ProtocolType.Udp, safeHandle);
 				nl_args = new SocketAsyncEventArgs ();
 				nl_args.SetBuffer (new byte [8192], 0, 8192);
 				nl_args.Completed += OnDataAvailable;
@@ -402,13 +410,15 @@ namespace System.Net.NetworkInformation {
 		void OnAvailabilityChanged (object unused)
 		{
 			NetworkAvailabilityChangedEventHandler d = AvailabilityChanged;
-			d (null, new NetworkAvailabilityEventArgs (GetAvailability ()));
+			if (d != null)
+				d (null, new NetworkAvailabilityEventArgs (GetAvailability ()));
 		}
 
 		void OnAddressChanged (object unused)
 		{
 			NetworkAddressChangedEventHandler d = AddressChanged;
-			d (null, EventArgs.Empty);
+			if (d != null)
+				d (null, EventArgs.Empty);
 		}
 
 		void OnEventDue (object unused)
@@ -438,8 +448,10 @@ namespace System.Net.NetworkInformation {
 
 		unsafe void OnDataAvailable (object sender, SocketAsyncEventArgs args)
 		{
+			if (nl_sock == null) // Recent changes in Mono cause MaybeCloseSocket to be called before OnDataAvailable
+				return;
 			EventType type;
-			fixed (byte *ptr = args.Buffer) {	
+			fixed (byte *ptr = args.Buffer) {
 				type = ReadEvents (nl_sock.Handle, new IntPtr (ptr), args.BytesTransferred, 8192);
 			}
 			nl_sock.ReceiveAsync (nl_args);

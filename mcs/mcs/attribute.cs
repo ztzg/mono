@@ -282,6 +282,11 @@ namespace Mono.CSharp {
 			}
 		}
 
+		public void SetOwner (Attributable owner)
+		{
+			targets [0] = owner;
+		}
+
 		/// <summary>
 		///   Tries to resolve the type of the attribute. Flags an error if it can't, and complain is true.
 		/// </summary>
@@ -477,10 +482,7 @@ namespace Mono.CSharp {
 				return null;
 			}
 
-			ObsoleteAttribute obsolete_attr = Type.GetAttributeObsolete ();
-			if (obsolete_attr != null) {
-				AttributeTester.Report_ObsoleteMessage (obsolete_attr, Type.GetSignatureForError (), Location, Report);
-			}
+			Type.CheckObsoleteness (context, expression.StartLocation);
 
 			ResolveContext rc = null;
 
@@ -574,8 +576,6 @@ namespace Mono.CSharp {
 					return false;
 				}
 
-				ObsoleteAttribute obsolete_attr;
-
 				if (member is PropertyExpr) {
 					var pi = ((PropertyExpr) member).PropertyInfo;
 
@@ -591,7 +591,9 @@ namespace Mono.CSharp {
 						return false;
 					}
 
-					obsolete_attr = pi.GetAttributeObsolete ();
+//					if (!context.IsObsolete)
+						pi.CheckObsoleteness (ec, member.StartLocation);
+					
 					pi.MemberDefinition.SetIsAssigned ();
 				} else {
 					var fi = ((FieldExpr) member).Spec;
@@ -607,12 +609,11 @@ namespace Mono.CSharp {
 						return false;
 					}
 
-					obsolete_attr = fi.GetAttributeObsolete ();
+//					if (!context.IsObsolete)
+						fi.CheckObsoleteness (ec, member.StartLocation);
+
 					fi.MemberDefinition.SetIsAssigned ();
 				}
-
-				if (obsolete_attr != null && !context.IsObsolete)
-					AttributeTester.Report_ObsoleteMessage (obsolete_attr, member.GetSignatureForError (), member.Location, Report);
 
 				if (a.Type != member.Type) {
 					a.Expr = Convert.ImplicitConversionRequired (ec, a.Expr, member.Type, a.Expr.Location);
@@ -1223,6 +1224,19 @@ namespace Mono.CSharp {
 			Attrs.AddRange (attrs);
 		}
 
+		public static void AttachFromPartial (Attributable target, Attributable partialSrc)
+		{
+			if (target.OptAttributes == null) {
+				target.OptAttributes = partialSrc.OptAttributes;
+			} else {
+				target.OptAttributes.Attrs.AddRange (partialSrc.OptAttributes.Attrs);
+			}
+
+			foreach (var attr in partialSrc.OptAttributes.Attrs) {
+				attr.SetOwner (target);
+			}
+		}
+
 		public void AttachTo (Attributable attributable, IMemberContext context)
 		{
 			foreach (Attribute a in Attrs)
@@ -1686,6 +1700,7 @@ namespace Mono.CSharp {
 		public readonly PredefinedAttribute AssemblyAlgorithmId;
 		public readonly PredefinedAttribute AssemblyFlags;
 		public readonly PredefinedAttribute AssemblyFileVersion;
+		public readonly PredefinedAttribute AssemblyInformationalVersion;
 		public readonly PredefinedAttribute ComImport;
 		public readonly PredefinedAttribute CoClass;
 		public readonly PredefinedAttribute AttributeUsage;
@@ -1786,6 +1801,7 @@ namespace Mono.CSharp {
 			AssemblyCompany = new PredefinedAttribute (module, "System.Reflection", "AssemblyCompanyAttribute");
 			AssemblyCopyright = new PredefinedAttribute (module, "System.Reflection", "AssemblyCopyrightAttribute");
 			AssemblyTrademark = new PredefinedAttribute (module, "System.Reflection", "AssemblyTrademarkAttribute");
+			AssemblyInformationalVersion = new PredefinedAttribute (module, "System.Reflection", "AssemblyInformationalVersionAttribute");
 
 			AsyncStateMachine = new PredefinedStateMachineAttribute (module, "System.Runtime.CompilerServices", "AsyncStateMachineAttribute");
 
@@ -1999,8 +2015,8 @@ namespace Mono.CSharp {
 
 			int[] bits = decimal.GetBits (value);
 			AttributeEncoder encoder = new AttributeEncoder ();
-			encoder.Encode ((byte) (bits[3] >> 16));
-			encoder.Encode ((byte) (bits[3] >> 31));
+			encoder.Encode ((byte) ((bits[3] & 0xFF0000) >> 16)); // Scale
+			encoder.Encode ((byte) ((bits[3] >> 31) << 7)); // Sign encoded as 0x80 for negative, 0x0 for possitive
 			encoder.Encode ((uint) bits[2]);
 			encoder.Encode ((uint) bits[1]);
 			encoder.Encode ((uint) bits[0]);

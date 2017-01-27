@@ -16,6 +16,7 @@
  * Copyright 2006 Broadcom
  * Copyright 2007-2008 Andreas Faerber
  * Copyright 2011-2013 Xamarin Inc
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "mono/utils/mono-hwcap-arm.h"
@@ -33,7 +34,6 @@
 gboolean mono_hwcap_arm_is_v5 = FALSE;
 gboolean mono_hwcap_arm_is_v6 = FALSE;
 gboolean mono_hwcap_arm_is_v7 = FALSE;
-gboolean mono_hwcap_arm_is_v7s = FALSE;
 gboolean mono_hwcap_arm_has_vfp = FALSE;
 gboolean mono_hwcap_arm_has_vfp3 = FALSE;
 gboolean mono_hwcap_arm_has_vfp3_d16 = FALSE;
@@ -161,7 +161,6 @@ mono_hwcap_print(FILE *f)
 	g_fprintf (f, "mono_hwcap_arm_is_v5 = %i\n", mono_hwcap_arm_is_v5);
 	g_fprintf (f, "mono_hwcap_arm_is_v6 = %i\n", mono_hwcap_arm_is_v6);
 	g_fprintf (f, "mono_hwcap_arm_is_v7 = %i\n", mono_hwcap_arm_is_v7);
-	g_fprintf (f, "mono_hwcap_arm_is_v7s = %i\n", mono_hwcap_arm_is_v7s);
 	g_fprintf (f, "mono_hwcap_arm_has_vfp = %i\n", mono_hwcap_arm_has_vfp);
 	g_fprintf (f, "mono_hwcap_arm_has_vfp3 = %i\n", mono_hwcap_arm_has_vfp3);
 	g_fprintf (f, "mono_hwcap_arm_has_vfp3_d16 = %i\n", mono_hwcap_arm_has_vfp3_d16);

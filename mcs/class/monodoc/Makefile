@@ -87,9 +87,9 @@ EXTRA_DISTFILES = \
 	Test/monodoc_test/trees/tree-from-3-0-old.tree \
 	Test/monodoc_test/trees/tree-from-3-0.tree
 
+LIB_REFS = ICSharpCode.SharpZipLib System System.Core System.Xml System.Xml.Linq System.Configuration
 LIB_MCS_FLAGS = \
 	/unsafe                                                           \
-	/codepage:utf8                                                    \
 	/nowarn:169,164,162,168,219,618,612                               \
 	/resource:../../docs/monodoc.xml,monodoc.xml                      \
 	/resource:Resources/base.css,base.css                             \
@@ -111,17 +111,12 @@ LIB_MCS_FLAGS = \
 	/resource:Resources/mono-ecma.xsl,mono-ecma.xsl                   \
 	/resource:Resources/toc-html.xsl,toc-html.xsl                     \
 	$(IMAGE_RESOURCE_COMMAND)					                      \
-	/r:ICSharpCode.SharpZipLib                                        \
-	/r:$(corlib)                                                      \
-	/r:System.dll                                                     \
-	/r:System.Core.dll                                                \
-	/r:System.Xml.dll                                                 \
-	/r:System.Xml.Linq.dll                                            \
-	/r:System.Configuration.dll
+	/publicsign
 
 CLEAN_FILES += $(the_lib).config
 
-TEST_MCS_FLAGS = /r:System.dll /r:System.Core.dll /r:System.Xml.dll
+TEST_MCS_FLAGS =
+TEST_LIB_REFS = System System.Core System.Xml
 
 DOC_SOURCE_DIRS = \
 	../../docs \

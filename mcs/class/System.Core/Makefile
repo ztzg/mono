@@ -4,16 +4,14 @@ include ../../build/rules.make
 
 LIBRARY = System.Core.dll
 
-REFERENCE_SOURCES_FLAGS = -d:FEATURE_PAL,PFX_LEGACY_3_5
-LIB_MCS_FLAGS = $(REFERENCE_SOURCES_FLAGS) -d:INSIDE_SYSCORE -d:LIBC /r:System.dll -unsafe
-RESOURCE_STRINGS = ../../../external/referencesource/System.Core/System.Core.txt
+REFERENCE_SOURCES_FLAGS = -d:FEATURE_PAL,PFX_LEGACY_3_5,FEATURE_NETCORE
+LIB_REFS = System
+LIB_MCS_FLAGS = $(REFERENCE_SOURCES_FLAGS) -d:INSIDE_SYSCORE -d:LIBC -unsafe
+TXT_RESOURCE_STRINGS = ../referencesource/System.Core/System.Core.txt
 
 ifneq (2.1, $(FRAMEWORK_VERSION))
 LIB_MCS_FLAGS += -d:NET_3_5 -nowarn:1720
 endif
-
-MOBILE_DYNAMIC := $(filter monodroid xammac mobile, $(PROFILE))
-MOBILE_STATIC := $(filter mobile_static monotouch monotouch_runtime, $(PROFILE))
 
 ifdef MOBILE_DYNAMIC
 LIB_MCS_FLAGS += -d:FEATURE_CORE_DLR,FEATURE_REFEMIT
@@ -27,7 +25,8 @@ system_core_library_deps = $(the_libdir_base)Mono.Dynamic.Interpreter.dll $(syst
 LIB_MCS_FLAGS += -d:FEATURE_CORE_DLR
 
 ifneq (plaincore/,$(intermediate))
-LIB_MCS_FLAGS += -d:MONO_INTERPRETER -r:Mono.Dynamic.Interpreter.dll
+LIB_REFS += Mono.Dynamic.Interpreter
+LIB_MCS_FLAGS += -d:MONO_INTERPRETER
 endif
 
 endif
@@ -45,7 +44,17 @@ CLR_PROFILE := $(filter 2.0 4.0 4.5, $(FRAMEWORK_VERSION))
 endif
 
 ifdef CLR_PROFILE
-LIB_MCS_FLAGS += -r:Mono.Posix.dll
+LIB_REFS += Mono.Posix
+endif
+
+CC_PROFILE := $(filter monotouch% xammac, $(PROFILE))
+ifdef CC_PROFILE
+BUILT_SOURCES = \
+	../corlib/CommonCrypto/AesManaged.g.cs \
+	../corlib/CommonCrypto/AesCryptoServiceProvider.g.cs
+
+../corlib/CommonCrypto/%.g.cs:
+	$(MAKE) -C ../corlib/CommonCrypto
 endif
 
 TEST_MCS_FLAGS = $(LIB_MCS_FLAGS)

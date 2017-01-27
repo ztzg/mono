@@ -6,7 +6,10 @@ LIBRARY = System.Threading.Tasks.Dataflow.dll
 
 include ../../build/library.make
 
-LIB_MCS_FLAGS += -r:$(corlib) -r:System.Core.dll -r:System.dll
+LIB_REFS += System.Core System
+LIB_MCS_FLAGS += -d:CONCURRENT_COLLECTIONS
 
-TEST_MCS_FLAGS = -r:System.Core.dll -r:System.dll
+TEST_MCS_FLAGS =
+TEST_LIB_REFS = System.Core System
 
+EXTRA_DISTFILES=README.md

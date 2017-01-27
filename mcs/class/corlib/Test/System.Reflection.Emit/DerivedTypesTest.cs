@@ -523,14 +523,7 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.IsFalse (ptr.IsGenericType, "#9");
 			Assert.IsFalse (ptr.IsGenericTypeDefinition, "#10");
 
-#if NET_4_0
 			Assert.AreEqual (TypeAttributes.Public, ptr.Attributes, "#11");
-#else
-			try {
-				var x = ptr.Attributes; //This is because GenericTypeParameterBuilder doesn't support Attributes 
-				Assert.Fail ("#11");
-			} catch (NotSupportedException) {}
-#endif
 
 			Assert.IsTrue (ptr.HasElementType, "#12");
 			Assert.IsTrue (ptr.IsPointer, "#13");
@@ -1034,14 +1027,7 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.IsFalse (byref.IsGenericTypeDefinition, "#10");
 
 
-#if NET_4_0
 			Assert.AreEqual (TypeAttributes.Public, byref.Attributes, "#11");
-#else
-			try {
-				var x = byref.Attributes; //This is because GenericTypeParameterBuilder doesn't support Attributes 
-				Assert.Fail ("#11");
-			} catch (NotSupportedException) {}
-#endif
 
 			Assert.IsTrue (byref.HasElementType, "#12");
 			Assert.IsTrue (byref.IsByRef, "#13");
@@ -1600,6 +1586,7 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.IsFalse (arr.IsGenericParameter, "#8");
 			Assert.IsFalse (arr.IsGenericType, "#9");
 			Assert.IsFalse (arr.IsGenericTypeDefinition, "#10");
+			Assert.IsTrue (arr is TypeInfo, "#11");
 		}
 
 		[Test]
@@ -1663,14 +1650,7 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.IsFalse (arr.IsGenericType, "#9");
 			Assert.IsFalse (arr.IsGenericTypeDefinition, "#10");
 
-#if NET_4_0
 			Assert.AreEqual (TypeAttributes.Public, arr.Attributes, "#11");
-#else
-			try {
-				var x = arr.Attributes; //This is because GenericTypeParameterBuilder doesn't support Attributes 
-				Assert.Fail ("#11");
-			} catch (NotSupportedException) {}
-#endif
 
 			Assert.IsTrue (arr.HasElementType, "#12");
 			Assert.IsTrue (arr.IsArray, "#13");
@@ -1685,6 +1665,7 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.AreEqual ("F[]", arr.Name, "#21");
 
 			Assert.AreEqual (gparam, arr.GetElementType (), "#22");
+			Assert.IsTrue (arr is TypeInfo, "#23");
 		}
 
 		[Test]
@@ -1739,6 +1720,7 @@ namespace MonoTests.System.Reflection.Emit
 			Assert.AreEqual ("enum[]", arr.Name, "#21");
 
 			Assert.AreEqual (eb, arr.GetElementType (), "#22");
+			Assert.IsTrue (arr is TypeInfo, "#23");
 		}
 
 	}

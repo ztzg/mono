@@ -40,65 +40,16 @@ namespace Mono.Security.Protocol.Tls
 
 		public static CipherSuiteCollection GetSupportedCiphers (bool server, SecurityProtocolType protocol)
 		{
-			CipherSuiteCollection suites;
 			switch (protocol) {
 			case SecurityProtocolType.Default:
 			case SecurityProtocolType.Tls:				
-				suites = CipherSuiteFactory.GetTls1SupportedCiphers ();
-				break;
+				return CipherSuiteFactory.GetTls1SupportedCiphers ();
 			case SecurityProtocolType.Ssl3:
-				suites = CipherSuiteFactory.GetSsl3SupportedCiphers ();
-				break;
+				return CipherSuiteFactory.GetSsl3SupportedCiphers ();
 			case SecurityProtocolType.Ssl2:
 			default:
 				throw new NotSupportedException ("Unsupported security protocol type");
 			}
-
-			IEnumerable<string> list = null;
-#if INSIDE_SYSTEM
-			// if SSL/TLS support is built-in System.dll (e.g. monotouch) then we can access ServicePointManager
-			// extension directly
-			var cb = server ? ServicePointManager.ServerCipherSuitesCallback : ServicePointManager.ClientCipherSuitesCallback;
-			if (cb == null)
-				return suites; // e.g. no callback was set
-
-			list = cb ((System.Net.SecurityProtocolType) (int) protocol, suites.GetNames ());
-#elif !BOOTSTRAP_BASIC
-			// Mono.Security must work on MS.NET so it cannot depend on any Mono-specific extensions
-			PropertyInfo pi = null;
-			if (server) {
-				if (server_callback == null)
-					server_callback = spm.GetProperty ("ServerCipherSuitesCallback", BindingFlags.Static | BindingFlags.Public);
-				pi = server_callback;
-			} else {
-				if (client_callback == null)
-					client_callback = spm.GetProperty ("ClientCipherSuitesCallback", BindingFlags.Static | BindingFlags.Public);
-				pi = client_callback;
-			}
-			if (pi == null)
-				return suites; // e.g. MS runtime - return every supported suites
-
-			var cb = (Delegate) pi.GetGetMethod ().Invoke (null, null);
-			if (cb == null)
-				return suites; // e.g. no callback was set - return every supported suites
-
-			list = (IEnumerable<string>) cb.DynamicInvoke (new object[] { 
-				(System.Net.SecurityProtocolType) (int) protocol, suites.GetNames () 
-			});
-#else
-			// TODO: right now the callback is only available when using System.Net.* types for SSL/TLS
-			return suites;
-#endif
-			CipherSuiteCollection allowed = new CipherSuiteCollection (protocol);
-			if (list != null) {
-				foreach (var name in list) {
-					// add any supported (ignore unknowns) ciphers requested by the callback
-					var cipher = suites [name];
-					if (cipher != null)
-						allowed.Add (cipher);
-				}
-			}
-			return allowed;
 		}
 
 		#region Private Static Methods
@@ -116,14 +67,14 @@ namespace Mono.Security.Protocol.Tls
 			scs.Add((0x00 << 0x08) | 0x09, "TLS_RSA_WITH_DES_CBC_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, false, true, 8, 8, 56, 8, 8);
 			
 			// Supported exportable ciphers
-			scs.Add((0x00 << 0x08) | 0x03, "TLS_RSA_EXPORT_WITH_RC4_40_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 5, 16, 40, 0, 0);
-			scs.Add((0x00 << 0x08) | 0x06, "TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 16, 40, 8, 8);
-			scs.Add((0x00 << 0x08) | 0x08, "TLS_RSA_EXPORT_WITH_DES40_CBC_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 8, 40, 8, 8);
-			scs.Add((0x00 << 0x08) | 0x60, "TLS_RSA_EXPORT_WITH_RC4_56_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
-			scs.Add((0x00 << 0x08) | 0x61, "TLS_RSA_EXPORT_WITH_RC2_CBC_56_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 7, 16, 56, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x03, "TLS_RSA_EXPORT_WITH_RC4_40_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 5, 16, 40, 0, 0);
+			// scs.Add((0x00 << 0x08) | 0x06, "TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 16, 40, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x08, "TLS_RSA_EXPORT_WITH_DES40_CBC_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 8, 40, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x60, "TLS_RSA_EXPORT_WITH_RC4_56_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
+			// scs.Add((0x00 << 0x08) | 0x61, "TLS_RSA_EXPORT_WITH_RC2_CBC_56_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 7, 16, 56, 8, 8);
 			// 56 bits but we use 64 bits because of parity (DES is really 56 bits)
-			scs.Add((0x00 << 0x08) | 0x62, "TLS_RSA_EXPORT_WITH_DES_CBC_56_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 8, 8, 64, 8, 8); 
-			scs.Add((0x00 << 0x08) | 0x64, "TLS_RSA_EXPORT_WITH_RC4_56_SHA", CipherAlgorithmType.Rc4, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
+			// scs.Add((0x00 << 0x08) | 0x62, "TLS_RSA_EXPORT_WITH_DES_CBC_56_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 8, 8, 64, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x64, "TLS_RSA_EXPORT_WITH_RC4_56_SHA", CipherAlgorithmType.Rc4, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
 			
 			// Default CipherSuite
 			// scs.Add(0, "TLS_NULL_WITH_NULL_NULL", CipherAlgorithmType.None, HashAlgorithmType.None, ExchangeAlgorithmType.None, true, false, 0, 0, 0, 0, 0);
@@ -195,14 +146,14 @@ namespace Mono.Security.Protocol.Tls
 			scs.Add((0x00 << 0x08) | 0x09, "SSL_RSA_WITH_DES_CBC_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, false, true, 8, 8, 56, 8, 8);
 
 			// Supported exportable ciphers
-			scs.Add((0x00 << 0x08) | 0x03, "SSL_RSA_EXPORT_WITH_RC4_40_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 5, 16, 40, 0, 0);
-			scs.Add((0x00 << 0x08) | 0x06, "SSL_RSA_EXPORT_WITH_RC2_CBC_40_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 16, 40, 8, 8);
-			scs.Add((0x00 << 0x08) | 0x08, "SSL_RSA_EXPORT_WITH_DES40_CBC_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 8, 40, 8, 8);
-			scs.Add((0x00 << 0x08) | 0x60, "SSL_RSA_EXPORT_WITH_RC4_56_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
-			scs.Add((0x00 << 0x08) | 0x61, "SSL_RSA_EXPORT_WITH_RC2_CBC_56_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 7, 16, 56, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x03, "SSL_RSA_EXPORT_WITH_RC4_40_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 5, 16, 40, 0, 0);
+			// scs.Add((0x00 << 0x08) | 0x06, "SSL_RSA_EXPORT_WITH_RC2_CBC_40_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 16, 40, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x08, "SSL_RSA_EXPORT_WITH_DES40_CBC_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 5, 8, 40, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x60, "SSL_RSA_EXPORT_WITH_RC4_56_MD5", CipherAlgorithmType.Rc4, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
+			// scs.Add((0x00 << 0x08) | 0x61, "SSL_RSA_EXPORT_WITH_RC2_CBC_56_MD5", CipherAlgorithmType.Rc2, HashAlgorithmType.Md5, ExchangeAlgorithmType.RsaKeyX, true, true, 7, 16, 56, 8, 8);
 			// 56 bits but we use 64 bits because of parity (DES is really 56 bits)
-			scs.Add((0x00 << 0x08) | 0x62, "SSL_RSA_EXPORT_WITH_DES_CBC_56_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 8, 8, 64, 8, 8); 
-			scs.Add((0x00 << 0x08) | 0x64, "SSL_RSA_EXPORT_WITH_RC4_56_SHA", CipherAlgorithmType.Rc4, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
+			// scs.Add((0x00 << 0x08) | 0x62, "SSL_RSA_EXPORT_WITH_DES_CBC_56_SHA", CipherAlgorithmType.Des, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, true, 8, 8, 64, 8, 8);
+			// scs.Add((0x00 << 0x08) | 0x64, "SSL_RSA_EXPORT_WITH_RC4_56_SHA", CipherAlgorithmType.Rc4, HashAlgorithmType.Sha1, ExchangeAlgorithmType.RsaKeyX, true, false, 7, 16, 56, 0, 0);
 
 			// Default CipherSuite
 			// scs.Add(0, "SSL_NULL_WITH_NULL_NULL", CipherAlgorithmType.None, HashAlgorithmType.None, true, false, 0, 0, 0, 0, 0);

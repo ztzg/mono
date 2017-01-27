@@ -6,7 +6,8 @@ use strict;
 
 my $builddir = shift || die "Usage: ptestrunner.pl mono_build_dir\n";
 my @errors = ();
-my $total_errors = 0;
+my $total_errors = 0; # this is reset before each test
+my $global_errors = 0;
 my $report;
 
 my $profbuilddir = $builddir . "/mono/profiler";
@@ -14,8 +15,6 @@ my $minibuilddir = $builddir . "/mono/mini";
 
 # Setup the execution environment
 # for the profiler module
-append_path ("LD_LIBRARY_PATH", $profbuilddir . "/.libs");
-append_path ("DYLD_LIBRARY_PATH", $profbuilddir . "/.libs");
 append_path ("DYLD_LIBRARY_PATH", $minibuilddir . "/.libs");
 # for mprof-report
 append_path ("PATH", $profbuilddir);
@@ -104,7 +103,9 @@ check_alloc_traces ($report,
 );
 report_errors ();
 
-exit ($total_errors? 1: 0);
+emit_nunit_report();
+
+exit ($global_errors ? 1 : 0);
 
 # utility functions
 sub append_path {
@@ -154,9 +155,65 @@ sub report_errors
 	foreach my $e (@errors) {
 		print "Error: $e\n";
 		$total_errors++;
+		$global_errors++;
 	}
 	print "Total errors: $total_errors\n" if $total_errors;
 	#print $report;
+}
+
+sub emit_nunit_report
+{
+	use Cwd;
+	use POSIX qw(strftime uname locale_h);
+	use Net::Domain qw(hostname hostfqdn);
+	use locale;
+
+	my $failed = $global_errors ? 1 : 0;
+	my $successbool;
+	my $total = 1;
+	my $mylocale = setlocale (LC_CTYPE);
+	$mylocale = substr($mylocale, 0, index($mylocale, '.'));
+	$mylocale =~ s/_/-/;
+
+	if ($failed > 0) {
+		$successbool = "False";
+	} else {
+		$successbool = "True";
+	}
+	open (my $nunitxml, '>', 'TestResult-profiler.xml') or die "Could not write to 'TestResult-profiler.xml' $!";
+	print $nunitxml "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>\n";
+	print $nunitxml "<!--This file represents the results of running a test suite-->\n";
+	print $nunitxml "<test-results name=\"profiler-tests.dummy\" total=\"$total\" failures=\"$failed\" not-run=\"0\" date=\"" . strftime ("%F", localtime) . "\" time=\"" . strftime ("%T", localtime) . "\">\n";
+	print $nunitxml "  <environment nunit-version=\"2.4.8.0\" clr-version=\"4.0.30319.17020\" os-version=\"Unix " . (uname ())[2]  . "\" platform=\"Unix\" cwd=\"" . getcwd . "\" machine-name=\"" . hostname . "\" user=\"" . getpwuid ($<) . "\" user-domain=\"" . hostfqdn  . "\" />\n";
+	print $nunitxml "  <culture-info current-culture=\"$mylocale\" current-uiculture=\"$mylocale\" />\n";
+	print $nunitxml "  <test-suite name=\"profiler-tests.dummy\" success=\"$successbool\" time=\"0\" asserts=\"0\">\n";
+	print $nunitxml "    <results>\n";
+	print $nunitxml "      <test-suite name=\"MonoTests\" success=\"$successbool\" time=\"0\" asserts=\"0\">\n";
+	print $nunitxml "        <results>\n";
+	print $nunitxml "          <test-suite name=\"profiler\" success=\"$successbool\" time=\"0\" asserts=\"0\">\n";
+	print $nunitxml "            <results>\n";
+	print $nunitxml "              <test-case name=\"MonoTests.profiler.100percentsuccess\" executed=\"True\" success=\"$successbool\" time=\"0\" asserts=\"0\"";
+	if ( $failed > 0) {
+	print $nunitxml ">\n";
+	print $nunitxml "                <failure>\n";
+	print $nunitxml "                  <message><![CDATA[";
+	print $nunitxml "The profiler tests returned an error. Check the log for more details.";
+	print $nunitxml "]]></message>\n";
+	print $nunitxml "                  <stack-trace>\n";
+	print $nunitxml "                  </stack-trace>\n";
+	print $nunitxml "                </failure>\n";
+	print $nunitxml "              </test-case>\n";
+	} else {
+	print $nunitxml " />\n";
+	}
+	print $nunitxml "            </results>\n";
+	print $nunitxml "          </test-suite>\n";
+	print $nunitxml "        </results>\n";
+	print $nunitxml "      </test-suite>\n";
+	print $nunitxml "    </results>\n";
+	print $nunitxml "  </test-suite>\n";
+	print $nunitxml "</test-results>\n";
+	close $nunitxml;
 }
 
 sub get_delim_data

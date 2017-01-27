@@ -11,7 +11,7 @@ RESGEN = resgen2
 profile-check:
 	@:
 
-DEFAULT_REFERENCES = -r:mscorlib.dll
+DEFAULT_REFERENCES = -r:$(topdir)/class/lib/$(PROFILE)/mscorlib.dll
 
 PROFILE_MCS_FLAGS = \
 	-d:NET_1_1 \
@@ -22,18 +22,38 @@ PROFILE_MCS_FLAGS = \
 	-d:NET_4_5 \
 	-d:MONO \
 	-d:DISABLE_CAS_USE \
-	-d:MOBILE \
+	-d:MOBILE,MOBILE_STATIC,MOBILE_LEGACY \
 	-d:FULL_AOT_RUNTIME \
 	-d:DISABLE_REMOTING \
 	-d:DISABLE_COM \
 	-nowarn:1699 \
 	-nostdlib \
-	-lib:$(topdir)/class/lib/$(PROFILE) \
 	$(DEFAULT_REFERENCES) \
 	$(PLATFORM_DEBUG_FLAGS)
 
 FRAMEWORK_VERSION = 2.1
-NO_TEST = yes
+NUNIT_LITE = yes
 
 # the tuner takes care of the install
 NO_INSTALL = yes
+MOBILE_STATIC = yes
+MOBILE_PROFILE = yes
+NO_VTS_TEST = yes
+
+# Note need for trailing comma. If you add, keep it
+PROFILE_TEST_HARNESS_EXCLUDES = MobileNotWorking,
+
+ifndef MONO_DISABLE_GSHAREDVT
+GSHAREDVT_FLAG = -O=gsharedvt
+endif
+
+ifneq ($(MONO_LLVMONLY),)
+AOT_BUILD_FLAGS_PREFIX = --aot=llvmonly,
+AOT_RUN_FLAGS =  --llvmonly
+else
+AOT_BUILD_FLAGS_PREFIX = $(GSHAREDVT_FLAG) --aot=full,
+AOT_RUN_FLAGS = --full-aot
+endif
+
+ALWAYS_AOT = yes
+

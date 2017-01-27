@@ -169,7 +169,11 @@ namespace System.Security.Cryptography {
 				name = "System.Security.Cryptography.X509Certificates.X509Chain, System";
 				break;
 			case "aes":
+#if MOBILE_STATIC
+				name = "System.Security.Cryptography.AesCryptoServiceProvider, System.Core";
+#else
 				name = "System.Security.Cryptography.AesManaged, System.Core";
+#endif
 				break;
 			}
 
@@ -183,6 +187,11 @@ namespace System.Security.Cryptography {
 				// method doesn't throw any exception
 				return null;
 			}
+		}
+
+		internal static string MapNameToOID (string name, object arg)
+		{
+			return MapNameToOID (name);
 		}
 
 		public static string MapNameToOID (string name)

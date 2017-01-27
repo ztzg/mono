@@ -9,6 +9,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 
 using NUnit.Framework;
 
@@ -830,31 +831,37 @@ namespace MonoTests.System.Net.Sockets {
 		{
 			UdpClient client = null;
 			var rnd = new Random ();
-			for (int i = 0; i < 5; i++) {
+			for (int i = 0, max = 5; i < max; i++) {
 				int port = rnd.Next (1025, 65534);
 				try {
 					client = new UdpClient (port);
 					break;
 				} catch (Exception) {
-					if (i == 5)
+					if (i == max - 1)
 						throw;
 				}
 			}
 
-			new Thread(delegate() {
-				Thread.Sleep(2000);
-				client.Close();
-				}).Start();
-
+			ManualResetEvent ready = new ManualResetEvent (false);
 			bool got_exc = false;
-			IPEndPoint ep = new IPEndPoint (IPAddress.Any, 0);
-			try {
-				client.Receive(ref ep);
-			} catch (SocketException) {
-				got_exc = true;
-			} finally {
-				client.Close ();
-			}
+
+			Task receive_task = Task.Factory.StartNew (() => {
+				IPEndPoint ep = new IPEndPoint (IPAddress.Any, 0);
+				try {
+					ready.Set ();
+					client.Receive(ref ep);
+				} catch (SocketException) {
+					got_exc = true;
+				} finally {
+					client.Close ();
+				}
+			});
+
+			ready.WaitOne (2000);
+			Thread.Sleep (20);
+			client.Close();
+
+			Assert.IsTrue (receive_task.Wait (1000));
 			Assert.IsTrue (got_exc);
 		}
 
@@ -1056,6 +1063,26 @@ namespace MonoTests.System.Net.Sockets {
 			Assert.AreEqual (true, client.MulticastLoopback, "MulticastLoopbackDefault");
 
 			client.Close ();
+		}
+
+		[Test] // #6057
+		public void ReceiveIPv6 ()
+		{
+			if (!Socket.OSSupportsIPv6)
+				Assert.Ignore ("IPv6 not enabled.");
+
+			int PORT = 9997;
+			using(var udpClient = new UdpClient (PORT, AddressFamily.InterNetworkV6))
+			using(var udpClient2 = new UdpClient (PORT+1, AddressFamily.InterNetworkV6))
+			{
+				var dataSent = new byte [] {1,2,3};
+				udpClient2.SendAsync (dataSent, dataSent.Length, "::1", PORT);
+
+				IPEndPoint endPoint = new IPEndPoint (IPAddress.IPv6Any, 0);
+				var data = udpClient.Receive (ref endPoint);
+
+				Assert.AreEqual (dataSent.Length, data.Length);
+			}
 		}
 		
 		/* No test for Ttl default as it is platform dependent */

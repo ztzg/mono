@@ -27,13 +27,11 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if NET_4_0
 
 using System;
 using System.Threading;
 using NUnit.Framework;
 using System.Threading.Tasks;
-using MonoTests.System.Threading.Tasks;
 
 namespace MonoTests.System.Threading
 {
@@ -57,8 +55,10 @@ namespace MonoTests.System.Threading
 		{
 			int called = 0;
 			var cts = new CancellationTokenSource (TimeSpan.FromMilliseconds (20));
-			cts.Token.Register (() => called++);
-			Thread.Sleep (50);
+			var mre = new ManualResetEvent (false);
+			cts.Token.Register (() => { called++; mre.Set (); });
+
+			Assert.IsTrue (mre.WaitOne (1000), "Not called in 1000ms");
 			Assert.AreEqual (1, called, "#1");
 		}
 
@@ -67,9 +67,11 @@ namespace MonoTests.System.Threading
 		{
 			int called = 0;
 			var cts = new CancellationTokenSource ();
-			cts.Token.Register (() => called++);
+			var mre = new ManualResetEvent(false);
+			cts.Token.Register (() => { called++; mre.Set (); });
 			cts.CancelAfter (20);
-			Thread.Sleep (50);
+
+			Assert.IsTrue(mre.WaitOne (1000), "Should be cancelled in ~20ms");
 			Assert.AreEqual (1, called, "#1");
 		}
 
@@ -89,10 +91,12 @@ namespace MonoTests.System.Threading
 		{
 			int called = 0;
 			var cts = new CancellationTokenSource ();
-			cts.Token.Register (() => called++);
+			var mre = new ManualResetEvent (false);
+			cts.Token.Register (() => { called++; mre.Set (); });
 			cts.CancelAfter (50);
 			cts.Dispose ();
-			Thread.Sleep (100);
+
+			Assert.IsFalse (mre.WaitOne (100), "Shouldn't have been called");
 			Assert.AreEqual (0, called, "#1");
 		}
 
@@ -447,10 +451,11 @@ namespace MonoTests.System.Threading
 			Assert.IsTrue (canceled, "#3");
 		}
 
+		[Category ("NotWorking")] // why would linked token be imune to ObjectDisposedException on Cancel?
 		[Test]
 		public void ConcurrentCancelLinkedTokenSourceWhileDisposing ()
 		{
-			ParallelTestHelper.Repeat (delegate {
+			for (int i = 0, total = 500; i < total; ++i) {
 				var src = new CancellationTokenSource ();
 				var linked = CancellationTokenSource.CreateLinkedTokenSource (src.Token);
 				var cntd = new CountdownEvent (2);
@@ -470,25 +475,23 @@ namespace MonoTests.System.Threading
 				t2.Start ();
 				t1.Join (500);
 				t2.Join (500);
-			}, 500);
+			}
 		}
 
 #if NET_4_5
 		[Test]
 		public void DisposeRace ()
 		{
-			for (int i = 0; i < 1000; ++i) {
+			for (int i = 0, total = 1000; i < total; ++i) {
 				var c1 = new CancellationTokenSource ();
-				using (c1) {
-					var wh = c1.Token.WaitHandle;
-					c1.CancelAfter (1);
-					Thread.Sleep (1);
-				}
+				var wh = c1.Token.WaitHandle;
+				c1.CancelAfter (1);
+				Thread.Sleep (1);
+				c1.Dispose ();
 			}
 		}
 #endif
 	}
 }
 
-#endif
 

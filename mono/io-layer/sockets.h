@@ -72,7 +72,7 @@ typedef struct
 #define SIO_KEEPALIVE_VALS 0x98000004
 
 typedef gboolean (*WapiDisconnectExFn)(guint32, WapiOverlapped *, guint32,
-					WapiTransmitFileFlags);
+					guint32);
 typedef gboolean (*WapiTransmitFileFn)(guint32, gpointer, guint32, guint32,
 					WapiOverlapped *,
 					WapiTransmitFileBuffers *,
@@ -82,7 +82,7 @@ extern void WSASetLastError(int error);
 extern int WSAGetLastError(void);
 extern int closesocket(guint32 handle);
 
-extern int ioctlsocket(guint32 handle, gint32 command, gpointer arg);
+extern int ioctlsocket(guint32 handle, unsigned long command, gpointer arg);
 extern int WSAIoctl (guint32 handle, gint32 command,
 		     gchar *input, gint i_len,
 		     gchar *output, gint o_len, glong *written,

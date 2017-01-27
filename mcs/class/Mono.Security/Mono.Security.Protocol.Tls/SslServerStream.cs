@@ -31,6 +31,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Mono.Security.Protocol.Tls.Handshake;
+using Mono.Security.Interface;
 
 namespace Mono.Security.Protocol.Tls
 {
@@ -233,16 +234,8 @@ namespace Mono.Security.Protocol.Tls
 			// Send ServerCertificate message
 			this.protocol.SendRecord(HandshakeType.Certificate);
 
-			// If the negotiated cipher is a KeyEx cipher send ServerKeyExchange
-			if (this.context.Negotiating.Cipher.IsExportable)
-			{
-				this.protocol.SendRecord(HandshakeType.ServerKeyExchange);
-			}
-
-			// If the negotiated cipher is a KeyEx cipher or
-			// the client certificate is required send the CertificateRequest message
-			if (this.context.Negotiating.Cipher.IsExportable ||
-				((ServerContext)this.context).ClientCertificateRequired ||
+			// If the client certificate is required send the CertificateRequest message
+			if (((ServerContext)this.context).ClientCertificateRequired ||
 				((ServerContext)this.context).RequestClientCertificate)
 			{
 				this.protocol.SendRecord(HandshakeType.CertificateRequest);

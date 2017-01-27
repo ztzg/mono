@@ -7,6 +7,7 @@
  * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  * Copyright 2011 Xamarin Inc (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -18,8 +19,9 @@
 #include <mono/metadata/mono-debug.h>
 #include <mono/metadata/mono-debug-debugger.h>
 #include <mono/metadata/mono-endian.h>
-#include <mono/metadata/gc-internal.h>
+#include <mono/metadata/gc-internals.h>
 #include <mono/metadata/mempool.h>
+#include <mono/metadata/debug-mono-ppdb.h>
 #include <string.h>
 
 #define ALIGN_TO(val,align) ((((guint64)val) + ((align) - 1)) & ~((align) - 1))
@@ -59,7 +61,6 @@ static GHashTable *data_table_hash;
 
 static mono_mutex_t debugger_lock_mutex;
 
-static int initialized = 0;
 static gboolean is_attached = FALSE;
 
 static MonoDebugHandle     *mono_debug_open_image      (MonoImage *image, const guint8 *raw_contents, int size);
@@ -100,7 +101,7 @@ lookup_data_table (MonoDomain *domain)
 {
 	MonoDebugDataTable *table;
 
-	table = g_hash_table_lookup (data_table_hash, domain);
+	table = (MonoDebugDataTable *)g_hash_table_lookup (data_table_hash, domain);
 	if (!table) {
 		g_error ("lookup_data_table () failed for %p\n", domain);
 		g_assert (table);
@@ -111,6 +112,8 @@ lookup_data_table (MonoDomain *domain)
 static void
 free_debug_handle (MonoDebugHandle *handle)
 {
+	if (handle->ppdb)
+		mono_ppdb_close (handle);
 	if (handle->symfile)
 		mono_debug_close_mono_symbol_file (handle->symfile);
 	/* decrease the refcount added with mono_image_addref () */
@@ -135,7 +138,7 @@ mono_debug_init (MonoDebugFormat format)
 	mono_debug_initialized = TRUE;
 	mono_debug_format = format;
 
-	mono_debugger_initialize ();
+	mono_os_mutex_init_recursive (&debugger_lock_mutex);
 
 	mono_debugger_lock ();
 
@@ -175,14 +178,12 @@ mono_debug_cleanup (void)
 void
 mono_debug_domain_create (MonoDomain *domain)
 {
-	MonoDebugDataTable *table;
-
 	if (!mono_debug_initialized)
 		return;
 
 	mono_debugger_lock ();
 
-	table = create_data_table (domain);
+	create_data_table (domain);
 
 	mono_debugger_unlock ();
 }
@@ -197,7 +198,7 @@ mono_debug_domain_unload (MonoDomain *domain)
 
 	mono_debugger_lock ();
 
-	table = g_hash_table_lookup (data_table_hash, domain);
+	table = (MonoDebugDataTable *)g_hash_table_lookup (data_table_hash, domain);
 	if (!table) {
 		g_warning (G_STRLOC ": unloading unknown domain %p / %d",
 			   domain, mono_domain_get_id (domain));
@@ -216,7 +217,7 @@ mono_debug_domain_unload (MonoDomain *domain)
 static MonoDebugHandle *
 mono_debug_get_image (MonoImage *image)
 {
-	return g_hash_table_lookup (mono_debug_handles, image);
+	return (MonoDebugHandle *)g_hash_table_lookup (mono_debug_handles, image);
 }
 
 void
@@ -261,8 +262,11 @@ mono_debug_open_image (MonoImage *image, const guint8 *raw_contents, int size)
 	handle->image = image;
 	mono_image_addref (image);
 
-	handle->symfile = mono_debug_open_mono_symbols (
-		handle, raw_contents, size, FALSE);
+	/* Try a ppdb file first */
+	handle->ppdb = mono_ppdb_load_file (handle->image, raw_contents, size);
+
+	if (!handle->ppdb)
+		handle->symfile = mono_debug_open_mono_symbols (handle, raw_contents, size, FALSE);
 
 	g_hash_table_insert (mono_debug_handles, image, handle);
 
@@ -300,7 +304,9 @@ lookup_method_func (gpointer key, gpointer value, gpointer user_data)
 	if (data->minfo)
 		return;
 
-	if (handle->symfile)
+	if (handle->ppdb)
+		data->minfo = mono_ppdb_lookup_method (handle, data->method);
+	else if (handle->symfile)
 		data->minfo = mono_debug_symfile_lookup_method (handle, data->method);
 }
 
@@ -427,8 +433,6 @@ mono_debug_add_method (MonoMethod *method, MonoDebugMethodJitInfo *jit, MonoDoma
 {
 	MonoDebugDataTable *table;
 	MonoDebugMethodAddress *address;
-	MonoDebugMethodInfo *minfo;
-	MonoDebugHandle *handle;
 	guint8 buffer [BUFSIZ];
 	guint8 *ptr, *oldptr;
 	guint32 i, size, total_size, max_size;
@@ -437,14 +441,11 @@ mono_debug_add_method (MonoMethod *method, MonoDebugMethodJitInfo *jit, MonoDoma
 
 	table = lookup_data_table (domain);
 
-	handle = mono_debug_get_image (method->klass->image);
-	minfo = mono_debug_lookup_method_internal (method);
-
 	max_size = (5 * 5) + 1 + (10 * jit->num_line_numbers) +
 		(25 + sizeof (gpointer)) * (1 + jit->num_params + jit->num_locals);
 
 	if (max_size > BUFSIZ)
-		ptr = oldptr = g_malloc (max_size);
+		ptr = oldptr = (guint8 *)g_malloc (max_size);
 	else
 		ptr = oldptr = buffer;
 
@@ -482,9 +483,9 @@ mono_debug_add_method (MonoMethod *method, MonoDebugMethodJitInfo *jit, MonoDoma
 	total_size = size + sizeof (MonoDebugMethodAddress);
 
 	if (method_is_dynamic (method)) {
-		address = g_malloc0 (total_size);
+		address = (MonoDebugMethodAddress *)g_malloc0 (total_size);
 	} else {
-		address = mono_mempool_alloc (table->mp, total_size);
+		address = (MonoDebugMethodAddress *)mono_mempool_alloc (table->mp, total_size);
 	}
 
 	address->code_start = jit->code_start;
@@ -515,7 +516,7 @@ mono_debug_remove_method (MonoMethod *method, MonoDomain *domain)
 
 	table = lookup_data_table (domain);
 
-	address = g_hash_table_lookup (table->method_address_hash, method);
+	address = (MonoDebugMethodAddress *)g_hash_table_lookup (table->method_address_hash, method);
 	if (address)
 		g_free (address);
 
@@ -579,7 +580,7 @@ read_variable (MonoDebugVarInfo *var, guint8 *ptr, guint8 **rptr)
 	var->size = read_leb128 (ptr, &ptr);
 	var->begin_scope = read_leb128 (ptr, &ptr);
 	var->end_scope = read_leb128 (ptr, &ptr);
-	READ_UNALIGNED (gpointer, ptr, var->type);
+	READ_UNALIGNED (MonoType *, ptr, var->type);
 	ptr += sizeof (gpointer);
 	*rptr = ptr;
 }
@@ -655,7 +656,7 @@ find_method (MonoMethod *method, MonoDomain *domain)
 	MonoDebugMethodAddress *address;
 
 	table = lookup_data_table (domain);
-	address = g_hash_table_lookup (table->method_address_hash, method);
+	address = (MonoDebugMethodAddress *)g_hash_table_lookup (table->method_address_hash, method);
 
 	if (!address)
 		return NULL;
@@ -751,7 +752,12 @@ mono_debug_lookup_source_location (MonoMethod *method, guint32 address, MonoDoma
 
 	mono_debugger_lock ();
 	minfo = mono_debug_lookup_method_internal (method);
-	if (!minfo || !minfo->handle || !minfo->handle->symfile || !mono_debug_symfile_is_loaded (minfo->handle->symfile)) {
+	if (!minfo || !minfo->handle) {
+		mono_debugger_unlock ();
+		return NULL;
+	}
+
+	if (!minfo->handle->ppdb && (!minfo->handle->symfile || !mono_debug_symfile_is_loaded (minfo->handle->symfile))) {
 		mono_debugger_unlock ();
 		return NULL;
 	}
@@ -762,7 +768,24 @@ mono_debug_lookup_source_location (MonoMethod *method, guint32 address, MonoDoma
 		return NULL;
 	}
 
-	location = mono_debug_symfile_lookup_location (minfo, offset);
+	if (minfo->handle->ppdb)
+		location = mono_ppdb_lookup_location (minfo, offset);
+	else
+		location = mono_debug_symfile_lookup_location (minfo, offset);
+	mono_debugger_unlock ();
+	return location;
+}
+
+MonoDebugSourceLocation *
+mono_debug_method_lookup_location (MonoDebugMethodInfo *minfo, int il_offset)
+{
+	MonoDebugSourceLocation *location;
+
+	mono_debugger_lock ();
+	if (minfo->handle->ppdb)
+		location = mono_ppdb_lookup_location (minfo, il_offset);
+	else
+		location = mono_debug_symfile_lookup_location (minfo, il_offset);
 	mono_debugger_unlock ();
 	return location;
 }
@@ -771,7 +794,7 @@ mono_debug_lookup_source_location (MonoMethod *method, guint32 address, MonoDoma
  * mono_debug_lookup_locals:
  *
  *   Return information about the local variables of MINFO.
- * The result should be freed using mono_debug_symfile_free_locals ().
+ * The result should be freed using mono_debug_free_locals ().
  */
 MonoDebugLocalsInfo*
 mono_debug_lookup_locals (MonoMethod *method)
@@ -784,15 +807,39 @@ mono_debug_lookup_locals (MonoMethod *method)
 
 	mono_debugger_lock ();
 	minfo = mono_debug_lookup_method_internal (method);
-	if (!minfo || !minfo->handle || !minfo->handle->symfile || !mono_debug_symfile_is_loaded (minfo->handle->symfile)) {
+	if (!minfo || !minfo->handle) {
 		mono_debugger_unlock ();
 		return NULL;
 	}
 
-	res = mono_debug_symfile_lookup_locals (minfo);
+	if (minfo->handle->ppdb) {
+		res = mono_ppdb_lookup_locals (minfo);
+	} else {
+		if (!minfo->handle->symfile || !mono_debug_symfile_is_loaded (minfo->handle->symfile))
+			res = NULL;
+		else
+			res = mono_debug_symfile_lookup_locals (minfo);
+	}
 	mono_debugger_unlock ();
 
 	return res;
+}
+
+/*
+ * mono_debug_free_locals:
+ *
+ *   Free all the data allocated by mono_debug_lookup_locals ().
+ */
+void
+mono_debug_free_locals (MonoDebugLocalsInfo *info)
+{
+	int i;
+
+	for (i = 0; i < info->num_locals; ++i)
+		g_free (info->locals [i].name);
+	g_free (info->locals);
+	g_free (info->code_blocks);
+	g_free (info);
 }
 
 /**
@@ -914,22 +961,15 @@ open_symfile_from_bundle (MonoImage *image)
 void
 mono_debugger_lock (void)
 {
-	g_assert (initialized);
-	mono_mutex_lock (&debugger_lock_mutex);
+	g_assert (mono_debug_initialized);
+	mono_os_mutex_lock (&debugger_lock_mutex);
 }
 
 void
 mono_debugger_unlock (void)
 {
-	g_assert (initialized);
-	mono_mutex_unlock (&debugger_lock_mutex);
-}
-
-void
-mono_debugger_initialize ()
-{
-	mono_mutex_init_recursive (&debugger_lock_mutex);
-	initialized = 1;
+	g_assert (mono_debug_initialized);
+	mono_os_mutex_unlock (&debugger_lock_mutex);
 }
 
 /**
@@ -941,4 +981,13 @@ mono_bool
 mono_debug_enabled (void)
 {
 	return mono_debug_format != MONO_DEBUG_FORMAT_NONE;
+}
+
+void
+mono_debug_get_seq_points (MonoDebugMethodInfo *minfo, char **source_file, GPtrArray **source_file_list, int **source_files, MonoSymSeqPoint **seq_points, int *n_seq_points)
+{
+	if (minfo->handle->ppdb)
+		mono_ppdb_get_seq_points (minfo, source_file, source_file_list, source_files, seq_points, n_seq_points);
+	else
+		mono_debug_symfile_get_seq_points (minfo, source_file, source_file_list, source_files, seq_points, n_seq_points);
 }

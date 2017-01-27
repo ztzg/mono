@@ -5,6 +5,7 @@
  *   Zoltan Varga (vargaz@gmail.com)
  *
  * Copyright 2007-2009 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -37,7 +38,7 @@
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/threads-types.h>
-#include <mono/metadata/gc-internal.h>
+#include <mono/metadata/gc-internals.h>
 #include <mono/utils/mono-threads.h>
 #include "attach.h"
 
@@ -99,10 +100,6 @@ static gboolean stop_receiver_thread;
 
 static gboolean needs_to_start, started;
 
-#define agent_lock() mono_mutex_lock (&agent_mutex)
-#define agent_unlock() mono_mutex_unlock (&agent_mutex)
-static mono_mutex_t agent_mutex;
-
 static void transport_connect (void);
 
 static guint32 WINAPI receiver_thread (void *arg);
@@ -127,15 +124,6 @@ decode_int (guint8 *buf, guint8 **endbuf, guint8 *limit)
 	g_assert (*endbuf <= limit);
 
 	return (((int)buf [0]) << 0) | (((int)buf [1]) << 8) | (((int)buf [2]) << 16) | (((int)buf [3]) << 24);
-}
-
-static inline int
-decode_short (guint8 *buf, guint8 **endbuf, guint8 *limit)
-{
-	*endbuf = buf + 2;
-	g_assert (*endbuf <= limit);
-
-	return (((int)buf [0]) << 0) | (((int)buf [1]) << 8);
 }
 
 static char*
@@ -165,7 +153,7 @@ decode_string_value (guint8 *buf, guint8 **endbuf, guint8 *limit)
 
 	g_assert (length < (1 << 16));
 
-	s = g_malloc (length + 1);
+	s = (char *)g_malloc (length + 1);
 
 	g_assert (p + length <= limit);
 	memcpy (s, p, length);
@@ -193,8 +181,6 @@ mono_attach_parse_options (char *options)
 void
 mono_attach_init (void)
 {
-	mono_mutex_init_recursive (&agent_mutex);
-
 	config.enabled = TRUE;
 }
 
@@ -280,6 +266,7 @@ mono_attach_cleanup (void)
 static int
 mono_attach_load_agent (MonoDomain *domain, char *agent, char *args, MonoObject **exc)
 {
+	MonoError error;
 	MonoAssembly *agent_assembly;
 	MonoImage *image;
 	MonoMethod *method;
@@ -307,24 +294,38 @@ mono_attach_load_agent (MonoDomain *domain, char *agent, char *args, MonoObject 
 		return 1;
 	}
 
-	method = mono_get_method (image, entry, NULL);
+	method = mono_get_method_checked (image, entry, NULL, NULL, &error);
 	if (method == NULL){
-		g_print ("The entry point method of assembly '%s' could not be loaded\n", agent);
+		g_print ("The entry point method of assembly '%s' could not be loaded due to %s\n", agent, mono_error_get_message (&error));
+		mono_error_cleanup (&error);
 		g_free (agent);
 		return 1;
 	}
 	
+	
+	main_args = (MonoArray*)mono_array_new_checked (domain, mono_defaults.string_class, (args == NULL) ? 0 : 1, &error);
+	if (main_args == NULL) {
+		g_print ("Could not allocate main method args due to %s\n", mono_error_get_message (&error));
+		mono_error_cleanup (&error);
+		g_free (agent);
+		return 1;
+	}
+
 	if (args) {
-		main_args = (MonoArray*)mono_array_new (domain, mono_defaults.string_class, 1);
 		mono_array_set (main_args, MonoString*, 0, mono_string_new (domain, args));
-	} else {
-		main_args = (MonoArray*)mono_array_new (domain, mono_defaults.string_class, 0);
+	}
+
+
+	pa [0] = main_args;
+	mono_runtime_try_invoke (method, NULL, pa, exc, &error);
+	if (!is_ok (&error)) {
+		g_print ("The entry point method of assembly '%s' could not be executed due to %s\n", agent, mono_error_get_message (&error));
+		mono_error_cleanup (&error);
+		g_free (agent);
+		return 1;
 	}
 
 	g_free (agent);
-
-	pa [0] = main_args;
-	mono_runtime_invoke (method, NULL, pa, exc);
 
 	return 0;
 }
@@ -486,10 +487,13 @@ transport_start_receive (void)
 static guint32 WINAPI
 receiver_thread (void *arg)
 {
+	MonoError error;
 	int res, content_len;
 	guint8 buffer [256];
 	guint8 *p, *p_end;
 	MonoObject *exc;
+
+	mono_native_thread_set_name (mono_native_thread_id_get (), "Attach receiver");
 
 	printf ("attach: Listening on '%s'...\n", server_uri);
 
@@ -501,11 +505,13 @@ receiver_thread (void *arg)
 
 		printf ("attach: Connected.\n");
 
-		mono_thread_attach (mono_get_root_domain ());
+		MonoThread *thread = mono_thread_attach (mono_get_root_domain ());
+		mono_thread_set_name_internal (thread->internal_thread, mono_string_new (mono_get_root_domain (), "Attach receiver"), TRUE, &error);
+		mono_error_assert_ok (&error);
 		/* Ask the runtime to not abort this thread */
 		//mono_thread_current ()->flags |= MONO_THREAD_FLAG_DONT_MANAGE;
 		/* Ask the runtime to not wait for this thread */
-		mono_thread_internal_current ()->state |= ThreadState_Background;
+		thread->internal_thread->state |= ThreadState_Background;
 
 		while (TRUE) {
 			char *cmd, *agent_name, *agent_args;
@@ -539,7 +545,7 @@ receiver_thread (void *arg)
 			content_len = decode_int (p, &p, p_end);
 
 			/* Read message body */
-			body = g_malloc (content_len);
+			body = (guint8 *)g_malloc (content_len);
 			res = read (conn_fd, body, content_len);
 			
 			p = body;

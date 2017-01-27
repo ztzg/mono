@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Collections.Generic;
 
+[AttributeUsageAttribute(AttributeTargets.All, Inherited = true, AllowMultiple = true)]
 public class CategoryAttribute : Attribute
 {
 	public CategoryAttribute (string category) {
@@ -31,6 +32,7 @@ public class TestDriver {
 
 		var exclude = new Dictionary<string, string> ();
 		List<string> run_only = new List<string> ();
+		List<string> exclude_test = new List<string> ();
 		if (args != null && args.Length > 0) {
 			for (j = 0; j < args.Length;) {
 				if (args [j] == "--time") {
@@ -49,6 +51,9 @@ public class TestDriver {
 					j += 1;
 				} else if (args [j] == "--exclude") {
 					exclude [args [j + 1]] = args [j + 1];
+					j += 2;
+				} else if (args [j] == "--exclude-test") {
+					exclude_test.Add (args [j + 1]);
 					j += 2;
 				} else if (args [j] == "--run-only") {
 					run_only.Add (args [j + 1]);
@@ -77,9 +82,15 @@ public class TestDriver {
 					if (!found)
 						continue;
 				}
-				if (exclude.Count > 0) {
+				if (exclude.Count > 0 || exclude_test.Count > 0) {
 					var attrs = methods [i].GetCustomAttributes (typeof (CategoryAttribute), false);
 					bool skip = false;
+					for (j = 0; j < exclude_test.Count; j++) {
+						if (name.EndsWith (exclude_test [j])) {
+							skip = true;
+							break;
+						}
+					}
 					foreach (CategoryAttribute attr in attrs) {
 						if (exclude.ContainsKey (attr.Category))
 							skip = true;
@@ -132,3 +143,65 @@ public class TestDriver {
 	}
 }
 
+/// Provide tests with the ability to find out how much time they have to run before being timed out.
+public class TestTimeout {
+	const string ENV_TIMEOUT = "TEST_DRIVER_TIMEOUT_SEC";
+	private readonly TimeSpan availableTime;
+	private TimeSpan slack;
+	private DateTime startTime;
+
+	/// <summary>
+	///   How much time the test runner provided for us or TimeSpan.Zero if there is no bound.
+	/// </summary>
+	public TimeSpan AvailableTime { get { return availableTime; } }
+
+	public DateTime StartTime { get { return startTime; } }
+
+	/// <summary> Extra time to add when deciding if there
+	///   is still time to run.  Bigger slack means less
+	///   time left.
+	/// </summary>
+	public TimeSpan Slack {
+		get { return slack; }
+		set { slack = value; }
+	}
+
+	public TestTimeout () {
+		availableTime = initializeAvailableTime ();
+		slack = defaultSlack ();
+	}
+
+	/// <summary>
+	///    Consider the test started.
+	/// </summary>
+	public void Start ()
+	{
+		startTime = DateTime.UtcNow;
+	}
+
+	public bool HaveTimeLeft ()
+	{
+		if (availableTime == TimeSpan.Zero)
+			return true;
+		var t = DateTime.UtcNow;
+		var finishTime = startTime + availableTime - slack;
+		return (t < finishTime);
+	}
+
+	private TimeSpan defaultSlack ()
+	{
+		return TimeSpan.FromSeconds (5);
+	}
+
+	private TimeSpan initializeAvailableTime ()
+	{
+		var e = System.Environment.GetEnvironmentVariable(ENV_TIMEOUT);
+		double d;
+		if (Double.TryParse(e, out d)) {
+			return TimeSpan.FromSeconds(d);
+		} else {
+			return TimeSpan.Zero;
+		}
+	}
+
+}

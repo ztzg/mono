@@ -40,6 +40,8 @@ using System.Net.Security;
 using System.Net.Cache;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using Mono.Net;
 
 #if NET_2_1
 using ConfigurationException = System.ArgumentException;
@@ -57,6 +59,8 @@ namespace System.Net
 		static bool isDefaultWebProxySet;
 		static IWebProxy defaultWebProxy;
 		static RequestCachePolicy defaultCachePolicy;
+
+		internal const int DefaultTimeout = 100000;
 
 		static WebRequest ()
 		{
@@ -332,6 +336,19 @@ namespace System.Net
 			throw GetMustImplement ();
 		}
 		
+		// Takes an ArrayList of fileglob-formatted strings and returns an array of Regex-formatted strings
+		private static string[] CreateBypassList (ArrayList al)
+		{
+			string[] result = al.ToArray (typeof (string)) as string[];
+			for (int c = 0; c < result.Length; c++)
+			{
+				result [c] = "^" +
+					Regex.Escape (result [c]).Replace (@"\*", ".*").Replace (@"\?", ".") +
+					"$";
+			}
+			return result;
+		}
+
 		[MonoTODO("Look in other places for proxy config info")]
 		public static IWebProxy GetSystemWebProxy ()
 		{
@@ -375,7 +392,7 @@ namespace System.Net
 						}
 					}
 					
-					return new WebProxy (strHttpProxy, bBypassOnLocal, al.ToArray (typeof(string)) as string[]);
+					return new WebProxy (strHttpProxy, bBypassOnLocal, CreateBypassList (al));
 				}
 			} else {
 #endif
@@ -425,7 +442,7 @@ namespace System.Net
 							}
 						}
 						
-						return new WebProxy (uri, bBypassOnLocal, al.ToArray (typeof(string)) as string[]);
+						return new WebProxy (uri, bBypassOnLocal, CreateBypassList (al));
 					} catch (UriFormatException) {
 					}
 				}
@@ -439,12 +456,11 @@ namespace System.Net
 
 		void ISerializable.GetObjectData (SerializationInfo serializationInfo, StreamingContext streamingContext)
 		{
-			throw new NotSupportedException ();
+			GetObjectData(serializationInfo, streamingContext);
 		}
 
 		protected virtual void GetObjectData (SerializationInfo serializationInfo, StreamingContext streamingContext)
 		{
-			throw GetMustImplement ();
 		}
 
 		public static bool RegisterPrefix (string prefix, IWebRequestCreate creator)
@@ -528,6 +544,5 @@ namespace System.Net
 		{
 			return Task<WebResponse>.Factory.FromAsync (BeginGetResponse, EndGetResponse, null);
 		}
-
 	}
 }

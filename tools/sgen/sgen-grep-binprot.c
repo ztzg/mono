@@ -1,14 +1,53 @@
+/*
+ * sgen-grep-binprot.c: Platform specific binary protocol entries reader
+ *
+ * Copyright (C) 2016 Xamarin Inc
+ *
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <glib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <config.h>
+#include "sgen-entry-stream.h"
+#include "sgen-grep-binprot.h"
 
-#define SGEN_BINARY_PROTOCOL
-#define MONO_INTERNAL
+#ifdef BINPROT_HAS_HEADER
+#define PACKED_SUFFIX	p
+#else
+#define PROTOCOL_STRUCT_ATTR
+#define PACKED_SUFFIX
+#endif
 
-#include <mono/metadata/sgen-protocol.h>
+#ifndef BINPROT_SIZEOF_VOID_P
+#define BINPROT_SIZEOF_VOID_P SIZEOF_VOID_P
+#define ARCH_SUFFIX
+#endif
+
+#if BINPROT_SIZEOF_VOID_P == 4
+typedef int32_t mword;
+#define MWORD_FORMAT_SPEC_D PRId32
+#define MWORD_FORMAT_SPEC_P PRIx32
+#ifndef ARCH_SUFFIX
+#define ARCH_SUFFIX	32
+#endif
+#else
+typedef int64_t mword;
+#define MWORD_FORMAT_SPEC_D PRId64
+#define MWORD_FORMAT_SPEC_P PRIx64
+#ifndef ARCH_SUFFIX
+#define ARCH_SUFFIX	64
+#endif
+#endif
+#define TYPE_SIZE	mword
+#define TYPE_POINTER	mword
+#include <mono/sgen/sgen-protocol.h>
 
 #define SGEN_PROTOCOL_EOF	255
 
@@ -16,59 +55,6 @@
 #define WORKER(t)	((t) & 0x80)
 
 #define MAX_ENTRY_SIZE (1 << 10)
-#define BUFFER_SIZE (1 << 20)
-
-typedef struct {
-	int file;
-	char *buffer;
-	const char *end;
-	const char *pos;
-} EntryStream;
-
-static void
-init_stream (EntryStream *stream, int file)
-{
-	stream->file = file;
-	stream->buffer = g_malloc0 (BUFFER_SIZE);
-	stream->end = stream->buffer + BUFFER_SIZE;
-	stream->pos = stream->end;
-}
-
-static void
-close_stream (EntryStream *stream)
-{
-	g_free (stream->buffer);
-}
-
-static gboolean
-refill_stream (EntryStream *in, size_t size)
-{
-	size_t remainder = in->end - in->pos;
-	ssize_t refilled;
-	g_assert (size > 0);
-	g_assert (in->pos >= in->buffer);
-	if (in->pos + size <= in->end)
-		return TRUE;
-	memmove (in->buffer, in->pos, remainder);
-	in->pos = in->buffer;
-	refilled = read (in->file, in->buffer + remainder, BUFFER_SIZE - remainder);
-	if (refilled < 0)
-		return FALSE;
-	g_assert (refilled + remainder <= BUFFER_SIZE);
-	in->end = in->buffer + refilled + remainder;
-	return in->end - in->buffer >= size;
-}
-
-static ssize_t
-read_stream (EntryStream *stream, void *out, size_t size)
-{
-	if (refill_stream (stream, size)) {
-		memcpy (out, stream->pos, size);
-		stream->pos += size;
-		return size;
-	}
-	return 0;
-}
 
 static int
 read_entry (EntryStream *stream, void *data)
@@ -110,8 +96,6 @@ read_entry (EntryStream *stream, void *data)
 #define BEGIN_PROTOCOL_ENTRY_HEAVY6(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6) \
 	BEGIN_PROTOCOL_ENTRY6 (method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6)
 
-#define FLUSH()
-
 #define DEFAULT_PRINT()
 #define CUSTOM_PRINT(_)
 
@@ -120,9 +104,10 @@ read_entry (EntryStream *stream, void *data)
 #define IS_VTABLE_MATCH(_)
 
 #define END_PROTOCOL_ENTRY
+#define END_PROTOCOL_ENTRY_FLUSH
 #define END_PROTOCOL_ENTRY_HEAVY
 
-#include <mono/metadata/sgen-protocol-def.h>
+#include <mono/sgen/sgen-protocol-def.h>
 
 	default: assert (0);
 	}
@@ -169,8 +154,6 @@ is_always_match (int type)
 #define BEGIN_PROTOCOL_ENTRY_HEAVY6(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6) \
 	BEGIN_PROTOCOL_ENTRY6 (method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6)
 
-#define FLUSH()
-
 #define DEFAULT_PRINT()
 #define CUSTOM_PRINT(_)
 
@@ -180,9 +163,10 @@ is_always_match (int type)
 #define IS_VTABLE_MATCH(_)
 
 #define END_PROTOCOL_ENTRY
+#define END_PROTOCOL_ENTRY_FLUSH
 #define END_PROTOCOL_ENTRY_HEAVY
 
-#include <mono/metadata/sgen-protocol-def.h>
+#include <mono/sgen/sgen-protocol-def.h>
 
 	default: assert (0);
 	}
@@ -207,6 +191,7 @@ typedef struct {
 #define TYPE_LONGLONG 1
 #define TYPE_SIZE 2
 #define TYPE_POINTER 3
+#define TYPE_BOOL 4
 
 static void
 print_entry_content (int entries_size, PrintEntry *entries, gboolean color_output)
@@ -225,10 +210,13 @@ print_entry_content (int entries_size, PrintEntry *entries, gboolean color_outpu
 			printf ("%lld", *(long long*) entries [i].data);
 			break;
 		case TYPE_SIZE:
-			printf ("%lu", *(size_t*) entries [i].data);
+			printf ("%"MWORD_FORMAT_SPEC_D, *(mword*) entries [i].data);
 			break;
 		case TYPE_POINTER:
-			printf ("%p", *(gpointer*) entries [i].data);
+			printf ("0x%"MWORD_FORMAT_SPEC_P, *(mword*) entries [i].data);
+			break;
+		case TYPE_BOOL:
+			printf ("%s", *(gboolean*) entries [i].data ? "true" : "false");
 			break;
 		default:
 			assert (0);
@@ -398,8 +386,6 @@ print_entry (int type, void *data, int num_nums, int *match_indices, gboolean co
 #define BEGIN_PROTOCOL_ENTRY_HEAVY6(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6) \
 	BEGIN_PROTOCOL_ENTRY6 (method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6)
 
-#define FLUSH()
-
 #define DEFAULT_PRINT() \
 	print_entry_content (pes_size, pes, color_output);
 #define CUSTOM_PRINT(print) \
@@ -413,10 +399,12 @@ print_entry (int type, void *data, int num_nums, int *match_indices, gboolean co
 		printf ("\n"); \
 		break; \
 	}
+#define END_PROTOCOL_ENTRY_FLUSH \
+	END_PROTOCOL_ENTRY
 #define END_PROTOCOL_ENTRY_HEAVY \
 	END_PROTOCOL_ENTRY
 
-#include <mono/metadata/sgen-protocol-def.h>
+#include <mono/sgen/sgen-protocol-def.h>
 
 	default: assert (0);
 	}
@@ -429,13 +417,13 @@ print_entry (int type, void *data, int num_nums, int *match_indices, gboolean co
 
 #define TYPE_INT int
 #define TYPE_LONGLONG long long
-#define TYPE_SIZE size_t
-#define TYPE_POINTER gpointer
+#define TYPE_SIZE mword
+#define TYPE_POINTER mword
 
 static gboolean
-matches_interval (gpointer ptr, gpointer start, int size)
+matches_interval (mword ptr, mword start, int size)
 {
-	return ptr >= start && (char*)ptr < (char*)start + size;
+	return ptr >= start && ptr < start + size;
 }
 
 /* Returns the index of the field where a match was found,
@@ -443,7 +431,7 @@ matches_interval (gpointer ptr, gpointer start, int size)
  * BINARY_PROTOCOL_MATCH for a match with no index.
  */
 static int
-match_index (gpointer ptr, int type, void *data)
+match_index (mword ptr, int type, void *data)
 {
 	switch (TYPE (type)) {
 
@@ -483,8 +471,6 @@ match_index (gpointer ptr, int type, void *data)
 #define BEGIN_PROTOCOL_ENTRY_HEAVY6(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6) \
 	BEGIN_PROTOCOL_ENTRY6 (method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6)
 
-#define FLUSH()
-
 #define DEFAULT_PRINT()
 #define CUSTOM_PRINT(_)
 
@@ -496,17 +482,19 @@ match_index (gpointer ptr, int type, void *data)
 #define END_PROTOCOL_ENTRY \
 		break; \
 	}
+#define END_PROTOCOL_ENTRY_FLUSH \
+	END_PROTOCOL_ENTRY
 #define END_PROTOCOL_ENTRY_HEAVY \
 	END_PROTOCOL_ENTRY
 
-#include <mono/metadata/sgen-protocol-def.h>
+#include <mono/sgen/sgen-protocol-def.h>
 
 	default: assert (0);
 	}
 }
 
 static gboolean
-is_vtable_match (gpointer ptr, int type, void *data)
+is_vtable_match (mword ptr, int type, void *data)
 {
 	switch (TYPE (type)) {
 
@@ -546,8 +534,6 @@ is_vtable_match (gpointer ptr, int type, void *data)
 #define BEGIN_PROTOCOL_ENTRY_HEAVY6(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6) \
 	BEGIN_PROTOCOL_ENTRY6 (method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6)
 
-#define FLUSH()
-
 #define DEFAULT_PRINT()
 #define CUSTOM_PRINT(_)
 
@@ -559,10 +545,12 @@ is_vtable_match (gpointer ptr, int type, void *data)
 #define END_PROTOCOL_ENTRY \
 		break; \
 	}
+#define END_PROTOCOL_ENTRY_FLUSH \
+	END_PROTOCOL_ENTRY
 #define END_PROTOCOL_ENTRY_HEAVY \
 	END_PROTOCOL_ENTRY
 
-#include <mono/metadata/sgen-protocol-def.h>
+#include <mono/sgen/sgen-protocol-def.h>
 
 	default: assert (0);
 	}
@@ -573,56 +561,55 @@ is_vtable_match (gpointer ptr, int type, void *data)
 #undef TYPE_SIZE
 #undef TYPE_POINTER
 
-int
-main (int argc, char *argv[])
+static gboolean
+sgen_binary_protocol_read_header (EntryStream *stream)
+{
+#ifdef BINPROT_HAS_HEADER
+	char data [MAX_ENTRY_SIZE];
+	int type = read_entry (stream, data);
+	if (type == SGEN_PROTOCOL_EOF)
+		return FALSE;
+	if (type == PROTOCOL_ID (binary_protocol_header)) {
+		PROTOCOL_STRUCT (binary_protocol_header) * str = (PROTOCOL_STRUCT (binary_protocol_header) *) data;
+		if (str->check == PROTOCOL_HEADER_CHECK && str->ptr_size == BINPROT_SIZEOF_VOID_P)
+			return TRUE;
+	}
+	return FALSE;
+#else
+	/*
+	 * This implementation doesn't account for the presence of a header,
+	 * reading all the entries with the default configuration of the host
+	 * machine. It has to be used only after all other implementations
+	 * fail to identify a header, for backward compatibility.
+	 */
+	return TRUE;
+#endif
+}
+
+#define CONC(A, B) CONC_(A, B)
+#define CONC_(A, B) A##B
+#define GREP_ENTRIES_FUNCTION_NAME CONC(sgen_binary_protocol_grep_entries, CONC(ARCH_SUFFIX,PACKED_SUFFIX))
+
+gboolean
+GREP_ENTRIES_FUNCTION_NAME (EntryStream *stream, int num_nums, long nums [], int num_vtables, long vtables [],
+			gboolean dump_all, gboolean pause_times, gboolean color_output, unsigned long long first_entry_to_consider)
 {
 	int type;
 	void *data = g_malloc0 (MAX_ENTRY_SIZE);
-	int num_args = argc - 1;
-	int num_nums = 0;
-	int num_vtables = 0;
 	int i;
-	long nums [num_args];
-	long vtables [num_args];
-	gboolean dump_all = FALSE;
-	gboolean pause_times = FALSE;
 	gboolean pause_times_stopped = FALSE;
 	gboolean pause_times_concurrent = FALSE;
 	gboolean pause_times_finish = FALSE;
-	gboolean color_output = FALSE;
 	long long pause_times_ts = 0;
-	const char *input_path = NULL;
-	int input_file;
-	EntryStream stream;
+	unsigned long long entry_index;
 
-	for (i = 0; i < num_args; ++i) {
-		char *arg = argv [i + 1];
-		char *next_arg = argv [i + 2];
-		if (!strcmp (arg, "--all")) {
-			dump_all = TRUE;
-		} else if (!strcmp (arg, "--pause-times")) {
-			pause_times = TRUE;
-		} else if (!strcmp (arg, "-v") || !strcmp (arg, "--vtable")) {
-			vtables [num_vtables++] = strtoul (next_arg, NULL, 16);
-			++i;
-		} else if (!strcmp (arg, "-c") || !strcmp (arg, "--color")) {
-			color_output = TRUE;
-		} else if (!strcmp (arg, "-i") || !strcmp (arg, "--input")) {
-			input_path = next_arg;
-			++i;
-		} else {
-			nums [num_nums++] = strtoul (arg, NULL, 16);
-		}
-	}
+	if (!sgen_binary_protocol_read_header (stream))
+		return FALSE;
 
-	if (dump_all)
-		assert (!pause_times);
-	if (pause_times)
-		assert (!dump_all);
-
-	input_file = input_path ? open (input_path, O_RDONLY) : STDIN_FILENO;
-	init_stream (&stream, input_file);
-	while ((type = read_entry (&stream, data)) != SGEN_PROTOCOL_EOF) {
+	entry_index = 0;
+	while ((type = read_entry (stream, data)) != SGEN_PROTOCOL_EOF) {
+		if (entry_index < first_entry_to_consider)
+			goto next_entry;
 		if (pause_times) {
 			switch (type) {
 			case PROTOCOL_ID (binary_protocol_world_stopping): {
@@ -656,30 +643,30 @@ main (int argc, char *argv[])
 		} else {
 			int match_indices [num_nums + 1];
 			gboolean match = is_always_match (type);
-			match_indices [num_nums] = num_nums == 0 ? match_index (NULL, type, data) : BINARY_PROTOCOL_NO_MATCH;
+			match_indices [num_nums] = num_nums == 0 ? match_index (0, type, data) : BINARY_PROTOCOL_NO_MATCH;
 			match = match_indices [num_nums] != BINARY_PROTOCOL_NO_MATCH;
 			for (i = 0; i < num_nums; ++i) {
-				match_indices [i] = match_index ((gpointer) nums [i], type, data);
+				match_indices [i] = match_index ((mword) nums [i], type, data);
 				match = match || match_indices [i] != BINARY_PROTOCOL_NO_MATCH;
 			}
 			if (!match) {
 				for (i = 0; i < num_vtables; ++i) {
-					if (is_vtable_match ((gpointer) vtables [i], type, data)) {
+					if (is_vtable_match ((mword) vtables [i], type, data)) {
 						match = TRUE;
 						break;
 					}
 				}
 			}
+			if (match || dump_all)
+				printf ("%12lld ", entry_index);
 			if (dump_all)
 				printf (match ? "* " : "  ");
 			if (match || dump_all)
 				print_entry (type, data, num_nums, match_indices, color_output);
 		}
+	next_entry:
+		++entry_index;
 	}
-	close_stream (&stream);
-	if (input_path)
-		close (input_file);
 	g_free (data);
-
-	return 0;
+	return TRUE;
 }

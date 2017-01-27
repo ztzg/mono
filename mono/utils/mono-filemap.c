@@ -5,6 +5,7 @@
  *   Paolo Molaro (lupus@ximian.com)
  *
  * Copyright 2008-2008 Novell, Inc.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "config.h"
@@ -35,7 +36,10 @@ mono_file_map_open (const char* name)
 	g_free (wname);
 	return result;
 #else
-	return (MonoFileMap *)fopen (name, "rb");
+	int fd = open (name, O_RDONLY);
+	if (fd < 0)
+		return NULL;
+	return (MonoFileMap *)(size_t)fd;
 #endif
 }
 
@@ -43,7 +47,7 @@ guint64
 mono_file_map_size (MonoFileMap *fmap)
 {
 	struct stat stat_buf;
-	if (fstat (fileno ((FILE*)fmap), &stat_buf) < 0)
+	if (fstat (mono_file_map_fd (fmap), &stat_buf) < 0)
 		return 0;
 	return stat_buf.st_size;
 }
@@ -51,13 +55,21 @@ mono_file_map_size (MonoFileMap *fmap)
 int
 mono_file_map_fd (MonoFileMap *fmap)
 {
+#ifdef WIN32
 	return fileno ((FILE*)fmap);
+#else
+	return (int)(size_t)fmap;
+#endif
 }
 
 int 
 mono_file_map_close (MonoFileMap *fmap)
 {
+#ifdef WIN32
 	return fclose ((FILE*)fmap);
+#else
+	return close (mono_file_map_fd (fmap));
+#endif
 }
 
 #if !defined (HOST_WIN32)

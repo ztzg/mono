@@ -50,12 +50,16 @@ namespace System.Runtime.Caching
 
 		protected void Add (MemoryCacheEntry entry)
 		{
-			entries.Add (entry);
+			lock (entries) {
+				entries.Add (entry);
+			}
 		}
 
 		protected void Remove (MemoryCacheEntry entry)
 		{
-			entries.Remove (entry);
+			lock (entries) {
+				entries.Remove (entry);
+			}
 		}
 
 		protected int FlushItems (DateTime limit, CacheEntryRemovedReason reason, bool blockInsert, int count = int.MaxValue)
@@ -64,15 +68,17 @@ namespace System.Runtime.Caching
 			if (blockInsert)
 				store.BlockInsert ();
 
-			foreach (var entry in entries) {
-				if (helper.GetDateTime (entry) > limit || flushedItems >= count)
-					break;
+			lock (entries) {
+				foreach (var entry in entries) {
+					if (helper.GetDateTime (entry) > limit || flushedItems >= count)
+						break;
 
-				flushedItems++;
+					flushedItems++;
+				}
+
+				for (var f = 0; f < flushedItems; f++)
+					store.Remove (entries.Min, null, reason);
 			}
-
-			for (var f = 0; f < flushedItems; f++)
-				store.Remove (entries.Min, null, reason);
 
 			if (blockInsert)
 				store.UnblockInsert ();

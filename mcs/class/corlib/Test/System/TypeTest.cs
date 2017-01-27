@@ -3,8 +3,10 @@
 // Authors:
 // 	Zoltan Varga (vargaz@freemail.hu)
 //  Patrik Torstensson
+//  Aleksey Kliger (aleksey@xamarin.com)
 //
 // (C) 2003 Ximian, Inc.  http://www.ximian.com
+// Copyright (C) 2015 Xamarin, Inc. (http://www.xamarin.com)
 // 
 
 using NUnit.Framework;
@@ -14,7 +16,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-#if !MONOTOUCH
+#if !MONOTOUCH && !MOBILE_STATIC
 using System.Reflection.Emit;
 #endif
 using System.Runtime.InteropServices;
@@ -210,6 +212,16 @@ namespace MonoTests.System
 		}
 	}
 
+	public class GenericIndexers<T, U>
+	{
+		// This class has two indexers that take different
+		// arguments.  GetProperties on all instances of this
+		// generic type should still have 2 properties, even
+		// if T and U are instantiated with the same types.
+		public T this[T t] { get { return t; } }
+		public U this[U u] { get { return u; } }
+	}
+
 	public class FirstMethodBinder : Binder
 	{
 		public override MethodBase BindToMethod (BindingFlags bindingAttr, MethodBase [] match, ref object [] args,
@@ -249,7 +261,7 @@ namespace MonoTests.System
 	[TestFixture]
 	public class TypeTest
 	{
-#if !MONOTOUCH
+#if !MONOTOUCH && !MOBILE_STATIC
 		private ModuleBuilder module;
 #endif
 		const string ASSEMBLY_NAME = "MonoTests.System.TypeTest";
@@ -260,7 +272,7 @@ namespace MonoTests.System
 		{
 			AssemblyName assemblyName = new AssemblyName ();
 			assemblyName.Name = ASSEMBLY_NAME;
-#if !MONOTOUCH
+#if !MONOTOUCH && !MOBILE_STATIC
 			var assembly = AppDomain.CurrentDomain.DefineDynamicAssembly (
 					assemblyName, AssemblyBuilderAccess.RunAndSave, Path.GetTempPath ());
 			module = assembly.DefineDynamicModule ("module1");
@@ -281,6 +293,11 @@ namespace MonoTests.System
 
 		private void GenericMethod<Q, T1> (Q q, T1 t) where T1 : IFace
 		{
+		}
+
+		public class Nested
+		{
+
 		}
 
 		[Test]
@@ -367,9 +384,10 @@ namespace MonoTests.System
 
 			// Tests for byref types
 			Type paramType = typeof (TypeTest).GetMethod ("ByrefMethod", BindingFlags.Instance|BindingFlags.NonPublic).GetParameters () [0].ParameterType;
-			Assert.IsTrue (!paramType.IsSubclassOf (typeof (ValueType)), "#02");
-			//Assert.IsTrue (paramType.IsSubclassOf (typeof (Object)), "#03");
-			Assert.IsTrue (!paramType.IsSubclassOf (paramType), "#04");
+			Assert.IsFalse (paramType.IsSubclassOf (typeof(ValueType)), "#02");
+			Assert.IsNull (paramType.BaseType, "#02-b");
+			Assert.IsTrue (paramType.IsSubclassOf (typeof (Object)), "#03");
+			Assert.IsFalse (paramType.IsSubclassOf (paramType), "#04");
 		}
 
 		[Test]
@@ -417,8 +435,25 @@ namespace MonoTests.System
 		public void GetProperties ()
 		{
 			// Test hide-by-name-and-signature
-			Assert.AreEqual (1, typeof (Derived2).GetProperties ().Length);
-			Assert.AreEqual (typeof (Derived2), typeof (Derived2).GetProperties ()[0].DeclaringType);
+			Assert.AreEqual (1, typeof (Derived2).GetProperties ().Length, "#1");
+			Assert.AreEqual (typeof (Derived2), typeof (Derived2).GetProperties ()[0].DeclaringType, "#2");
+
+			// For generics, hide-by-name-and-signature works on the unexpanded types. The
+			// GenericIndexers<T,U> class has two indexers that take different arguments.
+			// GetProperties on all instances of this generic type should still have 2 properties,
+			// even if T and U are instantiated with the same types.
+
+			var ps = typeof (GenericIndexers<int,int>).GetProperties ();
+			Assert.AreEqual (2, ps.Length, "#3");
+			for (int i = 0; i < ps.Length; i++) {
+				var p = ps[i];
+
+				var getterResultType = p.GetGetMethod ().ReturnType;
+
+				var msg = String.Format ("#4-{0}", i);
+				Assert.AreEqual (typeof (int), getterResultType, msg);
+			}
+
 		}
 
 		[Test] // GetProperties (BindingFlags)
@@ -1519,6 +1554,27 @@ namespace MonoTests.System
 							    typeof (long), new Type[0], null), "#2");
 		}
 
+		[Test]
+		public void GetProperty9_Indexers ()
+		{
+
+			var bindingFlags = BindingFlags.Public | BindingFlags.Instance;
+
+			Type type1 = typeof (List<byte>);
+			var p1 = type1.GetProperty ("Item", bindingFlags, null, typeof (byte), new Type[] { typeof (int) }, null);
+			Assert.IsNotNull (p1, "#1");
+
+			Type type2 = typeof (List<string>);
+			var p2 = type2.GetProperty ("Item", bindingFlags, null, typeof (string), new Type[] { typeof (int) }, null);
+			Assert.IsNotNull (p2, "#2");
+
+			Type type3 = typeof (List<Type>);
+			// result type not convertible, make sure we fail.
+			var p3 = type3.GetProperty ("Item", bindingFlags, null, typeof (string) /*!*/,
+						    new Type[] { typeof (int) }, null);
+			Assert.IsNull (p3, "#3");
+		}
+
 		[StructLayout(LayoutKind.Explicit, Pack = 4, Size = 64)]
 		public class Class1
 		{
@@ -1693,18 +1749,10 @@ namespace MonoTests.System
 		}
 
 		[Test]
-		[Category("NotDotNet")]
-		// Depends on the GAC working, which it doesn't durring make distcheck.
-		[Category ("NotWorking")]
-		public void GetTypeWithWhitespace ()
+		public void IsVisible ()
 		{
-			Assert.IsNotNull (Type.GetType
-						   (@"System.Configuration.NameValueSectionHandler,
-			System,
-Version=1.0.5000.0,
-Culture=neutral
-,
-PublicKeyToken=b77a5c561934e089"));
+			Assert.IsTrue (typeof (int).IsVisible, "#1");
+			Assert.IsTrue (typeof (Nested).IsVisible, "#2");
 		}
 
 		[Test]
@@ -1714,10 +1762,7 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual ("System.String[*]", t.ToString ());
 		}
 
-#if MONOTOUCH
-		// feature not available when compiled under FULL_AOT_RUNTIME
-		[ExpectedException (typeof (NotImplementedException))]
-#endif
+#if MONO_COM
 		[Test]
 		public void TypeFromCLSID ()
 		{
@@ -1752,7 +1797,7 @@ PublicKeyToken=b77a5c561934e089"));
 			else
 				throw new COMException ();
 		}
-		
+#endif
 		[Test]
 		public void ExerciseFilterName ()
 		{
@@ -1884,6 +1929,20 @@ PublicKeyToken=b77a5c561934e089"));
 		public void CreateValueTypeNoCtorArgs ()
 		{
 			typeof(B).InvokeMember ("", BindingFlags.CreateInstance, null, null, new object [] { 1 });
+		}
+
+		[Test]
+		[ExpectedException (typeof (MissingMethodException))]
+		public void InvokeGetPropertyMissing ()
+		{
+			typeof(B).InvokeMember ("", BindingFlags.GetProperty, null, null, new object [] { 1 });
+		}
+
+		[Test]
+		[ExpectedException (typeof (MissingMethodException))]
+		public void InvokeSetPropertyMissing ()
+		{
+			typeof(B).InvokeMember ("", BindingFlags.SetProperty, null, null, new object [] { 1 });
 		}
 
 		internal static string bug336841 (string param1, params string [] param2)
@@ -3032,7 +3091,7 @@ PublicKeyToken=b77a5c561934e089"));
 		}
 
 		[Test]
-#if MONOTOUCH
+#if MONOTOUCH || MOBILE_STATIC
 		[ExpectedException (typeof (NotSupportedException))]
 #endif
 		public void MakeGenericType_UserDefinedType ()
@@ -3048,8 +3107,10 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual (ut, arg, "#B3");
 		}
 
-		[Category ("NotWorking")]
-		//We dont support instantiating a user type 
+		[Test]
+#if MONOTOUCH || MOBILE_STATIC
+		[ExpectedException (typeof (NotSupportedException))]
+#endif
 		public void MakeGenericType_NestedUserDefinedType ()
 		{
 			Type ut = new UserType (new UserType (typeof (int)));
@@ -3064,7 +3125,9 @@ PublicKeyToken=b77a5c561934e089"));
 		}
 		
 		[Test]
-		[Category ("NotWorking")]
+#if MONOTOUCH || MOBILE_STATIC
+		[ExpectedException (typeof (NotSupportedException))]
+#endif
 		public void TestMakeGenericType_UserDefinedType_DotNet20SP1 () 
 		{
 			Type ut = new UserType(typeof(int));
@@ -3075,7 +3138,7 @@ PublicKeyToken=b77a5c561934e089"));
 		}
 		
 		[Test]
-#if MONOTOUCH
+#if MONOTOUCH || MOBILE_STATIC
 		[ExpectedException (typeof (NotSupportedException))]
 #endif
 		public void MakeGenericType_BadUserType ()
@@ -3198,7 +3261,7 @@ PublicKeyToken=b77a5c561934e089"));
 				obj = GetType ().GetMember ("DummyMember", memtype,
 						BindingFlags.Public | BindingFlags.Instance);
 				Assert.AreEqual (testtype.GetHashCode (), obj.GetType ().GetHashCode (),
-						"Expected " + testtype.FullName);
+						"Expected #" + i + " " + testtype.FullName);
 			}
 
 		}
@@ -3211,7 +3274,7 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual (t1, t2);
 		}
 
-#if !MONOTOUCH
+#if !MONOTOUCH && !MOBILE_STATIC
 		[Test]
 		public void SpaceAfterComma () {
 			string strType = "System.Collections.Generic.Dictionary`2[[System.Int32,mscorlib], [System.String,mscorlib]],mscorlib";
@@ -3219,7 +3282,7 @@ PublicKeyToken=b77a5c561934e089"));
 		}
 #endif
 
-#if !MONOTOUCH
+#if !MONOTOUCH && !MOBILE_STATIC
 		[Test]
 		public void Bug506757 ()
 		{
@@ -3474,7 +3537,6 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreSame (typeof (Foo<>), type.DeclaringType, "#1");
 		}
 
-#if NET_4_0
 		interface IGetInterfaceMap<in T>
 		{
 		    string Bar (T t);
@@ -3526,10 +3588,10 @@ PublicKeyToken=b77a5c561934e089"));
 
 			a.Equals (a);
 			Assert.AreEqual (1, ta.eq, "#1");
-			Assert.AreEqual (0, ta.ust, "#2");
+			Assert.AreEqual (2, ta.ust, "#2");
 			a.Equals (b);
 			Assert.AreEqual (2, ta.eq, "#3");
-			Assert.AreEqual (1, ta.ust, "#4");
+			Assert.AreEqual (3, ta.ust, "#4");
 			Assert.AreEqual (0, tb.eq, "#5");
 			Assert.AreEqual (1, tb.ust, "#6");
 		}
@@ -3759,7 +3821,7 @@ PublicKeyToken=b77a5c561934e089"));
 			try {
 				typeof (MyRealEnum).IsEnumDefined (typeof (MyRealEnum));
 				Assert.Fail ("#8");
-			} catch (ArgumentException) { }
+			} catch (InvalidOperationException) { }
 
 			Assert.IsTrue (typeof (MyRealEnum).IsEnumDefined ((short)0), "#9");
 			Assert.IsFalse (typeof (MyRealEnum).IsEnumDefined ((short)88), "#10");
@@ -3889,6 +3951,43 @@ PublicKeyToken=b77a5c561934e089"));
 				}, false, false);
 			Assert.AreEqual (typeof (MyRealEnum).MakePointerType (), res, "#12");
 
+			tname = typeof (MyRealEnum).FullName + "*&";
+			res = Type.GetType (tname, name => {
+					return Assembly.Load (name);
+				},(asm,name,ignore) => {
+					return asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
+				}, false, false);
+			Assert.AreEqual (typeof (MyRealEnum).MakePointerType ().MakeByRefType(),
+					 res, "#13");
+
+			tname = typeof (MyRealEnum).FullName + "[,]&";
+			res = Type.GetType (tname, name => {
+					return Assembly.Load (name);
+				},(asm,name,ignore) => {
+					return asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
+				}, false, false);
+			Assert.AreEqual (typeof (MyRealEnum).MakeArrayType (2).MakeByRefType (),
+					 res, "#14");
+
+			tname = typeof (MyRealEnum).FullName + "*[]";
+			res = Type.GetType (tname, name => {
+					return Assembly.Load (name);
+				},(asm,name,ignore) => {
+					return asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
+				}, false, false);
+			Assert.AreEqual (typeof (MyRealEnum).MakePointerType().MakeArrayType(),
+					 res, "#15");
+
+			// not a very useful type, but ought to be parsed correctly
+			tname = typeof (MyRealEnum).FullName + "[]**[]*&";
+			res = Type.GetType (tname, name => {
+					return Assembly.Load (name);
+				},(asm,name,ignore) => {
+					return asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
+				}, false, false);
+			Assert.AreEqual (typeof (MyRealEnum).MakeArrayType().MakePointerType().MakePointerType().MakeArrayType().MakePointerType().MakeByRefType(),
+					 res, "#16");
+
 			// assembly resolve without type resolve
 			res = Type.GetType ("System.String,mscorlib", delegate (AssemblyName aname) { return typeof (int).Assembly; }, null);
 			Assert.AreEqual (typeof (string), res);
@@ -3960,15 +4059,25 @@ PublicKeyToken=b77a5c561934e089"));
 			} catch (ArgumentNullException) {}
 		}
 
-		void MustAE (string tname) {
+		void MustAE_general (string tname, Func<string,Type> getType) {
 			try {
-				var res = Type.GetType (tname, name => {
-					return Assembly.Load (name);
-				},(asm,name,ignore) => {
-					return (object)asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
-				}, true, false);
+				var res = getType (tname);
 				Assert.Fail (tname);
 			} catch (ArgumentException) {}
+		}
+
+		void MustAE (string typename) {
+			MustAE_general (typename, tname => {
+					return Type.GetType (tname, name => {
+							return Assembly.Load (name);
+						},(asm,name,ignore) => {
+							return (object)asm == null ? Type.GetType (name, false, ignore) : asm.GetType (name, false, ignore);
+						}, true, false);
+				});
+		}
+
+		void MustAEnn (string typename) {
+			MustAE_general (typename, tname => Type.GetType (tname, null, null));
 		}
 
 		void MustFNFE (string tname) {
@@ -3985,12 +4094,14 @@ PublicKeyToken=b77a5c561934e089"));
 		[Test]
 		public void NewGetTypeErrors () {
 			MustANE (null);
+			MustAE ("!@#$%^&*");
 			MustAE (string.Format ("{0}[{1}&]", typeof (Foo<>).FullName, typeof (MyRealEnum).FullName));
 			MustAE (string.Format ("{0}[{1}*]", typeof (Foo<>).FullName, typeof (MyRealEnum).FullName));
 			MustAE (string.Format ("{0}&&", typeof (MyRealEnum).FullName));
 			MustAE (string.Format ("{0}&*", typeof (MyRealEnum).FullName));
 			MustAE (string.Format ("{0}&[{1}]", typeof (Foo<>).FullName, typeof (MyRealEnum).FullName));
-
+			MustAE (string.Format ("{0}[,", typeof (MyRealEnum).FullName));
+			MustAE (string.Format ("{0}[*", typeof (MyRealEnum).FullName));
 
 			MustAE (string.Format ("{0}[[{1},", typeof (Foo<>).FullName, typeof (MyRealEnum).FullName));
 			MustAE (string.Format ("{0}[[{1}]", typeof (Foo<>).FullName, typeof (MyRealEnum).FullName));
@@ -4031,7 +4142,6 @@ PublicKeyToken=b77a5c561934e089"));
 		public void IsAssignableFromWithNullable () {
             Console.WriteLine(typeof(IEnumerable<int?>).IsAssignableFrom(typeof(IEnumerable<int>)));
 		}
-#endif
 
 		[Test]
 		public void GetTypeParseGenericCorrectly () { //Bug #15124
@@ -4051,6 +4161,102 @@ PublicKeyToken=b77a5c561934e089"));
 			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[*"), null, "#14");
 			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[System.Int32"), null, "#15");
 		}
+
+		[Test]
+		public void GetTypeNullDelegatesParseGenericCorrectly () {
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1", null, null), typeof (Foo<>), "#1");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[System.Int32]", null, null), typeof (Foo<int>), "#2");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[[System.Int32]]", null, null), typeof (Foo<int>), "#3");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[System.Int32][]", null, null), typeof (Foo<int>[]), "#4");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[System.Int32][,]", null, null), typeof (Foo<int>[,]), "#5");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[]", null, null), typeof (Foo<>).MakeArrayType(), "#6");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[,]", null, null), typeof (Foo<>).MakeArrayType (2), "#7");
+			Assert.AreEqual (Type.GetType ("MonoTests.System.Foo`1[][]", null, null), typeof (Foo<>).MakeArrayType ().MakeArrayType (), "#8");
+
+			MustAEnn ("MonoTests.System.Foo`1[][System.Int32]");
+			MustAEnn ("MonoTests.System.Foo`1[");
+			MustAEnn ("MonoTests.System.Foo`1[[");
+			MustAEnn ("MonoTests.System.Foo`1[[]");
+			MustAEnn ("MonoTests.System.Foo`1[,");
+			MustAEnn ("MonoTests.System.Foo`1[*");
+			MustAEnn ("MonoTests.System.Foo`1[System.Int32");
+		}
+
+		Dictionary<int, T> MakeDictHelper<T> (T[] arr) {
+			return new Dictionary<int, T>();
+		}
+
+		[Test]
+		public void GetTypeAnonymousParseCorrectly () {
+			var x = new { X = 1 };
+			var a = new [] { x };
+			var d = MakeDictHelper (a);
+
+			var x_type = x.GetType ();
+			var a_type = a.GetType ();
+			var d_type = d.GetType ();
+
+			Assert.AreEqual (Type.GetType (x_type.ToString ()), x_type, "#1");
+			Assert.AreEqual (Type.GetType (x_type.ToString (), null, null), x_type, "#2");
+			Assert.AreEqual (Type.GetType (a_type.ToString ()), a_type, "#3");
+			Assert.AreEqual (Type.GetType (a_type.ToString (), null, null), a_type, "#4");
+			Assert.AreEqual (Type.GetType (d_type.ToString ()), d_type, "#5");
+			Assert.AreEqual (Type.GetType (d_type.ToString (), null, null), d_type, "#6");
+
+			Assert.AreEqual (Type.GetType (x_type.FullName), x_type, "#7");
+			Assert.AreEqual (Type.GetType (x_type.FullName, null, null), x_type, "#8");
+			Assert.AreEqual (Type.GetType (a_type.FullName), a_type, "#9");
+			Assert.AreEqual (Type.GetType (a_type.FullName, null, null), a_type, "#10");
+			Assert.AreEqual (Type.GetType (d_type.FullName), d_type, "#11");
+			Assert.AreEqual (Type.GetType (d_type.FullName, null, null), d_type, "#12");
+
+		}
+
+#if !MONOTOUCH && !MOBILE_STATIC
+		[Test]
+		[Category ("AndroidNotWorking")] // requires symbol writer
+		public void FullNameGetTypeParseEscapeRoundtrip () // bug #26384
+		{
+			var nm = new AssemblyName ("asm");
+			var ab = AssemblyBuilder.DefineDynamicAssembly (nm,
+									AssemblyBuilderAccess.Run);
+			var mb = ab.DefineDynamicModule("m", true);
+			var tb = mb.DefineType ("NameSpace,+*&[]\\.Type,+*&[]\\",
+						TypeAttributes.Class | TypeAttributes.Public);
+
+			var nestedTb = tb.DefineNestedType("Nested,+*&[]\\",
+							  TypeAttributes.Class | TypeAttributes.NestedPublic);
+
+			var ty = tb.CreateType();
+
+			var nestedTy = nestedTb.CreateType();
+
+			var escapedNestedName =
+				"NameSpace\\,\\+\\*\\&\\[\\]\\\\"
+				+ "."
+				+ "Type\\,\\+\\*\\&\\[\\]\\\\"
+				+ "+"
+				+ "Nested\\,\\+\\*\\&\\[\\]\\\\";
+
+			Assert.AreEqual(escapedNestedName, nestedTy.FullName);
+
+			var lookupNestedTy =
+				Type.GetType(escapedNestedName + "," + nm.FullName,
+					     asmName => {
+						     if (asmName.FullName.Equals(nm.FullName)) return ab;
+						     else return Assembly.Load (asmName);
+					     },
+					     (asm,name,ignore) => {
+						     if (asm == null)
+							     return Type.GetType(name, true, ignore);
+						     else return asm.GetType(name, true, ignore);
+					     },
+					     true,
+					     false);
+			Assert.AreEqual(nestedTy, lookupNestedTy);
+
+		}
+#endif
 
 		public abstract class Stream : IDisposable
 		{

@@ -39,6 +39,8 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 
+using MonoTests.Helpers;
+
 namespace MonoTests.System.Net.Security
 {
 
@@ -64,7 +66,7 @@ public class SslStreamTest {
 
 	void AuthenticateClientAndServer (bool server, bool client)
 	{
-		IPEndPoint endPoint = new IPEndPoint (IPAddress.Parse ("127.0.0.1"), 10000);
+		IPEndPoint endPoint = new IPEndPoint (IPAddress.Parse ("127.0.0.1"), NetworkHelpers.FindFreePort ());
 		ClientServerState state = new ClientServerState ();
 		state.Client = new TcpClient ();
 		state.Listener = new TcpListener (endPoint);
@@ -74,12 +76,12 @@ public class SslStreamTest {
 		state.ServerIOException = !server;
 		try {
 			Thread serverThread = new Thread (() => StartServerAndAuthenticate (state));
-			serverThread.Start (null);
+			serverThread.Start ();
 			Thread clientThread = new Thread (() => StartClientAndAuthenticate (state, endPoint));
-			clientThread.Start (null);
-			Assert.AreEqual (server, state.ServerAuthenticated.WaitOne (TimeSpan.FromSeconds (2)), 
+			clientThread.Start ();
+			Assert.AreEqual (server, state.ServerAuthenticated.WaitOne (TimeSpan.FromSeconds (5)), 
 				"server not authenticated");
-			Assert.AreEqual (client, state.ClientAuthenticated.WaitOne (TimeSpan.FromSeconds (2)), 
+			Assert.AreEqual (client, state.ClientAuthenticated.WaitOne (TimeSpan.FromSeconds (5)), 
 				"client not authenticated");
 		} finally {
 			if (state.ClientStream != null)
@@ -90,80 +92,6 @@ public class SslStreamTest {
 			if (state.ServerClient != null)
 				state.ServerClient.Close ();
 			state.Listener.Stop ();
-		}
-	}
-
-	[Test]
-	public void ClientCipherSuitesCallback ()
-	{
-		try {
-			ServicePointManager.ClientCipherSuitesCallback += (SecurityProtocolType p, IEnumerable<string> allCiphers) => {
-				string prefix = p == SecurityProtocolType.Tls ? "TLS_" : "SSL_";
-				return new List<string> { prefix + "RSA_WITH_AES_128_CBC_SHA" };
-			};
-			// client will only offers AES 128 - that's fine since the server support it (and many more ciphers)
-			AuthenticateClientAndServer_ClientSendsNoData ();
-		}
-		finally {
-			ServicePointManager.ClientCipherSuitesCallback = null;
-		}
-	}
-
-	[Test]
-	public void ServerCipherSuitesCallback ()
-	{
-		try {
-			ServicePointManager.ServerCipherSuitesCallback += (SecurityProtocolType p, IEnumerable<string> allCiphers) => {
-				string prefix = p == SecurityProtocolType.Tls ? "TLS_" : "SSL_";
-					return new List<string> { prefix + "RSA_WITH_AES_256_CBC_SHA" };
-			};
-			// server only accept AES 256 - that's fine since the client support it (and many more ciphers)
-			AuthenticateClientAndServer_ClientSendsNoData ();
-		}
-		finally {
-			ServicePointManager.ServerCipherSuitesCallback = null;
-		}
-	}
-
-	[Test]
-	public void CipherSuitesCallbacks ()
-	{
-		try {
-			ServicePointManager.ClientCipherSuitesCallback += (SecurityProtocolType p, IEnumerable<string> allCiphers) => {
-				string prefix = p == SecurityProtocolType.Tls ? "TLS_" : "SSL_";
-				return new List<string> { prefix + "RSA_WITH_AES_128_CBC_SHA", prefix + "RSA_WITH_AES_256_CBC_SHA" };
-			};
-			ServicePointManager.ServerCipherSuitesCallback += (SecurityProtocolType p, IEnumerable<string> allCiphers) => {
-				string prefix = p == SecurityProtocolType.Tls ? "TLS_" : "SSL_";
-				return new List<string> { prefix + "RSA_WITH_AES_128_CBC_SHA", prefix + "RSA_WITH_AES_256_CBC_SHA" };
-			};
-			// both client and server supports AES (128 and 256) - server will select 128 (first choice)
-			AuthenticateClientAndServer_ClientSendsNoData ();
-		}
-		finally {
-			ServicePointManager.ClientCipherSuitesCallback = null;
-			ServicePointManager.ServerCipherSuitesCallback = null;
-		}
-	}
-
-	[Test]
-	public void MismatchedCipherSuites ()
-	{
-		try {
-			ServicePointManager.ClientCipherSuitesCallback += (SecurityProtocolType p, IEnumerable<string> allCiphers) => {
-				string prefix = p == SecurityProtocolType.Tls ? "TLS_" : "SSL_";
-				return new List<string> { prefix + "RSA_WITH_AES_128_CBC_SHA" };
-			};
-			ServicePointManager.ServerCipherSuitesCallback += (SecurityProtocolType p, IEnumerable<string> allCiphers) => {
-				string prefix = p == SecurityProtocolType.Tls ? "TLS_" : "SSL_";
-				return new List<string> { prefix + "RSA_WITH_AES_256_CBC_SHA" };
-			};
-			// mismatch! server will refuse and send back an alert
-			AuthenticateClientAndServer (false, false);
-		}
-		finally {
-			ServicePointManager.ClientCipherSuitesCallback = null;
-			ServicePointManager.ServerCipherSuitesCallback = null;
 		}
 	}
 

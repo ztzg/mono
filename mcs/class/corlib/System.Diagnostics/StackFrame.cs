@@ -50,6 +50,7 @@ namespace System.Diagnostics {
 		private int ilOffset = OFFSET_UNKNOWN;
 		private int nativeOffset = OFFSET_UNKNOWN;
 		private long methodAddress;
+		private uint methodIndex;
 		private MethodBase methodBase;
 		private string fileName;
 		private int lineNumber;
@@ -169,6 +170,11 @@ namespace System.Diagnostics {
 		internal long GetMethodAddress ()
 		{
 			return methodAddress;
+		}
+
+		internal uint GetMethodIndex ()
+		{
+			return methodIndex;
 		}
 
 		internal string GetInternalMethodName ()

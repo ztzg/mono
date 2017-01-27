@@ -232,6 +232,7 @@ namespace MonoTests.System
 		
 		[Test]
 		[ExpectedException (typeof (ArgumentOutOfRangeException))]
+		[Category("MobileNotWorking")]
 		public void AddHoursOutOfRangeException1 ()
 		{
 			DateTime t1 = new DateTime (myTicks [1]);
@@ -240,6 +241,7 @@ namespace MonoTests.System
 
 		[Test]
 		[ExpectedException (typeof (ArgumentOutOfRangeException))]
+		[Category("MobileNotWorking")]
 		public void AddHoursOutOfRangeException2 ()
 		{
 			DateTime t1 = new DateTime (myTicks [1]);
@@ -269,12 +271,18 @@ namespace MonoTests.System
 			Assert.AreEqual (13, t1.Second, "#C4");
 		}
 
+		const long MaxMillis = 315537897600000;
+
 		[Test]
 		[ExpectedException (typeof (ArgumentOutOfRangeException))]
 		public void AddMillisecondsOutOfRangeException1 ()
 		{
 			DateTime t1 = new DateTime (myTicks [1]);
-			t1.AddMilliseconds (9E100);
+			// double to long conversion with overflow lead to "unspecified value", 
+			// ref: https://msdn.microsoft.com/en-us/library/yht2cx7b.aspx
+			// so we adapt the test to avoid this condition based on the real limit
+			// see https://github.com/Microsoft/referencesource/blob/master/mscorlib/system/datetime.cs#L90
+			t1.AddMilliseconds (MaxMillis + 1);
 		}
 
 		[Test]
@@ -282,7 +290,7 @@ namespace MonoTests.System
 		public void AddMillisecondsOutOfRangeException2 ()
 		{
 			DateTime t1 = new DateTime (myTicks [1]);
-			t1.AddMilliseconds (-9E100);
+			t1.AddMilliseconds (-MaxMillis-1);
 		}
 
 		[Test]
@@ -1287,6 +1295,21 @@ namespace MonoTests.System
 				}
 			}
 		}
+
+		[Test]
+		public void Parse_SameTimeAndDateSeparator ()
+		{
+			var fiFI = (CultureInfo) CultureInfo.GetCultureInfo("fi-FI").Clone();
+
+			fiFI.DateTimeFormat.TimeSeparator = fiFI.DateTimeFormat.DateSeparator;
+
+			var dt = DateTime.Parse("4.3.2010", fiFI);
+
+			Assert.AreEqual (2010, dt.Year, "#1");
+			Assert.AreEqual (3, dt.Month, "#2");
+			Assert.AreEqual (4, dt.Day, "#3");
+		}
+
 
 		[Test]
 		[ExpectedException (typeof (FormatException))]
@@ -2522,9 +2545,7 @@ namespace MonoTests.System
 			DateTime expected2 = new DateTime (2011, 03, 22, 08, 32, 00, DateTimeKind.Utc);
 
 			string [] cultures = new string [] {"es-ES", "en-US", "en-GB", "de-DE", "fr-FR"
-#if NET_4_0
 				,"es", "en", "de", "fr"
-#endif
 				};
 			
 			foreach (string culture in cultures) {
@@ -2622,6 +2643,29 @@ namespace MonoTests.System
 			var res = DateTime.Parse ("12-002", CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.RoundtripKind);			
 			Assert.AreEqual (2, res.Year, "#1");
 			Assert.AreEqual (12, res.Month, "#2");			
+		}
+
+		[Test]
+		[Culture ("en-us")]
+		public void ToUniversalTime_TimeZoneOffsetShouldNotOverflow ()
+		{
+			var m = DateTime.MaxValue;
+			var res = m.ToUniversalTime ();
+
+			// It does not matter which time zone but we should never overflow or have DateTime.MinValue
+			Assert.AreEqual (9999, res.Year, "#1");
+			Assert.AreEqual (12, res.Month, "#2");
+			Assert.AreEqual (31, res.Day, "#3");
+			Assert.AreEqual (DateTimeKind.Utc, res.Kind, "#4");
+
+			m = DateTime.MinValue;
+			res = m.ToUniversalTime ();
+
+			// It does not matter which time zone but we should never overflow or have DateTime.MinValue
+			Assert.AreEqual (0, res.Year, "#10");
+			Assert.AreEqual (1, res.Month, "#11");
+			Assert.AreEqual (1, res.Day, "#12");
+			Assert.AreEqual (DateTimeKind.Utc, res.Kind, "#13");
 		}
 	}
 }

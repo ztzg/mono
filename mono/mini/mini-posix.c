@@ -9,6 +9,7 @@
  * Copyright 2011 Xamarin, Inc (http://www.xamarin.com)
  *
  * See LICENSE for licensing information.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include <config.h>
 #include <signal.h>
@@ -26,7 +27,7 @@
 #include <sys/syscall.h>
 #endif
 #include <errno.h>
-
+#include <sched.h>
 
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/loader.h>
@@ -44,7 +45,7 @@
 #include <mono/metadata/mono-config.h>
 #include <mono/metadata/environment.h>
 #include <mono/metadata/mono-debug.h>
-#include <mono/metadata/gc-internal.h>
+#include <mono/metadata/gc-internals.h>
 #include <mono/metadata/threads-types.h>
 #include <mono/metadata/verify.h>
 #include <mono/metadata/verify-internals.h>
@@ -53,11 +54,12 @@
 #include <mono/utils/mono-math.h>
 #include <mono/utils/mono-compiler.h>
 #include <mono/utils/mono-counters.h>
-#include <mono/utils/mono-logger-internal.h>
+#include <mono/utils/mono-logger-internals.h>
 #include <mono/utils/mono-mmap.h>
 #include <mono/utils/dtrace.h>
 #include <mono/utils/mono-signal-handler.h>
 #include <mono/utils/mono-threads.h>
+#include <mono/utils/mono-threads-posix-signals.h>
 
 #include "mini.h"
 #include <string.h>
@@ -68,7 +70,13 @@
 
 #include "jit-icalls.h"
 
-#if defined(__native_client__)
+#ifdef PLATFORM_MACOSX
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <mach/clock.h>
+#endif
+
+#if defined(__native_client__) || defined(HOST_WATCHOS)
 
 void
 mono_runtime_setup_stat_profiler (void)
@@ -89,9 +97,17 @@ MONO_SIG_HANDLER_SIGNATURE (mono_chain_signal)
 	return FALSE;
 }
 
+#ifndef PLATFORM_MACOSX
 void
 mono_runtime_install_handlers (void)
 {
+}
+#endif
+
+void
+mono_runtime_posix_install_handlers(void)
+{
+
 }
 
 void
@@ -104,6 +120,7 @@ mono_runtime_cleanup_handlers (void)
 {
 }
 
+#if !defined(PLATFORM_MACOSX)
 pid_t
 mono_runtime_syscall_fork (void)
 {
@@ -115,24 +132,25 @@ void
 mono_gdb_render_native_backtraces (pid_t crashed_pid)
 {
 }
+#endif
 
 #else
 
 static GHashTable *mono_saved_signal_handlers = NULL;
 
-static gpointer
+static struct sigaction *
 get_saved_signal_handler (int signo)
 {
 	if (mono_saved_signal_handlers)
 		/* The hash is only modified during startup, so no need for locking */
-		return g_hash_table_lookup (mono_saved_signal_handlers, GINT_TO_POINTER (signo));
+		return (struct sigaction *)g_hash_table_lookup (mono_saved_signal_handlers, GINT_TO_POINTER (signo));
 	return NULL;
 }
 
 static void
 save_old_signal_handler (int signo, struct sigaction *old_action)
 {
-	struct sigaction *handler_to_save = g_malloc (sizeof (struct sigaction));
+	struct sigaction *handler_to_save = (struct sigaction *)g_malloc (sizeof (struct sigaction));
 
 	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_CONFIG,
 				"Saving old signal handler for signal %d.", signo);
@@ -179,7 +197,7 @@ gboolean
 MONO_SIG_HANDLER_SIGNATURE (mono_chain_signal)
 {
 	int signal = MONO_SIG_HANDLER_GET_SIGNO ();
-	struct sigaction *saved_handler = get_saved_signal_handler (signal);
+	struct sigaction *saved_handler = (struct sigaction *)get_saved_signal_handler (signal);
 
 	if (saved_handler && saved_handler->sa_handler) {
 		if (!(saved_handler->sa_flags & SA_SIGINFO)) {
@@ -201,86 +219,13 @@ MONO_SIG_HANDLER_FUNC (static, sigabrt_signal_handler)
 	MONO_SIG_HANDLER_GET_CONTEXT;
 
 	if (mono_thread_internal_current ())
-		ji = mono_jit_info_table_find (mono_domain_get (), mono_arch_ip_from_context (ctx));
+		ji = mono_jit_info_table_find_internal (mono_domain_get (), (char *)mono_arch_ip_from_context (ctx), TRUE, TRUE);
 	if (!ji) {
         if (mono_chain_signal (MONO_SIG_HANDLER_PARAMS))
 			return;
 		mono_handle_native_sigsegv (SIGABRT, ctx, info);
 	}
 }
-
-MONO_SIG_HANDLER_FUNC (static, sigusr1_signal_handler)
-{
-	gboolean running_managed;
-	MonoException *exc;
-	MonoInternalThread *thread = mono_thread_internal_current ();
-	MonoDomain *domain = mono_domain_get ();
-	void *ji;
-	MONO_SIG_HANDLER_GET_CONTEXT;
-
-	if (!thread || !domain) {
-		/* The thread might not have started up yet */
-		/* FIXME: Specify the synchronization with start_wrapper () in threads.c */
-		mono_debugger_agent_thread_interrupt (ctx, NULL);
-		return;
-	}
-
-	if (thread->ignore_next_signal) {
-		thread->ignore_next_signal = FALSE;
-		return;
-	}
-
-	if (thread->thread_dump_requested) {
-		thread->thread_dump_requested = FALSE;
-
-		mono_print_thread_dump (ctx);
-	}
-
-	/*
-	 * This is an async signal, so the code below must not call anything which
-	 * is not async safe. That includes the pthread locking functions. If we
-	 * know that we interrupted managed code, then locking is safe.
-	 */
-	/*
-	 * On OpenBSD, ctx can be NULL if we are interrupting poll ().
-	 */
-	if (ctx) {
-		ji = mono_jit_info_table_find (mono_domain_get (), mono_arch_ip_from_context(ctx));
-		running_managed = ji != NULL;
-
-		if (mono_debugger_agent_thread_interrupt (ctx, ji))
-			return;
-	} else {
-		running_managed = FALSE;
-	}
-
-	/* We can't do handler block checking from metadata since it requires doing
-	 * a stack walk with context.
-	 *
-	 * FIXME add full-aot support.
-	 */
-#ifdef MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX
-	if (!mono_aot_only && ctx) {
-		MonoThreadUnwindState unwind_state;
-		if (mono_thread_state_init_from_sigctx (&unwind_state, ctx)) {
-			if (mono_install_handler_block_guard (&unwind_state)) {
-#ifndef HOST_WIN32
-				/*Clear current thread from been wapi interrupted otherwise things can go south*/
-				wapi_clear_interruption ();
-#endif
-				return;
-			}
-		}
-	}
-#endif
-
-	exc = mono_thread_request_interruption (running_managed); 
-	if (!exc)
-		return;
-
-	mono_arch_handle_exception (ctx, exc);
-}
-
 
 #if defined(__i386__) || defined(__x86_64__)
 #define FULL_STAT_PROFILER_BACKTRACE 1
@@ -297,21 +242,11 @@ MONO_SIG_HANDLER_FUNC (static, sigusr1_signal_handler)
 #define FULL_STAT_PROFILER_BACKTRACE 0
 #endif
 
-#ifdef SIGPROF
+#if (defined (USE_POSIX_BACKEND) && defined (SIGRTMIN)) || defined (SIGPROF)
+#define HAVE_PROFILER_SIGNAL
+#endif
 
-static int profiling_signal_in_use;
-
-#if defined(__ia64__) || defined(__sparc__) || defined(sparc)
-
-MONO_SIG_HANDLER_FUNC (static, sigprof_signal_handler)
-{
-	if (mono_chain_signal (MONO_SIG_HANDLER_PARAMS))
-		return;
-
-	NOT_IMPLEMENTED;
-}
-
-#else
+#ifdef HAVE_PROFILER_SIGNAL
 
 static void
 per_thread_profiler_hit (void *ctx)
@@ -320,15 +255,15 @@ per_thread_profiler_hit (void *ctx)
 	MonoProfilerCallChainStrategy call_chain_strategy = mono_profiler_stat_get_call_chain_strategy ();
 
 	if (call_chain_depth == 0) {
-		mono_profiler_stat_hit (mono_arch_ip_from_context (ctx), ctx);
+		mono_profiler_stat_hit ((guchar *)mono_arch_ip_from_context (ctx), ctx);
 	} else {
-		MonoJitTlsData *jit_tls = mono_native_tls_get_value (mono_jit_tls_id);
+		MonoJitTlsData *jit_tls = (MonoJitTlsData *)mono_native_tls_get_value (mono_jit_tls_id);
 		int current_frame_index = 1;
 		MonoContext mono_context;
 		guchar *ips [call_chain_depth + 1];
 
 		mono_sigctx_to_monoctx (ctx, &mono_context);
-		ips [0] = MONO_CONTEXT_GET_IP (&mono_context);
+		ips [0] = (guchar *)MONO_CONTEXT_GET_IP (&mono_context);
 		
 		if (jit_tls != NULL) {
 			if (call_chain_strategy == MONO_PROFILER_CALL_CHAIN_NATIVE) {
@@ -337,17 +272,17 @@ per_thread_profiler_hit (void *ctx)
 			guchar *stack_bottom;
 			guchar *stack_top;
 			
-			stack_bottom = jit_tls->end_of_stack;
-			stack_top = MONO_CONTEXT_GET_SP (&mono_context);
-			current_frame = MONO_CONTEXT_GET_BP (&mono_context);
+			stack_bottom = (guchar *)jit_tls->end_of_stack;
+			stack_top = (guchar *)MONO_CONTEXT_GET_SP (&mono_context);
+			current_frame = (guchar *)MONO_CONTEXT_GET_BP (&mono_context);
 			
 			while ((current_frame_index <= call_chain_depth) &&
 					(stack_bottom IS_BEFORE_ON_STACK (guchar*) current_frame) &&
 					((guchar*) current_frame IS_BEFORE_ON_STACK stack_top)) {
-				ips [current_frame_index] = CURRENT_FRAME_GET_RETURN_ADDRESS (current_frame);
+				ips [current_frame_index] = (guchar *)CURRENT_FRAME_GET_RETURN_ADDRESS (current_frame);
 				current_frame_index ++;
 				stack_top = current_frame;
-				current_frame = CURRENT_FRAME_GET_BASE_POINTER (current_frame);
+				current_frame = (guchar *)CURRENT_FRAME_GET_BASE_POINTER (current_frame);
 			}
 #else
 				call_chain_strategy = MONO_PROFILER_CALL_CHAIN_GLIBC;
@@ -373,7 +308,7 @@ per_thread_profiler_hit (void *ctx)
 					ji = mono_find_jit_info (domain, jit_tls, &res, NULL, &mono_context,
 							&new_mono_context, NULL, &lmf, &native_offset, NULL);
 					while ((ji != NULL) && (current_frame_index <= call_chain_depth)) {
-						ips [current_frame_index] = MONO_CONTEXT_GET_IP (&new_mono_context);
+						ips [current_frame_index] = (guchar *)MONO_CONTEXT_GET_IP (&new_mono_context);
 						current_frame_index ++;
 						mono_context = new_mono_context;
 						ji = mono_find_jit_info (domain, jit_tls, &res, NULL, &mono_context,
@@ -387,12 +322,32 @@ per_thread_profiler_hit (void *ctx)
 	}
 }
 
-MONO_SIG_HANDLER_FUNC (static, sigprof_signal_handler)
+static MonoNativeThreadId sampling_thread;
+
+static gint32 profiler_signals_sent;
+static gint32 profiler_signals_received;
+static gint32 profiler_signals_accepted;
+static gint32 profiler_interrupt_signals_received;
+
+MONO_SIG_HANDLER_FUNC (static, profiler_signal_handler)
 {
-	MonoThreadInfo *info;
 	int old_errno = errno;
 	int hp_save_index;
 	MONO_SIG_HANDLER_GET_CONTEXT;
+
+	/* See the comment in mono_runtime_shutdown_stat_profiler (). */
+	if (mono_native_thread_id_get () == sampling_thread) {
+#ifdef HAVE_CLOCK_NANOSLEEP
+		if (mono_profiler_get_sampling_mode () == MONO_PROFILER_STAT_MODE_PROCESS) {
+			InterlockedIncrement (&profiler_interrupt_signals_received);
+			return;
+		}
+#endif
+
+		g_error ("%s: Unexpected profiler signal received by the sampler thread", __func__);
+	}
+
+	InterlockedIncrement (&profiler_signals_received);
 
 	if (mono_thread_info_get_small_id () == -1)
 		return; //an non-attached thread got the signal
@@ -400,18 +355,9 @@ MONO_SIG_HANDLER_FUNC (static, sigprof_signal_handler)
 	if (!mono_domain_get () || !mono_native_tls_get_value (mono_jit_tls_id))
 		return; //thread in the process of dettaching
 
+	InterlockedIncrement (&profiler_signals_accepted);
+
 	hp_save_index = mono_hazard_pointer_save_for_signal_handler ();
-
-	/* If we can't consume a profiling request it means we're the initiator. */
-	if (!(mono_threads_consume_async_jobs () & MONO_SERVICE_REQUEST_SAMPLE)) {
-		FOREACH_THREAD_SAFE (info) {
-			if (mono_thread_info_get_tid (info) == mono_native_thread_id_get ())
-				continue;
-
-			mono_threads_add_async_job (info, MONO_SERVICE_REQUEST_SAMPLE);
-			mono_threads_pthread_kill (info, profiling_signal_in_use);
-		} END_FOREACH_THREAD_SAFE;
-	}
 
 	mono_thread_info_set_is_async_context (TRUE);
 	per_thread_profiler_hit (ctx);
@@ -424,33 +370,17 @@ MONO_SIG_HANDLER_FUNC (static, sigprof_signal_handler)
 }
 
 #endif
-#endif
 
 MONO_SIG_HANDLER_FUNC (static, sigquit_signal_handler)
 {
 	gboolean res;
-	MONO_SIG_HANDLER_GET_CONTEXT;
 
 	/* We use this signal to start the attach agent too */
 	res = mono_attach_start ();
 	if (res)
 		return;
 
-	if (mono_thread_info_new_interrupt_enabled ()) {
-		mono_threads_request_thread_dump ();
-	} else {
-		printf ("Full thread dump:\n");
-
-		mono_threads_request_thread_dump ();
-
-		/*
-		 * print_thread_dump () skips the current thread, since sending a signal
-		 * to it would invoke the signal handler below the sigquit signal handler,
-		 * and signal handlers don't create an lmf, so the stack walk could not
-		 * be performed.
-		 */
-		mono_print_thread_dump (ctx);
-	}
+	mono_threads_request_thread_dump ();
 
 	mono_chain_signal (MONO_SIG_HANDLER_PARAMS);
 }
@@ -465,19 +395,19 @@ MONO_SIG_HANDLER_FUNC (static, sigusr2_signal_handler)
 }
 
 static void
-add_signal_handler (int signo, gpointer handler)
+add_signal_handler (int signo, gpointer handler, int flags)
 {
 	struct sigaction sa;
 	struct sigaction previous_sa;
 
 #ifdef MONO_ARCH_USE_SIGACTION
-	sa.sa_sigaction = handler;
+	sa.sa_sigaction = (void (*)(int, siginfo_t *, void *))handler;
 	sigemptyset (&sa.sa_mask);
-	sa.sa_flags = SA_SIGINFO;
+	sa.sa_flags = SA_SIGINFO | flags;
 #ifdef MONO_ARCH_SIGSEGV_ON_ALTSTACK
 
 /*Apple likes to deliver SIGBUS for *0 */
-#ifdef __APPLE__
+#ifdef PLATFORM_MACOSX
 	if (signo == SIGSEGV || signo == SIGBUS) {
 #else
 	if (signo == SIGSEGV) {
@@ -500,12 +430,11 @@ add_signal_handler (int signo, gpointer handler)
 		sigset_t block_mask;
      
 		sigemptyset (&block_mask);
-		sigaddset (&sa.sa_mask, mono_thread_get_abort_signal ());
 	}
 #else
 	sa.sa_handler = handler;
 	sigemptyset (&sa.sa_mask);
-	sa.sa_flags = 0;
+	sa.sa_flags = flags;
 #endif
 	g_assert (sigaction (signo, &sa, &previous_sa) != -1);
 
@@ -543,23 +472,20 @@ mono_runtime_posix_install_handlers (void)
 	sigset_t signal_set;
 
 	if (mini_get_debug_options ()->handle_sigint)
-		add_signal_handler (SIGINT, mono_sigint_signal_handler);
+		add_signal_handler (SIGINT, mono_sigint_signal_handler, SA_RESTART);
 
-	add_signal_handler (SIGFPE, mono_sigfpe_signal_handler);
-	add_signal_handler (SIGQUIT, sigquit_signal_handler);
-	add_signal_handler (SIGILL, mono_sigill_signal_handler);
-	add_signal_handler (SIGBUS, mono_sigsegv_signal_handler);
+	add_signal_handler (SIGFPE, mono_sigfpe_signal_handler, 0);
+	add_signal_handler (SIGQUIT, sigquit_signal_handler, SA_RESTART);
+	add_signal_handler (SIGILL, mono_sigill_signal_handler, 0);
+	add_signal_handler (SIGBUS, mono_sigsegv_signal_handler, 0);
 	if (mono_jit_trace_calls != NULL)
-		add_signal_handler (SIGUSR2, sigusr2_signal_handler);
+		add_signal_handler (SIGUSR2, sigusr2_signal_handler, SA_RESTART);
 
-	if (!mono_thread_info_new_interrupt_enabled ())
-		add_signal_handler (mono_thread_get_abort_signal (), sigusr1_signal_handler);
 	/* it seems to have become a common bug for some programs that run as parents
 	 * of many processes to block signal delivery for real time signals.
 	 * We try to detect and work around their breakage here.
 	 */
 	sigemptyset (&signal_set);
-	sigaddset (&signal_set, mono_thread_get_abort_signal ());
 	if (mono_gc_get_suspend_signal () != -1)
 		sigaddset (&signal_set, mono_gc_get_suspend_signal ());
 	if (mono_gc_get_restart_signal () != -1)
@@ -569,10 +495,10 @@ mono_runtime_posix_install_handlers (void)
 
 	signal (SIGPIPE, SIG_IGN);
 
-	add_signal_handler (SIGABRT, sigabrt_signal_handler);
+	add_signal_handler (SIGABRT, sigabrt_signal_handler, 0);
 
 	/* catch SIGSEGV */
-	add_signal_handler (SIGSEGV, mono_sigsegv_signal_handler);
+	add_signal_handler (SIGSEGV, mono_sigsegv_signal_handler, 0);
 }
 
 #ifndef PLATFORM_MACOSX
@@ -596,8 +522,6 @@ mono_runtime_cleanup_handlers (void)
 	if (mono_jit_trace_calls != NULL)
 		remove_signal_handler (SIGUSR2);
 
-	remove_signal_handler (mono_thread_get_abort_signal ());
-
 	remove_signal_handler (SIGABRT);
 
 	remove_signal_handler (SIGSEGV);
@@ -605,124 +529,335 @@ mono_runtime_cleanup_handlers (void)
 	free_saved_signal_handlers ();
 }
 
-#ifdef HAVE_LINUX_RTC_H
-#include <linux/rtc.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-static int rtc_fd = -1;
+#ifdef HAVE_PROFILER_SIGNAL
 
-static int
-enable_rtc_timer (gboolean enable)
+static volatile gint32 sampling_thread_running;
+
+#ifdef PLATFORM_MACOSX
+
+static clock_serv_t sampling_clock_service;
+
+static void
+clock_init (void)
 {
-	int flags;
-	flags = fcntl (rtc_fd, F_GETFL);
-	if (flags < 0) {
-		perror ("getflags");
-		return 0;
-	}
-	if (enable)
-		flags |= FASYNC;
-	else
-		flags &= ~FASYNC;
-	if (fcntl (rtc_fd, F_SETFL, flags) == -1) {
-		perror ("setflags");
-		return 0;
-	}
-	return 1;
+	kern_return_t ret;
+
+	do {
+		ret = host_get_clock_service (mach_host_self (), SYSTEM_CLOCK, &sampling_clock_service);
+	} while (ret == KERN_ABORTED);
+
+	if (ret != KERN_SUCCESS)
+		g_error ("%s: host_get_clock_service () returned %d", __func__, ret);
 }
+
+static void
+clock_cleanup (void)
+{
+	kern_return_t ret;
+
+	do {
+		ret = mach_port_deallocate (mach_task_self (), sampling_clock_service);
+	} while (ret == KERN_ABORTED);
+
+	if (ret != KERN_SUCCESS)
+		g_error ("%s: mach_port_deallocate () returned %d", __func__, ret);
+}
+
+static guint64
+clock_get_time_ns (void)
+{
+	kern_return_t ret;
+	mach_timespec_t mach_ts;
+
+	do {
+		ret = clock_get_time (sampling_clock_service, &mach_ts);
+	} while (ret == KERN_ABORTED);
+
+	if (ret != KERN_SUCCESS)
+		g_error ("%s: clock_get_time () returned %d", __func__, ret);
+
+	return ((guint64) mach_ts.tv_sec * 1000000000) + (guint64) mach_ts.tv_nsec;
+}
+
+static void
+clock_sleep_ns_abs (guint64 ns_abs)
+{
+	kern_return_t ret;
+	mach_timespec_t then, remain_unused;
+
+	then.tv_sec = ns_abs / 1000000000;
+	then.tv_nsec = ns_abs % 1000000000;
+
+	do {
+		ret = clock_sleep (sampling_clock_service, TIME_ABSOLUTE, then, &remain_unused);
+
+		if (ret != KERN_SUCCESS && ret != KERN_ABORTED)
+			g_error ("%s: clock_sleep () returned %d", __func__, ret);
+	} while (ret == KERN_ABORTED && InterlockedRead (&sampling_thread_running));
+}
+
+#else
+
+clockid_t sampling_posix_clock;
+
+static void
+clock_init (void)
+{
+	switch (mono_profiler_get_sampling_mode ()) {
+	case MONO_PROFILER_STAT_MODE_PROCESS:
+#ifdef HAVE_CLOCK_NANOSLEEP
+		/*
+		 * If we don't have clock_nanosleep (), measuring the process time
+		 * makes very little sense as we can only use nanosleep () to sleep on
+		 * real time.
+		 */
+		sampling_posix_clock = CLOCK_PROCESS_CPUTIME_ID;
+		break;
 #endif
+	case MONO_PROFILER_STAT_MODE_REAL: sampling_posix_clock = CLOCK_MONOTONIC; break;
+	default: g_assert_not_reached (); break;
+	}
+}
+
+static void
+clock_cleanup (void)
+{
+}
+
+static guint64
+clock_get_time_ns (void)
+{
+	struct timespec ts;
+
+	if (clock_gettime (sampling_posix_clock, &ts) == -1)
+		g_error ("%s: clock_gettime () returned -1, errno = %d", __func__, errno);
+
+	return ((guint64) ts.tv_sec * 1000000000) + (guint64) ts.tv_nsec;
+}
+
+static void
+clock_sleep_ns_abs (guint64 ns_abs)
+{
+#ifdef HAVE_CLOCK_NANOSLEEP
+	int ret;
+	struct timespec then;
+
+	then.tv_sec = ns_abs / 1000000000;
+	then.tv_nsec = ns_abs % 1000000000;
+
+	do {
+		ret = clock_nanosleep (sampling_posix_clock, TIMER_ABSTIME, &then, NULL);
+
+		if (ret != 0 && ret != EINTR)
+			g_error ("%s: clock_nanosleep () returned %d", __func__, ret);
+	} while (ret == EINTR && InterlockedRead (&sampling_thread_running));
+#else
+	int ret;
+	gint64 diff;
+	struct timespec req;
+
+	/*
+	 * What follows is a crude attempt at emulating clock_nanosleep () on OSs
+	 * which don't provide it (e.g. FreeBSD).
+	 *
+	 * The problem with nanosleep () is that if it is interrupted by a signal,
+	 * time will drift as a result of having to restart the call after the
+	 * signal handler has finished. For this reason, we avoid using the rem
+	 * argument of nanosleep (). Instead, before every nanosleep () call, we
+	 * check if enough time has passed to satisfy the sleep request. If yes, we
+	 * simply return. If not, we calculate the difference and do another sleep.
+	 *
+	 * This should reduce the amount of drift that happens because we account
+	 * for the time spent executing the signal handler, which nanosleep () is
+	 * not guaranteed to do for the rem argument.
+	 *
+	 * The downside to this approach is that it is slightly expensive: We have
+	 * to make an extra system call to retrieve the current time whenever we're
+	 * going to restart a nanosleep () call. This is unlikely to be a problem
+	 * in practice since the sampling thread won't be receiving many signals in
+	 * the first place (it's a tools thread, so no STW), and because typical
+	 * sleep periods for the thread are many orders of magnitude bigger than
+	 * the time it takes to actually perform that system call (just a few
+	 * nanoseconds).
+	 */
+	do {
+		diff = (gint64) ns_abs - (gint64) clock_get_time_ns ();
+
+		if (diff <= 0)
+			break;
+
+		req.tv_sec = diff / 1000000000;
+		req.tv_nsec = diff % 1000000000;
+
+		if ((ret = nanosleep (&req, NULL)) == -1 && errno != EINTR)
+			g_error ("%s: nanosleep () returned -1, errno = %d", __func__, errno);
+	} while (ret == -1 && InterlockedRead (&sampling_thread_running));
+#endif
+}
+
+#endif
+
+static int profiler_signal;
+static volatile gint32 sampling_thread_exiting;
+
+static mono_native_thread_return_t
+sampling_thread_func (void *data)
+{
+	mono_threads_attach_tools_thread ();
+	mono_native_thread_set_name (mono_native_thread_id_get (), "Profiler sampler");
+
+	gint64 rate = 1000000000 / mono_profiler_get_sampling_rate ();
+
+	int old_policy;
+	struct sched_param old_sched;
+	pthread_getschedparam (pthread_self (), &old_policy, &old_sched);
+
+	/*
+	 * Attempt to switch the thread to real time scheduling. This will not
+	 * necessarily work on all OSs; for example, most Linux systems will give
+	 * us EPERM here unless configured to allow this.
+	 *
+	 * TODO: This does not work on Mac (and maybe some other OSs). On Mac, we
+	 * have to use the Mach thread policy routines to switch to real-time
+	 * scheduling. This is quite tricky as we need to specify how often we'll
+	 * be doing work (easy), the normal processing time needed (also easy),
+	 * and the maximum amount of processing time needed (hard). This is
+	 * further complicated by the fact that if we misbehave and take too long
+	 * to do our work, the kernel may knock us back down to the normal thread
+	 * scheduling policy without telling us.
+	 */
+	struct sched_param sched = { .sched_priority = sched_get_priority_max (SCHED_FIFO) };
+	pthread_setschedparam (pthread_self (), SCHED_FIFO, &sched);
+
+	clock_init ();
+
+	guint64 sleep = clock_get_time_ns ();
+
+	while (InterlockedRead (&sampling_thread_running)) {
+		sleep += rate;
+
+		FOREACH_THREAD_SAFE (info) {
+			/* info should never be this thread as we're a tools thread. */
+			g_assert (mono_thread_info_get_tid (info) != mono_native_thread_id_get ());
+
+			mono_threads_pthread_kill (info, profiler_signal);
+			InterlockedIncrement (&profiler_signals_sent);
+		} FOREACH_THREAD_SAFE_END
+
+		clock_sleep_ns_abs (sleep);
+	}
+
+	InterlockedWrite (&sampling_thread_exiting, 1);
+
+	clock_cleanup ();
+
+	pthread_setschedparam (pthread_self (), old_policy, &old_sched);
+
+	mono_thread_info_detach ();
+
+	return NULL;
+}
 
 void
 mono_runtime_shutdown_stat_profiler (void)
 {
-#ifdef HAVE_LINUX_RTC_H
-	if (rtc_fd >= 0)
-		enable_rtc_timer (FALSE);
-#endif
-}
+	InterlockedWrite (&sampling_thread_running, 0);
 
-#ifdef ITIMER_PROF
-static int
-get_itimer_mode (void)
-{
-	switch (mono_profiler_get_sampling_mode ()) {
-	case MONO_PROFILER_STAT_MODE_PROCESS: return ITIMER_PROF;
-	case MONO_PROFILER_STAT_MODE_REAL: return ITIMER_REAL;
-	}
-	g_assert_not_reached ();
-	return 0;
-}
+#ifdef HAVE_CLOCK_NANOSLEEP
+	/*
+	 * There is a slight problem when we're using CLOCK_PROCESS_CPUTIME_ID: If
+	 * we're shutting down and there's largely no activity in the process other
+	 * than waiting for the sampler thread to shut down, it can take upwards of
+	 * 20 seconds (depending on a lot of factors) for us to shut down because
+	 * the sleep progresses very slowly as a result of the low CPU activity.
+	 *
+	 * We fix this by repeatedly sending the profiler signal to the sampler
+	 * thread in order to interrupt the sleep. clock_sleep_ns_abs () will check
+	 * sampling_thread_running upon an interrupt and return immediately if it's
+	 * zero. profiler_signal_handler () has a special case to ignore the signal
+	 * for the sampler thread.
+	 *
+	 * We do not need to do this on platforms where we use a regular sleep
+	 * based on a monotonic clock. The sleep will return in a reasonable amount
+	 * of time in those cases.
+	 */
+	if (mono_profiler_get_sampling_mode () == MONO_PROFILER_STAT_MODE_PROCESS) {
+		MonoThreadInfo *info;
 
-static int
-get_itimer_signal (void)
-{
-	switch (mono_profiler_get_sampling_mode ()) {
-	case MONO_PROFILER_STAT_MODE_PROCESS: return SIGPROF;
-	case MONO_PROFILER_STAT_MODE_REAL: return SIGALRM;
+		// Did it shut down already?
+		if ((info = mono_thread_info_lookup (sampling_thread))) {
+			while (!InterlockedRead (&sampling_thread_exiting)) {
+				mono_threads_pthread_kill (info, profiler_signal);
+				mono_thread_info_usleep (10 * 1000 /* 10ms */);
+			}
+
+			// Make sure info can be freed.
+			mono_hazard_pointer_clear (mono_hazard_pointer_get (), 1);
+		}
 	}
-	g_assert_not_reached ();
-	return 0;
-}
 #endif
+
+	pthread_join (sampling_thread, NULL);
+
+	/*
+	 * We can't safely remove the signal handler because we have no guarantee
+	 * that all pending signals have been delivered at this point. This should
+	 * not really be a problem anyway.
+	 */
+	//remove_signal_handler (profiler_signal);
+}
 
 void
 mono_runtime_setup_stat_profiler (void)
 {
-#ifdef ITIMER_PROF
-	struct itimerval itval;
-	static int inited = 0;
-#ifdef HAVE_LINUX_RTC_H
-	const char *rtc_freq;
-	if (!inited && (rtc_freq = g_getenv ("MONO_RTC"))) {
-		int freq = 0;
-		inited = 1;
-		if (*rtc_freq)
-			freq = atoi (rtc_freq);
-		if (!freq)
-			freq = 1024;
-		rtc_fd = open ("/dev/rtc", O_RDONLY);
-		if (rtc_fd == -1) {
-			perror ("open /dev/rtc");
-			return;
-		}
-		profiling_signal_in_use = SIGPROF;
-		add_signal_handler (profiling_signal_in_use, sigprof_signal_handler);
-		if (ioctl (rtc_fd, RTC_IRQP_SET, freq) == -1) {
-			perror ("set rtc freq");
-			return;
-		}
-		if (ioctl (rtc_fd, RTC_PIE_ON, 0) == -1) {
-			perror ("start rtc");
-			return;
-		}
-		if (fcntl (rtc_fd, F_SETSIG, SIGPROF) == -1) {
-			perror ("setsig");
-			return;
-		}
-		if (fcntl (rtc_fd, F_SETOWN, getpid ()) == -1) {
-			perror ("setown");
-			return;
-		}
-		enable_rtc_timer (TRUE);
-		return;
-	}
-	if (rtc_fd >= 0)
-		return;
+	/*
+	 * Use a real-time signal when possible. This gives us roughly a 99% signal
+	 * delivery rate in all cases. On the other hand, using a regular signal
+	 * tends to result in awful delivery rates when the application is heavily
+	 * loaded.
+	 *
+	 * We avoid real-time signals on Android as they're super broken in certain
+	 * API levels (too small sigset_t, nonsensical SIGRTMIN/SIGRTMAX values,
+	 * etc).
+	 *
+	 * TODO: On Mac, we should explore using the Mach thread suspend/resume
+	 * functions and doing the stack walk from the sampling thread. This would
+	 * get us a 100% sampling rate. However, this may interfere with the GC's
+	 * STW logic. Could perhaps be solved by taking the suspend lock.
+	 */
+#if defined (USE_POSIX_BACKEND) && defined (SIGRTMIN) && !defined (PLATFORM_ANDROID)
+	/* Just take the first real-time signal we can get. */
+	profiler_signal = mono_threads_posix_signal_search_alternative (-1);
+#else
+	profiler_signal = SIGPROF;
 #endif
 
-	itval.it_interval.tv_usec = (1000000 / mono_profiler_get_sampling_rate ()) - 1;
-	itval.it_interval.tv_sec = 0;
-	itval.it_value = itval.it_interval;
-	if (inited)
-		return;
-	inited = 1;
-	profiling_signal_in_use = get_itimer_signal ();
-	add_signal_handler (profiling_signal_in_use, sigprof_signal_handler);
-	setitimer (get_itimer_mode (), &itval, NULL);
-#endif
+	add_signal_handler (profiler_signal, profiler_signal_handler, SA_RESTART);
+
+	mono_counters_register ("Sampling signals sent", MONO_COUNTER_UINT | MONO_COUNTER_PROFILER | MONO_COUNTER_MONOTONIC, &profiler_signals_sent);
+	mono_counters_register ("Sampling signals received", MONO_COUNTER_UINT | MONO_COUNTER_PROFILER | MONO_COUNTER_MONOTONIC, &profiler_signals_received);
+	mono_counters_register ("Sampling signals accepted", MONO_COUNTER_UINT | MONO_COUNTER_PROFILER | MONO_COUNTER_MONOTONIC, &profiler_signals_accepted);
+	mono_counters_register ("Shutdown signals received", MONO_COUNTER_UINT | MONO_COUNTER_PROFILER | MONO_COUNTER_MONOTONIC, &profiler_interrupt_signals_received);
+
+	InterlockedWrite (&sampling_thread_running, 1);
+	mono_native_thread_create (&sampling_thread, sampling_thread_func, NULL);
 }
 
-#if !defined(__APPLE__)
+#else
+
+void
+mono_runtime_shutdown_stat_profiler (void)
+{
+}
+
+void
+mono_runtime_setup_stat_profiler (void)
+{
+}
+
+#endif
+
+#if !defined(PLATFORM_MACOSX)
 pid_t
 mono_runtime_syscall_fork ()
 {
@@ -742,7 +877,7 @@ void
 mono_gdb_render_native_backtraces (pid_t crashed_pid)
 {
 	const char *argv [9];
-	char template [] = "/tmp/mono-lldb-commands.XXXXXX";
+	char template_ [] = "/tmp/mono-lldb-commands.XXXXXX";
 	char buf1 [128];
 	FILE *commands;
 	gboolean using_lldb = FALSE;
@@ -757,10 +892,10 @@ mono_gdb_render_native_backtraces (pid_t crashed_pid)
 		return;
 
 	if (using_lldb) {
-		if (mkstemp (template) == -1)
+		if (mkstemp (template_) == -1)
 			return;
 
-		commands = fopen (template, "w");
+		commands = fopen (template_, "w");
 
 		fprintf (commands, "process attach --pid %ld\n", (long) crashed_pid);
 		fprintf (commands, "thread list\n");
@@ -772,7 +907,7 @@ mono_gdb_render_native_backtraces (pid_t crashed_pid)
 		fclose (commands);
 
 		argv [1] = "--source";
-		argv [2] = template;
+		argv [2] = template_;
 		argv [3] = 0;
 	} else {
 		argv [1] = "-ex";
@@ -789,7 +924,7 @@ mono_gdb_render_native_backtraces (pid_t crashed_pid)
 	execv (argv [0], (char**)argv);
 
 	if (using_lldb)
-		unlink (template);
+		unlink (template_);
 }
 #endif
 #endif /* __native_client__ */

@@ -120,6 +120,7 @@ static void
 mono_debug_add_vg_method (MonoMethod *method, MonoDebugMethodJitInfo *jit)
 {
 #ifdef VALGRIND_ADD_LINE_INFO
+	MonoError error;
 	MonoMethodHeader *header;
 	MonoDebugMethodInfo *minfo;
 	int i;
@@ -132,7 +133,8 @@ mono_debug_add_vg_method (MonoMethod *method, MonoDebugMethodJitInfo *jit)
 	if (!RUNNING_ON_VALGRIND)
 		return;
 
-	header = mono_method_get_header (method);
+	header = mono_method_get_header_checked (method, &error);
+	mono_error_assert_ok (&error); /* FIXME don't swallow the error */
 
 	full_name = mono_method_full_name (method, TRUE);
 
@@ -220,7 +222,6 @@ mono_debug_close_method (MonoCompile *cfg)
 	MonoDebugMethodJitInfo *jit;
 	MonoMethodHeader *header;
 	MonoMethodSignature *sig;
-	MonoDebugMethodAddress *debug_info;
 	MonoMethod *method;
 	int i;
 
@@ -270,7 +271,7 @@ mono_debug_close_method (MonoCompile *cfg)
 	for (i = 0; i < jit->num_line_numbers; i++)
 		jit->line_numbers [i] = g_array_index (info->line_numbers, MonoDebugLineNumberEntry, i);
 
-	debug_info = mono_debug_add_method (cfg->method_to_register, jit, cfg->domain);
+	mono_debug_add_method (cfg->method_to_register, jit, cfg->domain);
 
 	mono_debug_add_vg_method (method, jit);
 
@@ -452,7 +453,7 @@ mono_debug_serialize_debug_info (MonoCompile *cfg, guint8 **out_buf, guint32 *bu
 	}
 
 	size = ((jit->num_params + jit->num_locals + 1) * 10) + (jit->num_line_numbers * 10) + 64;
-	p = buf = g_malloc (size);
+	p = buf = (guint8 *)g_malloc (size);
 	encode_value (jit->epilogue_begin, p, &p);
 	encode_value (jit->prologue_end, p, &p);
 	encode_value (jit->code_size, p, &p);
@@ -522,14 +523,15 @@ deserialize_variable (MonoDebugVarInfo *var, guint8 *p, guint8 **endbuf)
 static MonoDebugMethodJitInfo *
 deserialize_debug_info (MonoMethod *method, guint8 *code_start, guint8 *buf, guint32 buf_len)
 {
+	MonoError error;
 	MonoMethodHeader *header;
 	gint32 offset, native_offset, prev_offset, prev_native_offset;
 	MonoDebugMethodJitInfo *jit;
 	guint8 *p;
 	int i;
 
-	header = mono_method_get_header (method);
-	g_assert (header);
+	header = mono_method_get_header_checked (method, &error);
+	mono_error_assert_ok (&error); /* FIXME don't swallow the error */
 
 	jit = g_new0 (MonoDebugMethodJitInfo, 1);
 	jit->code_start = code_start;
@@ -651,7 +653,7 @@ void
 mono_debug_print_vars (gpointer ip, gboolean only_arguments)
 {
 	MonoDomain *domain = mono_domain_get ();
-	MonoJitInfo *ji = mono_jit_info_table_find (domain, ip);
+	MonoJitInfo *ji = mono_jit_info_table_find (domain, (char *)ip);
 	MonoDebugMethodJitInfo *jit;
 	int i;
 
@@ -731,7 +733,7 @@ mono_debugger_method_has_breakpoint (MonoMethod *method)
 		return 0;
 
 	for (i = 0; i < breakpoints->len; i++) {
-		MiniDebugBreakpointInfo *info = g_ptr_array_index (breakpoints, i);
+		MiniDebugBreakpointInfo *info = (MiniDebugBreakpointInfo *)g_ptr_array_index (breakpoints, i);
 
 		if (!mono_method_desc_full_match (info->desc, method))
 			continue;

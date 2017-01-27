@@ -1,6 +1,7 @@
 /*
  * Copyright 2008-2010 Novell, Inc.
  * Copyright 2011 Xamarin Inc.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #ifndef __MONO_MONO_STACK_UNWINDING_H__
 #define __MONO_MONO_STACK_UNWINDING_H__
@@ -19,7 +20,8 @@ typedef enum {
 	FRAME_TYPE_DEBUGGER_INVOKE = 1,
 	/* Frame for transitioning to native code */
 	FRAME_TYPE_MANAGED_TO_NATIVE = 2,
-	FRAME_TYPE_SENTINEL = 3
+	FRAME_TYPE_TRAMPOLINE = 3,
+	FRAME_TYPE_NUM = 4
 } MonoStackFrameType;
 
 typedef enum {
@@ -57,6 +59,7 @@ typedef struct {
 	MonoMethod *actual_method;
 	/* The domain containing the code executed by this frame */
 	MonoDomain *domain;
+	/* Whenever method is a user level method */
 	gboolean managed;
 	/*
 	 * Whenever this frame was loaded in async context.
@@ -93,6 +96,8 @@ typedef struct {
 	MonoContext ctx;
 	gpointer unwind_data [3]; /*right now: domain, lmf and jit_tls*/
 	gboolean valid;
+	void *gc_stackdata;
+	int gc_stackdata_size;
 } MonoThreadUnwindState;
 
 

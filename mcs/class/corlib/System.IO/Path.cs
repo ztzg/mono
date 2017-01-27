@@ -289,6 +289,12 @@ namespace System.IO {
 			return fullpath;
 		}
 
+		internal static String GetFullPathInternal(String path)
+		{
+			return InsecureGetFullPath (path);
+		}
+
+#if !MOBILE
 		// http://msdn.microsoft.com/en-us/library/windows/desktop/aa364963%28v=vs.85%29.aspx
 		[DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		private static extern int GetFullPathName(string path, int numBufferChars, StringBuilder buffer, ref IntPtr lpFilePartOrNull); 
@@ -341,6 +347,7 @@ namespace System.IO {
 			}
 			return path;
 		}
+#endif
 
 		// insecure - do not call directly
 		internal static string InsecureGetFullPath (string path)
@@ -352,11 +359,11 @@ namespace System.IO {
 				string msg = Locale.GetText ("The specified path is not of a legal form (empty).");
 				throw new ArgumentException (msg);
 			}
-
+#if !MOBILE
 			// adjust for drives, i.e. a special case for windows
 			if (Environment.IsRunningOnWindows)
 				path = WindowsDriveAdjustment (path);
-
+#endif
 			// if the supplied path ends with a separator...
 			char end = path [path.Length - 1];
 
@@ -396,7 +403,7 @@ namespace System.IO {
 					if (current [1] == VolumeSeparatorChar)
 						path = current.Substring (0, 2) + path;
 					else
-						path = current.Substring (0, current.IndexOf ('\\', current.IndexOfOrdinalUnchecked ("\\\\") + 1));
+						path = current.Substring (0, current.IndexOf ('\\', current.IndexOfUnchecked ("\\\\", 0, current.Length) + 1));
 				}
 			}
 			
@@ -486,7 +493,7 @@ namespace System.IO {
 					f = new FileStream (path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read,
 							    8192, false, (FileOptions) 1);
 				} catch (IOException ex){
-					if (ex.hresult != MonoIO.FileAlreadyExistsHResult || count ++ > 65536)
+					if (ex._HResult != MonoIO.FileAlreadyExistsHResult || count ++ > 65536)
 						throw;
 				} catch (UnauthorizedAccessException ex) {
 					if (count ++ > 65536)
@@ -867,6 +874,12 @@ namespace System.IO {
 				int idx = path.IndexOf (':');
 				if (idx >= 0 && idx != 1)
 					throw new ArgumentException (parameterName);
+			}
+		}
+
+		internal static string DirectorySeparatorCharAsString {
+			get {
+				return DirectorySeparatorStr;
 			}
 		}
 	}

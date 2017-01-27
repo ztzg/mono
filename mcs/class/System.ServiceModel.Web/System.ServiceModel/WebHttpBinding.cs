@@ -52,7 +52,7 @@ namespace System.ServiceModel
 
 		public WebHttpBinding (string configurationName)
 		{
-#if !NET_2_1
+#if !NET_2_1 && !XAMMAC_4_5
 			BindingsSection bindingsSection = ConfigUtil.BindingsSection;
 			WebHttpBindingElement el = (WebHttpBindingElement) bindingsSection ["webHttpBinding"].ConfiguredBindings.FirstOrDefault (c => c.Name == configurationName);
 			if (el != null) {
@@ -88,7 +88,7 @@ namespace System.ServiceModel
 			get { return EnvelopeVersion.None; }
 		}
 
-#if !NET_2_1
+#if !NET_2_1 && !XAMMAC_4_5
 		[DefaultValue (false)]
 		public bool AllowCookies {
 			get { return t.AllowCookies; }
@@ -158,7 +158,7 @@ namespace System.ServiceModel
 		}
 
 		public override string Scheme {
-			get { return Security.Mode != WebHttpSecurityMode.None ? Uri.UriSchemeHttps : Uri.UriSchemeHttp; }
+			get { return Security.Mode == WebHttpSecurityMode.Transport ? Uri.UriSchemeHttps : Uri.UriSchemeHttp; }
 		}
 
 		public WebHttpSecurity Security {

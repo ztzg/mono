@@ -3,24 +3,13 @@
  *
  * Copyright (C) 2013 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "config.h"
 
-#include <metadata/sgen-gc.h>
-#include <metadata/sgen-qsort.h>
+#include <sgen/sgen-gc.h>
+#include <sgen/sgen-qsort.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -100,7 +89,7 @@ compare_sorts2 (void *base, size_t nel)
 	memcpy (b2, base, len);
 
 	qsort (b1, nel, sizeof (teststruct_t*), compare_teststructs2);
-	qsort_test_struct (b2, nel);
+	qsort_test_struct ((teststruct_t **)b2, nel);
 
 	assert (!memcmp (b1, b2, len));
 

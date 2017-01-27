@@ -42,6 +42,19 @@ using System.Reflection;
 #endif
 
 namespace Mono.CSharp {
+
+public static class TypeExtensions {
+	public static string GetNamespace (this Type t)
+	{
+		// IKVM crashes here with a null ref sometimes
+		try {
+			return t.Namespace;
+		} catch {
+			return null;
+		}
+	}
+}
+	
 public class Outline {
 	bool declared_only;
 	bool show_private;
@@ -636,7 +649,7 @@ public class Outline {
 		if (!type.StartsWith ("System.")) {
 			if (type.IndexOf (".") == -1)
 				return type;
-			if (t.Namespace == this.t.Namespace)
+			if (t.GetNamespace () == this.t.GetNamespace ())
 				return t.Name;
 			return type;
 		}
@@ -683,7 +696,7 @@ public class Outline {
 		// automatically get the namespace imported by virtue of the
 		// namespace {} block.
 		//	
-		if (this.t.Namespace.StartsWith (t.Namespace + ".") || t.Namespace == this.t.Namespace)
+		if (this.t.Namespace != null && (this.t.Namespace.StartsWith (t.Namespace + ".") || t.Namespace == this.t.Namespace))
 			return type.Substring (t.Namespace.Length + 1);
 	
 		return type;
@@ -745,7 +758,8 @@ public class Outline {
 		}
 
 		if (!recursed) {
-			string ns = t.Namespace;
+			string ns;
+			ns = t.GetNamespace ();
 			if ((ns != null) && (ns != "")) {
 				sb.Append (ns);
 				sb.Append (".");

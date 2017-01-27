@@ -69,7 +69,7 @@
  * by genmdesc from cpu-<ARCH>.md during the build process. Obviously,
  * this macro is mandatory.
  */
-#define MONO_ARCH_CPU_SPEC sh4_desc
+#define MONO_ARCH_CPU_SPEC mono_sh4_desc
 
 /*
  * If this macro is defined, the opcode to convert an unsigned 32 bits
@@ -82,6 +82,7 @@
  */
 #define MONO_ARCH_EMULATE_MUL_DIV 1
 #define MONO_ARCH_NEED_DIV_CHECK 1
+#define MONO_ARCH_EMULATE_DIV 1
 
 /*
  * If this macro is defined, the opcode to convert a double float to
@@ -255,11 +256,11 @@
 #define MONO_SH4_FREG_LAST_ARG sh4_fr11
 
 #define MONO_ARCH_HAVE_IMT 1
-#define MONO_ARCH_THIS_AS_FIRST_ARG 1
 #define MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX 1
 
 #define MONO_ARCH_IMT_REG sh4_r1
 #define MONO_ARCH_RGCTX_REG MONO_ARCH_IMT_REG
+#define MONO_ARCH_VTABLE_REG sh4_r0
 
 /* Structure where the arch-specific code can store
  * data during a compilation. */

@@ -29,11 +29,11 @@
 
 #if SECURITY_DEP
 
-#if MONOTOUCH || MONODROID
-using Mono.Security.Authenticode;
-#else
+#if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 using MonoSecurity::Mono.Security.Authenticode;
+#else
+using Mono.Security.Authenticode;
 #endif
 
 using System.IO;
@@ -47,21 +47,23 @@ using System.Threading;
 namespace System.Net {
 	sealed class EndPointListener
 	{
+		HttpListener listener;
 		IPEndPoint endpoint;
 		Socket sock;
 		Hashtable prefixes;  // Dictionary <ListenerPrefix, HttpListener>
 		ArrayList unhandled; // List<ListenerPrefix> unhandled; host = '*'
 		ArrayList all;       // List<ListenerPrefix> all;  host = '+'
-		X509Certificate2 cert;
-		AsymmetricAlgorithm key;
+		X509Certificate cert;
 		bool secure;
 		Dictionary<HttpConnection, HttpConnection> unregistered;
 
-		public EndPointListener (IPAddress addr, int port, bool secure)
+		public EndPointListener (HttpListener listener, IPAddress addr, int port, bool secure)
 		{
+			this.listener = listener;
+
 			if (secure) {
 				this.secure = secure;
-				LoadCertificateAndKey (addr, port);
+				cert = listener.LoadCertificateAndKey (addr, port);
 			}
 
 			endpoint = new IPEndPoint (addr, port);
@@ -71,68 +73,54 @@ namespace System.Net {
 			SocketAsyncEventArgs args = new SocketAsyncEventArgs ();
 			args.UserToken = this;
 			args.Completed += OnAccept;
-			sock.AcceptAsync (args);
+			Accept (sock, args);
 			prefixes = new Hashtable ();
 			unregistered = new Dictionary<HttpConnection, HttpConnection> ();
 		}
 
-		void LoadCertificateAndKey (IPAddress addr, int port)
-		{
-			// Actually load the certificate
-			try {
-				string dirname = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
-				string path = Path.Combine (dirname, ".mono");
-				path = Path.Combine (path, "httplistener");
-				string cert_file = Path.Combine (path, String.Format ("{0}.cer", port));
-				if (!File.Exists (cert_file))
-					return;
-				string pvk_file = Path.Combine (path, String.Format ("{0}.pvk", port));
-				if (!File.Exists (pvk_file))
-					return;
-				cert = new X509Certificate2 (cert_file);
-				key = PrivateKey.CreateFromFile (pvk_file).RSA;
-			} catch {
-				// ignore errors
+		internal HttpListener Listener {
+			get { return listener; }
+		}
+
+		static void Accept (Socket socket, SocketAsyncEventArgs e) {
+			e.AcceptSocket = null;
+			var asyn = socket.AcceptAsync(e);
+			if (!asyn) {
+				ProcessAccept(e);
 			}
 		}
 
-		static void OnAccept (object sender, EventArgs e)
+
+		static void ProcessAccept (SocketAsyncEventArgs args) 
 		{
-			SocketAsyncEventArgs args = (SocketAsyncEventArgs) e;
-			EndPointListener epl = (EndPointListener) args.UserToken;
 			Socket accepted = null;
-			if (args.SocketError == SocketError.Success) {
+			if (args.SocketError == SocketError.Success)
 				accepted = args.AcceptSocket;
-				args.AcceptSocket = null;
-			}
 
-			try {
-				if (epl.sock != null)
-					epl.sock.AcceptAsync (args);
-			} catch {
-				if (accepted != null) {
-					try {
-						accepted.Close ();
-					} catch {}
-					accepted = null;
-				}
-			} 
+			EndPointListener epl = (EndPointListener) args.UserToken;
 
+
+			Accept (epl.sock, args);
 			if (accepted == null)
 				return;
 
-			if (epl.secure && (epl.cert == null || epl.key == null)) {
+			if (epl.secure && epl.cert == null) {
 				accepted.Close ();
 				return;
 			}
-			HttpConnection conn = new HttpConnection (accepted, epl, epl.secure, epl.cert, epl.key);
+			HttpConnection conn = new HttpConnection (accepted, epl, epl.secure, epl.cert);
 			lock (epl.unregistered) {
 				epl.unregistered [conn] = conn;
 			}
 			conn.BeginReadRequest ();
 		}
 
-		internal void RemoveConnection (HttpConnection conn)
+		static void OnAccept (object sender, SocketAsyncEventArgs e) 
+		{
+			ProcessAccept (e);
+		}
+
+		internal void RemoveConnection (HttpConnection conn) 
 		{
 			lock (unregistered) {
 				unregistered.Remove (conn);
@@ -168,7 +156,7 @@ namespace System.Net {
 
 			string host = uri.Host;
 			int port = uri.Port;
-			string path = HttpUtility.UrlDecode (uri.AbsolutePath);
+			string path = WebUtility.UrlDecode (uri.AbsolutePath);
 			string path_slash = path [path.Length - 1] == '/' ? path : path + "/";
 			
 			HttpListener best_match = null;

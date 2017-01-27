@@ -6,6 +6,7 @@
  *
  * Copyright 2001-2004 Ximian, Inc.
  * Copyright 2004-2009 Novell, Inc.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include <config.h>
 
@@ -48,6 +49,17 @@ mono_dl_get_executable_path (char *buf, int buflen)
 	if (_NSGetExecutablePath (buf, &bsize) == 0)
 		return strlen (buf);
 	return -1;
+}
+
+const char*
+mono_dl_get_system_dir (void)
+{
+#ifdef TARGET_IOS
+	/* IOS9 can't load system libraries using relative paths, i.e. 'libc' doesn't work, but '/usr/lib/libc' does. */
+	return "/usr/lib";
+#else
+	return NULL;
+#endif
 }
 
 #endif

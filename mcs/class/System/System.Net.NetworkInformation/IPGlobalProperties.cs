@@ -37,60 +37,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 namespace System.Net.NetworkInformation {
-	public abstract class IPGlobalProperties {
-		protected IPGlobalProperties ()
-		{
-		}
-
-		public static IPGlobalProperties GetIPGlobalProperties ()
-		{
-#if MONODROID
-			return new AndroidIPGlobalProperties ();
-#else
-			switch (Environment.OSVersion.Platform) {
-			case PlatformID.Unix:
-				MibIPGlobalProperties impl = null;
-				if (Directory.Exists (MibIPGlobalProperties.ProcDir)) {
-					impl = new MibIPGlobalProperties (MibIPGlobalProperties.ProcDir);
-					if (File.Exists (impl.StatisticsFile))
-						return impl;
-				}
-				if (Directory.Exists (MibIPGlobalProperties.CompatProcDir)) {
-					impl = new MibIPGlobalProperties (MibIPGlobalProperties.CompatProcDir);
-					if (File.Exists (impl.StatisticsFile))
-						return impl;
-				}
-				return new UnixIPGlobalProperties ();
-			default:
-				return new Win32IPGlobalProperties ();
-			}
-#endif
-		}
-
-		internal static IPGlobalProperties InternalGetIPGlobalProperties()
-		{
-			return GetIPGlobalProperties ();
-		}
-
-		public abstract TcpConnectionInformation [] GetActiveTcpConnections ();
-		public abstract IPEndPoint [] GetActiveTcpListeners ();
-		public abstract IPEndPoint [] GetActiveUdpListeners ();
-		public abstract IcmpV4Statistics GetIcmpV4Statistics ();
-		public abstract IcmpV6Statistics GetIcmpV6Statistics ();
-		public abstract IPGlobalStatistics GetIPv4GlobalStatistics ();
-		public abstract IPGlobalStatistics GetIPv6GlobalStatistics ();
-		public abstract TcpStatistics GetTcpIPv4Statistics ();
-		public abstract TcpStatistics GetTcpIPv6Statistics ();
-		public abstract UdpStatistics GetUdpIPv4Statistics ();
-		public abstract UdpStatistics GetUdpIPv6Statistics ();
-
-		public abstract string DhcpScopeName { get; }
-		public abstract string DomainName { get; }
-		public abstract string HostName { get; }
-		public abstract bool IsWinsProxy { get; }
-		public abstract NetBiosNodeType NodeType { get; }
-	}
-
 	abstract class CommonUnixIPGlobalProperties : IPGlobalProperties
 	{
 		[DllImport ("libc")]
@@ -190,6 +136,7 @@ namespace System.Net.NetworkInformation {
 		}
 	}
 
+#if MONODROID
 	sealed class AndroidIPGlobalProperties : UnixIPGlobalProperties
 	{
 		public override string DomainName {
@@ -198,6 +145,7 @@ namespace System.Net.NetworkInformation {
 			}
 		}
 	}
+#endif
 
 	// It expects /proc/net/snmp (or /usr/compat/linux/proc/net/snmp),
 	// formatted like:
@@ -339,7 +287,7 @@ namespace System.Net.NetworkInformation {
 				IPEndPoint local = ToEndpoint (list [i] [1]);
 				IPEndPoint remote = ToEndpoint (list [i] [2]);
 				TcpState state = (TcpState) int.Parse (list [i] [3], NumberStyles.HexNumber);
-				ret [i] = new TcpConnectionInformationImpl (local, remote, state);
+				ret [i] = new SystemTcpConnectionInformation (local, remote, state);
 			}
 			return ret;
 		}
@@ -403,6 +351,7 @@ namespace System.Net.NetworkInformation {
 		}
 	}
 
+#if !MOBILE
 	class Win32IPGlobalProperties : IPGlobalProperties
 	{
 		public const int AF_INET = 2;
@@ -685,7 +634,7 @@ namespace System.Net.NetworkInformation {
 			}
 
 			public TcpConnectionInformation TcpInfo {
-				get { return new TcpConnectionInformationImpl (LocalEndPoint, RemoteEndPoint, State); }
+				get { return new SystemTcpConnectionInformation (LocalEndPoint, RemoteEndPoint, State); }
 			}
 		}
 
@@ -709,7 +658,7 @@ namespace System.Net.NetworkInformation {
 			}
 
 			public TcpConnectionInformation TcpInfo {
-				get { return new TcpConnectionInformationImpl (LocalEndPoint, RemoteEndPoint, State); }
+				get { return new SystemTcpConnectionInformation (LocalEndPoint, RemoteEndPoint, State); }
 			}
 		}
 
@@ -736,4 +685,5 @@ namespace System.Net.NetworkInformation {
 			}
 		}
 	}
+#endif
 }

@@ -26,12 +26,9 @@
 #include <mono/io-layer/semaphores.h>
 #include <mono/io-layer/sockets.h>
 #include <mono/io-layer/status.h>
-#include <mono/io-layer/system.h>
 #include <mono/io-layer/threads.h>
 #include <mono/io-layer/timefuncs.h>
 #include <mono/io-layer/versioninfo.h>
 #include <mono/io-layer/wait.h>
-
-#include <mono/utils/mono-mutex.h>
 
 #endif /* _WAPI_WAPI_H_ */

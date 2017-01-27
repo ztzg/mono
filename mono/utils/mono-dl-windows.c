@@ -6,6 +6,7 @@
  *
  * Copyright 2001-2004 Ximian, Inc.
  * Copyright 2004-2009 Novell, Inc.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include <config.h>
 
@@ -157,6 +158,12 @@ int
 mono_dl_get_executable_path (char *buf, int buflen)
 {
 	return -1; //TODO
+}
+
+const char*
+mono_dl_get_system_dir (void)
+{
+	return NULL;
 }
 
 #endif

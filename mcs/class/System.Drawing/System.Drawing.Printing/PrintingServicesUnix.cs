@@ -299,6 +299,9 @@ namespace System.Drawing.Printing
 			CUPS_OPTIONS cups_options;
 			string option_name, option_value;
 			int cups_size = Marshal.SizeOf(typeof(CUPS_OPTIONS));
+
+			LoadOptionList (ppd, "PageSize", paper_names, out defsize);
+			LoadOptionList (ppd, "InputSlot", paper_sources, out defsource);
 			
 			for (int j = 0; j < numOptions; j++)
 			{
@@ -306,6 +309,8 @@ namespace System.Drawing.Printing
 				option_name = Marshal.PtrToStringAnsi(cups_options.name);
 				option_value = Marshal.PtrToStringAnsi(cups_options.val);
 
+				if (option_name == "PageSize") defsize = option_value;
+				else if (option_name == "InputSlot") defsource = option_value;
 				#if PrintDebug
 				Console.WriteLine("{0} = {1}", option_name, option_value);
 				#endif
@@ -314,9 +319,6 @@ namespace System.Drawing.Printing
 
 				options = (IntPtr) ((long)options + cups_size);
 			}
-			
-			LoadOptionList (ppd, "PageSize", paper_names, out defsize);
-			LoadOptionList (ppd, "InputSlot", paper_sources, out defsource);
 		}
 		
 		/// <summary>
@@ -843,7 +845,7 @@ namespace System.Drawing.Printing
 			if (!settings.PrintToFile) {
 				StringBuilder sb = new StringBuilder (1024);
 				int length = sb.Capacity;
-				cupsTempFile (sb, length);
+				cupsTempFd (sb, length);
 				name = sb.ToString ();
 				tmpfile = name;
 			}
@@ -889,7 +891,7 @@ namespace System.Drawing.Printing
 		static extern void cupsFreeDests (int num_dests, IntPtr dests);
 
 		[DllImport("libcups", CharSet=CharSet.Ansi)]
-		static extern IntPtr cupsTempFile (StringBuilder sb, int len);
+		static extern IntPtr cupsTempFd (StringBuilder sb, int len);
 
 		[DllImport("libcups", CharSet=CharSet.Ansi)]
 		static extern IntPtr cupsGetDefault ();

@@ -5,10 +5,21 @@
  *	Gonzalo Paniagua Javier (gonzalo@ximian.com)
  *
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
+#endif
+
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_SYS_EVENT_H
+#include <sys/event.h>
+#endif
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
 #endif
 
 #include <mono/metadata/appdomain.h>
@@ -51,7 +62,6 @@ ves_icall_System_IO_FSW_SupportsFSW (void)
 	MonoDl *fam_module;
 	int lib_used = 4; /* gamin */
 	int inotify_instance;
-	void *iter;
 	char *err;
 
 	inotify_instance = ves_icall_System_IO_InotifyWatcher_GetInotifyInstance ();
@@ -60,11 +70,9 @@ ves_icall_System_IO_FSW_SupportsFSW (void)
 		return 5; /* inotify */
 	}
 
-	iter = NULL;
 	fam_module = mono_dl_open ("libgamin-1.so", MONO_DL_LAZY, NULL);
 	if (fam_module == NULL) {
 		lib_used = 2; /* FAM */
-		iter = NULL;
 		fam_module = mono_dl_open ("libfam.so", MONO_DL_LAZY, NULL);
 	}
 
@@ -141,13 +149,16 @@ ves_icall_System_IO_InotifyWatcher_GetInotifyInstance ()
 int
 ves_icall_System_IO_InotifyWatcher_AddWatch (int fd, MonoString *name, gint32 mask)
 {
+	MonoError error;
 	char *str, *path;
 	int retval;
 
 	if (name == NULL)
 		return -1;
 
-	str = mono_string_to_utf8 (name);
+	str = mono_string_to_utf8_checked (name, &error);
+	if (mono_error_set_pending_exception (&error))
+		return -1;
 	path = mono_portability_find_file (str, TRUE);
 	if (!path)
 		path = str;
@@ -191,4 +202,55 @@ ves_icall_System_IO_InotifyWatcher_RemoveWatch (int fd, gint32 watch_descriptor)
 	return inotify_rm_watch (fd, watch_descriptor);
 }
 #endif
+
+#if HAVE_KQUEUE
+
+static void
+interrupt_kevent (gpointer data)
+{
+	int *kq_ptr = data;
+
+	/* Interrupt the kevent () call by closing the fd */
+	close (*kq_ptr);
+	/* Signal to managed code that the fd is closed */
+	*kq_ptr = -1;
+}
+
+/*
+ * ves_icall_System_IO_KqueueMonitor_kevent_notimeout:
+ *
+ *   Call kevent (), while handling runtime interruptions.
+ */
+int
+ves_icall_System_IO_KqueueMonitor_kevent_notimeout (int *kq_ptr, gpointer changelist, int nchanges, gpointer eventlist, int nevents)
+{
+	int res;
+	gboolean interrupted;
+
+	mono_thread_info_install_interrupt (interrupt_kevent, kq_ptr, &interrupted);
+	if (interrupted) {
+		close (*kq_ptr);
+		*kq_ptr = -1;
+		return -1;
+	}
+
+	MONO_ENTER_GC_SAFE;
+	res = kevent (*kq_ptr, changelist, nchanges, eventlist, nevents, NULL);
+	MONO_EXIT_GC_SAFE;
+
+	mono_thread_info_uninstall_interrupt (&interrupted);
+
+	return res;
+}
+
+#else
+
+int
+ves_icall_System_IO_KqueueMonitor_kevent_notimeout (int *kq_ptr, gpointer changelist, int nchanges, gpointer eventlist, int nevents)
+{
+	g_assert_not_reached ();
+	return -1;
+}
+
+#endif /* #if HAVE_KQUEUE */
 

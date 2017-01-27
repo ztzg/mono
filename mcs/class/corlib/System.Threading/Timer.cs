@@ -166,7 +166,7 @@ namespace System.Threading
 			if (notifyObject == null)
 				throw new ArgumentNullException ("notifyObject");
 			Dispose ();
-			NativeEventCalls.SetEvent_internal (notifyObject.Handle);
+			NativeEventCalls.SetEvent (notifyObject.SafeWaitHandle);
 			return true;
 		}
 
@@ -347,7 +347,7 @@ namespace System.Threading
 							list.RemoveAt (i);
 							count--;
 							i--;
-							ThreadPool.QueueWorkItem (TimerCB, timer);
+							ThreadPool.UnsafeQueueUserWorkItem (TimerCB, timer);
 							long period = timer.period_ms;
 							long due_time = timer.due_time_ms;
 							bool no_more = (period == -1 || ((period == 0 || period == Timeout.Infinite) && due_time != Timeout.Infinite));

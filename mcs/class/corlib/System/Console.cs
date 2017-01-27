@@ -96,11 +96,6 @@ namespace System
 
 		static Console ()
 		{
-#if NET_2_1
-			Encoding inputEncoding;
-			Encoding outputEncoding;
-#endif
-
 			if (Environment.IsRunningOnWindows) {
 				//
 				// On Windows, follow the Windows tradition
@@ -141,48 +136,29 @@ namespace System
 		{
 #if !NET_2_1
 			if (!Environment.IsRunningOnWindows && ConsoleDriver.IsConsole) {
-				StreamWriter w = new CStreamWriter (OpenStandardOutput (0), outputEncoding, true);
-				w.AutoFlush = true;
-				stdout = TextWriter.Synchronized (w);
-
-				w = new CStreamWriter (OpenStandardOutput (0), outputEncoding, true);
-				w.AutoFlush = true;
-				stderr = TextWriter.Synchronized (w);
-				
 				stdin = new CStreamReader (OpenStandardInput (0), inputEncoding);
-			} else {
+				stdout = TextWriter.Synchronized (new CStreamWriter (OpenStandardOutput (0), outputEncoding, true) { AutoFlush = true });
+				stderr = TextWriter.Synchronized (new CStreamWriter (OpenStandardError (0), outputEncoding, true) { AutoFlush = true });
+			} else
 #endif
-// FULL_AOT_RUNTIME is used (instead of MONOTOUCH) since we only want this code when running on 
-// iOS (simulator or devices) and *not* when running tools (e.g. btouch #12179) that needs to use 
-// the mscorlib.dll shipped with Xamarin.iOS
-#if MONOTOUCH && FULL_AOT_RUNTIME
-				stdout = new NSLogWriter ();
-#else
-				stdout = new UnexceptionalStreamWriter (OpenStandardOutput (0), outputEncoding);
-				((StreamWriter)stdout).AutoFlush = true;
-#endif
-				stdout = TextWriter.Synchronized (stdout);
+			{
+				stdin = TextReader.Synchronized (new UnexceptionalStreamReader (OpenStandardInput (0), inputEncoding));
 
-#if MONOTOUCH && FULL_AOT_RUNTIME
+#if MONOTOUCH
+				stdout = new NSLogWriter ();
 				stderr = new NSLogWriter ();
 #else
-				stderr = new UnexceptionalStreamWriter (OpenStandardError (0), outputEncoding); 
-				((StreamWriter)stderr).AutoFlush = true;
-#endif
-				stderr = TextWriter.Synchronized (stderr);
-
-				stdin = new UnexceptionalStreamReader (OpenStandardInput (0), inputEncoding);
-				stdin = TextReader.Synchronized (stdin);
-#if !NET_2_1
-			}
-#endif
+				stdout = TextWriter.Synchronized (new UnexceptionalStreamWriter (OpenStandardOutput (0), outputEncoding) { AutoFlush = true });
+				stderr = TextWriter.Synchronized (new UnexceptionalStreamWriter (OpenStandardError (0), outputEncoding) { AutoFlush = true });
 
 #if MONODROID
-			if (LogcatTextWriter.IsRunningOnAndroid ()) {
-				stdout = TextWriter.Synchronized (new LogcatTextWriter ("mono-stdout", stdout));
-				stderr = TextWriter.Synchronized (new LogcatTextWriter ("mono-stderr", stderr));
+				if (LogcatTextWriter.IsRunningOnAndroid ()) {
+					stdout = TextWriter.Synchronized (new LogcatTextWriter ("mono-stdout", stdout));
+					stderr = TextWriter.Synchronized (new LogcatTextWriter ("mono-stderr", stderr));
+				}
+#endif // MONODROID
+#endif // MONOTOUCH
 			}
-#endif  // MONODROID
 
 			GC.SuppressFinalize (stdout);
 			GC.SuppressFinalize (stderr);
@@ -210,7 +186,8 @@ namespace System
 		private static Stream Open (IntPtr handle, FileAccess access, int bufferSize)
 		{
 			try {
-				return new FileStream (handle, access, false, bufferSize, false, bufferSize == 0);
+				// TODO: Should use __ConsoleStream from reference sources
+				return new FileStream (handle, access, false, bufferSize, false, true);
 			} catch (IOException) {
 				return Stream.Null;
 			}
@@ -542,7 +519,6 @@ namespace System
 
 #endif
 
-#if !NET_2_1
 		// FIXME: Console should use these encodings when changed
 		static Encoding inputEncoding;
 		static Encoding outputEncoding;
@@ -563,6 +539,7 @@ namespace System
 			}
 		}
 
+#if !NET_2_1
 		public static ConsoleColor BackgroundColor {
 			get { return ConsoleDriver.BackgroundColor; }
 			set { ConsoleDriver.BackgroundColor = value; }

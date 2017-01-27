@@ -465,7 +465,7 @@ namespace MonoTests.System.Xml.TestClasses
 
 		public ArrayList list2;
 
-		public MyList list3;
+//		public MyList list3;
 
 		public string[] list4;
 
@@ -709,6 +709,13 @@ namespace MonoTests.System.Xml.TestClasses
 		[XmlElement ("a", typeof (SubclassTestBase))]
 		[XmlElement ("b", typeof (SubclassTestExtra))]
 		public object data;
+	}
+
+	public class SubclassTestList
+	{
+		[XmlElement ("a", typeof (SimpleClass))]
+		[XmlElement ("b", typeof (SubclassTestBase))]
+		public List<object> Items;
 	}
 
 	public class DictionaryWithIndexer : DictionaryBase

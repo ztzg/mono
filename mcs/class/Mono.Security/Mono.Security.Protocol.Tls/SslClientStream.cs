@@ -32,6 +32,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 
 using Mono.Security.Protocol.Tls.Handshake;
+using Mono.Security.Interface;
 
 namespace Mono.Security.Protocol.Tls
 {
@@ -45,36 +46,6 @@ namespace Mono.Security.Protocol.Tls
 	delegate bool CertificateValidationCallback(
 		X509Certificate certificate, 
 		int[]			certificateErrors);
-
-#if INSIDE_SYSTEM
-	internal
-#else
-	public
-#endif
-	class ValidationResult {
-		bool trusted;
-		bool user_denied;
-		int error_code;
-
-		public ValidationResult (bool trusted, bool user_denied, int error_code)
-		{
-			this.trusted = trusted;
-			this.user_denied = user_denied;
-			this.error_code = error_code;
-		}
-
-		public bool Trusted {
-			get { return trusted; }
-		}
-
-		public bool UserDenied {
-			get { return user_denied; }
-		}
-
-		public int ErrorCode {
-			get { return error_code; }
-		}
-	}
 
 #if INSIDE_SYSTEM
 	internal
@@ -586,9 +557,21 @@ namespace Mono.Security.Protocol.Tls
 					break;
 				}
 			}
+			catch (TlsException ex)
+			{
+				try {
+					Exception e = ex;
+					this.protocol.SendAlert(ref e);
+				} catch {
+				}
+				negotiate.SetComplete(new IOException("The authentication or decryption has failed.", ex));
+			}
 			catch (Exception ex)
 			{
-				this.protocol.SendAlert(ref ex);
+				try {
+					this.protocol.SendAlert(AlertDescription.InternalError);
+				} catch {
+				}
 				negotiate.SetComplete(new IOException("The authentication or decryption has failed.", ex));
 			}
 		}

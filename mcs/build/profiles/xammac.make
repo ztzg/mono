@@ -4,12 +4,12 @@ BOOTSTRAP_MCS = MONO_PATH="$(topdir)/class/lib/$(BOOTSTRAP_PROFILE)$(PLATFORM_PA
 MCS = MONO_PATH="$(topdir)/class/lib/$(BOOTSTRAP_PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(INTERNAL_GMCS)
 
 # Use system resgen as we don't want local System.Windows.Forms dependency
-RESGEN = resgen2
+RESGEN := $(dir $(shell which $(EXTERNAL_MCS)))resgen2
 
 profile-check:
 	@:
 
-DEFAULT_REFERENCES = -r:mscorlib.dll
+DEFAULT_REFERENCES = -r:$(topdir)/class/lib/$(PROFILE)/mscorlib.dll
 
 PROFILE_MCS_FLAGS = \
 	-d:NET_1_1 \
@@ -23,12 +23,15 @@ PROFILE_MCS_FLAGS = \
 	-d:MOBILE \
 	-d:MOBILE_DYNAMIC \
 	-d:XAMMAC \
+	-d:FEATURE_INTERCEPTABLE_THREADPOOL_CALLBACK \
+	-d:XAMARIN_MODERN \
 	-nowarn:1699 \
 	-nostdlib \
-	-lib:$(topdir)/class/lib/$(PROFILE) \
 	$(DEFAULT_REFERENCES) \
 	$(PLATFORM_DEBUG_FLAGS)
 
 FRAMEWORK_VERSION = 2.1
 NO_TEST = yes
 NO_INSTALL = yes
+MOBILE_DYNAMIC = yes
+MOBILE_PROFILE = yes

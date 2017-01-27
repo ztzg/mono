@@ -188,6 +188,17 @@ public class Tests {
 	[DllImport ("libtest", EntryPoint="mono_test_marshal_return_delegate_delegate")]
 	public static extern int mono_test_marshal_return_delegate_delegate (ReturnDelegateDelegate d);
 
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_delegate_ref_delegate")]
+	public static extern int mono_test_marshal_delegate_ref_delegate (DelegateByrefDelegate del);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_virtual_delegate")]
+	public static extern int mono_test_marshal_virtual_delegate (VirtualDelegate del);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_icall_delegate")]
+	public static extern int mono_test_marshal_icall_delegate (IcallDelegate del);
+
+	public delegate string IcallDelegate (IntPtr p);
+
 	public delegate int TestDelegate (int a, ref SimpleStruct ss, int b);
 
 	public delegate SimpleStruct SimpleDelegate2 (SimpleStruct ss);
@@ -209,6 +220,10 @@ public class Tests {
 	public delegate int PrimitiveByrefDelegate (ref int i);
 
 	public delegate return_int_delegate ReturnDelegateDelegate ();
+
+	public delegate int DelegateByrefDelegate (ref return_int_delegate del);
+
+	public delegate int VirtualDelegate (int i);
 
 	public static int Main () {
 		return TestDriver.RunTests (typeof (Tests));
@@ -331,6 +346,20 @@ public class Tests {
 
 	public static int test_55_marshal_return_delegate_delegate () {
 		return mono_test_marshal_return_delegate_delegate (new ReturnDelegateDelegate (return_delegate));
+	}
+
+	public static int return_plus_1 (int i) {
+		return i + 1;
+	}
+
+	public static int ref_delegate_delegate (ref return_int_delegate del) {
+		del = return_plus_1;
+		return 0;
+	}
+
+	public static int test_55_marshal_delegate_ref_delegate () {
+		var del = new DelegateByrefDelegate (ref_delegate_delegate);
+		return mono_test_marshal_delegate_ref_delegate (del);
 	}
 
 	/* Passing and returning strings */
@@ -1115,4 +1144,32 @@ public class Tests {
 			return 0;
 		}
     }
+
+	class Base {
+		public VirtualDelegate get_del () {
+			return delegate_test;
+		}
+
+		public virtual int delegate_test (int i) {
+			return i;
+		}
+	}
+
+	class Derived : Base {
+		public override int delegate_test (int i) {
+			return i + 1;
+		}
+	}
+
+	public static int test_43_virtual () {
+		Base b = new Derived ();
+
+		return mono_test_marshal_virtual_delegate (b.get_del ());
+	}
+
+	public static int test_0_icall_delegate () {
+		var m = typeof (Marshal).GetMethod ("PtrToStringAnsi", new Type[] { typeof (IntPtr) });
+
+		return mono_test_marshal_icall_delegate ((IcallDelegate)Delegate.CreateDelegate (typeof (IcallDelegate), m));
+	}
 }

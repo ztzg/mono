@@ -28,7 +28,7 @@ ifndef BUILD_TOOLS_PROFILE
 BUILD_TOOLS_PROFILE = build
 endif
 
-USE_MCS_FLAGS = /codepage:$(CODEPAGE) $(LOCAL_MCS_FLAGS) $(PLATFORM_MCS_FLAGS) $(PROFILE_MCS_FLAGS) $(MCS_FLAGS) $(MCS_FLAGS_INTERNAL)
+USE_MCS_FLAGS = /codepage:$(CODEPAGE) $(LOCAL_MCS_FLAGS) $(PLATFORM_MCS_FLAGS) $(PROFILE_MCS_FLAGS) $(MCS_FLAGS)
 USE_MBAS_FLAGS = /codepage:$(CODEPAGE) $(LOCAL_MBAS_FLAGS) $(PLATFORM_MBAS_FLAGS) $(PROFILE_MBAS_FLAGS) $(MBAS_FLAGS)
 USE_CFLAGS = $(LOCAL_CFLAGS) $(CFLAGS) $(CPPFLAGS)
 CSCOMPILE = $(Q_MCS) $(MCS) $(USE_MCS_FLAGS)
@@ -43,10 +43,12 @@ MKINSTALLDIRS = $(SHELL) $(topdir)/mkinstalldirs
 INTERNAL_MBAS = $(RUNTIME) $(RUNTIME_FLAGS) $(topdir)/mbas/mbas.exe
 INTERNAL_GMCS = $(RUNTIME) $(RUNTIME_FLAGS) $(topdir)/class/lib/$(BUILD_TOOLS_PROFILE)/mcs.exe
 INTERNAL_ILASM = $(RUNTIME) $(RUNTIME_FLAGS) $(topdir)/class/lib/$(PROFILE)/ilasm.exe
-corlib = mscorlib.dll
+INTERNAL_CSC = $(RUNTIME) $(RUNTIME_FLAGS) $(CSC_LOCATION)
 
-INTERNAL_RESGEN = $(RUNTIME) $(RUNTIME_FLAGS) $(topdir)/class/lib/$(PROFILE)/resgen.exe
+RESGEN_EXE = $(topdir)/class/lib/$(PROFILE)/resgen.exe
+INTERNAL_RESGEN = $(RUNTIME) $(RUNTIME_FLAGS) $(RESGEN_EXE)
 RESGEN = MONO_PATH="$(topdir)/class/lib/$(PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(INTERNAL_RESGEN)
+STRING_REPLACER = MONO_PATH="$(topdir)/class/lib/$(BUILD_TOOLS_PROFILE)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(RUNTIME) $(RUNTIME_FLAGS) $(topdir)/class/lib/$(BUILD_TOOLS_PROFILE)/cil-stringreplacer.exe
 
 depsdir = $(topdir)/build/deps
 
@@ -60,7 +62,6 @@ export CC
 export CFLAGS
 export INSTALL
 export MKINSTALLDIRS
-export TEST_HARNESS
 export BOOTSTRAP_MCS
 export DESTDIR
 export RESGEN
@@ -76,6 +77,7 @@ default: all
 
 include $(topdir)/build/config-default.make
 -include $(topdir)/build/pre-config.make
+-include $(topdir)/build/config.make
 
 # Default PLATFORM and PROFILE if they're not already defined.
 
@@ -113,16 +115,79 @@ PROFILE = $(DEFAULT_PROFILE)
 endif
 
 include $(topdir)/build/profiles/$(PROFILE).make
--include $(topdir)/build/config.make
+
+# If the profile is using nunit-lite, use it
+ifdef NUNIT_LITE
+TEST_HARNESS=$(topdir)/class/lib/$(PROFILE)/nunit-lite-console.exe
+endif
+
+# Make sure propagates
+export TEST_HARNESS
+
+# If the profile is using nunit-lite, use it
+ifdef NUNIT_LITE
+TEST_HARNESS=$(topdir)/class/lib/$(PROFILE)/nunit-lite-console.exe
+endif
+
+# Make sure propagates
+export TEST_HARNESS
+
+# start aot config
+
+# We set the prefix of the aot build flags
+# in the profile. This determines the aot type,
+# whether it be llvmonly or full. To this we append the
+# options which do not change between them, the INVARIANT_AOT_OPTIONS
+ifndef AOT_BUILD_FLAGS_PREFIX
+AOT_BUILD_FLAGS_PREFIX = --aot=
+endif
+
+# Set the options for building and running AOT
+# The trampoline numbers are provisional, they are what is required
+# to run the corlib test suite. They should be considered a lower bound.
+INVARIANT_AOT_OPTIONS=nimt-trampolines=900,ntrampolines=8000
+
+ifndef MONO_DISABLE_GSHAREDVT
+INVARIANT_AOT_OPTIONS:=$(INVARIANT_AOT_OPTIONS),ngsharedvt-trampolines=900
+endif
+
+AOT_BUILD_FLAGS = $(AOT_BUILD_FLAGS_PREFIX)$(INVARIANT_AOT_OPTIONS)
+
+# end AOT config
 
 ifdef BCL_OPTIMIZE
 PROFILE_MCS_FLAGS += -optimize
 endif
 
+# Design:
+# Problem: We want to be able to build aot
+# assemblies as part of the build system. 
+#
+# For this to be done safely, we really need two passes. This
+# ensures that all of the .dlls are compiled before trying to
+# aot them. Because we want this to be the
+# default target for some profiles(mobile_static) we have a
+# two-level build system. The do-all-aot target is what
+# gets invoked at the top-level when someone tries to build with aot.
+# It will invoke the do-all target, and will set TOP_LEVEL_DO for this
+# recursive make call in order to prevent this recursive call from trying
+# to build aot in each of the subdirs. After this is done, we will aot
+# everything that our building produced by aoting everything in
+# mcs/class/lib/$(PROFILE)/
+ifndef TOP_LEVEL_DO
+
+ifdef ALWAYS_AOT
+TOP_LEVEL_DO = do-all-aot
+else
+TOP_LEVEL_DO = do-all
+endif # ALWAYS_AOT
+
+endif # !TOP_LEVEL_DO
+
 ifdef OVERRIDE_TARGET_ALL
 all: all.override
 else
-all: do-all
+all: $(TOP_LEVEL_DO)
 endif
 
 ifdef NO_INSTALL
@@ -135,6 +200,19 @@ endif
 STD_TARGETS = test run-test run-test-ondotnet clean install uninstall doc-update
 
 $(STD_TARGETS): %: do-%
+
+ifdef PLATFORM_AOT_SUFFIX
+Q_AOT=$(if $(V),,@echo "AOT     [$(PROFILE)] AOT All Assemblies";)
+LIST_ALL_PROFILE_ASSEMBLIES = find . | grep -E '(dll|exe)$$' | grep -v -E 'bare|plaincore|secxml|Facades'
+COMPILE_ALL_PROFILE_ASSEMBLIES = $(LIST_ALL_PROFILE_ASSEMBLIES) | MONO_PATH="./" xargs -I '{}' $(RUNTIME) $(RUNTIME_FLAGS) $(AOT_BUILD_FLAGS) '{}'
+
+do-all-aot:
+	$(MAKE) do-all TOP_LEVEL_DO=do-all
+	$(MAKE) aot-all-profile
+
+aot-all-profile:
+	$(Q_AOT) cd $(topdir)/class/lib/$(PROFILE)/ && $(COMPILE_ALL_PROFILE_ASSEMBLIES) &> $(PROFILE)-aot.log
+endif
 
 do-run-test:
 	ok=:; $(MAKE) run-test-recursive || ok=false; $(MAKE) run-test-local || ok=false; $$ok
@@ -156,6 +234,12 @@ ifndef PROFILE_SUBDIRS
 PROFILE_SUBDIRS = $(SUBDIRS)
 endif
 
+# These subdirs can be built in parallel
+PROFILE_PARALLEL_SUBDIRS := $($(PROFILE)_PARALLEL_SUBDIRS)
+ifndef PROFILE_PARALLEL_SUBDIRS
+PROFILE_PARALLEL_SUBDIRS = $(PARALLEL_SUBDIRS)
+endif
+
 ifndef FRAMEWORK_VERSION_MAJOR
 FRAMEWORK_VERSION_MAJOR = $(basename $(FRAMEWORK_VERSION))
 endif
@@ -167,7 +251,56 @@ endif
 	list='$(PROFILE_SUBDIRS)'; for d in $$list ; do \
 	    (cd $$d && $(MAKE) $*) || { final_exit="exit 1"; $$dk; } ; \
 	done; \
+	if [ $* = "all" -a -n "$(PROFILE_PARALLEL_SUBDIRS)" ]; then \
+		$(MAKE) do-all-parallel ENABLE_PARALLEL_SUBDIR_BUILD=1 || { final_exit="exit 1"; $$dk; } ; \
+	else \
+		list='$(PROFILE_PARALLEL_SUBDIRS)'; for d in $$list ; do \
+		    (cd $$d && $(MAKE) $*) || { final_exit="exit 1"; $$dk; } ; \
+		done; \
+	fi; \
 	$$final_exit
+
+#
+# Parallel build support
+#
+# The variable $(PROFILE)_PARALLEL_SUBDIRS should be set to the list of directories
+# which could be built in parallel. These directories are built after the directories in
+# $(PROFILE)_SUBDIRS.
+# Parallel building is currently only supported for the 'all' target.
+#
+# Each directory's Makefile may define DEP_LIBS and DEP_DIRS to specify the libraries and
+# directories it depends on.
+#
+ifneq ($(PROFILE_PARALLEL_SUBDIRS),)
+dep_dirs = .dep_dirs-$(PROFILE)
+$(dep_dirs):
+	@echo "Creating $@..."
+	list='$(PROFILE_PARALLEL_SUBDIRS)'; \
+	echo > $@; \
+	for d in $$list; do \
+		$(MAKE) -C $$d gen-deps DEPS_TARGET_DIR=$$d DEPS_FILE=$(abspath $@); \
+	done
+-include $(dep_dirs)
+endif
+
+.PHONY: gen-deps
+# The gen-deps target is in library.make/executable.make so it can pick up
+# DEP_LIBS/DEP_DIRS
+
+clean-dep-dir:
+	$(RM) $(dep_dirs)
+
+clean-local: clean-dep-dir
+
+ifdef ENABLE_PARALLEL_SUBDIR_BUILD
+.PHONY: do-all-parallel $(PROFILE_PARALLEL_SUBDIRS)
+
+do-all-parallel: $(PROFILE_PARALLEL_SUBDIRS)
+
+$(PROFILE_PARALLEL_SUBDIRS):
+	@set . $$MAKEFLAGS; \
+	cd $@ && $(MAKE)
+endif
 
 ifndef DIST_SUBDIRS
 DIST_SUBDIRS = $(SUBDIRS) $(DIST_ONLY_SUBDIRS)

@@ -124,6 +124,16 @@ This is currently an experimental feature as it is not complete.
 This instructs Mono to precompile code that has historically not been
 precompiled with AOT.   
 .TP
+.I data-outfile=FILE.dll.aotdata
+.Sp
+This instructs the AOT code generator to output certain data
+constructs into a separate file.   This can reduce the executable
+images some five to twenty percent.   Developers need to then ship the
+resulting aotdata as a resource and register a hook to load the data
+on demand by using the 
+.I mono_install_load_aot_data_hook
+method.
+.TP
 .I direct-pinvoke
 .Sp
 When this option is specified, P/Invoke methods are invoked directly
@@ -131,6 +141,11 @@ instead of going through the operating system symbol lookup operation.
 .TP
 .I llvm-path=<PREFIX>
 Same for the llvm tools 'opt' and 'llc'.
+.TP
+.I gen-seq-points-file=FILE.msym
+Instructs the AOT compiler to generate offline sequence points .msym files.
+The path is optional, if none is passed then a .msym file will be generated
+next to the input assembly.
 .TP
 .I mtriple=<TRIPLE>
 Use the GNU style target triple <TRIPLE> to determine some code generation options, i.e.
@@ -145,6 +160,13 @@ Defaults to 128.
 .TP
 .I nodebug
 Instructs the AOT compiler to not output any debugging information.
+.TP
+.I no-direct-calls
+This prevents the AOT compiler from generating a direct calls to a
+method.   The AOT compiler usually generates direct calls for certain
+methods that do not require going through the PLT (for example,
+methods that are known to not require a hook like a static
+constructor) or call into simple internal calls. 
 .TP
 .I dwarfdebug
 Instructs the AOT compiler to emit DWARF debugging information. When
@@ -310,6 +332,13 @@ Currently this merely ensures that you are running either the
 \fBMONO_ENV_OPTIONS\fR environment variable to force all of your child
 processes to use one particular kind of GC with the Mono runtime.
 .TP
+\fB--arch=32\fR, \fB--arch=64\fR
+(Mac OS X only): Selects the bitness of the Mono binary used, if
+available. If the binary used is already for the selected bitness, nothing
+changes. If not, the execution switches to a binary with the selected
+bitness suffix installed side by side (for example, '/bin/mono --arch=64'
+will switch to '/bin/mono64' iff '/bin/mono' is a 32-bit build).
+.TP
 \fB--help\fR, \fB-h\fR
 Displays usage instructions.
 .TP
@@ -333,31 +362,31 @@ In general, Mono has been tuned to use the default set of flags,
 before using these flags for a deployment setting, you might want to
 actually measure the benefits of using them.    
 .Sp
-The following optimizations are implemented:
+The following optimization flags are implemented in the core engine:
 .nf
+             abcrem     Array bound checks removal
              all        Turn on all optimizations
-             peephole   Peephole postpass
+             aot        Usage of Ahead Of Time compiled code
              branch     Branch optimizations
-             inline     Inline method calls
              cfold      Constant folding
+             cmov       Conditional moves [arch-dependency]
+             deadce     Dead code elimination
              consprop   Constant propagation
              copyprop   Copy propagation
-             deadce     Dead code elimination
-             linears    Linear scan global reg allocation
-             cmov       Conditional moves [arch-dependency]
-             shared     Emit per-domain code
-             sched      Instruction scheduling
-             intrins    Intrinsic method implementations
-             tailc      Tail recursion and tail calls
-             loop       Loop related optimizations
              fcmov      Fast x86 FP compares [arch-dependency]
-             leaf       Leaf procedures optimizations
-             aot        Usage of Ahead Of Time compiled code
-             precomp    Precompile all methods before executing Main
-             abcrem     Array bound checks removal
-             ssapre     SSA based Partial Redundancy Elimination
-             sse2       SSE2 instructions on x86 [arch-dependency]
+             float32	Perform 32-bit float arithmetic using 32-bit operations
              gshared    Enable generic code sharing.
+             inline     Inline method calls
+             intrins    Intrinsic method implementations
+             linears    Linear scan global reg allocation
+             leaf       Leaf procedures optimizations
+             loop       Loop related optimizations
+             peephole   Peephole postpass
+             precomp    Precompile all methods before executing Main
+             sched      Instruction scheduling
+             shared     Emit per-domain code
+             sse2       SSE2 instructions on x86 [arch-dependency]
+             tailc      Tail recursion and tail calls
 .fi
 .Sp
 For example, to enable all the optimization but dead code
@@ -370,6 +399,23 @@ The flags that are flagged with [arch-dependency] indicate that the
 given option if used in combination with Ahead of Time compilation
 (--aot flag) would produce pre-compiled code that will depend on the
 current CPU and might not be safely moved to another computer. 
+.RS
+.ne 8
+.PP
+The following optimizations are supported
+.TP
+.I float32
+Requests that the runtime performn 32-bit floating point operations
+using only 32-bits.   By default the Mono runtime tries to use the
+highest precision available for floating point operations, but while
+this might render better results, the code might run slower.   This
+options also affects the code generated by the LLVM backend.
+.TP
+.I inline
+Controls whether the runtime should attempt to inline (the default),
+or not inline methods invocations
+.ne
+.RE
 .TP
 \fB--runtime=VERSION\fR
 Mono supports different runtime versions. The version used depends on the program
@@ -393,10 +439,6 @@ Using security without parameters is equivalent as calling it with the
 "cas" parameter.  
 .PP
 The following modes are supported:
-.TP
-.I cas
-This allows mono to support declarative security attributes,
-e.g. execution of Code Access Security (CAS) or non-CAS demands.
 .TP 
 .I core-clr
 Enables the core-clr security system, typically used for
@@ -574,6 +616,16 @@ Currently this option is only supported on Linux.
 .SH JIT MAINTAINER OPTIONS
 The maintainer options are only used by those developing the runtime
 itself, and not typically of interest to runtime users or developers.
+.TP
+\fB--bisect=optimization:filename\fR
+This flag is used by the automatic optimization bug bisector.  It
+takes an optimization flag and a filename of a file containing a list
+of full method names, one per line.  When it compiles one of the
+methods in the file it will use the optimization given, in addition to
+the optimizations that are otherwise enabled.  Note that if the
+optimization is enabled by default, you should disable it with `-O`,
+otherwise it will just apply to every method, whether it's in the file
+or not.
 .TP
 \fB--break method\fR
 Inserts a breakpoint before the method whose name is `method'
@@ -841,7 +893,9 @@ environment variable to limit the extent of the messages you get:
 If set, the log mask is changed to the set value. Possible values are
 "asm" (assembly loader), "type", "dll" (native library loader), "gc"
 (garbage collector), "cfg" (config file loader), "aot" (precompiler),
-"security" (e.g. Moonlight CoreCLR support) and "all". 
+"security" (e.g. Moonlight CoreCLR support), "threadpool" (thread pool generic), 
+"io-threadpool" (thread pool I/O), "io-layer" (I/O layer - sockets, handles, shared memory etc) 
+and "all". 
 The default value is "all". Changing the mask value allows you to display only 
 messages for a certain component. You can use multiple masks by comma 
 separating them. For example to see config file messages and assembly loader
@@ -904,7 +958,12 @@ by setting the option
 Turns off the garbage collection in Mono.  This should be only used
 for debugging purposes
 .TP
-\fBLVM_COUNT\fR
+\fBHTTP_PROXY\fR
+(Also \fBhttp_proxy\fR) If set, web requests using the Mono
+Class Library will be automatically proxied through the given URL.
+Not supported on Windows, Mac OS, iOS or Android. See also \fBNO_PROXY\fR.
+.TP
+\fBLLVM_COUNT\fR
 When Mono is compiled with LLVM support, this instructs the runtime to
 stop using LLVM after the specified number of methods are JITed.
 This is a tool used in diagnostics to help isolate problems in the
@@ -972,7 +1031,12 @@ where V is the architecture number 4, 5, 6, 7 and the options can be currently b
 .TP
 \fBMONO_ARM_FORCE_SOFT_FLOAT\fR
 When Mono is built with a soft float fallback on ARM and this variable is set to
-"1", Mono will always emit soft float code, even if a VFP unit is detected.
+"1", Mono will always emit soft float code, even if a VFP unit is
+detected.
+.TP
+\fBMONO_DARWIN_WATCHER_MAXFDS\fR
+This is a debugging aid used to force limits on the FileSystemWatcher
+implementation in Darwin.   There is no limit by default.
 .TP
 \fBMONO_DISABLE_AIO\fR
 If set, tells mono NOT to attempt using native asynchronous I/O services. In
@@ -1016,10 +1080,19 @@ For platforms that do not otherwise have a way of obtaining random bytes
 this can be set to the name of a file system socket on which an egd or
 prngd daemon is listening.
 .TP
-\fBMONO_ENABLE_SHM\fR
-Unix only: Enable support for cross-process handles.  Cross-process
-handles are used to expose process handles, thread handles, named
-mutexes, named events and named semaphores across Unix processes.
+\fBMONO_ENABLE_COOP\fR
+This makes the Mono runtime and the SGen garbage collector run in cooperative
+mode as opposed to run on preemptive mode.   Preemptive mode is the mode
+that Mono has used historically, going back to the Boehm days, where the
+garbage collector would run at any point and suspend execution of all 
+threads as required to perform a garbage collection.  The cooperative mode
+on the other hand requires the cooperation of all threads to stop at a 
+safe point.   This makes for an easier to debug garbage collector.   As
+of Mono 4.3.0 it is a work in progress, and while it works, it has not
+been used extensively.   This option enabled the feature and allows us to
+find spots that need to be tuned for this mode of operation.   Alternatively,
+this mode can be enabled at compile time by using the --with-cooperative-gc
+flag when calling configure.
 .TP
 \fBMONO_ENV_OPTIONS\fR
 This environment variable allows you to pass command line arguments to
@@ -1093,6 +1166,16 @@ separated list of words.
 .RS
 .ne 8
 .TP
+\fBmax-heap-size=\fIsize\fR
+Sets the maximum size of the heap. The size is specified in bytes and must
+be a power of two. The suffixes `k', `m' and `g' can be used to
+specify kilo-, mega- and gigabytes, respectively. The limit is the sum
+of the nursery, major heap and large object heap. Once the limit is reached
+the application will receive OutOfMemoryExceptions when trying to allocate.
+Not the full extent of memory set in max-heap-size could be available to
+satisfy a single allocation due to internal fragmentation. By default heap
+limits is disabled and the GC will try to use all available memory.
+.TP
 \fBnursery-size=\fIsize\fR
 Sets the size of the nursery.  The size is specified in bytes and must
 be a power of two.  The suffixes `k', `m' and `g' can be used to
@@ -1122,9 +1205,16 @@ to 100 percent.  A value of 0 turns evacuation off.
 .TP
 \fB(no-)lazy-sweep\fR
 Enables or disables lazy sweep for the Mark&Sweep collector.  If
-enabled, the sweep phase of the garbage collection is done piecemeal
-whenever the need arises, typically during nursery collections.  Lazy
-sweeping is enabled by default.
+enabled, the sweeping of individual major heap blocks is done
+piecemeal whenever the need arises, typically during nursery
+collections.  Lazy sweeping is enabled by default.
+.TP
+\fB(no-)concurrent-sweep\fR
+Enables or disables concurrent sweep for the Mark&Sweep collector.  If
+enabled, the iteration of all major blocks to determine which ones can
+be freed and which ones have to be kept and swept, is done
+concurrently with the running program.  Concurrent sweeping is enabled
+by default.
 .TP
 \fBstack-mark=\fImark-mode\fR
 Specifies how application threads should be scanned. Options are
@@ -1179,6 +1269,12 @@ Valid values are integers between 1 and 14. Default is 2.
 Enables or disables cementing.  This can dramatically shorten nursery
 collection times on some benchmarks where pinned objects are referred
 to from the major heap.
+.TP
+\fBallow-synchronous-major\fR
+This forbids the major collector from performing synchronous major collections.
+The major collector might want to do a synchronous collection due to excessive
+fragmentation. Disabling this might trigger OutOfMemory error in situations that
+would otherwise not happen.
 .ne
 .RE
 .TP
@@ -1283,22 +1379,25 @@ work, Mono needs to be compiled with the BINARY_PROTOCOL define on
 sgen-gc.c.   You can then use this command to explore the output
 .nf
                 sgen-grep-binprot 0x1234 0x5678 < file
+.fi
 .TP
 \fBnursery-canaries\fR
 If set, objects allocated in the nursery are suffixed with a canary (guard)
 word, which is checked on each minor collection. Can be used to detect/debug
 heap corruption issues.
-.fi
-.ne
-.RE
+
 .TP
-\fBdo-not-finalize\fR
+\fBdo-not-finalize(=\fIclasses\fB)\fR
 If enabled, finalizers will not be run.  Everything else will be
 unaffected: finalizable objects will still be put into the
 finalization queue where they survive until they're scheduled to
 finalize.  Once they're not in the queue anymore they will be
-collected regularly.
-.fi
+collected regularly.  If a list of comma-separated class names is
+given, only objects from those classes will not be finalized.
+
+.TP
+\fBlog-finalizers\fR
+Log verbosely around the finalization process to aid debugging.
 .ne
 .RE
 .TP
@@ -1409,24 +1508,6 @@ For a complete description of recommended practices for application
 deployment, see
 http://www.mono-project.com/docs/getting-started/application-deployment/
 .TP
-\fBMONO_RTC\fR
-Experimental RTC support in the statistical profiler: if the user has
-the permission, more accurate statistics are gathered.  The MONO_RTC
-value must be restricted to what the Linux rtc allows: power of two
-from 64 to 8192 Hz. To enable higher frequencies like 4096 Hz, run as root:
-.nf
-
-	echo 4096 > /proc/sys/dev/rtc/max-user-freq
-
-.fi
-.Sp
-For example:
-.nf
-
-	MONO_RTC=4096 mono --profiler=default:stat program.exe
-
-.fi
-.TP 
 \fBMONO_SHARED_DIR\fR
 If set its the directory where the ".wapi" handle state is stored.
 This is the directory where the Windows I/O Emulation layer stores its
@@ -1480,6 +1561,13 @@ ftps, smtps...).  The default is 'nocheck', which performs no revocation check
 at all. The other possible values are 'offline', which performs CRL check (not
 implemented yet) and 'online' which uses OCSP and CRL to verify the revocation
 status (not implemented yet).
+.TP
+\fBNO_PROXY\fR
+(Also \fBno_proxy\fR) If both \fBHTTP_PROXY\fR and \fBNO_PROXY\fR are
+set, \fBNO_PROXY\fR will be treated as a comma-separated list of "bypass" domains
+which will not be sent through the proxy. Domains in \fBNO_PROXY\fR may contain
+wildcards, as in "*.mono-project.com" or "build????.local". Not supported on
+Windows, Mac OS, iOS or Android.
 .SH ENVIRONMENT VARIABLES FOR DEBUGGING
 .TP
 \fBMONO_ASPNET_NODELETE\fR
@@ -1494,6 +1582,13 @@ Currently, the following options are supported:
 .RS
 .ne 8
 .TP
+\fBalign-small-structs\fR
+Enables small structs alignment to 4/8 bytes.
+.TP
+\fBarm-use-fallback-tls\fR
+When this option is set on ARM, a fallback TLS will be used instead
+of the default fast TLS.
+.TP
 \fBbreak-on-unverified\fR
 If this variable is set, when the Mono VM runs into a verification
 problem, instead of throwing an exception it will break into the
@@ -1504,11 +1599,25 @@ This option can be used to get more detailed information from
 InvalidCast exceptions, it will provide information about the types
 involved.     
 .TP
+\fBcheck-pinvoke-callconv\fR
+This option causes the runtime to check for calling convention
+mismatches when using pinvoke, i.e. mixing cdecl/stdcall. It only
+works on windows. If a mismatch is detected, an
+ExecutionEngineException is thrown.
+.TP
 \fBcollect-pagefault-stats\fR
 Collects information about pagefaults.   This is used internally to
 track the number of page faults produced to load metadata.  To display
 this information you must use this option with "--stats" command line
 option.
+.TP
+\fBdebug-domain-unload\fR
+When this option is set, the runtime will invalidate the domain memory
+pool instead of destroying it.
+.TP
+\fBdisable_omit_fp\fR
+Disables a compiler optimization where the frame pointer is omitted
+from the stack. This optimization can interact badly with debuggers.
 .TP
 \fBdont-free-domains\fR
 This is an Optimization for multi-AppDomain applications (most
@@ -1527,6 +1636,12 @@ using this feature).
 Instructs the runtime to try to use a generic runtime-invoke wrapper
 instead of creating one invoke wrapper.
 .TP
+\fBexplicit-null-checks\fR
+Makes the JIT generate an explicit NULL check on variable dereferences
+instead of depending on the operating system to raise a SIGSEGV or
+another form of trap event when an invalid memory location is
+accessed.
+.TP
 \fBgdb\fR 
 Equivalent to setting the \fBMONO_XDEBUG\fR variable, this emits
 symbols into a shared library as the code is JITed that can be loaded
@@ -1537,11 +1652,11 @@ Automatically generates sequence points where the
 IL stack is empty.  These are places where the debugger can set a
 breakpoint.
 .TP
-\fBexplicit-null-checks\fR
-Makes the JIT generate an explicit NULL check on variable dereferences
-instead of depending on the operating system to raise a SIGSEGV or
-another form of trap event when an invalid memory location is
-accessed. 
+\fBgen-compact-seq-points\fR
+This option generates sequence points data that maps native offsets to
+IL offsets. Sequence point data is used to display IL offset in
+stacktraces. Stacktraces with IL offsets can be symbolicated using
+mono-symbolicate tool.
 .TP
 \fBhandle-sigint\fR
 Captures the interrupt signal (Control-C) and displays a stack trace
@@ -1561,6 +1676,14 @@ passed to unmanaged code, and no references kept in managed code,
 which will garbage collect the code.  With this option it is possible
 to track down the source of the problems. 
 .TP
+\fBno-gdb-backtrace\fR
+This option will disable the GDB backtrace emitted by the runtime
+after a SIGSEGV or SIGABRT in unmanaged code.
+.TP
+\fBpartial-sharing\fR
+When this option is set, the runtime can share generated code between
+generic types effectively reducing the amount of code generated.
+.TP
 \fBreverse-pinvoke-exceptions
 This option will cause mono to abort with a descriptive message when
 during stack unwinding after an exception it reaches a native stack
@@ -1571,20 +1694,25 @@ will skip any native stack frames in the process. This leads to
 undefined behaviour (since mono doesn't know how to process native
 frames), leaks, and possibly crashes too.
 .TP
-\fBno-gdb-backtrace\fR
-This option will disable the GDB backtrace emitted by the runtime
-after a SIGSEGV or SIGABRT in unmanaged code.
+\fBsingle-imm-size\fR
+This guarantees that each time managed code is compiled the same
+instructions and registers are used, regardless of the size of used
+values.
+.TP
+\fBsoft-breakpoints\fR
+This option allows using single-steps and breakpoints in hardware
+where we cannot do it with signals.
 .TP
 \fBsuspend-on-sigsegv\fR
 This option will suspend the program when a native SIGSEGV is received.
 This is useful for debugging crashes which do not happen under gdb,
 since a live process contains more information than a core file.
 .TP
-\fBcheck-pinvoke-callconv\fR
-This option causes the runtime to check for calling convention
-mismatches when using pinvoke, i.e. mixing cdecl/stdcall. It only
-works on windows. If a mismatch is detected, an
-ExecutionEngineException is thrown.
+\fBsuspend-on-exception\fR
+This option will suspend the program when an exception occurs.
+.TP
+\fBsuspend-on-unhandled\fR
+This option will suspend the program when an unhandled exception occurs.
 .ne
 .RE
 .TP
@@ -1648,34 +1776,6 @@ as it forces all of the commands send to X11 server to be done
 synchronously.   The default mode of operation is asynchronous which
 makes it hard to isolate the root of certain problems.
 .TP
-\fBMONO_GENERIC_SHARING\fR
-This environment variable controls the kind of generic sharing used.
-This variable is used by internal JIT developers and should not be
-changed in production.  Do not use it.
-.Sp
-The variable controls which classes will have generic code sharing
-enabled.
-.Sp
-Permissible values are:
-.RS
-.TP 
-.I "all" 
-All generated code can be shared. 
-.TP
-.I "collections" 
-Only the classes in System.Collections.Generic will have its code
-shared (this is the default value).
-.TP
-.I "corlib"
-Only code in corlib will have its code shared.
-.TP
-.I "none"
-No generic code sharing will be performed.
-.RE
-.Sp
-Generic code sharing by default only applies to collections.   The
-Mono JIT by default turns this on.
-.TP
 \fBMONO_XDEBUG\fR
 When the the MONO_XDEBUG env var is set, debugging info for JITted
 code is emitted into a shared library, loadable into gdb. This enables,
@@ -1685,6 +1785,10 @@ for example, to see managed frame names on gdb backtraces.
 Enables the maximum JIT verbosity for the specified method. This is
 very helpfull to diagnose a miscompilation problems of a specific
 method.
+.TP
+\fBMONO_JIT_DUMP_METHOD\fR
+Enables sending of the JITs intermediate representation for a specified
+method to the IdealGraphVisualizer tool.
 .TP
 \fBMONO_VERBOSE_HWCAP\fR
 If set, makes the JIT output information about detected CPU features

@@ -27,10 +27,13 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
+using MonoTests.Helpers;
 
 namespace MonoTests.System.Net {
 	[TestFixture]
@@ -40,7 +43,7 @@ namespace MonoTests.System.Net {
 
 		[SetUp]
 		public void SetUp () {
-			port = new Random ().Next (7777, 8000);
+			port = NetworkHelpers.FindFreePort ();
 		}
 
 		[Test]
@@ -349,7 +352,7 @@ namespace MonoTests.System.Net {
 		public void CloseWhileBegin ()
 		{
 			HttpListener listener = new HttpListener ();
-			listener.Prefixes.Add ("http://127.0.0.1:9001/closewhilebegin/");
+			listener.Prefixes.Add ("http://127.0.0.1:" + NetworkHelpers.FindFreePort () + "/closewhilebegin/");
 			listener.Start ();
 			CallMe cm = new CallMe ();
 			listener.BeginGetContext (cm.Callback, listener);
@@ -365,7 +368,7 @@ namespace MonoTests.System.Net {
 		public void AbortWhileBegin ()
 		{
 			HttpListener listener = new HttpListener ();
-			listener.Prefixes.Add ("http://127.0.0.1:9001/abortwhilebegin/");
+			listener.Prefixes.Add ("http://127.0.0.1:" + NetworkHelpers.FindFreePort () + "/abortwhilebegin/");
 			listener.Start ();
 			CallMe cm = new CallMe ();
 			listener.BeginGetContext (cm.Callback, listener);
@@ -387,7 +390,7 @@ namespace MonoTests.System.Net {
 			//   at MonoTests.System.Net.HttpListenerTest.CloseWhileGet()
 
 			HttpListener listener = new HttpListener ();
-			listener.Prefixes.Add ("http://127.0.0.1:9001/closewhileget/");
+			listener.Prefixes.Add ("http://127.0.0.1:" + NetworkHelpers.FindFreePort () + "/closewhileget/");
 			listener.Start ();
 			RunMe rm = new RunMe (1000, new ThreadStart (listener.Close), new object [0]);
 			rm.Start ();
@@ -404,7 +407,7 @@ namespace MonoTests.System.Net {
 			//   at MonoTests.System.Net.HttpListenerTest.CloseWhileGet()
 
 			HttpListener listener = new HttpListener ();
-			listener.Prefixes.Add ("http://127.0.0.1:9001/abortwhileget/");
+			listener.Prefixes.Add ("http://127.0.0.1:" + NetworkHelpers.FindFreePort () + "/abortwhileget/");
 			listener.Start ();
 			RunMe rm = new RunMe (1000, new ThreadStart (listener.Abort), new object [0]);
 			rm.Start ();
@@ -477,7 +480,7 @@ namespace MonoTests.System.Net {
 		[Test]
 		public void ConnectionReuse ()
 		{
-			var uri = "http://localhost:1338/";
+			var uri = "http://localhost:" + NetworkHelpers.FindFreePort () + "/";
 
 			HttpListener listener = new HttpListener ();
 			listener.Prefixes.Add (uri);
@@ -492,7 +495,11 @@ namespace MonoTests.System.Net {
 		public IPEndPoint CreateListenerRequest (HttpListener listener, string uri)
 		{
 			IPEndPoint ipEndPoint = null;
-			listener.BeginGetContext ((result) => ipEndPoint = ListenerCallback (result), listener);
+			var mre = new ManualResetEventSlim ();
+			listener.BeginGetContext (result => {
+				ipEndPoint = ListenerCallback (result);
+				mre.Set ();
+			}, listener);
 
 			var request = (HttpWebRequest) WebRequest.Create (uri);
 			request.Method = "POST";
@@ -506,6 +513,8 @@ namespace MonoTests.System.Net {
 
 			// Close response so socket can be reused.
 			response.Close ();
+
+			mre.Wait ();
 
 			return ipEndPoint;
 		}
@@ -523,6 +532,53 @@ namespace MonoTests.System.Net {
 			context.Response.OutputStream.Close ();
 
 			return clientEndPoint;
+		}
+		
+		[Test]
+		public void HttpClientIsDisconnectedCheckForWriteException()
+		{
+			string uri = "http://localhost:" + NetworkHelpers.FindFreePort () + "/";
+
+			AutoResetEvent exceptionOccuredEvent = new AutoResetEvent (false);
+			HttpListener listener = new HttpListener {
+				IgnoreWriteExceptions = false
+			};
+			listener.Prefixes.Add (uri);
+			listener.Start ();
+			listener.BeginGetContext (result =>
+			{
+				HttpListenerContext context = listener.EndGetContext (result);
+				context.Response.SendChunked = true;
+				context.Request.InputStream.Close ();
+				
+				var bytes = new byte [1024];
+				using(Stream outputStream = context.Response.OutputStream) {
+					try {
+						while (true) 
+							outputStream.Write (bytes, 0, bytes.Length);
+					} catch {
+						exceptionOccuredEvent.Set ();
+					}
+				}
+			}, null);
+
+			Task.Factory.StartNew (() =>
+			{
+				var webRequest = (HttpWebRequest)WebRequest.Create (uri);
+				webRequest.Method = "POST";
+				webRequest.KeepAlive = false;
+				Stream requestStream = webRequest.GetRequestStream ();
+				requestStream.WriteByte (1);
+				requestStream.Close ();
+				using (WebResponse response = webRequest.GetResponse ())
+				using (Stream stream = response.GetResponseStream ()) {
+					byte[] clientBytes = new byte [1024];
+					Assert.IsNotNull (stream, "#01");
+					stream.Read (clientBytes, 0, clientBytes.Length);
+				}
+			});
+
+			Assert.IsTrue (exceptionOccuredEvent.WaitOne (15 * 1000), "#02");
 		}
 	}
 }

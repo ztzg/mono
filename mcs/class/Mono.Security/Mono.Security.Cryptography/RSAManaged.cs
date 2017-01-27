@@ -93,7 +93,7 @@ namespace Mono.Security.Cryptography {
 			// p and q values should have a length of half the strength in bits
 			int pbitlength = ((KeySize + 1) >> 1);
 			int qbitlength = (KeySize - pbitlength);
-			const uint uint_e = 17;
+			const uint uint_e = 65537;
 			e = uint_e; // fixed
 	
 			// generate p, prime and (p-1) relatively prime to e
@@ -145,7 +145,10 @@ namespace Mono.Security.Cryptography {
 		// overrides from RSA class
 
 		public override int KeySize {
-			get { 
+			get {
+				if (m_disposed)
+					throw new ObjectDisposedException (Locale.GetText ("Keypair was disposed"));
+				
 				// in case keypair hasn't been (yet) generated
 				if (keypairGenerated) {
 					int ks = n.BitCount ();

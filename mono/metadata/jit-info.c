@@ -8,6 +8,7 @@
  * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  * Copyright 2011-2012 Xamarin, Inc (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -15,11 +16,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <mono/metadata/gc-internal.h>
+#include <mono/metadata/gc-internals.h>
 
 #include <mono/utils/atomic.h>
 #include <mono/utils/mono-compiler.h>
-#include <mono/utils/mono-logger-internal.h>
+#include <mono/utils/mono-logger-internals.h>
 #include <mono/utils/mono-membar.h>
 #include <mono/utils/mono-counters.h>
 #include <mono/utils/hazard-pointer.h>
@@ -33,7 +34,7 @@
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/exception.h>
 #include <mono/metadata/metadata-internals.h>
-#include <mono/metadata/gc-internal.h>
+#include <mono/metadata/gc-internals.h>
 #include <mono/metadata/appdomain.h>
 #include <mono/metadata/mono-debug-debugger.h>
 #include <mono/metadata/mono-config.h>
@@ -90,7 +91,7 @@ jit_info_table_new_chunk (void)
 MonoJitInfoTable *
 mono_jit_info_table_new (MonoDomain *domain)
 {
-	MonoJitInfoTable *table = g_malloc0 (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*));
+	MonoJitInfoTable *table = (MonoJitInfoTable *)g_malloc0 (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*));
 
 	table->domain = domain;
 	table->num_chunks = 1;
@@ -125,18 +126,15 @@ mono_jit_info_table_free (MonoJitInfoTable *table)
 
 	for (i = 0; i < num_chunks; ++i) {
 		MonoJitInfoTableChunk *chunk = table->chunks [i];
-		int num_elements;
-		int j;
+		MonoJitInfo *tombstone;
 
 		if (--chunk->refcount > 0)
 			continue;
 
-		num_elements = chunk->num_elements;
-		for (j = 0; j < num_elements; ++j) {
-			MonoJitInfo *ji = chunk->data [j];
-
-			if (IS_JIT_INFO_TOMBSTONE (ji))
-				g_free (ji);
+		for (tombstone = chunk->next_tombstone; tombstone; ) {
+			MonoJitInfo *next = tombstone->n.next_tombstone;
+			g_free (tombstone);
+			tombstone = next;
 		}
 
 		g_free (chunk);
@@ -197,7 +195,7 @@ jit_info_table_chunk_index (MonoJitInfoTableChunk *chunk, MonoThreadHazardPointe
 
 	while (left < right) {
 		int pos = (left + right) / 2;
-		MonoJitInfo *ji = get_hazardous_pointer((gpointer volatile*)&chunk->data [pos], hp, JIT_INFO_HAZARD_INDEX);
+		MonoJitInfo *ji = (MonoJitInfo *)get_hazardous_pointer((gpointer volatile*)&chunk->data [pos], hp, JIT_INFO_HAZARD_INDEX);
 		gint8 *code_end = (gint8*)ji->code_start + ji->code_size;
 
 		if (addr < code_end)
@@ -230,7 +228,7 @@ jit_info_table_find (MonoJitInfoTable *table, MonoThreadHazardPointers *hp, gint
 		MonoJitInfoTableChunk *chunk = table->chunks [chunk_pos];
 
 		while (pos < chunk->num_elements) {
-			ji = get_hazardous_pointer ((gpointer volatile*)&chunk->data [pos], hp, JIT_INFO_HAZARD_INDEX);
+			ji = (MonoJitInfo *)get_hazardous_pointer ((gpointer volatile*)&chunk->data [pos], hp, JIT_INFO_HAZARD_INDEX);
 
 			++pos;
 
@@ -266,12 +264,13 @@ jit_info_table_find (MonoJitInfoTable *table, MonoThreadHazardPointers *hp, gint
  *
  * If TRY_AOT is FALSE, avoid loading information for missing methods from AOT images, which is currently not async safe.
  * In this case, only those AOT methods will be found whose jit info is already loaded.
+ * If ALLOW_TRAMPOLINES is TRUE, this can return a MonoJitInfo which represents a trampoline (ji->is_trampoline is true).
  * ASYNC SAFETY: When called in an async context (mono_thread_info_is_async_context ()), this is async safe.
  * In this case, the returned MonoJitInfo might not have metadata information, in particular,
  * mono_jit_info_get_method () could fail.
  */
 MonoJitInfo*
-mono_jit_info_table_find_internal (MonoDomain *domain, char *addr, gboolean try_aot)
+mono_jit_info_table_find_internal (MonoDomain *domain, char *addr, gboolean try_aot, gboolean allow_trampolines)
 {
 	MonoJitInfoTable *table;
 	MonoJitInfo *ji, *module_ji;
@@ -287,31 +286,51 @@ mono_jit_info_table_find_internal (MonoDomain *domain, char *addr, gboolean try_
 	   table by a hazard pointer and make sure that the pointer is
 	   still there after we've made it hazardous, we don't have to
 	   worry about the writer freeing the table. */
-	table = get_hazardous_pointer ((gpointer volatile*)&domain->jit_info_table, hp, JIT_INFO_TABLE_HAZARD_INDEX);
+	table = (MonoJitInfoTable *)get_hazardous_pointer ((gpointer volatile*)&domain->jit_info_table, hp, JIT_INFO_TABLE_HAZARD_INDEX);
 
 	ji = jit_info_table_find (table, hp, (gint8*)addr);
 	if (hp)
 		mono_hazard_pointer_clear (hp, JIT_INFO_TABLE_HAZARD_INDEX);
+	if (ji && ji->is_trampoline && !allow_trampolines)
+		return NULL;
 	if (ji)
 		return ji;
 
 	/* Maybe its an AOT module */
 	if (try_aot && mono_get_root_domain () && mono_get_root_domain ()->aot_modules) {
-		table = get_hazardous_pointer ((gpointer volatile*)&mono_get_root_domain ()->aot_modules, hp, JIT_INFO_TABLE_HAZARD_INDEX);
+		table = (MonoJitInfoTable *)get_hazardous_pointer ((gpointer volatile*)&mono_get_root_domain ()->aot_modules, hp, JIT_INFO_TABLE_HAZARD_INDEX);
 		module_ji = jit_info_table_find (table, hp, (gint8*)addr);
 		if (module_ji)
 			ji = jit_info_find_in_aot_func (domain, module_ji->d.image, addr);
 		if (hp)
 			mono_hazard_pointer_clear (hp, JIT_INFO_TABLE_HAZARD_INDEX);
 	}
+
+	if (ji && ji->is_trampoline && !allow_trampolines)
+		return NULL;
 	
 	return ji;
 }
 
+/**
+ * mono_jit_info_table_find:
+ * @domain: Domain that you want to look up
+ * @addr: Points to an address with JITed code.
+ *
+ * Use this function to obtain a `MonoJitInfo*` object that can be used to get
+ * some statistics.   You should provide both the @domain on which you will be
+ * performing the probe, and an address.   Since application domains can share code
+ * the same address can be in use by multiple domains at once.
+ *
+ * This does not return any results for trampolines.
+ *
+ * Returns: NULL if the address does not belong to JITed code (it might be native
+ * code or a trampoline) or a valid pointer to a `MonoJitInfo*`.
+ */
 MonoJitInfo*
 mono_jit_info_table_find (MonoDomain *domain, char *addr)
 {
-	return mono_jit_info_table_find_internal (domain, addr, TRUE);
+	return mono_jit_info_table_find_internal (domain, addr, TRUE, FALSE);
 }
 
 static G_GNUC_UNUSED void
@@ -329,10 +348,10 @@ jit_info_table_check (MonoJitInfoTable *table)
 		g_assert (chunk->num_elements <= MONO_JIT_INFO_TABLE_CHUNK_SIZE);
 
 		for (j = 0; j < chunk->num_elements; ++j) {
-			MonoJitInfo *this = chunk->data [j];
+			MonoJitInfo *this_ji = chunk->data [j];
 			MonoJitInfo *next;
 
-			g_assert ((gint8*)this->code_start + this->code_size <= chunk->last_code_end);
+			g_assert ((gint8*)this_ji->code_start + this_ji->code_size <= chunk->last_code_end);
 
 			if (j < chunk->num_elements - 1)
 				next = chunk->data [j + 1];
@@ -351,7 +370,7 @@ jit_info_table_check (MonoJitInfoTable *table)
 			} else
 				return;
 
-			g_assert ((gint8*)this->code_start + this->code_size <= (gint8*)next->code_start + next->code_size);
+			g_assert ((gint8*)this_ji->code_start + this_ji->code_size <= (gint8*)next->code_start + next->code_size);
 		}
 	}
 }
@@ -364,7 +383,7 @@ jit_info_table_realloc (MonoJitInfoTable *old)
 	int required_size;
 	int num_chunks;
 	int new_chunk, new_element;
-	MonoJitInfoTable *new;
+	MonoJitInfoTable *result;
 
 	/* number of needed places for elements needed */
 	required_size = (int)((long)num_elements * JIT_INFO_TABLE_FILL_RATIO_DENOM / JIT_INFO_TABLE_FILL_RATIO_NOM);
@@ -375,12 +394,12 @@ jit_info_table_realloc (MonoJitInfoTable *old)
 	}
 	g_assert (num_chunks > 0);
 
-	new = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*) * num_chunks);
-	new->domain = old->domain;
-	new->num_chunks = num_chunks;
+	result = (MonoJitInfoTable *)g_malloc (MONO_SIZEOF_JIT_INFO_TABLE + sizeof (MonoJitInfoTableChunk*) * num_chunks);
+	result->domain = old->domain;
+	result->num_chunks = num_chunks;
 
 	for (i = 0; i < num_chunks; ++i)
-		new->chunks [i] = jit_info_table_new_chunk ();
+		result->chunks [i] = jit_info_table_new_chunk ();
 
 	new_chunk = 0;
 	new_element = 0;
@@ -392,9 +411,9 @@ jit_info_table_realloc (MonoJitInfoTable *old)
 		for (j = 0; j < chunk_num_elements; ++j) {
 			if (!IS_JIT_INFO_TOMBSTONE (chunk->data [j])) {
 				g_assert (new_chunk < num_chunks);
-				new->chunks [new_chunk]->data [new_element] = chunk->data [j];
+				result->chunks [new_chunk]->data [new_element] = chunk->data [j];
 				if (++new_element >= JIT_INFO_TABLE_FILLED_NUM_ELEMENTS) {
-					new->chunks [new_chunk]->num_elements = new_element;
+					result->chunks [new_chunk]->num_elements = new_element;
 					++new_chunk;
 					new_element = 0;
 				}
@@ -404,18 +423,18 @@ jit_info_table_realloc (MonoJitInfoTable *old)
 
 	if (new_chunk < num_chunks) {
 		g_assert (new_chunk == num_chunks - 1);
-		new->chunks [new_chunk]->num_elements = new_element;
-		g_assert (new->chunks [new_chunk]->num_elements > 0);
+		result->chunks [new_chunk]->num_elements = new_element;
+		g_assert (result->chunks [new_chunk]->num_elements > 0);
 	}
 
 	for (i = 0; i < num_chunks; ++i) {
-		MonoJitInfoTableChunk *chunk = new->chunks [i];
+		MonoJitInfoTableChunk *chunk = result->chunks [i];
 		MonoJitInfo *ji = chunk->data [chunk->num_elements - 1];
 
-		new->chunks [i]->last_code_end = (gint8*)ji->code_start + ji->code_size;
+		result->chunks [i]->last_code_end = (gint8*)ji->code_start + ji->code_size;
 	}
 
-	return new;
+	return result;
 }
 
 static void
@@ -444,7 +463,7 @@ jit_info_table_split_chunk (MonoJitInfoTableChunk *chunk, MonoJitInfoTableChunk 
 static MonoJitInfoTable*
 jit_info_table_copy_and_split_chunk (MonoJitInfoTable *table, MonoJitInfoTableChunk *chunk)
 {
-	MonoJitInfoTable *new_table = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE
+	MonoJitInfoTable *new_table = (MonoJitInfoTable *)g_malloc (MONO_SIZEOF_JIT_INFO_TABLE
 		+ sizeof (MonoJitInfoTableChunk*) * (table->num_chunks + 1));
 	int i, j;
 
@@ -471,28 +490,28 @@ jit_info_table_copy_and_split_chunk (MonoJitInfoTable *table, MonoJitInfoTableCh
 static MonoJitInfoTableChunk*
 jit_info_table_purify_chunk (MonoJitInfoTableChunk *old)
 {
-	MonoJitInfoTableChunk *new = jit_info_table_new_chunk ();
+	MonoJitInfoTableChunk *result = jit_info_table_new_chunk ();
 	int i, j;
 
 	j = 0;
 	for (i = 0; i < old->num_elements; ++i) {
 		if (!IS_JIT_INFO_TOMBSTONE (old->data [i]))
-			new->data [j++] = old->data [i];
+			result->data [j++] = old->data [i];
 	}
 
-	new->num_elements = j;
-	if (new->num_elements > 0)
-		new->last_code_end = (gint8*)new->data [j - 1]->code_start + new->data [j - 1]->code_size;
+	result->num_elements = j;
+	if (result->num_elements > 0)
+		result->last_code_end = (gint8*)result->data [j - 1]->code_start + result->data [j - 1]->code_size;
 	else
-		new->last_code_end = old->last_code_end;
+		result->last_code_end = old->last_code_end;
 
-	return new;
+	return result;
 }
 
 static MonoJitInfoTable*
 jit_info_table_copy_and_purify_chunk (MonoJitInfoTable *table, MonoJitInfoTableChunk *chunk)
 {
-	MonoJitInfoTable *new_table = g_malloc (MONO_SIZEOF_JIT_INFO_TABLE
+	MonoJitInfoTable *new_table = (MonoJitInfoTable *)g_malloc (MONO_SIZEOF_JIT_INFO_TABLE
 		+ sizeof (MonoJitInfoTableChunk*) * table->num_chunks);
 	int i, j;
 
@@ -595,7 +614,7 @@ jit_info_table_add (MonoDomain *domain, MonoJitInfoTable *volatile *table_ptr, M
 		*table_ptr = new_table;
 		mono_memory_barrier ();
 		domain->num_jit_info_tables++;
-		mono_thread_hazardous_free_or_queue (table, (MonoHazardousFreeFunc)mono_jit_info_table_free, TRUE, FALSE);
+		mono_thread_hazardous_try_free (table, (MonoHazardousFreeFunc)mono_jit_info_table_free);
 		table = new_table;
 
 		goto restart;
@@ -651,13 +670,15 @@ mono_jit_info_table_add (MonoDomain *domain, MonoJitInfo *ji)
 }
 
 static MonoJitInfo*
-mono_jit_info_make_tombstone (MonoJitInfo *ji)
+mono_jit_info_make_tombstone (MonoJitInfoTableChunk *chunk, MonoJitInfo *ji)
 {
 	MonoJitInfo *tombstone = g_new0 (MonoJitInfo, 1);
 
 	tombstone->code_start = ji->code_start;
 	tombstone->code_size = ji->code_size;
 	tombstone->d.method = JIT_INFO_TOMBSTONE_MARKER;
+	tombstone->n.next_tombstone = chunk->next_tombstone;
+	chunk->next_tombstone = tombstone;
 
 	return tombstone;
 }
@@ -671,7 +692,7 @@ mono_jit_info_free_or_queue (MonoDomain *domain, MonoJitInfo *ji)
 	if (domain->num_jit_info_tables <= 1) {
 		/* Can it actually happen that we only have one table
 		   but ji is still hazardous? */
-		mono_thread_hazardous_free_or_queue (ji, g_free, TRUE, FALSE);
+		mono_thread_hazardous_try_free (ji, g_free);
 	} else {
 		domain->jit_info_free_queue = g_slist_prepend (domain->jit_info_free_queue, ji);
 	}
@@ -684,10 +705,10 @@ jit_info_table_remove (MonoJitInfoTable *table, MonoJitInfo *ji)
 	gpointer start = ji->code_start;
 	int chunk_pos, pos;
 
-	chunk_pos = jit_info_table_index (table, start);
+	chunk_pos = jit_info_table_index (table, (gint8 *)start);
 	g_assert (chunk_pos < table->num_chunks);
 
-	pos = jit_info_table_chunk_index (table->chunks [chunk_pos], NULL, start);
+	pos = jit_info_table_chunk_index (table->chunks [chunk_pos], NULL, (gint8 *)start);
 
 	do {
 		chunk = table->chunks [chunk_pos];
@@ -710,7 +731,7 @@ jit_info_table_remove (MonoJitInfoTable *table, MonoJitInfo *ji)
  found:
 	g_assert (chunk->data [pos] == ji);
 
-	chunk->data [pos] = mono_jit_info_make_tombstone (ji);
+	chunk->data [pos] = mono_jit_info_make_tombstone (chunk, ji);
 
 	/* Debugging code, should be removed. */
 	//jit_info_table_check (table);
@@ -772,14 +793,14 @@ mono_jit_info_size (MonoJitInfoFlags flags, int num_clauses, int num_holes)
 	int size = MONO_SIZEOF_JIT_INFO;
 
 	size += num_clauses * sizeof (MonoJitExceptionInfo);
-	if (flags & JIT_INFO_HAS_CAS_INFO)
-		size += sizeof (MonoMethodCasInfo);
 	if (flags & JIT_INFO_HAS_GENERIC_JIT_INFO)
 		size += sizeof (MonoGenericJitInfo);
 	if (flags & JIT_INFO_HAS_TRY_BLOCK_HOLES)
 		size += sizeof (MonoTryBlockHoleTableJitInfo) + num_holes * sizeof (MonoTryBlockHoleJitInfo);
 	if (flags & JIT_INFO_HAS_ARCH_EH_INFO)
 		size += sizeof (MonoArchEHJitInfo);
+	if (flags & JIT_INFO_HAS_THUNK_INFO)
+		size += sizeof (MonoThunkJitInfo);
 	return size;
 }
 
@@ -791,32 +812,63 @@ mono_jit_info_init (MonoJitInfo *ji, MonoMethod *method, guint8 *code, int code_
 	ji->code_start = code;
 	ji->code_size = code_size;
 	ji->num_clauses = num_clauses;
-	if (flags & JIT_INFO_HAS_CAS_INFO)
-		ji->has_cas_info = 1;
 	if (flags & JIT_INFO_HAS_GENERIC_JIT_INFO)
 		ji->has_generic_jit_info = 1;
 	if (flags & JIT_INFO_HAS_TRY_BLOCK_HOLES)
 		ji->has_try_block_holes = 1;
 	if (flags & JIT_INFO_HAS_ARCH_EH_INFO)
 		ji->has_arch_eh_info = 1;
+	if (flags & JIT_INFO_HAS_THUNK_INFO)
+		ji->has_thunk_info = 1;
 }
 
+/**
+ * mono_jit_info_get_code_start:
+ * @ji: the JIT information handle
+ *
+ * Use this function to get the starting address for the method described by
+ * the @ji object.  You can use this plus the `mono_jit_info_get_code_size`
+ * to determine the start and end of the native code.
+ *
+ * Returns: Starting address with the native code.
+ */
 gpointer
 mono_jit_info_get_code_start (MonoJitInfo* ji)
 {
 	return ji->code_start;
 }
 
+/**
+ * mono_jit_info_get_code_size:
+ * @ji: the JIT information handle
+ *
+ * Use this function to get the code size for the method described by
+ * the @ji object.   You can use this plus the `mono_jit_info_get_code_start`
+ * to determine the start and end of the native code.
+ *
+ * Returns: Starting address with the native code.
+ */
 int
 mono_jit_info_get_code_size (MonoJitInfo* ji)
 {
 	return ji->code_size;
 }
 
+/**
+ * mono_jit_info_get_method:
+ * @ji: the JIT information handle
+ *
+ * Use this function to get the `MonoMethod *` that backs
+ * the @ji object.
+ *
+ * Returns: The MonoMethod that represents the code tracked
+ * by @ji.
+ */
 MonoMethod*
 mono_jit_info_get_method (MonoJitInfo* ji)
 {
 	g_assert (!ji->async);
+	g_assert (!ji->is_trampoline);
 	return ji->d.method;
 }
 
@@ -833,7 +885,7 @@ jit_info_next_value (gpointer value)
 {
 	MonoJitInfo *info = (MonoJitInfo*)value;
 
-	return (gpointer*)&info->next_jit_code_hash;
+	return (gpointer*)&info->n.next_jit_code_hash;
 }
 
 void
@@ -928,10 +980,10 @@ mono_jit_info_get_arch_eh_info (MonoJitInfo *ji)
 	}
 }
 
-MonoMethodCasInfo*
-mono_jit_info_get_cas_info (MonoJitInfo *ji)
+MonoThunkJitInfo*
+mono_jit_info_get_thunk_info (MonoJitInfo *ji)
 {
-	if (ji->has_cas_info) {
+	if (ji->has_thunk_info) {
 		char *ptr = (char*)&ji->clauses [ji->num_clauses];
 		if (ji->has_generic_jit_info)
 			ptr += sizeof (MonoGenericJitInfo);
@@ -939,7 +991,7 @@ mono_jit_info_get_cas_info (MonoJitInfo *ji)
 			ptr += try_block_hole_table_size (ji);
 		if (ji->has_arch_eh_info)
 			ptr += sizeof (MonoArchEHJitInfo);
-		return (MonoMethodCasInfo*)ptr;
+		return (MonoThunkJitInfo*)ptr;
 	} else {
 		return NULL;
 	}

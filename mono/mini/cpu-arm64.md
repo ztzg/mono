@@ -1,5 +1,6 @@
 # Copyright 2011-2013 Xamarin, Inc (http://www.xamarin.com)
 # Copyright 2003-2011 Novell, Inc (http://www.novell.com)
+# Licensed under the MIT license. See LICENSE file in the project root for full license information.
 # arm64 cpu description file
 # this file is read by genmdesc to pruduce a table with all the relevant information
 # about the cpu instructions that may be used by the regsiter allocator, the scheduler
@@ -56,7 +57,7 @@ br: len:16
 switch: src1:i len:12
 # See the comment in resume_from_signal_handler, we can't copy the fp regs from sigctx to MonoContext on linux,
 # since the corresponding sigctx structures are not well defined.
-seq_point: len:38 clob:c
+seq_point: len:40 clob:c
 il_seq_point: len:0
 
 throw: src1:i len:24
@@ -65,6 +66,7 @@ start_handler: len:32
 endfinally: len:32
 call_handler: len:16 clob:c
 endfilter: src1:i len:32
+get_ex_obj: dest:i len:16
 
 ckfinite: dest:f src1:f len:64
 ceq: dest:i len:12
@@ -477,3 +479,6 @@ atomic_store_i8: dest:b src1:i len:12
 atomic_store_u8: dest:b src1:i len:12
 atomic_store_r4: dest:b src1:f len:24
 atomic_store_r8: dest:b src1:f len:20
+
+generic_class_init: src1:a len:44 clob:c
+gc_safe_point: src1:i len:12 clob:c

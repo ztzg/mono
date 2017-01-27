@@ -6,7 +6,9 @@ PROGRAM = resgen.exe
 
 CLEAN_FILES = resgen.exe
 
-INSTALL_PROFILE := $(filter net_4_5, $(PROFILE))
+LIB_REFS = System System.Xml System.Core
+
+INSTALL_PROFILE := $(filter $(DEFAULT_PROFILE), $(PROFILE))
 ifndef INSTALL_PROFILE
 NO_INSTALL = yes
 endif

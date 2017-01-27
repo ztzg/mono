@@ -99,7 +99,7 @@ namespace MonoTests.System.IO.Compression
 			MemoryStream backing = new MemoryStream (data);
 			DeflateStream compressing = new DeflateStream (backing, CompressionMode.Decompress);
 			compressing.Read (dummy, 0, 1);
-		}		
+		}
 
 		[Test]
 		[ExpectedException (typeof (ArgumentNullException))]
@@ -362,6 +362,57 @@ namespace MonoTests.System.IO.Compression
 			backing.Close();
 		}
 #endif	
+
+		[Test]
+		[ExpectedException (typeof (ArgumentException))]
+		public void CheckBufferOverrun ()
+		{
+			byte[] data = new byte [20];
+			MemoryStream backing = new MemoryStream ();
+			DeflateStream compressing = new DeflateStream (backing, CompressionLevel.Fastest, true);
+			compressing.Write (data, 0, data.Length + 1);
+			compressing.Close ();
+			backing.Close ();
+		}
+
+		[Test]
+		public void Bug28777_EmptyFlush ()
+		{
+			MemoryStream backing = new MemoryStream ();
+			DeflateStream compressing = new DeflateStream (backing, CompressionLevel.Fastest, true);
+			compressing.Flush ();
+			compressing.Close ();
+			backing.Close ();
+		}
+		
+		[Test]
+		public void Bug28777_DoubleFlush ()
+		{
+			byte[] buffer = new byte [4096];
+			MemoryStream backing = new MemoryStream ();
+			DeflateStream compressing = new DeflateStream (backing, CompressionLevel.Fastest, true);
+			compressing.Write (buffer, 0, buffer.Length);
+			compressing.Flush ();
+			compressing.Flush ();
+			compressing.Close ();
+			backing.Close ();
+		}
+
+		[Test]
+		public void Bug34916_Inflate ()
+		{
+			var base64String = @"H4sIAAAAAAAAA6yVu27bQBBF/4VtZGHeD3ZJmhTp5C5IIUiEIcCWDEUugiD/nmEQwYRNURFAsuFwd2exZ++d+farud89davT+um5aRsC1DuEO+R7lJayRV9m5gegFqBZNB83m5fjevOzadGWUPHjaXd62XYVEy3Z04wiMTKIX0dfV0G/6FO3Pu72D/+iL916W9GbOV/X58SaS6zEKKyoGUA1eNg/nLfF2jUEBBNMtT4Wzeq567Z9HkZkE1Osf93msN/+WO32m+7zsavsh30/BUU8fy+uUCC+QIHpPQW1RAXkEGWUmSnUy2iUYSMYOGpARYViiIHcqY5kExS8rg2vY8gLGEjeYsClBVE4ORQHz3kxsEF4iS01xzBIZkgYQcYQQ7C54LQaIrxWn5+4ioT1BiRQN8Fh6MrOPjOS9Eh3M8YRJJQMZioJkUODFA8RNJ9AYuYBNyGJW5D0oi3/EpZ3dWYk5X5PN81RJGJgDATMQ5X02nFS1imVlMGvu0XwBg5/K1hY1U8tecxcNDy1/FAnG+OAQSi9PliHRaNUiuoxQYFB6T8oyAUKEu9LJ6oipbr1spyZArhWX6qbi7EOUrs7SCAoDNVgzKagMlUz+q6DQ4N8/yM=";
+
+			byte[] byteArray = Convert.FromBase64String(base64String);
+			string unZipped = null;
+
+			using (var zippedMemoryStream = new MemoryStream (byteArray))
+			using (var gZipStream = new GZipStream (zippedMemoryStream, CompressionMode.Decompress))
+			using (var unzippedMemStream = new MemoryStream())
+			using (var unZippedStream = new StreamReader (gZipStream, Encoding.UTF8)) {
+				unZipped = unZippedStream.ReadToEnd ();
+			}
+		}
 	}
 }
 

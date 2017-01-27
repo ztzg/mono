@@ -9,6 +9,7 @@
  * The AOT compiler can load these files during compilation.
  * Currently, only the order in which methods were compiled is saved, 
  * allowing more efficient function ordering in the AOT files.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -124,7 +125,7 @@ prof_jit_leave (MonoProfiler *prof, MonoMethod *method, int result)
 	MonoImage *image = mono_class_get_image (mono_method_get_class (method));
 	PerImageData *data;
 
-	data = g_hash_table_lookup (prof->images, image);
+	data = (PerImageData *)g_hash_table_lookup (prof->images, image);
 	if (!data) {
 		data = g_new0 (PerImageData, 1);
 		g_hash_table_insert (prof->images, image, data);

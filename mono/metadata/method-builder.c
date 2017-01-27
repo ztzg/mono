@@ -6,6 +6,7 @@
  *
  * Copyright 2002-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "config.h"
@@ -67,7 +68,8 @@ mono_mb_new_base (MonoClass *klass, MonoWrapperType type)
 
 #ifndef DISABLE_JIT
 	mb->code_size = 40;
-	mb->code = g_malloc (mb->code_size);
+	mb->code = (unsigned char *)g_malloc (mb->code_size);
+	mb->init_locals = TRUE;
 #endif
 	/* placeholder for the wrapper always at index 1 */
 	mono_mb_add_data (mb, NULL);
@@ -96,6 +98,12 @@ void
 mono_mb_free (MonoMethodBuilder *mb)
 {
 #ifndef DISABLE_JIT
+	GList *l;
+
+	for (l = mb->locals_list; l; l = l->next) {
+		/* Allocated in mono_mb_add_local () */
+		g_free (l->data);
+	}
 	g_list_free (mb->locals_list);
 	if (!mb->dynamic) {
 		g_free (mb->method);
@@ -148,14 +156,14 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 		header->code = mb->code;
 
 		for (i = 0, l = mb->locals_list; l; l = l->next, i++) {
-			header->locals [i] = mono_metadata_type_dup (NULL, (MonoType*)l->data);
+			header->locals [i] = (MonoType*)l->data;
 		}
 	} else
 #endif
 	{
 		/* Realloc the method info into a mempool */
 
-		method = mono_image_alloc0 (image, sizeof (MonoMethodWrapper));
+		method = (MonoMethod *)mono_image_alloc0 (image, sizeof (MonoMethodWrapper));
 		memcpy (method, mb->method, sizeof (MonoMethodWrapper));
 		mw = (MonoMethodWrapper*) method;
 
@@ -168,14 +176,20 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 		mw->header = header = (MonoMethodHeader *) 
 			mono_image_alloc0 (image, MONO_SIZEOF_METHOD_HEADER + mb->locals * sizeof (MonoType *));
 
-		header->code = mono_image_alloc (image, mb->pos);
+		header->code = (const unsigned char *)mono_image_alloc (image, mb->pos);
 		memcpy ((char*)header->code, mb->code, mb->pos);
 
 		for (i = 0, l = mb->locals_list; l; l = l->next, i++) {
-			header->locals [i] = (MonoType *)l->data;
+			header->locals [i] = (MonoType*)l->data;
 		}
 #endif
 	}
+
+#ifndef DISABLE_JIT
+	/* Free the locals list so mono_mb_free () doesn't free the types twice */
+	g_list_free (mb->locals_list);
+	mb->locals_list = NULL;
+#endif
 
 	method->signature = signature;
 	if (!signature->hasthis)
@@ -189,7 +203,7 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 
 	header->code_size = mb->pos;
 	header->num_locals = mb->locals;
-	header->init_locals = TRUE;
+	header->init_locals = mb->init_locals;
 
 	header->num_clauses = mb->num_clauses;
 	header->clauses = mb->clauses;
@@ -197,15 +211,15 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 	method->skip_visibility = mb->skip_visibility;
 #endif
 
-	i = g_list_length (mw->method_data);
+	i = g_list_length ((GList *)mw->method_data);
 	if (i) {
 		GList *tmp;
 		void **data;
-		l = g_list_reverse (mw->method_data);
+		l = g_list_reverse ((GList *)mw->method_data);
 		if (method_is_dynamic (method))
-			data = g_malloc (sizeof (gpointer) * (i + 1));
+			data = (void **)g_malloc (sizeof (gpointer) * (i + 1));
 		else
-			data = mono_image_alloc (image, sizeof (gpointer) * (i + 1));
+			data = (void **)mono_image_alloc (image, sizeof (gpointer) * (i + 1));
 		/* store the size in the first element */
 		data [0] = GUINT_TO_POINTER (i);
 		i = 1;
@@ -232,7 +246,7 @@ mono_mb_create_method (MonoMethodBuilder *mb, MonoMethodSignature *signature, in
 #endif
 
 	if (mb->param_names) {
-		char **param_names = mono_image_alloc0 (image, signature->param_count * sizeof (gpointer));
+		char **param_names = (char **)mono_image_alloc0 (image, signature->param_count * sizeof (gpointer));
 		for (i = 0; i < signature->param_count; ++i)
 			param_names [i] = mono_image_strdup (image, mb->param_names [i]);
 
@@ -257,9 +271,9 @@ mono_mb_add_data (MonoMethodBuilder *mb, gpointer data)
 	mw = (MonoMethodWrapper *)mb->method;
 
 	/* one O(n) is enough */
-	mw->method_data = g_list_prepend (mw->method_data, data);
+	mw->method_data = g_list_prepend ((GList *)mw->method_data, data);
 
-	return g_list_length (mw->method_data);
+	return g_list_length ((GList *)mw->method_data);
 }
 
 #ifndef DISABLE_JIT
@@ -268,12 +282,19 @@ int
 mono_mb_add_local (MonoMethodBuilder *mb, MonoType *type)
 {
 	int res;
+	MonoType *t;
+
+	/*
+	 * Have to make a copy early since type might be sig->ret,
+	 * which is transient, see mono_metadata_signature_dup_internal_with_padding ().
+	 */
+	t = mono_metadata_type_dup (NULL, type);
 
 	g_assert (mb != NULL);
 	g_assert (type != NULL);
 
 	res = mb->locals;
-	mb->locals_list = g_list_append (mb->locals_list, type);
+	mb->locals_list = g_list_append (mb->locals_list, t);
 	mb->locals++;
 
 	return res;
@@ -299,7 +320,7 @@ mono_mb_emit_byte (MonoMethodBuilder *mb, guint8 op)
 {
 	if (mb->pos >= mb->code_size) {
 		mb->code_size += mb->code_size >> 1;
-		mb->code = g_realloc (mb->code, mb->code_size);
+		mb->code = (unsigned char *)g_realloc (mb->code, mb->code_size);
 	}
 
 	mb->code [mb->pos++] = op;
@@ -322,7 +343,7 @@ mono_mb_emit_i4 (MonoMethodBuilder *mb, gint32 data)
 {
 	if ((mb->pos + 4) >= mb->code_size) {
 		mb->code_size += mb->code_size >> 1;
-		mb->code = g_realloc (mb->code, mb->code_size);
+		mb->code = (unsigned char *)g_realloc (mb->code, mb->code_size);
 	}
 
 	mono_mb_patch_addr (mb, mb->pos, data);
@@ -330,11 +351,24 @@ mono_mb_emit_i4 (MonoMethodBuilder *mb, gint32 data)
 }
 
 void
+mono_mb_emit_i8 (MonoMethodBuilder *mb, gint64 data)
+{
+	if ((mb->pos + 8) >= mb->code_size) {
+		mb->code_size += mb->code_size >> 1;
+		mb->code = (unsigned char *)g_realloc (mb->code, mb->code_size);
+	}
+
+	mono_mb_patch_addr (mb, mb->pos, data);
+	mono_mb_patch_addr (mb, mb->pos + 4, data >> 32);
+	mb->pos += 8;
+}
+
+void
 mono_mb_emit_i2 (MonoMethodBuilder *mb, gint16 data)
 {
 	if ((mb->pos + 2) >= mb->code_size) {
 		mb->code_size += mb->code_size >> 1;
-		mb->code = g_realloc (mb->code, mb->code_size);
+		mb->code = (unsigned char *)g_realloc (mb->code, mb->code_size);
 	}
 
 	mb->code [mb->pos] = data & 0xff;
@@ -440,6 +474,13 @@ mono_mb_emit_icon (MonoMethodBuilder *mb, gint32 value)
 	}
 }
 
+void
+mono_mb_emit_icon8 (MonoMethodBuilder *mb, gint64 value)
+{
+	mono_mb_emit_byte (mb, CEE_LDC_I8);
+	mono_mb_emit_i8 (mb, value);
+}
+
 int
 mono_mb_get_label (MonoMethodBuilder *mb)
 {
@@ -530,7 +571,7 @@ mono_mb_emit_exception_full (MonoMethodBuilder *mb, const char *exc_nspace, cons
 {
 	MonoMethod *ctor = NULL;
 
-	MonoClass *mme = mono_class_from_name (mono_defaults.corlib, exc_nspace, exc_name);
+	MonoClass *mme = mono_class_load_from_name (mono_defaults.corlib, exc_nspace, exc_name);
 	mono_class_init (mme);
 	ctor = mono_class_get_method_from_name (mme, ".ctor", 0);
 	g_assert (ctor);

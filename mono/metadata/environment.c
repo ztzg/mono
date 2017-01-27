@@ -7,6 +7,7 @@
  *
  * Copyright 2002-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -18,7 +19,7 @@
 #include <mono/utils/mono-compiler.h>
 #include <mono/io-layer/io-layer.h>
 
-extern MonoString* ves_icall_System_Environment_GetOSVersionString (void) MONO_INTERNAL;
+extern MonoString* ves_icall_System_Environment_GetOSVersionString (void);
 
 #if !defined(HOST_WIN32) && defined(HAVE_SYS_UTSNAME_H)
 #include <sys/utsname.h>

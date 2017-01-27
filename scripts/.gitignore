@@ -50,6 +50,7 @@
 /mono-abi-info
 /mono-api-diff
 /mono-api-info
+/mono-api-html
 /mono-api-info1
 /mono-api-info2
 /mono-cil-strip
@@ -65,6 +66,7 @@
 /mono-service
 /mono-service2
 /mono-shlib-cop
+/mono-symbolicate
 /mono-xmltool
 /mozroots
 /nunit-console

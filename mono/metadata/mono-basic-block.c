@@ -5,6 +5,7 @@
  *   Rodrigo Kumpera (rkumpera@novell.com)
  *
  * Copyright 2010 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -239,6 +240,8 @@ bb_split (MonoSimpleBasicBlock *first, MonoSimpleBasicBlock *hint, MonoSimpleBas
 {
 	MonoSimpleBasicBlock *res, *bb = first;
 
+	mono_error_init (error);
+
 	if (bb_idx_is_contained (hint, target)) {
 		first = hint;
 	} else if (hint->next && bb_idx_is_contained (hint->next, target)) {
@@ -295,11 +298,11 @@ bb_liveness (MonoSimpleBasicBlock *bb)
 	}
 
 	while (mark_stack->len > 0) {
-		MonoSimpleBasicBlock *block = g_ptr_array_remove_index_fast (mark_stack, mark_stack->len - 1);
+		MonoSimpleBasicBlock *block = (MonoSimpleBasicBlock *)g_ptr_array_remove_index_fast (mark_stack, mark_stack->len - 1);
 		block->dead = FALSE;
 
 		for (tmp = block->out_bb; tmp; tmp = tmp->next) {
-			MonoSimpleBasicBlock *to = tmp->data;
+			MonoSimpleBasicBlock *to = (MonoSimpleBasicBlock *)tmp->data;
 			if (to->dead)
 				g_ptr_array_add (mark_stack, to);
 		}
@@ -334,6 +337,8 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 	guint cli_addr, offset;
 	MonoSimpleBasicBlock *branch, *next, *current;
 	const MonoOpcode *opcode;
+
+	mono_error_init (error);
 
 	current = bb;
 
@@ -463,6 +468,9 @@ bb_formation_eh_pass (MonoMethodHeader *header, MonoSimpleBasicBlock *bb, MonoSi
 {
 	int i;
 	int end = header->code_size;
+
+	mono_error_init (error);
+
 	/*We must split at all points to verify for targets in the middle of an instruction*/
 	for (i = 0; i < header->num_clauses; ++i) {
 		MonoExceptionClause *clause = header->clauses + i;
@@ -514,18 +522,12 @@ mono_basic_block_free (MonoSimpleBasicBlock *bb)
  * Return the list of basic blocks of method. Return NULL on failure and set @error.
 */
 MonoSimpleBasicBlock*
-mono_basic_block_split (MonoMethod *method, MonoError *error)
+mono_basic_block_split (MonoMethod *method, MonoError *error, MonoMethodHeader *header)
 {
 	MonoSimpleBasicBlock *bb, *root;
 	const unsigned char *start, *end;
-	MonoMethodHeader *header = mono_method_get_header (method);
 
 	mono_error_init (error);
-
-	if (!header) {
-		mono_error_set_not_verifiable (error, method, "Could not decode header");
-		return NULL;
-	}
 
 	start = header->code;
 	end = start + header->code_size;
@@ -551,11 +553,9 @@ mono_basic_block_split (MonoMethod *method, MonoError *error)
 	dump_bb_list (bb, &root, g_strdup_printf("AFTER LIVENESS %s", mono_method_full_name (method, TRUE)));
 #endif
 
-	mono_metadata_free_mh (header);
 	return bb;
 
 fail:
-	mono_metadata_free_mh (header);
 	mono_basic_block_free (bb);
 	return NULL;
 }

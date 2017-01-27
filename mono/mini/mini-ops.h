@@ -2,6 +2,7 @@
  * Copyright 2003 Ximian, Inc
  * Copyright 2003-2011 Novell Inc
  * Copyright 2011 Xamarin Inc
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 MINI_OP(OP_LOAD,	"load", NONE, NONE, NONE)
 MINI_OP(OP_LDADDR,	"ldaddr", IREG, NONE, NONE)
@@ -41,6 +42,7 @@ MINI_OP(OP_SEQ_POINT, "seq_point", NONE, NONE, NONE)
 MINI_OP(OP_IL_SEQ_POINT, "il_seq_point", NONE, NONE, NONE)
 MINI_OP(OP_IMPLICIT_EXCEPTION, "implicit_exception", NONE, NONE, NONE)
 
+/* CALL opcodes need to stay together, see MONO_IS_CALL macro */
 MINI_OP(OP_VOIDCALL,	"voidcall", NONE, NONE, NONE)
 MINI_OP(OP_VOIDCALL_REG,	"voidcall_reg", NONE, IREG, NONE)
 MINI_OP(OP_VOIDCALL_MEMBASE,	"voidcall_membase", NONE, IREG, NONE)
@@ -371,7 +373,7 @@ MINI_OP(OP_INOT,       "int_not", IREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_I1,"int_conv_to_i1", IREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_I2,"int_conv_to_i2", IREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_I4,"int_conv_to_i4", IREG, IREG, NONE)
-MINI_OP(OP_ICONV_TO_I8,"int_conv_to_i8", IREG, IREG, NONE)
+MINI_OP(OP_ICONV_TO_I8,"int_conv_to_i8", LREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_R4,"int_conv_to_r4", FREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_R8,"int_conv_to_r8", FREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_U4,"int_conv_to_u4", IREG, IREG, NONE)
@@ -540,11 +542,11 @@ MINI_OP(OP_FSUB_OVF_UN,   "float_sub_ovf_un", FREG, FREG, FREG)
 MINI_OP(OP_FCONV_TO_OVF_I1_UN,"float_conv_to_ovf_i1_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I2_UN,"float_conv_to_ovf_i2_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I4_UN,"float_conv_to_ovf_i4_un", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_I8_UN,"float_conv_to_ovf_i8_un", IREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_I8_UN,"float_conv_to_ovf_i8_un", LREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U1_UN,"float_conv_to_ovf_u1_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U2_UN,"float_conv_to_ovf_u2_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U4_UN,"float_conv_to_ovf_u4_un", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_U8_UN,"float_conv_to_ovf_u8_un", IREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_U8_UN,"float_conv_to_ovf_u8_un", LREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I_UN, "float_conv_to_ovf_i_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U_UN, "float_conv_to_ovf_u_un", IREG, FREG, NONE)
 
@@ -554,8 +556,8 @@ MINI_OP(OP_FCONV_TO_OVF_I2,"float_conv_to_ovf_i2", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U2,"float_conv_to_ovf_u2", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I4,"float_conv_to_ovf_i4", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U4,"float_conv_to_ovf_u4", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_I8,"float_conv_to_ovf_i8", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_U8,"float_conv_to_ovf_u8", IREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_I8,"float_conv_to_ovf_i8", LREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_U8,"float_conv_to_ovf_u8", LREG, FREG, NONE)
 
 /* These do the comparison too */
 MINI_OP(OP_FCEQ,   "float_ceq", IREG, FREG, FREG)
@@ -640,6 +642,11 @@ MINI_OP(OP_CALL_HANDLER  , "call_handler", NONE, NONE, NONE)
 MINI_OP(OP_START_HANDLER  , "start_handler", NONE, NONE, NONE)
 MINI_OP(OP_ENDFILTER,  "endfilter", NONE, IREG, NONE)
 MINI_OP(OP_ENDFINALLY,  "endfinally", NONE, NONE, NONE)
+/*
+ * Returns the exception object passed to catch clauses in
+ * by the EH code in a register.
+ */
+MINI_OP(OP_GET_EX_OBJ, "get_ex_obj", IREG, NONE, NONE)
 
 /* inline (long)int * (long)int */
 MINI_OP(OP_BIGMUL, "bigmul", LREG, IREG, IREG)
@@ -1062,14 +1069,17 @@ MINI_OP(OP_GC_SPILL_SLOT_LIVENESS_DEF, "gc_spill_slot_liveness_def", NONE, NONE,
  */
 MINI_OP(OP_GC_PARAM_SLOT_LIVENESS_DEF, "gc_param_slot_liveness_def", NONE, NONE, NONE)
 
-/* Arch specific opcodes */
-/* #if defined(__native_client_codegen__) || defined(__native_client__) */
-/* We have to define these in terms of the TARGET defines, not NaCl defines */
-/* because genmdesc.pl doesn't have multiple defines per platform.          */
-#if defined(TARGET_AMD64) || defined(TARGET_X86) || defined(TARGET_ARM)
-MINI_OP(OP_NACL_GC_SAFE_POINT,     "nacl_gc_safe_point", IREG, NONE, NONE)
-#endif
+MINI_OP(OP_GC_SAFE_POINT, "gc_safe_point", NONE, IREG, NONE)
 
+/*
+ * Check if the class given by sreg1 was inited, if not, call
+ * mono_generic_class_init_trampoline () though a trampoline.
+ * Since the trampoline saves all registers, this doesn't clobber
+ * any registers.
+ */
+MINI_OP(OP_GENERIC_CLASS_INIT, "generic_class_init", NONE, IREG, NONE)
+
+/* Arch specific opcodes */
 #if defined(TARGET_X86) || defined(TARGET_AMD64)
 MINI_OP(OP_X86_TEST_NULL,          "x86_test_null", NONE, IREG, NONE)
 MINI_OP(OP_X86_COMPARE_MEMBASE_REG,"x86_compare_membase_reg", NONE, IREG, IREG)

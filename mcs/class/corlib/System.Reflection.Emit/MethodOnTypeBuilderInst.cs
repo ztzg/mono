@@ -128,6 +128,12 @@ namespace System.Reflection.Emit
 			}
 		}
 
+		public override Module Module {
+			get {
+				return base_method.Module;
+			}
+		}
+
 		public override bool IsDefined (Type attributeType, bool inherit)
 		{
 			throw new NotSupportedException ();
@@ -275,6 +281,12 @@ namespace System.Reflection.Emit
 		public override MethodInfo GetBaseDefinition ()
 		{
 			throw new NotSupportedException ();
+		}
+
+		public override ParameterInfo ReturnParameter {
+			get {
+				throw new NotSupportedException();
+			}
 		}
 
 		public override ICustomAttributeProvider ReturnTypeCustomAttributes {

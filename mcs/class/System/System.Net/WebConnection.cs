@@ -28,25 +28,14 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if SECURITY_DEP
-
-#if MONOTOUCH || MONODROID
-using Mono.Security.Protocol.Tls;
-#else
-extern alias MonoSecurity;
-using MonoSecurity::Mono.Security.Protocol.Tls;
-#endif
-
-#endif
-
 using System.IO;
 using System.Collections;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Diagnostics;
+using Mono.Net.Security;
 
 namespace System.Net
 {
@@ -93,20 +82,13 @@ namespace System.Net
 		NtlmAuthState connect_ntlm_auth_state;
 		HttpWebRequest connect_request;
 
-		bool ssl;
-		bool certsAvailable;
 		Exception connect_exception;
 		static object classLock = new object ();
-		static Type sslStream;
-#if !MONOTOUCH && !MONODROID
-		static PropertyInfo piClient;
-		static PropertyInfo piServer;
-		static PropertyInfo piTrustFailure;
-#endif
+		MonoTlsStream tlsStream;
 
-#if MONOTOUCH
+#if MONOTOUCH && !MONOTOUCH_TV && !MONOTOUCH_WATCH
 		[System.Runtime.InteropServices.DllImport ("__Internal")]
-		static extern void monotouch_start_wwan (string uri);
+		static extern void xamarin_start_wwan (string uri);
 #endif
 
 		internal ChunkStream ChunkStream {
@@ -170,15 +152,15 @@ namespace System.Net
 				IPHostEntry hostEntry = sPoint.HostEntry;
 
 				if (hostEntry == null) {
-#if MONOTOUCH
-					monotouch_start_wwan (sPoint.Address.ToString ());
+#if MONOTOUCH && !MONOTOUCH_TV && !MONOTOUCH_WATCH
+					xamarin_start_wwan (sPoint.Address.ToString ());
 					hostEntry = sPoint.HostEntry;
 					if (hostEntry == null) {
 #endif
 						status = sPoint.UsesProxy ? WebExceptionStatus.ProxyNameResolutionFailure :
 									    WebExceptionStatus.NameResolutionFailure;
 						return;
-#if MONOTOUCH
+#if MONOTOUCH && !MONOTOUCH_TV && !MONOTOUCH_WATCH
 					}
 #endif
 				}
@@ -237,34 +219,6 @@ namespace System.Net
 			}
 		}
 
-		static void EnsureSSLStreamAvailable ()
-		{
-			lock (classLock) {
-				if (sslStream != null)
-					return;
-
-#if NET_2_1 && SECURITY_DEP
-				sslStream = typeof (HttpsClientStream);
-#else
-				// HttpsClientStream is an internal glue class in Mono.Security.dll
-				sslStream = Type.GetType ("Mono.Security.Protocol.Tls.HttpsClientStream, " +
-							Consts.AssemblyMono_Security, false);
-
-				if (sslStream == null) {
-					string msg = "Missing Mono.Security.dll assembly. " +
-							"Support for SSL/TLS is unavailable.";
-
-					throw new NotSupportedException (msg);
-				}
-#endif
-#if !MONOTOUCH && !MONODROID
-				piClient = sslStream.GetProperty ("SelectedClientCertificate");
-				piServer = sslStream.GetProperty ("ServerCertificate");
-				piTrustFailure = sslStream.GetProperty ("TrustFailure");
-#endif
-			}
-		}
-
 		bool CreateTunnel (HttpWebRequest request, Uri connectUri,
 		                   Stream stream, out byte[] buffer)
 		{
@@ -307,7 +261,7 @@ namespace System.Net
 					var auth = AuthenticationManager.Authenticate (challenge [i], connect_request, creds);
 					if (auth == null)
 						continue;
-					ntlm = (auth.Module.AuthenticationType == "NTLM");
+					ntlm = (auth.ModuleAuthenticationType == "NTLM");
 					sb.Append ("\r\nProxy-Authorization: ");
 					sb.Append (auth.Message);
 					break;
@@ -338,7 +292,7 @@ namespace System.Net
 				}
 
 				Data.StatusCode = status;
-				Data.Challenge = result.GetValues_internal ("Proxy-Authenticate", false);
+				Data.Challenge = result.GetValues ("Proxy-Authentic");
 				return false;
 			} else if (status != 200) {
 				string msg = String.Format ("The remote server returned a {0} status code.", status);
@@ -439,41 +393,33 @@ namespace System.Net
 				NetworkStream serverStream = new NetworkStream (socket, false);
 
 				if (request.Address.Scheme == Uri.UriSchemeHttps) {
-					ssl = true;
-					EnsureSSLStreamAvailable ();
-					if (!reused || nstream == null || nstream.GetType () != sslStream) {
+#if SECURITY_DEP
+					if (!reused || nstream == null || tlsStream == null) {
 						byte [] buffer = null;
 						if (sPoint.UseConnect) {
 							bool ok = CreateTunnel (request, sPoint.Address, serverStream, out buffer);
 							if (!ok)
 								return false;
 						}
-#if SECURITY_DEP
-#if MONOTOUCH || MONODROID
-						nstream = new HttpsClientStream (serverStream, request.ClientCertificates, request, buffer);
-#else
-						object[] args = new object [4] { serverStream,
-							request.ClientCertificates,
-							request, buffer};
-						nstream = (Stream) Activator.CreateInstance (sslStream, args);
-#endif
-						SslClientStream scs = (SslClientStream) nstream;
-						var helper = new ServicePointManager.ChainValidationHelper (request, request.Address.Host);
-						scs.ServerCertValidation2 += new CertificateValidationCallback2 (helper.ValidateChain);
-#endif
-						certsAvailable = false;
+						tlsStream = new MonoTlsStream (request, serverStream);
+						nstream = tlsStream.CreateStream (buffer);
 					}
 					// we also need to set ServicePoint.Certificate 
 					// and ServicePoint.ClientCertificate but this can
 					// only be done later (after handshake - which is
 					// done only after a read operation).
+#else
+					throw new NotSupportedException ();
+#endif
 				} else {
-					ssl = false;
 					nstream = serverStream;
 				}
-			} catch (Exception) {
-				if (!request.Aborted)
+			} catch (Exception ex) {
+				if (tlsStream != null)
+					status = tlsStream.ExceptionStatus;
+				else if (!request.Aborted)
 					status = WebExceptionStatus.ConnectFailure;
+				connect_exception = ex;
 				return false;
 			}
 
@@ -623,21 +569,6 @@ namespace System.Net
 			return (statusCode >= 200 && statusCode != 204 && statusCode != 304);
 		}
 
-		internal void GetCertificates (Stream stream) 
-		{
-			// here the SSL negotiation have been done
-#if SECURITY_DEP && (MONOTOUCH || MONODROID)
-			HttpsClientStream s = (stream as HttpsClientStream);
-			X509Certificate client = s.SelectedClientCertificate;
-			X509Certificate server = s.ServerCertificate;
-#else
-			X509Certificate client = (X509Certificate) piClient.GetValue (stream, null);
-			X509Certificate server = (X509Certificate) piServer.GetValue (stream, null);
-#endif
-			sPoint.SetCertificates (client, server);
-			certsAvailable = (server != null);
-		}
-
 		internal static void InitRead (object state)
 		{
 			WebConnection cnc = (WebConnection) state;
@@ -728,8 +659,23 @@ namespace System.Net
 					if (!finished)
 						return 0;
 
-					foreach (string s in headers)
-						data.Headers.SetInternal (s);
+					// .NET uses ParseHeaders or ParseHeadersStrict which is much better
+					foreach (string s in headers) {
+
+						int pos_s = s.IndexOf (':');
+						if (pos_s == -1)
+							throw new ArgumentException ("no colon found", "header");
+
+						var header = s.Substring (0, pos_s);
+						var value = s.Substring (pos_s + 1).Trim ();
+
+						var h = data.Headers;
+						if (h.AllowMultiValues (header)) {
+							h.AddInternal (header, value);
+						} else  {
+							h.SetInternal (header, value);
+						}
+					}
 
 					if (data.StatusCode == (int) HttpStatusCode.Continue) {
 						sPoint.SendContinue = true;
@@ -1062,11 +1008,10 @@ namespace System.Net
 
 		internal bool EndWrite (HttpWebRequest request, bool throwOnError, IAsyncResult result)
 		{
-			if (request.FinishedReading)
-				return true;
-
 			Stream s = null;
 			lock (this) {
+				if (status == WebExceptionStatus.RequestCanceled)
+					return true;
 				if (Data.request != request)
 					throw new ObjectDisposedException (typeof (NetworkStream).FullName);
 				if (nstream == null)
@@ -1140,9 +1085,6 @@ namespace System.Net
 
 			try {
 				s.Write (buffer, offset, size);
-				// here SSL handshake should have been done
-				if (ssl && !certsAvailable)
-					GetCertificates (s);
 			} catch (Exception e) {
 				err_msg = e.Message;
 				WebExceptionStatus wes = WebExceptionStatus.SendFailure;
@@ -1150,19 +1092,6 @@ namespace System.Net
 				if (e is WebException) {
 					HandleError (wes, e, msg);
 					return false;
-				}
-
-				// if SSL is in use then check for TrustFailure
-				if (ssl) {
-#if SECURITY_DEP && (MONOTOUCH || MONODROID)
-					HttpsClientStream https = (s as HttpsClientStream);
-					if (https.TrustFailure) {
-#else
-					if ((bool) piTrustFailure.GetValue (s , null)) {
-#endif
-						wes = WebExceptionStatus.TrustFailure;
-						msg = "Trust failure";
-					}
 				}
 
 				HandleError (wes, e, msg);

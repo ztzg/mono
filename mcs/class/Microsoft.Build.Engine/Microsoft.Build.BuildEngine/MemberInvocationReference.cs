@@ -32,6 +32,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Globalization;
 using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using System.Text;
 
 namespace Microsoft.Build.BuildEngine
@@ -92,10 +93,12 @@ namespace Microsoft.Build.BuildEngine
 
 			object[] args;
 			if (Arguments == null) {
-				flags |= BindingFlags.GetProperty;
+				if ((flags & BindingFlags.CreateInstance) == 0)
+					flags |= BindingFlags.GetProperty;
 				args = null;
 			} else {
-				flags |= BindingFlags.InvokeMethod;
+				if ((flags & BindingFlags.CreateInstance) == 0)
+					flags |= BindingFlags.InvokeMethod;
 				ExpandArguments (project, options);
 				args = PrepareMethodArguments (member_name, flags);
 				if (args == null)
@@ -105,7 +108,7 @@ namespace Microsoft.Build.BuildEngine
 			object value;
 			try {
 				value = type.InvokeMember (member_name, flags, null, target, args, CultureInfo.InvariantCulture);
-			} catch (MissingFieldException) {
+			} catch (MissingMethodException) {
 				//
 				// It can be field/constant instead of a property
 				//
@@ -121,6 +124,14 @@ namespace Microsoft.Build.BuildEngine
 			return value;
 		}
 
+		static string TrimFirstAndLast(string unTrimmed)
+		{
+			if (unTrimmed.Length > 1 && Array.IndexOf (ArgumentTrimChars, unTrimmed [0]) != -1 && Array.IndexOf (ArgumentTrimChars, unTrimmed [unTrimmed.Length - 1]) != -1) {
+				return unTrimmed.Substring (1, unTrimmed.Length - 2);
+			}
+			return unTrimmed;
+		}
+
 		void ExpandArguments (Project project, ExpressionOptions options)
 		{
 			for (int i = 0; i < Arguments.Count; ++i) {
@@ -131,7 +142,7 @@ namespace Microsoft.Build.BuildEngine
 					arg = Expression.ParseAs<string> (arg, ParseOptions.None,
 						project, options);
 
-					arg = arg.Trim (ArgumentTrimChars);
+					arg = TrimFirstAndLast (arg);
 				}
 
 				Arguments [i] = arg;
@@ -278,7 +289,10 @@ namespace Microsoft.Build.BuildEngine
 
 		public ITaskItem[] ConvertToITaskItemArray (Project project, ExpressionOptions options)
 		{
-			throw new NotImplementedException ();
+			var items = new ITaskItem[1];
+			items[0] = new TaskItem (ConvertToString (project, options));
+
+			return items;
 		}
 	}
 }

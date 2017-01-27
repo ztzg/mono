@@ -6,6 +6,7 @@
  *
  * Copyright 2011 Novell, Inc (http://www.novell.com)
  * Copyright 2011 Xamarin, Inc (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifndef __MONO_TLS_H__
@@ -49,7 +50,7 @@ typedef enum {
 static inline int
 mono_native_tls_alloc (MonoNativeTlsKey *key, void *destructor)
 {
-	return pthread_key_create (key, destructor) == 0;
+	return pthread_key_create (key, (void (*)(void*)) destructor) == 0;
 }
 
 static inline void

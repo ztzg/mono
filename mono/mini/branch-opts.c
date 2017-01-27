@@ -6,6 +6,7 @@
  *
  * (C) 2005 Ximian, Inc.  http://www.ximian.com
  * Copyright 2011 Xamarin Inc.  http://www.xamarin.com
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
  #include "mini.h"
 
@@ -44,7 +45,7 @@ mono_branch_optimize_exception_target (MonoCompile *cfg, MonoBasicBlock *bb, con
 	if (bb->region == -1 || !MONO_BBLOCK_IS_IN_REGION (bb, MONO_REGION_TRY))
 		return NULL;
 
-	exclass = mono_class_from_name (mono_get_corlib (), "System", exname);
+	exclass = mono_class_load_from_name (mono_get_corlib (), "System", exname);
 	/* search for the handler */
 	for (i = 0; i < header->num_clauses; ++i) {
 		clause = &header->clauses [i];
@@ -85,7 +86,7 @@ mono_branch_optimize_exception_target (MonoCompile *cfg, MonoBasicBlock *bb, con
 						MONO_INST_NEW (cfg, jump, OP_BR);
 
 						/* Allocate memory for our branch target */
-						jump->inst_i1 = mono_mempool_alloc0 (cfg->mempool, sizeof (MonoInst));
+						jump->inst_i1 = (MonoInst *)mono_mempool_alloc0 (cfg->mempool, sizeof (MonoInst));
 						jump->inst_true_bb = targetbb;
 
 						if (cfg->verbose_level > 2) 
@@ -248,7 +249,8 @@ mono_replace_ins (MonoCompile *cfg, MonoBasicBlock *bb, MonoInst *ins, MonoInst 
 		bb->has_array_access |= first_bb->has_array_access;
 
 		/* Delete the links between the original bb and its successors */
-		tmp_bblocks = bb->out_bb;
+		tmp_bblocks = mono_mempool_alloc0 (cfg->mempool, sizeof (MonoBasicBlock*) * bb->out_count);
+		memcpy (tmp_bblocks, bb->out_bb, sizeof (MonoBasicBlock*) * bb->out_count);
 		count = bb->out_count;
 		for (i = 0; i < count; ++i)
 			mono_unlink_bblock (cfg, bb, tmp_bblocks [i]);
@@ -626,7 +628,7 @@ mono_if_conversion (MonoCompile *cfg)
 	 * optimize_branches () since the IR is already optimized.
 	 */
 	for (bb = cfg->bb_entry; bb; bb = bb->next_bb) {
-		MonoBasicBlock *bb1, *bb2, *true_bb, *false_bb, *next_bb;
+		MonoBasicBlock *bb1, *bb2, *next_bb;
 		MonoInst *branch1, *branch2, *compare1, *ins, *next;
 
 		/* Look for the IR code generated from if (<var> < 0 || v > <limit>)
@@ -657,8 +659,6 @@ mono_if_conversion (MonoCompile *cfg)
 		if (!(branch1 && ((branch1->opcode == OP_IBLT) || (branch1->opcode == OP_LBLT)) && (branch1->inst_false_bb == next_bb)))
 			continue;
 
-		true_bb = branch1->inst_true_bb;
-
 		/* Check second branch */
 		branch2 = mono_bb_last_inst (next_bb, filter);
 		if (!branch2)
@@ -666,9 +666,9 @@ mono_if_conversion (MonoCompile *cfg)
 
 		/* mcs sometimes generates inverted branches */
 		if (((branch2->opcode == OP_IBGT) || (branch2->opcode == OP_LBGT)) && branch2->inst_true_bb == branch1->inst_true_bb)
-			false_bb = branch2->inst_false_bb;
+			;
 		else if (((branch2->opcode == OP_IBLE) || (branch2->opcode == OP_LBLE)) && branch2->inst_false_bb == branch1->inst_true_bb)
-			false_bb = branch2->inst_true_bb;
+			;
 		else
 			continue;
 
@@ -853,7 +853,7 @@ replace_out_block_in_code (MonoBasicBlock *bb, MonoBasicBlock *orig, MonoBasicBl
 					ins->inst_false_bb = repl;
 			} else if (MONO_IS_JUMP_TABLE (ins)) {
 				int i;
-				MonoJumpInfoBBTable *table = MONO_JUMP_TABLE_FROM_INS (ins);
+				MonoJumpInfoBBTable *table = (MonoJumpInfoBBTable *)MONO_JUMP_TABLE_FROM_INS (ins);
 				for (i = 0; i < table->table_size; i++ ) {
 					if (table->table [i] == orig)
 						table->table [i] = repl;
@@ -997,7 +997,7 @@ mono_merge_basic_blocks (MonoCompile *cfg, MonoBasicBlock *bb, MonoBasicBlock *b
 		for (inst = bb->code; inst != NULL; inst = inst->next) {
 			if (MONO_IS_JUMP_TABLE (inst)) {
 				int i;
-				MonoJumpInfoBBTable *table = MONO_JUMP_TABLE_FROM_INS (inst);
+				MonoJumpInfoBBTable *table = (MonoJumpInfoBBTable *)MONO_JUMP_TABLE_FROM_INS (inst);
 				for (i = 0; i < table->table_size; i++ ) {
 					/* Might be already NULL from a previous merge */
 					if (table->table [i])
@@ -1139,7 +1139,7 @@ mono_remove_critical_edges (MonoCompile *cfg)
 				 * overwrite the sreg1 of the ins.
 				 */
 				if ((in_bb->out_count > 1) || (in_bb->out_count == 1 && in_bb->last_ins && in_bb->last_ins->opcode == OP_BR_REG)) {
-					MonoBasicBlock *new_bb = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoBasicBlock));
+					MonoBasicBlock *new_bb = (MonoBasicBlock *)mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoBasicBlock));
 					new_bb->block_num = cfg->num_bblocks++;
 //					new_bb->real_offset = bb->real_offset;
 					new_bb->region = bb->region;
@@ -1163,7 +1163,7 @@ mono_remove_critical_edges (MonoCompile *cfg)
 							/* We cannot add any inst to the entry BB, so we must */
 							/* put a new BB in the middle to hold the OP_BR */
 							MonoInst *jump;
-							MonoBasicBlock *new_bb_after_entry = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoBasicBlock));
+							MonoBasicBlock *new_bb_after_entry = (MonoBasicBlock *)mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoBasicBlock));
 							new_bb_after_entry->block_num = cfg->num_bblocks++;
 //							new_bb_after_entry->real_offset = bb->real_offset;
 							new_bb_after_entry->region = bb->region;
@@ -1192,10 +1192,10 @@ mono_remove_critical_edges (MonoCompile *cfg)
 					previous_bb = new_bb;
 					
 					/* Setup in_bb and out_bb */
-					new_bb->in_bb = mono_mempool_alloc ((cfg)->mempool, sizeof (MonoBasicBlock*));
+					new_bb->in_bb = (MonoBasicBlock **)mono_mempool_alloc ((cfg)->mempool, sizeof (MonoBasicBlock*));
 					new_bb->in_bb [0] = in_bb;
 					new_bb->in_count = 1;
-					new_bb->out_bb = mono_mempool_alloc ((cfg)->mempool, sizeof (MonoBasicBlock*));
+					new_bb->out_bb = (MonoBasicBlock **)mono_mempool_alloc ((cfg)->mempool, sizeof (MonoBasicBlock*));
 					new_bb->out_bb [0] = bb;
 					new_bb->out_count = 1;
 					
@@ -1240,7 +1240,7 @@ mono_remove_critical_edges (MonoCompile *cfg)
 void
 mono_optimize_branches (MonoCompile *cfg)
 {
-	int i, changed = FALSE;
+	int i, count = 0, changed = FALSE;
 	MonoBasicBlock *bb, *bbn;
 	guint32 niterations;
 	MonoInst *bbn_first_inst;
@@ -1263,6 +1263,11 @@ mono_optimize_branches (MonoCompile *cfg)
 
 		/* we skip the entry block (exit is handled specially instead ) */
 		for (previous_bb = cfg->bb_entry, bb = cfg->bb_entry->next_bb; bb; previous_bb = bb, bb = bb->next_bb) {
+			count ++;
+			if (count == 1000) {
+				mono_threads_safepoint ();
+				count = 0;
+			}
 			/* dont touch code inside exception clauses */
 			if (bb->region != -1)
 				continue;

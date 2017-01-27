@@ -3,24 +3,7 @@
  *
  * (C) Copyright 2011 Novell, Inc
  *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- * 
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
- * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 /*
@@ -83,7 +66,12 @@
 #include <stdlib.h>
 
 #include <mono/utils/atomic.h>
+#ifdef SGEN_WITHOUT_MONO
+#include <mono/sgen/sgen-gc.h>
+#include <mono/sgen/sgen-client.h>
+#else
 #include <mono/utils/mono-mmap.h>
+#endif
 #include <mono/utils/mono-membar.h>
 #include <mono/utils/hazard-pointer.h>
 #include <mono/utils/lock-free-queue.h>
@@ -150,7 +138,7 @@ alloc_sb (Descriptor *desc)
 		pagesize = mono_pagesize ();
 
 	sb_header = desc->block_size == pagesize ?
-		mono_valloc (0, desc->block_size, prot_flags_for_activate (TRUE)) :
+		mono_valloc (NULL, desc->block_size, prot_flags_for_activate (TRUE)) :
 		mono_valloc_aligned (desc->block_size, desc->block_size, prot_flags_for_activate (TRUE));
 
 	g_assert (sb_header == sb_header_for_addr (sb_header, desc->block_size));
@@ -182,7 +170,7 @@ desc_alloc (void)
 	for (;;) {
 		gboolean success;
 
-		desc = get_hazardous_pointer ((gpointer * volatile)&desc_avail, hp, 1);
+		desc = (Descriptor *) get_hazardous_pointer ((gpointer * volatile)&desc_avail, hp, 1);
 		if (desc) {
 			Descriptor *next = desc->next;
 			success = (InterlockedCompareExchangePointer ((gpointer * volatile)&desc_avail, next, desc) == desc);
@@ -191,7 +179,7 @@ desc_alloc (void)
 			Descriptor *d;
 			int i;
 
-			desc = mono_valloc (0, desc_size * NUM_DESC_BATCH, prot_flags_for_activate (TRUE));
+			desc = (Descriptor *) mono_valloc (NULL, desc_size * NUM_DESC_BATCH, prot_flags_for_activate (TRUE));
 
 			/* Organize into linked list. */
 			d = desc;
@@ -225,7 +213,7 @@ desc_alloc (void)
 static void
 desc_enqueue_avail (gpointer _desc)
 {
-	Descriptor *desc = _desc;
+	Descriptor *desc = (Descriptor *) _desc;
 	Descriptor *old_head;
 
 	g_assert (desc->anchor.data.state == STATE_EMPTY);
@@ -245,7 +233,7 @@ desc_retire (Descriptor *desc)
 	g_assert (desc->in_use);
 	desc->in_use = FALSE;
 	free_sb (desc->sb, desc->block_size);
-	mono_thread_hazardous_free_or_queue (desc, desc_enqueue_avail, FALSE, TRUE);
+	mono_thread_hazardous_try_free (desc, desc_enqueue_avail);
 }
 #else
 MonoLockFreeQueue available_descs;
@@ -285,11 +273,11 @@ list_get_partial (MonoLockFreeAllocSizeClass *sc)
 static void
 desc_put_partial (gpointer _desc)
 {
-	Descriptor *desc = _desc;
+	Descriptor *desc = (Descriptor *) _desc;
 
 	g_assert (desc->anchor.data.state != STATE_FULL);
 
-	mono_lock_free_queue_node_free (&desc->node);
+	mono_lock_free_queue_node_unpoison (&desc->node);
 	mono_lock_free_queue_enqueue (&desc->heap->sc->partial, &desc->node);
 }
 
@@ -297,7 +285,7 @@ static void
 list_put_partial (Descriptor *desc)
 {
 	g_assert (desc->anchor.data.state != STATE_FULL);
-	mono_thread_hazardous_free_or_queue (desc, desc_put_partial, FALSE, TRUE);
+	mono_thread_hazardous_try_free (desc, desc_put_partial);
 }
 
 static void
@@ -316,7 +304,7 @@ list_remove_empty_desc (MonoLockFreeAllocSizeClass *sc)
 			desc_retire (desc);
 		} else {
 			g_assert (desc->heap->sc == sc);
-			mono_thread_hazardous_free_or_queue (desc, desc_put_partial, FALSE, TRUE);
+			mono_thread_hazardous_try_free (desc, desc_put_partial);
 			if (++num_non_empty >= 2)
 				return;
 		}
@@ -366,7 +354,6 @@ alloc_from_active_or_partial (MonoLockFreeAllocator *heap)
 
 	do {
 		unsigned int next;
-
 		new_anchor = old_anchor = *(volatile Anchor*)&desc->anchor.value;
 		if (old_anchor.data.state == STATE_EMPTY) {
 			/* We must free it because we own it. */

@@ -16,6 +16,7 @@ typedef struct _MonoSymbolTable			MonoSymbolTable;
 typedef struct _MonoDebugDataTable		MonoDebugDataTable;
 
 typedef struct _MonoSymbolFile			MonoSymbolFile;
+typedef struct _MonoPPDBFile			MonoPPDBFile;
 
 typedef struct _MonoDebugHandle			MonoDebugHandle;
 
@@ -74,6 +75,7 @@ struct _MonoDebugHandle {
 	MonoImage *image;
 	MonoDebugDataTable *type_table;
 	MonoSymbolFile *symfile;
+	MonoPPDBFile *ppdb;
 };
 
 struct _MonoDebugMethodJitInfo {
@@ -182,6 +184,9 @@ mono_debug_add_delegate_trampoline (void* code, int size);
 
 MONO_API MonoDebugLocalsInfo*
 mono_debug_lookup_locals (MonoMethod *method);
+
+MonoDebugSourceLocation *
+mono_debug_method_lookup_location (MonoDebugMethodInfo *minfo, int il_offset);
 
 /*
  * Line number support.

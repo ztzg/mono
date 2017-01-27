@@ -1,10 +1,57 @@
 /*
  * decode.c: mprof-report program source: decode and analyze the log profiler data
  *
- * Author:
+ * Authors:
  *   Paolo Molaro (lupus@ximian.com)
+ *   Alex Rønne Petersen (alexrp@xamarin.com)
  *
  * Copyright 2010 Novell, Inc (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
+ */
+
+/*
+ * The Coverage XML output schema
+ * <coverage>
+ *   <assembly/>
+ *   <class/>
+ *   <method>
+ *     <statement/>
+ *   </method>
+ * </coverage>
+ *
+ * Elements:
+ *   <coverage> - The root element of the documentation. It can contain any number of
+ *                <assembly>, <class> or <method> elements.
+ *                Attributes:
+ *                   - version: The version number for the file format - (eg: "0.3")
+ *   <assembly> - Contains data about assemblies. Has no child elements
+ *                Attributes:
+ *                   - name: The name of the assembly - (eg: "System.Xml")
+ *                   - guid: The GUID of the assembly
+ *                   - filename: The filename of the assembly
+ *                   - method-count: The number of methods in the assembly
+ *                   - full: The number of fully covered methods
+ *                   - partial: The number of partially covered methods
+ *   <class> - Contains data about classes. Has no child elements
+ *             Attributes:
+ *                - name: The name of the class
+ *                - method-count: The number of methods in the class
+ *                - full: The number of fully covered methods
+ *                - partial: The number of partially covered methods
+ *   <method> - Contains data about methods. Can contain any number of <statement> elements
+ *              Attributes:
+ *                 - assembly: The name of the parent assembly
+ *                 - class: The name of the parent class
+ *                 - name: The name of the method, with all it's parameters
+ *                 - filename: The name of the source file containing this method
+ *                 - token
+ *   <statement> - Contains data about IL statements. Has no child elements
+ *                 Attributes:
+ *                    - offset: The offset of the statement in the IL code after the previous
+ *                              statement's offset
+ *                    - counter: 1 if the line was covered, 0 if it was not
+ *                    - line: The line number in the parent method's file
+ *                    - column: The column on the line
  */
 #include <config.h>
 #include "utils.c"
@@ -49,6 +96,7 @@ static uint64_t time_to = 0xffffffffffffffffULL;
 static int use_time_filter = 0;
 static uint64_t startup_time = 0;
 static FILE* outfile = NULL;
+static FILE* coverage_outfile = NULL;
 
 static int32_t
 read_int16 (unsigned char *p)
@@ -86,7 +134,7 @@ static char*
 pstrdup (const char *s)
 {
 	int len = strlen (s) + 1;
-	char *p = malloc (len);
+	char *p = (char *)malloc (len);
 	memcpy (p, s, len);
 	return p;
 }
@@ -149,7 +197,7 @@ add_counter_to_section (Counter *counter)
 	CounterSection *csection, *s;
 	CounterList *clist;
 
-	clist = calloc (1, sizeof (CounterList));
+	clist = (CounterList *)calloc (1, sizeof (CounterList));
 	clist->counter = counter;
 
 	for (csection = counters_sections; csection; csection = csection->next) {
@@ -165,7 +213,7 @@ add_counter_to_section (Counter *counter)
 	}
 
 	/* If section does not exist */
-	csection = calloc (1, sizeof (CounterSection));
+	csection = (CounterSection *)calloc (1, sizeof (CounterSection));
 	csection->value = counter->section;
 	csection->counters = clist;
 	csection->counters_last = clist;
@@ -190,7 +238,7 @@ add_counter (const char *section, const char *name, int type, int unit, int vari
 		if (list->counter->index == index)
 			return;
 
-	counter = calloc (1, sizeof (Counter));
+	counter = (Counter *)calloc (1, sizeof (Counter));
 	counter->section = section;
 	counter->name = name;
 	counter->type = type;
@@ -198,7 +246,7 @@ add_counter (const char *section, const char *name, int type, int unit, int vari
 	counter->variance = variance;
 	counter->index = index;
 
-	list = calloc (1, sizeof (CounterList));
+	list = (CounterList *)calloc (1, sizeof (CounterList));
 	list->counter = counter;
 
 	if (!counters) {
@@ -221,7 +269,7 @@ add_counter_to_timestamp (uint64_t timestamp, Counter *counter)
 	CounterSection *csection;
 	CounterList *clist;
 
-	clist = calloc (1, sizeof (CounterList));
+	clist = (CounterList *)calloc (1, sizeof (CounterList));
 	clist->counter = counter;
 
 	for (ctimestamp = counters_timestamps; ctimestamp; ctimestamp = ctimestamp->next) {
@@ -239,7 +287,7 @@ add_counter_to_timestamp (uint64_t timestamp, Counter *counter)
 			}
 
 			/* if timestamp exist and section does not exist */
-			csection = calloc (1, sizeof (CounterSection));
+			csection = (CounterSection *)calloc (1, sizeof (CounterSection));
 			csection->value = counter->section;
 			csection->counters = clist;
 			csection->counters_last = clist;
@@ -254,12 +302,12 @@ add_counter_to_timestamp (uint64_t timestamp, Counter *counter)
 	}
 
 	/* If timestamp do not exist and section does not exist */
-	csection = calloc (1, sizeof (CounterSection));
+	csection = (CounterSection *)calloc (1, sizeof (CounterSection));
 	csection->value = counter->section;
 	csection->counters = clist;
 	csection->counters_last = clist;
 
-	ctimestamp = calloc (1, sizeof (CounterTimestamp));
+	ctimestamp = (CounterTimestamp *)calloc (1, sizeof (CounterTimestamp));
 	ctimestamp->value = timestamp;
 	ctimestamp->sections = csection;
 	ctimestamp->sections_last = csection;
@@ -306,6 +354,7 @@ section_name (int section)
 	case MONO_COUNTER_SECURITY: return "Mono Security";
 	case MONO_COUNTER_RUNTIME: return "Mono Runtime";
 	case MONO_COUNTER_SYSTEM: return "Mono System";
+	case MONO_COUNTER_PROFILER: return "Mono Profiler";
 	default: return "<unknown>";
 	}
 }
@@ -517,12 +566,35 @@ static void
 add_image (intptr_t image, char *name)
 {
 	int slot = ((image >> 2) & 0xffff) % SMALL_HASH_SIZE;
-	ImageDesc *cd = malloc (sizeof (ImageDesc));
+	ImageDesc *cd = (ImageDesc *)malloc (sizeof (ImageDesc));
 	cd->image = image;
 	cd->filename = pstrdup (name);
 	cd->next = image_hash [slot];
 	image_hash [slot] = cd;
 	num_images++;
+}
+
+static int num_assemblies;
+
+typedef struct _AssemblyDesc AssemblyDesc;
+struct _AssemblyDesc {
+	AssemblyDesc *next;
+	intptr_t assembly;
+	char *asmname;
+};
+
+static AssemblyDesc* assembly_hash [SMALL_HASH_SIZE] = {0};
+
+static void
+add_assembly (intptr_t assembly, char *name)
+{
+	int slot = ((assembly >> 2) & 0xffff) % SMALL_HASH_SIZE;
+	AssemblyDesc *cd = (AssemblyDesc *)malloc (sizeof (AssemblyDesc));
+	cd->assembly = assembly;
+	cd->asmname = pstrdup (name);
+	cd->next = assembly_hash [slot];
+	assembly_hash [slot] = cd;
+	num_assemblies++;
 }
 
 typedef struct _BackTrace BackTrace;
@@ -565,7 +637,7 @@ add_class (intptr_t klass, const char *name)
 		cd->name = pstrdup (name);
 		return cd;
 	}
-	cd = calloc (sizeof (ClassDesc), 1);
+	cd = (ClassDesc *)calloc (sizeof (ClassDesc), 1);
 	cd->klass = klass;
 	cd->name = pstrdup (name);
 	cd->next = class_hash [slot];
@@ -631,7 +703,7 @@ add_method (intptr_t method, const char *name, intptr_t code, int len)
 		cd->name = pstrdup (name);
 		return cd;
 	}
-	cd = calloc (sizeof (MethodDesc), 1);
+	cd = (MethodDesc *)calloc (sizeof (MethodDesc), 1);
 	cd->method = method;
 	cd->name = pstrdup (name);
 	cd->code = code;
@@ -673,8 +745,8 @@ add_stat_sample (int type, uintptr_t ip) {
 		size_stat_samples *= 2;
 		if (!size_stat_samples)
 		size_stat_samples = 32;
-		stat_samples = realloc (stat_samples, size_stat_samples * sizeof (uintptr_t));
-		stat_sample_desc = realloc (stat_sample_desc, size_stat_samples * sizeof (int));
+		stat_samples = (uintptr_t *)realloc (stat_samples, size_stat_samples * sizeof (uintptr_t));
+		stat_sample_desc = (int *)realloc (stat_sample_desc, size_stat_samples * sizeof (int));
 	}
 	stat_samples [num_stat_samples] = ip;
 	stat_sample_desc [num_stat_samples++] = type;
@@ -702,8 +774,8 @@ lookup_method_by_ip (uintptr_t ip)
 static int
 compare_method_samples (const void *a, const void *b)
 {
-	MethodDesc *const*A = a;
-	MethodDesc *const*B = b;
+	MethodDesc *const *A = (MethodDesc *const *)a;
+	MethodDesc *const *B = (MethodDesc *const *)b;
 	if ((*A)->sample_hits == (*B)->sample_hits)
 		return 0;
 	if ((*B)->sample_hits < (*A)->sample_hits)
@@ -728,8 +800,8 @@ static int usymbols_num = 0;
 static int
 compare_usymbol_addr (const void *a, const void *b)
 {
-	UnmanagedSymbol *const*A = a;
-	UnmanagedSymbol *const*B = b;
+	UnmanagedSymbol *const *A = (UnmanagedSymbol *const *)a;
+	UnmanagedSymbol *const *B = (UnmanagedSymbol *const *)b;
 	if ((*B)->addr == (*A)->addr)
 		return 0;
 	if ((*B)->addr > (*A)->addr)
@@ -740,8 +812,8 @@ compare_usymbol_addr (const void *a, const void *b)
 static int
 compare_usymbol_samples (const void *a, const void *b)
 {
-	UnmanagedSymbol *const*A = a;
-	UnmanagedSymbol *const*B = b;
+	UnmanagedSymbol *const *A = (UnmanagedSymbol *const *)a;
+	UnmanagedSymbol *const *B = (UnmanagedSymbol *const *)b;
 	if ((*B)->sample_hits == (*A)->sample_hits)
 		return 0;
 	if ((*B)->sample_hits < (*A)->sample_hits)
@@ -757,10 +829,10 @@ add_unmanaged_symbol (uintptr_t addr, char *name, uintptr_t size)
 		int new_size = usymbols_size * 2;
 		if (!new_size)
 			new_size = 16;
-		usymbols = realloc (usymbols, sizeof (void*) * new_size);
+		usymbols = (UnmanagedSymbol **)realloc (usymbols, sizeof (void*) * new_size);
 		usymbols_size = new_size;
 	}
-	sym = calloc (sizeof (UnmanagedSymbol), 1);
+	sym = (UnmanagedSymbol *)calloc (sizeof (UnmanagedSymbol), 1);
 	sym->addr = addr;
 	sym->name = name;
 	sym->size = size;
@@ -805,10 +877,10 @@ add_unmanaged_binary (uintptr_t addr, char *name, uintptr_t size)
 		int new_size = ubinaries_size * 2;
 		if (!new_size)
 			new_size = 16;
-		ubinaries = realloc (ubinaries, sizeof (void*) * new_size);
+		ubinaries = (UnmanagedSymbol **)realloc (ubinaries, sizeof (void*) * new_size);
 		ubinaries_size = new_size;
 	}
-	sym = calloc (sizeof (UnmanagedSymbol), 1);
+	sym = (UnmanagedSymbol *)calloc (sizeof (UnmanagedSymbol), 1);
 	sym->addr = addr;
 	sym->name = name;
 	sym->size = size;
@@ -895,7 +967,7 @@ dump_samples (void)
 					msize *= 2;
 					if (!msize)
 						msize = 4;
-					cachedm = realloc (cachedm, sizeof (void*) * msize);
+					cachedm = (MethodDesc **)realloc (cachedm, sizeof (void*) * msize);
 				}
 				cachedm [count++] = m;
 			}
@@ -913,7 +985,7 @@ dump_samples (void)
 						usize *= 2;
 						if (!usize)
 							usize = 4;
-						cachedus = realloc (cachedus, sizeof (void*) * usize);
+						cachedus = (UnmanagedSymbol **)realloc (cachedus, sizeof (void*) * usize);
 					}
 					cachedus [ucount++] = usym;
 				}
@@ -1021,7 +1093,7 @@ add_heap_class_rev (HeapClassDesc *from, HeapClassDesc *to)
 		to->rev_hash_size *= 2;
 		if (to->rev_hash_size == 0)
 			to->rev_hash_size = 4;
-		n = calloc (sizeof (HeapClassRevRef) * to->rev_hash_size, 1);
+		n = (HeapClassRevRef *)calloc (sizeof (HeapClassRevRef) * to->rev_hash_size, 1);
 		for (i = 0; i < old_size; ++i) {
 			if (to->rev_hash [i].klass)
 				add_rev_class_hashed (n, to->rev_hash_size, to->rev_hash [i].klass, to->rev_hash [i].count);
@@ -1063,9 +1135,9 @@ static int num_heap_shots = 0;
 static HeapShot*
 new_heap_shot (uint64_t timestamp)
 {
-	HeapShot *hs = calloc (sizeof (HeapShot), 1);
+	HeapShot *hs = (HeapShot *)calloc (sizeof (HeapShot), 1);
 	hs->hash_size = 4;
-	hs->class_hash = calloc (sizeof (void*), hs->hash_size);
+	hs->class_hash = (HeapClassDesc **)calloc (sizeof (void*), hs->hash_size);
 	hs->timestamp = timestamp;
 	num_heap_shots++;
 	hs->next = heap_shots;
@@ -1111,7 +1183,7 @@ add_heap_hashed (HeapClassDesc **hash, HeapClassDesc **retv, uintptr_t hsize, Cl
 				hash [i] = *retv;
 				return 1;
 			}
-			hash [i] = calloc (sizeof (HeapClassDesc), 1);
+			hash [i] = (HeapClassDesc *)calloc (sizeof (HeapClassDesc), 1);
 			hash [i]->klass = klass;
 			hash [i]->total_size += size;
 			hash [i]->count += count;
@@ -1138,7 +1210,7 @@ add_heap_shot_class (HeapShot *hs, ClassDesc *klass, uint64_t size)
 		hs->hash_size *= 2;
 		if (hs->hash_size == 0)
 			hs->hash_size = 4;
-		n = calloc (sizeof (void*) * hs->hash_size, 1);
+		n = (HeapClassDesc **)calloc (sizeof (void*) * hs->hash_size, 1);
 		for (i = 0; i < old_size; ++i) {
 			res = hs->class_hash [i];
 			if (hs->class_hash [i])
@@ -1158,7 +1230,7 @@ add_heap_shot_class (HeapShot *hs, ClassDesc *klass, uint64_t size)
 static HeapObjectDesc*
 alloc_heap_obj (uintptr_t objaddr, HeapClassDesc *hklass, uintptr_t num_refs)
 {
-	HeapObjectDesc* ho = calloc (sizeof (HeapObjectDesc) + num_refs * sizeof (uintptr_t), 1);
+	HeapObjectDesc* ho = (HeapObjectDesc *)calloc (sizeof (HeapObjectDesc) + num_refs * sizeof (uintptr_t), 1);
 	ho->objaddr = objaddr;
 	ho->hklass = hklass;
 	ho->num_refs = num_refs;
@@ -1204,7 +1276,7 @@ heap_shot_obj_add_refs (HeapShot *hs, uintptr_t objaddr, uintptr_t num, uintptr_
 	/* should not happen */
 	printf ("failed heap obj update\n");
 	return NULL;
-	
+
 }
 
 static uintptr_t
@@ -1241,7 +1313,7 @@ add_heap_shot_obj (HeapShot *hs, HeapObjectDesc *obj)
 		hs->objects_hash_size *= 2;
 		if (hs->objects_hash_size == 0)
 			hs->objects_hash_size = 4;
-		n = calloc (sizeof (void*) * hs->objects_hash_size, 1);
+		n = (HeapObjectDesc **)calloc (sizeof (void*) * hs->objects_hash_size, 1);
 		for (i = 0; i < old_size; ++i) {
 			if (hs->objects_hash [i])
 				add_heap_hashed_obj (n, hs->objects_hash_size, hs->objects_hash [i]);
@@ -1295,7 +1367,7 @@ heap_shot_mark_objects (HeapShot *hs)
 	if (!debug)
 		return;
 	/* consistency checks: it seems not all the objects are walked in the heap in some cases */
-	marks = calloc (hs->objects_hash_size, 1);
+	marks = (unsigned char *)calloc (hs->objects_hash_size, 1);
 	if (!marks)
 		return;
 	for (i = 0; i < hs->num_roots; ++i) {
@@ -1408,14 +1480,14 @@ add_backtrace (int count, MethodDesc **methods)
 			return bt;
 		bt = bt->next;
 	}
-	bt = malloc (sizeof (BackTrace) + ((count - 1) * sizeof (void*)));
+	bt = (BackTrace *)malloc (sizeof (BackTrace) + ((count - 1) * sizeof (void*)));
 	bt->next = backtrace_hash [slot];
 	backtrace_hash [slot] = bt;
 	if (next_backtrace == num_backtraces) {
 		num_backtraces *= 2;
 		if (!num_backtraces)
 			num_backtraces = 16;
-		backtraces = realloc (backtraces, sizeof (void*) * num_backtraces);
+		backtraces = (BackTrace **)realloc (backtraces, sizeof (void*) * num_backtraces);
 	}
 	bt->id = next_backtrace++;
 	backtraces [bt->id] = bt;
@@ -1429,6 +1501,8 @@ add_backtrace (int count, MethodDesc **methods)
 
 typedef struct _MonitorDesc MonitorDesc;
 typedef struct _ThreadContext ThreadContext;
+typedef struct _DomainContext DomainContext;
+typedef struct _RemCtxContext RemCtxContext;
 
 typedef struct {
 	FILE *file;
@@ -1445,7 +1519,11 @@ typedef struct {
 	int port;
 	uint64_t startup_time;
 	ThreadContext *threads;
-	ThreadContext *current;
+	ThreadContext *current_thread;
+	DomainContext *domains;
+	DomainContext *current_domain;
+	RemCtxContext *remctxs;
+	RemCtxContext *current_remctx;
 } ProfContext;
 
 struct _ThreadContext {
@@ -1470,11 +1548,23 @@ struct _ThreadContext {
 	uint64_t gc_start_times [3];
 };
 
+struct _DomainContext {
+	DomainContext *next;
+	intptr_t domain_id;
+	const char *friendly_name;
+};
+
+struct _RemCtxContext {
+	RemCtxContext *next;
+	intptr_t remctx_id;
+	intptr_t domain_id;
+};
+
 static void
 ensure_buffer (ProfContext *ctx, int size)
 {
 	if (ctx->size < size) {
-		ctx->buf = realloc (ctx->buf, size);
+		ctx->buf = (unsigned char *)realloc (ctx->buf, size);
 		ctx->size = size;
 	}
 }
@@ -1489,7 +1579,7 @@ load_data (ProfContext *ctx, int size)
 		if (r == 0)
 			return size == 0? 1: 0;
 		return r == size;
-	} else 
+	} else
 #endif
 	{
 		int r = fread (ctx->buf, size, 1, ctx->file);
@@ -1503,8 +1593,8 @@ static ThreadContext*
 get_thread (ProfContext *ctx, intptr_t thread_id)
 {
 	ThreadContext *thread;
-	if (ctx->current && ctx->current->thread_id == thread_id)
-		return ctx->current;
+	if (ctx->current_thread && ctx->current_thread->thread_id == thread_id)
+		return ctx->current_thread;
 	thread = ctx->threads;
 	while (thread) {
 		if (thread->thread_id == thread_id) {
@@ -1512,24 +1602,70 @@ get_thread (ProfContext *ctx, intptr_t thread_id)
 		}
 		thread = thread->next;
 	}
-	thread = calloc (sizeof (ThreadContext), 1);
+	thread = (ThreadContext *)calloc (sizeof (ThreadContext), 1);
 	thread->next = ctx->threads;
 	ctx->threads = thread;
 	thread->thread_id = thread_id;
 	thread->last_time = 0;
 	thread->stack_id = 0;
 	thread->stack_size = 32;
-	thread->stack = malloc (thread->stack_size * sizeof (void*));
-	thread->time_stack = malloc (thread->stack_size * sizeof (uint64_t));
-	thread->callee_time_stack = malloc (thread->stack_size * sizeof (uint64_t));
+	thread->stack = (MethodDesc **)malloc (thread->stack_size * sizeof (void*));
+	thread->time_stack = (uint64_t *)malloc (thread->stack_size * sizeof (uint64_t));
+	thread->callee_time_stack = (uint64_t *)malloc (thread->stack_size * sizeof (uint64_t));
 	return thread;
+}
+
+static DomainContext *
+get_domain (ProfContext *ctx, intptr_t domain_id)
+{
+	if (ctx->current_domain && ctx->current_domain->domain_id == domain_id)
+		return ctx->current_domain;
+
+	DomainContext *domain = ctx->domains;
+
+	while (domain) {
+		if (domain->domain_id == domain_id)
+			return domain;
+
+		domain = domain->next;
+	}
+
+	domain = (DomainContext *)calloc (sizeof (DomainContext), 1);
+	domain->next = ctx->domains;
+	ctx->domains = domain;
+	domain->domain_id = domain_id;
+
+	return domain;
+}
+
+static RemCtxContext *
+get_remctx (ProfContext *ctx, intptr_t remctx_id)
+{
+	if (ctx->current_remctx && ctx->current_remctx->remctx_id == remctx_id)
+		return ctx->current_remctx;
+
+	RemCtxContext *remctx = ctx->remctxs;
+
+	while (remctx) {
+		if (remctx->remctx_id == remctx_id)
+			return remctx;
+
+		remctx = remctx->next;
+	}
+
+	remctx = (RemCtxContext *)calloc (sizeof (RemCtxContext), 1);
+	remctx->next = ctx->remctxs;
+	ctx->remctxs = remctx;
+	remctx->remctx_id = remctx_id;
+
+	return remctx;
 }
 
 static ThreadContext*
 load_thread (ProfContext *ctx, intptr_t thread_id)
 {
 	ThreadContext *thread = get_thread (ctx, thread_id);
-	ctx->current = thread;
+	ctx->current_thread = thread;
 	return thread;
 }
 
@@ -1538,9 +1674,9 @@ ensure_thread_stack (ThreadContext *thread)
 {
 	if (thread->stack_id == thread->stack_size) {
 		thread->stack_size *= 2;
-		thread->stack = realloc (thread->stack, thread->stack_size * sizeof (void*));
-		thread->time_stack = realloc (thread->time_stack, thread->stack_size * sizeof (uint64_t));
-		thread->callee_time_stack = realloc (thread->callee_time_stack, thread->stack_size * sizeof (uint64_t));
+		thread->stack = (MethodDesc **)realloc (thread->stack, thread->stack_size * sizeof (void*));
+		thread->time_stack = (uint64_t *)realloc (thread->time_stack, thread->stack_size * sizeof (uint64_t));
+		thread->callee_time_stack = (uint64_t *)realloc (thread->callee_time_stack, thread->stack_size * sizeof (uint64_t));
 	}
 }
 
@@ -1581,7 +1717,7 @@ add_trace_bt (BackTrace *bt, TraceDesc *trace, uint64_t value)
 		trace->size *= 2;
 		if (trace->size == 0)
 			trace->size = 4;
-		n = calloc (sizeof (CallContext) * trace->size, 1);
+		n = (CallContext *)calloc (sizeof (CallContext) * trace->size, 1);
 		for (i = 0; i < old_size; ++i) {
 			if (trace->traces [i].bt)
 				add_trace_hashed (n, trace->size, trace->traces [i].bt, trace->traces [i].count);
@@ -1627,9 +1763,9 @@ thread_add_root (ThreadContext *ctx, uintptr_t obj, int root_type, uintptr_t ext
 		int new_size = ctx->size_roots * 2;
 		if (!new_size)
 			new_size = 4;
-		ctx->roots = realloc (ctx->roots, new_size * sizeof (uintptr_t));
-		ctx->roots_extra = realloc (ctx->roots_extra, new_size * sizeof (uintptr_t));
-		ctx->roots_types = realloc (ctx->roots_types, new_size * sizeof (int));
+		ctx->roots = (uintptr_t *)realloc (ctx->roots, new_size * sizeof (uintptr_t));
+		ctx->roots_extra = (uintptr_t *)realloc (ctx->roots_extra, new_size * sizeof (uintptr_t));
+		ctx->roots_types = (int *)realloc (ctx->roots_types, new_size * sizeof (int));
 		ctx->size_roots = new_size;
 	}
 	ctx->roots_types [ctx->num_roots] = root_type;
@@ -1640,8 +1776,8 @@ thread_add_root (ThreadContext *ctx, uintptr_t obj, int root_type, uintptr_t ext
 static int
 compare_callc (const void *a, const void *b)
 {
-	const CallContext *A = a;
-	const CallContext *B = b;
+	const CallContext *A = (const CallContext *)a;
+	const CallContext *B = (const CallContext *)b;
 	if (B->count == A->count)
 		return 0;
 	if (B->count < A->count)
@@ -1711,6 +1847,7 @@ typedef struct {
 	uint64_t live;
 	uint64_t max_live;
 	TraceDesc traces;
+	TraceDesc destroy_traces;
 } HandleInfo;
 static HandleInfo handle_info [4];
 
@@ -1773,7 +1910,7 @@ lookup_monitor (uintptr_t objid)
 	while (cd && cd->objid != objid)
 		cd = cd->next;
 	if (!cd) {
-		cd = calloc (sizeof (MonitorDesc), 1);
+		cd = (MonitorDesc *)calloc (sizeof (MonitorDesc), 1);
 		cd->objid = objid;
 		cd->next = monitor_hash [slot];
 		monitor_hash [slot] = cd;
@@ -1828,7 +1965,7 @@ decode_bt (MethodDesc** sframes, int *size, unsigned char *p, unsigned char **en
 	if (flags != 0)
 		return NULL;
 	if (count > *size)
-		frames = malloc (count * sizeof (void*));
+		frames = (MethodDesc **)malloc (count * sizeof (void*));
 	else
 		frames = sframes;
 	for (i = 0; i < count; ++i) {
@@ -1857,12 +1994,18 @@ tracked_creation (uintptr_t obj, ClassDesc *cd, uint64_t size, BackTrace *bt, ui
 }
 
 static void
-track_handle (uintptr_t obj, int htype, uint32_t handle)
+track_handle (uintptr_t obj, int htype, uint32_t handle, BackTrace *bt, uint64_t timestamp)
 {
 	int i;
 	for (i = 0; i < num_tracked_objects; ++i) {
-		if (tracked_objects [i] == obj)
-			fprintf (outfile, "Object %p referenced from handle %u\n", (void*)obj, handle);
+		if (tracked_objects [i] != obj)
+			continue;
+		fprintf (outfile, "Object %p referenced from handle %u at %.3f secs.\n", (void*)obj, handle, (timestamp - startup_time) / 1000000000.0);
+		if (bt && bt->count) {
+			int k;
+			for (k = 0; k < bt->count; ++k)
+				fprintf (outfile, "\t%s\n", bt->methods [k]->name);
+		}
 	}
 }
 
@@ -1883,7 +2026,7 @@ track_obj_reference (uintptr_t obj, uintptr_t parent, ClassDesc *cd)
 {
 	int i;
 	for (i = 0; i < num_tracked_objects; ++i) {
-		if (tracked_objects [i] == obj) 
+		if (tracked_objects [i] == obj)
 			fprintf (outfile, "Object %p referenced from %p (%s).\n", (void*)obj, (void*)parent, cd->name);
 	}
 }
@@ -1892,7 +2035,7 @@ static void
 found_object (uintptr_t obj)
 {
 	num_tracked_objects ++;
-	tracked_objects = realloc (tracked_objects, num_tracked_objects * sizeof (tracked_objects [0]));
+	tracked_objects = (uintptr_t *)realloc (tracked_objects, num_tracked_objects * sizeof (tracked_objects [0]));
 	tracked_objects [num_tracked_objects - 1] = obj;
 }
 
@@ -1921,13 +2064,148 @@ code_buffer_desc (int type)
 		return "monitor/lock";
 	case MONO_PROFILER_CODE_BUFFER_DELEGATE_INVOKE:
 		return "delegate invoke";
+	case MONO_PROFILER_CODE_BUFFER_EXCEPTION_HANDLING:
+		return "exception handling";
 	default:
 		return "unspecified";
 	}
 }
 
+typedef struct _CoverageAssembly CoverageAssembly;
+struct _CoverageAssembly {
+	char *name;
+	char *guid;
+	char *filename;
+	int number_of_methods;
+	int fully_covered;
+	int partially_covered;
+};
+
+typedef struct _CoverageClass CoverageClass;
+struct _CoverageClass {
+	char *assembly_name;
+	char *class_name;
+	int number_of_methods;
+	int fully_covered;
+	int partially_covered;
+};
+
+typedef struct _CoverageCoverage CoverageCoverage;
+struct _CoverageCoverage {
+	int method_id;
+	int offset;
+	int count;
+	int line;
+	int column;
+};
+
+typedef struct _CoverageMethod CoverageMethod;
+struct _CoverageMethod {
+	char *assembly_name;
+	char *class_name;
+	char *method_name;
+	char *method_signature;
+	char *filename;
+	int token;
+	int n_statements;
+	int method_id;
+	GPtrArray *coverage;
+};
+static GPtrArray *coverage_assemblies = NULL;
+static GPtrArray *coverage_methods = NULL;
+static GPtrArray *coverage_statements = NULL;
+static GHashTable *coverage_methods_hash = NULL;
+static GPtrArray *coverage_classes = NULL;
+static GHashTable *coverage_assembly_classes = NULL;
+
+static void
+gather_coverage_statements (void)
+{
+	for (guint i = 0; i < coverage_statements->len; i++) {
+		CoverageCoverage *coverage = (CoverageCoverage *)coverage_statements->pdata[i];
+		CoverageMethod *method = (CoverageMethod *)g_hash_table_lookup (coverage_methods_hash, GINT_TO_POINTER (coverage->method_id));
+		if (method == NULL) {
+			fprintf (outfile, "Cannot find method with ID: %d\n", coverage->method_id);
+			continue;
+		}
+
+		g_ptr_array_add (method->coverage, coverage);
+	}
+}
+
+static void
+coverage_add_assembly (CoverageAssembly *assembly)
+{
+	if (coverage_assemblies == NULL)
+		coverage_assemblies = g_ptr_array_new ();
+
+	g_ptr_array_add (coverage_assemblies, assembly);
+}
+
+static void
+coverage_add_method (CoverageMethod *method)
+{
+	if (coverage_methods == NULL) {
+		coverage_methods = g_ptr_array_new ();
+		coverage_methods_hash = g_hash_table_new (NULL, NULL);
+	}
+
+	g_ptr_array_add (coverage_methods, method);
+	g_hash_table_insert (coverage_methods_hash, GINT_TO_POINTER (method->method_id), method);
+}
+
+static void
+coverage_add_class (CoverageClass *klass)
+{
+	GPtrArray *classes = NULL;
+
+	if (coverage_classes == NULL) {
+		coverage_classes = g_ptr_array_new ();
+		coverage_assembly_classes = g_hash_table_new (g_str_hash, g_str_equal);
+	}
+
+	g_ptr_array_add (coverage_classes, klass);
+	classes = (GPtrArray *)g_hash_table_lookup (coverage_assembly_classes, klass->assembly_name);
+	if (classes == NULL) {
+		classes = g_ptr_array_new ();
+		g_hash_table_insert (coverage_assembly_classes, klass->assembly_name, classes);
+	}
+	g_ptr_array_add (classes, klass);
+}
+
+static void
+coverage_add_coverage (CoverageCoverage *coverage)
+{
+	if (coverage_statements == NULL)
+		coverage_statements = g_ptr_array_new ();
+
+	g_ptr_array_add (coverage_statements, coverage);
+}
+
 #define OBJ_ADDR(diff) ((obj_base + diff) << 3)
 #define LOG_TIME(base,diff) /*fprintf("outfile, time %llu + %llu near offset %d\n", base, diff, p - ctx->buf)*/
+
+
+/* Stats */
+#define BUFFER_HEADER_SIZE 48
+
+typedef struct {
+	int count, min_size, max_size, bytes;
+} EventStat;
+
+static int buffer_count;
+static EventStat stats [256];
+
+static void
+record_event_stats (int type, int size)
+{
+	++stats [type].count;
+	if (!stats [type].min_size)
+		stats [type].min_size = size;
+	stats [type].min_size = MIN (stats [type].min_size, size);
+	stats [type].max_size = MAX (stats [type].max_size, size);
+	stats [type].bytes += size;
+}
 
 static int
 decode_buffer (ProfContext *ctx)
@@ -1970,20 +2248,23 @@ decode_buffer (ProfContext *ctx)
 	thread = load_thread (ctx, thread_id);
 	if (!load_data (ctx, len))
 		return 0;
+
+	++buffer_count;
+
 	if (!startup_time) {
 		startup_time = time_base;
 		if (use_time_filter) {
 			time_from += startup_time;
 			time_to += startup_time;
 		}
-		if (!thread->name)
-			thread->name = pstrdup ("Main");
 	}
 	for (i = 0; i < thread->stack_id; ++i)
 		thread->stack [i]->recurse_count++;
 	p = ctx->buf;
 	end = p + len;
 	while (p < end) {
+		unsigned char *start = p;
+		unsigned char event = *p;
 		switch (*p & 0xf) {
 		case TYPE_GC: {
 			int subtype = *p & 0xf0;
@@ -2027,36 +2308,78 @@ decode_buffer (ProfContext *ctx)
 						fprintf (outfile, "moved obj %p to %p\n", (void*)OBJ_ADDR (obj1diff), (void*)OBJ_ADDR (obj2diff));
 					}
 				}
-			} else if (subtype == TYPE_GC_HANDLE_CREATED) {
+			} else if (subtype == TYPE_GC_HANDLE_CREATED || subtype == TYPE_GC_HANDLE_CREATED_BT) {
+				int has_bt = subtype == TYPE_GC_HANDLE_CREATED_BT;
+				int num_bt = 0;
+				MethodDesc *sframes [8];
+				MethodDesc **frames = sframes;
 				int htype = decode_uleb128 (p, &p);
 				uint32_t handle = decode_uleb128 (p, &p);
 				intptr_t objdiff = decode_sleb128 (p, &p);
+				if (has_bt) {
+					num_bt = 8;
+					frames = decode_bt (sframes, &num_bt, p, &p, ptr_base);
+					if (!frames) {
+						fprintf (outfile, "Cannot load backtrace\n");
+						return 0;
+					}
+				}
 				if (htype > 3)
 					return 0;
-				handle_info [htype].created++;
-				handle_info [htype].live++;
-				add_trace_thread (thread, &handle_info [htype].traces, 1);
-				/* FIXME: we don't take into account timing here */
-				if (handle_info [htype].live > handle_info [htype].max_live)
-					handle_info [htype].max_live = handle_info [htype].live;
-				if (num_tracked_objects)
-					track_handle (OBJ_ADDR (objdiff), htype, handle);
+				if ((thread_filter && thread_filter == thread->thread_id) || (time_base >= time_from && time_base < time_to)) {
+					handle_info [htype].created++;
+					handle_info [htype].live++;
+					if (handle_info [htype].live > handle_info [htype].max_live)
+						handle_info [htype].max_live = handle_info [htype].live;
+					BackTrace *bt;
+					if (has_bt)
+						bt = add_trace_methods (frames, num_bt, &handle_info [htype].traces, 1);
+					else
+						bt = add_trace_thread (thread, &handle_info [htype].traces, 1);
+					if (num_tracked_objects)
+						track_handle (OBJ_ADDR (objdiff), htype, handle, bt, time_base);
+				}
 				if (debug)
 					fprintf (outfile, "handle (%s) %u created for object %p\n", get_handle_name (htype), handle, (void*)OBJ_ADDR (objdiff));
-			} else if (subtype == TYPE_GC_HANDLE_DESTROYED) {
+				if (frames != sframes)
+					free (frames);
+			} else if (subtype == TYPE_GC_HANDLE_DESTROYED || subtype == TYPE_GC_HANDLE_DESTROYED_BT) {
+				int has_bt = subtype == TYPE_GC_HANDLE_DESTROYED_BT;
+				int num_bt = 0;
+				MethodDesc *sframes [8];
+				MethodDesc **frames = sframes;
 				int htype = decode_uleb128 (p, &p);
 				uint32_t handle = decode_uleb128 (p, &p);
+				if (has_bt) {
+					num_bt = 8;
+					frames = decode_bt (sframes, &num_bt, p, &p, ptr_base);
+					if (!frames) {
+						fprintf (outfile, "Cannot load backtrace\n");
+						return 0;
+					}
+				}
 				if (htype > 3)
 					return 0;
-				handle_info [htype].destroyed ++;
-				handle_info [htype].live--;
+				if ((thread_filter && thread_filter == thread->thread_id) || (time_base >= time_from && time_base < time_to)) {
+					handle_info [htype].destroyed ++;
+					handle_info [htype].live--;
+					BackTrace *bt;
+					if (has_bt)
+						bt = add_trace_methods (frames, num_bt, &handle_info [htype].destroy_traces, 1);
+					else
+						bt = add_trace_thread (thread, &handle_info [htype].destroy_traces, 1);
+					/* TODO: track_handle_free () - would need to record and keep track of the associated object address... */
+				}
 				if (debug)
 					fprintf (outfile, "handle (%s) %u destroyed\n", get_handle_name (htype), handle);
+				if (frames != sframes)
+					free (frames);
 			}
 			break;
 		}
 		case TYPE_METADATA: {
-			int error = *p & TYPE_LOAD_ERR;
+			int subtype = *p & 0xf0;
+			const char *load_str = subtype == TYPE_END_LOAD ? "loaded" : "unloaded";
 			uint64_t tdiff = decode_uleb128 (p + 1, &p);
 			int mtype = *p++;
 			intptr_t ptrdiff = decode_sleb128 (p, &p);
@@ -2070,8 +2393,8 @@ decode_buffer (ProfContext *ctx)
 					return 0;
 				}
 				if (debug)
-					fprintf (outfile, "loaded class %p (%s in %p) at %llu\n", (void*)(ptr_base + ptrdiff), p, (void*)(ptr_base + imptrdiff), (unsigned long long) time_base);
-				if (!error)
+					fprintf (outfile, "%s class %p (%s in %p) at %llu\n", load_str, (void*)(ptr_base + ptrdiff), p, (void*)(ptr_base + imptrdiff), (unsigned long long) time_base);
+				if (subtype == TYPE_END_LOAD)
 					add_class (ptr_base + ptrdiff, (char*)p);
 				while (*p) p++;
 				p++;
@@ -2082,24 +2405,74 @@ decode_buffer (ProfContext *ctx)
 					return 0;
 				}
 				if (debug)
-					fprintf (outfile, "loaded image %p (%s) at %llu\n", (void*)(ptr_base + ptrdiff), p, (unsigned long long) time_base);
-				if (!error)
+					fprintf (outfile, "%s image %p (%s) at %llu\n", load_str, (void*)(ptr_base + ptrdiff), p, (unsigned long long) time_base);
+				if (subtype == TYPE_END_LOAD)
 					add_image (ptr_base + ptrdiff, (char*)p);
 				while (*p) p++;
 				p++;
+			} else if (mtype == TYPE_ASSEMBLY) {
+				uint64_t flags = decode_uleb128 (p, &p);
+				if (flags) {
+					fprintf (outfile, "non-zero flags in assembly\n");
+					return 0;
+				}
+				if (debug)
+					fprintf (outfile, "%s assembly %p (%s) at %llu\n", load_str, (void*)(ptr_base + ptrdiff), p, (unsigned long long) time_base);
+				if (subtype == TYPE_END_LOAD)
+					add_assembly (ptr_base + ptrdiff, (char*)p);
+				while (*p) p++;
+				p++;
+			} else if (mtype == TYPE_DOMAIN) {
+				uint64_t flags = decode_uleb128 (p, &p);
+				if (flags) {
+					fprintf (outfile, "non-zero flags in domain\n");
+					return 0;
+				}
+				DomainContext *nd = get_domain (ctx, ptr_base + ptrdiff);
+				/* no subtype means it's a name event, rather than start/stop */
+				if (subtype == 0)
+					nd->friendly_name = pstrdup ((char *) p);
+				if (debug) {
+					if (subtype == 0)
+						fprintf (outfile, "domain %p named at %llu: %s\n", (void *) (ptr_base + ptrdiff), (unsigned long long) time_base, p);
+					else
+						fprintf (outfile, "%s thread %p at %llu\n", load_str, (void *) (ptr_base + ptrdiff), (unsigned long long) time_base);
+				}
+				if (subtype == 0) {
+					while (*p) p++;
+					p++;
+				}
+			} else if (mtype == TYPE_CONTEXT) {
+				uint64_t flags = decode_uleb128 (p, &p);
+				if (flags) {
+					fprintf (outfile, "non-zero flags in context\n");
+					return 0;
+				}
+				intptr_t domaindiff = decode_sleb128 (p, &p);
+				if (debug)
+					fprintf (outfile, "%s context %p (%p) at %llu\n", load_str, (void*)(ptr_base + ptrdiff), (void *) (ptr_base + domaindiff), (unsigned long long) time_base);
+				if (subtype == TYPE_END_LOAD)
+					get_remctx (ctx, ptr_base + ptrdiff)->domain_id = ptr_base + domaindiff;
 			} else if (mtype == TYPE_THREAD) {
-				ThreadContext *nt;
 				uint64_t flags = decode_uleb128 (p, &p);
 				if (flags) {
 					fprintf (outfile, "non-zero flags in thread\n");
 					return 0;
 				}
-				nt = get_thread (ctx, ptr_base + ptrdiff);
-				nt->name = pstrdup ((char*)p);
-				if (debug)
-					fprintf (outfile, "thread %p named: %s\n", (void*)(ptr_base + ptrdiff), p);
-				while (*p) p++;
-				p++;
+				ThreadContext *nt = get_thread (ctx, ptr_base + ptrdiff);
+				/* no subtype means it's a name event, rather than start/stop */
+				if (subtype == 0)
+					nt->name = pstrdup ((char*)p);
+				if (debug) {
+					if (subtype == 0)
+						fprintf (outfile, "thread %p named at %llu: %s\n", (void*)(ptr_base + ptrdiff), (unsigned long long) time_base, p);
+					else
+						fprintf (outfile, "%s thread %p at %llu\n", load_str, (void *) (ptr_base + ptrdiff), (unsigned long long) time_base);
+				}
+				if (subtype == 0) {
+					while (*p) p++;
+					p++;
+				}
 			}
 			break;
 		}
@@ -2395,7 +2768,7 @@ decode_buffer (ProfContext *ctx)
 				int codelen = decode_uleb128 (p, &p);
 				const char *name;
 				if (type == MONO_PROFILER_CODE_BUFFER_SPECIFIC_TRAMPOLINE) {
-					name = (void*)p;
+					name = (const char *)p;
 					while (*p) p++;
 						p++;
 				} else {
@@ -2414,13 +2787,16 @@ decode_buffer (ProfContext *ctx)
 				int i;
 				int sample_type = decode_uleb128 (p + 1, &p);
 				uint64_t tstamp = decode_uleb128 (p, &p);
+				void *tid = (void *) thread_id;
+				if (ctx->data_version > 10)
+					tid = (void *) (ptr_base + decode_sleb128 (p, &p));
 				int count = decode_uleb128 (p, &p);
 				for (i = 0; i < count; ++i) {
 					uintptr_t ip = ptr_base + decode_sleb128 (p, &p);
 					if ((tstamp >= time_from && tstamp < time_to))
 						add_stat_sample (sample_type, ip);
 					if (debug)
-						fprintf (outfile, "sample hit, type: %d at %p\n", sample_type, (void*)ip);
+						fprintf (outfile, "sample hit, type: %d at %p for thread %p\n", sample_type, (void*)ip, tid);
 				}
 				if (ctx->data_version > 5) {
 					count = decode_uleb128 (p, &p);
@@ -2501,7 +2877,7 @@ decode_buffer (ProfContext *ctx)
 
 					type = decode_uleb128 (p, &p);
 
-					value = calloc (1, sizeof (CounterValue));
+					value = (CounterValue *)calloc (1, sizeof (CounterValue));
 					value->timestamp = timestamp;
 
 					switch (type) {
@@ -2509,11 +2885,11 @@ decode_buffer (ProfContext *ctx)
 #if SIZEOF_VOID_P == 4
 					case MONO_COUNTER_WORD:
 #endif
-						value->buffer = malloc (sizeof (int32_t));
+						value->buffer = (unsigned char *)malloc (sizeof (int32_t));
 						*(int32_t*)value->buffer = (int32_t)decode_sleb128 (p, &p) + (previous ? (*(int32_t*)previous->buffer) : 0);
 						break;
 					case MONO_COUNTER_UINT:
-						value->buffer = malloc (sizeof (uint32_t));
+						value->buffer = (unsigned char *)malloc (sizeof (uint32_t));
 						*(uint32_t*)value->buffer = (uint32_t)decode_uleb128 (p, &p) + (previous ? (*(uint32_t*)previous->buffer) : 0);
 						break;
 					case MONO_COUNTER_LONG:
@@ -2521,15 +2897,15 @@ decode_buffer (ProfContext *ctx)
 					case MONO_COUNTER_WORD:
 #endif
 					case MONO_COUNTER_TIME_INTERVAL:
-						value->buffer = malloc (sizeof (int64_t));
+						value->buffer = (unsigned char *)malloc (sizeof (int64_t));
 						*(int64_t*)value->buffer = (int64_t)decode_sleb128 (p, &p) + (previous ? (*(int64_t*)previous->buffer) : 0);
 						break;
 					case MONO_COUNTER_ULONG:
-						value->buffer = malloc (sizeof (uint64_t));
+						value->buffer = (unsigned char *)malloc (sizeof (uint64_t));
 						*(uint64_t*)value->buffer = (uint64_t)decode_uleb128 (p, &p) + (previous ? (*(uint64_t*)previous->buffer) : 0);
 						break;
 					case MONO_COUNTER_DOUBLE:
-						value->buffer = malloc (sizeof (double));
+						value->buffer = (unsigned char *)malloc (sizeof (double));
 #if TARGET_BYTE_ORDER == G_LITTLE_ENDIAN
 						for (i = 0; i < sizeof (double); i++)
 #else
@@ -2554,10 +2930,114 @@ decode_buffer (ProfContext *ctx)
 			}
 			break;
 		}
+		case TYPE_COVERAGE:{
+			int subtype = *p & 0xf0;
+			switch (subtype) {
+			case TYPE_COVERAGE_METHOD: {
+				CoverageMethod *method = g_new0 (CoverageMethod, 1);
+				const char *assembly, *klass, *name, *sig, *filename;
+				int token, n_offsets, method_id;
+
+				p++;
+				assembly = (const char *)p; while (*p) p++; p++;
+				klass = (const char *)p; while (*p) p++; p++;
+				name = (const char *)p; while (*p) p++; p++;
+				sig = (const char *)p; while (*p) p++; p++;
+				filename = (const char *)p; while (*p) p++; p++;
+
+				token = decode_uleb128 (p, &p);
+				method_id = decode_uleb128 (p, &p);
+				n_offsets = decode_uleb128 (p, &p);
+
+				method->assembly_name = g_strdup (assembly);
+				method->class_name = g_strdup (klass);
+				method->method_name = g_strdup (name);
+				method->method_signature = g_strdup (sig);
+				method->filename = g_strdup (filename);
+				method->token = token;
+				method->n_statements = n_offsets;
+				method->coverage = g_ptr_array_new ();
+				method->method_id = method_id;
+
+				coverage_add_method (method);
+
+				break;
+			}
+			case TYPE_COVERAGE_STATEMENT: {
+				CoverageCoverage *coverage = g_new0 (CoverageCoverage, 1);
+				int offset, count, line, column, method_id;
+
+				p++;
+				method_id = decode_uleb128 (p, &p);
+				offset = decode_uleb128 (p, &p);
+				count = decode_uleb128 (p, &p);
+				line = decode_uleb128 (p, &p);
+				column = decode_uleb128 (p, &p);
+
+				coverage->method_id = method_id;
+				coverage->offset = offset;
+				coverage->count = count;
+				coverage->line = line;
+				coverage->column = column;
+
+				coverage_add_coverage (coverage);
+				break;
+			}
+			case TYPE_COVERAGE_ASSEMBLY: {
+				CoverageAssembly *assembly = g_new0 (CoverageAssembly, 1);
+				char *name, *guid, *filename;
+				int number_of_methods, fully_covered, partially_covered;
+				p++;
+
+				name = (char *)p; while (*p) p++; p++;
+				guid = (char *)p; while (*p) p++; p++;
+				filename = (char *)p; while (*p) p++; p++;
+				number_of_methods = decode_uleb128 (p, &p);
+				fully_covered = decode_uleb128 (p, &p);
+				partially_covered = decode_uleb128 (p, &p);
+
+				assembly->name = g_strdup (name);
+				assembly->guid = g_strdup (guid);
+				assembly->filename = g_strdup (filename);
+				assembly->number_of_methods = number_of_methods;
+				assembly->fully_covered = fully_covered;
+				assembly->partially_covered = partially_covered;
+
+				coverage_add_assembly (assembly);
+				break;
+			}
+			case TYPE_COVERAGE_CLASS: {
+				CoverageClass *klass = g_new0 (CoverageClass, 1);
+				char *assembly_name, *class_name;
+				int number_of_methods, fully_covered, partially_covered;
+				p++;
+
+				assembly_name = (char *)p; while (*p) p++; p++;
+				class_name = (char *)p; while (*p) p++; p++;
+				number_of_methods = decode_uleb128 (p, &p);
+				fully_covered = decode_uleb128 (p, &p);
+				partially_covered = decode_uleb128 (p, &p);
+
+				klass->assembly_name = g_strdup (assembly_name);
+				klass->class_name = g_strdup (class_name);
+				klass->number_of_methods = number_of_methods;
+				klass->fully_covered = fully_covered;
+				klass->partially_covered = partially_covered;
+
+				coverage_add_class (klass);
+				break;
+			}
+
+			default:
+				break;
+			}
+			break;
+		}
 		default:
 			fprintf (outfile, "unhandled profiler event: 0x%x at file offset: %llu + %lld (len: %d\n)\n", *p, (unsigned long long) file_offset, (long long) (p - ctx->buf), len);
 			exit (1);
 		}
+		record_event_stats (event, p - start);
 	}
 	thread->last_time = time_base;
 	for (i = 0; i < thread->stack_id; ++i)
@@ -2569,7 +3049,7 @@ static ProfContext*
 load_file (char *name)
 {
 	unsigned char *p;
-	ProfContext *ctx = calloc (sizeof (ProfContext), 1);
+	ProfContext *ctx = (ProfContext *)calloc (sizeof (ProfContext), 1);
 	if (strcmp (name, "-") == 0)
 		ctx->file = stdin;
 	else
@@ -2611,8 +3091,8 @@ static int alloc_sort_mode = ALLOC_SORT_BYTES;
 static int
 compare_class (const void *a, const void *b)
 {
-	ClassDesc *const*A = a;
-	ClassDesc *const*B = b;
+	ClassDesc *const *A = (ClassDesc *const *)a;
+	ClassDesc *const *B = (ClassDesc *const *)b;
 	uint64_t vala, valb;
 	if (alloc_sort_mode == ALLOC_SORT_BYTES) {
 		vala = (*A)->alloc_size;
@@ -2671,8 +3151,28 @@ dump_threads (ProfContext *ctx)
 	ThreadContext *thread;
 	fprintf (outfile, "\nThread summary\n");
 	for (thread = ctx->threads; thread; thread = thread->next) {
-		fprintf (outfile, "\tThread: %p, name: \"%s\"\n", (void*)thread->thread_id, thread->name? thread->name: "");
+		if (thread->thread_id) {
+			fprintf (outfile, "\tThread: %p, name: \"%s\"\n", (void*)thread->thread_id, thread->name? thread->name: "");
+		}
 	}
+}
+
+static void
+dump_domains (ProfContext *ctx)
+{
+	fprintf (outfile, "\nDomain summary\n");
+
+	for (DomainContext *domain = ctx->domains; domain; domain = domain->next)
+		fprintf (outfile, "\tDomain: %p, friendly name: \"%s\"\n", (void *) domain->domain_id, domain->friendly_name);
+}
+
+static void
+dump_remctxs (ProfContext *ctx)
+{
+	fprintf (outfile, "\nContext summary\n");
+
+	for (RemCtxContext *remctx = ctx->remctxs; remctx; remctx = remctx->next)
+		fprintf (outfile, "\tContext: %p, domain: %p\n", (void *) remctx->remctx_id, (void *) remctx->domain_id);
 }
 
 static void
@@ -2692,8 +3192,8 @@ dump_exceptions (void)
 static int
 compare_monitor (const void *a, const void *b)
 {
-	MonitorDesc *const*A = a;
-	MonitorDesc *const*B = b;
+	MonitorDesc *const *A = (MonitorDesc *const *)a;
+	MonitorDesc *const *B = (MonitorDesc *const *)b;
 	if ((*B)->wait_time == (*A)->wait_time)
 		return 0;
 	if ((*B)->wait_time < (*A)->wait_time)
@@ -2708,7 +3208,7 @@ dump_monitors (void)
 	int i, j;
 	if (!num_monitors)
 		return;
-	monitors = malloc (sizeof (void*) * num_monitors);
+	monitors = (MonitorDesc **)malloc (sizeof (void*) * num_monitors);
 	for (i = 0, j = 0; i < SMALL_HASH_SIZE; ++i) {
 		MonitorDesc *mdesc = monitor_hash [i];
 		while (mdesc) {
@@ -2756,6 +3256,7 @@ dump_gcs (void)
 			(unsigned long long) (handle_info [i].destroyed),
 			(unsigned long long) (handle_info [i].max_live));
 		dump_traces (&handle_info [i].traces, "created");
+		dump_traces (&handle_info [i].destroy_traces, "destroyed");
 	}
 }
 
@@ -2789,7 +3290,7 @@ dump_allocations (void)
 	intptr_t allocs = 0;
 	uint64_t size = 0;
 	int header_done = 0;
-	ClassDesc **classes = malloc (num_classes * sizeof (void*));
+	ClassDesc **classes = (ClassDesc **)malloc (num_classes * sizeof (void*));
 	ClassDesc *cd;
 	c = 0;
 	for (i = 0; i < HASH_SIZE; ++i) {
@@ -2832,8 +3333,8 @@ static int method_sort_mode = METHOD_SORT_TOTAL;
 static int
 compare_method (const void *a, const void *b)
 {
-	MethodDesc *const*A = a;
-	MethodDesc *const*B = b;
+	MethodDesc *const *A = (MethodDesc *const *)a;
+	MethodDesc *const *B = (MethodDesc *const *)b;
 	uint64_t vala, valb;
 	if (method_sort_mode == METHOD_SORT_SELF) {
 		vala = (*A)->self_time;
@@ -2868,7 +3369,18 @@ dump_metadata (void)
 			}
 		}
 	}
-
+	fprintf (outfile, "\tLoaded assemblies: %d\n", num_assemblies);
+	if (verbose) {
+		AssemblyDesc *assembly;
+		int i;
+		for (i = 0; i < SMALL_HASH_SIZE; ++i) {
+			assembly = assembly_hash [i];
+			while (assembly) {
+				fprintf (outfile, "\t\t%s\n", assembly->asmname);
+				assembly = assembly->next;
+			}
+		}
+	}
 }
 
 static void
@@ -2877,7 +3389,7 @@ dump_methods (void)
 	int i, c;
 	uint64_t calls = 0;
 	int header_done = 0;
-	MethodDesc **methods = malloc (num_methods * sizeof (void*));
+	MethodDesc **methods = (MethodDesc **)malloc (num_methods * sizeof (void*));
 	MethodDesc *cd;
 	c = 0;
 	for (i = 0; i < HASH_SIZE; ++i) {
@@ -2918,8 +3430,8 @@ dump_methods (void)
 static int
 compare_heap_class (const void *a, const void *b)
 {
-	HeapClassDesc *const*A = a;
-	HeapClassDesc *const*B = b;
+	HeapClassDesc *const *A = (HeapClassDesc *const *)a;
+	HeapClassDesc *const *B = (HeapClassDesc *const *)b;
 	uint64_t vala, valb;
 	if (alloc_sort_mode == ALLOC_SORT_BYTES) {
 		vala = (*A)->total_size;
@@ -2938,8 +3450,8 @@ compare_heap_class (const void *a, const void *b)
 static int
 compare_rev_class (const void *a, const void *b)
 {
-	const HeapClassRevRef *A = a;
-	const HeapClassRevRef *B = b;
+	const HeapClassRevRef *A = (const HeapClassRevRef *)a;
+	const HeapClassRevRef *B = (const HeapClassRevRef *)b;
 	if (B->count == A->count)
 		return 0;
 	if (B->count < A->count)
@@ -2972,7 +3484,7 @@ heap_shot_summary (HeapShot *hs, int hs_num, HeapShot *last_hs)
 	int i;
 	HeapClassDesc *cd;
 	HeapClassDesc **sorted;
-	sorted = malloc (sizeof (void*) * hs->class_count);
+	sorted = (HeapClassDesc **)malloc (sizeof (void*) * hs->class_count);
 	for (i = 0; i < hs->hash_size; ++i) {
 		cd = hs->class_hash [i];
 		if (!cd)
@@ -3013,7 +3525,7 @@ heap_shot_summary (HeapShot *hs, int hs_num, HeapShot *last_hs)
 		}
 		if (!collect_traces)
 			continue;
-		rev_sorted = malloc (cd->rev_count * sizeof (HeapClassRevRef));
+		rev_sorted = (HeapClassRevRef *)malloc (cd->rev_count * sizeof (HeapClassRevRef));
 		k = 0;
 		for (j = 0; j < cd->rev_hash_size; ++j) {
 			if (cd->rev_hash [j].klass)
@@ -3032,8 +3544,8 @@ heap_shot_summary (HeapShot *hs, int hs_num, HeapShot *last_hs)
 static int
 compare_heap_shots (const void *a, const void *b)
 {
-	HeapShot *const*A = a;
-	HeapShot *const*B = b;
+	HeapShot *const *A = (HeapShot *const *)a;
+	HeapShot *const *B = (HeapShot *const *)b;
 	if ((*B)->timestamp == (*A)->timestamp)
 		return 0;
 	if ((*B)->timestamp > (*A)->timestamp)
@@ -3050,7 +3562,7 @@ dump_heap_shots (void)
 	int i;
 	if (!heap_shots)
 		return;
-	hs_sorted = malloc (num_heap_shots * sizeof (void*));
+	hs_sorted = (HeapShot **)malloc (num_heap_shots * sizeof (void*));
 	fprintf (outfile, "\nHeap shot summary\n");
 	i = 0;
 	for (hs = heap_shots; hs; hs = hs->next)
@@ -3062,6 +3574,227 @@ dump_heap_shots (void)
 		last_hs = hs;
 	}
 }
+
+/* This is a very basic escape function that escapes < > and &
+   Ideally we'd use g_markup_escape_string but that function isn't
+	 available in Mono's eglib. This was written without looking at the
+	 source of that function in glib. */
+static char *
+escape_string_for_xml (const char *string)
+{
+	GString *string_builder = g_string_new (NULL);
+	const char *start, *p;
+
+	start = p = string;
+	while (*p) {
+		while (*p && *p != '&' && *p != '<' && *p != '>')
+			p++;
+
+		g_string_append_len (string_builder, start, p - start);
+
+		if (*p == '\0')
+			break;
+
+		switch (*p) {
+		case '<':
+			g_string_append (string_builder, "&lt;");
+			break;
+
+		case '>':
+			g_string_append (string_builder, "&gt;");
+			break;
+
+		case '&':
+			g_string_append (string_builder, "&amp;");
+			break;
+
+		default:
+			break;
+		}
+
+		p++;
+		start = p;
+	}
+
+	return g_string_free (string_builder, FALSE);
+}
+
+static int
+sort_assemblies (gconstpointer a, gconstpointer b)
+{
+	CoverageAssembly *assembly_a = *(CoverageAssembly **)a;
+	CoverageAssembly *assembly_b = *(CoverageAssembly **)b;
+
+	if (assembly_a->name == NULL && assembly_b->name == NULL)
+		return 0;
+	else if (assembly_a->name == NULL)
+		return -1;
+	else if (assembly_b->name == NULL)
+		return 1;
+
+	return strcmp (assembly_a->name, assembly_b->name);
+}
+
+static void
+dump_coverage (void)
+{
+	if (!coverage_methods && !coverage_assemblies)
+		return;
+
+	gather_coverage_statements ();
+	fprintf (outfile, "\nCoverage Summary:\n");
+
+	if (coverage_outfile) {
+		fprintf (coverage_outfile, "<?xml version=\"1.0\"?>\n");
+		fprintf (coverage_outfile, "<coverage version=\"0.3\">\n");
+	}
+
+	g_ptr_array_sort (coverage_assemblies, sort_assemblies);
+
+	for (guint i = 0; i < coverage_assemblies->len; i++) {
+		CoverageAssembly *assembly = (CoverageAssembly *)coverage_assemblies->pdata[i];
+		GPtrArray *classes;
+
+		if (assembly->number_of_methods != 0) {
+			int percentage = ((assembly->fully_covered + assembly->partially_covered) * 100) / assembly->number_of_methods;
+			fprintf (outfile, "\t%s (%s) %d%% covered (%d methods - %d covered)\n", assembly->name, assembly->filename, percentage, assembly->number_of_methods, assembly->fully_covered);
+		} else
+			fprintf (outfile, "\t%s (%s) ?%% covered (%d methods - %d covered)\n", assembly->name, assembly->filename, assembly->number_of_methods, assembly->fully_covered);
+
+		if (coverage_outfile) {
+			char *escaped_name, *escaped_filename;
+			escaped_name = escape_string_for_xml (assembly->name);
+			escaped_filename = escape_string_for_xml (assembly->filename);
+
+			fprintf (coverage_outfile, "\t<assembly name=\"%s\" guid=\"%s\" filename=\"%s\" method-count=\"%d\" full=\"%d\" partial=\"%d\"/>\n", escaped_name, assembly->guid, escaped_filename, assembly->number_of_methods, assembly->fully_covered, assembly->partially_covered);
+
+			g_free (escaped_name);
+			g_free (escaped_filename);
+		}
+
+		classes = (GPtrArray *)g_hash_table_lookup (coverage_assembly_classes, assembly->name);
+		if (classes) {
+			for (guint j = 0; j < classes->len; j++) {
+				CoverageClass *klass = (CoverageClass *)classes->pdata [j];
+
+				if (klass->number_of_methods > 0) {
+					int percentage = ((klass->fully_covered + klass->partially_covered) * 100) / klass->number_of_methods;
+					fprintf (outfile, "\t\t%s %d%% covered (%d methods - %d covered)\n", klass->class_name, percentage, klass->number_of_methods, klass->fully_covered);
+				} else
+					fprintf (outfile, "\t\t%s ?%% covered (%d methods - %d covered)\n", klass->class_name, klass->number_of_methods, klass->fully_covered);
+
+				if (coverage_outfile) {
+					char *escaped_name;
+					escaped_name = escape_string_for_xml (klass->class_name);
+
+					fprintf (coverage_outfile, "\t\t<class name=\"%s\" method-count=\"%d\" full=\"%d\" partial=\"%d\"/>\n", escaped_name, klass->number_of_methods, klass->fully_covered, klass->partially_covered);
+					g_free (escaped_name);
+				}
+			}
+		}
+	}
+
+	for (guint i = 0; i < coverage_methods->len; i++) {
+		CoverageMethod *method = (CoverageMethod *)coverage_methods->pdata [i];
+
+		if (coverage_outfile) {
+			char *escaped_assembly, *escaped_class, *escaped_method, *escaped_sig, *escaped_filename;
+
+			escaped_assembly = escape_string_for_xml (method->assembly_name);
+			escaped_class = escape_string_for_xml (method->class_name);
+			escaped_method = escape_string_for_xml (method->method_name);
+			escaped_sig = escape_string_for_xml (method->method_signature);
+			escaped_filename = escape_string_for_xml (method->filename);
+
+			fprintf (coverage_outfile, "\t<method assembly=\"%s\" class=\"%s\" name=\"%s (%s)\" filename=\"%s\" token=\"%d\">\n", escaped_assembly, escaped_class, escaped_method, escaped_sig, escaped_filename, method->token);
+
+			g_free (escaped_assembly);
+			g_free (escaped_class);
+			g_free (escaped_method);
+			g_free (escaped_sig);
+			g_free (escaped_filename);
+
+			for (guint j = 0; j < method->coverage->len; j++) {
+				CoverageCoverage *coverage = (CoverageCoverage *)method->coverage->pdata [j];
+				fprintf (coverage_outfile, "\t\t<statement offset=\"%d\" counter=\"%d\" line=\"%d\" column=\"%d\"/>\n", coverage->offset, coverage->count, coverage->line, coverage->column);
+			}
+			fprintf (coverage_outfile, "\t</method>\n");
+		}
+	}
+
+	if (coverage_outfile) {
+		fprintf (coverage_outfile, "</coverage>\n");
+		fclose (coverage_outfile);
+		coverage_outfile = NULL;
+	}
+}
+
+#define DUMP_EVENT_STAT(EVENT,SUBTYPE) dump_event (#EVENT, #SUBTYPE, EVENT, SUBTYPE);
+
+static void
+dump_event (const char *event_name, const char *subtype_name, int event, int subtype)
+{
+	int idx = event | subtype;
+	EventStat evt = stats [idx];
+	if (!evt.count)
+		return;
+
+	fprintf (outfile, "\t%16s\t%26s\tcount %6d\tmin %3d\tmax %6d\tbytes %d\n", event_name, subtype_name, evt.count, evt.min_size, evt.max_size, evt.bytes);
+}
+
+static void
+dump_stats (void)
+{
+	fprintf (outfile, "\nMlpd statistics\n");
+	fprintf (outfile, "\tBuffer count %d\toverhead %d (%d bytes per header)\n", buffer_count, buffer_count * BUFFER_HEADER_SIZE, BUFFER_HEADER_SIZE);
+	fprintf (outfile, "\nEvent details:\n");
+
+	DUMP_EVENT_STAT (TYPE_ALLOC, TYPE_ALLOC_NO_BT);
+	DUMP_EVENT_STAT (TYPE_ALLOC, TYPE_ALLOC_BT);
+
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_EVENT);
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_RESIZE);
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_MOVE);
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_HANDLE_CREATED);
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_HANDLE_DESTROYED);
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_HANDLE_CREATED_BT);
+	DUMP_EVENT_STAT (TYPE_GC, TYPE_GC_HANDLE_DESTROYED_BT);
+
+	DUMP_EVENT_STAT (TYPE_METADATA, TYPE_END_LOAD);
+	DUMP_EVENT_STAT (TYPE_METADATA, TYPE_END_UNLOAD);
+
+	DUMP_EVENT_STAT (TYPE_METHOD, TYPE_LEAVE);
+	DUMP_EVENT_STAT (TYPE_METHOD, TYPE_ENTER);
+	DUMP_EVENT_STAT (TYPE_METHOD, TYPE_EXC_LEAVE);
+	DUMP_EVENT_STAT (TYPE_METHOD, TYPE_JIT);
+
+	DUMP_EVENT_STAT (TYPE_EXCEPTION, TYPE_THROW);
+	DUMP_EVENT_STAT (TYPE_EXCEPTION, TYPE_CLAUSE);
+	DUMP_EVENT_STAT (TYPE_EXCEPTION, TYPE_EXCEPTION_BT);
+
+	DUMP_EVENT_STAT (TYPE_MONITOR, TYPE_MONITOR_NO_BT);
+	DUMP_EVENT_STAT (TYPE_MONITOR, TYPE_MONITOR_BT);
+
+	DUMP_EVENT_STAT (TYPE_HEAP, TYPE_HEAP_START);
+	DUMP_EVENT_STAT (TYPE_HEAP, TYPE_HEAP_END);
+	DUMP_EVENT_STAT (TYPE_HEAP, TYPE_HEAP_OBJECT);
+	DUMP_EVENT_STAT (TYPE_HEAP, TYPE_HEAP_ROOT);
+
+	DUMP_EVENT_STAT (TYPE_SAMPLE, TYPE_SAMPLE_HIT);
+	DUMP_EVENT_STAT (TYPE_SAMPLE, TYPE_SAMPLE_USYM);
+	DUMP_EVENT_STAT (TYPE_SAMPLE, TYPE_SAMPLE_UBIN);
+	DUMP_EVENT_STAT (TYPE_SAMPLE, TYPE_SAMPLE_COUNTERS_DESC);
+	DUMP_EVENT_STAT (TYPE_SAMPLE, TYPE_SAMPLE_COUNTERS);
+
+	DUMP_EVENT_STAT (TYPE_RUNTIME, TYPE_JITHELPER);
+
+	DUMP_EVENT_STAT (TYPE_COVERAGE, TYPE_COVERAGE_ASSEMBLY);
+	DUMP_EVENT_STAT (TYPE_COVERAGE, TYPE_COVERAGE_METHOD);
+	DUMP_EVENT_STAT (TYPE_COVERAGE, TYPE_COVERAGE_STATEMENT);
+	DUMP_EVENT_STAT (TYPE_COVERAGE, TYPE_COVERAGE_CLASS);
+}
+
+
 
 static void
 flush_context (ProfContext *ctx)
@@ -3077,7 +3810,7 @@ flush_context (ProfContext *ctx)
 	}
 }
 
-static const char *reports = "header,jit,gc,sample,alloc,call,metadata,exception,monitor,thread,heapshot,counters";
+static const char *reports = "header,jit,gc,sample,alloc,call,metadata,exception,monitor,thread,heapshot,counters,coverage";
 
 static const char*
 match_option (const char *p, const char *opt)
@@ -3105,6 +3838,16 @@ print_reports (ProfContext *ctx, const char *reps, int parse_only)
 		if ((opt = match_option (p, "thread")) != p) {
 			if (!parse_only)
 				dump_threads (ctx);
+			continue;
+		}
+		if ((opt = match_option (p, "domain")) != p) {
+			if (!parse_only)
+				dump_domains (ctx);
+			continue;
+		}
+		if ((opt = match_option (p, "context")) != p) {
+			if (!parse_only)
+				dump_remctxs (ctx);
 			continue;
 		}
 		if ((opt = match_option (p, "gc")) != p) {
@@ -3157,6 +3900,16 @@ print_reports (ProfContext *ctx, const char *reps, int parse_only)
 				dump_counters ();
 			continue;
 		}
+		if ((opt = match_option (p, "coverage")) != p) {
+			if (!parse_only)
+				dump_coverage ();
+			continue;
+		}
+		if ((opt = match_option (p, "stats")) != p) {
+			if (!parse_only)
+				dump_stats ();
+			continue;
+		}
 		return 0;
 	}
 	return 1;
@@ -3185,7 +3938,7 @@ usage (void)
 	printf ("Options:\n");
 	printf ("\t--help               display this help\n");
 	printf ("\t--out=FILE           write to FILE instead of stdout\n");
-	printf ("\t--traces             collect and show backtraces\n"); 
+	printf ("\t--traces             collect and show backtraces\n");
 	printf ("\t--maxframes=NUM      limit backtraces to NUM entries\n");
 	printf ("\t--reports=R1[,R2...] print the specified reports. Defaults are:\n");
 	printf ("\t                     %s\n", reports);
@@ -3200,6 +3953,7 @@ usage (void)
 	printf ("\t--time=FROM-TO       consider data FROM seconds from startup up to TO seconds\n");
 	printf ("\t--verbose            increase verbosity level\n");
 	printf ("\t--debug              display decoding debug info for mprof-report devs\n");
+	printf ("\t--coverage-out=FILE  write the coverage info to FILE as XML\n");
 }
 
 int
@@ -3311,6 +4065,13 @@ main (int argc, char *argv[])
 		} else if (strcmp ("--traces", argv [i]) == 0) {
 			show_traces = 1;
 			collect_traces = 1;
+		} else if (strncmp ("--coverage-out=", argv [i], 15) == 0) {
+			const char *val = argv [i] + 15;
+			coverage_outfile = fopen (val, "w");
+			if (!coverage_outfile) {
+				printf ("Cannot open output file: %s\n", val);
+				return 1;
+			}
 		} else {
 			break;
 		}
@@ -3331,4 +4092,3 @@ main (int argc, char *argv[])
 	print_reports (ctx, reports, 0);
 	return 0;
 }
-

@@ -30,9 +30,7 @@ RESOURCE_FILES_DIST= \
 
 NUNIT_RESOURCE_FILES= \
 	Test/resources/Web.mono.config \
-	Test/resources/profile.config.4.5 \
-	Test/resources/profile.config.4.0 \
-	Test/resources/profile.config.2.0 \
+	Test/resources/profile.config.4.x \
 	$(wildcard Test/resources/*.as?x) \
 	$(wildcard ../System.Web/Test/mainsoft/NunitWeb/NunitWeb/Resources/*.cs) \
 	$(wildcard ../System.Web/Test/mainsoft/NunitWeb/NunitWeb/Resources/*.as?x) \
@@ -41,7 +39,7 @@ NUNIT_RESOURCE_FILES= \
 CLASSLIB_DIR = $(topdir)/class/lib/$(PROFILE)
 
 STANDALONE_RUNNER_SUPPORT_ASSEMBLY = $(CLASSLIB_DIR)/standalone-runner-support.dll
-STANDALONE_TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) $(PROFILE_MCS_FLAGS) -debug:full -r:$(STANDALONE_RUNNER_SUPPORT_ASSEMBLY) -r:System.Web.dll -r:System.Web.Extensions.dll -r:nunit.framework.dll
+STANDALONE_TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) $(PROFILE_MCS_FLAGS) -r:$(STANDALONE_RUNNER_SUPPORT_ASSEMBLY) -r:$(topdir)/class/lib/$(PROFILE)/System.Web.dll -r:$(topdir)/class/lib/$(PROFILE)/System.Web.Extensions.dll -r:$(topdir)/class/lib/$(PROFILE)/nunit.framework.dll
 STANDALONE_TEST_ASSEMBLY = System.Web.Extensions_standalone_test_$(PROFILE).dll
 STANDALONE_TEST_MAKEFRAG = $(depsdir)/$(STANDALONE_TEST_ASSEMBLY).makefrag
 
@@ -51,30 +49,20 @@ ifdef TESTNAME
 RUN_STANDALONE += --test=$(TESTNAME)
 endif
 
-ifeq (4, $(FRAMEWORK_VERSION_MAJOR))
-OTHER_LIB_MCS_FLAGS += -r:System.Web.ApplicationServices.dll
-endif
-
+LIB_REFS = System System.Core System.Drawing System.Data System.Data.Linq System.Xml System.Web System.Web.Services System.Configuration System.EnterpriseServices System.ServiceModel
 LIB_MCS_FLAGS = \
 	-unsafe \
 	-define:NET_3_5			\
 	-define:SYSTEM_WEB_EXTENSIONS	\
-	-r:$(corlib)	 		\
-	-r:System.dll 			\
-	-r:System.Core.dll		\
-	-r:System.Drawing.dll 		\
-	-r:System.Data.dll		\
-	-r:System.Data.Linq.dll		\
-	-r:System.Xml.dll		\
-	-r:System.Web.dll		\
-	-r:System.Web.Services.dll	\
-	-r:System.Configuration.dll	\
-	-r:System.EnterpriseServices.dll \
-	-r:System.ServiceModel.dll	\
 	$(OTHER_LIB_MCS_FLAGS) 		\
 	$(RESOURCE_FILES:%=/resource:%)
 
-TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) -doc:$(test_lib:.dll=.xml) -nowarn:219,169,1591 $(NUNIT_RESOURCE_FILES:%=/resource:%) -r:SystemWebTestShim.dll -define:SYSTEM_WEB_EXTENSIONS
+ifeq (4, $(FRAMEWORK_VERSION_MAJOR))
+LIB_REFS += System.Web.ApplicationServices
+endif
+
+TEST_LIB_REFS = SystemWebTestShim
+TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) -doc:$(test_lib:.dll=.xml) -nowarn:219,169,1591 $(NUNIT_RESOURCE_FILES:%=/resource:%) -define:SYSTEM_WEB_EXTENSIONS
 
 EXTRA_DISTFILES = $(RESOURCE_FILES_DIST) $(NUNIT_RESOURCE_FILES) \
 	System.Web.Extensions_standalone_test.dll.sources \

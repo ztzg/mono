@@ -25,9 +25,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-#if NET_4_0 && CONFIGURATION_DEP
-
-extern alias PrebuiltSystem;
+#if CONFIGURATION_DEP
 
 using System;
 using System.Collections;
@@ -41,8 +39,6 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
-
-using TypeConverter = PrebuiltSystem::System.ComponentModel.TypeConverter;
 
 namespace System.Security.Authentication.ExtendedProtection.Configuration
 {

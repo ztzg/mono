@@ -7,16 +7,9 @@
 // (C) 2001 Mads Pultz
 // (C) 2003 Martin Willemoes Hansen
 // 
-// This test assumes the following:
-// 1) The following Internet sites exist:
-//        www.go-mono.com with IP address 64.14.94.188
-//        info.diku.dk with IP address 130.225.96.4
-// 2) The following DNS name does not exist:
-//        www.hopefullydoesnotexist.dk
-//
 
 using System;
-using System.Collections;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -28,12 +21,12 @@ namespace MonoTests.System.Net
 	[TestFixture]
 	public class DnsTest
 	{
-		private String site1Name = "jenkins.mono-project.com",
-			site1Dot = "162.253.133.196",
-			site2Name = "info.diku.dk",
-			site2Dot = "130.225.96.4",
+		private String site1Name = "google-public-dns-a.google.com",
+			site1Dot = "8.8.8.8",
+			site2Name = "google-public-dns-b.google.com",
+			site2Dot = "8.8.4.4",
 			noneExistingSite = "unlikely.xamarin.com";
-		private uint site1IP = 1852407392, site2IP = 2195808260; // Big-Endian
+		private uint site1IP = 134744072, site2IP = 134743044; // Big-Endian
 
 		[Test]
 		public void AsyncGetHostByName ()
@@ -44,7 +37,7 @@ namespace MonoTests.System.Net
 			IAsyncResult async = Dns.BeginGetHostByName (site1Name, null, null);
 			IPHostEntry entry = Dns.EndGetHostByName (async);
 			SubTestValidIPHostEntry (entry);
-			Assert.IsTrue (entry.HostName == "jenkins.mono-project.com");
+			Assert.IsTrue (entry.HostName == "google-public-dns-a.google.com");
 		}
 
 		void GetHostByNameCallback (IAsyncResult ar)
@@ -63,7 +56,8 @@ namespace MonoTests.System.Net
 			IAsyncResult async = Dns.BeginResolve (site1Dot, null, null);
 			IPHostEntry entry = Dns.EndResolve (async);
 			SubTestValidIPHostEntry (entry);
-			Assert.AreEqual (site1Dot, entry.AddressList [0].ToString ());
+			var ip = GetIPv4Address (entry);
+			Assert.AreEqual (site1Dot, ip.ToString ());
 		}
 
 		void ResolveCallback (IAsyncResult ar)
@@ -189,7 +183,7 @@ namespace MonoTests.System.Net
 		[Test]
 		public void GetHostByName ()
 		{
-			SubTestGetHostByName ("jenkins.mono-project.com", site1Dot);
+			SubTestGetHostByName (site1Name, site1Dot);
 			SubTestGetHostByName (site2Name, site2Dot);
 			try {
 				var entry = Dns.GetHostByName (noneExistingSite);
@@ -212,12 +206,21 @@ namespace MonoTests.System.Net
 			}
 		}
 
+		static IPAddress GetIPv4Address (IPHostEntry h)
+		{
+			var al = h.AddressList.FirstOrDefault (x => x.AddressFamily == AddressFamily.InterNetwork);
+			if (al == null)
+				Assert.Ignore ("Could not resolve an IPv4 address as required by this test case, e.g. running on an IPv6 only network");
+			return al;
+		}
+
 		void SubTestGetHostByName (string siteName, string siteDot)
 		{
 			IPHostEntry h = Dns.GetHostByName (siteName);
 			SubTestValidIPHostEntry (h);
 			Assert.AreEqual (siteName, h.HostName, "siteName");
-			Assert.AreEqual (siteDot, h.AddressList [0].ToString (), "siteDot");
+			var ip = GetIPv4Address (h);
+			Assert.AreEqual (siteDot, ip.ToString (), "siteDot");
 		}
 
 		[Test]
@@ -294,7 +297,8 @@ namespace MonoTests.System.Net
 			IPAddress addr = new IPAddress (IPAddress.NetworkToHostOrder ((int) site1IP));
 			IPHostEntry h = Dns.GetHostByAddress (addr);
 			SubTestValidIPHostEntry (h);
-			Assert.AreEqual (addr.ToString (), h.AddressList [0].ToString ());
+			var ip = GetIPv4Address (h);
+			Assert.AreEqual (addr.ToString (), ip.ToString ());
 		}
 
 		[Test]
@@ -303,7 +307,8 @@ namespace MonoTests.System.Net
 			IPAddress addr = new IPAddress (IPAddress.NetworkToHostOrder ((int) site2IP));
 			IPHostEntry h = Dns.GetHostByAddress (addr);
 			SubTestValidIPHostEntry (h);
-			Assert.AreEqual (addr.ToString (), h.AddressList [0].ToString ());
+			var ip = GetIPv4Address (h);
+			Assert.AreEqual (addr.ToString (), ip.ToString ());
 		}
 
 		[Test]

@@ -10,7 +10,7 @@
 CODEPAGE = 65001
 
 RUNTIME_FLAGS = 
-TEST_HARNESS = $(topdir)/class/lib/$(PROFILE)/nunit-console.exe
+TEST_HARNESS = $(topdir)/class/lib/$(PROFILE)/$(PARENT_PROFILE)nunit-console.exe
 MCS_FLAGS = 
 MBAS_FLAGS = $(PLATFORM_DEBUG_FLAGS)
 LIBRARY_FLAGS = /noconfig
@@ -23,14 +23,14 @@ mono_libdir = $(exec_prefix)/lib
 sysconfdir = $(prefix)/etc
 #RUNTIME = mono
 RUNTIME = false
-TEST_RUNTIME = MONO_PATH="$(topdir)/class/lib/$(PROFILE)$(PLATFORM_PATH_SEPARATOR)$(TEST_MONO_PATH)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(RUNTIME) --debug
+TEST_RUNTIME = MONO_PATH="./$(PLATFORM_PATH_SEPARATOR)$(topdir)/class/lib/$(PROFILE)$(PLATFORM_PATH_SEPARATOR)$(TEST_MONO_PATH)$(PLATFORM_PATH_SEPARATOR)$$MONO_PATH" $(RUNTIME) --debug
 
 # In case you want to add MCS_FLAGS, this lets you not have to
 # keep track of the default value
 
 DEFAULT_MCS_FLAGS := $(MCS_FLAGS)
 DEFAULT_MBAS_FLAGS := $(MBAS_FLAGS)
-DEFAULT_PROFILE := net_4_5
+DEFAULT_PROFILE := net_4_x
 
 # You shouldn't need to set these but might on a 
 # weird platform.

@@ -13,6 +13,8 @@
 #include <config.h>
 #include <glib.h>
 
+#include <mono/utils/mono-os-semaphore.h>
+
 /* There doesn't seem to be a defined symbol for this */
 #define _WAPI_PROCESS_CURRENT (gpointer)0xFFFFFFFF
 
@@ -50,9 +52,11 @@ struct MonoProcess {
 	 * the process has exited, so that the information there isn't lost.
 	 */
 	gpointer handle;
+	gboolean freeable;
 	struct MonoProcess *next;
 };
 
+typedef struct MonoProcess MonoProcess;
 
 /*
  * _WapiHandle_process is a structure containing all the required information

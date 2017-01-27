@@ -106,7 +106,7 @@ alloc_dreg (MonoCompile *cfg, MonoStackType stack_type)
  * JIT code still uses the left and right fields, so it has to stay.
  */
 #define MONO_INST_NEW(cfg,dest,op) do {	\
-		(dest) = mono_mempool_alloc ((cfg)->mempool, sizeof (MonoInst));	\
+		(dest) = (MonoInst *)mono_mempool_alloc ((cfg)->mempool, sizeof (MonoInst));	\
 		(dest)->inst_c0 = (dest)->inst_c1 = 0; \
 		(dest)->next = (dest)->prev = NULL;    \
 		(dest)->opcode = (op);	\
@@ -230,7 +230,7 @@ alloc_dreg (MonoCompile *cfg, MonoStackType stack_type)
 #define NEW_AOTCONST(cfg,dest,patch_type,cons) do {    \
         MONO_INST_NEW ((cfg), (dest), cfg->compile_aot ? OP_AOTCONST : OP_PCONST); \
 		(dest)->inst_p0 = (cons);	\
-		(dest)->inst_i1 = (gpointer)(patch_type); \
+		(dest)->inst_i1 = (MonoInst *)(patch_type); \
 		(dest)->type = STACK_PTR;	\
 		(dest)->dreg = alloc_dreg ((cfg), STACK_PTR);	\
     } while (0)
@@ -262,7 +262,7 @@ alloc_dreg (MonoCompile *cfg, MonoStackType stack_type)
 
 #define NEW_LDSTRLITCONST(cfg,dest,val) NEW_AOTCONST ((cfg), (dest), MONO_PATCH_INFO_LDSTR_LIT, (val))
 
-#define NEW_TYPE_FROM_HANDLE_CONST(cfg,dest,image,token,generic_context) NEW_AOTCONST_TOKEN ((cfg), (dest), MONO_PATCH_INFO_TYPE_FROM_HANDLE, (image), (token), (generic_context), STACK_OBJ, mono_defaults.monotype_class)
+#define NEW_TYPE_FROM_HANDLE_CONST(cfg,dest,image,token,generic_context) NEW_AOTCONST_TOKEN ((cfg), (dest), MONO_PATCH_INFO_TYPE_FROM_HANDLE, (image), (token), (generic_context), STACK_OBJ, mono_defaults.runtimetype_class)
 
 #define NEW_LDTOKENCONST(cfg,dest,image,token,generic_context) NEW_AOTCONST_TOKEN ((cfg), (dest), MONO_PATCH_INFO_LDTOKEN, (image), (token), (generic_context), STACK_PTR, NULL)
 
@@ -311,7 +311,7 @@ alloc_dreg (MonoCompile *cfg, MonoStackType stack_type)
 		type_to_eval_stack_type ((cfg), (vartype), (dest));	\
 		(dest)->klass = var->klass;	\
 		(dest)->sreg1 = var->dreg;   \
-        (dest)->dreg = alloc_dreg ((cfg), (dest)->type); \
+        (dest)->dreg = alloc_dreg ((cfg), (MonoStackType)(dest)->type); \
         if ((dest)->opcode == OP_VMOVE) (dest)->klass = mono_class_from_mono_type ((vartype)); \
 	} while (0)
 
@@ -339,8 +339,8 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
 		(dest)->klass = (var)->klass;	\
         (dest)->dreg = alloc_dreg ((cfg), STACK_MP); \
 		(cfg)->has_indirection = TRUE;	\
-			  if (G_UNLIKELY (cfg->gsharedvt) && mini_is_gsharedvt_variable_type ((cfg), (var)->inst_vtype)) { handle_gsharedvt_ldaddr ((cfg)); } \
-		if (SIZEOF_REGISTER == 4 && DECOMPOSE_INTO_REGPAIR ((var)->type)) { MonoInst *var1 = get_vreg_to_inst (cfg, (var)->dreg + 1); MonoInst *var2 = get_vreg_to_inst (cfg, (var)->dreg + 2); g_assert (var1); g_assert (var2); var1->flags |= MONO_INST_INDIRECT; var2->flags |= MONO_INST_INDIRECT; } \
+			  if (G_UNLIKELY (cfg->gsharedvt) && mini_is_gsharedvt_variable_type ((var)->inst_vtype)) { handle_gsharedvt_ldaddr ((cfg)); } \
+		if (SIZEOF_REGISTER == 4 && DECOMPOSE_INTO_REGPAIR ((var)->type)) { MonoInst *var1 = get_vreg_to_inst (cfg, MONO_LVREG_LS ((var)->dreg)); MonoInst *var2 = get_vreg_to_inst (cfg, MONO_LVREG_MS ((var)->dreg)); g_assert (var1); g_assert (var2); var1->flags |= MONO_INST_INDIRECT; var2->flags |= MONO_INST_INDIRECT; } \
 	} while (0)
 
 #define NEW_VARSTORE(cfg,dest,var,vartype,inst) do {	\
@@ -373,7 +373,7 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
         (dest)->type = STACK_MP; \
 	    (dest)->klass = cfg->ret->klass;	\
 	    (dest)->sreg1 = cfg->vret_addr->dreg;   \
-        (dest)->dreg = alloc_dreg ((cfg), (dest)->type); \
+        (dest)->dreg = alloc_dreg ((cfg), (MonoStackType)(dest)->type); \
 	} while (0)
 
 #define NEW_ARGLOADA(cfg,dest,num) NEW_VARLOADA ((cfg), (dest), arg_array [(num)], param_types [(num)])
@@ -395,7 +395,7 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
 #define NEW_LOAD_MEMBASE_TYPE(cfg,dest,ltype,base,offset) do { \
 	    NEW_LOAD_MEMBASE ((cfg), (dest), mono_type_to_load_membase ((cfg), (ltype)), 0, (base), (offset)); \
 	    type_to_eval_stack_type ((cfg), (ltype), (dest)); \
-	    (dest)->dreg = alloc_dreg ((cfg), (dest)->type); \
+	    (dest)->dreg = alloc_dreg ((cfg), (MonoStackType)(dest)->type); \
     } while (0)
 
 #define NEW_STORE_MEMBASE_TYPE(cfg,dest,ltype,base,offset,sr) do { \
@@ -408,7 +408,7 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
 	} while (0)
 
 #define NEW_SEQ_POINT(cfg,dest,il_offset,intr_loc) do {	 \
-	MONO_INST_NEW ((cfg), (dest), cfg->gen_seq_points_debug_data ? OP_SEQ_POINT : OP_IL_SEQ_POINT); \
+	MONO_INST_NEW ((cfg), (dest), cfg->gen_sdb_seq_points ? OP_SEQ_POINT : OP_IL_SEQ_POINT); \
 	(dest)->inst_imm = (il_offset); \
 	(dest)->flags = intr_loc ? MONO_INST_SINGLE_STEP_LOC : 0; \
 	} while (0)
@@ -448,7 +448,7 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
 
 #define EMIT_NEW_LDSTRLITCONST(cfg,dest,val) do { NEW_AOTCONST ((cfg), (dest), MONO_PATCH_INFO_LDSTR_LIT, (val)); MONO_ADD_INS ((cfg)->cbb, (dest)); } while (0)
 
-#define EMIT_NEW_TYPE_FROM_HANDLE_CONST(cfg,dest,image,token,generic_context) do { NEW_AOTCONST_TOKEN ((cfg), (dest), MONO_PATCH_INFO_TYPE_FROM_HANDLE, (image), (token), (generic_context), STACK_OBJ, mono_defaults.monotype_class); MONO_ADD_INS ((cfg)->cbb, (dest)); } while (0)
+#define EMIT_NEW_TYPE_FROM_HANDLE_CONST(cfg,dest,image,token,generic_context) do { NEW_AOTCONST_TOKEN ((cfg), (dest), MONO_PATCH_INFO_TYPE_FROM_HANDLE, (image), (token), (generic_context), STACK_OBJ, mono_defaults.runtimetype_class); MONO_ADD_INS ((cfg)->cbb, (dest)); } while (0)
 
 #define EMIT_NEW_LDTOKENCONST(cfg,dest,image,token,generic_context) do { NEW_AOTCONST_TOKEN ((cfg), (dest), MONO_PATCH_INFO_LDTOKEN, (image), (token), (generic_context), STACK_PTR, NULL); MONO_ADD_INS ((cfg)->cbb, (dest)); } while (0)
 
@@ -743,7 +743,7 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
  * block_num: unique ID assigned at bblock creation
  */
 #define NEW_BBLOCK(cfg,bblock) do { \
-	(bblock) = mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoBasicBlock)); \
+	(bblock) = (MonoBasicBlock *)mono_mempool_alloc0 ((cfg)->mempool, sizeof (MonoBasicBlock)); \
 	(bblock)->block_num = cfg->num_bblocks++; \
     } while (0)
 
@@ -754,8 +754,8 @@ handle_gsharedvt_ldaddr (MonoCompile *cfg)
 		(b)->real_offset = cfg->real_offset;	\
 	} while (0)
 
-/* Emit a one-way conditional branch */
-/* 
+/*
+ * Emit a one-way conditional branch and start a new bblock.
  * The inst_false_bb field of the cond branch will not be set, the JIT code should be
  * prepared to deal with this.
  */
@@ -796,7 +796,7 @@ static int ccount = 0;
             MONO_ADD_INS ((cfg)->cbb, ins); \
             MONO_START_BB ((cfg), falsebb); \
         } else { \
-		    ins->inst_many_bb = mono_mempool_alloc (cfg->mempool, sizeof(gpointer)*2);	\
+		    ins->inst_many_bb = (MonoBasicBlock **)mono_mempool_alloc (cfg->mempool, sizeof(gpointer)*2);	\
             ins->inst_true_bb = (truebb); \
             ins->inst_false_bb = NULL; \
             mono_link_bblock ((cfg), (cfg)->cbb, (truebb)); \
@@ -817,7 +817,7 @@ static int ccount = 0;
 #define	MONO_EMIT_NEW_BRANCH_BLOCK2(cfg,op,truebb,falsebb) do { \
         MonoInst *ins; \
         MONO_INST_NEW ((cfg), (ins), (op)); \
-		ins->inst_many_bb = mono_mempool_alloc (cfg->mempool, sizeof(gpointer)*2);	\
+		ins->inst_many_bb = (MonoBasicBlock **)mono_mempool_alloc (cfg->mempool, sizeof(gpointer)*2);	\
         ins->inst_true_bb = (truebb); \
         ins->inst_false_bb = (falsebb); \
         mono_link_bblock ((cfg), (cfg)->cbb, (truebb)); \

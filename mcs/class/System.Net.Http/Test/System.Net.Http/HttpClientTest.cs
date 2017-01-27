@@ -150,17 +150,41 @@ namespace MonoTests.System.Net.Http
 			}
 		}
 
+		class ThrowOnlyProxy : IWebProxy
+		{
+			public ICredentials Credentials {
+				get {
+					throw new NotImplementedException ();
+				}
+
+				set {
+					throw new NotImplementedException ();
+				}
+			}
+
+			public Uri GetProxy (Uri destination)
+			{
+				throw new NotImplementedException ();
+			}
+
+			public bool IsBypassed (Uri host)
+			{
+				throw new NotImplementedException ();
+			}
+		}
+
 		const int WaitTimeout = 5000;
 
-		string port, TestHost, LocalServer;
+		string TestHost, LocalServer;
+		int port;
 
 		[SetUp]
 		public void SetupFixture ()
 		{
 			if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
-				port = "810";
+				port = 810;
 			} else {
-				port = "8810";
+				port = 8810;
 			}
 
 			TestHost = "localhost:" + port;
@@ -297,6 +321,25 @@ namespace MonoTests.System.Net.Http
 		}
 
 		[Test]
+		public void Proxy_Disabled ()
+		{
+			var pp = WebRequest.DefaultWebProxy;
+
+			try {
+				WebRequest.DefaultWebProxy = new ThrowOnlyProxy ();
+
+				var request = new HttpClientHandler {
+					UseProxy = false
+				};
+
+				var client = new HttpClient (request);
+				Assert.IsTrue (client.GetAsync ("http://google.com").Wait (5000), "needs internet access");
+			} finally {
+				WebRequest.DefaultWebProxy = pp;
+			}
+		}
+
+		[Test]
 		public void Send ()
 		{
 			var mh = new HttpMessageHandlerMock ();
@@ -313,6 +356,24 @@ namespace MonoTests.System.Net.Http
 			};
 
 			Assert.AreEqual (response, client.SendAsync (request).Result, "#1");
+		}
+
+		[Test]
+		public void Send_BaseAddress ()
+		{
+			var mh = new HttpMessageHandlerMock ();
+
+			var client = new HttpClient (mh);
+			client.BaseAddress = new Uri ("http://localhost/");
+			var response = new HttpResponseMessage ();
+
+			mh.OnSend = l => {
+				Assert.AreEqual ("http://localhost/relative", l.RequestUri.ToString (), "#2");
+				return Task.FromResult (response);
+			};
+
+			Assert.AreEqual (response, client.GetAsync ("relative").Result, "#1");
+			Assert.AreEqual (response, client.GetAsync ("/relative").Result, "#2");
 		}
 
 		[Test]
@@ -550,6 +611,130 @@ namespace MonoTests.System.Net.Http
 				
 				Assert.AreEqual (false, failed, "#112");
 			} finally {
+				listener.Close ();
+			}
+		}
+
+		[Test]
+		public void Send_Complete_CustomHeaders_SpecialSeparators ()
+		{
+			bool? failed = null;
+
+			var listener = CreateListener (l => {
+				var request = l.Request;
+
+				try {
+					Assert.AreEqual ("MLK Android Phone 1.1.9", request.UserAgent, "#1");
+					failed = false;
+				} catch {
+					failed = true;
+				}
+			});
+
+			try {
+				var client = new HttpClient ();
+
+				client.DefaultRequestHeaders.Add("User-Agent", "MLK Android Phone 1.1.9");
+
+				var request = new HttpRequestMessage (HttpMethod.Get, LocalServer);
+
+				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
+
+				Assert.AreEqual ("", response.Content.ReadAsStringAsync ().Result, "#100");
+				Assert.AreEqual (HttpStatusCode.OK, response.StatusCode, "#101");
+				Assert.AreEqual (false, failed, "#102");
+			} finally {
+				listener.Abort ();
+				listener.Close ();
+			}
+		}
+
+		[Test]
+		public void Send_Complete_CustomHeaders_Host ()
+		{
+			bool? failed = null;
+			var listener = CreateListener (l => {
+				var request = l.Request;
+
+				try {
+					Assert.AreEqual ("customhost", request.Headers["Host"], "#1");
+					failed = false;
+				} catch {
+					failed = true;
+				}
+			});
+
+			try {
+				var client = new HttpClient ();
+
+				client.DefaultRequestHeaders.Add("Host", "customhost");
+
+				var request = new HttpRequestMessage (HttpMethod.Get, LocalServer);
+
+				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
+
+				Assert.AreEqual ("", response.Content.ReadAsStringAsync ().Result, "#100");
+				Assert.AreEqual (HttpStatusCode.OK, response.StatusCode, "#101");
+				Assert.AreEqual (false, failed, "#102");
+			} finally {
+				listener.Abort ();
+				listener.Close ();
+			}
+		}
+
+		[Test]
+		public void Send_Transfer_Encoding_Chunked ()
+		{
+			bool? failed = null;
+
+			var listener = CreateListener (l => {
+				var request = l.Request;
+
+				try {
+					Assert.AreEqual (1, request.Headers.Count, "#1");
+					failed = false;
+				} catch {
+					failed = true;
+				}
+			});
+
+			try {
+				var client = new HttpClient ();
+				client.DefaultRequestHeaders.TransferEncodingChunked = true;
+
+				client.GetAsync (LocalServer).Wait ();
+
+				Assert.AreEqual (false, failed, "#102");
+			} finally {
+				listener.Abort ();
+				listener.Close ();
+			}
+		}
+
+		[Test]
+		public void Send_Transfer_Encoding_Custom ()
+		{
+			bool? failed = null;
+
+			var listener = CreateListener (l => {
+				failed = true;
+			});
+
+			try {
+				var client = new HttpClient ();
+				client.DefaultRequestHeaders.TransferEncoding.Add (new TransferCodingHeaderValue ("chunked2"));
+
+				var request = new HttpRequestMessage (HttpMethod.Get, LocalServer);
+
+				try {
+					client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Wait ();
+					Assert.Fail ("#1");
+				} catch (AggregateException e) {
+					Assert.AreEqual (typeof (ProtocolViolationException), e.InnerException.GetType (), "#2");
+				}
+				Assert.IsNull (failed, "#102");
+			} finally {
+				listener.Abort ();
 				listener.Close ();
 			}
 		}
@@ -851,24 +1036,33 @@ namespace MonoTests.System.Net.Http
 		}
 
 		[Test]
-		public void GetString_RelativeUri ()
-		{
-			var client = new HttpClient ();
-			client.BaseAddress = new Uri ("http://en.wikipedia.org/wiki/");
-			var uri = new Uri ("Computer", UriKind.Relative);
-
-			Assert.That (client.GetStringAsync (uri).Result != null);
-			Assert.That (client.GetStringAsync ("Computer").Result != null);
-		}
-
-		[Test]
 		[Category ("MobileNotWorking")] // Missing encoding
 		public void GetString_Many ()
 		{
-			var client = new HttpClient ();
-			var t1 = client.GetStringAsync ("http://www.google.com");
-			var t2 = client.GetStringAsync ("http://www.google.com");
-			Assert.IsTrue (Task.WaitAll (new [] { t1, t2 }, WaitTimeout));		
+			Action<HttpListenerContext> context = (HttpListenerContext l) => {
+				var response = l.Response;
+				response.StatusCode = 200;
+				response.OutputStream.WriteByte (0x68);
+				response.OutputStream.WriteByte (0x65);
+				response.OutputStream.WriteByte (0x6c);
+				response.OutputStream.WriteByte (0x6c);
+				response.OutputStream.WriteByte (0x6f);
+			};
+
+			var listener = CreateListener (context); // creates a default request handler
+			AddListenerContext (listener, context);  // add another request handler for the second request
+
+			try {
+				var client = new HttpClient ();
+				var t1 = client.GetStringAsync (LocalServer);
+				var t2 = client.GetStringAsync (LocalServer);
+				Assert.IsTrue (Task.WaitAll (new [] { t1, t2 }, WaitTimeout));
+				Assert.AreEqual ("hello", t1.Result, "#1");
+				Assert.AreEqual ("hello", t2.Result, "#2");
+			} finally {
+				listener.Abort ();
+				listener.Close ();
+			}
 		}
 
 		[Test]
@@ -929,8 +1123,19 @@ namespace MonoTests.System.Net.Http
 				var response = l.Response;
 
 				response.StatusCode = (int)HttpStatusCode.Moved;
-				response.RedirectLocation = "http://xamarin.com/";
+				response.RedirectLocation = "http://localhost:8811/";
 			});
+
+			var listener2 = CreateListener (l => {
+				var response = l.Response;
+
+				response.StatusCode = (int)HttpStatusCode.OK;
+				response.OutputStream.WriteByte (0x68);
+				response.OutputStream.WriteByte (0x65);
+				response.OutputStream.WriteByte (0x6c);
+				response.OutputStream.WriteByte (0x6c);
+				response.OutputStream.WriteByte (0x6f);
+			}, 8811);
 
 			try {
 				var chandler = new HttpClientHandler ();
@@ -940,10 +1145,13 @@ namespace MonoTests.System.Net.Http
 				var r = client.GetAsync (LocalServer);
 				Assert.IsTrue (r.Wait (WaitTimeout), "#1");
 				var resp = r.Result;
-				Assert.AreEqual ("http://xamarin.com/", resp.RequestMessage.RequestUri.AbsoluteUri, "#2");
+				Assert.AreEqual ("http://localhost:8811/", resp.RequestMessage.RequestUri.AbsoluteUri, "#2");
+				Assert.AreEqual ("hello", resp.Content.ReadAsStringAsync ().Result, "#3");
 			} finally {
 				listener.Abort ();
 				listener.Close ();
+				listener2.Abort ();
+				listener2.Close ();
 			}
 		}
 
@@ -1001,9 +1209,21 @@ namespace MonoTests.System.Net.Http
 
 		HttpListener CreateListener (Action<HttpListenerContext> contextAssert)
 		{
+			return CreateListener (contextAssert, port);
+		}
+
+		HttpListener CreateListener (Action<HttpListenerContext> contextAssert, int port)
+		{
 			var l = new HttpListener ();
 			l.Prefixes.Add (string.Format ("http://+:{0}/", port));
 			l.Start ();
+			AddListenerContext(l, contextAssert);
+
+			return l;
+		}
+
+		HttpListener AddListenerContext (HttpListener l, Action<HttpListenerContext> contextAssert)
+		{
 			l.BeginGetContext (ar => {
 				var ctx = l.EndGetContext (ar);
 

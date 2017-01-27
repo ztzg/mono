@@ -61,7 +61,16 @@ The advantage of this change is that it could have a _membase version and promot
 without a OP_LDADDR.
 */
 
-#ifdef MONO_ARCH_SIMD_INTRINSICS
+#if defined (MONO_ARCH_SIMD_INTRINSICS)
+
+#if defined (DISABLE_JIT)
+
+void
+mono_simd_intrinsics_init (void)
+{
+}
+
+#else
 
 //#define IS_DEBUG_ON(cfg) (0)
 
@@ -677,7 +686,7 @@ mono_simd_simplify_indirection (MonoCompile *cfg)
 	}
 
 	DEBUG (printf ("[simd-simplify] max vreg is %d\n", max_vreg));
-	vreg_flags = g_malloc0 (max_vreg + 1);
+	vreg_flags = (char *)g_malloc0 (max_vreg + 1);
 	target_bb = g_new0 (MonoBasicBlock*, max_vreg + 1);
 
 	for (i = 0; i < cfg->num_varinfo; i++) {
@@ -1473,7 +1482,7 @@ simd_version_name (guint32 version)
 static MonoInst*
 emit_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args, const SimdIntrinsc *intrinsics, guint32 size)
 {
-	const SimdIntrinsc * result = mono_binary_search (cmethod->name, intrinsics, size, sizeof (SimdIntrinsc), &simd_intrinsic_compare_by_name);
+	const SimdIntrinsc *result = (const SimdIntrinsc *)mono_binary_search (cmethod->name, intrinsics, size, sizeof (SimdIntrinsc), &simd_intrinsic_compare_by_name);
 	if (!result) {
 		DEBUG (printf ("function doesn't have a simd intrinsic %s::%s/%d\n", cmethod->klass->name, cmethod->name, fsig->param_count));
 		return NULL;
@@ -1673,4 +1682,5 @@ mono_emit_simd_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 	return NULL;
 }
 
-#endif
+#endif /* DISABLE_JIT */
+#endif /* MONO_ARCH_SIMD_INTRINSICS */

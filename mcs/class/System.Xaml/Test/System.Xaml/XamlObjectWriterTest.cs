@@ -709,11 +709,7 @@ namespace MonoTests.System.Xaml
 		[Test]
 		public void OnSetValueAndHandledFalse () // part of bug #3003
 		{
-#if NET_4_5
-			string ver = "net_4_5";
-#else
-			string ver = "net_4_0";
-#endif
+			const string ver = "net_4_x";
 
 			/*
 			var obj = new TestClass3 ();
@@ -723,7 +719,7 @@ namespace MonoTests.System.Xaml
 			XamlServices.Transform (new XamlObjectReader (obj), xxw);
 			Console.Error.WriteLine (sw);
 			*/
-			var xml = "<TestClass3 xmlns='clr-namespace:MonoTests.System.Xaml;assembly=System.Xaml_test_net_4_0' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'><TestClass3.Nested><TestClass3 Nested='{x:Null}' /></TestClass3.Nested></TestClass3>".Replace ("net_4_0", ver);
+			var xml = "<TestClass3 xmlns='clr-namespace:MonoTests.System.Xaml;assembly=System.Xaml_test_net_4_0' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'><TestClass3.Nested><TestClass3 Nested='{x:Null}' /></TestClass3.Nested></TestClass3>".Replace ("System.Xaml_test_net_4_0", ver + "_System.Xaml_test");
 			var settings = new XamlObjectWriterSettings ();
 			bool invoked = false;
 			settings.XamlSetValueHandler = (sender, e) => {
@@ -838,12 +834,8 @@ namespace MonoTests.System.Xaml
 
 		XamlReader GetReader (string filename)
 		{
-#if NET_4_5
-			string ver = "net_4_5";
-#else
-			string ver = "net_4_0";
-#endif
-			string xml = File.ReadAllText (Path.Combine ("Test/XmlFiles", filename)).Replace ("net_4_0", ver);
+			const string ver = "net_4_x";
+			string xml = File.ReadAllText (Path.Combine ("Test/XmlFiles", filename)).Replace ("System.Xaml_test_net_4_0", ver + "_System.Xaml_test");
 			return new XamlXmlReader (XmlReader.Create (new StringReader (xml)));
 		}
 

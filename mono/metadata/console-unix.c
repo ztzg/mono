@@ -5,6 +5,7 @@
  *	Gonzalo Paniagua Javier (gonzalo@ximian.com)
  *
  * Copyright (C) 2005-2009 Novell, Inc. (http://www.novell.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #if defined(__native_client__)
 #include "console-null.c"
@@ -31,9 +32,9 @@
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/domain-internals.h>
-#include <mono/metadata/gc-internal.h>
+#include <mono/metadata/gc-internals.h>
 #include <mono/metadata/metadata.h>
-#include <mono/metadata/threadpool.h>
+#include <mono/metadata/threadpool-ms.h>
 #include <mono/utils/mono-signal-handler.h>
 #include <mono/utils/mono-proclib.h>
 
@@ -200,7 +201,7 @@ terminal_get_dimensions (void)
 static void
 tty_teardown (void)
 {
-	int unused;
+	int unused G_GNUC_UNUSED;
 
 	if (!setup_finished)
 		return;
@@ -221,19 +222,18 @@ static void
 do_console_cancel_event (void)
 {
 	static MonoClassField *cancel_handler_field;
+	MonoError error;
 	MonoDomain *domain = mono_domain_get ();
 	MonoClass *klass;
 	MonoDelegate *load_value;
 	MonoMethod *method;
-	MonoMethodMessage *msg;
-	MonoMethod *im;
 	MonoVTable *vtable;
 
 	/* FIXME: this should likely iterate all the domains, instead */
 	if (!domain->domain)
 		return;
 
-	klass = mono_class_from_name (mono_defaults.corlib, "System", "Console");
+	klass = mono_class_try_load_from_name (mono_defaults.corlib, "System", "Console");
 	if (klass == NULL)
 		return;
 
@@ -242,19 +242,26 @@ do_console_cancel_event (void)
 		g_assert (cancel_handler_field);
 	}
 
-	vtable = mono_class_vtable_full (domain, klass, FALSE);
-	if (vtable == NULL)
+	vtable = mono_class_vtable_full (domain, klass, &error);
+	if (vtable == NULL || !is_ok (&error)) {
+		mono_error_cleanup (&error);
 		return;
-	mono_field_static_get_value (vtable, cancel_handler_field, &load_value);
-	if (load_value == NULL)
+	}
+	mono_field_static_get_value_checked (vtable, cancel_handler_field, &load_value, &error);
+	if (load_value == NULL || !is_ok (&error)) {
+		mono_error_cleanup (&error);
 		return;
+	}
 
 	klass = load_value->object.vtable->klass;
 	method = mono_class_get_method_from_name (klass, "BeginInvoke", -1);
 	g_assert (method != NULL);
-	im = mono_get_delegate_invoke (method->klass);
-	msg = mono_method_call_message_new (method, NULL, im, NULL, NULL);
-	mono_thread_pool_add ((MonoObject *) load_value, msg, NULL, NULL);
+
+	mono_threadpool_ms_begin_invoke (domain, (MonoObject*) load_value, method, NULL, &error);
+	if (!is_ok (&error)) {
+		g_warning ("Couldn't invoke System.Console cancel handler due to %s", mono_error_get_message (&error));
+		mono_error_cleanup (&error);
+	}
 }
 
 static int need_cancel = FALSE;
@@ -289,7 +296,7 @@ static struct sigaction save_sigcont, save_sigint, save_sigwinch;
 
 MONO_SIG_HANDLER_FUNC (static, sigcont_handler)
 {
-	int unused;
+	int unused G_GNUC_UNUSED;
 	// Ignore error, there is not much we can do in the sigcont handler.
 	tcsetattr (STDIN_FILENO, TCSANOW, &mono_attr);
 
@@ -339,6 +346,7 @@ MONO_SIG_HANDLER_FUNC (static, sigwinch_handler)
 static void
 console_set_signal_handlers ()
 {
+#if defined(HAVE_SIGACTION)
 	struct sigaction sigcont, sigint, sigwinch;
 
 	memset (&sigcont, 0, sizeof (struct sigaction));
@@ -346,22 +354,23 @@ console_set_signal_handlers ()
 	memset (&sigwinch, 0, sizeof (struct sigaction));
 	
 	// Continuing
-	sigcont.sa_handler = (void *) sigcont_handler;
-	sigcont.sa_flags = 0;
+	sigcont.sa_handler = (void (*)(int)) sigcont_handler;
+	sigcont.sa_flags = SA_RESTART;
 	sigemptyset (&sigcont.sa_mask);
 	sigaction (SIGCONT, &sigcont, &save_sigcont);
 	
 	// Interrupt handler
-	sigint.sa_handler = (void *) sigint_handler;
-	sigint.sa_flags = 0;
+	sigint.sa_handler = (void (*)(int)) sigint_handler;
+	sigint.sa_flags = SA_RESTART;
 	sigemptyset (&sigint.sa_mask);
 	sigaction (SIGINT, &sigint, &save_sigint);
 
 	// Window size changed
-	sigwinch.sa_handler = (void *) sigwinch_handler;
-	sigwinch.sa_flags = 0;
+	sigwinch.sa_handler = (void (*)(int)) sigwinch_handler;
+	sigwinch.sa_flags = SA_RESTART;
 	sigemptyset (&sigwinch.sa_mask);
 	sigaction (SIGWINCH, &sigwinch, &save_sigwinch);
+#endif
 }
 
 #if currently_unuused
@@ -438,6 +447,8 @@ set_control_chars (MonoArray *control_chars, const guchar *cc)
 MonoBoolean
 ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardown, MonoArray **control_chars, int **size)
 {
+	MonoError error;
+
 	int dims;
 
 	dims = terminal_get_dimensions ();
@@ -463,7 +474,10 @@ ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardow
 
 	/* 17 is the number of entries set in set_control_chars() above.
 	 * NCCS is the total size, but, by now, we only care about those 17 values*/
-	mono_gc_wbarrier_generic_store (control_chars, (MonoObject*) mono_array_new (mono_domain_get (), mono_defaults.byte_class, 17));
+	MonoArray *control_chars_arr = mono_array_new_checked (mono_domain_get (), mono_defaults.byte_class, 17, &error);
+	if (mono_error_set_pending_exception (&error))
+		return FALSE;
+	mono_gc_wbarrier_generic_store (control_chars, (MonoObject*) control_chars_arr);
 	if (tcgetattr (STDIN_FILENO, &initial_attr) == -1)
 		return FALSE;
 
@@ -484,13 +498,21 @@ ves_icall_System_ConsoleDriver_TtySetup (MonoString *keypad, MonoString *teardow
 	if (setup_finished)
 		return TRUE;
 
-	keypad_xmit_str = keypad != NULL ? mono_string_to_utf8 (keypad) : NULL;
+	keypad_xmit_str = NULL;
+	if (keypad != NULL) {
+		keypad_xmit_str = mono_string_to_utf8_checked (keypad, &error);
+		if (mono_error_set_pending_exception (&error))
+			return FALSE;
+	}
 	
 	console_set_signal_handlers ();
 	setup_finished = TRUE;
 	if (!atexit_called) {
-		if (teardown != NULL)
-			teardown_str = mono_string_to_utf8 (teardown);
+		if (teardown != NULL) {
+			teardown_str = mono_string_to_utf8_checked (teardown, &error);
+			if (mono_error_set_pending_exception (&error))
+				return FALSE;
+		}
 
 		mono_atexit (tty_teardown);
 	}

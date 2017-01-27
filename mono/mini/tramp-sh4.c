@@ -161,11 +161,7 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
  * 	// Remove the method's address from the previous frame.
  * 	%SP = %SP + 1;
  * 
- * #if trampoline_type != MONO_TRAMPOLINE_CLASS_INIT
  * 	goto compiled_methode;
- * #else
- * 	return;
- * #endif
  * }
  */
 guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type, MonoTrampInfo **info, gboolean aot)
@@ -354,13 +350,9 @@ guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type,
 	 *	:              : Current frame.
 	 */
 
-	if (trampoline_type != MONO_TRAMPOLINE_CLASS_INIT)
-		/* pseudo-code: goto compiled_methode; */
-		/* Rtemp is the result from the call to trampoline(). */
-		sh4_jmp_indRx(&buffer, sh4_r0);
-	else
-		/* pseudo-code: return; */
-		sh4_rts(&buffer);
+	/* pseudo-code: goto compiled_methode; */
+	/* Rtemp is the result from the call to trampoline(). */
+	sh4_jmp_indRx(&buffer, sh4_r0);
 	sh4_nop(&buffer);
 
 	/* Align the constant pool. */

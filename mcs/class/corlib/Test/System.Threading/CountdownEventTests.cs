@@ -26,7 +26,6 @@
 //
 //
 
-#if NET_4_0
 
 using System;
 using System.Threading;
@@ -305,7 +304,7 @@ namespace MonoTests.System.Threading
 						});
 					}
 
-					Assert.IsTrue (ce.Wait (1000), "#1");
+					Assert.IsTrue (ce.Wait (10000), "#1");
 				}
 			}
 		}
@@ -396,4 +395,3 @@ namespace MonoTests.System.Threading
 		}
 	}
 }
-#endif

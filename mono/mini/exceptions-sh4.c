@@ -39,11 +39,11 @@
  * the 'lmf' if necessary.
  */
 gboolean
-mono_arch_find_jit_info (MonoDomain *domain, MonoJitTlsData *jit_tls,
-			 MonoJitInfo *ji, MonoContext *context,
-			 MonoContext *new_context, MonoLMF **lmf,
-			 mgreg_t **save_locations,
-			 StackFrameInfo *frame_info)
+mono_arch_unwind_frame (MonoDomain *domain, MonoJitTlsData *jit_tls,
+			MonoJitInfo *ji, MonoContext *context,
+			MonoContext *new_context, MonoLMF **lmf,
+			mgreg_t **save_locations,
+			StackFrameInfo *frame_info)
 {
 	memset (frame_info, 0, sizeof (StackFrameInfo));
 	frame_info->ji = ji;
@@ -455,6 +455,7 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 {
 	static void (* restore_context)(MonoContext *) = NULL;
 	MonoContext context;
+	MonoError error;
 
 	SH4_EXTRA_DEBUG("args => %p, %d, %p, %d", exception, pc, registers, rethrow);
 
@@ -467,11 +468,14 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 	memcpy(&(context.fregisters), registers + sizeof(context.registers), sizeof(context.fregisters));
 	context.pc = pc;
 
-	if (rethrow != 0) {
-		MonoObject *object = mono_object_isinst(exception, mono_defaults.exception_class);
-		if (object != NULL)
-			((MonoException*)exception)->stack_trace = NULL;
+	if (mono_object_isinst_checked (exception, mono_defaults.exception_class, &error)) {
+		MonoException *mono_ex = (MonoException*)exception;
+		if (!rethrow) {
+			mono_ex->stack_trace = NULL;
+			mono_ex->trace_ips = NULL;
+		}
 	}
+	mono_error_assert_ok (&error);
 
 	mono_handle_exception(&context, exception);
 	restore_context(&context);

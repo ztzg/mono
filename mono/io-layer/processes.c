@@ -6,6 +6,7 @@
  *
  * (C) 2002-2011 Novell, Inc.
  * Copyright 2011 Xamarin Inc
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -54,11 +55,26 @@
 #endif
 #endif
 
-#if defined(PLATFORM_MACOSX) || defined(__OpenBSD__)
+#if defined(PLATFORM_MACOSX)
+#define USE_OSX_LOADER
+#endif
+
+#if ( defined(__OpenBSD__) || defined(__FreeBSD__) ) && defined(HAVE_LINK_H)
+#define USE_BSD_LOADER
+#endif
+
+#if defined(__HAIKU__)
+#define USE_HAIKU_LOADER
+#endif
+
+#if defined(USE_OSX_LOADER) || defined(USE_BSD_LOADER)
 #include <sys/proc.h>
 #include <sys/sysctl.h>
 #  if !defined(__OpenBSD__)
 #    include <sys/utsname.h>
+#  endif
+#  if defined(__FreeBSD__)
+#    include <sys/user.h>  /* struct kinfo_proc */
 #  endif
 #endif
 
@@ -80,41 +96,42 @@
 #include <mono/io-layer/wapi.h>
 #include <mono/io-layer/wapi-private.h>
 #include <mono/io-layer/handles-private.h>
-#include <mono/io-layer/misc-private.h>
 #include <mono/io-layer/process-private.h>
 #include <mono/io-layer/threads.h>
+#include <mono/io-layer/io-trace.h>
 #include <mono/utils/strenc.h>
 #include <mono/utils/mono-path.h>
 #include <mono/io-layer/timefuncs-private.h>
 #include <mono/utils/mono-time.h>
 #include <mono/utils/mono-membar.h>
-#include <mono/utils/mono-mutex.h>
+#include <mono/utils/mono-os-mutex.h>
 #include <mono/utils/mono-signal-handler.h>
+#include <mono/utils/mono-proclib.h>
+#include <mono/utils/mono-once.h>
+#include <mono/utils/mono-logger-internals.h>
 
 /* The process' environment strings */
-#if defined(__APPLE__) && !defined (__arm__)
+#if defined(__APPLE__)
+#if defined (TARGET_OSX)
 /* Apple defines this in crt_externs.h but doesn't provide that header for 
  * arm-apple-darwin9.  We'll manually define the symbol on Apple as it does
  * in fact exist on all implementations (so far) 
  */
-char ***_NSGetEnviron(void);
+gchar ***_NSGetEnviron(void);
 #define environ (*_NSGetEnviron())
 #else
-extern char **environ;
-#endif
-
-#if 0
-#define DEBUG(...) g_message(__VA_ARGS__)
-#define DEBUG_ENABLED 1
+static char *mono_environ[1] = { NULL };
+#define environ mono_environ
+#endif /* defined (TARGET_OSX) */
 #else
-#define DEBUG(...)
+extern char **environ;
 #endif
 
 static guint32 process_wait (gpointer handle, guint32 timeout, gboolean alertable);
 static void process_close (gpointer handle, gpointer data);
 static gboolean is_pid_valid (pid_t pid);
 
-#if !defined(__OpenBSD__)
+#if !(defined(USE_OSX_LOADER) || defined(USE_BSD_LOADER) || defined(USE_HAIKU_LOADER))
 static FILE *
 open_process_map (int pid, const char *mode);
 #endif
@@ -148,7 +165,6 @@ static void process_add_sigchld_handler (void);
  * signal handler)
  */
 static struct MonoProcess *mono_processes = NULL;
-static volatile gint32 mono_processes_read_lock = 0;
 static volatile gint32 mono_processes_cleaning_up = 0;
 static mono_mutex_t mono_processes_mutex;
 static void mono_processes_cleanup (void);
@@ -175,7 +191,9 @@ is_pid_valid (pid_t pid)
 {
 	gboolean result = FALSE;
 
-#if defined(PLATFORM_MACOSX) || defined(__OpenBSD__)
+#if defined(HOST_WATCHOS)
+	result = TRUE; // TODO: Rewrite using sysctl
+#elif defined(PLATFORM_MACOSX) || defined(__OpenBSD__) || defined(__FreeBSD__)
 	if (((kill(pid, 0) == 0) || (errno == EPERM)) && pid != 0)
 		result = TRUE;
 #elif defined(__HAIKU__)
@@ -501,10 +519,12 @@ CreateProcessWithLogonW (const gunichar2 *username,
 }
 
 static gboolean
-is_readable (const char *prog)
+is_readable_or_executable (const char *prog)
 {
 	struct stat buf;
-	if (access (prog, R_OK) != 0)
+	int a = access (prog, R_OK);
+	int b = access (prog, X_OK);
+	if (a != 0 && b != 0)
 		return FALSE;
 	if (stat (prog, &buf))
 		return FALSE;
@@ -547,15 +567,16 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			WapiStartupInfo *startup,
 			WapiProcessInformation *process_info)
 {
+#if defined (HAVE_FORK) && defined (HAVE_EXECVE)
 	char *cmd = NULL, *prog = NULL, *full_prog = NULL, *args = NULL, *args_after_prog = NULL;
 	char *dir = NULL, **env_strings = NULL, **argv = NULL;
 	guint32 i, env_count = 0;
 	gboolean ret = FALSE;
-	gpointer handle;
+	gpointer handle = NULL;
 	WapiHandle_process process_handle = {0}, *process_handle_data;
 	GError *gerr = NULL;
 	int in_fd, out_fd, err_fd;
-	pid_t pid;
+	pid_t pid = 0;
 	int thr_ret;
 	int startup_pipe [2] = {-1, -1};
 	int dummy;
@@ -593,7 +614,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 	if (appname != NULL) {
 		cmd = mono_unicode_to_external (appname);
 		if (cmd == NULL) {
-			DEBUG ("%s: unicode conversion returned NULL",
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: unicode conversion returned NULL",
 				   __func__);
 
 			SetLastError (ERROR_PATH_NOT_FOUND);
@@ -606,7 +627,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 	if (cmdline != NULL) {
 		args = mono_unicode_to_external (cmdline);
 		if (args == NULL) {
-			DEBUG ("%s: unicode conversion returned NULL", __func__);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: unicode conversion returned NULL", __func__);
 
 			SetLastError (ERROR_PATH_NOT_FOUND);
 			goto free_strings;
@@ -616,7 +637,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 	if (cwd != NULL) {
 		dir = mono_unicode_to_external (cwd);
 		if (dir == NULL) {
-			DEBUG ("%s: unicode conversion returned NULL", __func__);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: unicode conversion returned NULL", __func__);
 
 			SetLastError (ERROR_PATH_NOT_FOUND);
 			goto free_strings;
@@ -645,8 +666,8 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			prog = g_strdup (unquoted);
 
 			/* Executable existing ? */
-			if (!is_readable (prog)) {
-				DEBUG ("%s: Couldn't find executable %s",
+			if (!is_readable_or_executable (prog)) {
+				MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Couldn't find executable %s",
 					   __func__, prog);
 				g_free (unquoted);
 				SetLastError (ERROR_FILE_NOT_FOUND);
@@ -662,8 +683,8 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			g_free (curdir);
 
 			/* And make sure it's readable */
-			if (!is_readable (prog)) {
-				DEBUG ("%s: Couldn't find executable %s",
+			if (!is_readable_or_executable (prog)) {
+				MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Couldn't find executable %s",
 					   __func__, prog);
 				g_free (unquoted);
 				SetLastError (ERROR_FILE_NOT_FOUND);
@@ -728,7 +749,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 		
 		if (token == NULL) {
 			/* Give up */
-			DEBUG ("%s: Couldn't find what to exec", __func__);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Couldn't find what to exec", __func__);
 
 			SetLastError (ERROR_PATH_NOT_FOUND);
 			goto free_strings;
@@ -753,8 +774,8 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			prog = g_strdup (token);
 			
 			/* Executable existing ? */
-			if (!is_readable (prog)) {
-				DEBUG ("%s: Couldn't find executable %s",
+			if (!is_readable_or_executable (prog)) {
+				MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Couldn't find executable %s",
 					   __func__, token);
 				g_free (token);
 				SetLastError (ERROR_FILE_NOT_FOUND);
@@ -777,11 +798,11 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			 *
 			 * X_OK is too strict *if* the target is a CLR binary
 			 */
-			if (!is_readable (prog)) {
+			if (!is_readable_or_executable (prog)) {
 				g_free (prog);
 				prog = g_find_program_in_path (token);
 				if (prog == NULL) {
-					DEBUG ("%s: Couldn't find executable %s", __func__, token);
+					MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Couldn't find executable %s", __func__, token);
 
 					g_free (token);
 					SetLastError (ERROR_FILE_NOT_FOUND);
@@ -793,7 +814,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 		g_free (token);
 	}
 
-	DEBUG ("%s: Exec prog [%s] args [%s]", __func__, prog,
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Exec prog [%s] args [%s]", __func__, prog,
 		   args_after_prog);
 	
 	/* Check for CLR binaries; if found, we will try to invoke
@@ -810,11 +831,11 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 
 		if (newapp != NULL) {
 			if (appname != NULL) {
-				newcmd = utf16_concat (newapp, utf16_space,
+				newcmd = utf16_concat (utf16_quote, newapp, utf16_quote, utf16_space,
 						       appname, utf16_space,
 						       cmdline, NULL);
 			} else {
-				newcmd = utf16_concat (newapp, utf16_space,
+				newcmd = utf16_concat (utf16_quote, newapp, utf16_quote, utf16_space,
 						       cmdline, NULL);
 			}
 			
@@ -836,8 +857,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 		}
 	} else {
 		if (!is_executable (prog)) {
-			DEBUG ("%s: Executable permisson not set on %s", __func__, prog);
-			g_free (prog);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Executable permisson not set on %s", __func__, prog);
 			SetLastError (ERROR_ACCESS_DENIED);
 			goto free_strings;
 		}
@@ -948,26 +968,21 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 		/* Could not create the pipe to synchroniz process startup. We'll just not synchronize.
 		 * This is just for a very hard to hit race condition in the first place */
 		startup_pipe [0] = startup_pipe [1] = -1;
-		DEBUG ("%s: new process startup not synchronized. We may not notice if the newly created process exits immediately.", __func__);
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: new process startup not synchronized. We may not notice if the newly created process exits immediately.", __func__);
 	}
 
-	thr_ret = _wapi_handle_lock_shared_handles ();
-	g_assert (thr_ret == 0);
-	
-	pid = fork ();
-	if (pid == -1) {
-		/* Error */
+	switch (pid = fork ()) {
+	case -1: /* Error */ {
 		SetLastError (ERROR_OUTOFMEMORY);
 		ret = FALSE;
 		fork_failed = TRUE;
-		goto cleanup;
-	} else if (pid == 0) {
-		/* Child */
-		
+		break;
+	}
+	case 0: /* Child */ {
 		if (startup_pipe [0] != -1) {
 			/* Wait until the parent has updated it's internal data */
 			ssize_t _i G_GNUC_UNUSED = read (startup_pipe [0], &dummy, 1);
-			DEBUG ("%s: child: parent has completed its setup", __func__);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: child: parent has completed its setup", __func__);
 			close (startup_pipe [0]);
 			close (startup_pipe [1]);
 		}
@@ -988,7 +1003,7 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 			close (i);
 
 #ifdef DEBUG_ENABLED
-		DEBUG ("%s: exec()ing [%s] in dir [%s]", __func__, cmd,
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: exec()ing [%s] in dir [%s]", __func__, cmd,
 			   dir == NULL?".":dir);
 		for (i = 0; argv[i] != NULL; i++)
 			g_message ("arg %d: [%s]", i, argv[i]);
@@ -1008,56 +1023,59 @@ gboolean CreateProcess (const gunichar2 *appname, const gunichar2 *cmdline,
 		
 		/* set error */
 		_exit (-1);
+
+		break;
 	}
-	/* parent */
-	
-	process_handle_data = lookup_process_handle (handle);
-	if (!process_handle_data) {
-		g_warning ("%s: error looking up process handle %p", __func__,
-			   handle);
-		_wapi_handle_unref (handle);
-		goto cleanup;
+	default: /* Parent */ {
+		thr_ret = _wapi_handle_lock_shared_handles ();
+		g_assert (thr_ret == 0);
+
+		process_handle_data = lookup_process_handle (handle);
+		if (!process_handle_data) {
+			g_warning ("%s: error looking up process handle %p", __func__, handle);
+			_wapi_handle_unref (handle);
+		} else {
+			process_handle_data->id = pid;
+
+			/* Add our mono_process into the linked list of mono_processes */
+			mono_process = (struct MonoProcess *) g_malloc0 (sizeof (struct MonoProcess));
+			mono_process->pid = pid;
+			mono_process->handle_count = 1;
+			if (mono_os_sem_init (&mono_process->exit_sem, 0) != 0) {
+				/* If we can't create the exit semaphore, we just don't add anything
+				 * to our list of mono processes. Waiting on the process will return 
+				 * immediately. */
+				g_warning ("%s: could not create exit semaphore for process.", strerror (errno));
+				g_free (mono_process);
+			} else {
+				/* Keep the process handle artificially alive until the process
+				 * exits so that the information in the handle isn't lost. */
+				_wapi_handle_ref (handle);
+				mono_process->handle = handle;
+
+				process_handle_data->mono_process = mono_process;
+
+				mono_os_mutex_lock (&mono_processes_mutex);
+				mono_process->next = mono_processes;
+				mono_processes = mono_process;
+				mono_os_mutex_unlock (&mono_processes_mutex);
+			}
+
+			if (process_info != NULL) {
+				process_info->hProcess = handle;
+				process_info->dwProcessId = pid;
+
+				/* FIXME: we might need to handle the thread info some day */
+				process_info->hThread = INVALID_HANDLE_VALUE;
+				process_info->dwThreadId = 0;
+			}
+		}
+
+		_wapi_handle_unlock_shared_handles ();
+
+		break;
 	}
-	
-	process_handle_data->id = pid;
-
-	/* Add our mono_process into the linked list of mono_processes */
-	mono_process = (struct MonoProcess *) g_malloc0 (sizeof (struct MonoProcess));
-	mono_process->pid = pid;
-	mono_process->handle_count = 1;
-	if (MONO_SEM_INIT (&mono_process->exit_sem, 0) != 0) {
-		/* If we can't create the exit semaphore, we just don't add anything
-		 * to our list of mono processes. Waiting on the process will return 
-		 * immediately. */
-		g_warning ("%s: could not create exit semaphore for process.", strerror (errno));
-		g_free (mono_process);
-	} else {
-		/* Keep the process handle artificially alive until the process
-		 * exits so that the information in the handle isn't lost. */
-		_wapi_handle_ref (handle);
-		mono_process->handle = handle;
-
-		process_handle_data->mono_process = mono_process;
-
-		mono_mutex_lock (&mono_processes_mutex);
-		mono_process->next = mono_processes;
-		mono_processes = mono_process;
-		mono_mutex_unlock (&mono_processes_mutex);
 	}
-	
-	if (process_info != NULL) {
-		process_info->hProcess = handle;
-		process_info->dwProcessId = pid;
-
-		/* FIXME: we might need to handle the thread info some
-		 * day
-		 */
-		process_info->hThread = INVALID_HANDLE_VALUE;
-		process_info->dwThreadId = 0;
-	}
-
-cleanup:
-	_wapi_handle_unlock_shared_handles ();
 
 	if (fork_failed)
 		_wapi_handle_unref (handle);
@@ -1085,13 +1103,16 @@ free_strings:
 	if (argv)
 		g_strfreev (argv);
 	
-	DEBUG ("%s: returning handle %p for pid %d", __func__, handle,
-		   pid);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: returning handle %p for pid %d", __func__, handle, pid);
 
 	/* Check if something needs to be cleaned up. */
 	mono_processes_cleanup ();
 	
 	return ret;
+#else
+	SetLastError (ERROR_NOT_SUPPORTED);
+	return FALSE;
+#endif // defined (HAVE_FORK) && defined (HAVE_EXECVE)
 }
 		
 static void
@@ -1102,7 +1123,7 @@ process_set_name (WapiHandle_process *process_handle)
 	progname = g_get_prgname ();
 	utf8_progname = mono_utf8_from_external (progname);
 
-	DEBUG ("%s: using [%s] as prog name", __func__, progname);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: using [%s] as prog name", __func__, progname);
 
 	if (utf8_progname) {
 		slash = strrchr (utf8_progname, '/');
@@ -1121,8 +1142,7 @@ wapi_processes_init (void)
 	WapiHandle_process process_handle = {0};
 
 	_wapi_handle_register_capabilities (WAPI_HANDLE_PROCESS,
-					    WAPI_HANDLE_CAP_WAIT |
-					    WAPI_HANDLE_CAP_SPECIAL_WAIT);
+		(WapiHandleCapability)(WAPI_HANDLE_CAP_WAIT | WAPI_HANDLE_CAP_SPECIAL_WAIT));
 	
 	process_handle.id = pid;
 
@@ -1132,6 +1152,8 @@ wapi_processes_init (void)
 	current_process = _wapi_handle_new (WAPI_HANDLE_PROCESS,
 					    &process_handle);
 	g_assert (current_process);
+
+	mono_os_mutex_init (&mono_processes_mutex);
 }
 
 gpointer
@@ -1179,7 +1201,7 @@ process_open_compare (gpointer handle, gpointer user_data)
 	process_handle = lookup_process_handle (handle);
 	g_assert (process_handle);
 	
-	DEBUG ("%s: looking at process %d", __func__, process_handle->id);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: looking at process %d", __func__, process_handle->id);
 
 	checking_pid = process_handle->id;
 
@@ -1221,7 +1243,7 @@ OpenProcess (guint32 req_access G_GNUC_UNUSED, gboolean inherit G_GNUC_UNUSED, g
 	/* Find the process handle that corresponds to pid */
 	gpointer handle = NULL;
 	
-	DEBUG ("%s: looking for process %d", __func__, pid);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: looking for process %d", __func__, pid);
 
 	handle = _wapi_search_handle (WAPI_HANDLE_PROCESS,
 				      process_open_compare,
@@ -1233,7 +1255,7 @@ OpenProcess (guint32 req_access G_GNUC_UNUSED, gboolean inherit G_GNUC_UNUSED, g
 			 */
 			return WAPI_PID_TO_HANDLE (pid);
 		} else {
-			DEBUG ("%s: Can't find pid %d", __func__, pid);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find pid %d", __func__, pid);
 
 			SetLastError (ERROR_PROC_NOT_FOUND);
 	
@@ -1263,13 +1285,14 @@ GetExitCodeProcess (gpointer process, guint32 *code)
 			*code = STILL_ACTIVE;
 			return TRUE;
 		} else {
-			return FALSE;
+			*code = -1;
+			return TRUE;
 		}
 	}
 
 	process_handle = lookup_process_handle (process);
 	if (!process_handle) {
-		DEBUG ("%s: Can't find process %p", __func__, process);
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__, process);
 		
 		return FALSE;
 	}
@@ -1308,14 +1331,22 @@ GetProcessTimes (gpointer process, WapiFileTime *create_time,
 		/* Not sure if w32 allows NULLs here or not */
 		return FALSE;
 	
-	if (WAPI_IS_PSEUDO_PROCESS_HANDLE (process))
-		/* This is a pseudo handle, so just fail for now
-		 */
-		return FALSE;
-	
+	if (WAPI_IS_PSEUDO_PROCESS_HANDLE (process)) {
+		gpointer pid = GINT_TO_POINTER (WAPI_HANDLE_TO_PID(process));
+		gint64 start_ticks, user_ticks, kernel_ticks;
+
+		mono_process_get_times (pid, &start_ticks, &user_ticks, &kernel_ticks);
+
+		_wapi_guint64_to_filetime (start_ticks, create_time);
+		_wapi_guint64_to_filetime (user_ticks, kernel_time);
+		_wapi_guint64_to_filetime (kernel_ticks, user_time);
+
+		return TRUE;
+	}
+
 	process_handle = lookup_process_handle (process);
 	if (!process_handle) {
-		DEBUG ("%s: Can't find process %p", __func__, process);
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__, process);
 		
 		return FALSE;
 	}
@@ -1384,7 +1415,7 @@ static gint find_procmodule (gconstpointer a, gconstpointer b)
 	}
 }
 
-#ifdef PLATFORM_MACOSX
+#if defined(USE_OSX_LOADER)
 #include <mach-o/dyld.h>
 #include <mach-o/getsect.h>
 
@@ -1439,7 +1470,7 @@ static GSList *load_modules (void)
 	
 	return(ret);
 }
-#elif defined(__OpenBSD__)
+#elif defined(USE_BSD_LOADER)
 #include <link.h>
 static int load_modules_callback (struct dl_phdr_info *info, size_t size, void *ptr)
 {
@@ -1480,7 +1511,7 @@ static GSList *load_modules (void)
 		mod->inode = i;
 		mod->filename = g_strdup (info->dlpi_name); 
 
-		DEBUG ("%s: inode=%d, filename=%s, address_start=%p, address_end=%p", __func__,
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: inode=%d, filename=%s, address_start=%p, address_end=%p", __func__,
 				   mod->inode, mod->filename, mod->address_start, mod->address_end);
 
 		free(info);
@@ -1498,7 +1529,7 @@ static GSList *load_modules (void)
 
 	return(ret);
 }
-#elif defined(__HAIKU__)
+#elif defined(USE_HAIKU_LOADER)
 
 static GSList *load_modules (void)
 {
@@ -1661,6 +1692,7 @@ static gboolean match_procname_to_modulename (char *procname, char *modulename)
 	if (procname == NULL || modulename == NULL)
 		return (FALSE);
 
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: procname=\"%s\", modulename=\"%s\"", __func__, procname, modulename);
 	pname = mono_path_resolve_symlinks (procname);
 	mname = mono_path_resolve_symlinks (modulename);
 
@@ -1689,10 +1721,11 @@ static gboolean match_procname_to_modulename (char *procname, char *modulename)
 	g_free (pname);
 	g_free (mname);
 
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: result is %d", __func__, result);
 	return result;
 }
 
-#if !defined(__OpenBSD__)
+#if !(defined(USE_OSX_LOADER) || defined(USE_BSD_LOADER) || defined(USE_HAIKU_LOADER))
 static FILE *
 open_process_map (int pid, const char *mode)
 {
@@ -1715,11 +1748,13 @@ open_process_map (int pid, const char *mode)
 }
 #endif
 
+static char *get_process_name_from_proc (pid_t pid);
+
 gboolean EnumProcessModules (gpointer process, gpointer *modules,
 			     guint32 size, guint32 *needed)
 {
 	WapiHandle_process *process_handle;
-#if !defined(__OpenBSD__) && !defined(PLATFORM_MACOSX)
+#if !defined(USE_OSX_LOADER) && !defined(USE_BSD_LOADER)
 	FILE *fp;
 #endif
 	GSList *mods = NULL;
@@ -1743,18 +1778,19 @@ gboolean EnumProcessModules (gpointer process, gpointer *modules,
 
 	if (WAPI_IS_PSEUDO_PROCESS_HANDLE (process)) {
 		pid = WAPI_HANDLE_TO_PID (process);
+		proc_name = get_process_name_from_proc (pid);
 	} else {
 		process_handle = lookup_process_handle (process);
 		if (!process_handle) {
-			DEBUG ("%s: Can't find process %p", __func__, process);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__, process);
 		
 			return FALSE;
 		}
 		pid = process_handle->id;
-		proc_name = process_handle->proc_name;
+		proc_name = g_strdup (process_handle->proc_name);
 	}
 	
-#if defined(PLATFORM_MACOSX) || defined(__OpenBSD__) || defined(__HAIKU__)
+#if defined(USE_OSX_LOADER) || defined(USE_BSD_LOADER) || defined(USE_HAIKU_LOADER)
 	mods = load_modules ();
 	if (!proc_name) {
 		modules[0] = NULL;
@@ -1769,6 +1805,7 @@ gboolean EnumProcessModules (gpointer process, gpointer *modules,
 		 */
 		modules[0] = NULL;
 		*needed = sizeof(gpointer);
+		g_free (proc_name);
 		return TRUE;
 	}
 	mods = load_modules (fp);
@@ -1799,21 +1836,22 @@ gboolean EnumProcessModules (gpointer process, gpointer *modules,
 	}
 		
 	for (i = 0; i < count; i++) {
-		free_procmodule (g_slist_nth_data (mods, i));
+		free_procmodule ((WapiProcModule *)g_slist_nth_data (mods, i));
 	}
 	g_slist_free (mods);
-
+	g_free (proc_name);
+	
 	return TRUE;
 }
 
 static char *
 get_process_name_from_proc (pid_t pid)
 {
-#if defined(__OpenBSD__)
+#if defined(USE_BSD_LOADER)
 	int mib [6];
 	size_t size;
 	struct kinfo_proc *pi;
-#elif defined(PLATFORM_MACOSX)
+#elif defined(USE_OSX_LOADER)
 #if !(!defined (__mono_ppc__) && defined (TARGET_OSX))
 	size_t size;
 	struct kinfo_proc *pi;
@@ -1840,12 +1878,36 @@ get_process_name_from_proc (pid_t pid)
 		fclose (fp);
 	}
 	g_free (filename);
-#elif defined(PLATFORM_MACOSX)
+#elif defined(USE_OSX_LOADER)
 #if !defined (__mono_ppc__) && defined (TARGET_OSX)
 	/* No proc name on OSX < 10.5 nor ppc nor iOS */
 	memset (buf, '\0', sizeof(buf));
 	proc_name (pid, buf, sizeof(buf));
-	if (strlen (buf) > 0)
+
+	// Fixes proc_name triming values to 15 characters #32539
+	if (strlen (buf) >= MAXCOMLEN - 1) {
+		char path_buf [PROC_PIDPATHINFO_MAXSIZE];
+		char *name_buf;
+		int path_len;
+
+		memset (path_buf, '\0', sizeof(path_buf));
+		path_len = proc_pidpath (pid, path_buf, sizeof(path_buf));
+
+		if (path_len > 0 && path_len < sizeof(path_buf)) {
+			name_buf = path_buf + path_len;
+			for(;name_buf > path_buf; name_buf--) {
+				if (name_buf [0] == '/') {
+					name_buf++;
+					break;
+				}
+			}
+
+			if (memcmp (buf, name_buf, MAXCOMLEN - 1) == 0)
+				ret = g_strdup (name_buf);
+		}
+	}
+
+	if (ret == NULL && strlen (buf) > 0)
 		ret = g_strdup (buf);
 #else
 	if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0)
@@ -1857,7 +1919,7 @@ get_process_name_from_proc (pid_t pid)
 	if (sysctl (mib, 4, pi, &size, NULL, 0) < 0) {
 		if (errno == ENOMEM) {
 			free(pi);
-			DEBUG ("%s: Didn't allocate enough memory for kproc info", __func__);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Didn't allocate enough memory for kproc info", __func__);
 		}
 		return(ret);
 	}
@@ -1867,6 +1929,31 @@ get_process_name_from_proc (pid_t pid)
 
 	free(pi);
 #endif
+#elif defined(USE_BSD_LOADER)
+#if defined(__FreeBSD__)
+	mib [0] = CTL_KERN;
+	mib [1] = KERN_PROC;
+	mib [2] = KERN_PROC_PID;
+	mib [3] = pid;
+	if (sysctl(mib, 4, NULL, &size, NULL, 0) < 0) {
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: sysctl() failed: %d", __func__, errno);
+		return(ret);
+	}
+
+	if ((pi = malloc(size)) == NULL)
+		return(ret);
+
+	if (sysctl (mib, 4, pi, &size, NULL, 0) < 0) {
+		if (errno == ENOMEM) {
+			free(pi);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Didn't allocate enough memory for kproc info", __func__);
+		}
+		return(ret);
+	}
+
+	if (strlen (pi->ki_comm) > 0)
+		ret = g_strdup (pi->ki_comm);
+	free(pi);
 #elif defined(__OpenBSD__)
 	mib [0] = CTL_KERN;
 	mib [1] = KERN_PROC;
@@ -1876,8 +1963,10 @@ get_process_name_from_proc (pid_t pid)
 	mib [5] = 0;
 
 retry:
-	if (sysctl(mib, 6, NULL, &size, NULL, 0) < 0)
+	if (sysctl(mib, 6, NULL, &size, NULL, 0) < 0) {
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: sysctl() failed: %d", __func__, errno);
 		return(ret);
+	}
 
 	if ((pi = malloc(size)) == NULL)
 		return(ret);
@@ -1897,7 +1986,8 @@ retry:
 		ret = g_strdup (pi->p_comm);
 
 	free(pi);
-#elif defined(__HAIKU__)
+#endif
+#elif defined(USE_HAIKU_LOADER)
 	image_info imageInfo;
 	int32 cookie = 0;
 
@@ -2001,7 +2091,7 @@ get_module_name (gpointer process, gpointer module,
 	char *procname_ext = NULL;
 	glong len;
 	gsize bytes;
-#if !defined(__OpenBSD__) && !defined(PLATFORM_MACOSX)
+#if !defined(USE_OSX_LOADER) && !defined(USE_BSD_LOADER)
 	FILE *fp;
 #endif
 	GSList *mods = NULL;
@@ -2010,7 +2100,7 @@ get_module_name (gpointer process, gpointer module,
 	int i;
 	char *proc_name = NULL;
 	
-	DEBUG ("%s: Getting module base name, process handle %p module %p",
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Getting module base name, process handle %p module %p",
 		   __func__, process, module);
 
 	size = size * sizeof (gunichar2); /* adjust for unicode characters */
@@ -2025,7 +2115,7 @@ get_module_name (gpointer process, gpointer module,
 	} else {
 		process_handle = lookup_process_handle (process);
 		if (!process_handle) {
-			DEBUG ("%s: Can't find process %p", __func__,
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__,
 				   process);
 			
 			return 0;
@@ -2035,7 +2125,7 @@ get_module_name (gpointer process, gpointer module,
 	}
 
 	/* Look up the address in /proc/<pid>/maps */
-#if defined(PLATFORM_MACOSX) || defined(__OpenBSD__) || defined(__HAIKU__)
+#if defined(USE_OSX_LOADER) || defined(USE_BSD_LOADER) || defined(USE_HAIKU_LOADER)
 	mods = load_modules ();
 #else
 	fp = open_process_map (pid, "r");
@@ -2086,7 +2176,7 @@ get_module_name (gpointer process, gpointer module,
 	g_free (proc_name);
 
 	if (procname_ext) {
-		DEBUG ("%s: Process name is [%s]", __func__,
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Process name is [%s]", __func__,
 			   procname_ext);
 
 		procname = mono_unicode_from_external (procname_ext, &bytes);
@@ -2102,11 +2192,11 @@ get_module_name (gpointer process, gpointer module,
 		bytes += 2;
 		
 		if (size < bytes) {
-			DEBUG ("%s: Size %d smaller than needed (%ld); truncating", __func__, size, bytes);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Size %d smaller than needed (%ld); truncating", __func__, size, bytes);
 
 			memcpy (basename, procname, size);
 		} else {
-			DEBUG ("%s: Size %d larger than needed (%ld)",
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Size %d larger than needed (%ld)",
 				   __func__, size, bytes);
 
 			memcpy (basename, procname, bytes);
@@ -2121,6 +2211,53 @@ get_module_name (gpointer process, gpointer module,
 	return 0;
 }
 
+static guint32
+get_module_filename (gpointer process, gpointer module,
+					 gunichar2 *basename, guint32 size)
+{
+	int pid, len;
+	gsize bytes;
+	char *path;
+	gunichar2 *proc_path;
+	
+	size *= sizeof (gunichar2); /* adjust for unicode characters */
+
+	if (basename == NULL || size == 0)
+		return 0;
+
+	pid = GetProcessId (process);
+
+	path = wapi_process_get_path (pid);
+	if (path == NULL)
+		return 0;
+
+	proc_path = mono_unicode_from_external (path, &bytes);
+	g_free (path);
+
+	if (proc_path == NULL)
+		return 0;
+
+	len = (bytes / 2);
+	
+	/* Add the terminator */
+	bytes += 2;
+
+	if (size < bytes) {
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Size %d smaller than needed (%ld); truncating", __func__, size, bytes);
+
+		memcpy (basename, proc_path, size);
+	} else {
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Size %d larger than needed (%ld)",
+			   __func__, size, bytes);
+
+		memcpy (basename, proc_path, bytes);
+	}
+
+	g_free (proc_path);
+
+	return len;
+}
+
 guint32
 GetModuleBaseName (gpointer process, gpointer module,
 				   gunichar2 *basename, guint32 size)
@@ -2132,7 +2269,7 @@ guint32
 GetModuleFileNameEx (gpointer process, gpointer module,
 					 gunichar2 *filename, guint32 size)
 {
-	return get_module_name (process, module, filename, size, FALSE);
+	return get_module_filename (process, module, filename, size);
 }
 
 gboolean
@@ -2141,7 +2278,7 @@ GetModuleInformation (gpointer process, gpointer module,
 {
 	WapiHandle_process *process_handle;
 	pid_t pid;
-#if !defined(__OpenBSD__) && !defined(PLATFORM_MACOSX)
+#if !defined(USE_OSX_LOADER) && !defined(USE_BSD_LOADER)
 	FILE *fp;
 #endif
 	GSList *mods = NULL;
@@ -2151,7 +2288,7 @@ GetModuleInformation (gpointer process, gpointer module,
 	gboolean ret = FALSE;
 	char *proc_name = NULL;
 	
-	DEBUG ("%s: Getting module info, process handle %p module %p",
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Getting module info, process handle %p module %p",
 		   __func__, process, module);
 
 	if (modinfo == NULL || size < sizeof (WapiModuleInfo))
@@ -2163,7 +2300,7 @@ GetModuleInformation (gpointer process, gpointer module,
 	} else {
 		process_handle = lookup_process_handle (process);
 		if (!process_handle) {
-			DEBUG ("%s: Can't find process %p", __func__,
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__,
 				   process);
 			
 			return FALSE;
@@ -2172,7 +2309,7 @@ GetModuleInformation (gpointer process, gpointer module,
 		proc_name = g_strdup (process_handle->proc_name);
 	}
 
-#if defined(PLATFORM_MACOSX) || defined(__OpenBSD__) || defined(__HAIKU__)
+#if defined(USE_OSX_LOADER) || defined(USE_BSD_LOADER) || defined(USE_HAIKU_LOADER)
 	mods = load_modules ();
 #else
 	/* Look up the address in /proc/<pid>/maps */
@@ -2227,7 +2364,7 @@ GetProcessWorkingSetSize (gpointer process, size_t *min, size_t *max)
 	
 	process_handle = lookup_process_handle (process);
 	if (!process_handle) {
-		DEBUG ("%s: Can't find process %p", __func__, process);
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__, process);
 		
 		return FALSE;
 	}
@@ -2250,7 +2387,7 @@ SetProcessWorkingSetSize (gpointer process, size_t min, size_t max)
 
 	process_handle = lookup_process_handle (process);
 	if (!process_handle) {
-		DEBUG ("%s: Can't find process %p", __func__, process);
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__, process);
 		
 		return FALSE;
 	}
@@ -2265,6 +2402,7 @@ SetProcessWorkingSetSize (gpointer process, size_t min, size_t max)
 gboolean
 TerminateProcess (gpointer process, gint32 exitCode)
 {
+#if defined(HAVE_KILL)
 	WapiHandle_process *process_handle;
 	int signo;
 	int ret;
@@ -2276,7 +2414,7 @@ TerminateProcess (gpointer process, gint32 exitCode)
 	} else {
 		process_handle = lookup_process_handle (process);
 		if (!process_handle) {
-			DEBUG ("%s: Can't find process %p", __func__, process);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s: Can't find process %p", __func__, process);
 			SetLastError (ERROR_INVALID_HANDLE);
 			return FALSE;
 		}
@@ -2302,6 +2440,10 @@ TerminateProcess (gpointer process, gint32 exitCode)
 	}
 	
 	return (ret == 0);
+#else
+	g_error ("kill() is not supported by this platform");
+	return FALSE;
+#endif
 }
 
 guint32
@@ -2433,30 +2575,27 @@ mono_processes_cleanup (void)
 {
 	struct MonoProcess *mp;
 	struct MonoProcess *prev = NULL;
-	struct MonoProcess *candidate = NULL;
+	GSList *finished = NULL;
+	GSList *l;
 	gpointer unref_handle;
-	int spin;
 
-	DEBUG ("%s", __func__);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s", __func__);
 
 	/* Ensure we're not in here in multiple threads at once, nor recursive. */
 	if (InterlockedCompareExchange (&mono_processes_cleaning_up, 1, 0) != 0)
 		return;
 
-	mp = mono_processes;
-	while (mp != NULL) {
-		if (mp->pid == 0 && mp->handle != NULL) {
+	for (mp = mono_processes; mp; mp = mp->next) {
+		if (mp->pid == 0 && mp->handle) {
 			/* This process has exited and we need to remove the artifical ref
 			 * on the handle */
-			mono_mutex_lock (&mono_processes_mutex);
+			mono_os_mutex_lock (&mono_processes_mutex);
 			unref_handle = mp->handle;
 			mp->handle = NULL;
-			mono_mutex_unlock (&mono_processes_mutex);
+			mono_os_mutex_unlock (&mono_processes_mutex);
 			if (unref_handle)
 				_wapi_handle_unref (unref_handle);
-			continue;
 		}
-		mp = mp->next;
 	}
 
 	/*
@@ -2465,64 +2604,46 @@ mono_processes_cleanup (void)
 	 * asynchronously. The handler requires that the mono_processes list
 	 * remain valid.
 	 */
-	mp = mono_processes;
-	spin = 0;
-	while (mp != NULL) {
-		if ((mp->handle_count == 0 && mp->pid == 0) || candidate != NULL) {
-			if (spin > 0) {
-				_wapi_handle_spin (spin);
-				spin <<= 1;
-			}
+	mono_os_mutex_lock (&mono_processes_mutex);
 
-			/* We've found a candidate */
-			mono_mutex_lock (&mono_processes_mutex);
+	mp = mono_processes;
+	while (mp) {
+		if (mp->handle_count == 0 && mp->freeable) {
 			/*
+			 * Unlink the entry.
 			 * This code can run parallel with the sigchld handler, but the
 			 * modifications it makes are safe.
 			 */
-			if (candidate == NULL) {
-				/* unlink it */
-				if (mp == mono_processes) {
-					mono_processes = mp->next;
-				} else {
-					prev->next = mp->next;
-				}
-				candidate = mp;
-			}
+			if (mp == mono_processes)
+				mono_processes = mp->next;
+			else
+				prev->next = mp->next;
+			finished = g_slist_prepend (finished, mp);
 
-			/* It's still safe to traverse the structure.*/
-			mono_memory_barrier ();
-
-			if (mono_processes_read_lock != 0) {
-				/* The sigchld handler is watching us. Spin a bit and try again */
-				if (spin == 0) {
-					spin = 1;
-				} else if (spin >= 8) {
-					/* Just give up for now */
-					mono_mutex_unlock (&mono_processes_mutex);
-					break;
-				}
-			} else {
-				/* We've modified the list of processes, and we know the sigchld handler
-				 * isn't executing, so even if it executes at any moment, it'll see the
-				 * new version of the list. So now we can free the candidate. */
-				DEBUG ("%s: freeing candidate %p", __func__, candidate);
-				mp = candidate->next;
-				MONO_SEM_DESTROY (&candidate->exit_sem);
-				g_free (candidate);
-				candidate = NULL;
-			}
-
-			mono_mutex_unlock (&mono_processes_mutex);
-
-			continue;
+			mp = mp->next;
+		} else {
+			prev = mp;
+			mp = mp->next;
 		}
-		spin = 0;
-		prev = mp;
-		mp = mp->next;
 	}
 
-	DEBUG ("%s done", __func__);
+	mono_memory_barrier ();
+
+	for (l = finished; l; l = l->next) {
+		/*
+		 * All the entries in the finished list are unlinked from mono_processes, and
+		 * they have the 'finished' flag set, which means the sigchld handler is done
+		 * accessing them.
+		 */
+		mp = (MonoProcess *)l->data;
+		mono_os_sem_destroy (&mp->exit_sem);
+		g_free (mp);
+	}
+	g_slist_free (finished);
+
+	mono_os_mutex_unlock (&mono_processes_mutex);
+
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s done", __func__);
 
 	InterlockedDecrement (&mono_processes_cleaning_up);
 }
@@ -2532,7 +2653,7 @@ process_close (gpointer handle, gpointer data)
 {
 	WapiHandle_process *process_handle;
 
-	DEBUG ("%s", __func__);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s", __func__);
 
 	process_handle = (WapiHandle_process *) data;
 	g_free (process_handle->proc_name);
@@ -2549,9 +2670,7 @@ MONO_SIGNAL_HANDLER_FUNC (static, mono_sigchld_signal_handler, (int _dummy, sigi
 	int pid;
 	struct MonoProcess *p;
 
-	DEBUG ("SIG CHILD handler for pid: %i\n", info->si_pid);
-
-	InterlockedIncrement (&mono_processes_read_lock);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "SIG CHILD handler for pid: %i\n", info->si_pid);
 
 	do {
 		do {
@@ -2561,22 +2680,27 @@ MONO_SIGNAL_HANDLER_FUNC (static, mono_sigchld_signal_handler, (int _dummy, sigi
 		if (pid <= 0)
 			break;
 
-		DEBUG ("child ended: %i", pid);
-		p = mono_processes;
-		while (p != NULL) {
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "child ended: %i", pid);
+
+		/*
+		 * This can run concurrently with the code in the rest of this module.
+		 */
+		for (p = mono_processes; p; p = p->next) {
 			if (p->pid == pid) {
-				p->pid = 0; /* this pid doesn't exist anymore, clear it */
-				p->status = status;
-				MONO_SEM_POST (&p->exit_sem);
 				break;
 			}
-			p = p->next;
+		}
+		if (p) {
+			p->pid = 0; /* this pid doesn't exist anymore, clear it */
+			p->status = status;
+			mono_os_sem_post (&p->exit_sem);
+			mono_memory_barrier ();
+			/* Mark this as freeable, the pointer becomes invalid afterwards */
+			p->freeable = TRUE;
 		}
 	} while (1);
 
-	InterlockedDecrement (&mono_processes_read_lock);
-
-	DEBUG ("SIG CHILD handler: done looping.");
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "SIG CHILD handler: done looping.");
 }
 
 #endif
@@ -2591,7 +2715,7 @@ process_add_sigchld_handler (void)
 	sigemptyset (&sa.sa_mask);
 	sa.sa_flags = SA_NOCLDSTOP | SA_SIGINFO;
 	g_assert (sigaction (SIGCHLD, &sa, &previous_chld_sa) != -1);
-	DEBUG ("Added SIGCHLD handler");
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "Added SIGCHLD handler");
 #endif
 }
 
@@ -2599,17 +2723,16 @@ static guint32
 process_wait (gpointer handle, guint32 timeout, gboolean alertable)
 {
 	WapiHandle_process *process_handle;
-	pid_t pid, ret;
+	pid_t pid G_GNUC_UNUSED, ret;
 	int status;
-	guint32 start;
-	guint32 now;
+	gint64 start, now;
 	struct MonoProcess *mp;
 
 	/* FIXME: We can now easily wait on processes that aren't our own children,
 	 * but WaitFor*Object won't call us for pseudo handles. */
 	g_assert ((GPOINTER_TO_UINT (handle) & _WAPI_PROCESS_UNHANDLED) != _WAPI_PROCESS_UNHANDLED);
 
-	DEBUG ("%s (%p, %u)", __func__, handle, timeout);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u)", __func__, handle, timeout);
 
 	process_handle = lookup_process_handle (handle);
 	if (!process_handle) {
@@ -2619,65 +2742,91 @@ process_wait (gpointer handle, guint32 timeout, gboolean alertable)
 
 	if (process_handle->exited) {
 		/* We've already done this one */
-		DEBUG ("%s (%p, %u): Process already exited", __func__, handle, timeout);
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): Process already exited", __func__, handle, timeout);
 		return WAIT_OBJECT_0;
 	}
 
 	pid = process_handle->id;
 
-	DEBUG ("%s (%p, %u): PID: %d", __func__, handle, timeout, pid);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): PID: %d", __func__, handle, timeout, pid);
 
 	/* We don't need to lock mono_processes here, the entry
 	 * has a handle_count > 0 which means it will not be freed. */
 	mp = process_handle->mono_process;
-	g_assert (mp);
+	if (!mp) {
+		pid_t res;
+
+		if (pid == mono_process_current_pid ()) {
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): waiting on current process", __func__, handle, timeout);
+			return WAIT_TIMEOUT;
+		}
+
+		/* This path is used when calling Process.HasExited, so
+		 * it is only used to poll the state of the process, not
+		 * to actually wait on it to exit */
+		g_assert (timeout == 0);
+
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): waiting on non-child process", __func__, handle, timeout);
+
+		res = waitpid (pid, &status, WNOHANG);
+		if (res == 0) {
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): non-child process WAIT_TIMEOUT", __func__, handle, timeout);
+			return WAIT_TIMEOUT;
+		}
+		if (res > 0) {
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): non-child process waited successfully", __func__, handle, timeout);
+			return WAIT_OBJECT_0;
+		}
+
+		MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): non-child process WAIT_FAILED, error : %s (%d))", __func__, handle, timeout, g_strerror (errno), errno);
+		return WAIT_FAILED;
+	}
 
 	start = mono_msec_ticks ();
 	now = start;
 
 	while (1) {
 		if (timeout != INFINITE) {
-			DEBUG ("%s (%p, %u): waiting on semaphore for %li ms...", 
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): waiting on semaphore for %li ms...", 
 				   __func__, handle, timeout, (timeout - (now - start)));
-
-			ret = MONO_SEM_TIMEDWAIT_ALERTABLE (&mp->exit_sem, (timeout - (now - start)), alertable);
+			ret = mono_os_sem_timedwait (&mp->exit_sem, (timeout - (now - start)), alertable ? MONO_SEM_FLAGS_ALERTABLE : MONO_SEM_FLAGS_NONE);
 		} else {
-			DEBUG ("%s (%p, %u): waiting on semaphore forever...", 
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): waiting on semaphore forever...", 
 				   __func__, handle, timeout);
-			ret = MONO_SEM_WAIT_ALERTABLE (&mp->exit_sem, alertable);
+			ret = mono_os_sem_wait (&mp->exit_sem, alertable ? MONO_SEM_FLAGS_ALERTABLE : MONO_SEM_FLAGS_NONE);
 		}
 
 		if (ret == -1 && errno != EINTR && errno != ETIMEDOUT) {
-			DEBUG ("%s (%p, %u): sem_timedwait failure: %s", 
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): sem_timedwait failure: %s", 
 				   __func__, handle, timeout, g_strerror (errno));
 			/* Should we return a failure here? */
 		}
 
 		if (ret == 0) {
 			/* Success, process has exited */
-			MONO_SEM_POST (&mp->exit_sem);
+			mono_os_sem_post (&mp->exit_sem);
 			break;
 		}
 
 		if (timeout == 0) {
-			DEBUG ("%s (%p, %u): WAIT_TIMEOUT (timeout = 0)", __func__, handle, timeout);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): WAIT_TIMEOUT (timeout = 0)", __func__, handle, timeout);
 			return WAIT_TIMEOUT;
 		}
 
 		now = mono_msec_ticks ();
 		if (now - start >= timeout) {
-			DEBUG ("%s (%p, %u): WAIT_TIMEOUT", __func__, handle, timeout);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): WAIT_TIMEOUT", __func__, handle, timeout);
 			return WAIT_TIMEOUT;
 		}
 		
 		if (alertable && _wapi_thread_cur_apc_pending ()) {
-			DEBUG ("%s (%p, %u): WAIT_IO_COMPLETION", __func__, handle, timeout);
+			MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): WAIT_IO_COMPLETION", __func__, handle, timeout);
 			return WAIT_IO_COMPLETION;
 		}
 	}
 
 	/* Process must have exited */
-	DEBUG ("%s (%p, %u): Waited successfully", __func__, handle, timeout);
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): Waited successfully", __func__, handle, timeout);
 
 	ret = _wapi_handle_lock_shared_handles ();
 	g_assert (ret == 0);
@@ -2691,7 +2840,7 @@ process_wait (gpointer handle, guint32 timeout, gboolean alertable)
 
 	process_handle->exited = TRUE;
 
-	DEBUG ("%s (%p, %u): Setting pid %d signalled, exit status %d",
+	MONO_TRACE (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER, "%s (%p, %u): Setting pid %d signalled, exit status %d",
 		   __func__, handle, timeout, process_handle->id, process_handle->exitstatus);
 
 	_wapi_handle_set_signal_state (handle, TRUE, TRUE);

@@ -136,7 +136,7 @@ static inline void add_int64_arg(SH4IntRegister *arg_reg, guint32 *stack_size, s
 	SH4_EXTRA_DEBUG("stack_size = %d", *stack_size);
 }
 
-static void add_valuetype(MonoCompile *cfg, MonoGenericSharingContext *context, MonoMethodSignature *signature,
+static void add_valuetype(MonoCompile *cfg, MonoMethodSignature *signature,
 			  MonoType *type, struct arg_info *arg_info, guint32 *stack_size)
 {
 	guint32 size;
@@ -149,7 +149,7 @@ static void add_valuetype(MonoCompile *cfg, MonoGenericSharingContext *context, 
 	if (signature->pinvoke)
 		size = mono_type_native_stack_size(&klass->byval_arg, NULL);
 	else
-		size = mini_type_stack_size(context, &klass->byval_arg, NULL);
+		size = mini_type_stack_size(&klass->byval_arg, NULL);
 
 	size = ALIGN_TO(size, 0x4);
 
@@ -254,7 +254,7 @@ static inline void add_wrapper_float32_arg(SH4FloatRegister *arg_reg, guint32 *s
  * determine starting points for stack-based arguments, and area for
  * aggregates being returned on the stack.
  */
-static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingContext *context, MonoMethodSignature *signature)
+static struct call_info *get_call_info(MonoCompile *cfg, MonoMethodSignature *signature)
 {
 	struct call_info *call_info = NULL;
 	SH4IntRegister   arg_reg  = MONO_SH4_REG_FIRST_ARG;
@@ -264,14 +264,14 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 	guint32 size = 0;
 	guint32 i = 0;
 
-	SH4_EXTRA_DEBUG("args => %p, %p", context, signature);
+	SH4_EXTRA_DEBUG("args => %p", signature);
 
 	call_info = g_malloc0(sizeof(struct call_info));
 	call_info->args = g_malloc0(sizeof(struct arg_info) * (signature->param_count + signature->hasthis));
 
 	/* Determine where the result will be stored. */
 	basic_type = mono_type_get_underlying_type(signature->ret);
-	basic_type = mini_get_basic_type_from_generic(context, basic_type);
+	basic_type = mini_type_get_underlying_type(basic_type);
 
 	SH4_EXTRA_DEBUG("basic_type of result = %d", basic_type->type);
 
@@ -332,7 +332,7 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 		/* else fall through. */
 	case MONO_TYPE_VALUETYPE:
 		/* We don't increase stack_size: stack allocation is done elsewhere. */
-		add_valuetype(cfg, context, signature, signature->ret, &call_info->ret, &size /* unused */);
+		add_valuetype(cfg, signature, signature->ret, &call_info->ret, &size /* unused */);
 		/* SH4 ABI specifies register containing the @ of the aggregate. */
 		call_info->ret.reg = sh4_r2;
 		break;
@@ -372,7 +372,7 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 		}
 
 		basic_type = mono_type_get_underlying_type(signature->params[i]);
-		basic_type = mini_get_basic_type_from_generic(context, basic_type);
+		basic_type = mini_type_get_underlying_type(basic_type);
 
 		SH4_EXTRA_DEBUG("basic_type of arg[%d] = %d", i, basic_type->type);
 
@@ -423,7 +423,7 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoGenericSharingConte
 			}
 		/* else fall through. */
 		case MONO_TYPE_VALUETYPE:
-			add_valuetype(cfg, context, signature, signature->params[i], arg_info, &stack_size);
+			add_valuetype(cfg, signature, signature->params[i], arg_info, &stack_size);
 			break;
 
 		case MONO_TYPE_TYPEDBYREF:
@@ -514,8 +514,8 @@ static guint32 mono_emit_call_struct(MonoCompile *cfg, MonoCallInst *call,
 		align = sizeof(gpointer);
 	}
 	else {
-		size = mini_type_stack_size_full(cfg->generic_sharing_context,
-						 &inst->klass->byval_arg, &align,
+		size = mini_type_stack_size_full(&inst->klass->byval_arg,
+						 &align,
 						 signature->pinvoke);
 	}
 
@@ -558,7 +558,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 	signature = call->signature;
 	arg_count = signature->param_count + signature->hasthis;
-	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, signature);
 
 	if (MONO_TYPE_ISSTRUCT(signature->ret)) {
 		MonoInst *inst;
@@ -814,7 +814,7 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 /* Emits IR to move its argument to the proper return register(s). */
 void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *result)
 {
-	MonoType *ret = mini_type_get_underlying_type(cfg->generic_sharing_context, mono_method_signature(method)->ret);
+	MonoType *ret = mini_type_get_underlying_type(mono_method_signature(method)->ret);
 	MonoInst *inst = NULL;
 
 	if (ret->byref != 0)
@@ -875,7 +875,7 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->flags |= MONO_CFG_HAS_SPILLUP;
 
 	signature = mono_method_signature(cfg->method);
-	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, signature);
 
 	/* At this point, the stack looks like :
 	 *	:              :
@@ -1095,7 +1095,7 @@ void mono_arch_create_vars(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 
-	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, signature);
 
 	switch (call_info->ret.storage) {
 	case into_register:
@@ -1240,7 +1240,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	signature = mono_method_signature(cfg->method);
 
-	call_info = get_call_info(cfg, cfg->generic_sharing_context, signature);
+	call_info = get_call_info(cfg, signature);
 
 	/* Allocate buffer memory. Each time you modify this prolog
 	 * please modify the code size accordingly, or debugging is
@@ -1828,7 +1828,7 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
 			continue;
 
-		class = mono_class_from_name(mono_defaults.corlib, "System", patch_info->data.name);
+		class = mono_class_load_from_name(mono_defaults.corlib, "System", patch_info->data.name);
 		g_assert(class != NULL);
 
 #if 0 /* TODO - CV */
@@ -1955,7 +1955,7 @@ GList *mono_arch_get_allocatable_int_vars(MonoCompile *cfg)
 	return vars;
 }
 
-int mono_arch_get_argument_info(MonoGenericSharingContext *gsctx, MonoMethodSignature *csig, int param_count, MonoJitArgumentInfo *arg_info)
+int mono_arch_get_argument_info(MonoMethodSignature *csig, int param_count, MonoJitArgumentInfo *arg_info)
 {
 	/* TODO - CV */
 	g_assert(0);
@@ -4149,7 +4149,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
  *
  * That's why all resolutions are absolute.
  */
-void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, MonoCodeManager *dyn_code_mp, gboolean run_cctors)
+void mono_arch_patch_code(MonoCompile *cfg, MonoMethod *method, MonoDomain *domain, guint8 *code, MonoJumpInfo *patch_info, gboolean run_cctors, MonoError *error)
 {
 	SH4_EXTRA_DEBUG("args => %p, %p, %p, %p, %d", method, domain, code, patch_info, run_cctors);
 
@@ -4169,10 +4169,9 @@ void mono_arch_patch_code(MonoMethod *method, MonoDomain *domain, guint8 *code, 
 		case MONO_PATCH_INFO_METHOD:
 		case MONO_PATCH_INFO_ABS:
 		case MONO_PATCH_INFO_INTERNAL_METHOD:
-		case MONO_PATCH_INFO_CLASS_INIT:
 		case MONO_PATCH_INFO_JIT_ICALL_ADDR:
 			/* Absolute. */
-			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors);
+			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors, error);
 			break;
 
 		case MONO_PATCH_INFO_IP:
@@ -4388,6 +4387,47 @@ void mono_arch_decompose_opts (MonoCompile *cfg, MonoInst *ins)
 gpointer
 mono_arch_get_delegate_virtual_invoke_impl (MonoMethodSignature *sig, MonoMethod *method, int offset, gboolean load_imt_reg)
 {
+	return NULL;
+}
+
+#define MAX_ARCH_DELEGATE_PARAMS 3
+
+static gpointer
+get_delegate_invoke_impl (MonoTrampInfo **info, gboolean has_target, gboolean param_count, gboolean aot)
+{
+	/* TODO(ddiederen) */
+	g_assert_not_reached();
+	return NULL;
+}
+
+/*
+ * mono_arch_get_delegate_invoke_impls:
+ *
+ *   Return a list of MonoAotTrampInfo structures for the delegate invoke impl
+ * trampolines.
+ */
+GSList*
+mono_arch_get_delegate_invoke_impls (void)
+{
+	GSList *res = NULL;
+	MonoTrampInfo *info;
+	int i;
+
+	get_delegate_invoke_impl (&info, TRUE, 0, TRUE);
+	res = g_slist_prepend (res, info);
+
+	for (i = 0; i <= MAX_ARCH_DELEGATE_PARAMS; ++i) {
+		get_delegate_invoke_impl (&info, FALSE, i, TRUE);
+		res = g_slist_prepend (res, info);
+	}
+
+	return res;
+}
+
+gpointer
+mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_target)
+{
+	/* TODO(ddiederen) */
 	return NULL;
 }
 
