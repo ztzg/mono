@@ -25,9 +25,6 @@ COMPAT_2_0_SUFFIX=2$(SCRIPT_SUFFIX)
 COMPAT_4_0_SUFFIX=4$(SCRIPT_SUFFIX)
 
 bin_SCRIPTS = \
-	$(scripts_4_0_umask)	\
-	$(scripts_defaults)	\
-	$(scripts_2_0)		\
 	$(scripts_service)	\
 	$(scripts_nunit)	\
 	$(scripts_rpmhelpers)	\
@@ -36,11 +33,14 @@ bin_SCRIPTS = \
 	mono-test-install	\
 	peverify			\
 	mcs					\
-	mono-heapviz		\
-	$(scripts_mono_configuration_crypto)
+	mono-heapviz
 
 if INSTALL_4_5
+bin_SCRIPTS += $(scripts_4_0_umask)
+bin_SCRIPTS += $(scripts_defaults)
+bin_SCRIPTS += $(scripts_2_0)
 bin_SCRIPTS += $(scripts_4_0)
+bin_SCRIPTS += $(scripts_mono_configuration_crypto)
 bin_SCRIPTS += dmcs
 bin_SCRIPTS += xbuild
 endif
@@ -132,8 +132,16 @@ scripts_defaults = 		\
 	resgen$(SCRIPT_SUFFIX)			\
 	wsdl$(SCRIPT_SUFFIX)
 
-scripts_service = mono-service mono-service2
-scripts_nunit = nunit-console$(SCRIPT_SUFFIX) nunit-console2$(SCRIPT_SUFFIX) nunit-console4$(SCRIPT_SUFFIX)
+scripts_service = mono-service2
+if INSTALL_4_5
+scripts_service += mono-service
+endif
+
+scripts_nunit = nunit-console2$(SCRIPT_SUFFIX)
+if INSTALL_4_5
+scripts_nunit += nunit-console$(SCRIPT_SUFFIX) nunit-console4$(SCRIPT_SUFFIX)
+endif
+
 scripts_rpmhelpers = mono-find-provides mono-find-requires
 scripts_mono_configuration_crypto = mono-configuration-crypto$(SCRIPT_SUFFIX)
 
@@ -192,6 +200,8 @@ if INSTALL_4_5
 REWRITE4 = $(REWRITE) -e 's,@''framework_version@,4.5,g'
 REWRITE4_DEBUG = $(REWRITE_DEBUG) -e 's,@''framework_version@,4.5,g'
 endif
+
+
 
 peverify: peverify.in Makefile
 	$(REWRITE_COMMON) $(srcdir)/peverify.in > $@.tmp
