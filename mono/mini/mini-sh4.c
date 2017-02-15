@@ -1230,10 +1230,6 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	if (cfg->method->wrapper_type == MONO_WRAPPER_NATIVE_TO_MANAGED)
-		g_error("%s::%s: Wrapper native -> managed not yet implemented.\n",
-			cfg->method->klass->name, cfg->method->name);
-
 	/* Initialize cst pools - for the moment keep running in low perf mode.*/
 	sh4_cstpool_init(cfg, cstpool_mode_lowperf);
 
