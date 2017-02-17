@@ -363,8 +363,10 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoMethodSignature *si
 		/* Emit the signature cookie just before the implicit arguments. */
 		if (signature->pinvoke == 0 &&
 		    signature->sentinelpos == i &&
-		    signature->call_convention == MONO_CALL_VARARG)
+		    signature->call_convention == MONO_CALL_VARARG) {
+			force_stack(&arg_reg);
 			add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
+		}
 
 		if (signature->params[i]->byref) {
 			add_int32_arg(&arg_reg, &stack_size, arg_info);
@@ -445,8 +447,10 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoMethodSignature *si
 	/* Emit the signature cookie in case no implicit arguments are specified. */
 	if (signature->pinvoke == 0 &&
 	    signature->sentinelpos == signature->param_count &&
-	    signature->call_convention == MONO_CALL_VARARG)
+	    signature->call_convention == MONO_CALL_VARARG) {
+		force_stack(&arg_reg);
 		add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
+	}
 
 	/* Align the stack frame on a 4-bytes boundary. */
 	call_info->stack_usage = ALIGN_TO(stack_size, 0x4);
@@ -455,38 +459,34 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoMethodSignature *si
 	return call_info;
 }
 
-/**
- * For variable length argument lists emit a signature cookie.
- * Pass a different signature because mono_ArgIterator_Setup assumes
- * the signature cookie is passed first and all the arguments which
- * were before it are passed on the stack after the signature.
- */
-static inline void emit_signature_cookie2(MonoCompile *cfg, MonoCallInst *call)
+static void
+emit_sig_cookie (MonoCompile *cfg, MonoCallInst *call, struct call_info *cinfo)
 {
-	MonoMethodSignature *new_signature = NULL;
-	MonoInst *signature = NULL;
-	MonoInst *inst = NULL;
+	MonoMethodSignature *tmp_sig;
+	int sig_reg;
+	MonoInst *inst;
 
-	/* AOT not yet supported. */
-	cfg->disable_aot = TRUE;
+	if (call->tail_call)
+		NOT_IMPLEMENTED;
 
-	new_signature = mono_metadata_signature_dup(call->signature);
-	new_signature->param_count -= call->signature->sentinelpos;
-	new_signature->sentinelpos = 0;
+	g_assert (cinfo->sig_cookie.storage == onto_stack);
 
-	memcpy(new_signature->params,
-	       call->signature->params + call->signature->sentinelpos,
-	       new_signature->param_count * sizeof(MonoType*));
+	/*
+	 * mono_ArgIterator_Setup assumes the signature cookie is
+	 * passed first and all the arguments which were before it are
+	 * passed on the stack after the signature. So compensate by
+	 * passing a different signature.
+	 */
+	tmp_sig = mono_metadata_signature_dup_full (cfg->method->klass->image, call->signature);
+	tmp_sig->param_count -= call->signature->sentinelpos;
+	tmp_sig->sentinelpos = 0;
+	memcpy (tmp_sig->params, call->signature->params + call->signature->sentinelpos, tmp_sig->param_count * sizeof (MonoType*));
 
-	/* Declare a room where the signature cookie will be stored. */
-	MONO_INST_NEW(cfg, signature, OP_ICONST);
-	signature->inst_c0 = (guint32)new_signature;
-	signature->dreg    = mono_alloc_ireg(cfg);
-	MONO_ADD_INS(cfg->cbb, signature);
+	sig_reg = mono_alloc_ireg (cfg);
+	MONO_EMIT_NEW_SIGNATURECONST (cfg, sig_reg, tmp_sig);
 
-	/* Create a new argument pointing to the signature cookie. */
 	MONO_INST_NEW(cfg, inst, OP_SH4_PUSH_ARG);
-	inst->sreg1 = signature->dreg;
+	inst->sreg1 = sig_reg;
 	call->stack_usage += 4;
 	MONO_ADD_INS(cfg->cbb, inst);
 }
@@ -584,12 +584,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 		MonoInst *arg = NULL;
 		MonoInst *inst = NULL;
 		MonoInst *dummy_inst = NULL;
-
-		/* Emit the signature cookie just before the implicit arguments. */
-		if (sentinelpos == i &&
-		    signature->pinvoke == 0 &&
-		    signature->call_convention == MONO_CALL_VARARG)
-			emit_signature_cookie2(cfg, call);
 
 		if (i >= signature->hasthis &&
 		    MONO_TYPE_ISSTRUCT(signature->params[i - signature->hasthis])) {
@@ -795,13 +789,19 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 			g_assert_not_reached();
 			break;
 		}
+
+		/* Emit the signature cookie just before the implicit arguments. */
+		if (sentinelpos == j &&
+		    signature->pinvoke == 0 &&
+		    signature->call_convention == MONO_CALL_VARARG)
+			emit_sig_cookie (cfg, call, call_info);
 	}
 
 	/* Emit the signature cookie in case no implicit arguments are specified. */
 	if (signature->pinvoke == 0 &&
 	    sentinelpos == arg_count &&
 	    signature->call_convention == MONO_CALL_VARARG)
-		emit_signature_cookie2(cfg, call);
+		emit_sig_cookie (cfg, call, call_info);
 
 	/* get_call_info() and emit_call() have to be kept in sync. */
 	g_assert(call->stack_usage == call_info->stack_usage);
@@ -933,16 +933,20 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	 *	:              :
 	 */
 
-	if (signature->pinvoke != 0 &&
+	if (signature->pinvoke == 0 &&
 	    signature->call_convention == MONO_CALL_VARARG) {
 		/* Currently, the SH4 backend is able to store the signature
 		   cookie into a register, however it appears the generic
 		   part of Mono can not handle this because only the field
-		   "gint32 sig_cookie" into MonoCompile is available. I don't
-		   like the idea to do like other backend, so I'm waiting for
-		   another solution. CV */
-		g_error("%s::%s: Variadic functions not yet supported.\n",
-			cfg->method->klass->name, cfg->method->name);
+		   "gint32 sig_cookie" into MonoCompile is available. --CV
+
+		   TODO(ddiederen): Implement this? */
+		int size = 4;
+		int align = 4;
+
+		cfg->stack_offset = ALIGN_TO(cfg->stack_offset, align);
+		cfg->sig_cookie = cfg->stack_offset;
+		cfg->stack_offset += size;
 	}
 
 	/* The locals area size is now fully known so specify where are saved parameters. */
@@ -1342,6 +1346,27 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 			sh4_load(&buffer, cfg->stack_offset, sh4_temp);
 			sh4_sub(&buffer, sh4_temp, sh4_fp);
 		}
+	}
+
+	if (signature->call_convention == MONO_CALL_VARARG) {
+		struct arg_info *cookie = &call_info->sig_cookie;
+		int offset = saved_regs_size + cookie->offset;
+
+		/* Save the sig cookie address */
+		g_assert (cookie->storage == onto_stack);
+
+		/* TODO(ddiederen): Null offsets, larger ranges. Use
+		 * something akin to sh4_base_load? */
+		g_assert (SH4_CHECK_RANGE_add_imm(offset));
+
+		/* Note: we need a temporary register, but cannot use
+		 * r3 (aka sh4_temp) since it is used by
+		 * sh4_base_store.  So we use r0.  (Cf. other note
+		 * about "aka sh4_temp" for rationale.)
+		 */
+		sh4_mov(&buffer, sh4_sp, sh4_r0);
+		sh4_add_imm(&buffer, offset, sh4_r0);
+		sh4_base_store(NULL, &buffer, sh4_r0, cfg->sig_cookie, sh4_fp);
 	}
 
 	/* At this point, the stack looks like :
@@ -3866,6 +3891,20 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			   might be misaligned in case of vtypes so use a byte load. */
 			sh4_movb_indRy(&buffer, inst->sreg1, sh4_temp);
 			break;
+
+		case OP_ARGLIST: {
+			/* MD: oparglist: src1:b len:16 */
+
+			/* TODO(ddiederen): Null offsets, larger
+			 * ranges. Use sh4_base_load? */
+			g_assert (SH4_CHECK_RANGE_add_imm (cfg->sig_cookie));
+
+			sh4_mov(&buffer, cfg->frame_reg, sh4_temp);
+			sh4_add_imm(&buffer, cfg->sig_cookie, sh4_temp);
+			sh4_movl_indRy(&buffer, sh4_temp, sh4_temp);
+			sh4_movl_indRx(&buffer, sh4_temp, inst->sreg1);
+			break;
+		}
 
 			/* Support for spilled variables. */
 		case OP_STORE_MEMBASE_REG:

@@ -152,6 +152,7 @@ int_not: dest:i src1:i len:2
 int_neg: dest:i src1:i len:2
 label: len:0
 checkthis: src1:b len:2
+oparglist: src1:b len:16
 store_membase_reg: dest:b src1:i len:16
 load_membase: dest:i src1:b len:16
 nop: len:0
