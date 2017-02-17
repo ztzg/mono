@@ -227,7 +227,7 @@ static inline void add_wrapper_float32_arg(SH4FloatRegister *arg_reg, guint32 *s
 
 	SH4_EXTRA_DEBUG("args => %d, %d, %p", *arg_reg, *stack_size, arg_info);
 
-	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG - 1) {
+	if (*arg_reg <= MONO_SH4_FREG_LAST_ARG) {
 		if ((*arg_reg & 0x1) == 0x0) {
 			arg_info->storage = into_register;
 			arg_info->reg = *arg_reg + 1;
