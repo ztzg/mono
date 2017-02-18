@@ -1180,6 +1180,17 @@ static inline void sh4_base_storef32(MonoCompile *cfg, guint8 **buffer, SH4Float
 	sh4_fmovs_indRx(buffer, src, sh4_temp);
 }
 
+/* Like sh4_base_storef32, but does not assume src is a double
+ * precision register pair. */
+static inline void sh4_base_storef32_single(MonoCompile *cfg, guint8 **buffer, SH4FloatRegister src, int offset, SH4IntRegister base)
+{
+	g_assert(base != sh4_temp);
+
+	sh4_add_offset2base(cfg, buffer, offset, base, sh4_temp);
+
+	sh4_fmovs_indRx(buffer, src, sh4_temp);
+}
+
 static inline void sh4_base_loadf32(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base, SH4FloatRegister dest)
 {
 	g_assert(base != sh4_temp);
@@ -1478,7 +1489,10 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 					break;
 
 				case float32:
-					sh4_base_storef32(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					if (signature->pinvoke != 0)
+						sh4_base_storef32_single(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					else
+						sh4_base_storef32(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case typedbyref:	/* Always onto the stack currently */
