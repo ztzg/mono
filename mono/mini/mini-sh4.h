@@ -169,8 +169,10 @@
  * This macro provides, from the machine-description of an instruction,
  * the fixed hreg corresponding to that value. This macro is mandatory.
  */
-#define MONO_ARCH_INST_FIXED_REG(desc) ((desc) == 'z' || (desc) == 'Z' ? sh4_r0 : \
-					(desc) == 'y' ? sh4_dr0 : -1)
+#define MONO_ARCH_INST_FIXED_REG(desc)			\
+	((desc) == 'z' || (desc) == 'Z' ? sh4_r0 :	\
+	 (desc) == 'w' ? sh4_r1 :			\
+	 (desc) == 'y' ? sh4_dr0 : -1)
 
 /*
  * This macro tests if a register denotes a register pair (from

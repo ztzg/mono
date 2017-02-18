@@ -1069,11 +1069,6 @@ void mono_arch_cpu_init(void)
  */
 guint32 mono_arch_cpu_optimizations(guint32 *exclude_mask)
 {
-	/* A generic optimization break a SH4 specific assumption:
-	 * http://code.google.com/p/mono-sh4/issues/detail?id=12 */
-	*exclude_mask = (guint32)-1;
-	*exclude_mask &= ~MONO_OPT_BRANCH;
-
 	/* no SH4-specific optimizations yet. */
 	return 0;
 }
@@ -3949,7 +3944,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SETLRET:
-			/* MD: setlret: src1:i src2:i len:0 */
+			/* MD: setlret: src1:z src2:w len:0 */
 			g_assert(inst->sreg1 == sh4_r0);
 			g_assert(inst->sreg2 == sh4_r1);
 			break;

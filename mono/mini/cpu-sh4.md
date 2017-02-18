@@ -164,7 +164,7 @@ not_reached: len:2
 memory_barrier: len:2
 break: len:2
 jump_table: dest:i len:12
-setlret: src1:i src2:i len:0
+setlret: src1:z src2:w len:0
 sh4_bzero4: dest:i src1:b src2:i len:18
 fmove: dest:f src1:f len:4
 sh4_f32moveh: dest:f src1:f len:2
