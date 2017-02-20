@@ -4512,6 +4512,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 		code = mono_domain_code_reserve (domain, size);
 	start = code;
 
+	/* TODO(ddiederen): Use constant pool. */
 	for (i = 0; i < count; ++i) {
 		MonoIMTCheckItem *item = imt_entries [i];
 
@@ -4521,6 +4522,8 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 			guint8 *eq = NULL;
 
 			if (item->check_target_idx) {
+				/* TODO(ddiederen): compare_done. */
+
 				/*   if (magic_reg == item->method) */
 				/*     goto eq; */
 				sh4_load(&code, (guint32)item->key, sh4_temp);
@@ -4533,13 +4536,33 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 				item->jmp_code = code;
 				sh4_jmp_indRx(&code, sh4_temp);
 				sh4_nop(&code);
+			} else {
+				g_assert (!item->has_target_code);
+
+				if (fail_tramp) {
+					/*   if (magic_reg == item->method) */
+					/*     goto eq; */
+					sh4_load(&code, (guint32)item->key, sh4_temp);
+					sh4_cmpeq(&code, MONO_ARCH_IMT_REG, sh4_temp);
+					eq = code + 18;
+					sh4_bt_label(&code, eq);
+
+					/*   jump_to_fail_tramp. */
+					sh4_load(&code, (guint32)fail_tramp, sh4_temp);
+					sh4_jmp_indRx(&code, sh4_temp);
+					sh4_nop(&code);
+				}
 			}
 
 			g_assert (eq == NULL || code == eq);
 			/* eq: */
 			/*   jump_to_vtable (item->vtable_slot); */
-			sh4_load(&code, (guint32)&(vtable->vtable[item->value.vtable_slot]), sh4_temp);
-			sh4_movl_indRy(&code, sh4_temp, sh4_temp);
+			if (item->has_target_code) {
+				sh4_load(&code, (guint32)item->value.target_code, sh4_temp);
+			} else {
+				sh4_load(&code, (guint32)&(vtable->vtable[item->value.vtable_slot]), sh4_temp);
+				sh4_movl_indRy(&code, sh4_temp, sh4_temp);
+			}
 			sh4_jmp_indRx(&code, sh4_temp);
 			sh4_nop(&code);
 		} else {
@@ -4580,6 +4603,8 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 
 #if DEBUG_IMT
 	{
+		printf("IMT thunk emitted: %p, %p\n", start, code);
+		fflush(stdout);
 		char *buff = g_strdup_printf ("thunk_for_class_%s_%s_entries_%d", vtable->klass->name_space, vtable->klass->name, count);
 		mono_disassemble_code (NULL, start, code - start, buff);
 		g_free (buff);
@@ -4587,9 +4612,11 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 #endif
 
 	mono_arch_flush_icache ((guint8*)start, size);
-	mono_stats.imt_thunks_size += code - start;
 
+	if (!fail_tramp)
+		mono_stats.imt_thunks_size += code - start;
 	g_assert (code - start <= size);
+
 	return start;
 }
 
