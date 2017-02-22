@@ -127,7 +127,7 @@ vcall_reg: src1:i clob:c len:18
 vcall2_reg: src1:i clob:c len:18
 lcall_reg: dest:Z src1:i clob:c len:18
 call_reg: dest:z src1:i clob:c len:18
-call_handler: len:16
+call_handler: clob:c len:16
 throw: src1:i len:18
 rethrow: src1:i len:18
 int_conv_to_i4: dest:i src1:i len:2

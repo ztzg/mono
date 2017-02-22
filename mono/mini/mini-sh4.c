@@ -3680,7 +3680,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_CALL_HANDLER:
-			/* MD: call_handler: len:16 */
+			/* MD: call_handler: clob:c len:16 */
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_BB, inst->inst_target_bb, sh4_temp);
 
 			sh4_jsr_indRx(&buffer, sh4_temp);
