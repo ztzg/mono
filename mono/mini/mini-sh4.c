@@ -407,7 +407,6 @@ static struct call_info *get_call_info(MonoCompile *cfg, MonoMethodSignature *si
 			break;
 
 		case MONO_TYPE_R4:
-			g_assert(cfg->method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
 			if (signature->pinvoke != 0)
 				add_wrapper_float32_arg(&arg_freg, &stack_size, arg_info);
 			else
@@ -635,7 +634,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 		case float32:
 			if (!flag_f) {
-				g_assert(cfg->method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
 				if (signature->pinvoke != 0) {
 					MONO_INST_NEW(cfg, inst, OP_SH4_FCNVDS);
 					inst->sreg1 = call->args[i]->dreg;
@@ -755,7 +753,6 @@ void mono_arch_emit_call(MonoCompile *cfg, MonoCallInst *call)
 
 		case float32:
 			if (!flag_f) {
-				g_assert(cfg->method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
 				if (signature->pinvoke != 0) {
 					MONO_INST_NEW(cfg, inst, OP_SH4_FCNVDS);
 					inst->sreg1 = call->args[j]->dreg;
@@ -836,7 +833,6 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		break;
 
 	case MONO_TYPE_R4:
-		g_assert(method->wrapper_type != MONO_WRAPPER_RUNTIME_INVOKE);
 		if (method->wrapper_type == MONO_WRAPPER_MANAGED_TO_NATIVE) {
 			MONO_INST_NEW(cfg, inst, OP_SH4_FCNVSD);
 			inst->sreg1 = result->dreg;
