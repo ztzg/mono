@@ -181,8 +181,8 @@ float_conv_to_i1: dest:i src1:f len:6
 float_conv_to_u1: dest:i src1:f len:6
 sh4_fcnvsd: dest:f src1:f len:4
 sh4_fcnvds: dest:f src1:f len:4
-float_conv_to_r4: dest:f src1:f len:0
-float_conv_to_r8: dest:f src1:f len:0
+float_conv_to_r4: dest:f src1:f len:4
+float_conv_to_r8: dest:f src1:f len:4
 float_add: clob:1 dest:f src1:f src2:f len:2
 float_sub: clob:1 dest:f src1:f src2:f len:2
 float_mul: clob:1 dest:f src1:f src2:f len:2

@@ -4070,8 +4070,12 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_fsts_FPUL(&buffer, inst->dreg);
 			break;
 
-		case OP_FCONV_TO_R4: /* MD: float_conv_to_r4: dest:f src1:f len:0 */
-		case OP_FCONV_TO_R8: /* MD: float_conv_to_r8: dest:f src1:f len:0 */
+		case OP_FCONV_TO_R4: /* MD: float_conv_to_r4: dest:f src1:f len:4 */
+		case OP_FCONV_TO_R8: /* MD: float_conv_to_r8: dest:f src1:f len:4 */
+			if (inst->dreg != inst->sreg1) {
+				sh4_fmov(&buffer, inst->sreg1, inst->dreg);
+				sh4_fmov(&buffer, inst->sreg1 + 1, inst->dreg + 1);
+			}
 			break;
 
 		case OP_FADD:
