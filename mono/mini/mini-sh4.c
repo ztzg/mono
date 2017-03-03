@@ -4080,6 +4080,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_FCONV_TO_R4: /* MD: float_conv_to_r4: dest:f src1:f len:4 */
+			sh4_fcnvds_double_FPUL(&buffer, inst->sreg1);
+			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
+			break;
+
 		case OP_FCONV_TO_R8: /* MD: float_conv_to_r8: dest:f src1:f len:4 */
 			if (inst->dreg != inst->sreg1) {
 				sh4_fmov(&buffer, inst->sreg1, inst->dreg);
