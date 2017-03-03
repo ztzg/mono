@@ -3617,7 +3617,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_FCALL:
-			/* MD: fcall: dest:y clob:c len:30 */
+			/* MD: fcall: dest:y clob:c len:34 */
 		case OP_VOIDCALL:
 			/* MD: voidcall: clob:c len:30 */
 		case OP_VCALL:
@@ -3649,6 +3649,21 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			sh4_jsr_indRx(&buffer, sh4_temp);
 			sh4_nop(&buffer); /* delay slot */
+
+			if (inst->opcode == OP_FCALL &&
+			    call->signature->pinvoke) {
+				MonoType *rtype = mini_get_underlying_type
+					(call->signature->ret);
+
+				/*
+				 * P/Invoke calls return single floats
+				 * in fr0; fr1 is most probably garbage.
+				 */
+				if (rtype->type == MONO_TYPE_R4) {
+					sh4_flds_FPUL(&buffer, sh4_fr0);
+					sh4_fcnvsd_FPUL_double(&buffer, sh4_dr0);
+				}
+			}
 
 			if (call->stack_usage != 0)
 				free_args_area(cfg, &buffer, call);

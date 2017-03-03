@@ -115,7 +115,7 @@ sh4_loadu2: dest:i src1:b len:4
 sh4_loadi4_membase: dest:i src1:b len:2
 sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
-fcall: dest:y clob:c len:30
+fcall: dest:y clob:c len:34
 voidcall: clob:c len:30
 vcall: clob:c len:30
 vcall2: clob:c len:30
