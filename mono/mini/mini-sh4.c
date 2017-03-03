@@ -4560,8 +4560,6 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 				sh4_jmp_indRx(&code, sh4_temp);
 				sh4_nop(&code);
 			} else {
-				g_assert (!item->has_target_code);
-
 				if (fail_tramp) {
 					/*   if (magic_reg == item->method) */
 					/*     goto eq; */
@@ -4590,6 +4588,8 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 			sh4_nop(&code);
 		} else {
 			guint8 *not_ge = NULL;
+
+			g_assert (!item->has_target_code);
 
 			/*   if (! (magic_reg >= item->method)) */
 			/*     goto not_ge; */
