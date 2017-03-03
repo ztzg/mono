@@ -469,6 +469,14 @@ mono_fdiv (double a, double b)
 }
 #endif
 
+#ifdef MONO_ARCH_EMULATE_ICONV_TO_R4
+double
+mono_conv_to_r4 (int a)
+{
+	return (double)(float)a;
+}
+#endif
+
 #ifdef MONO_ARCH_SOFT_FLOAT_FALLBACK
 
 double

@@ -95,10 +95,7 @@
  */
 #define MONO_ARCH_EMULATE_FREM 1
 
-/*
- * If this macro is defined, the opcode to convert a 64 bits integer
- * to a float will be emulated.
- */
+#define MONO_ARCH_EMULATE_ICONV_TO_R4 1
 #define MONO_ARCH_EMULATE_LCONV_TO_R4 1
 
 /*

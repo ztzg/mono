@@ -171,7 +171,6 @@ sh4_f32moveh: dest:f src1:f len:2
 sh4_f32movel: dest:f src1:f len:2
 r8const: dest:f clob:z len:24
 r4const: dest:f clob:z len:20
-int_conv_to_r4: dest:f src1:i len:4
 int_conv_to_r8: dest:f src1:i len:4
 float_conv_to_i: dest:i src1:f len:4
 float_conv_to_i4: dest:i src1:f len:4

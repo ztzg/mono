@@ -4031,12 +4031,6 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_fcnvsd_FPUL_double(&buffer, inst->dreg);
 			break;
 
-		case OP_ICONV_TO_R4:
-			/* MD: int_conv_to_r4: dest:f src1:i len:4 */
-			sh4_lds_FPUL(&buffer, inst->sreg1);
-			sh4_float_FPUL(&buffer, inst->dreg);
-			break;
-
 		case OP_ICONV_TO_R8:
 			/* MD: int_conv_to_r8: dest:f src1:i len:4 */
 			sh4_lds_FPUL(&buffer, inst->sreg1);
