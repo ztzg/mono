@@ -466,6 +466,12 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
 	memcpy(&(context.registers), registers, sizeof(context.registers));
 	/* Floating-point registers are stored "beyond" integer registers. */
 	memcpy(&(context.fregisters), registers + sizeof(context.registers), sizeof(context.fregisters));
+	/*
+	 * ... which means that the saved sh4_sp is 64 bytes too low.
+	 * TODO(ddiederen): Figure out be the implications (of any) of
+	 * saving IREGS first.
+	 */
+	context.registers[sh4_sp] += sizeof(context.fregisters);
 	context.pc = pc;
 
 	if (mono_object_isinst_checked (exception, mono_defaults.exception_class, &error)) {
