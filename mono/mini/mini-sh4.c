@@ -3937,6 +3937,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_NOP:		/* MD: nop: len:0 */
+		case OP_RELAXED_NOP:	/* MD: relaxed_nop: len:0 */
 		case OP_DUMMY_USE:	/* MD: dummy_use: src1:i len:0 */
 		case OP_SH4_DUMMY_FUSE:	/* MD: sh4_dummy_fuse: src1:f len:0 */
 		case OP_DUMMY_STORE:	/* MD: dummy_store: len:0 */

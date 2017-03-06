@@ -156,6 +156,7 @@ oparglist: src1:b len:16
 store_membase_reg: dest:b src1:i len:16
 load_membase: dest:i src1:b len:16
 nop: len:0
+relaxed_nop: len:0
 dummy_use: src1:i len:0
 sh4_dummy_fuse: src1:f len:0
 dummy_store: len:0
