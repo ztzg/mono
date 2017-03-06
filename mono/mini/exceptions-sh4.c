@@ -197,7 +197,7 @@ mono_arch_unwind_frame (MonoDomain *domain, MonoJitTlsData *jit_tls,
 	}
 	else if (*lmf != NULL) {
 
-		ji = mono_jit_info_table_find(domain, (gpointer)(*lmf)->pc);
+		ji = mini_jit_info_table_find(domain, (gpointer)(*lmf)->pc, NULL);
 
 		if (!ji) {
 			if (!(*lmf)->method)
