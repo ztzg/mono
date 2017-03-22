@@ -1705,7 +1705,8 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-#define EPILOGUE_SIZE 48U
+	/* TODO(ddiederen): Compute this value. */
+#define EPILOGUE_SIZE 50U
 
 	/* Reallocate enough room to store the SH4 instructions
 	   used to implement an epilogue. */
