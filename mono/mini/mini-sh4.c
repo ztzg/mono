@@ -1717,7 +1717,6 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		/* Adjust SP to point to the "hidden" LMF. */
 		sh4_mov(&buffer, sh4_fp, sh4_sp);
 		sh4_multi_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
-		sh4_mov(&buffer, sh4_sp, sh4_temp);
 
 		/* At this point, the stack looks like :
 		 *	:              :
@@ -1734,9 +1733,9 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		 */
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
-		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_temp);
-		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_sp, sh4_sp);
-		sh4_movl_indRx(&buffer, sh4_temp, sh4_sp);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_sp, sh4_temp);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_sp, sh4_r4);
+		sh4_movl_indRx(&buffer, sh4_temp, sh4_r4);
 	}
 
 	/* Reset the stack pointer. */
