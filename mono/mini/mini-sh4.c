@@ -1714,9 +1714,21 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
-		/* Adjust SP to point to the "hidden" LMF. */
-		sh4_mov(&buffer, sh4_fp, sh4_sp);
-		sh4_multi_add_imm(&buffer, -sizeof(MonoLMF), sh4_sp);
+		/*
+		 * Adjust SP to point to the "hidden" LMF.
+		 *
+		 * We use sh4_temp, and not sh4_sp, to perform the
+		 * subtraction from sh4_fp.  This is important: we
+		 * must not have a window during which the LMF is not
+		 * covered by SP, lest an unfortunate incoming signal
+		 * scribble over it.
+		 *
+		 * TODO(ddiederen): Figure out whether we *ever* need
+		 * to do this.	(SP should already be pointing to the
+		 * LMF, unless stack allocations are unbalanced.)
+		 */
+		sh4_mov(&buffer, sh4_fp, sh4_temp);
+		sh4_multi_add_imm(&buffer, -sizeof(MonoLMF), sh4_temp);
 
 		/* At this point, the stack looks like :
 		 *	:              :
@@ -1733,8 +1745,8 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 		 */
 
 		/* pseudo-code: *(MonoLMF.lmf_addr) = MonoLMF.previous_lmf; */
-		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_sp, sh4_temp);
-		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_sp, sh4_r4);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, lmf_addr), sh4_temp, sh4_r4);
+		sh4_movl_dispRy(&buffer, offsetof(MonoLMF, previous_lmf), sh4_temp, sh4_temp);
 		sh4_movl_indRx(&buffer, sh4_temp, sh4_r4);
 	}
 
