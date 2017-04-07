@@ -833,12 +833,13 @@ void mono_arch_emit_setret(MonoCompile *cfg, MonoMethod *method, MonoInst *resul
 		break;
 
 	case MONO_TYPE_R4:
-		if (method->wrapper_type == MONO_WRAPPER_MANAGED_TO_NATIVE) {
-			MONO_INST_NEW(cfg, inst, OP_SH4_FCNVSD);
-			inst->sreg1 = result->dreg;
-			inst->dreg = result->dreg;
-			MONO_ADD_INS(cfg->cbb, inst);
-		}
+		/*
+		 * This used to widen to R8 if wrapper type was
+		 * MONO_WRAPPER_MANAGED_TO_NATIVE, but setret is not
+		 * invoked when the method is inlined--so we need the
+		 * P/Invoke widening to happen OP_FCALL instead, and
+		 * not to be done twice.
+		 */
 	/* Fall through */
 	case MONO_TYPE_R8:
 		MONO_EMIT_NEW_UNALU(cfg, OP_FMOVE, cfg->ret->dreg, result->dreg);
@@ -1065,6 +1066,9 @@ void mono_arch_cpu_init(void)
  */
 guint32 mono_arch_cpu_optimizations(guint32 *exclude_mask)
 {
+	/* TODO(ddiederen): Handle cfg->r4fp. */
+	*exclude_mask = MONO_OPT_FLOAT32;
+
 	/* no SH4-specific optimizations yet. */
 	return 0;
 }
@@ -3669,7 +3673,8 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 				/*
 				 * P/Invoke calls return single floats
-				 * in fr0; fr1 is most probably garbage.
+				 * in fr0.  See also: MONO_TYPE_R4
+				 * note in mono_arch_emit_setret.
 				 */
 				if (rtype->type == MONO_TYPE_R4) {
 					sh4_flds_FPUL(&buffer, sh4_fr0);
