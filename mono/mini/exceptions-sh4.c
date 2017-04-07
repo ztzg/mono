@@ -777,6 +777,20 @@ gpointer mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean ao
 	return code;
 }
 
+void
+mono_arch_setup_async_callback (MonoContext *ctx, void (*async_cb)(void *fun), gpointer user_data)
+{
+	mgreg_t sp = (mgreg_t)MONO_CONTEXT_GET_SP (ctx);
+
+	ctx->registers[sh4_r4] = (mgreg_t)user_data;
+
+	/* Allocate a stack frame */
+	sp -= 16;
+	MONO_CONTEXT_SET_SP (ctx, sp);
+
+	MONO_CONTEXT_SET_IP (ctx, async_cb);
+}
+
 /**
  * This is the function called from the signal handler
  */
