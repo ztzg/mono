@@ -438,11 +438,11 @@ void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
 
 	constant_address = get_imm_sh4_call_site((void *)code);
 	if(constant_address == NULL) {
-		char name[] = "call site in nullify_class_init_trampoline";
-		mono_disassemble_code(NULL, code - 20, 20, name);
-		g_assert_not_reached();
+		/* Already changed by another thread */
+		return;
 	}
 
+	/* TODO(ddiederen): Fix this to use InterlockedExchange or similar. */
 	/* Patch the call. */
 	sh4_nop(&call_site);
 
