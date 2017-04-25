@@ -2521,6 +2521,7 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		MonoInst *new_inst5 = NULL;
 		MonoInst *new_inst6 = NULL;
 		MonoInst *new_inst7 = NULL;
+		MonoInst *new_inst8 = NULL;
 		gint32 tmp_reg;
 
 		switch (inst->opcode) {
@@ -3046,7 +3047,12 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			 * if l = (high,low)
 			 *     overflow = (low >> 31) != high
 			 */
+
+			/* Keep original dreg in tmp_reg. */
+			tmp_reg = inst->dreg;
+
 			inst->opcode = OP_MOVE;
+			inst->dreg = mono_alloc_ireg(cfg);
 
 			MONO_INST_NEW(cfg, new_inst, OP_ICONST);
 			new_inst->inst_c0 = (-1) << 5;
@@ -3082,6 +3088,16 @@ void mono_arch_lowering_pass(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			new_inst7->backend.data = (gpointer)-1;
 			new_inst7->inst_p1      = (void *)"OverflowException";
 			mono_bblock_insert_after_ins(basic_block, new_inst6, new_inst7);
+
+			/*
+			 * Move inst->dreg, which has not been
+			 * clobbered, to tmp_reg--the original
+			 * destination.
+			 */
+			MONO_INST_NEW(cfg, new_inst8, OP_MOVE);
+			new_inst8->sreg1 = inst->dreg;
+			new_inst8->dreg  = tmp_reg;
+			mono_bblock_insert_after_ins(basic_block, new_inst7, new_inst8);
 			break;
 
 		case OP_LOCALLOC_IMM:
