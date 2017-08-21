@@ -10611,8 +10611,20 @@ mono_method_to_ir (MonoCompile *cfg, MonoMethod *method, MonoBasicBlock *start_b
 			CHECK_OPSIZE (5);
 			token = read32 (ip + 1);
 			if (method->wrapper_type != MONO_WRAPPER_NONE) {
+				gpointer iter = NULL;
 				field = (MonoClassField *)mono_method_get_wrapper_data (method, token);
 				klass = field->parent;
+
+				/* KLUDGE: It is possible--e.g., in the case
+				 * of a dynamic-method wrapper referencing an
+				 * AOTed class--for the field not to be fully
+				 * initialized, and for its offset to be zero.
+				 *
+				 * The call below is just a silly way to
+				 * enforce klass->fields_inited, so that the
+				 * field's offset is correct.
+				 */
+				mono_class_get_fields(klass, &iter);
 			}
 			else {
 				field = mono_field_from_token_checked (image, token, &klass, generic_context, &cfg->error);
