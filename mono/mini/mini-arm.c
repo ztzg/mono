@@ -781,7 +781,7 @@ mono_arch_init (void)
 	mono_aot_register_jit_icall ("mono_arm_start_gsharedvt_call", mono_arm_start_gsharedvt_call);
 #endif
 	mono_aot_register_jit_icall ("mono_arm_unaligned_stack", mono_arm_unaligned_stack);
-
+	mono_aot_register_jit_icall ("mono_arm_handler_block_trampoline_helper", mono_arm_handler_block_trampoline_helper);
 #if defined(__ARM_EABI__)
 	eabi_supported = TRUE;
 #endif
@@ -791,7 +791,7 @@ mono_arch_init (void)
 #else
 	arm_fpu = MONO_ARM_FPU_VFP;
 
-#if defined(ARM_FPU_NONE) && !defined(__APPLE__)
+#if defined(ARM_FPU_NONE) && !defined(TARGET_IOS)
 	/*
 	 * If we're compiling with a soft float fallback and it
 	 * turns out that no VFP unit is available, we need to
@@ -811,6 +811,7 @@ mono_arch_init (void)
 
 	if (soft && !strncmp (soft, "1", 1))
 		arm_fpu = MONO_ARM_FPU_NONE;
+	g_free (soft);
 #endif
 #endif
 
@@ -833,7 +834,7 @@ mono_arch_init (void)
 	v7_supported = TRUE;
 #endif
 
-#if defined(__APPLE__)
+#if defined(TARGET_IOS)
 	/* iOS is special-cased here because we don't yet
 	   have a way to properly detect CPU features on it. */
 	thumb_supported = TRUE;
@@ -858,6 +859,7 @@ mono_arch_init (void)
 
 		thumb_supported = strstr (cpu_arch, "thumb") != NULL;
 		thumb2_supported = strstr (cpu_arch, "thumb2") != NULL;
+		g_free (cpu_arch);
 	}
 }
 
@@ -1515,6 +1517,7 @@ get_call_info (MonoMemPool *mp, MonoMethodSignature *sig)
 			nwords = (align_size + sizeof (gpointer) -1 ) / sizeof (gpointer);
 			ainfo->storage = RegTypeStructByVal;
 			ainfo->struct_size = size;
+			ainfo->align = align;
 			/* FIXME: align stack_size if needed */
 			if (eabi_supported) {
 				if (align >= 8 && (gr & 1))
@@ -2166,7 +2169,14 @@ mono_arch_get_llvm_call_info (MonoCompile *cfg, MonoMethodSignature *sig)
 			break;
 		case RegTypeStructByVal:
 			lainfo->storage = LLVMArgAsIArgs;
-			lainfo->nslots = ainfo->struct_size / sizeof (gpointer);
+			if (eabi_supported && ainfo->align == 8) {
+				/* LLVM models this by passing an int64 array */
+				lainfo->nslots = ALIGN_TO (ainfo->struct_size, 8) / 8;
+				lainfo->esize = 8;
+			} else {
+				lainfo->nslots = ainfo->struct_size / sizeof (gpointer);
+				lainfo->esize = 4;
+			}
 			break;
 		case RegTypeStructByAddr:
 		case RegTypeStructByAddrOnStack:
@@ -7433,6 +7443,20 @@ emit_aotconst (MonoCompile *cfg, guint8 *code, int dreg, int patch_type, gpointe
 	*(gpointer*)code = NULL;
 	code += 4;
 	/* Load the value from the GOT */
+	ARM_LDR_REG_REG (code, dreg, ARMREG_PC, dreg);
+	return code;
+}
+
+guint8*
+mono_arm_emit_aotconst (gpointer ji_list, guint8 *code, guint8 *buf, int dreg, int patch_type, gconstpointer data)
+{
+	MonoJumpInfo **ji = (MonoJumpInfo**)ji_list;
+
+	*ji = mono_patch_info_list_prepend (*ji, code - buf, patch_type, data);
+	ARM_LDR_IMM (code, dreg, ARMREG_PC, 0);
+	ARM_B (code, 0);
+	*(gpointer*)code = NULL;
+	code += 4;
 	ARM_LDR_REG_REG (code, dreg, ARMREG_PC, dreg);
 	return code;
 }

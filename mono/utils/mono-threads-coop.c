@@ -288,6 +288,12 @@ mono_threads_exit_gc_safe_region_unbalanced (gpointer cookie, gpointer *stackdat
 	default:
 		g_error ("Unknown thread state");
 	}
+
+	if (info->async_target) {
+		info->async_target (info->user_data);
+		info->async_target = NULL;
+		info->user_data = NULL;
+	}
 }
 
 void
@@ -355,6 +361,12 @@ mono_threads_enter_gc_unsafe_region_unbalanced_with_info (MonoThreadInfo *info, 
 		g_error ("Unknown thread state");
 	}
 
+	if (info->async_target) {
+		info->async_target (info->user_data);
+		info->async_target = NULL;
+		info->user_data = NULL;
+	}
+
 	return info;
 }
 
@@ -417,7 +429,7 @@ mono_threads_is_coop_enabled (void)
 #else
 	static int is_coop_enabled = -1;
 	if (G_UNLIKELY (is_coop_enabled == -1))
-		is_coop_enabled = g_getenv ("MONO_ENABLE_COOP") != NULL ? 1 : 0;
+		is_coop_enabled = g_hasenv ("MONO_ENABLE_COOP") ? 1 : 0;
 	return is_coop_enabled == 1;
 #endif
 }

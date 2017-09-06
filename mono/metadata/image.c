@@ -255,7 +255,7 @@ mono_images_init (void)
 	for(hash_idx = 0; hash_idx < IMAGES_HASH_COUNT; hash_idx++)
 		loaded_images_hashes [hash_idx] = g_hash_table_new (g_str_hash, g_str_equal);
 
-	debug_assembly_unload = g_getenv ("MONO_DEBUG_ASSEMBLY_UNLOAD") != NULL;
+	debug_assembly_unload = g_hasenv ("MONO_DEBUG_ASSEMBLY_UNLOAD");
 
 	install_pe_loader ();
 
@@ -535,9 +535,9 @@ load_metadata_ptrs (MonoImage *image, MonoCLIImageInfo *iinfo)
 	}
 
 	i = ((MonoImageLoader*)image->loader)->load_tables (image);
-	g_assert (image->heap_guid.data);
 
 	if (!image->metadata_only) {
+		g_assert (image->heap_guid.data);
 		g_assert (image->heap_guid.size >= 16);
 
 		image->guid = mono_guid_to_string ((guint8*)image->heap_guid.data);
@@ -1102,7 +1102,7 @@ Mono provides its own implementation of those assemblies so it's safe to do so.
 
 The ignored_assemblies list is generated using tools/nuget-hash-extractor and feeding the problematic nugets to it.
 
-Right now the list of nugets are the ones that provide the assemblies in $ignored_assemblies_names.
+Right now the list of nugets are the ones that provide the assemblies in $ignored_assemblies_file_names.
 
 This is to be removed once a proper fix is shipped through nuget.
 
@@ -1114,8 +1114,7 @@ typedef enum {
 	SYS_IO_COMPRESSION = 2, //System.IO.Compression
 	SYS_NET_HTTP = 3, //System.Net.Http
 	SYS_TEXT_ENC_CODEPAGES = 4, //System.Text.Encoding.CodePages
-	SYS_REF_DISP_PROXY = 5, //System.Reflection.DispatchProxy
-	SYS_VALUE_TUPLE = 6, //System.ValueTuple
+	SYS_REF_DISP_PROXY = 5 //System.Reflection.DispatchProxy
 } IgnoredAssemblyNames;
 
 typedef struct {
@@ -1124,14 +1123,18 @@ typedef struct {
 	const char guid [40];
 } IgnoredAssembly;
 
-const char *ignored_assemblies_names[] = {
+typedef struct {
+	int assembly_name;
+	guint16 major, minor, build, revision;
+} IgnoredAssemblyVersion;
+
+const char *ignored_assemblies_file_names[] = {
 	"System.Runtime.InteropServices.RuntimeInformation.dll",
 	"System.Globalization.Extensions.dll",
 	"System.IO.Compression.dll",
 	"System.Net.Http.dll",
 	"System.Text.Encoding.CodePages.dll",
 	"System.Reflection.DispatchProxy.dll",
-	"System.ValueTuple.dll"
 };
 
 #define IGNORED_ASSEMBLY(HASH, NAME, GUID, VER_STR)	{ .hash = HASH, .assembly_name = NAME, .guid = GUID }
@@ -1145,6 +1148,7 @@ static const IgnoredAssembly ignored_assemblies [] = {
 	IGNORED_ASSEMBLY (0x27726A90, SYS_NET_HTTP, "269B562C-CC15-4736-B1B1-68D4A43CAA98", "4.1.0 net46"),
 	IGNORED_ASSEMBLY (0x10CADA75, SYS_NET_HTTP, "EA2EC6DC-51DD-479C-BFC2-E713FB9E7E47", "4.1.1 net46"),
 	IGNORED_ASSEMBLY (0x8437178B, SYS_NET_HTTP, "C0E04D9C-70CF-48A6-A179-FBFD8CE69FD0", "4.3.0 net46"),
+	IGNORED_ASSEMBLY (0xFAFDA422, SYS_NET_HTTP, "817F01C3-4011-477D-890A-98232B85553D", "4.3.1 net46"),
 	IGNORED_ASSEMBLY (0x4A15555E, SYS_REF_DISP_PROXY, "E40AFEB4-CABE-4124-8412-B46AB79C92FD", "4.0.0 net46"),
 	IGNORED_ASSEMBLY (0xD20D9783, SYS_REF_DISP_PROXY, "2A69F0AD-B86B-40F2-8E4C-5B671E47479F", "4.0.1 netstandard1.3"),
 	IGNORED_ASSEMBLY (0xA33A7E68, SYS_REF_DISP_PROXY, "D4E8D2DB-BD65-4168-99EA-D2C1BDEBF9CC", "4.3.0 netstandard1.3"),
@@ -1152,8 +1156,52 @@ static const IgnoredAssembly ignored_assemblies [] = {
 	IGNORED_ASSEMBLY (0xD07383BB, SYS_RT_INTEROP_RUNTIME_INFO, "DD91439F-3167-478E-BD2C-BF9C036A1395", "4.3.0 net45"),
 	IGNORED_ASSEMBLY (0x911D9EC3, SYS_TEXT_ENC_CODEPAGES, "C142254F-DEB5-46A7-AE43-6F10320D1D1F", "4.0.1 net46"),
 	IGNORED_ASSEMBLY (0xFA686A38, SYS_TEXT_ENC_CODEPAGES, "FD178CD4-EF4F-44D5-9C3F-812B1E25126B", "4.3.0 net46"),
-	IGNORED_ASSEMBLY (0x75B4B041, SYS_VALUE_TUPLE, "F81A4140-A898-4E2B-B6E9-55CE78C273EC", "4.3.0 netstandard1.0"),
 };
+
+
+const char *ignored_assemblies_names[] = {
+	"System.Runtime.InteropServices.RuntimeInformation",
+	"System.Globalization.Extensions",
+	"System.IO.Compression",
+	"System.Net.Http",
+	"System.Text.Encoding.CodePages",
+	"System.Reflection.DispatchProxy"
+};
+
+#define IGNORED_ASM_VER(NAME, MAJOR, MINOR, BUILD, REVISION) { .assembly_name = NAME, .major = MAJOR, .minor = MINOR, .build = BUILD, .revision = REVISION }
+
+static const IgnoredAssemblyVersion ignored_assembly_versions [] = {
+	IGNORED_ASM_VER (SYS_GLOBALIZATION_EXT, 4, 0, 0, 0),
+	IGNORED_ASM_VER (SYS_GLOBALIZATION_EXT, 4, 0, 1, 0),
+	IGNORED_ASM_VER (SYS_GLOBALIZATION_EXT, 4, 0, 2, 0),
+	IGNORED_ASM_VER (SYS_IO_COMPRESSION, 4, 1, 0, 0),
+	IGNORED_ASM_VER (SYS_IO_COMPRESSION, 4, 1, 2, 0),
+	IGNORED_ASM_VER (SYS_NET_HTTP, 4, 1, 0, 0),
+	IGNORED_ASM_VER (SYS_NET_HTTP, 4, 1, 0, 1),
+	IGNORED_ASM_VER (SYS_NET_HTTP, 4, 1, 1, 0),
+	IGNORED_ASM_VER (SYS_REF_DISP_PROXY, 4, 0, 0, 0),
+	IGNORED_ASM_VER (SYS_REF_DISP_PROXY, 4, 0, 1, 0),
+	IGNORED_ASM_VER (SYS_REF_DISP_PROXY, 4, 0, 2, 0),
+	IGNORED_ASM_VER (SYS_RT_INTEROP_RUNTIME_INFO, 4, 0, 0, 0),
+	IGNORED_ASM_VER (SYS_RT_INTEROP_RUNTIME_INFO, 4, 0, 1, 0),
+	IGNORED_ASM_VER (SYS_TEXT_ENC_CODEPAGES, 4, 0, 1, 0),
+	IGNORED_ASM_VER (SYS_TEXT_ENC_CODEPAGES, 4, 0, 2, 0)
+};
+
+gboolean
+mono_assembly_is_problematic_version (const char *name, guint16 major, guint16 minor, guint16 build, guint16 revision)
+{
+	for (int i = 0; i < G_N_ELEMENTS (ignored_assembly_versions); ++i) {
+		if (ignored_assembly_versions [i].major != major ||
+			ignored_assembly_versions [i].minor != minor ||
+			ignored_assembly_versions [i].build != build ||
+			ignored_assembly_versions [i].revision != revision)
+				continue;
+		if (!strcmp (ignored_assemblies_names [ignored_assembly_versions [i].assembly_name], name))
+			return TRUE;
+	}
+	return FALSE;
+}
 
 /*
 Equivalent C# code:
@@ -1187,7 +1235,7 @@ is_problematic_image (MonoImage *image)
 	// Either sort by hash and bseach or use SoA and make the linear search more cache efficient.
 	for (int i = 0; i < G_N_ELEMENTS (ignored_assemblies); ++i) {
 		if (ignored_assemblies [i].hash == h && !strcmp (image->guid, ignored_assemblies [i].guid)) {
-			const char *needle = ignored_assemblies_names [ignored_assemblies [i].assembly_name];
+			const char *needle = ignored_assemblies_file_names [ignored_assemblies [i].assembly_name];
 			size_t needle_len = strlen (needle);
 			size_t asm_len = strlen (image->name);
 			if (asm_len > needle_len && !g_ascii_strcasecmp (image->name + (asm_len - needle_len), needle))
@@ -1253,9 +1301,13 @@ do_mono_image_load (MonoImage *image, MonoImageOpenStatus *status,
 		goto invalid_image;
 
 	if (!image->ref_only && is_problematic_image (image)) {
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Denying load of problematic image %s", image->name);
-		*status = MONO_IMAGE_IMAGE_INVALID;
-		goto invalid_image;
+		if (image->load_from_context) {
+			mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Loading problematic image %s", image->name);
+		} else {
+			mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_ASSEMBLY, "Denying load of problematic image %s", image->name);
+			*status = MONO_IMAGE_IMAGE_INVALID;
+			goto invalid_image;
+		}
 	}
 
 	if (image->loader == &pe_loader && !image->metadata_only && !mono_verifier_verify_table_data (image, &errors))
@@ -1285,7 +1337,7 @@ invalid_image:
 
 static MonoImage *
 do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
-					gboolean care_about_cli, gboolean care_about_pecoff, gboolean refonly, gboolean metadata_only)
+					gboolean care_about_cli, gboolean care_about_pecoff, gboolean refonly, gboolean metadata_only, gboolean load_from_context)
 {
 	MonoCLIImageInfo *iinfo;
 	MonoImage *image;
@@ -1329,6 +1381,7 @@ do_mono_image_open (const char *fname, MonoImageOpenStatus *status,
 	image->name = mono_path_resolve_symlinks (fname);
 	image->ref_only = refonly;
 	image->metadata_only = metadata_only;
+	image->load_from_context = load_from_context;
 	image->ref_count = 1;
 	/* if MONO_SECURITY_MODE_CORE_CLR is set then determine if this image is platform code */
 	image->core_clr_platform_code = mono_security_core_clr_determine_platform_image (image);
@@ -1526,6 +1579,12 @@ mono_image_open_from_module_handle (HMODULE module_handle, char* fname, gboolean
 MonoImage *
 mono_image_open_full (const char *fname, MonoImageOpenStatus *status, gboolean refonly)
 {
+	return mono_image_open_a_lot (fname, status, refonly, FALSE);
+}
+
+MonoImage *
+mono_image_open_a_lot (const char *fname, MonoImageOpenStatus *status, gboolean refonly, gboolean load_from_context)
+{
 	MonoImage *image;
 	GHashTable *loaded_images = get_loaded_images_hash (refonly);
 	char *absfname;
@@ -1624,7 +1683,7 @@ mono_image_open_full (const char *fname, MonoImageOpenStatus *status, gboolean r
 	mono_images_unlock ();
 
 	// Image not loaded, load it now
-	image = do_mono_image_open (fname, status, TRUE, TRUE, refonly, FALSE);
+	image = do_mono_image_open (fname, status, TRUE, TRUE, refonly, FALSE, load_from_context);
 	if (image == NULL)
 		return NULL;
 
@@ -1663,7 +1722,7 @@ mono_pe_file_open (const char *fname, MonoImageOpenStatus *status)
 {
 	g_return_val_if_fail (fname != NULL, NULL);
 	
-	return do_mono_image_open (fname, status, FALSE, TRUE, FALSE, FALSE);
+	return do_mono_image_open (fname, status, FALSE, TRUE, FALSE, FALSE, FALSE);
 }
 
 /**
@@ -1680,7 +1739,7 @@ mono_image_open_raw (const char *fname, MonoImageOpenStatus *status)
 {
 	g_return_val_if_fail (fname != NULL, NULL);
 	
-	return do_mono_image_open (fname, status, FALSE, FALSE, FALSE, FALSE);
+	return do_mono_image_open (fname, status, FALSE, FALSE, FALSE, FALSE, FALSE);
 }
 
 /*
@@ -1691,7 +1750,7 @@ mono_image_open_raw (const char *fname, MonoImageOpenStatus *status)
 MonoImage *
 mono_image_open_metadata_only (const char *fname, MonoImageOpenStatus *status)
 {
-	return do_mono_image_open (fname, status, TRUE, TRUE, FALSE, TRUE);
+	return do_mono_image_open (fname, status, TRUE, TRUE, FALSE, TRUE, FALSE);
 }
 
 void

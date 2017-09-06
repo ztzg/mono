@@ -356,7 +356,7 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 	MonoNativeThreadId tid;
 	int do_initialization = 0;
 	MonoDomain *last_domain = NULL;
-	MonoException * pending_tae = NULL;
+	gboolean pending_tae = FALSE;
 
 	mono_error_init (error);
 
@@ -430,9 +430,6 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 		lock->initializing_tid = tid;
 		lock->waiting_count = 1;
 		lock->done = FALSE;
-		/* grab the vtable lock while this thread still owns type_initialization_section */
-		/* This is why type_initialization_lock needs to enter blocking mode */
-		mono_type_init_lock (lock);
 		g_hash_table_insert (type_initialization_hash, vtable, lock);
 		do_initialization = 1;
 	} else {
@@ -444,6 +441,7 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 			return TRUE;
 		}
 		/* see if the thread doing the initialization is already blocked on this thread */
+		gboolean is_blocked = TRUE;
 		blocked = GUINT_TO_POINTER (MONO_NATIVE_THREAD_ID_TO_UINT (lock->initializing_tid));
 		while ((pending_lock = (TypeInitializationLock*) g_hash_table_lookup (blocked_thread_hash, blocked))) {
 			if (mono_native_thread_id_equals (pending_lock->initializing_tid, tid)) {
@@ -454,6 +452,7 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 					/* the thread doing the initialization is blocked on this thread,
 					   but on a lock that has already been freed. It just hasn't got
 					   time to awake */
+					is_blocked = FALSE;
 					break;
 				}
 			}
@@ -461,7 +460,8 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 		}
 		++lock->waiting_count;
 		/* record the fact that we are waiting on the initializing thread */
-		g_hash_table_insert (blocked_thread_hash, GUINT_TO_POINTER (tid), lock);
+		if (is_blocked)
+			g_hash_table_insert (blocked_thread_hash, GUINT_TO_POINTER (tid), lock);
 	}
 	mono_type_initialization_unlock ();
 
@@ -472,7 +472,7 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 
 		mono_threads_begin_abort_protected_block ();
 		mono_runtime_try_invoke (method, NULL, NULL, (MonoObject**) &exc, error);
-		gboolean got_pending_interrupt = mono_threads_end_abort_protected_block ();
+		mono_threads_end_abort_protected_block ();
 
 		//exception extracted, error will be set to the right value later
 		if (exc == NULL && !mono_error_ok (error))//invoking failed but exc was not set
@@ -513,19 +513,22 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 
 		if (last_domain)
 			mono_domain_set (last_domain, TRUE);
+
 		/* Signal to the other threads that we are done */
+		mono_type_init_lock (lock);
 		lock->done = TRUE;
 		mono_coop_cond_broadcast (&lock->cond);
-
 		mono_type_init_unlock (lock);
 
-		//This can happen if the cctor self-aborts
-		if (exc && mono_object_class (exc) == mono_defaults.threadabortexception_class)
-			pending_tae = exc;
-
-		//TAEs are blocked around .cctors, they must escape as soon as no cctor is left to run.
-		if (!pending_tae && got_pending_interrupt)
-			pending_tae = mono_thread_try_resume_interruption ();
+		/*
+		 * This can happen if the cctor self-aborts. We need to reactivate tae
+		 * (next interruption checkpoint will throw it) and make sure we won't
+		 * throw tie for the type.
+		 */
+		if (exc && mono_object_class (exc) == mono_defaults.threadabortexception_class) {
+			pending_tae = TRUE;
+			mono_thread_resume_interruption (FALSE);
+		}
 	} else {
 		/* this just blocks until the initializing thread is done */
 		mono_type_init_lock (lock);
@@ -546,10 +549,8 @@ mono_runtime_class_init_full (MonoVTable *vtable, MonoError *error)
 		vtable->initialized = 1;
 	mono_type_initialization_unlock ();
 
-	//TAE wins over TIE
-	if (pending_tae)
-		mono_error_set_exception_instance (error, pending_tae);
-	else if (vtable->init_failed) {
+	/* If vtable init fails because of TAE, we don't throw TIE, only the TAE */
+	if (vtable->init_failed && !pending_tae) {
 		/* Either we were the initializing thread or we waited for the initialization */
 		mono_error_set_exception_instance (error, get_type_init_exception_for_vtable (vtable));
 		return FALSE;
@@ -572,6 +573,7 @@ gboolean release_type_locks (gpointer key, gpointer value, gpointer user)
 		 * mono_runtime_class_init (). In this case, the exception object is not stored,
 		 * and get_type_init_exception_for_class () needs to be aware of this.
 		 */
+		mono_type_init_lock (lock);
 		vtable->init_failed = 1;
 		mono_coop_cond_broadcast (&lock->cond);
 		mono_type_init_unlock (lock);
@@ -6672,7 +6674,7 @@ mono_object_handle_isinst_mbyref (MonoObjectHandle obj, MonoClass *klass, MonoEr
 
 		pa [0] = MONO_HANDLE_RAW (reftype);
 		pa [1] = MONO_HANDLE_RAW (obj);
-		MonoObject *res = mono_runtime_invoke_checked (im, rp, pa, error);
+		MonoObject *res = mono_runtime_invoke_checked (im, MONO_HANDLE_RAW (rp), pa, error);
 		if (!is_ok (error))
 			goto leave;
 

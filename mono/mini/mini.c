@@ -3117,7 +3117,7 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, JitFl
 	gboolean llvm = (flags & JIT_FLAG_LLVM) ? 1 : 0;
 #endif
 	static gboolean verbose_method_inited;
-	static const char *verbose_method_name;
+	static char *verbose_method_name;
 
 	InterlockedIncrement (&mono_jit_stats.methods_compiled);
 	if (mono_profiler_get_events () & MONO_PROFILE_JIT_COMPILATION)
@@ -3607,6 +3607,10 @@ mini_method_compile (MonoMethod *method, guint32 opts, MonoDomain *domain, JitFl
 		cfg->opt &= ~ (MONO_OPT_LINEARS | MONO_OPT_COPYPROP | MONO_OPT_CONSPROP);
 		cfg->disable_ssa = TRUE;
 	}
+
+	if (cfg->num_varinfo > 10000 && !cfg->llvm_only)
+		/* Disable llvm for overly complex methods */
+		cfg->disable_ssa = TRUE;
 
 	if (cfg->opt & MONO_OPT_LOOP) {
 		MONO_TIME_TRACK (mono_jit_stats.jit_compile_dominator_info, mono_compile_dominator_info (cfg, MONO_COMP_DOM | MONO_COMP_IDOM));

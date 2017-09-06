@@ -877,7 +877,7 @@ mono_debugger_agent_parse_options (char *options)
 	char **args, **ptr;
 	char *host;
 	int port;
-	const char *extra;
+	char *extra;
 
 #ifndef MONO_ARCH_SOFT_DEBUG_SUPPORTED
 	fprintf (stderr, "--debugger-agent is not supported on this platform.\n");
@@ -885,8 +885,10 @@ mono_debugger_agent_parse_options (char *options)
 #endif
 
 	extra = g_getenv ("MONO_SDB_ENV_OPTIONS");
-	if (extra)
+	if (extra) {
 		options = g_strdup_printf ("%s,%s", options, extra);
+		g_free (extra);
+	}
 
 	agent_config.enabled = TRUE;
 	agent_config.suspend = TRUE;
@@ -4696,21 +4698,16 @@ get_this_async_id (StackFrame *frame)
 	return get_objid (get_this (frame));
 }
 
-static MonoMethod* set_notification_method_cache = NULL;
-
 static MonoMethod*
-get_set_notification_method ()
+get_set_notification_method (MonoClass* async_builder_class)
 {
-	if(set_notification_method_cache != NULL)
-		return set_notification_method_cache;
 	MonoError error;
-	MonoClass* async_builder_class = mono_class_load_from_name (mono_defaults.corlib, "System.Runtime.CompilerServices", "AsyncTaskMethodBuilder");
 	GPtrArray* array = mono_class_get_methods_by_name (async_builder_class, "SetNotificationForWaitCompletion", 0x24, FALSE, FALSE, &error);
 	mono_error_assert_ok (&error);
 	g_assert (array->len == 1);
-	set_notification_method_cache = (MonoMethod *)g_ptr_array_index (array, 0);
+	MonoMethod* set_notification_method = (MonoMethod *)g_ptr_array_index (array, 0);
 	g_ptr_array_free (array, TRUE);
-	return set_notification_method_cache;
+	return set_notification_method;
 }
 
 static void
@@ -4729,7 +4726,7 @@ set_set_notification_for_wait_completion_flag (StackFrame *frame)
 	void* args [1];
 	gboolean arg = TRUE;
 	args [0] = &arg;
-	mono_runtime_invoke_checked (get_set_notification_method(), mono_object_unbox (builder), args, &error);
+	mono_runtime_invoke_checked (get_set_notification_method (builder->vtable->klass), mono_object_unbox (builder), args, &error);
 	mono_error_assert_ok (&error);
 	mono_field_set_value (obj, builder_field, mono_object_unbox (builder));
 }
@@ -10137,7 +10134,7 @@ debugger_thread (void *arg)
 	debugger_thread_id = mono_native_thread_id_get ();
 
 	MonoThread *thread = mono_thread_attach (mono_get_root_domain ());
-	mono_thread_set_name_internal (thread->internal_thread, mono_string_new (mono_get_root_domain (), "Debugger agent"), TRUE, &error);
+	mono_thread_set_name_internal (thread->internal_thread, mono_string_new (mono_get_root_domain (), "Debugger agent"), TRUE, FALSE, &error);
 	mono_error_assert_ok (&error);
 
 	thread->internal_thread->state |= ThreadState_Background;

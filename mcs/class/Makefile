@@ -2,6 +2,12 @@ thisdir = class
 
 pcl_facade_dirs := Facades
 
+-include ../build/config.make
+
+ifdef MCS_MODE
+MCS_MODE_dirs := Mono.Cecil.Mdb
+endif
+
 # The minimal set of csc dependencies
 basic_SUBDIRS := \
 	corlib \
@@ -14,6 +20,7 @@ basic_SUBDIRS := \
 	System.Xml.Linq \
 	System.Runtime.InteropServices.RuntimeInformation \
 	Mono.Cecil \
+	$(MCS_MODE_dirs) \
 	../tools/cil-stringreplacer
 
 # resgen is corlib specific so we need to wait until corlib is build
@@ -33,11 +40,10 @@ build_SUBDIRS :=  \
 	System.Runtime.InteropServices.RuntimeInformation \
 	System.IO.Compression \
 	Mono.Cecil \
+	$(MCS_MODE_dirs) \
 	Mono.CompilerServices.SymbolWriter	\
 	PEAPI \
 	../tools/cil-stringreplacer
-
--include ../build/config.make
 
 ifdef MCS_MODE
 basic_PARALLEL_SUBDIRS := ../mcs
@@ -384,7 +390,7 @@ all-local $(STD_TARGETS:=-local):
 
 all-local-aot:
 
-monolite_dir := monolite
+monolite_dir := monolite/$(MONO_CORLIB_VERSION)
 
 # Files needed to bootstrap C# compiler
 build_files = mscorlib.dll System.dll System.Xml.dll Mono.Security.dll System.Core.dll System.Security.dll System.Configuration.dll \
@@ -418,6 +424,11 @@ $(build_files:%=lib/build/%):
 	cd $(topdir) && $(MAKE) profile-do--build--all NO_DIR_CHECK=1 SKIP_AOT=1
 
 dist-monolite: $(monolite_files) lib/$(monolite_dir)/mcs.exe
+
+package-monolite-latest:
+	MONOLITE=monolite-$(MONO_CORLIB_VERSION)-latest; \
+	$(MAKE) dist-monolite monolite_dir=$$MONOLITE; \
+	tar zcvpf $$MONOLITE.tar.gz --directory=lib $$MONOLITE/
 
 dist-default: dist-monolite
 

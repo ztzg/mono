@@ -983,6 +983,8 @@ ves_icall_System_Runtime_CompilerServices_RuntimeHelpers_SufficientExecutionStac
 {
 #if defined(TARGET_WIN32) || defined(HOST_WIN32)
 	// It does not work on win32
+#elif defined(TARGET_ANDROID)
+	// No need for now
 #else
 	guint8 *stack_addr;
 	guint8 *current;
@@ -6239,7 +6241,10 @@ ves_icall_System_Delegate_GetVirtualMethod_internal (MonoDelegate *delegate)
 {
 	MonoReflectionMethod *ret = NULL;
 	MonoError error;
-	ret = mono_method_get_object_checked (mono_domain_get (), mono_object_get_virtual_method (delegate->target, delegate->method), mono_object_class (delegate->target), &error);
+	MonoMethod *m;
+
+	m = mono_object_get_virtual_method (delegate->target, delegate->method);
+	ret = mono_method_get_object_checked (mono_domain_get (), m, m->klass, &error);
 	mono_error_set_pending_exception (&error);
 	return ret;
 }
@@ -6385,6 +6390,8 @@ ICALL_EXPORT MonoReflectionType *
 ves_icall_Remoting_RealProxy_InternalGetProxyType (MonoTransparentProxy *tp)
 {
 	MonoError error;
+	g_assert (tp != NULL && mono_object_class (tp) == mono_defaults.transparent_proxy_class);
+	g_assert (tp->remote_class != NULL && tp->remote_class->proxy_class != NULL);
 	MonoReflectionType *ret = mono_type_get_object_checked (mono_object_domain (tp), &tp->remote_class->proxy_class->byval_arg, &error);
 	mono_error_set_pending_exception (&error);
 
@@ -6505,7 +6512,7 @@ ves_icall_System_Environment_GetIs64BitOperatingSystem (void)
 ICALL_EXPORT MonoStringHandle
 ves_icall_System_Environment_GetEnvironmentVariable_native (const gchar *utf8_name, MonoError *error)
 {
-	const gchar *value;
+	gchar *value;
 
 	if (utf8_name == NULL)
 		return NULL_HANDLE_STRING;
@@ -6515,7 +6522,9 @@ ves_icall_System_Environment_GetEnvironmentVariable_native (const gchar *utf8_na
 	if (value == 0)
 		return NULL_HANDLE_STRING;
 	
-	return mono_string_new_handle (mono_domain_get (), value, error);
+	MonoStringHandle res = mono_string_new_handle (mono_domain_get (), value, error);
+	g_free (value);
+	return res;
 }
 
 /*
@@ -6645,10 +6654,6 @@ ves_icall_System_Environment_Exit (int result)
 
 	/* Suspend all managed threads since the runtime is going away */
 	mono_thread_suspend_all_other_threads ();
-
-	//FIXME shutdown is, weirdly enough, abortible in gc.c so we add this hack for now, see https://bugzilla.xamarin.com/show_bug.cgi?id=51653
-	mono_threads_begin_abort_protected_block ();
-	mono_thread_info_clear_self_interrupt ();
 
 	mono_runtime_quit ();
 #endif
@@ -7270,10 +7275,20 @@ ves_icall_MonoMethod_get_base_method (MonoReflectionMethodHandle m, gboolean def
 
 	MonoMethod *base = mono_method_get_base_method (method, definition, error);
 	return_val_if_nok (error, MONO_HANDLE_CAST (MonoReflectionMethod, NULL_HANDLE));
-	if (base == method)
-		return m;
-	else
-		return mono_method_get_object_handle (mono_domain_get (), base, NULL, error);
+	if (base == method) {
+		/* we want to short-circuit and return 'm' here. But we should
+		   return the same method object that
+		   mono_method_get_object_handle, below would return.  Since
+		   that call takes NULL for the reftype argument, it will take
+		   base->klass as the reflected type for the MonoMethod.  So we
+		   need to check that m also has base->klass as the reflected
+		   type. */
+		MonoReflectionTypeHandle orig_reftype = MONO_HANDLE_NEW_GET (MonoReflectionType, m, reftype);
+		MonoClass *orig_klass = mono_class_from_mono_type (MONO_HANDLE_GETVAL (orig_reftype, type));
+		if (base->klass == orig_klass)
+			return m;
+	}
+	return mono_method_get_object_handle (mono_domain_get (), base, NULL, error);
 }
 
 ICALL_EXPORT MonoStringHandle
@@ -8543,7 +8558,7 @@ mono_create_icall_signature (const char *sigstr)
 	res = mono_metadata_signature_alloc (corlib, len - 1);
 	res->pinvoke = 1;
 
-#ifdef HOST_WIN32
+#ifdef TARGET_WIN32
 	/* 
 	 * Under windows, the default pinvoke calling convention is STDCALL but
 	 * we need CDECL.

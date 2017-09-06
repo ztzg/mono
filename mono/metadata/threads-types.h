@@ -178,6 +178,7 @@ void mono_thread_internal_check_for_interruption_critical (MonoInternalThread *t
 
 void mono_thread_internal_stop (MonoInternalThread *thread);
 void mono_thread_internal_abort (MonoInternalThread *thread);
+void mono_thread_internal_suspend_for_shutdown (MonoInternalThread *thread);
 
 gboolean mono_thread_internal_has_appdomain_ref (MonoInternalThread *thread, MonoDomain *domain);
 
@@ -202,7 +203,7 @@ gunichar2* mono_thread_get_name (MonoInternalThread *this_obj, guint32 *name_len
 
 MONO_API MonoException* mono_thread_get_undeniable_exception (void);
 
-void mono_thread_set_name_internal (MonoInternalThread *this_obj, MonoString *name, gboolean permanent, MonoError *error);
+void mono_thread_set_name_internal (MonoInternalThread *this_obj, MonoString *name, gboolean permanent, gboolean reset, MonoError *error);
 
 void mono_thread_suspend_all_other_threads (void);
 gboolean mono_threads_abort_appdomain_threads (MonoDomain *domain, int timeout);
@@ -223,7 +224,7 @@ uint32_t mono_alloc_special_static_data (uint32_t static_type, uint32_t size, ui
 void*    mono_get_special_static_data   (uint32_t offset);
 gpointer mono_get_special_static_data_for_thread (MonoInternalThread *thread, guint32 offset);
 
-MonoException* mono_thread_resume_interruption (void);
+MonoException* mono_thread_resume_interruption (gboolean exec);
 void mono_threads_perform_thread_dump (void);
 
 gboolean
@@ -249,7 +250,6 @@ mono_threads_detach_coop (gpointer cookie, gpointer *dummy);
 
 void mono_threads_begin_abort_protected_block (void);
 gboolean mono_threads_end_abort_protected_block (void);
-MonoException* mono_thread_try_resume_interruption (void);
 
 gboolean
 mono_thread_internal_current_is_attached (void);

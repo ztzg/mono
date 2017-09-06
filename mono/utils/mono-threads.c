@@ -75,6 +75,8 @@ static gboolean mono_threads_inited = FALSE;
 static MonoSemType suspend_semaphore;
 static size_t pending_suspends;
 
+static mono_mutex_t join_mutex;
+
 #define mono_thread_info_run_state(info) (((MonoThreadInfo*)info)->thread_state & THREAD_STATE_MASK)
 
 /*warn at 50 ms*/
@@ -678,7 +680,7 @@ mono_threads_init (MonoThreadInfoCallbacks *callbacks, size_t info_size)
 	gboolean res;
 	threads_callbacks = *callbacks;
 	thread_info_size = info_size;
-	const char *sleepLimit;
+	char *sleepLimit;
 #ifdef HOST_WIN32
 	res = mono_native_tls_alloc (&thread_info_key, NULL);
 	res = mono_native_tls_alloc (&thread_exited_key, NULL);
@@ -702,10 +704,12 @@ mono_threads_init (MonoThreadInfoCallbacks *callbacks, size_t info_size)
 			sleepWarnDuration = threshold / 20;
 		} else
 			g_warning("MONO_SLEEP_ABORT_LIMIT must be a number >= 40");
+		g_free (sleepLimit);
 	}
 
 	mono_os_sem_init (&global_suspend_semaphore, 1);
 	mono_os_sem_init (&suspend_semaphore, 0);
+	mono_os_mutex_init (&join_mutex);
 
 	mono_lls_init (&thread_list, NULL);
 	mono_thread_smr_init ();
@@ -1002,8 +1006,12 @@ currently used only to deliver exceptions.
 void
 mono_thread_info_setup_async_call (MonoThreadInfo *info, void (*target_func)(void*), void *user_data)
 {
-	/* An async call can only be setup on an async suspended thread */
-	g_assert (mono_thread_info_run_state (info) == STATE_ASYNC_SUSPENDED);
+	if (!mono_threads_is_coop_enabled ()) {
+		/* In non-coop mode, an async call can only be setup on an async suspended thread, but in coop mode, a thread
+		 * may be in blocking state, and will execute the async call when leaving the safepoint, leaving a gc safe
+		 * region or entering a gc unsafe region */
+		g_assert (mono_thread_info_run_state (info) == STATE_ASYNC_SUSPENDED);
+	}
 	/*FIXME this is a bad assert, we probably should do proper locking and fail if one is already set*/
 	g_assert (!info->async_target);
 	info->async_target = target_func;
@@ -1231,6 +1239,7 @@ mono_thread_info_yield (void)
 {
 	return mono_threads_platform_yield ();
 }
+
 static mono_lazy_init_t sleep_init = MONO_LAZY_INIT_STATUS_NOT_INITIALIZED;
 static MonoCoopMutex sleep_mutex;
 static MonoCoopCond sleep_cond;
@@ -1651,7 +1660,7 @@ mono_thread_info_wait_one_handle (MonoThreadHandle *thread_handle, guint32 timeo
 {
 	MonoOSEventWaitRet res;
 
-	res = mono_os_event_wait_one (&thread_handle->event, timeout);
+	res = mono_os_event_wait_one (&thread_handle->event, timeout, alertable);
 	if (res == MONO_OS_EVENT_WAIT_RET_SUCCESS_0)
 		return MONO_THREAD_INFO_WAIT_RET_SUCCESS_0;
 	else if (res == MONO_OS_EVENT_WAIT_RET_ALERTED)
@@ -1679,7 +1688,7 @@ mono_thread_info_wait_multiple_handle (MonoThreadHandle **thread_handles, gsize 
 	if (background_change_event)
 		thread_events [nhandles ++] = background_change_event;
 
-	res = mono_os_event_wait_multiple (thread_events, nhandles, waitall, timeout);
+	res = mono_os_event_wait_multiple (thread_events, nhandles, waitall, timeout, alertable);
 	if (res >= MONO_OS_EVENT_WAIT_RET_SUCCESS_0 && res <= MONO_OS_EVENT_WAIT_RET_SUCCESS_0 + nhandles - 1)
 		return MONO_THREAD_INFO_WAIT_RET_SUCCESS_0 + (res - MONO_OS_EVENT_WAIT_RET_SUCCESS_0);
 	else if (res == MONO_OS_EVENT_WAIT_RET_ALERTED)
@@ -1688,4 +1697,27 @@ mono_thread_info_wait_multiple_handle (MonoThreadHandle **thread_handles, gsize 
 		return MONO_THREAD_INFO_WAIT_RET_TIMEOUT;
 	else
 		g_error ("%s: unknown res value %d", __func__, res);
+}
+
+/*
+ * mono_threads_join_mutex:
+ *
+ *   This mutex is used to avoid races between pthread_create () and pthread_join () on osx, see
+ * https://bugzilla.xamarin.com/show_bug.cgi?id=50529
+ * The code inside the lock should not block.
+ */
+void
+mono_threads_join_lock (void)
+{
+#ifdef TARGET_OSX
+	mono_os_mutex_lock (&join_mutex);
+#endif
+}
+
+void
+mono_threads_join_unlock (void)
+{
+#ifdef TARGET_OSX
+	mono_os_mutex_unlock (&join_mutex);
+#endif
 }

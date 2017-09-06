@@ -300,7 +300,7 @@ done:
 	if (!res && mono_error_ok (error)) {
 		char *name = mono_class_name_from_token (image, type_token);
 		char *assembly = mono_assembly_name_from_token (image, type_token);
-		mono_error_set_type_load_name (error, name, assembly, "Could not resolve type with token %08x", type_token);
+		mono_error_set_type_load_name (error, name, assembly, "Could not resolve type with token %08x (from typeref, class/assembly %s, %s)", type_token, name, assembly);
 	}
 	return res;
 }
@@ -3687,7 +3687,7 @@ is_wcf_hack_disabled (void)
 	static gboolean disabled;
 	static gboolean inited = FALSE;
 	if (!inited) {
-		disabled = g_getenv ("MONO_DISABLE_WCF_HACK") != NULL;
+		disabled = g_hasenv ("MONO_DISABLE_WCF_HACK");
 		inited = TRUE;
 	}
 	return disabled;
@@ -5412,6 +5412,12 @@ mono_class_setup_supertypes (MonoClass *klass)
 }
 
 static gboolean
+discard_gclass_due_to_failure (MonoClass *gclass, void *user_data)
+{
+	return mono_class_get_generic_class (gclass)->container_class == user_data;
+}
+
+static gboolean
 fix_gclass_incomplete_instantiation (MonoClass *gclass, void *user_data)
 {
 	MonoClass *gtd = (MonoClass*)user_data;
@@ -5704,6 +5710,9 @@ mono_class_create_from_typedef (MonoImage *image, guint32 type_token, MonoError 
 	return klass;
 
 parent_failure:
+	if (mono_class_is_gtd (klass))
+		disable_gclass_recording (discard_gclass_due_to_failure, klass);
+
 	mono_class_setup_mono_type (klass);
 	mono_loader_unlock ();
 	mono_profiler_class_loaded (klass, MONO_PROFILE_FAILED);
@@ -7246,7 +7255,7 @@ done:
 	if (!klass && mono_error_ok (error)) {
 		char *name = mono_class_name_from_token (image, type_token);
 		char *assembly = mono_assembly_name_from_token (image, type_token);
-		mono_error_set_type_load_name (error, name, assembly, "Could not resolve type with token %08x", type_token);
+		mono_error_set_type_load_name (error, name, assembly, "Could not resolve type with token %08x (class/assembly %s, %s)", type_token, name, assembly);
 	}
 
 	return klass;

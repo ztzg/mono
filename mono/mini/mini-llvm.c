@@ -1431,7 +1431,10 @@ sig_to_llvm_sig_full (EmitContext *ctx, MonoMethodSignature *sig, LLVMCallInfo *
 			pindex ++;
 			break;
 		case LLVMArgAsIArgs:
-			param_types [pindex] = LLVMArrayType (IntPtrType (), ainfo->nslots);
+			if (ainfo->esize == 8)
+				param_types [pindex] = LLVMArrayType (LLVMInt64Type (), ainfo->nslots);
+			else
+				param_types [pindex] = LLVMArrayType (IntPtrType (), ainfo->nslots);
 			pindex ++;
 			break;
 		case LLVMArgVtypeByRef:
@@ -3490,7 +3493,10 @@ process_call (EmitContext *ctx, MonoBasicBlock *bb, LLVMBuilderRef *builder_ref,
 		}
 		case LLVMArgAsIArgs:
 			g_assert (addresses [reg]);
-			args [pindex] = LLVMBuildLoad (ctx->builder, convert (ctx, addresses [reg], LLVMPointerType (LLVMArrayType (IntPtrType (), ainfo->nslots), 0)), "");
+			if (ainfo->esize == 8)
+				args [pindex] = LLVMBuildLoad (ctx->builder, convert (ctx, addresses [reg], LLVMPointerType (LLVMArrayType (LLVMInt64Type (), ainfo->nslots), 0)), "");
+			else
+				args [pindex] = LLVMBuildLoad (ctx->builder, convert (ctx, addresses [reg], LLVMPointerType (LLVMArrayType (IntPtrType (), ainfo->nslots), 0)), "");
 			break;
 		case LLVMArgVtypeAsScalar:
 			g_assert_not_reached ();
@@ -6931,13 +6937,16 @@ emit_method_inner (EmitContext *ctx)
 		static int count = 0;
 		count ++;
 
-		if (g_getenv ("LLVM_COUNT")) {
-			if (count == atoi (g_getenv ("LLVM_COUNT"))) {
+		char *llvm_count_str = g_getenv ("LLVM_COUNT");
+		if (llvm_count_str) {
+			int lcount = atoi (llvm_count_str);
+			g_free (llvm_count_str);
+			if (count == lcount) {
 				printf ("LAST: %s\n", mono_method_full_name (cfg->method, TRUE));
 				fflush (stdout);
 				last = TRUE;
 			}
-			if (count > atoi (g_getenv ("LLVM_COUNT"))) {
+			if (count > lcount) {
 				set_failure (ctx, "count");
 				return;
 			}
@@ -9110,7 +9119,7 @@ emit_dbg_loc (EmitContext *ctx, LLVMBuilderRef builder, const unsigned char *cil
 		MonoDebugSourceLocation *loc;
 		LLVMValueRef loc_md;
 
-		loc = mono_debug_symfile_lookup_location (ctx->minfo, cil_code - cfg->header->code);
+		loc = mono_debug_method_lookup_location (ctx->minfo, cil_code - cfg->header->code);
 
 		if (loc) {
 #if LLVM_API_VERSION > 100
@@ -9128,7 +9137,7 @@ emit_dbg_loc (EmitContext *ctx, LLVMBuilderRef builder, const unsigned char *cil
 			loc_md = LLVMMDNode (md_args, nmd_args);
 			LLVMSetCurrentDebugLocation (builder, loc_md);
 #endif
-			mono_debug_symfile_free_location (loc);
+			mono_debug_free_source_location (loc);
 		}
 	}
 }

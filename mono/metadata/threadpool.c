@@ -124,6 +124,7 @@ domains_unlock (void)
 static void
 destroy (gpointer unused)
 {
+#if 0
 	g_ptr_array_free (threadpool->domains, TRUE);
 	mono_coop_mutex_destroy (&threadpool->domains_lock);
 
@@ -138,6 +139,7 @@ destroy (gpointer unused)
 	 * not free the threadpool, as we won't be able to access
 	 * the threadpool anyway because the ref count will be 0 */
 	// g_free (threadpool);
+#endif
 }
 
 static void
@@ -187,6 +189,7 @@ cleanup (void)
 
 	mono_coop_mutex_unlock (&threadpool->threads_lock);
 
+#if 0
 	/* give a chance to the other threads to exit */
 	mono_thread_info_yield ();
 
@@ -205,6 +208,7 @@ cleanup (void)
 	}
 
 	mono_coop_mutex_unlock (&threadpool->threads_lock);
+#endif
 
 	mono_threadpool_worker_cleanup (threadpool->worker);
 
@@ -419,6 +423,9 @@ worker_callback (gpointer unused)
 		tpdomain->threadpool_jobs ++;
 
 		domains_unlock ();
+
+		mono_thread_set_name_internal (thread, mono_string_new (mono_get_root_domain (), "Threadpool worker"), FALSE, TRUE, &error);
+		mono_error_assert_ok (&error);
 
 		mono_thread_clr_state (thread, (MonoThreadState)~ThreadState_Background);
 		if (!mono_thread_test_state (thread , ThreadState_Background))

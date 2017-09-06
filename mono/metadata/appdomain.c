@@ -39,6 +39,7 @@
 #include <mono/metadata/domain-internals.h>
 #include "mono/metadata/metadata-internals.h"
 #include <mono/metadata/assembly.h>
+#include <mono/metadata/assembly-internals.h>
 #include <mono/metadata/exception.h>
 #include <mono/metadata/exception-internals.h>
 #include <mono/metadata/threads.h>
@@ -75,19 +76,6 @@
 #ifdef HOST_WIN32
 #include <direct.h>
 #endif
-
-/*
- * This is the version number of the corlib-runtime interface. When
- * making changes to this interface (by changing the layout
- * of classes the runtime knows about, changing icall signature or
- * semantics etc), increment this variable. Also increment the
- * pair of this variable in mscorlib in:
- *       mcs/class/corlib/System/Environment.cs
- *
- * Changes which are already detected at runtime, like the addition
- * of icalls, do not require an increment.
- */
-#define MONO_CORLIB_VERSION 164
 
 typedef struct
 {
@@ -1840,8 +1828,10 @@ mono_make_shadow_copy (const char *filename, MonoError *oerror)
 	sibling_source_len = strlen (sibling_source);
 	sibling_target = g_strconcat (shadow, ".config", NULL);
 	sibling_target_len = strlen (sibling_target);
-	
+
 	copy_result = shadow_copy_sibling (sibling_source, sibling_source_len, ".mdb", sibling_target, sibling_target_len, 7);
+	if (copy_result)
+		copy_result = shadow_copy_sibling (sibling_source, sibling_source_len, ".pdb", sibling_target, sibling_target_len, 11);
 	if (copy_result)
 		copy_result = shadow_copy_sibling (sibling_source, sibling_source_len, ".config", sibling_target, sibling_target_len, 7);
 	
@@ -2054,7 +2044,7 @@ ves_icall_System_Reflection_Assembly_LoadFrom (MonoStringHandle fname, MonoBoole
 	if (!is_ok (error))
 		goto leave;
 	
-	MonoAssembly *ass = mono_assembly_open_full (filename, &status, refOnly);
+	MonoAssembly *ass = mono_assembly_open_a_lot (filename, &status, refOnly, TRUE);
 	
 	if (!ass) {
 		if (status == MONO_IMAGE_IMAGE_INVALID)
@@ -2208,8 +2198,9 @@ ves_icall_System_AppDomain_InternalUnload (gint32 domain_id, MonoError *error)
 	 * Unloading seems to cause problems when running NUnit/NAnt, hence
 	 * this workaround.
 	 */
-	if (g_getenv ("MONO_NO_UNLOAD"))
+	if (g_hasenv ("MONO_NO_UNLOAD"))
 		return;
+
 #ifdef __native_client__
 	return;
 #endif
@@ -2486,7 +2477,7 @@ unload_thread_main (void *arg)
 	/* Force it to be attached to avoid racing during shutdown. */
 	thread = mono_thread_attach_full (mono_get_root_domain (), TRUE);
 
-	mono_thread_set_name_internal (thread->internal_thread, mono_string_new (mono_get_root_domain (), "Domain unloader"), TRUE, &error);
+	mono_thread_set_name_internal (thread->internal_thread, mono_string_new (mono_get_root_domain (), "Domain unloader"), TRUE, FALSE, &error);
 	if (!is_ok (&error)) {
 		data->failure_reason = g_strdup (mono_error_get_message (&error));
 		mono_error_cleanup (&error);

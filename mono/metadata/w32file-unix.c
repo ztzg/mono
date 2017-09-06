@@ -502,7 +502,7 @@ static gint
 get_errno_from_g_file_error (gint error)
 {
 	switch (error) {
-#ifdef EACCESS
+#ifdef EACCES
 	case G_FILE_ERROR_ACCES: return EACCES;
 #endif
 #ifdef ENAMETOOLONG
@@ -559,7 +559,7 @@ get_errno_from_g_file_error (gint error)
 #ifdef EINTR
 	case G_FILE_ERROR_INTR: return EINTR;
 #endif
-#ifdef EWIO
+#ifdef EIO
 	case G_FILE_ERROR_IO: return EIO;
 #endif
 #ifdef EPERM
@@ -4828,7 +4828,7 @@ mono_w32file_init (void)
 /* 	mono_w32handle_register_capabilities (MONO_W32HANDLE_CONSOLE, */
 /* 					    MONO_W32HANDLE_CAP_WAIT); */
 
-	if (g_getenv ("MONO_STRICT_IO_EMULATION"))
+	if (g_hasenv ("MONO_STRICT_IO_EMULATION"))
 		lock_while_writing = TRUE;
 }
 
