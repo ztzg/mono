@@ -105,10 +105,10 @@ namespace System
 
 			try {
 				ret = readlink (path, buf, buf.Length);
-			} catch (DllNotFoundException e) {
+			} catch (DllNotFoundException) {
 				readlinkNotFound = true;
 				return null;
-			} catch (EntryPointNotFoundException e) {
+			} catch (EntryPointNotFoundException) {
 				readlinkNotFound = true;
 				return null;
 			}
@@ -149,10 +149,10 @@ namespace System
 			return true;
 		}
 
-#if !MOBILE || MOBILE_STATIC
+#if !MONODROID && !MONOTOUCH && !XAMMAC
 		static TimeZoneInfo CreateLocal ()
 		{
-#if !MOBILE_STATIC
+#if !FULL_AOT_DESKTOP || WIN_PLATFORM
 			if (IsWindows && LocalZoneKey != null) {
 				string name = (string)LocalZoneKey.GetValue ("TimeZoneKeyName");
 				if (name == null)
@@ -204,7 +204,7 @@ namespace System
 
 		static void GetSystemTimeZonesCore (List<TimeZoneInfo> systemTimeZones)
 		{
-#if !MOBILE_STATIC
+#if !FULL_AOT_DESKTOP || WIN_PLATFORM
 			if (TimeZoneKey != null) {
 				foreach (string id in TimeZoneKey.GetSubKeyNames ()) {
 					try {
@@ -237,7 +237,7 @@ namespace System
 			throw new NotImplementedException ("This method is not implemented for this platform");
 #endif
 		}
-#endif
+#endif // !MONODROID && !MONOTOUCH && !XAMMAC
 
 		string standardDisplayName;
 		public string StandardName {
@@ -273,7 +273,7 @@ namespace System
 #endif
 		private AdjustmentRule [] adjustmentRules;
 
-#if !NET_2_1 || MOBILE_STATIC
+#if !MOBILE || !FULL_AOT_DESKTOP || WIN_PLATFORM
 		/// <summary>
 		/// Determine whether windows of not (taken Stephane Delcroix's code)
 		/// </summary>
@@ -301,7 +301,7 @@ namespace System
 			return str.Substring (Istart, Iend-Istart+1);
 		}
 		
-#if !MOBILE_STATIC
+#if !FULL_AOT_DESKTOP || WIN_PLATFORM
 		static RegistryKey timeZoneKey;
 		static RegistryKey TimeZoneKey {
 			get {
@@ -330,7 +330,7 @@ namespace System
 			}
 		}
 #endif
-#endif
+#endif // !MOBILE || !FULL_AOT_DESKTOP || WIN_PLATFORM
 
 		private static bool TryAddTicks (DateTime date, long ticks, out DateTime result, DateTimeKind kind = DateTimeKind.Unspecified)
 		{
@@ -412,7 +412,14 @@ namespace System
 
 		public static DateTime ConvertTimeBySystemTimeZoneId (DateTime dateTime, string sourceTimeZoneId, string destinationTimeZoneId)
 		{
-			return ConvertTime (dateTime, FindSystemTimeZoneById (sourceTimeZoneId), FindSystemTimeZoneById (destinationTimeZoneId));
+			TimeZoneInfo source_tz;
+			if (dateTime.Kind == DateTimeKind.Utc && sourceTimeZoneId == TimeZoneInfo.Utc.Id) {
+				source_tz = Utc;
+			} else {
+				source_tz = FindSystemTimeZoneById (sourceTimeZoneId);
+			}
+
+			return ConvertTime (dateTime, source_tz, FindSystemTimeZoneById (destinationTimeZoneId));
 		}
 
 		public static DateTimeOffset ConvertTimeBySystemTimeZoneId (DateTimeOffset dateTimeOffset, string destinationTimeZoneId)
@@ -531,7 +538,7 @@ namespace System
 			//FIXME: this method should check for cached values in systemTimeZones
 			if (id == null)
 				throw new ArgumentNullException ("id");
-#if !NET_2_1
+#if WIN_PLATFORM
 			if (TimeZoneKey != null)
 			{
 				if (id == "Coordinated Universal Time")
@@ -561,7 +568,7 @@ namespace System
 		}
 #endif
 
-#if !NET_2_1
+#if WIN_PLATFORM
 		private static TimeZoneInfo FromRegistryKey (string id, RegistryKey key)
 		{
 			byte [] reg_tzi = (byte []) key.GetValue ("TZI");
@@ -804,9 +811,16 @@ namespace System
 					return tz.BaseUtcOffset;
 			}
 
-			if (tzRule != null && tz.IsInDST (tzRule, stdUtcDateTime) && tz.IsInDST (tzRule, dstUtcDateTime)) {
+			if (tzRule != null && tz.IsInDST (tzRule, stdUtcDateTime)) {
+				// Replicate what .NET does when given a time which falls into the hour which is lost when
+				// DST starts. isDST should always be true but the offset should be BaseUtcOffset without the
+				// DST delta while in that hour.
 				isDST = true;
-				return tz.BaseUtcOffset + tzRule.DaylightDelta;
+				if (tz.IsInDST (tzRule, dstUtcDateTime)) {
+					return tz.BaseUtcOffset + tzRule.DaylightDelta;
+				} else {
+					return tz.BaseUtcOffset;
+				}
 			}
 
 			return tz.BaseUtcOffset;
@@ -873,7 +887,7 @@ namespace System
 				return true;
 
 			// We might be in the dateTime previous year's DST period
-			return IsInDSTForYear (rule, dateTime, dateTime.Year - 1);
+			return dateTime.Year > 1 && IsInDSTForYear (rule, dateTime, dateTime.Year - 1);
 		}
 
 		bool IsInDSTForYear (AdjustmentRule rule, DateTime dateTime, int year)
@@ -912,7 +926,7 @@ namespace System
 
 		public bool IsDaylightSavingTime (DateTimeOffset dateTimeOffset)
 		{
-			throw new NotImplementedException ();
+			return IsDaylightSavingTime (dateTimeOffset.DateTime);
 		}
 
 		internal DaylightTime GetDaylightChanges (int year)
@@ -951,12 +965,17 @@ namespace System
 			} else {
 				AdjustmentRule first = null, last = null;
 
+				// Rule start/end dates are either very specific or very broad depending on the platform
+				//   2015-10-04..2016-04-03 - Rule for a time zone in southern hemisphere on non-Windows platforms
+				//   2016-03-27..2016-10-03 - Rule for a time zone in northern hemisphere on non-Windows platforms
+				//   0001-01-01..9999-12-31 - Rule for a time zone on Windows
+
 				foreach (var rule in GetAdjustmentRules ()) {
-					if (rule.DateStart.Year != year && rule.DateEnd.Year != year)
+					if (rule.DateStart.Year > year || rule.DateEnd.Year < year)
 						continue;
-					if (rule.DateStart.Year == year)
+					if (rule.DateStart.Year <= year && (first == null || rule.DateStart.Year > first.DateStart.Year))
 						first = rule;
-					if (rule.DateEnd.Year == year)
+					if (rule.DateEnd.Year >= year && (last == null || rule.DateEnd.Year < last.DateEnd.Year))
 						last = rule;
 				}
 
@@ -1165,16 +1184,27 @@ namespace System
 					return false;
 			}
 
+			var inDelta = false;
 			for (var i =  transitions.Count - 1; i >= 0; i--) {
 				var pair = transitions [i];
 				DateTime ttime = pair.Key;
 				TimeType ttype = pair.Value;
 
-				if (ttime > date)
+				var delta =  new TimeSpan (0, 0, ttype.Offset) - BaseUtcOffset;
+
+				if ((ttime + delta) > date) {
+					inDelta = ttime <= date;
 					continue;
+				}
 
 				offset =  new TimeSpan (0, 0, ttype.Offset);
-				isDst = ttype.IsDst;
+				if (inDelta) {
+					// Replicate what .NET does when given a time which falls into the hour which is lost when
+					// DST starts. isDST should be true but the offset should be the non-DST offset.
+					isDst = transitions [i - 1].Value.IsDst;
+				} else {
+					isDst = ttype.IsDst;
+				}
 
 				return true;
 			}
@@ -1221,8 +1251,10 @@ namespace System
 
 			try {
 				return ParseTZBuffer (id, buffer, length);
+			} catch (InvalidTimeZoneException) {
+				throw;
 			} catch (Exception e) {
-				throw new InvalidTimeZoneException (e.Message);
+				throw new InvalidTimeZoneException ("Time zone information file contains invalid data", e);
 			}
 		}
 
@@ -1279,7 +1311,7 @@ namespace System
 			if (time_types.Count == 0)
 				throw new InvalidTimeZoneException ();
 
-			if (time_types.Count == 1 && ((TimeType)time_types[0]).IsDst)
+			if (time_types.Count == 1 && time_types[0].IsDst)
 				throw new InvalidTimeZoneException ();
 
 			TimeSpan baseUtcOffset = new TimeSpan (0);
@@ -1360,8 +1392,8 @@ namespace System
 
 			TimeZoneInfo tz;
 			if (adjustmentRules.Count == 0 && !storeTransition) {
-				TimeType t = (TimeType)time_types [0];
 				if (standardDisplayName == null) {
+					var t = time_types [0];
 					standardDisplayName = t.Name;
 					baseUtcOffset = new TimeSpan (0, 0, t.Offset);
 				}
@@ -1405,6 +1437,20 @@ namespace System
 			var types = new Dictionary<int, TimeType> (count);
 			for (int i = 0; i < count; i++) {
 				int offset = ReadBigEndianInt32 (buffer, index + 6 * i);
+
+				//
+				// The official tz database contains timezone with GMT offsets
+				// not only in whole hours/minutes but in seconds. This happens for years
+				// before 1901. For example
+				//
+				// NAME		        GMTOFF   RULES	FORMAT	UNTIL
+				// Europe/Madrid	-0:14:44 -	LMT	1901 Jan  1  0:00s
+				//
+				// .NET as of 4.6.2 cannot handle that and uses hours/minutes only, so
+				// we remove seconds to not crash later
+				//
+				offset = (offset / 60) * 60;
+
 				byte is_dst = buffer [index + 6 * i + 4];
 				byte abbrev = buffer [index + 6 * i + 5];
 				types.Add (i, new TimeType (offset, (is_dst != 0), abbreviations [(int)abbrev]));
@@ -1460,7 +1506,7 @@ namespace System
 #endregion
 	}
 
-	struct TimeType {
+	class TimeType {
 		public readonly int Offset;
 		public readonly bool IsDst;
 		public string Name;

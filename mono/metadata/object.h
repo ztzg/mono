@@ -36,7 +36,6 @@ typedef void*    (*MonoCompileFunc)	     (MonoMethod *method);
 typedef void	    (*MonoMainThreadFunc)    (void* user_data);
 
 #define MONO_OBJECT_SETREF(obj,fieldname,value) do {	\
-		g_assert (sizeof((obj)->fieldname) == sizeof (gpointer*));	\
 		mono_gc_wbarrier_set_field ((MonoObject*)(obj), &((obj)->fieldname), (MonoObject*)value);	\
 		/*(obj)->fieldname = (value);*/	\
 	} while (0)
@@ -112,6 +111,13 @@ mono_array_addr_with_size   (MonoArray *array, int size, uintptr_t idx);
 MONO_API uintptr_t
 mono_array_length           (MonoArray *array);
 
+MONO_API MonoString*
+mono_string_empty	      (MonoDomain *domain);
+
+MONO_RT_EXTERNAL_ONLY
+MONO_API MonoString*
+mono_string_empty_wrapper   (void);
+
 MONO_RT_EXTERNAL_ONLY
 MONO_API MonoString*
 mono_string_new_utf16	    (MonoDomain *domain, const mono_unichar2 *text, int32_t len);
@@ -175,6 +181,7 @@ mono_string_hash            (MonoString *s);
 MONO_API int
 mono_object_hash            (MonoObject* obj);
 
+MONO_RT_EXTERNAL_ONLY
 MONO_API MonoString *
 mono_object_to_string (MonoObject *obj, MonoObject **exc);
 
@@ -278,10 +285,12 @@ mono_runtime_exec_managed_code (MonoDomain *domain,
 				MonoMainThreadFunc main_func,
 				void* main_args);
 
+MONO_RT_EXTERNAL_ONLY
 MONO_API int
 mono_runtime_run_main	    (MonoMethod *method, int argc, char* argv[], 
 			     MonoObject **exc);
 
+MONO_RT_EXTERNAL_ONLY
 MONO_API int
 mono_runtime_exec_main	    (MonoMethod *method, MonoArray *args,
 			     MonoObject **exc);

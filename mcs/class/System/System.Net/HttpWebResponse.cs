@@ -106,7 +106,7 @@ namespace System.Net
 			version = (Version) info.GetValue ("version", typeof (Version));
 			statusCode = (HttpStatusCode) info.GetValue ("statusCode", typeof (HttpStatusCode));
 		}
-		
+
 		// Properties
 		
 		public string CharacterSet {
@@ -225,7 +225,7 @@ namespace System.Net
 		public string Server {
 			get {
 				CheckDisposed ();
-				return webHeaders ["Server"]; 
+				return webHeaders ["Server"] ?? "";
 			}
 		}
 		
@@ -241,6 +241,12 @@ namespace System.Net
 			get {
 				CheckDisposed ();
 				return statusDescription; 
+			}
+		}
+
+		public override bool SupportsHeaders {
+			get {
+				return true;
 			}
 		}
 

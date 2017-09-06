@@ -2465,6 +2465,12 @@ namespace Mono.CSharp
 				case '\"':
 					++str_quote;
 					break;
+				case '\\':
+					// Skip escaped " character
+					c = reader.Read ();
+					if (c == -1)
+						res = false;
+					break;
 				case -1:
 					res = false;
 					break;
@@ -2523,7 +2529,6 @@ namespace Mono.CSharp
 
 		int TokenizePragmaWarningIdentifier (ref int c, ref bool identifier)
 		{
-
 			if ((c >= '0' && c <= '9') || is_identifier_start_character (c)) {
 				int number;
 
@@ -2548,7 +2553,7 @@ namespace Mono.CSharp
 						id_builder [pos] = (char)c;
 
 						if (c >= '0' && c <= '9') {
-							if (pos == 6 && id_builder [0] == 'C' && id_builder [1] == 'S') {
+							if (pos == 5 && id_builder [0] == 'C' && id_builder [1] == 'S') {
 								// Recognize CSXXXX as C# XXXX warning
 								number = 0;
 								int pow = 1000;
@@ -2563,6 +2568,9 @@ namespace Mono.CSharp
 									pow /= 10;
 								}
 							}
+						} else if (c == '\n' || c == UnicodeLS || c == UnicodePS) {
+							advance_line ();
+							break;
 						} else if ((c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '_') {
 							break;
 						}

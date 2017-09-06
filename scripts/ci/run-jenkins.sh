@@ -1,116 +1,99 @@
 #!/bin/bash -e
 
-TESTCMD=`dirname "${BASH_SOURCE[0]}"`/run-step.sh
+export MONO_REPO_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../" && pwd )"
+export TESTCMD=${MONO_REPO_ROOT}/scripts/ci/run-step.sh
 
 export TEST_HARNESS_VERBOSE=1
-export CFLAGS=-ggdb3
 
-if [[ ${CI_TAGS} == *'coop-gc'* ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-cooperative-gc=yes"; export MONO_CHECK_MODE=gc,thread; fi
+if [[ ${label} == w* ]]; then
+    # Passing -ggdb3 on Cygwin breaks linking against libmonosgen-x.y.dll
+    export CFLAGS="-g -O2"
+else
+    export CFLAGS="-ggdb3 -O2"
+fi
 
-if [[ ${label} == 'osx-i386' ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-libgdiplus=/Library/Frameworks/Mono.framework/Versions/Current/lib/libgdiplus.dylib --enable-nls=no --build=i386-apple-darwin11.2.0"; fi
-if [[ ${label} == 'osx-amd64' ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-libgdiplus=/Library/Frameworks/Mono.framework/Versions/Current/lib/libgdiplus.dylib --enable-nls=no"; fi
-if [[ ${label} == 'w32' ]]; then PLATFORM=Win32; EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --host=i686-w64-mingw32"; export MONO_EXECUTABLE="`cygpath -u ${WORKSPACE}\\\msvc\\\Win32\\\bin\\\Release_SGen\\\mono-sgen.exe`";fi
-if [[ ${label} == 'w64' ]]; then PLATFORM=x64; EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --host=x86_64-w64-mingw32"; export MONO_EXECUTABLE="`cygpath -u ${WORKSPACE}\\\msvc\\\x64\\\bin\\\Release_SGen\\\mono-sgen.exe`"; fi
+if [[ ${label} == 'osx-i386' ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-libgdiplus=/Library/Frameworks/Mono.framework/Versions/Current/lib/libgdiplus.dylib --build=i386-apple-darwin11.2.0"; fi
+if [[ ${label} == 'osx-amd64' ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-libgdiplus=/Library/Frameworks/Mono.framework/Versions/Current/lib/libgdiplus.dylib "; fi
+if [[ ${label} == 'w32' ]]; then PLATFORM=Win32; EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --host=i686-w64-mingw32"; export MONO_EXECUTABLE="${MONO_REPO_ROOT}/msvc/build/sgen/Win32/bin/Release/mono-sgen.exe"; fi
+if [[ ${label} == 'w64' ]]; then PLATFORM=x64; EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --host=x86_64-w64-mingw32 --disable-boehm"; export MONO_EXECUTABLE="${MONO_REPO_ROOT}/msvc/build/sgen/x64/bin/Release/mono-sgen.exe"; fi
 
-if [[ ${label} != w* ]] && [[ ${label} != 'debian-ppc64el' ]] && [[ ${label} != 'centos-s390x' ]];
+if [[ ${CI_TAGS} == *'coop-gc'* ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-cooperative-gc=yes"; fi
+
+if [[ ${CI_TAGS} == *'checked-coop'* ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --enable-checked-build=gc,thread"; export MONO_CHECK_MODE=gc,thread; fi
+if [[ ${CI_TAGS} == *'checked-all'* ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --enable-checked-build=all"; export MONO_CHECK_MODE=all; fi
+
+if [[ ${CI_TAGS} == *'mcs-compiler'* ]]; then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-csc=mcs"; fi
+
+if   [[ ${CI_TAGS} == *'fullaot_llvm'* ]];       then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --enable-llvm=yes --with-runtime_preset=fullaot ";
+elif [[ ${CI_TAGS} == *'hybridaot_llvm'* ]];     then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --enable-llvm=yes --with-runtime_preset=hybridaot";
+elif [[ ${CI_TAGS} == *'aot_llvm'* ]];           then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --enable-llvm=yes --with-runtime_preset=aot ";
+elif [[ ${CI_TAGS} == *'fullaot'* ]];            then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-runtime_preset=fullaot";
+elif [[ ${CI_TAGS} == *'hybridaot'* ]];          then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-runtime_preset=hybridaot";
+elif [[ ${CI_TAGS} == *'winaot'* ]];             then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-runtime_preset=winaot";
+elif [[ ${CI_TAGS} == *'aot'* ]];                then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-runtime_preset=aot";
+elif [[ ${CI_TAGS} == *'bitcode'* ]];            then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-runtime_preset=bitcode";
+elif [[ ${CI_TAGS} == *'interpreter'* ]];        then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-interpreter=yes";
+elif [[ ${CI_TAGS} == *'acceptance-tests'* ]];   then EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --prefix=${MONO_REPO_ROOT}/tmp/mono-acceptance-tests --with-sgen-default-concurrent=yes";
+elif [[ ${label} != w* ]] && [[ ${label} != 'debian-8-ppc64el' ]] && [[ ${label} != 'centos-s390x' ]] && [[ ${CI_TAGS} != *'monolite'* ]];
     then
-    EXTRA_CONF_FLAGS="$EXTRA_CONF_FLAGS --with-monodroid --with-monotouch --with-monotouch_watch --with-monotouch_tv --with-xammac --with-mobile_static"
-    # only enable the mobile profiles and mobile_static on the main architectures
+    # only enable the concurrent collector by default on main unix archs
+    EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-sgen-default-concurrent=yes"
+
+    if [[ ${label} == 'ubuntu-1404-amd64' ]]; then
+        # only enable build of the additional profiles on one architecture to save time
+        EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --with-runtime_preset=all"
+    fi
 fi
 
 if [ -x "/usr/bin/dpkg-architecture" ];
 	then
 	EXTRA_CONF_FLAGS="$EXTRA_CONF_FLAGS --host=`/usr/bin/dpkg-architecture -qDEB_HOST_GNU_TYPE`"
 	#force build arch = dpkg arch, sometimes misdetected
+	mkdir -p ~/.config/.mono/
+	wget -qO- https://download.mono-project.com/test/new-certs.tgz| tar zx -C ~/.config/.mono/
 fi
 
 ${TESTCMD} --label=configure --timeout=60m --fatal ./autogen.sh $EXTRA_CONF_FLAGS
+if [[ ${label} == 'w32' ]];
+    then
+	# only build boehm on w32 (only windows platform supporting boehm).
+    ${TESTCMD} --label=make-msvc --timeout=60m --fatal /cygdrive/c/Program\ Files\ \(x86\)/MSBuild/14.0/Bin/MSBuild.exe /p:PlatformToolset=v140 /p:Platform=${PLATFORM} /p:Configuration=Release /p:MONO_TARGET_GC=boehm msvc/mono.sln
+fi
 if [[ ${label} == w* ]];
     then
-    ${TESTCMD} --label=make-msvc --timeout=60m --fatal /cygdrive/c/Program\ Files\ \(x86\)/MSBuild/14.0/Bin/MSBuild.exe /p:PlatformToolset=v140 /p:Platform=${PLATFORM} /p:Configuration=Release msvc/mono.sln
-    ${TESTCMD} --label=make-msvc-sgen --timeout=60m --fatal /cygdrive/c/Program\ Files\ \(x86\)/MSBuild/14.0/Bin/MSBuild.exe /p:PlatformToolset=v140 /p:Platform=${PLATFORM} /p:Configuration=Release_SGen msvc/mono.sln
+    ${TESTCMD} --label=make-msvc-sgen --timeout=60m --fatal /cygdrive/c/Program\ Files\ \(x86\)/MSBuild/14.0/Bin/MSBuild.exe /p:PlatformToolset=v140 /p:Platform=${PLATFORM} /p:Configuration=Release /p:MONO_TARGET_GC=sgen msvc/mono.sln
 fi
-${TESTCMD} --label=make --timeout=300m --fatal make -w V=1
-if [[ -n "${ghprbPullId}" ]] && [[ ${label} == w* ]];
+
+if [[ ${CI_TAGS} == *'winaot'* ]];
     then
-    exit 0
-    # we don't run the test suite on Windows PRs, we just ensure the build succeeds, so end here
+    # The AOT compiler on Windows requires Visual Studio's clang.exe and link.exe in $PATH
+    # and we must make sure Visual Studio's link.exe comes before Cygwin's link.exe
+    VC_ROOT="/cygdrive/c/Program Files (x86)/Microsoft Visual Studio 14.0/VC"
+    export PATH="$VC_ROOT/ClangC2/bin/amd64:$VC_ROOT/bin/amd64":$PATH
 fi
-${TESTCMD} --label=mini --timeout=5m make -w -C mono/mini -k check
-${TESTCMD} --label=runtime --timeout=140m make -w -C mono/tests -k test-wrench V=1 CI=1
-${TESTCMD} --label=corlib --timeout=30m make -w -C mcs/class/corlib run-test
-${TESTCMD} --label=verify --timeout=15m make -w -C runtime mcs-compileall
-${TESTCMD} --label=profiler --timeout=30m make -w -C mono/profiler -k check
-${TESTCMD} --label=compiler --timeout=30m make -w -C mcs/tests run-test
-${TESTCMD} --label=compiler-errors --timeout=30m make -w -C mcs/errors run-test
-${TESTCMD} --label=System --timeout=10m make -w -C mcs/class/System run-test
-${TESTCMD} --label=System.XML --timeout=5m make -w -C mcs/class/System.XML run-test
-${TESTCMD} --label=Mono.Security --timeout=5m make -w -C mcs/class/Mono.Security run-test
-${TESTCMD} --label=System.Security --timeout=5m make -w -C mcs/class/System.Security run-test
-${TESTCMD} --label=System.Drawing --timeout=5m make -w -C mcs/class/System.Drawing run-test
-if [[ ${label} == osx-* ]]
-then ${TESTCMD} --label=Windows.Forms --skip
-else ${TESTCMD} --label=Windows.Forms --timeout=5m make -w -C mcs/class/System.Windows.Forms run-test
+
+if [[ ${CI_TAGS} == *'monolite'* ]]; then make get-monolite-latest; fi
+
+make_parallelism=-j4
+if [[ ${label} == 'debian-8-ppc64el' ]]; then make_parallelism=-j1; fi
+
+${TESTCMD} --label=make --timeout=300m --fatal make ${make_parallelism} -w V=1
+
+if [[ ${CI_TAGS} == *'acceptance-tests'* ]];
+    then
+	$(dirname "${BASH_SOURCE[0]}")/run-test-acceptance-tests.sh
+elif [[ ${CI_TAGS} == *'profiler-stress-tests'* ]];
+    then
+	$(dirname "${BASH_SOURCE[0]}")/run-test-profiler-stress-tests.sh
+elif [[ ${CI_TAGS} == *'interpreter'* ]];
+    then
+    $(dirname "${BASH_SOURCE[0]}")/run-test-interpreter.sh
+elif [[ ${CI_TAGS} == *'mcs-compiler'* ]];
+    then
+    $(dirname "${BASH_SOURCE[0]}")/run-test-mcs.sh
+elif [[ ${CI_TAGS} == *'no-tests'* ]];
+    then
+	exit 0
+else
+	make check-ci
 fi
-${TESTCMD} --label=System.Data --timeout=5m make -w -C mcs/class/System.Data run-test
-${TESTCMD} --label=System.Data.OracleClient --timeout=5m make -w -C mcs/class/System.Data.OracleClient run-test
-${TESTCMD} --label=System.Design --timeout=5m make -w -C mcs/class/System.Design run-test
-${TESTCMD} --label=Mono.Posix --timeout=5m make -w -C mcs/class/Mono.Posix run-test
-${TESTCMD} --label=System.Web --timeout=30m make -w -C mcs/class/System.Web run-test
-${TESTCMD} --label=System.Web.Services --timeout=5m make -w -C mcs/class/System.Web.Services run-test
-${TESTCMD} --label=System.Runtime.SFS --timeout=5m make -w -C mcs/class/System.Runtime.Serialization.Formatters.Soap run-test
-${TESTCMD} --label=System.Runtime.Remoting --timeout=5m make -w -C mcs/class/System.Runtime.Remoting run-test
-${TESTCMD} --label=Cscompmgd --timeout=5m make -w -C mcs/class/Cscompmgd run-test
-${TESTCMD} --label=Commons.Xml.Relaxng --timeout=5m make -w -C mcs/class/Commons.Xml.Relaxng run-test
-${TESTCMD} --label=System.ServiceProcess --timeout=5m make -w -C mcs/class/System.ServiceProcess run-test
-${TESTCMD} --label=I18N.CJK --timeout=5m make -w -C mcs/class/I18N/CJK run-test
-${TESTCMD} --label=I18N.West --timeout=5m make -w -C mcs/class/I18N/West run-test
-${TESTCMD} --label=I18N.MidEast --timeout=5m make -w -C mcs/class/I18N/MidEast run-test
-${TESTCMD} --label=System.DirectoryServices --timeout=5m make -w -C mcs/class/System.DirectoryServices run-test
-${TESTCMD} --label=Microsoft.Build.Engine --timeout=5m make -w -C mcs/class/Microsoft.Build.Engine run-test
-${TESTCMD} --label=Microsoft.Build.Framework --timeout=5m make -w -C mcs/class/Microsoft.Build.Framework run-test
-${TESTCMD} --label=Microsoft.Build.Tasks --timeout=5m make -w -C mcs/class/Microsoft.Build.Tasks run-test
-${TESTCMD} --label=Microsoft.Build.Utilities --timeout=5m make -w -C mcs/class/Microsoft.Build.Utilities run-test
-${TESTCMD} --label=Mono.C5 --timeout=5m make -w -C mcs/class/Mono.C5 run-test
-${TESTCMD} --label=System.Configuration --timeout=5m make -w -C mcs/class/System.Configuration run-test
-${TESTCMD} --label=System.Transactions --timeout=5m make -w -C mcs/class/System.Transactions run-test
-${TESTCMD} --label=System.Web.Extensions --timeout=5m make -w -C mcs/class/System.Web.Extensions run-test
-${TESTCMD} --label=System.Core --timeout=15m make -w -C mcs/class/System.Core run-test
-${TESTCMD} --label=symbolicate --timeout=60m make -w -C mcs/tools/mono-symbolicate check
-${TESTCMD} --label=System.Xml.Linq --timeout=5m make -w -C mcs/class/System.Xml.Linq run-test
-${TESTCMD} --label=System.Data.DSE --timeout=5m make -w -C mcs/class/System.Data.DataSetExtensions run-test
-${TESTCMD} --label=System.Web.Abstractions --timeout=5m make -w -C mcs/class/System.Web.Abstractions run-test
-${TESTCMD} --label=System.Web.Routing --timeout=5m make -w -C mcs/class/System.Web.Routing run-test
-${TESTCMD} --label=System.Runtime.Serialization --timeout=5m make -w -C mcs/class/System.Runtime.Serialization run-test
-${TESTCMD} --label=System.IdentityModel --timeout=5m make -w -C mcs/class/System.IdentityModel run-test
-${TESTCMD} --label=System.ServiceModel --timeout=15m make -w -C mcs/class/System.ServiceModel run-test
-${TESTCMD} --label=System.ServiceModel.Web --timeout=5m make -w -C mcs/class/System.ServiceModel.Web run-test
-${TESTCMD} --label=System.Web.Extensions-standalone --timeout=5m make -w -C mcs/class/System.Web.Extensions run-standalone-test
-${TESTCMD} --label=System.ComponentModel.DataAnnotations --timeout=5m make -w -C mcs/class/System.ComponentModel.DataAnnotations run-test
-${TESTCMD} --label=Mono.CodeContracts --timeout=5m make -w -C mcs/class/Mono.CodeContracts run-test
-${TESTCMD} --label=System.Runtime.Caching --timeout=5m make -w -C mcs/class/System.Runtime.Caching run-test
-${TESTCMD} --label=System.Data.Services --timeout=5m make -w -C mcs/class/System.Data.Services run-test
-${TESTCMD} --label=System.Web.DynamicData --timeout=5m make -w -C mcs/class/System.Web.DynamicData run-test
-${TESTCMD} --label=Mono.CSharp --timeout=5m make -w -C mcs/class/Mono.CSharp run-test
-${TESTCMD} --label=WindowsBase --timeout=5m make -w -C mcs/class/WindowsBase run-test
-${TESTCMD} --label=System.Numerics --timeout=5m make -w -C mcs/class/System.Numerics run-test
-${TESTCMD} --label=System.Runtime.DurableInstancing --timeout=5m make -w -C mcs/class/System.Runtime.DurableInstancing run-test
-${TESTCMD} --label=System.ServiceModel.Discovery --timeout=5m make -w -C mcs/class/System.ServiceModel.Discovery run-test
-${TESTCMD} --label=System.Xaml --timeout=5m make -w -C mcs/class/System.Xaml run-test
-${TESTCMD} --label=System.Net.Http --timeout=5m make -w -C mcs/class/System.Net.Http run-test
-${TESTCMD} --label=System.Json --timeout=5m make -w -C mcs/class/System.Json run-test
-${TESTCMD} --label=System.Threading.Tasks.Dataflow --timeout=5m make -w -C mcs/class/System.Threading.Tasks.Dataflow run-test
-${TESTCMD} --label=Mono.Debugger.Soft --timeout=5m make -w -C mcs/class/Mono.Debugger.Soft run-test
-${TESTCMD} --label=Microsoft.Build --timeout=5m make -w -C mcs/class/Microsoft.Build run-test
-${TESTCMD} --label=monodoc --timeout=10m make -w -C mcs/tools/mdoc run-test
-${TESTCMD} --label=Microsoft.Build-12 --timeout=10m make -w -C mcs/class/Microsoft.Build run-test PROFILE=xbuild_12
-${TESTCMD} --label=Microsoft.Build.Engine-12 --timeout=60m make -w -C mcs/class/Microsoft.Build.Engine run-test PROFILE=xbuild_12
-${TESTCMD} --label=Microsoft.Build.Framework-12 --timeout=60m make -w -C mcs/class/Microsoft.Build.Framework run-test PROFILE=xbuild_12
-${TESTCMD} --label=Microsoft.Build.Tasks-12 --timeout=60m make -w -C mcs/class/Microsoft.Build.Tasks run-test PROFILE=xbuild_12
-${TESTCMD} --label=Microsoft.Build.Utilities-12 --timeout=60m make -w -C mcs/class/Microsoft.Build.Utilities run-test PROFILE=xbuild_12
-${TESTCMD} --label=Microsoft.Build-14 --timeout=60m make -w -C mcs/class/Microsoft.Build run-test PROFILE=xbuild_14
-${TESTCMD} --label=Microsoft.Build.Engine-14 --timeout=60m make -w -C mcs/class/Microsoft.Build.Engine run-test PROFILE=xbuild_14
-${TESTCMD} --label=Microsoft.Build.Framework-14 --timeout=60m make -w -C mcs/class/Microsoft.Build.Framework run-test PROFILE=xbuild_14
-${TESTCMD} --label=Microsoft.Build.Tasks-14 --timeout=60m make -w -C mcs/class/Microsoft.Build.Tasks run-test PROFILE=xbuild_14
-${TESTCMD} --label=Microsoft.Build.Utilities-14 --timeout=60m make -w -C mcs/class/Microsoft.Build.Utilities run-test PROFILE=xbuild_14
-rm -fr /tmp/jenkins-temp-aspnet*

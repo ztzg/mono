@@ -24,8 +24,6 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <netinet/in.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pwd.h>
@@ -41,6 +39,8 @@
 #include <mono/metadata/gc-internals.h>
 #include <mono/utils/mono-threads.h>
 #include "attach.h"
+
+#include <mono/utils/w32api.h>
 
 /*
  * This module enables other processes to attach to a running mono process and
@@ -94,7 +94,7 @@ static char *ipc_filename;
 
 static char *server_uri;
 
-static HANDLE receiver_thread_handle;
+static MonoThreadHandle *receiver_thread_handle;
 
 static gboolean stop_receiver_thread;
 
@@ -102,7 +102,7 @@ static gboolean needs_to_start, started;
 
 static void transport_connect (void);
 
-static guint32 WINAPI receiver_thread (void *arg);
+static gsize WINAPI receiver_thread (void *arg);
 
 static void transport_start_receive (void);
 
@@ -260,7 +260,7 @@ mono_attach_cleanup (void)
 
 	/* Wait for the receiver thread to exit */
 	if (receiver_thread_handle)
-		WaitForSingleObjectEx (receiver_thread_handle, 0, FALSE);
+		mono_thread_info_wait_one_handle (receiver_thread_handle, 0, FALSE);
 }
 
 static int
@@ -480,11 +480,11 @@ transport_start_receive (void)
 	if (!listen_fd)
 		return;
 
-	receiver_thread_handle = mono_threads_create_thread (receiver_thread, NULL, 0, 0, NULL);
+	receiver_thread_handle = mono_threads_create_thread (receiver_thread, NULL, NULL, NULL);
 	g_assert (receiver_thread_handle);
 }
 
-static guint32 WINAPI
+static gsize WINAPI
 receiver_thread (void *arg)
 {
 	MonoError error;

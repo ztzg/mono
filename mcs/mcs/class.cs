@@ -22,7 +22,7 @@ using System.Text;
 using System.Diagnostics;
 using Mono.CompilerServices.SymbolWriter;
 
-#if NET_2_1
+#if MOBILE
 using XmlElement = System.Object;
 #endif
 
@@ -296,6 +296,10 @@ namespace Mono.CSharp
 
 						throw new InternalErrorException (tc, e);
 					}
+				}
+
+				if (PartialContainer != null && PartialContainer != this) {
+					containers = null;
 				}
 			}
 
@@ -1661,6 +1665,8 @@ namespace Mono.CSharp
 
 		public override void ExpandBaseInterfaces ()
 		{
+			DoResolveTypeParameters ();
+
 			if (!IsPartialPart)
 				DoExpandBaseInterfaces ();
 
@@ -1766,8 +1772,6 @@ namespace Mono.CSharp
 		protected override void DoDefineContainer ()
 		{
 			DefineBaseTypes ();
-
-			DoResolveTypeParameters ();
 		}
 
 		//
@@ -1853,7 +1857,7 @@ namespace Mono.CSharp
 					return base_type;
 			}
 
-			if (iface_exprs != null) {
+			if (iface_exprs != null && this is Interface) {
 				foreach (var iface in iface_exprs) {
 					// the interface might not have been resolved, prevents a crash, see #442144
 					if (iface == null)
@@ -2383,7 +2387,7 @@ namespace Mono.CSharp
 			var ifaces = PartialContainer.Interfaces;
 			if (ifaces != null) {
 				foreach (TypeSpec t in ifaces){
-					if (t == mb.InterfaceType)
+					if (t == mb.InterfaceType || t == null)
 						return true;
 
 					var expanded_base = t.Interfaces;
@@ -2500,7 +2504,7 @@ namespace Mono.CSharp
 			//	return null;
 
 			var container = PartialContainer.CurrentType;
-			return MemberCache.FindNestedType (container, name, arity);
+			return MemberCache.FindNestedType (container, name, arity, false);
 		}
 
 		public void Mark_HasEquals ()

@@ -563,7 +563,13 @@ class MsbuildGenerator {
 
 		case "/publicsign":
 			return true;
-			
+
+		case "/deterministic":
+			return true;
+
+		case "/runtimemetadataversion":
+			return true;
+
 		case "/-getresourcestrings":
 			return true;
 		}
@@ -654,12 +660,19 @@ class MsbuildGenerator {
 
 	public VsCsproj Csproj;
 
+	void AppendResource (StringBuilder resources, string source, string logical)
+	{
+		resources.AppendFormat ("    <EmbeddedResource Include=\"{0}\">" + NewLine, source);
+		resources.AppendFormat ("      <LogicalName>{0}</LogicalName>" + NewLine, logical);
+		resources.AppendFormat ("    </EmbeddedResource>" + NewLine);
+	}
+	
 	public VsCsproj Generate (string library_output, Dictionary<string,MsbuildGenerator> projects, bool showWarnings = false)
 	{
 		var generatedProjFile = NativeName (Csproj.csProjFilename);
 		//Console.WriteLine ("Generating: {0}", generatedProjFile);
 
-		string boot, flags, output_name, built_sources, response, profile;
+		string boot, flags, output_name, built_sources, response, profile, reskey;
 
 		boot = xproject.Element ("boot").Value;
 		flags = xproject.Element ("flags").Value;
@@ -668,6 +681,7 @@ class MsbuildGenerator {
 			Target = Target.Exe;
 		built_sources = xproject.Element ("built_sources").Value;
 		response = xproject.Element ("response").Value;
+		reskey = xproject.Element ("resources").Value;
 
 		profile = xproject.Element ("profile").Value;
 		if (string.IsNullOrEmpty (response)) {
@@ -788,20 +802,45 @@ class MsbuildGenerator {
 			refs.Append (string.Format ("    <Reference Include=\"{0}\" />" + NewLine, nunitLibPath));
 		}
 
+		//
+		// Generate resource referenced from the command line
+		//
 		var resources = new StringBuilder ();
 		if (embedded_resources.Count > 0) {
-			resources.AppendFormat ("  <ItemGroup>" + NewLine);
 			foreach (var dk in embedded_resources) {
 				var source = dk.Key;
 				if (source.EndsWith (".resources"))
 					source = source.Replace (".resources", ".resx");
-				resources.AppendFormat ("    <EmbeddedResource Include=\"{0}\">" + NewLine, source);
-				resources.AppendFormat ("      <LogicalName>{0}</LogicalName>" + NewLine, dk.Value);
-				resources.AppendFormat ("    </EmbeddedResource>" + NewLine);
+				
+				// try to find a pre-built resource, and use that instead of trying to build it
+				if (source.EndsWith (".resx")) {
+					var probe_prebuilt = Path.Combine (base_dir, source.Replace (".resx", ".resources.prebuilt"));
+					if (File.Exists (probe_prebuilt)) {
+						
+						source = GetRelativePath (base_dir + "/", probe_prebuilt);
+					}
+				}
+				AppendResource (resources, source, dk.Value);
 			}
+		}
+		//
+		// Generate resources that were part of the explicit <resource> node
+		//
+		if (reskey != null && reskey != ""){
+			var pairs = reskey.Split (' ', '\n', '\t');
+			foreach (var pair in pairs){
+				var p = pair.IndexOf (",");
+				if (p == -1){
+					Console.Error.WriteLine ($"Found a resource without a filename: {pairs} for {Csproj.csProjFilename}");
+					Environment.Exit (1);
+				}
+				AppendResource (resources, pair.Substring (p+1), pair.Substring (0, p) + ".resources");
+			}
+		}
+		if (resources.Length > 0){
+			resources.Insert (0, "  <ItemGroup>" + NewLine);
 			resources.AppendFormat ("  </ItemGroup>" + NewLine);
 		}
-	
 
 		if (references.Count > 0 || reference_aliases.Count > 0) {
 			// -r:mscorlib.dll -r:System.dll
@@ -921,7 +960,7 @@ class MsbuildGenerator {
 		int q = library.IndexOf ("-");
 		if (q != -1)
 			target = target + Load (library.Substring (0, q) + suffix);
-			
+
 		if (target.IndexOf ("@MONO@") != -1){
 			target_unix = target.Replace ("@MONO@", "mono").Replace ("@CAT@", "cat");
 			target_windows = target.Replace ("@MONO@", "").Replace ("@CAT@", "type");
@@ -929,6 +968,10 @@ class MsbuildGenerator {
 			target_unix = target.Replace ("jay.exe", "jay");
 			target_windows = target;
 		}
+		target_unix = target_unix.Replace ("@COPY@", "cp");
+		target_windows = target_unix.Replace ("@COPY@", "copy");
+
+		target_unix = target_unix.Replace ("\r", "");
 		const string condition_unix    = "Condition=\" '$(OS)' != 'Windows_NT' \"";
 		const string condition_windows = "Condition=\" '$(OS)' == 'Windows_NT' \"";
 		var result =

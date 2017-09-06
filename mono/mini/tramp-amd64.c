@@ -33,6 +33,7 @@
 
 #define IS_REX(inst) (((inst) >= 0x40) && ((inst) <= 0x4f))
 
+#ifndef DISABLE_JIT
 /*
  * mono_arch_get_unbox_trampoline:
  * @m: method pointer
@@ -110,6 +111,7 @@ mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericCo
 
 	return start;
 }
+#endif /* !DISABLE_JIT */
 
 #ifdef _WIN64
 // Workaround lack of Valgrind support for 64-bit Windows
@@ -171,6 +173,7 @@ mono_arch_patch_callsite (guint8 *method_start, guint8 *orig_code, guint8 *addr)
 	}
 }
 
+#ifndef DISABLE_JIT
 guint8*
 mono_arch_create_llvm_native_thunk (MonoDomain *domain, guint8 *addr)
 {
@@ -190,6 +193,7 @@ mono_arch_create_llvm_native_thunk (MonoDomain *domain, guint8 *addr)
 	mono_profiler_code_buffer_new (thunk_start, thunk_code - thunk_start, MONO_PROFILER_CODE_BUFFER_HELPER, NULL);
 	return addr;
 }
+#endif /* !DISABLE_JIT */
 
 void
 mono_arch_patch_plt_entry (guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
@@ -208,6 +212,7 @@ mono_arch_patch_plt_entry (guint8 *code, gpointer *got, mgreg_t *regs, guint8 *a
 	InterlockedExchangePointer (plt_jump_table_entry, addr);
 }
 
+#ifndef DISABLE_JIT
 static void
 stack_unaligned (MonoTrampolineType tramp_type)
 {
@@ -756,50 +761,75 @@ mono_arch_invalidate_method (MonoJitInfo *ji, void *func, gpointer func_arg)
 	x86_push_imm (code, (guint64)func_arg);
 	amd64_call_reg (code, AMD64_R11);
 }
+#endif /* !DISABLE_JIT */
 
-
-static void
-handler_block_trampoline_helper (gpointer *ptr)
+gpointer
+mono_amd64_handler_block_trampoline_helper (void)
 {
-	MonoJitTlsData *jit_tls = (MonoJitTlsData *)mono_native_tls_get_value (mono_jit_tls_id);
-	*ptr = jit_tls->handler_block_return_address;
+	MonoJitTlsData *jit_tls = (MonoJitTlsData *)mono_tls_get_jit_tls ();
+	return jit_tls->handler_block_return_address;
 }
 
+#ifndef DISABLE_JIT
 gpointer
 mono_arch_create_handler_block_trampoline (MonoTrampInfo **info, gboolean aot)
 {
-	guint8 *tramp = mono_get_trampoline_code (MONO_TRAMPOLINE_HANDLER_BLOCK_GUARD);
 	guint8 *code, *buf;
 	int tramp_size = 64;
 	MonoJumpInfo *ji = NULL;
 	GSList *unwind_ops;
-
-	g_assert (!aot);
 
 	code = buf = (guint8 *)mono_global_codeman_reserve (tramp_size);
 
 	unwind_ops = mono_arch_get_cie_program ();
 
 	/*
-	This trampoline restore the call chain of the handler block then jumps into the code that deals with it.
-	*/
-	if (mono_get_jit_tls_offset () != -1) {
-		code = mono_amd64_emit_tls_get (code, MONO_AMD64_ARG_REG1, mono_get_jit_tls_offset ());
-		amd64_mov_reg_membase (code, MONO_AMD64_ARG_REG1, MONO_AMD64_ARG_REG1, MONO_STRUCT_OFFSET (MonoJitTlsData, handler_block_return_address), 8);
-		/* Simulate a call */
-		amd64_push_reg (code, AMD64_RAX);
-		mono_add_unwind_op_def_cfa_offset (unwind_ops, code, buf, 16);
-		amd64_jump_code (code, tramp);
+	 * This trampoline restore the call chain of the handler block then jumps into the code that deals with it.
+	 * We get here from the ret emitted by CEE_ENDFINALLY.
+	 * The stack is misaligned.
+	 */
+	/* Align the stack before the call to mono_amd64_handler_block_trampoline_helper() */
+#ifdef TARGET_WIN32
+	/* Also make room for the "register parameter stack area" as specified by the Windows x64 ABI (4 64-bit registers) */
+	amd64_alu_reg_imm (code, X86_SUB, AMD64_RSP, 8 + 4 * 8);
+#else
+	amd64_alu_reg_imm (code, X86_SUB, AMD64_RSP, 8);
+#endif
+	if (aot) {
+		code = mono_arch_emit_load_aotconst (buf, code, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, "mono_amd64_handler_block_trampoline_helper");
+		amd64_call_reg (code, AMD64_R11);
 	} else {
-		/*Slow path uses a c helper*/
-		amd64_mov_reg_reg (code, MONO_AMD64_ARG_REG1, AMD64_RSP, 8);
-		amd64_mov_reg_imm (code, AMD64_RAX, tramp);
-		amd64_push_reg (code, AMD64_RAX);
-		mono_add_unwind_op_def_cfa_offset (unwind_ops, code, buf, 16);
-		amd64_push_reg (code, AMD64_RAX);
-		mono_add_unwind_op_def_cfa_offset (unwind_ops, code, buf, 24);
-		amd64_jump_code (code, handler_block_trampoline_helper);
+		amd64_mov_reg_imm (code, AMD64_RAX, mono_amd64_handler_block_trampoline_helper);
+		amd64_call_reg (code, AMD64_RAX);
 	}
+	/* Undo stack alignment */
+#ifdef TARGET_WIN32
+	amd64_alu_reg_imm (code, X86_ADD, AMD64_RSP, 8 + 4 * 8);
+#else
+	amd64_alu_reg_imm (code, X86_ADD, AMD64_RSP, 8);
+#endif
+	/* Save the result to the stack */
+	amd64_push_reg (code, AMD64_RAX);
+#ifdef TARGET_WIN32
+	/* Make room for the "register parameter stack area" as specified by the Windows x64 ABI (4 64-bit registers) */
+	amd64_alu_reg_imm (code, X86_SUB, AMD64_RSP, 4 * 8);
+#endif
+	if (aot) {
+		char *name = g_strdup_printf ("trampoline_func_%d", MONO_TRAMPOLINE_HANDLER_BLOCK_GUARD);
+		code = mono_arch_emit_load_aotconst (buf, code, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, name);
+		amd64_mov_reg_reg (code, AMD64_RAX, AMD64_R11, 8);
+	} else {
+		amd64_mov_reg_imm (code, AMD64_RAX, mono_get_trampoline_func (MONO_TRAMPOLINE_HANDLER_BLOCK_GUARD));
+	}
+	/* The stack is aligned */
+	amd64_call_reg (code, AMD64_RAX);
+#ifdef TARGET_WIN32
+	amd64_alu_reg_imm (code, X86_ADD, AMD64_RSP, 4 * 8);
+#endif
+	/* Load return address */
+	amd64_pop_reg (code, AMD64_RAX);
+	/* The stack is misaligned, thats what the code we branch to expects */
+	amd64_jump_reg (code, AMD64_RAX);
 
 	mono_arch_flush_icache (buf, code - buf);
 	mono_profiler_code_buffer_new (buf, code - buf, MONO_PROFILER_CODE_BUFFER_HELPER, NULL);
@@ -809,6 +839,7 @@ mono_arch_create_handler_block_trampoline (MonoTrampInfo **info, gboolean aot)
 
 	return buf;
 }
+#endif /* !DISABLE_JIT */
 
 /*
  * mono_arch_get_call_target:
@@ -839,6 +870,7 @@ mono_arch_get_plt_info_offset (guint8 *plt_entry, mgreg_t *regs, guint8 *code)
 	return *(guint32*)(plt_entry + 6);
 }
 
+#ifndef DISABLE_JIT
 /*
  * mono_arch_create_sdb_trampoline:
  *
@@ -849,7 +881,7 @@ mono_arch_get_plt_info_offset (guint8 *plt_entry, mgreg_t *regs, guint8 *code)
 guint8*
 mono_arch_create_sdb_trampoline (gboolean single_step, MonoTrampInfo **info, gboolean aot)
 {
-	int tramp_size = 256;
+	int tramp_size = 512;
 	int i, framesize, ctx_offset, cfa_offset, gregs_offset;
 	guint8 *code, *buf;
 	GSList *unwind_ops = NULL;
@@ -937,3 +969,160 @@ mono_arch_create_sdb_trampoline (gboolean single_step, MonoTrampInfo **info, gbo
 
 	return buf;
 }
+
+
+#ifdef ENABLE_INTERPRETER
+/*
+ * mono_arch_get_enter_icall_trampoline:
+ *
+ *   A trampoline that handles the transition from interpreter into native world.
+ *   It requiers to set up a descriptor (MethodArguments) that describes the
+ *   required arguments passed to the callee.
+ */
+gpointer
+mono_arch_get_enter_icall_trampoline (MonoTrampInfo **info)
+{
+	guint8 *start = NULL, *code, *exits[4], *leave_tramp;
+	MonoJumpInfo *ji = NULL;
+	GSList *unwind_ops = NULL;
+	static int arg_regs[] = {AMD64_ARG_REG1, AMD64_ARG_REG2, AMD64_ARG_REG3, AMD64_ARG_REG4};
+	int i;
+
+	start = code = (guint8 *) mono_global_codeman_reserve (256);
+
+	/* save MethodArguments* onto stack */
+	amd64_push_reg (code, AMD64_ARG_REG2);
+
+	/* save target address on stack */
+	amd64_push_reg (code, AMD64_ARG_REG1);
+	amd64_push_reg (code, AMD64_RAX);
+
+	/* load pointer to MethodArguments* into R11 */
+	amd64_mov_reg_reg (code, AMD64_R11, AMD64_ARG_REG2, 8);
+	
+	/* TODO: do float stuff first */
+
+	/* move ilen into RAX */ // TODO: struct offset
+	amd64_mov_reg_membase (code, AMD64_RAX, AMD64_R11, 0, 8);
+	/* load pointer to iregs into R11 */ // TODO: struct offset
+	amd64_mov_reg_membase (code, AMD64_R11, AMD64_R11, 8, 8);
+
+	for (i = 0; i < 4; i++) {
+		amd64_test_reg_reg (code, AMD64_RAX, AMD64_RAX);
+		exits [i] = code;
+		x86_branch8 (code, X86_CC_Z, 0, FALSE);
+
+		amd64_mov_reg_membase (code, arg_regs [i], AMD64_R11, i * sizeof (gpointer), 8);
+		amd64_dec_reg_size (code, AMD64_RAX, 1);
+	}
+
+	for (i = 0; i < 4; i++) {
+		x86_patch (exits [i], code);
+	}
+
+
+	amd64_pop_reg (code, AMD64_RAX);
+	amd64_pop_reg (code, AMD64_R11);
+
+	/* call into native function */
+	amd64_call_reg (code, AMD64_R11);
+
+	/* load MethodArguments */
+	amd64_pop_reg (code, AMD64_R11);
+	/* load retval */ // TODO: struct offset
+	amd64_mov_reg_membase (code, AMD64_R11, AMD64_R11, 0x20, 8);
+
+	amd64_test_reg_reg (code, AMD64_R11, AMD64_R11);
+	leave_tramp = code;
+	x86_branch8 (code, X86_CC_Z, 0, FALSE);
+
+	amd64_mov_membase_reg (code, AMD64_R11, 0, AMD64_RAX, 8);
+
+	x86_patch (leave_tramp, code);
+	amd64_ret (code);
+
+
+	mono_arch_flush_icache (start, code - start);
+	mono_profiler_code_buffer_new (start, code - start, MONO_PROFILER_CODE_BUFFER_EXCEPTION_HANDLING, NULL);
+
+	if (info)
+		*info = mono_tramp_info_create ("enter_icall_trampoline", start, code - start, ji, unwind_ops);
+
+	return start;
+}
+#endif
+#endif /* !DISABLE_JIT */
+
+#ifdef DISABLE_JIT
+gpointer
+mono_arch_get_unbox_trampoline (MonoMethod *m, gpointer addr)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+gpointer
+mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericContext *mrgctx, gpointer addr)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+gpointer
+mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot, MonoTrampInfo **info, gboolean aot)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+guchar*
+mono_arch_create_generic_trampoline (MonoTrampolineType tramp_type, MonoTrampInfo **info, gboolean aot)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+gpointer
+mono_arch_create_specific_trampoline (gpointer arg1, MonoTrampolineType tramp_type, MonoDomain *domain, guint32 *code_len)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+gpointer
+mono_arch_create_general_rgctx_lazy_fetch_trampoline (MonoTrampInfo **info, gboolean aot)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+gpointer
+mono_arch_create_handler_block_trampoline (MonoTrampInfo **info, gboolean aot)
+{
+        g_assert_not_reached ();
+        return NULL;
+}
+
+void
+mono_arch_invalidate_method (MonoJitInfo *ji, void *func, gpointer func_arg)
+{
+	g_assert_not_reached ();
+	return;
+}
+
+guint8*
+mono_arch_create_sdb_trampoline (gboolean single_step, MonoTrampInfo **info, gboolean aot)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+
+#ifdef ENABLE_INTERPRETER
+gpointer
+mono_arch_get_enter_icall_trampoline (MonoTrampInfo **info)
+{
+	g_assert_not_reached ();
+	return NULL;
+}
+#endif
+#endif /* DISABLE_JIT */

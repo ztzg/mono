@@ -191,6 +191,10 @@ typedef struct {
 	MonoMethodSignature *sig;
 } GsharedvtWrapperInfo;
 
+typedef struct {
+	MonoMethod *method;
+} DelegateInvokeWrapperInfo;
+
 /*
  * This structure contains additional information to uniquely identify a given wrapper
  * method. It can be retrieved by mono_marshal_get_wrapper_info () for certain types
@@ -231,6 +235,8 @@ typedef struct {
 		RemotingWrapperInfo remoting;
 		/* GSHAREDVT_IN_SIG/GSHAREDVT_OUT_SIG */
 		GsharedvtWrapperInfo gsharedvt;
+		/* DELEGATE_INVOKE */
+		DelegateInvokeWrapperInfo delegate_invoke;
 	} d;
 } WrapperInfo;
 
@@ -269,7 +275,10 @@ gpointer
 mono_string_to_ansibstr (MonoString *string_obj);
 
 gpointer
-mono_string_to_bstr (MonoString *string_obj);
+mono_ptr_to_bstr (gpointer ptr, int slen);
+
+gpointer
+mono_string_to_bstr(MonoString* str);
 
 void mono_delegate_free_ftnptr (MonoDelegate *delegate);
 
@@ -358,12 +367,6 @@ mono_marshal_get_castclass_with_cache (void);
 
 MonoMethod *
 mono_marshal_get_isinst_with_cache (void);
-
-MonoMethod *
-mono_marshal_get_isinst (MonoClass *klass);
-
-MonoMethod *
-mono_marshal_get_castclass (MonoClass *klass);
 
 MonoMethod *
 mono_marshal_get_stelemref (void);
@@ -467,6 +470,9 @@ gpointer
 ves_icall_System_Runtime_InteropServices_Marshal_StringToBSTR (MonoString *string);
 
 gpointer
+ves_icall_System_Runtime_InteropServices_Marshal_BufferToBSTR (MonoArray *ptr, int len);
+
+gpointer
 ves_icall_System_Runtime_InteropServices_Marshal_StringToHGlobalAnsi (MonoString *string);
 
 gpointer
@@ -477,6 +483,9 @@ ves_icall_System_Runtime_InteropServices_Marshal_DestroyStructure (gpointer src,
 
 void*
 ves_icall_System_Runtime_InteropServices_Marshal_AllocCoTaskMem (int size);
+
+void*
+ves_icall_System_Runtime_InteropServices_Marshal_AllocCoTaskMemSize (gulong size);
 
 void
 ves_icall_System_Runtime_InteropServices_Marshal_FreeCoTaskMem (void *ptr);

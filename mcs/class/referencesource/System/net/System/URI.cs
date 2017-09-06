@@ -2320,7 +2320,7 @@ namespace System {
             // plus it will set idx value for next steps
             if ((cF & Flags.ImplicitFile) != 0) {
                 idx = (ushort)0;
-                while (IsLWS(m_String[idx])) {
+                while (idx < info.Offset.End && IsLWS(m_String[idx])) {
                     ++idx;
                     ++info.Offset.Scheme;
                 }
@@ -3968,6 +3968,14 @@ namespace System {
 
                 if (hasUnicode && iriParsing && hostNotUnicodeNormalized){
                     flags |= Flags.HostUnicodeNormalized;// no host
+
+#if MONO
+                    // I am not certain this is the best fix but for Unix implicit paths with
+                    // unicode characters the host must be valid (null or non-empty) as
+                    // CreateUriInfo assumes. This should happen only for paths like /foo/path-with-unicode
+                    if (newHost.Length == 0 && (flags & Flags.BasicHostType) != 0)
+                        newHost = null;
+#endif
                 }
 
                  return idx;

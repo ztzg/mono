@@ -26,10 +26,14 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+using System.Collections.Generic;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Specialized;
 using System.Net.Http.Headers;
+using System.Net.Security;
 using System.Linq;
 
 namespace System.Net.Http
@@ -376,7 +380,9 @@ namespace System.Net.Http
 				}
 			} catch (WebException we) {
 				if (we.Status != WebExceptionStatus.RequestCanceled)
-					throw;
+					throw new HttpRequestException ("An error occurred while sending the request", we);
+			} catch (System.IO.IOException ex) {
+				throw new HttpRequestException ("An error occurred while sending the request", ex);
 			}
 
 			if (cancellationToken.IsCancellationRequested) {
@@ -387,5 +393,74 @@ namespace System.Net.Http
 			
 			return CreateResponseMessage (wresponse, request, cancellationToken);
 		}
+
+#if NETSTANDARD
+		public bool CheckCertificateRevocationList {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public X509CertificateCollection ClientCertificates {
+			get {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public ICredentials DefaultProxyCredentials {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public int MaxConnectionsPerServer {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public int MaxResponseHeadersLength {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public IDictionary<string,object> Properties {
+			get {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public Func<HttpRequestMessage,X509Certificate2,X509Chain,SslPolicyErrors,bool> ServerCertificateCustomValidationCallback {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public SslProtocols SslProtocols {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+#endif
 	}
 }

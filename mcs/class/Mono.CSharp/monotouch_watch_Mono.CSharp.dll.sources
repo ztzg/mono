@@ -1,2 +1,1 @@
-#include mobile_static_Mono.CSharp.dll.sources
-monotouch.cs
+#include testing_aot_full_Mono.CSharp.dll.sources

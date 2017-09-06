@@ -270,10 +270,14 @@ namespace Mono.CSharp {
 			var da_false = new DefiniteAssignmentBitSet (fc.DefiniteAssignmentOnFalse);
 
 			fc.DefiniteAssignment = fc.DefiniteAssignmentOnTrue;
+			var labels = fc.CopyLabelStack ();
 
 			var res = TrueStatement.FlowAnalysis (fc);
 
+			fc.SetLabelStack (labels);
+
 			if (FalseStatement == null) {
+
 				var c = expr as Constant;
 				if (c != null && !c.IsDefaultValue)
 					return true_returns;
@@ -288,13 +292,19 @@ namespace Mono.CSharp {
 
 			if (true_returns) {
 				fc.DefiniteAssignment = da_false;
-				return FalseStatement.FlowAnalysis (fc);
+
+				res = FalseStatement.FlowAnalysis (fc);
+				fc.SetLabelStack (labels);
+				return res;
 			}
 
 			var da_true = fc.DefiniteAssignment;
 
 			fc.DefiniteAssignment = da_false;
+
 			res &= FalseStatement.FlowAnalysis (fc);
+
+			fc.SetLabelStack (labels);
 
 			if (!TrueStatement.IsUnreachable) {
 				if (false_returns || FalseStatement.IsUnreachable)
@@ -2280,6 +2290,9 @@ namespace Mono.CSharp {
 
 		public override void Emit (EmitContext ec)
 		{
+			if (!Variable.IsUsed)
+				ec.Report.Warning (219, 3, loc, "The constant `{0}' is never used", Variable.Name);
+			
 			// Nothing to emit, not even sequence point
 		}
 
@@ -2438,6 +2451,12 @@ namespace Mono.CSharp {
 			}
 		}
 
+		public bool IsUsed {
+			get {
+				return (flags & Flags.Used) != 0;
+			}
+		}
+
 		public bool IsFixed {
 			get {
 				return (flags & Flags.FixedVariable) != 0;
@@ -2527,8 +2546,10 @@ namespace Mono.CSharp {
 
 		public Expression CreateReferenceExpression (ResolveContext rc, Location loc)
 		{
-			if (IsConstant && const_value != null)
+			if (IsConstant && const_value != null) {
+				SetIsUsed ();
 				return Constant.CreateConstantFromValue (Type, const_value.GetValue (), loc);
+			}
 
 			return new LocalVariableReference (this, loc);
 		}
@@ -2657,6 +2678,7 @@ namespace Mono.CSharp {
 			AwaitBlock = 1 << 13,
 			FinallyBlock = 1 << 14,
 			CatchBlock = 1 << 15,
+			HasReferenceToStoreyForInstanceLambdas = 1 << 16,
 			Iterator = 1 << 20,
 			NoFlowAnalysis = 1 << 21,
 			InitializationEmitted = 1 << 22
@@ -3223,9 +3245,10 @@ namespace Mono.CSharp {
 
 		public override void Emit (EmitContext ec)
 		{
-			if (Parent != null) {
-				// TODO: It's needed only when scope has variable (normal or lifted)
-				ec.BeginScope (GetDebugSymbolScopeIndex ());
+			// TODO: It's needed only when scope has variable (normal or lifted)
+			var scopeIndex = GetDebugSymbolScopeIndex ();
+			if (scopeIndex > 0) {
+				ec.BeginScope (scopeIndex);
 			}
 
 			EmitScopeInitialization (ec);
@@ -3236,7 +3259,7 @@ namespace Mono.CSharp {
 
 			DoEmit (ec);
 
-			if (Parent != null)
+			if (scopeIndex > 0)
 				ec.EndScope ();
 
 			if (ec.EmitAccurateDebugInfo && HasReachableClosingBrace && !(this is ParametersBlock) &&
@@ -3257,6 +3280,7 @@ namespace Mono.CSharp {
 			//
 			storey.CreateContainer ();
 			storey.DefineContainer ();
+			storey.ExpandBaseInterfaces ();
 
 			if (Original.Explicit.HasCapturedThis && Original.ParametersBlock.TopBlock.ThisReferencesFromChildrenBlock != null) {
 
@@ -3281,7 +3305,7 @@ namespace Mono.CSharp {
 							break;
 					}
 				}
-				
+
 				//
 				// We are the first storey on path and 'this' has to be hoisted
 				//
@@ -3349,7 +3373,7 @@ namespace Mono.CSharp {
 
 								//
 								// If we are state machine with no parent. We can hook into parent without additional
- 								// reference and capture this directly
+								// reference and capture this directly
 								//
 								ExplicitBlock parent_storey_block = pb;
 								while (parent_storey_block.Parent != null) {
@@ -3428,7 +3452,12 @@ namespace Mono.CSharp {
 			storey.Parent.PartialContainer.AddCompilerGeneratedClass (storey);
 		}
 
-		public int GetDebugSymbolScopeIndex ()
+		public void DisableDebugScopeIndex ()
+		{
+			debug_scope_index = -1;
+		}
+
+		public virtual int GetDebugSymbolScopeIndex ()
 		{
 			if (debug_scope_index == 0)
 				debug_scope_index = ++ParametersBlock.debug_scope_index;
@@ -3666,6 +3695,15 @@ namespace Mono.CSharp {
 
 		#region Properties
 
+		public bool HasReferenceToStoreyForInstanceLambdas {
+			get {
+				return (flags & Flags.HasReferenceToStoreyForInstanceLambdas) != 0;
+			}
+			set {
+				flags = value ? flags | Flags.HasReferenceToStoreyForInstanceLambdas : flags & ~Flags.HasReferenceToStoreyForInstanceLambdas;
+			}
+		}
+
 		public bool IsAsync {
 			get {
 				return (flags & Flags.HasAsyncModifier) != 0;
@@ -3825,6 +3863,11 @@ namespace Mono.CSharp {
 				CheckControlExit (fc);
 
 			return res;
+		}
+
+		public override int GetDebugSymbolScopeIndex ()
+		{
+			return 0;
 		}
 
 		public LabeledStatement GetLabel (string name, Block block)
@@ -5378,18 +5421,30 @@ namespace Mono.CSharp {
 						continue;
 					}
 
-					if (constant_label != null && constant_label != sl)
+					if (section_rc.IsUnreachable) {
+						//
+						// Common case. Previous label section end is unreachable as
+						// it ends with break, return, etc. For next section revert
+						// to reachable again unless we have constant switch block
+						//
+						section_rc = constant_label != null && constant_label != sl ?
+							Reachability.CreateUnreachable () :
+							new Reachability ();
+					} else if (prev_label != null) {
+						//
+						// Error case as control cannot fall through from one case label
+						//
+						sl.SectionStart = false;
+						s = new MissingBreak (prev_label);
+						s.MarkReachable (rc);
+						block.Statements.Insert (i - 1, s);
+						++i;
+					} else if (constant_label != null && constant_label != sl) {
+						//
+						// Special case for the first unreachable label in constant
+						// switch block
+						//
 						section_rc = Reachability.CreateUnreachable ();
-					else if (section_rc.IsUnreachable) {
-						section_rc = new Reachability ();
-					} else {
-						if (prev_label != null) {
-							sl.SectionStart = false;
-							s = new MissingBreak (prev_label);
-							s.MarkReachable (rc);
-							block.Statements.Insert (i - 1, s);
-							++i;
-						}
 					}
 
 					prev_label = sl;
@@ -5990,7 +6045,7 @@ namespace Mono.CSharp {
 				ec.EmitInt (first_resume_pc);
 				ec.Emit (OpCodes.Sub);
 
-				var labels = new Label[resume_points.Count - System.Math.Max (first_catch_resume_pc, 0)];
+				var labels = new Label [first_catch_resume_pc > 0 ? first_catch_resume_pc : resume_points.Count];
 				for (int i = 0; i < labels.Length; ++i)
 					labels[i] = resume_points[i].PrepareForEmit (ec);
 				ec.Emit (OpCodes.Switch, labels);
@@ -7029,6 +7084,7 @@ namespace Mono.CSharp {
 			ec.Emit (OpCodes.Stloc, temp);
 
 			var exception_field = ec.GetTemporaryField (type);
+			exception_field.AutomaticallyReuse = false;
 			ec.EmitThis ();
 			ec.Emit (OpCodes.Ldloc, temp);
 			exception_field.EmitAssignFromStack (ec);
@@ -7052,7 +7108,7 @@ namespace Mono.CSharp {
 			ec.Emit (OpCodes.Throw);
 			ec.MarkLabel (skip_throw);
 
-			exception_field.IsAvailableForReuse = true;
+			exception_field.PrepareCleanup (ec);
 
 			EmitUnwindFinallyTable (ec);
 		}
@@ -8293,15 +8349,14 @@ namespace Mono.CSharp {
 			ec.LoopBegin = ec.DefineLabel ();
 			ec.LoopEnd = ec.DefineLabel ();
 
-			if (!(Statement is Block))
-				ec.BeginCompilerScope (variable.Block.Explicit.GetDebugSymbolScopeIndex ());
+			ec.BeginCompilerScope (variable.Block.Explicit.GetDebugSymbolScopeIndex ());
+			body.Explicit.DisableDebugScopeIndex ();
 
 			variable.CreateBuilder (ec);
 
 			Statement.Emit (ec);
 
-			if (!(Statement is Block))
-				ec.EndScope ();
+			ec.EndScope ();
 
 			ec.LoopBegin = old_begin;
 			ec.LoopEnd = old_end;

@@ -384,7 +384,7 @@ namespace System.Reflection.Emit
 
 		internal void AddPermissionRequests (PermissionSet required, PermissionSet optional, PermissionSet refused)
 		{
-#if !NET_2_1
+#if !MOBILE
 			if (created)
 				throw new InvalidOperationException ("Assembly was already saved.");
 
@@ -464,6 +464,16 @@ namespace System.Reflection.Emit
 				throw new ArgumentNullException ("name");
 
 			return new AssemblyBuilder (name, null, access, false);
+		}
+
+		public static AssemblyBuilder DefineDynamicAssembly (AssemblyName name, AssemblyBuilderAccess access, IEnumerable<CustomAttributeBuilder> assemblyAttributes)
+		{
+			var ab = DefineDynamicAssembly (name, access);
+			foreach (var attr in  assemblyAttributes) {
+				ab.SetCustomAttribute (attr);
+			}
+
+			return ab;
 		}
 
 		public ModuleBuilder DefineDynamicModule (string name)
@@ -1038,20 +1048,10 @@ namespace System.Reflection.Emit
 			return (str == "neutral" ? String.Empty : str);
 		}
 
-		internal override AssemblyName UnprotectedGetName ()
-		{
-			AssemblyName an = base.UnprotectedGetName ();
-			if (sn != null) {
-				an.SetPublicKey (sn.PublicKey);
-				an.SetPublicKeyToken (sn.PublicKeyToken);
-			}
-			return an;
-		}
-
 		/*Warning, @typeArguments must be a mscorlib internal array. So make a copy before passing it in*/
 		internal Type MakeGenericType (Type gtd, Type[] typeArguments)
 		{
-			return new MonoGenericClass (gtd, typeArguments);
+			return new TypeBuilderInstantiation (gtd, typeArguments);
 		}
 
 		void _AssemblyBuilder.GetIDsOfNames([In] ref Guid riid, IntPtr rgszNames, uint cNames, uint lcid, IntPtr rgDispId)
@@ -1124,7 +1124,14 @@ namespace System.Reflection.Emit
 
 		public override AssemblyName GetName (bool copiedName)
 		{
-			return base.GetName (copiedName);
+			var aname = AssemblyName.Create (this, false);
+
+			if (sn != null) {
+				aname.SetPublicKey (sn.PublicKey);
+				aname.SetPublicKeyToken (sn.PublicKeyToken);
+			}
+			return aname;
+
 		}
 
 		[MonoTODO ("This always returns an empty array")]

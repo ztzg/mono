@@ -21,7 +21,7 @@ using System.Linq;
 using Mono.CompilerServices.SymbolWriter;
 using System.Runtime.CompilerServices;
 
-#if NET_2_1
+#if MOBILE
 using XmlElement = System.Object;
 #else
 using System.Xml;
@@ -723,7 +723,12 @@ namespace Mono.CSharp {
 				}
 			}
 
-			if (type_expr != null)
+			//
+			// Optimization but it also covers cases where we cannot check
+			// constraints because method is captured into generated class
+			// and type parameters context is now different
+			//
+			if (type_expr != null && !IsCompilerGenerated)
 				ConstraintChecker.Check (this, member_type, type_expr.Location);
 
 			base.Emit ();

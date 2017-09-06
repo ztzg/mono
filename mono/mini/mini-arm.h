@@ -187,8 +187,10 @@ typedef enum {
 	RegTypeBaseGen,
 	/* FP value passed in either an ireg or a vfp reg */
 	RegTypeFP,
+	/* Struct passed/returned in gregs */
 	RegTypeStructByVal,
 	RegTypeStructByAddr,
+	RegTypeStructByAddrOnStack,
 	/* gsharedvt argument passed by addr in greg */
 	RegTypeGSharedVtInReg,
 	/* gsharedvt argument passed by addr on stack */
@@ -201,10 +203,11 @@ typedef struct {
 	guint16 vtsize; /* in param area */
 	/* RegTypeHFA */
 	int esize;
-	/* RegTypeHFA */
+	/* RegTypeHFA/RegTypeStructByVal */
 	int nregs;
 	guint8  reg;
 	ArgStorage  storage;
+	/* RegTypeStructByVal */
 	gint32  struct_size;
 	guint8  size    : 4; /* 1, 2, 4, 8, or regs used by RegTypeStructByVal */
 } ArgInfo;
@@ -223,6 +226,7 @@ typedef struct {
 typedef struct {
 	gpointer ss_trigger_page;
 	gpointer bp_trigger_page;
+	gpointer ss_tramp_addr;
 	guint8* bp_addrs [MONO_ZERO_LEN_ARRAY];
 } SeqPointInfo;
 
@@ -312,7 +316,7 @@ typedef struct MonoCompileArch {
 
 #define MONO_ARCH_NEED_DIV_CHECK 1
 
-#define MONO_ARCH_HAVE_GENERALIZED_IMT_THUNK 1
+#define MONO_ARCH_HAVE_GENERALIZED_IMT_TRAMPOLINE 1
 
 #define MONO_ARCH_HAVE_FULL_AOT_TRAMPOLINES 1
 #define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
@@ -347,10 +351,7 @@ typedef struct MonoCompileArch {
 #define MONO_ARCH_HAVE_PATCH_CODE_NEW 1
 #define MONO_ARCH_HAVE_OP_GENERIC_CLASS_INIT 1
 
-#define MONO_ARCH_HAVE_TLS_GET (mono_arm_have_tls_get ())
-#define MONO_ARCH_HAVE_TLS_GET_REG 1
-
-#ifdef TARGET_WATCHOS
+#if defined(TARGET_WATCHOS) || (defined(__linux__) && !defined(TARGET_ANDROID))
 #define MONO_ARCH_DISABLE_HW_TRAPS 1
 #define MONO_ARCH_HAVE_UNWIND_BACKTRACE 1
 #endif
@@ -398,9 +399,6 @@ mono_arm_patchable_bl (guint8 *code, int cond);
 
 gboolean
 mono_arm_is_hard_float (void);
-
-gboolean
-mono_arm_have_tls_get (void);
 
 void
 mono_arm_unaligned_stack (MonoMethod *method);

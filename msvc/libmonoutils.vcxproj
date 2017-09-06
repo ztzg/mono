@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -18,7 +18,6 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <Import Project="mono.props" />
   <ItemGroup>
     <ClCompile Include="..\mono\utils\dlmalloc.c" />
     <ClCompile Include="..\mono\utils\hazard-pointer.c" />
@@ -26,10 +25,30 @@
     <ClCompile Include="..\mono\utils\lock-free-alloc.c" />
     <ClCompile Include="..\mono\utils\lock-free-array-queue.c" />
     <ClCompile Include="..\mono\utils\lock-free-queue.c" />
-    <ClCompile Include="..\mono\utils\mach-support-amd64.c" />
-    <ClCompile Include="..\mono\utils\mach-support-arm.c" />
-    <ClCompile Include="..\mono\utils\mach-support-x86.c" />
-    <ClCompile Include="..\mono\utils\mach-support.c" />
+    <ClCompile Include="..\mono\utils\mach-support-amd64.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\mono\utils\mach-support-arm.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\mono\utils\mach-support-x86.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\mono\utils\mach-support.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\mono\utils\mono-codeman.c" />
     <ClCompile Include="..\mono\utils\mono-conc-hashtable.c" />
     <ClCompile Include="..\mono\utils\mono-context.c" />
@@ -42,10 +61,15 @@
     <ClCompile Include="..\mono\utils\mono-io-portability.c" />
     <ClCompile Include="..\mono\utils\mono-linked-list-set.c" />
     <ClCompile Include="..\mono\utils\mono-logger.c" />
+    <ClCompile Include="..\mono\utils\mono-log-windows.c" />
+    <ClCompile Include="..\mono\utils\mono-log-common.c" />
     <ClCompile Include="..\mono\utils\mono-math.c" />
     <ClCompile Include="..\mono\utils\mono-md5.c" />
+    <ClCompile Include="..\mono\utils\mono-mmap-windows.c" />
     <ClCompile Include="..\mono\utils\mono-mmap.c" />
     <ClCompile Include="..\mono\utils\mono-networkinterfaces.c" />
+    <ClCompile Include="..\mono\utils\mono-proclib-windows.c" />
+    <ClCompile Include="..\mono\utils\mono-rand-windows.c" />
     <ClCompile Include="..\mono\utils\mono-rand.c" />
     <ClCompile Include="..\mono\utils\mono-threads-state-machine.c" />
     <ClCompile Include="..\mono\utils\networking.c" />
@@ -59,20 +83,33 @@
     <ClCompile Include="..\mono\utils\mono-publib.c" />
     <ClCompile Include="..\mono\utils\mono-sha1.c" />
     <ClCompile Include="..\mono\utils\mono-stdlib.c" />
-    <ClCompile Include="..\mono\utils\mono-threads-mach.c" />
-    <ClCompile Include="..\mono\utils\mono-threads-posix.c" />
-    <ClCompile Include="..\mono\utils\mono-threads-posix-signals.c" />
+    <ClCompile Include="..\mono\utils\mono-threads-mach.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\mono\utils\mono-threads-posix.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\mono\utils\mono-threads-posix-signals.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\mono\utils\mono-threads-windows.c" />
     <ClCompile Include="..\mono\utils\mono-threads.c" />
     <ClCompile Include="..\mono\utils\mono-threads-coop.c" />
-    <ClCompile Include="..\mono\utils\mono-threads-posix-abort-syscall.c" />
-    <ClCompile Include="..\mono\utils\mono-threads-mach-abort-syscall.c" />
-    <ClCompile Include="..\mono\utils\mono-threads-windows-abort-syscall.c" />
     <ClCompile Include="..\mono\utils\mono-time.c" />
     <ClCompile Include="..\mono\utils\mono-tls.c" />
     <ClCompile Include="..\mono\utils\mono-uri.c" />
     <ClCompile Include="..\mono\utils\mono-value-hash.c" />
     <ClCompile Include="..\mono\utils\monobitset.c" />
+    <ClCompile Include="..\mono\utils\os-event-win32.c" />
     <ClCompile Include="..\mono\utils\strenc.c" />
     <ClCompile Include="..\mono\utils\atomic.c" />
     <ClCompile Include="..\mono\utils\mono-hwcap.c" />
@@ -107,6 +144,7 @@
     <ClInclude Include="..\mono\utils\mono-counters.h" />
     <ClInclude Include="..\mono\utils\mono-digest.h" />
     <ClInclude Include="..\mono\utils\mono-dl-fallback.h" />
+    <ClInclude Include="..\mono\utils\mono-dl-windows-internals.h" />
     <ClInclude Include="..\mono\utils\mono-dl.h" />
     <ClInclude Include="..\mono\utils\mono-error-internals.h" />
     <ClInclude Include="..\mono\utils\mono-error.h" />
@@ -119,6 +157,8 @@
     <ClInclude Include="..\mono\utils\mono-math.h" />
     <ClInclude Include="..\mono\utils\mono-membar.h" />
     <ClInclude Include="..\mono\utils\mono-memory-model.h" />
+    <ClInclude Include="..\mono\utils\mono-mmap-internals.h" />
+    <ClInclude Include="..\mono\utils\mono-mmap-windows-internals.h" />
     <ClInclude Include="..\mono\utils\mono-mmap.h" />
     <ClInclude Include="..\mono\utils\mono-networkinterfaces.h" />
     <ClInclude Include="..\mono\utils\mono-once.h" />
@@ -126,9 +166,11 @@
     <ClInclude Include="..\mono\utils\mono-os-semaphore.h" />
     <ClInclude Include="..\mono\utils\mono-path.h" />
     <ClInclude Include="..\mono\utils\mono-poll.h" />
+    <ClInclude Include="..\mono\utils\mono-proclib-windows-internals.h" />
     <ClInclude Include="..\mono\utils\mono-proclib.h" />
     <ClInclude Include="..\mono\utils\mono-property-hash.h" />
     <ClInclude Include="..\mono\utils\mono-publib.h" />
+    <ClInclude Include="..\mono\utils\mono-rand-windows-internals.h" />
     <ClInclude Include="..\mono\utils\mono-rand.h" />
     <ClInclude Include="..\mono\utils\mono-sigcontext.h" />
     <ClInclude Include="..\mono\utils\mono-stack-unwinding.h" />
@@ -137,12 +179,12 @@
     <ClInclude Include="..\mono\utils\mono-threads.h" />
     <ClInclude Include="..\mono\utils\mono-threads-api.h" />
     <ClInclude Include="..\mono\utils\mono-threads-coop.h" />
-    <ClInclude Include="..\mono\utils\mono-threads-posix-signals.h" />
     <ClInclude Include="..\mono\utils\mono-time.h" />
     <ClInclude Include="..\mono\utils\mono-tls.h" />
     <ClInclude Include="..\mono\utils\mono-uri.h" />
     <ClInclude Include="..\mono\utils\mono-value-hash.h" />
     <ClInclude Include="..\mono\utils\monobitset.h" />
+    <ClInclude Include="..\mono\utils\os-event.h" />
     <ClInclude Include="..\mono\utils\strenc.h" />
     <ClInclude Include="..\mono\utils\valgrind.h" />
     <ClInclude Include="..\mono\utils\atomic.h" />
@@ -155,37 +197,48 @@
   <ItemGroup>
     <MASM Include="..\mono\utils\win64.asm">
       <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="eglib.vcxproj">
+      <Project>{158073ed-99ae-4196-9edc-ddb2344f8466}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\mono\utils\Makefile.am" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{8FC2B0C8-51AD-49DF-851F-5D01A77A75E4}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>libmonoutils</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -193,32 +246,36 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="mono.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="mono.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="mono.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="mono.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>$(Platform)\lib\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\lib\$(Configuration)\</OutDir>
+    <IntDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(Platform)\lib\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\lib\$(Configuration)\</OutDir>
+    <IntDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>$(Platform)\lib\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\lib\$(Configuration)\</OutDir>
+    <IntDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(Platform)\lib\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\lib\$(Configuration)\</OutDir>
+    <IntDir>$(MONO_BUILD_DIR_PREFIX)$(Platform)\obj\$(ProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -226,15 +283,18 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(top_srcdir);$(top_srcdir)/mono;$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MONO_DIR);$(MONO_INCLUDE_DIR);$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
-      <Command>winsetup.bat</Command>
+      <Command>
+      </Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -243,15 +303,18 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(top_srcdir);$(top_srcdir)/eglib/src;$(top_srcdir)/mono;$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MONO_DIR);$(MONO_INCLUDE_DIR);$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PreBuildEvent>
-      <Command>winsetup.bat</Command>
+      <Command>
+      </Command>
     </PreBuildEvent>
     <MASM>
       <PreprocessorDefinitions>X64</PreprocessorDefinitions>
@@ -265,8 +328,9 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(top_srcdir);$(top_srcdir)/mono;$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MONO_DIR);$(MONO_INCLUDE_DIR);$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -275,7 +339,8 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <PreBuildEvent>
-      <Command>winsetup.bat</Command>
+      <Command>
+      </Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -286,8 +351,9 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(top_srcdir);$(top_srcdir)/mono;$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MONO_DIR);$(MONO_INCLUDE_DIR);$(LIBGC_CPPFLAGS_INCLUDE);$(GLIB_CFLAGS_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -296,7 +362,8 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <PreBuildEvent>
-      <Command>winsetup.bat</Command>
+      <Command>
+      </Command>
     </PreBuildEvent>
     <MASM>
       <PreprocessorDefinitions>X64</PreprocessorDefinitions>

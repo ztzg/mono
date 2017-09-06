@@ -7,7 +7,7 @@
 .\" Author:
 .\"   Miguel de Icaza (miguel@gnu.org)
 .\"
-.TH Mono "Mono 3.0"
+.TH Mono "Mono 4.7.0"
 .SH NAME
 mono \- Mono's ECMA-CLI native code generator (Just-in-Time and Ahead-of-Time)
 .SH SYNOPSIS
@@ -142,10 +142,10 @@ instead of going through the operating system symbol lookup operation.
 .I llvm-path=<PREFIX>
 Same for the llvm tools 'opt' and 'llc'.
 .TP
-.I gen-seq-points-file=FILE.msym
+.I msym-dir=<PATH>
 Instructs the AOT compiler to generate offline sequence points .msym files.
-The path is optional, if none is passed then a .msym file will be generated
-next to the input assembly.
+The generated .msym files will be stored into a subfolder of <PATH> named as the
+compilation AOTID.
 .TP
 .I mtriple=<TRIPLE>
 Use the GNU style target triple <TRIPLE> to determine some code generation options, i.e.
@@ -257,6 +257,9 @@ The default files are /etc/mono/config and ~/.mono/config or the file
 specified in the MONO_CONFIG environment variable, if set.  See the
 mono-config(5) man page for details on the format of this file.
 .TP
+\fB--aot-path=PATH\fR
+List of additional directories to search for AOT images.
+.TP
 \fB--debugger-agent=[options]\fR 
 This instructs the Mono runtime to
 start a debugging agent inside the Mono runtime and connect it to a
@@ -331,6 +334,12 @@ Currently this merely ensures that you are running either the
 \fImono\fR or \fImono-sgen\fR commands.    This flag can be set in the
 \fBMONO_ENV_OPTIONS\fR environment variable to force all of your child
 processes to use one particular kind of GC with the Mono runtime.
+.TP
+\fB--gc-debug=[options]\fR
+Command line equivalent of the \fBMONO_GC_DEBUG\fR environment variable.
+.TP
+\fB--gc-params=[options]\fR
+Command line equivalent of the \fBMONO_GC_PARAMS\fR environment variable.
 .TP
 \fB--arch=32\fR, \fB--arch=64\fR
 (Mac OS X only): Selects the bitness of the Mono binary used, if
@@ -844,6 +853,26 @@ The offsets displayed are IL offsets.
 .PP
 A more powerful coverage tool is available in the module `monocov'.
 See the monocov(1) man page for details.
+.SH AOT PROFILING
+You can improve startup performance by using the AOT profiler.
+.PP
+Typically the AOT compiler (\fBmono --aot\fR) will not generate code
+for generic instantiations.   To solve this, you can run Mono with the
+AOT profiler to find out all the generic instantiations that are used,
+and then instructing the AOT compiler to produce code for these.
+.PP
+This command will run the specified app.exe and produce the
+\fBout.aotprof\fR file with the data describing the generic
+instantiations that are needed:
+.nf
+	$ mono --profile=aot:output=out.aotprof app.exe
+.fi
+.PP
+Once you have this data, you can pass this to Mono's AOT compiler to
+instruct it to generate code for it:
+.nf
+	$ mono --aot=profile=out.aotprof
+.fi
 .SH DEBUGGING AIDS
 To debug managed applications, you can use the 
 .B mdb
@@ -1100,7 +1129,7 @@ a Mono process through the environment.   This is useful for example
 to force all of your Mono processes to use LLVM or SGEN without having
 to modify any launch scripts.
 .TP
-\fBMONO_ENV_OPTIONS\fR
+\fBMONO_SDB_ENV_OPTIONS\fR
 Used to pass extra options to the debugger agent in the runtime, as they were passed
 using --debugger-agent=.
 .TP
@@ -1302,12 +1331,12 @@ statistics when shutting down.
 .TP
 \fBcollect-before-allocs\fR
 .TP
-\fBcheck-at-minor-collections\fR
-This performs a consistency check on minor collections and also clears
-the nursery at collection time, instead of the default, when buffers
-are allocated (clear-at-gc).   The consistency check ensures that
-there are no major to minor references that are not on the remembered
-sets. 
+\fBcheck-remset-consistency\fR
+This performs a remset consistency check at various opportunities, and
+also clears the nursery at collection time, instead of the default,
+when buffers are allocated (clear-at-gc).  The consistency check
+ensures that there are no major to minor references that are not on
+the remembered sets.
 .TP
 \fBmod-union-consistency-check\fR
 Checks that the mod-union cardtable is consistent before each
@@ -1652,11 +1681,11 @@ Automatically generates sequence points where the
 IL stack is empty.  These are places where the debugger can set a
 breakpoint.
 .TP
-\fBgen-compact-seq-points\fR
-This option generates sequence points data that maps native offsets to
-IL offsets. Sequence point data is used to display IL offset in
-stacktraces. Stacktraces with IL offsets can be symbolicated using
-mono-symbolicate tool.
+\fBno-compact-seq-points\fR
+Unless the option is used, the runtime generates sequence points data that
+maps native offsets to IL offsets. Sequence point data is used to
+display IL offset in stacktraces. Stacktraces with IL offsets can be
+symbolicated using mono-symbolicate tool.
 .TP
 \fBhandle-sigint\fR
 Captures the interrupt signal (Control-C) and displays a stack trace
@@ -1731,6 +1760,16 @@ The default value is "all". Changing the mask value allows you to display only
 messages for a certain component. You can use multiple masks by comma 
 separating them. For example to see config file messages and assembly loader
 messages set you mask to "asm,cfg".
+.TP
+\fBMONO_LOG_DEST\fR
+Controls where trace log messages are written. If not set then the messages go to stdout. 
+If set, the string either specifies a path to a file that will have messages appended to
+it, or the string "syslog" in which case the messages will be written to the system log.
+Under Windows, this is simulated by writing to a file called "mono.log". 
+\fBMONO_LOG_HEADER\fR
+Controls whether trace log messages not directed to syslog have the id, timestamp, and
+pid as the prefix to the log message. To enable a header this environment variable need
+just be non-null. 
 .TP
 \fBMONO_TRACE\fR
 Used for runtime tracing of method calls. The format of the comma separated

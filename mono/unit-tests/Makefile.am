@@ -20,7 +20,7 @@ else !SUPPORT_SGEN
 libtestlib_la_LIBADD = ../metadata/libmonoruntime.la
 endif !SUPPORT_SGEN
 
-libtestlib_la_LIBADD += ../utils/libmonoutils.la ../io-layer/libwapi.la 
+libtestlib_la_LIBADD += ../utils/libmonoutils.la
 
 if SUPPORT_SGEN
 test_sgen_qsort_SOURCES = test-sgen-qsort.c

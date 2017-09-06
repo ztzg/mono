@@ -112,6 +112,32 @@ sgen_array_list_update_next_slot (SgenArrayList *array, guint32 new_index)
 	}
 }
 
+/*
+ * Extension for the array list that allows fast allocation and index based fetching
+ * of long lived memory of various sizes, without the need of realloc. Not thread safe.
+ */
+guint32
+sgen_array_list_alloc_block (SgenArrayList *array, guint32 slots_to_add)
+{
+	guint32 new_index = array->next_slot;
+	guint32 old_capacity = array->capacity;
+
+	/* FIXME Don't allocate arrays that will be skipped */
+	/* There are no empty arrays between next_slot and capacity because we allocate incrementally */
+	while ((old_capacity - new_index) < slots_to_add) {
+		sgen_array_list_grow (array, old_capacity);
+		new_index = old_capacity;
+		old_capacity = array->capacity;
+	}
+
+	SGEN_ASSERT (0, sgen_array_list_index_bucket (new_index) == sgen_array_list_index_bucket (new_index + slots_to_add - 1),
+			"We failed to allocate a continuous block of slots");
+
+	array->next_slot = new_index + slots_to_add;
+	/* The slot address will point to the allocated memory */
+	return new_index;
+}
+
 guint32
 sgen_array_list_add (SgenArrayList *array, gpointer ptr, int data, gboolean increase_size_before_set)
 {
@@ -151,24 +177,6 @@ retry:
 }
 
 /*
- * Removes all NULL pointers from the array. Not thread safe
- */
-void
-sgen_array_list_remove_nulls (SgenArrayList *array)
-{
-	guint32 start = 0;
-	volatile gpointer *slot;
-
-	SGEN_ARRAY_LIST_FOREACH_SLOT (array, slot) {
-		if (*slot)
-			*sgen_array_list_get_slot (array, start++) = *slot;
-	} SGEN_ARRAY_LIST_END_FOREACH_SLOT;
-
-	mono_memory_write_barrier ();
-	array->next_slot = start;
-}
-
-/*
  * Does a linear search through the pointer array to find `ptr`.  Returns the index if
  * found, otherwise (guint32)-1.
  */
@@ -182,6 +190,20 @@ sgen_array_list_find (SgenArrayList *array, gpointer ptr)
 			return __index;
 	} SGEN_ARRAY_LIST_END_FOREACH_SLOT;
 	return (guint32)-1;
+}
+
+gboolean
+sgen_array_list_default_cas_setter (volatile gpointer *slot, gpointer ptr, int data)
+{
+	if (InterlockedCompareExchangePointer (slot, ptr, NULL) == NULL)
+		return TRUE;
+	return FALSE;
+}
+
+gboolean
+sgen_array_list_default_is_slot_set (volatile gpointer *slot)
+{
+	return *slot != NULL;
 }
 
 #endif

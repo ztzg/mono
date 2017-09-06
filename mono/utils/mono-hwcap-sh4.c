@@ -30,14 +30,9 @@
  *   Hervé Knochel (herve.knochel@st.com)
  */
 
-#include "mono/utils/mono-hwcap-sh4.h"
+#include "mono/utils/mono-hwcap.h"
 
 void
 mono_hwcap_arch_init (void)
-{
-}
-
-void
-mono_hwcap_print(FILE *f)
 {
 }

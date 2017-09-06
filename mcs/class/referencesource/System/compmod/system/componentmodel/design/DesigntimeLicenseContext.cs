@@ -93,7 +93,7 @@ namespace System.ComponentModel.Design {
                     Debug.WriteLineIf(RuntimeLicenseContextSwitch.TraceVerbose,"rawfile: " + rawFile);
                     string codeBase;
                     
-#if !DISABLE_CAS_USE
+#if MONO_FEATURE_CAS
                     // FileIOPermission is required for ApplicationBase in URL-hosted domains
                     FileIOPermission perm = new FileIOPermission(PermissionState.Unrestricted);
                     perm.Assert();
@@ -133,7 +133,7 @@ namespace System.ComponentModel.Design {
                             // file://fullpath/foo.exe
                             //
                             string fileName;
-#if !DISABLE_CAS_USE
+#if MONO_FEATURE_CAS
                             FileIOPermission perm = new FileIOPermission(PermissionState.Unrestricted);
                             perm.Assert();
                             try
@@ -166,15 +166,19 @@ namespace System.ComponentModel.Design {
                     else if(!resourceAssembly.IsDynamic) { // EscapedCodeBase won't be supported by emitted assemblies anyway
                         Debug.WriteLineIf(RuntimeLicenseContextSwitch.TraceVerbose,"resourceAssembly is not null");
                         string fileName;
+#if MONO_FEATURE_CAS
                         FileIOPermission perm = new FileIOPermission(PermissionState.Unrestricted);
                         perm.Assert();
+#endif
                         try
                         {
                             fileName = GetLocalPath(resourceAssembly.EscapedCodeBase);
                         }
                         finally
                         {
+#if MONO_FEATURE_CAS
                             CodeAccessPermission.RevertAssert();
+#endif
                         }
                         fileName = Path.GetFileName(fileName); // we don't want to use FileInfo here... it requests FileIOPermission that we
                         // might now have... see VSWhidbey 527758
@@ -254,7 +258,7 @@ namespace System.ComponentModel.Design {
 
         static Stream OpenRead(Uri resourceUri) {
             Stream result = null;
-#if !DISABLE_CAS_USE
+#if MONO_FEATURE_CAS
             PermissionSet perms = new PermissionSet(PermissionState.Unrestricted);
 
             perms.Assert();
@@ -267,7 +271,7 @@ namespace System.ComponentModel.Design {
             catch (Exception e) {
                 Debug.Fail(e.ToString());
             }
-#if !DISABLE_CAS_USE
+#if MONO_FEATURE_CAS
             finally {
                 CodeAccessPermission.RevertAssert();
             }

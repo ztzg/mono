@@ -94,6 +94,39 @@
 #endif
 #endif
 
+/**
+ * mono_config_get_os:
+ *
+ * Returns the operating system that Mono is running on, as used for dllmap entries.
+ */
+const char *
+mono_config_get_os (void)
+{
+	return CONFIG_OS;
+}
+
+/**
+ * mono_config_get_cpu:
+ *
+ * Returns the architecture that Mono is running on, as used for dllmap entries.
+ */
+const char *
+mono_config_get_cpu (void)
+{
+	return CONFIG_CPU;
+}
+
+/**
+ * mono_config_get_wordsize:
+ *
+ * Returns the word size that Mono is running on, as used for dllmap entries.
+ */
+const char *
+mono_config_get_wordsize (void)
+{
+	return CONFIG_WORDSIZE;
+}
+
 static void start_element (GMarkupParseContext *context, 
                            const gchar         *element_name,
 			   const gchar        **attribute_names,
@@ -284,13 +317,14 @@ dllmap_start (gpointer user_data,
 			else if (strcmp (attribute_names [i], "target") == 0){
 				char *p = strstr (attribute_values [i], "$mono_libdir");
 				if (p != NULL){
-					const char *libdir = mono_assembly_getrootdir ();
+					char *libdir = mono_native_getrootdir ();
 					size_t libdir_len = strlen (libdir);
 					char *result;
 					
 					result = (char *)g_malloc (libdir_len-strlen("$mono_libdir")+strlen(attribute_values[i])+1);
 					strncpy (result, attribute_values[i], p-attribute_values[i]);
 					strcpy (result+(p-attribute_values[i]), libdir);
+					g_free (libdir);
 					strcat (result, p+strlen("$mono_libdir"));
 					info->target = result;
 				} else 
@@ -705,7 +739,7 @@ publisher_policy_start (gpointer user_data,
 		memset (&info->old_version_bottom, 0, sizeof (info->old_version_bottom));
 		memset (&info->old_version_top, 0, sizeof (info->old_version_top));
 		memset (&info->new_version, 0, sizeof (info->new_version));
-	} if (!strcmp (element_name, "assemblyIdentity")) {
+	} else if (!strcmp (element_name, "assemblyIdentity")) {
 		for (n = 0; attribute_names [n]; n++) {
 			const gchar *attribute_name = attribute_names [n];
 			

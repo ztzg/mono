@@ -12,6 +12,7 @@
 
 #include <mono/utils/checked-build.h>
 #include <mono/utils/mono-threads.h>
+#include <mono/utils/mono-threads-coop.h>
 #include <mono/utils/mono-tls.h>
 #include <mono/metadata/mempool.h>
 #include <mono/metadata/metadata-internals.h>
@@ -145,7 +146,7 @@ translate_backtrace (gpointer native_trace[], int size)
 			g_string_append_printf (bt, "\tat %s\n", names [i]);
 	}
 
-	free (names);
+	g_free (names);
 	return g_string_free (bt, FALSE);
 }
 
@@ -183,10 +184,9 @@ checked_build_thread_transition (const char *transition, void *info, int from_st
 	if (!mono_check_mode_enabled (MONO_CHECK_MODE_THREAD))
 		return;
 
-	MonoThreadInfo *cur = mono_thread_info_current_unchecked ();
 	CheckState *state = get_state ();
 	/* We currently don't record external changes as those are hard to reason about. */
-	if (cur != info)
+	if (!mono_thread_info_is_current (info))
 		return;
 
 	if (state->transitions->len >= MAX_TRANSITIONS)
@@ -473,6 +473,12 @@ check_image_may_reference_image(MonoImage *from, MonoImage *to)
 			// For each queued image visit all directly referenced images
 			int inner_idx;
 
+			// 'files' and 'modules' semantically contain the same items but because of lazy loading we must check both
+			for (inner_idx = 0; !success && inner_idx < checking->file_count; inner_idx++)
+			{
+				CHECK_IMAGE_VISIT (checking->files[inner_idx]);
+			}
+
 			for (inner_idx = 0; !success && inner_idx < checking->module_count; inner_idx++)
 			{
 				CHECK_IMAGE_VISIT (checking->modules[inner_idx]);
@@ -480,8 +486,8 @@ check_image_may_reference_image(MonoImage *from, MonoImage *to)
 
 			for (inner_idx = 0; !success && inner_idx < checking->nreferences; inner_idx++)
 			{
-				// References are lazy-loaded and thus allowed to be NULL.
-				// If they are NULL, we don't care about them for this search, because they haven't impacted ref_count yet.
+				// Assembly references are lazy-loaded and thus allowed to be NULL.
+				// If they are NULL, we don't care about them for this search, because their images haven't impacted ref_count yet.
 				if (checking->references[inner_idx])
 				{
 					CHECK_IMAGE_VISIT (checking->references[inner_idx]->image);
@@ -540,10 +546,10 @@ check_image_set_may_reference_image_set (MonoImageSet *from, MonoImageSet *to)
 		if (to->images[to_idx] == mono_defaults.corlib)
 			seen = TRUE;
 
-		// For each item in to->images, scan over from->images looking for it.
+		// For each item in to->images, scan over from->images seeking a path to it.
 		for (from_idx = 0; !seen && from_idx < from->nimages; from_idx++)
 		{
-			if (to->images[to_idx] == from->images[from_idx])
+			if (check_image_may_reference_image (from->images[from_idx], to->images[to_idx]))
 				seen = TRUE;
 		}
 

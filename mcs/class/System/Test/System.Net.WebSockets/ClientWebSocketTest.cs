@@ -1,4 +1,3 @@
-#if NET_4_5
 using System;
 using System.Net;
 using System.Threading;
@@ -18,32 +17,42 @@ namespace MonoTests.System.Net.WebSockets
 	public class ClientWebSocketTest
 	{
 		const string EchoServerUrl = "ws://corefx-net.cloudapp.net/WebSocket/EchoWebSocket.ashx";
-		int Port = NetworkHelpers.FindFreePort ();
-		HttpListener listener;
+
 		ClientWebSocket socket;
 		MethodInfo headerSetMethod;
+		int Port;
 
 		[SetUp]
 		public void Setup ()
 		{
-			listener = new HttpListener ();
-			listener.Prefixes.Add ("http://localhost:" + Port + "/");
-			listener.Start ();
 			socket = new ClientWebSocket ();
+			Port = NetworkHelpers.FindFreePort ();
+		}
+
+		HttpListener _listener;
+		HttpListener listener {
+			get {
+				if (_listener != null)
+					return _listener;
+
+				var tmp = new HttpListener ();
+				tmp.Prefixes.Add ("http://localhost:" + Port + "/");
+				tmp.Start ();
+				return _listener = tmp;
+			}
 		}
 
 		[TearDown]
 		public void Teardown ()
 		{
-			if (listener != null) {
-				listener.Stop ();
-				listener = null;
+			if (_listener != null) {
+				_listener.Stop ();
+				_listener = null;
 			}
 			if (socket != null) {
 				if (socket.State == WebSocketState.Open)
 					socket.CloseAsync (WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None).Wait (2000);
 				socket.Dispose ();
-				socket = null;
 			}
 		}
 
@@ -297,4 +306,3 @@ namespace MonoTests.System.Net.WebSockets
 	}
 }
 
-#endif

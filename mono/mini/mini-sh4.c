@@ -1032,6 +1032,12 @@ void mono_arch_cleanup(void)
 	return;
 }
 
+gboolean
+mono_arch_have_fast_tls (void)
+{
+	return FALSE;
+}
+
 mgreg_t mono_arch_context_get_int_reg(MonoContext *ctx, int reg)
 {
 	return ctx->registers [reg];
@@ -3977,6 +3983,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_NOT_NULL:	/* MD: not_null: len:0 */
 			break;
 
+		case OP_IL_SEQ_POINT:	/* MD: il_seq_point: len:0 */
+			mono_add_seq_point (cfg, basic_block, inst, code - cfg->native_code);
+			break;
+
 		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
 			sh4_die(&buffer);
 			break;
@@ -4177,6 +4187,21 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_TLS_GET:
 			/* MD: tls_get: dest:i len:2 */
 			sh4_die(&buffer); /* Not yet implemented. */
+			break;
+
+		case OP_BIGMUL:
+			/* MD: bigmul: len:6 dest:Z src1:i src2:i */
+			/* TODO(ddiederen): dest:l */
+			sh4_dmulsl(&buffer, inst->sreg1, inst->sreg2);
+			sh4_sts_MACL(&buffer, inst->dreg);
+			sh4_sts_MACH(&buffer, inst->dreg + 1);
+			break;
+		case OP_BIGMUL_UN:
+			/* MD: bigmul_un: len:6 dest:Z src1:i src2:i */
+			/* TODO(ddiederen): dest:l */
+			sh4_dmulul(&buffer, inst->sreg1, inst->sreg2);
+			sh4_sts_MACL(&buffer, inst->dreg);
+			sh4_sts_MACH(&buffer, inst->dreg + 1);
 			break;
 
 		default:
@@ -4546,7 +4571,7 @@ mono_arch_find_static_call_vtable (mgreg_t *regs, guint8 *code)
 }
 
 gpointer
-mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckItem **imt_entries, int count, gpointer fail_tramp)
+mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckItem **imt_entries, int count, gpointer fail_tramp)
 {
 	int size, i;
 	guint8 *code = NULL, *start = NULL;
@@ -4564,7 +4589,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 #endif
 
 	if (fail_tramp)
-		code = mono_method_alloc_generic_virtual_thunk (domain, size);
+		code = mono_method_alloc_generic_virtual_trampoline (domain, size);
 	else
 		code = mono_domain_code_reserve (domain, size);
 	start = code;
@@ -4671,7 +4696,7 @@ mono_arch_build_imt_thunk (MonoVTable *vtable, MonoDomain *domain, MonoIMTCheckI
 	mono_arch_flush_icache ((guint8*)start, size);
 
 	if (!fail_tramp)
-		mono_stats.imt_thunks_size += code - start;
+		mono_stats.imt_trampolines_size += code - start;
 	g_assert (code - start <= size);
 
 	return start;

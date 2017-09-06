@@ -163,7 +163,10 @@ mono_type_get_desc (GString *res, MonoType *type, gboolean include_namespace)
 		break;
 	case MONO_TYPE_ARRAY:
 		mono_type_get_desc (res, &type->data.array->eklass->byval_arg, include_namespace);
-		g_string_append_printf (res, "[%d]", type->data.array->rank);
+		g_string_append_c (res, '[');
+		for (i = 1; i < type->data.array->rank; ++i)
+			g_string_append_c (res, ',');
+		g_string_append_c (res, ']');
 		break;
 	case MONO_TYPE_SZARRAY:
 		mono_type_get_desc (res, &type->data.klass->byval_arg, include_namespace);
@@ -928,14 +931,18 @@ mono_object_describe (MonoObject *obj)
 	klass = mono_object_class (obj);
 	if (klass == mono_defaults.string_class) {
 		char *utf8 = mono_string_to_utf8_checked ((MonoString*)obj, &error);
-		mono_error_raise_exception (&error); /* FIXME don't raise here */
-		if (strlen (utf8) > 60) {
+		mono_error_cleanup (&error); /* FIXME don't swallow the error */
+		if (utf8 && strlen (utf8) > 60) {
 			utf8 [57] = '.';
 			utf8 [58] = '.';
 			utf8 [59] = '.';
 			utf8 [60] = 0;
 		}
-		g_print ("String at %p, length: %d, '%s'\n", obj, mono_string_length ((MonoString*) obj), utf8);
+		if (utf8) {
+			g_print ("String at %p, length: %d, '%s'\n", obj, mono_string_length ((MonoString*) obj), utf8);
+		} else {
+			g_print ("String at %p, length: %d, unable to decode UTF16\n", obj, mono_string_length ((MonoString*) obj));
+		}
 		g_free (utf8);
 	} else if (klass->rank) {
 		MonoArray *array = (MonoArray*)obj;

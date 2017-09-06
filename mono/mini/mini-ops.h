@@ -706,6 +706,9 @@ MINI_OP(OP_STRLEN, "strlen", IREG, IREG, NONE)
 MINI_OP(OP_NEWARR, "newarr", IREG, IREG, NONE)
 MINI_OP(OP_LDLEN, "ldlen", IREG, IREG, NONE)
 MINI_OP(OP_BOUNDS_CHECK, "bounds_check", NONE, IREG, IREG)
+/* type checks */
+MINI_OP(OP_ISINST, "isinst", IREG, IREG, NONE)
+MINI_OP(OP_CASTCLASS, "castclass", IREG, IREG, NONE)
 /* get adress of element in a 2D array */
 MINI_OP(OP_LDELEMA2D, "getldelema2", NONE, NONE, NONE)
 /* inlined small memcpy with constant length */
@@ -944,10 +947,15 @@ MINI_OP(OP_CVTPS2PD, "cvtps2pd", XREG, XREG, NONE)
 MINI_OP(OP_CVTTPD2DQ, "cvttpd2dq", XREG, XREG, NONE)
 MINI_OP(OP_CVTTPS2DQ, "cvttps2dq", XREG, XREG, NONE)
 
+/* r4 dot product */
+/* multiply all 4 single precision float elements, add them together, and store the result to the lowest element */
+MINI_OP(OP_DPPS, "dpps", XREG, XREG, XREG)
+
 #endif
 
 MINI_OP(OP_XMOVE,   "xmove", XREG, XREG, NONE)
 MINI_OP(OP_XZERO,   "xzero", XREG, NONE, NONE)
+MINI_OP(OP_XONES,   "xones", XREG, NONE, NONE)
 MINI_OP(OP_XPHI,	"xphi", XREG, NONE, NONE)
 
 /*
@@ -1461,3 +1469,4 @@ MINI_OP(OP_OBJC_GET_SELECTOR, "objc_get_selector", IREG, NONE, NONE)
 MINI_OP(OP_GET_SP, "get_sp", IREG, NONE, NONE)
 MINI_OP(OP_SET_SP, "set_sp", NONE, IREG, NONE)
 
+MINI_OP(OP_GET_LAST_ERROR, "get_last_error", IREG, NONE, NONE)

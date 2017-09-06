@@ -15,6 +15,7 @@
 
 #include <mono/metadata/gc-internals.h>
 #include <mono/metadata/abi-details.h>
+#include <mono/utils/mono-compiler.h>
 
 #ifndef DISABLE_JIT
 
@@ -1890,6 +1891,13 @@ mono_local_emulate_ops (MonoCompile *cfg)
 			MonoJitICallInfo *info;
 
 			/*
+			 * These opcodes don't have logical equivalence to the emulating native
+			 * function. They are decomposed in specific fashion in mono_decompose_soft_float.
+			 */
+			if (MONO_HAS_CUSTOM_EMULATION (ins))
+				continue;
+
+			/*
 			 * Emulation can't handle _IMM ops. If this is an imm opcode we need
 			 * to check whether its non-imm counterpart is emulated and, if so,
 			 * decompose it back to its non-imm counterpart.
@@ -1961,4 +1969,8 @@ mono_local_emulate_ops (MonoCompile *cfg)
 	}
 }
 
-#endif /* DISABLE_JIT */
+#else /* !DISABLE_JIT */
+
+MONO_EMPTY_SOURCE_FILE (decompose);
+
+#endif /* !DISABLE_JIT */

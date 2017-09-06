@@ -22,7 +22,6 @@
 #include "mono/metadata/domain-internals.h"
 #include "mono/metadata/gc-internals.h"
 #include "mono/metadata/mono-config-dirs.h"
-#include "mono/io-layer/io-layer.h"
 #include "mono/utils/mono-dl.h"
 #include <mono/utils/mono-logger-internals.h>
 #include <string.h>
@@ -101,6 +100,11 @@ struct _ProfilerDesc {
 	MonoProfileGCMoveFunc    gc_moves;
 	MonoProfileGCHandleFunc  gc_handle;
 	MonoProfileGCRootFunc    gc_roots;
+
+	MonoProfileGCFinalizeFunc gc_finalize_begin;
+	MonoProfileGCFinalizeObjectFunc gc_finalize_object_begin;
+	MonoProfileGCFinalizeObjectFunc gc_finalize_object_end;
+	MonoProfileGCFinalizeFunc gc_finalize_end;
 
 	MonoProfileFunc          runtime_initialized_event;
 
@@ -268,7 +272,6 @@ mono_profiler_install_transition (MonoProfileMethodResult callback)
 void 
 mono_profiler_install_allocation (MonoProfileAllocFunc callback)
 {
-	mono_gc_enable_alloc_events ();
 	if (!prof_list)
 		return;
 	prof_list->allocation_cb = callback;
@@ -871,7 +874,6 @@ mono_profiler_gc_roots (int num, void **objects, int *root_types, uintptr_t *ext
 void
 mono_profiler_install_gc (MonoProfileGCFunc callback, MonoProfileGCResizeFunc heap_resize_callback)
 {
-	mono_gc_enable_events ();
 	if (!prof_list)
 		return;
 	prof_list->gc_event = callback;
@@ -923,6 +925,50 @@ mono_profiler_install_gc_roots (MonoProfileGCHandleFunc handle_callback, MonoPro
 		return;
 	prof_list->gc_handle = handle_callback;
 	prof_list->gc_roots = roots_callback;
+}
+
+void
+mono_profiler_gc_finalize_begin (void)
+{
+	for (ProfilerDesc *prof = prof_list; prof; prof = prof->next)
+		if ((prof->events & MONO_PROFILE_GC_FINALIZATION) && prof->gc_finalize_begin)
+			prof->gc_finalize_begin (prof->profiler);
+}
+
+void
+mono_profiler_gc_finalize_object_begin (MonoObject *obj)
+{
+	for (ProfilerDesc *prof = prof_list; prof; prof = prof->next)
+		if ((prof->events & MONO_PROFILE_GC_FINALIZATION) && prof->gc_finalize_object_begin)
+			prof->gc_finalize_object_begin (prof->profiler, obj);
+}
+
+void
+mono_profiler_gc_finalize_object_end (MonoObject *obj)
+{
+	for (ProfilerDesc *prof = prof_list; prof; prof = prof->next)
+		if ((prof->events & MONO_PROFILE_GC_FINALIZATION) && prof->gc_finalize_object_end)
+			prof->gc_finalize_object_end (prof->profiler, obj);
+}
+
+void
+mono_profiler_gc_finalize_end (void)
+{
+	for (ProfilerDesc *prof = prof_list; prof; prof = prof->next)
+		if ((prof->events & MONO_PROFILE_GC_FINALIZATION) && prof->gc_finalize_end)
+			prof->gc_finalize_end (prof->profiler);
+}
+
+void
+mono_profiler_install_gc_finalize (MonoProfileGCFinalizeFunc begin, MonoProfileGCFinalizeObjectFunc begin_obj, MonoProfileGCFinalizeObjectFunc end_obj, MonoProfileGCFinalizeFunc end)
+{
+	if (!prof_list)
+		return;
+
+	prof_list->gc_finalize_begin = begin;
+	prof_list->gc_finalize_object_begin = begin_obj;
+	prof_list->gc_finalize_object_end = end_obj;
+	prof_list->gc_finalize_end = end;
 }
 
 void

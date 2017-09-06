@@ -12,7 +12,11 @@ enum {
 	/*
 	Something happened while processing the error and the resulting message is incomplete.
 	*/
-	MONO_ERROR_INCOMPLETE = 0x0002
+	MONO_ERROR_INCOMPLETE = 0x0002,
+	/*
+	This MonoError is heap allocated in a mempool
+        */
+	MONO_ERROR_MEMPOOL_BOXED = 0x0004
 };
 
 enum {
@@ -26,6 +30,8 @@ enum {
 	MONO_ERROR_ARGUMENT = 7,
 	MONO_ERROR_ARGUMENT_NULL = 11,
 	MONO_ERROR_NOT_VERIFIABLE = 8,
+	MONO_ERROR_INVALID_PROGRAM = 12,
+
 	/*
 	 * This is a generic error mechanism is you need to raise an arbitrary corlib exception.
 	 * You must pass the exception name otherwise prepare_exception will fail with internal execution. 
@@ -45,6 +51,9 @@ typedef struct _MonoError {
 
 	void *hidden_1 [12]; /*DON'T TOUCH */
 } MonoError;
+
+/* Mempool-allocated MonoError.*/
+typedef struct _MonoErrorBoxed MonoErrorBoxed;
 
 MONO_BEGIN_DECLS
 

@@ -100,33 +100,49 @@ public class Program
 
 	static void RewriteAssembly (string assemblyLocation, Dictionary<string, string> resourcesStrings, CmdOptions options)
 	{
-		var readerParameters = new ReaderParameters { ReadSymbols = true };
-		var assembly = AssemblyDefinition.ReadAssembly (assemblyLocation, readerParameters);
-		foreach (var module in assembly.Modules) {
-			foreach (var type in module.GetTypes ()) {
-				foreach (var method in type.Methods) {
-					if (!method.HasBody)
-						continue;
-					
-					foreach (var instr in method.Body.Instructions) {
-						if (instr.OpCode != OpCodes.Ldstr)
+		var debugSymbols = Path.ChangeExtension (assemblyLocation, "pdb");
+		var useDebugSymbols = File.Exists (debugSymbols);
+
+		var readerParameters = new ReaderParameters {
+			ReadWrite = true,
+		};
+
+		if (useDebugSymbols) {
+			readerParameters.SymbolReaderProvider = new PortablePdbReaderProvider ();
+		}
+
+		using (var assembly = AssemblyDefinition.ReadAssembly (assemblyLocation, readerParameters)) {
+			foreach (var module in assembly.Modules) {
+				foreach (var type in module.GetTypes ()) {
+					foreach (var method in type.Methods) {
+						if (!method.HasBody)
 							continue;
 
-						string value;
-						if (resourcesStrings.TryGetValue ((string)instr.Operand, out value)) {
-							if (options.Verbose) {
-								Console.WriteLine ($"Replacing '{instr.Operand}' with '{value}'");
-							}
+						foreach (var instr in method.Body.Instructions) {
+							if (instr.OpCode != OpCodes.Ldstr)
+								continue;
 
-							instr.Operand = value;
+							string value;
+							if (resourcesStrings.TryGetValue ((string)instr.Operand, out value)) {
+								if (options.Verbose) {
+									Console.WriteLine ($"Replacing '{instr.Operand}' with '{value}'");
+								}
+
+								instr.Operand = value;
+							}
 						}
 					}
 				}
 			}
-		}
 
-		var writerParameters = new WriterParameters { WriteSymbols = true };
-		assembly.Write (assemblyLocation, writerParameters);
+			var writerParameters = new WriterParameters ();
+
+			if (useDebugSymbols) {
+				writerParameters.SymbolWriterProvider = new PortablePdbWriterProvider ();
+			}
+
+			assembly.Write (writerParameters);
+		}
 	}
 
 	static bool LoadGetResourceStrings (Dictionary<string, string> resourcesStrings, CmdOptions options)

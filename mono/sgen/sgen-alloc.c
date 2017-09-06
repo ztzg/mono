@@ -57,30 +57,10 @@ static guint64 stat_bytes_alloced_los = 0;
  * tlab_real_end points to the end of the TLAB.
  */
 
-/*
- * FIXME: What is faster, a TLS variable pointing to a structure, or separate TLS 
- * variables for next+temp_end ?
- */
-#ifdef HAVE_KW_THREAD
-static __thread char *tlab_start;
-static __thread char *tlab_next;
-static __thread char *tlab_temp_end;
-static __thread char *tlab_real_end;
-/* Used by the managed allocator/wbarrier */
-static __thread char **tlab_next_addr MONO_ATTR_USED;
-#endif
-
-#ifdef HAVE_KW_THREAD
-#define TLAB_START	tlab_start
-#define TLAB_NEXT	tlab_next
-#define TLAB_TEMP_END	tlab_temp_end
-#define TLAB_REAL_END	tlab_real_end
-#else
 #define TLAB_START	(__thread_info__->tlab_start)
 #define TLAB_NEXT	(__thread_info__->tlab_next)
 #define TLAB_TEMP_END	(__thread_info__->tlab_temp_end)
 #define TLAB_REAL_END	(__thread_info__->tlab_real_end)
-#endif
 
 static GCObject*
 alloc_degraded (GCVTable vtable, size_t size, gboolean for_mature)
@@ -93,7 +73,7 @@ alloc_degraded (GCVTable vtable, size_t size, gboolean for_mature)
 		sgen_ensure_free_space (size, GENERATION_OLD);
 	} else {
 		if (sgen_need_major_collection (size))
-			sgen_perform_collection (size, GENERATION_OLD, "mature allocation failure", !for_mature);
+			sgen_perform_collection (size, GENERATION_OLD, "mature allocation failure", !for_mature, TRUE);
 	}
 
 
@@ -161,7 +141,7 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 
 		if (collect_before_allocs) {
 			if (((current_alloc % collect_before_allocs) == 0) && nursery_section) {
-				sgen_perform_collection (0, GENERATION_NURSERY, "collect-before-alloc-triggered", TRUE);
+				sgen_perform_collection (0, GENERATION_NURSERY, "collect-before-alloc-triggered", TRUE, TRUE);
 				if (!degraded_mode && sgen_can_alloc_size (size) && real_size <= SGEN_MAX_SMALL_OBJ_SIZE) {
 					// FIXME:
 					g_assert_not_reached ();
@@ -196,11 +176,6 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 
 		if (G_LIKELY (new_next < TLAB_TEMP_END)) {
 			/* Fast path */
-
-			/* 
-			 * FIXME: We might need a memory barrier here so the change to tlab_next is 
-			 * visible before the vtable store.
-			 */
 
 			CANARIFY_ALLOC(p,real_size);
 			SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %zd", p, vtable, sgen_client_vtable_get_name (vtable), size);
@@ -420,13 +395,16 @@ sgen_alloc_obj (GCVTable vtable, size_t size)
 		int current_alloc = InterlockedIncrement (&alloc_count);
 
 		if (verify_before_allocs) {
-			if ((current_alloc % verify_before_allocs) == 0)
+			if ((current_alloc % verify_before_allocs) == 0) {
+				LOCK_GC;
 				sgen_check_whole_heap_stw ();
+				UNLOCK_GC;
+			}
 		}
 		if (collect_before_allocs) {
 			if (((current_alloc % collect_before_allocs) == 0) && nursery_section) {
 				LOCK_GC;
-				sgen_perform_collection (0, GENERATION_NURSERY, "collect-before-alloc-triggered", TRUE);
+				sgen_perform_collection (0, GENERATION_NURSERY, "collect-before-alloc-triggered", TRUE, TRUE);
 				UNLOCK_GC;
 			}
 		}
@@ -492,23 +470,6 @@ sgen_alloc_obj_mature (GCVTable vtable, size_t size)
 	return res;
 }
 
-void
-sgen_init_tlab_info (SgenThreadInfo* info)
-{
-#ifndef HAVE_KW_THREAD
-	SgenThreadInfo *__thread_info__ = info;
-#endif
-
-	info->tlab_start_addr = &TLAB_START;
-	info->tlab_next_addr = &TLAB_NEXT;
-	info->tlab_temp_end_addr = &TLAB_TEMP_END;
-	info->tlab_real_end_addr = &TLAB_REAL_END;
-
-#ifdef HAVE_KW_THREAD
-	tlab_next_addr = &tlab_next;
-#endif
-}
-
 /*
  * Clear the thread local TLAB variables for all threads.
  */
@@ -517,28 +478,16 @@ sgen_clear_tlabs (void)
 {
 	FOREACH_THREAD (info) {
 		/* A new TLAB will be allocated when the thread does its first allocation */
-		*info->tlab_start_addr = NULL;
-		*info->tlab_next_addr = NULL;
-		*info->tlab_temp_end_addr = NULL;
-		*info->tlab_real_end_addr = NULL;
+		info->tlab_start = NULL;
+		info->tlab_next = NULL;
+		info->tlab_temp_end = NULL;
+		info->tlab_real_end = NULL;
 	} FOREACH_THREAD_END
 }
 
 void
 sgen_init_allocator (void)
 {
-#if defined(HAVE_KW_THREAD) && !defined(SGEN_WITHOUT_MONO)
-	int tlab_next_addr_offset = -1;
-	int tlab_temp_end_offset = -1;
-
-
-	MONO_THREAD_VAR_OFFSET (tlab_next_addr, tlab_next_addr_offset);
-	MONO_THREAD_VAR_OFFSET (tlab_temp_end, tlab_temp_end_offset);
-
-	mono_tls_key_set_offset (TLS_KEY_SGEN_TLAB_NEXT_ADDR, tlab_next_addr_offset);
-	mono_tls_key_set_offset (TLS_KEY_SGEN_TLAB_TEMP_END, tlab_temp_end_offset);
-#endif
-
 #ifdef HEAVY_STATISTICS
 	mono_counters_register ("# objects allocated", MONO_COUNTER_GC | MONO_COUNTER_ULONG, &stat_objects_alloced);
 	mono_counters_register ("bytes allocated", MONO_COUNTER_GC | MONO_COUNTER_ULONG, &stat_bytes_alloced);

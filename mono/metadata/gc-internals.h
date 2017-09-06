@@ -16,7 +16,6 @@
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/threads-types.h>
 #include <mono/sgen/gc-internal-agnostic.h>
-#include <mono/utils/gc_wrapper.h>
 
 #define mono_domain_finalizers_lock(domain) mono_os_mutex_lock (&(domain)->finalizable_objects_hash_lock);
 #define mono_domain_finalizers_unlock(domain) mono_os_mutex_unlock (&(domain)->finalizable_objects_hash_lock);
@@ -103,8 +102,6 @@ extern void mono_gc_set_stack_end (void *stack_end);
 gboolean mono_object_is_alive (MonoObject* obj);
 gboolean mono_gc_is_finalizer_thread (MonoThread *thread);
 gpointer mono_gc_out_of_memory (size_t size);
-void     mono_gc_enable_events (void);
-void     mono_gc_enable_alloc_events (void);
 
 void mono_gchandle_set_target (guint32 gchandle, MonoObject *obj);
 
@@ -145,10 +142,6 @@ void     mono_gchandle_free_domain  (MonoDomain *domain);
 
 typedef void (*FinalizerThreadCallback) (gpointer user_data);
 
-/* if there are finalizers to run, run them. Returns the number of finalizers run */
-gboolean mono_gc_pending_finalizers (void);
-void     mono_gc_finalize_notify    (void);
-
 void* mono_gc_alloc_pinned_obj (MonoVTable *vtable, size_t size);
 void* mono_gc_alloc_obj (MonoVTable *vtable, size_t size);
 void* mono_gc_alloc_vector (MonoVTable *vtable, size_t size, uintptr_t max_length);
@@ -161,9 +154,11 @@ void  mono_gc_register_for_finalization (MonoObject *obj, void *user_data);
 void  mono_gc_add_memory_pressure (gint64 value);
 MONO_API int   mono_gc_register_root (char *start, size_t size, MonoGCDescriptor descr, MonoGCRootSource source, const char *msg);
 void  mono_gc_deregister_root (char* addr);
-int   mono_gc_finalizers_for_domain (MonoDomain *domain, MonoObject **out_array, int out_size);
+void  mono_gc_finalize_domain (MonoDomain *domain);
 void  mono_gc_run_finalize (void *obj, void *data);
 void  mono_gc_clear_domain (MonoDomain * domain);
+/* Signal early termination of finalizer processing inside the gc */
+void  mono_gc_suspend_finalizers (void);
 
 
 /* 
@@ -189,10 +184,17 @@ void  mono_gc_finalize_threadpool_threads (void);
 
 /* fast allocation support */
 
+typedef enum {
+	// Regular fast path allocator.
+	MANAGED_ALLOCATOR_REGULAR,
+	// Managed allocator that just calls into the runtime. Used when allocation profiling w/ AOT.
+	MANAGED_ALLOCATOR_SLOW_PATH,
+} ManagedAllocatorVariant;
+
 int mono_gc_get_aligned_size_for_allocator (int size);
 MonoMethod* mono_gc_get_managed_allocator (MonoClass *klass, gboolean for_box, gboolean known_instance_size);
 MonoMethod* mono_gc_get_managed_array_allocator (MonoClass *klass);
-MonoMethod *mono_gc_get_managed_allocator_by_type (int atype, gboolean slowpath);
+MonoMethod *mono_gc_get_managed_allocator_by_type (int atype, ManagedAllocatorVariant variant);
 
 guint32 mono_gc_get_managed_allocator_types (void);
 
@@ -294,8 +296,6 @@ gboolean mono_gc_card_table_nursery_check (void);
 
 void* mono_gc_get_nursery (int *shift_bits, size_t *size);
 
-void mono_gc_set_current_thread_appdomain (MonoDomain *domain);
-
 void mono_gc_set_skip_thread (gboolean skip);
 
 #ifndef HOST_WIN32
@@ -358,6 +358,8 @@ BOOL APIENTRY mono_gc_dllmain (HMODULE module_handle, DWORD reason, LPVOID reser
 guint mono_gc_get_vtable_bits (MonoClass *klass);
 
 void mono_gc_register_altstack (gpointer stack, gint32 stack_size, gpointer altstack, gint32 altstack_size);
+
+gboolean mono_gc_is_critical_method (MonoMethod *method);
 
 /* If set, print debugging messages around finalizers. */
 extern gboolean log_finalizers;

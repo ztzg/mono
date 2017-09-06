@@ -13,6 +13,7 @@
 #include "mini.h"
 #include "ir-emit.h"
 #include "glib.h"
+#include <mono/utils/mono-compiler.h>
 
 #ifndef DISABLE_JIT
 
@@ -191,7 +192,9 @@ handle_instruction:
 			case OP_LOADU4_MEMBASE:
 			case OP_LOADI1_MEMBASE:
 			case OP_LOADI8_MEMBASE:
+#ifndef MONO_ARCH_SOFT_FLOAT_FALLBACK
 			case OP_LOADR4_MEMBASE:
+#endif
 			case OP_LOADR8_MEMBASE:
 				if (ins->inst_offset != 0)
 					continue;
@@ -211,7 +214,9 @@ handle_instruction:
 			case OP_STOREI2_MEMBASE_REG:
 			case OP_STOREI4_MEMBASE_REG:
 			case OP_STOREI8_MEMBASE_REG:
+#ifndef MONO_ARCH_SOFT_FLOAT_FALLBACK
 			case OP_STORER4_MEMBASE_REG:
+#endif
 			case OP_STORER8_MEMBASE_REG:
 			case OP_STOREV_MEMBASE:
 				if (ins->inst_offset != 0)
@@ -226,7 +231,7 @@ handle_instruction:
 					}
 				}
 				break;
-
+			//FIXME missing storei1_membase_imm and storei2_membase_imm
 			case OP_STORE_MEMBASE_IMM:
 			case OP_STOREI4_MEMBASE_IMM:
 			case OP_STOREI8_MEMBASE_IMM:
@@ -357,5 +362,9 @@ done:
 	if (cfg->verbose_level > 2)
 		mono_print_code (cfg, "AFTER ALIAS_ANALYSIS");
 }
+
+#else /* !DISABLE_JIT */
+
+MONO_EMPTY_SOURCE_FILE (alias_analysis);
 
 #endif /* !DISABLE_JIT */

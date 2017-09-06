@@ -8,7 +8,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+#if !MONO
 using System.Numerics;
+#endif
 using System.Runtime.CompilerServices;
 using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
@@ -100,7 +102,7 @@ namespace System.Security.Cryptography {
         ProtectKey = 0x00000001,                        // NCRYPT_UI_PROTECT_KEY_FLAG    
         ForceHighProtection = 0x00000002                // NCRYPT_UI_FORCE_HIGH_PROTECTION_FLAG
     }
-
+#if !MONO
     /// <summary>
     ///     Native interop with CNG's NCrypt layer. Native definitions are in ncrypt.h
     /// </summary>
@@ -794,10 +796,6 @@ namespace System.Security.Cryptography {
                                        signature,
                                        signature.Length,
                                        paddingMode);
-            if (error != ErrorCode.Success && error != ErrorCode.BadSignature) {
-                throw new CryptographicException((int)error);
-            }
-
             return error == ErrorCode.Success;
         }
 
@@ -1693,6 +1691,55 @@ namespace System.Security.Cryptography {
         }
 
         /// <summary>
+        ///     Sign a hash using no padding
+        /// </summary>
+        [System.Security.SecurityCritical]
+        internal static byte[] SignHash(SafeNCryptKeyHandle key, byte[] hash, int expectedSize)
+        {
+            Contract.Requires(key != null);
+            Contract.Requires(hash != null);
+            Contract.Ensures(Contract.Result<byte[]>() != null);
+
+#if DEBUG
+            expectedSize = 1;
+#endif
+
+            // Figure out how big the signature is
+            byte[] signature = new byte[expectedSize];
+            int signatureSize = 0;
+            ErrorCode error = UnsafeNativeMethods.NCryptSignHash(key,
+                                                                 IntPtr.Zero,
+                                                                 hash,
+                                                                 hash.Length,
+                                                                 signature,
+                                                                 signature.Length,
+                                                                 out signatureSize,
+                                                                 0);
+
+            if (error == ErrorCode.BufferTooSmall)
+            {
+                signature = new byte[signatureSize];
+
+                error = UnsafeNativeMethods.NCryptSignHash(key,
+                                                           IntPtr.Zero,
+                                                           hash,
+                                                           hash.Length,
+                                                           signature,
+                                                           signature.Length,
+                                                           out signatureSize,
+                                                           0);
+            }
+
+            if (error != ErrorCode.Success)
+            {
+                throw new CryptographicException((int)error);
+            }
+
+            Array.Resize(ref signature, signatureSize);
+            return signature;
+        }
+
+        /// <summary>
         ///     Unpack a key blob in ECC public blob format into its X and Y parameters
         /// 
         ///     This method expects that the blob be in the correct format -- blobs accepted from partially
@@ -1734,11 +1781,8 @@ namespace System.Security.Cryptography {
                                                                         signature.Length,
                                                                         0);
 
-            if (error != ErrorCode.Success && error != ErrorCode.BadSignature) {
-                throw new CryptographicException((int)error);
-            }
-
             return error == ErrorCode.Success;
         }
     }
+#endif
 }

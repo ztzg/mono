@@ -161,6 +161,7 @@ dummy_use: src1:i len:0
 sh4_dummy_fuse: src1:f len:0
 dummy_store: len:0
 not_null: len:0
+il_seq_point: len:0
 not_reached: len:2
 memory_barrier: len:2
 break: len:2
@@ -193,3 +194,5 @@ loadr8_membase: dest:f src1:b len:16
 storer4_membase_reg: dest:b src1:f len:18
 loadr4_membase: dest:f src1:b len:18
 tls_get: dest:i len:2
+bigmul: len:6 dest:Z src1:i src2:i
+bigmul_un: len:6 dest:Z src1:i src2:i

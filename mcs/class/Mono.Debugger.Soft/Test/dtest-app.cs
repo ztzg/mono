@@ -9,8 +9,12 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+using MonoTests.Helpers;
 
 public class TestsBase
 {
@@ -311,6 +315,11 @@ public class Tests : TestsBase, ITest2
 			wait_one ();
 			return 0;
 		}
+		if (args.Length >0 && args [0] == "threadpool-io") {
+			threadpool_io ();
+			return 0;
+		}
+		assembly_load ();
 		breakpoints ();
 		single_stepping ();
 		arguments ();
@@ -320,7 +329,6 @@ public class Tests : TestsBase, ITest2
 		locals ();
 		line_numbers ();
 		type_info ();
-		assembly_load ();
 		invoke ();
 		exceptions ();
 		exception_filter ();
@@ -419,7 +427,12 @@ public class Tests : TestsBase, ITest2
 		ss_step_through ();
 		ss_non_user_code ();
 		ss_recursive (1);
+		ss_recursive2 (1);
+		ss_recursive2 (1);
+		ss_recursive_chaotic ();
 		ss_fp_clobber ();
+		ss_no_frames ();
+		ss_await ();
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -474,23 +487,49 @@ public class Tests : TestsBase, ITest2
 	public static void ss6_2 () {
 	}
 
-	[MethodImplAttribute (MethodImplOptions.NoInlining)]
-	public static void ss7 () {
-		try {
-			ss7_2 ();
-			ss7_3 ();
-		} catch {
-		}
-		ss7_2 ();
+	[MethodImplAttribute(MethodImplOptions.NoInlining)]
+	public static void ss7 ()
+	{
+		ss7_2();//Used to test stepout inside ss7_2, which may not go to catch
+		ss7_2();//Used to test stepout inside ss7_2_1, which must go to catch
+		ss7_2();//Used to test stepover inside ss7_2, which must go to catch
+		ss7_2();//Used to test stepover inside ss7_2_1, which must go to catch
+		ss7_3();//Used to test stepin inside ss7_3, which must go to catch
+		ss7_2();//Used to test stepin inside ss7_2_1, which must go to catch
 	}
 
-	[MethodImplAttribute (MethodImplOptions.NoInlining)]
-	public static void ss7_2 () {
-	}
-
-	[MethodImplAttribute (MethodImplOptions.NoInlining)]
-	public static void ss7_3 () {
+	[MethodImplAttribute(MethodImplOptions.NoInlining)]
+	public static void ss7_2_1 ()
+	{
 		throw new Exception ();
+	}
+
+	[MethodImplAttribute(MethodImplOptions.NoInlining)]
+	public static void ss7_2_2 ()
+	{
+		ss7_2_1();
+	}
+
+	[MethodImplAttribute(MethodImplOptions.NoInlining)]
+	public static void ss7_2 ()
+	{
+		try {
+			ss7_2_2();
+		}
+		catch
+		{
+		}
+	}
+
+	[MethodImplAttribute(MethodImplOptions.NoInlining)]
+	public static void ss7_3 ()
+	{
+		try {
+			throw new Exception ();
+		}
+		catch
+		{
+		}
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -568,6 +607,92 @@ public class Tests : TestsBase, ITest2
 		ss_recursive (n + 1);
 	}
 
+	// Breakpoint will be placed here
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive2_trap ()
+	{
+	}
+
+	public static void ss_recursive2_at (string s)
+	{
+		// Console.WriteLine (s);
+	}
+
+	// This method is used both for a step over and step out test.
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive2 (int x)
+	{
+		ss_recursive2_at ( "ss_recursive2 in " + x);
+		if (x < 5) {
+			int next = x + 1;
+			ss_recursive2_at ("ss_recursive2 descend " + x);
+			ss_recursive2_trap ();
+			ss_recursive2 (next);
+		}
+		ss_recursive2_at ("ss_recursive2 out " + x);
+	}
+
+	// Breakpoint will be placed here
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive_chaotic_trap ()
+	{
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive_chaotic_at (bool exiting, string at, int n)
+	{
+//		string indent = "";
+//		for (int count = 5 - n; count > 0; count--)
+//			indent += "\t";
+//		Console.WriteLine (indent + (exiting ? "<--" : "-->") + " " + at + " " + n);
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive_chaotic_fizz (int n)
+	{
+		ss_recursive_chaotic_at (false, "fizz", n);
+		if (n > 0) {
+			int next = n - 1;
+			ss_recursive_chaotic_buzz (next);
+			ss_recursive_chaotic_fizzbuzz (next);
+		} else {
+			ss_recursive_chaotic_trap ();
+		}
+		ss_recursive_chaotic_at (true, "fizz", n);
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive_chaotic_buzz (int n)
+	{
+		ss_recursive_chaotic_at (false, "buzz", n);
+		if (n > 0) {
+			int next = n - 1;
+			ss_recursive_chaotic_fizz (next);
+			ss_recursive_chaotic_fizzbuzz (next);
+		}
+		ss_recursive_chaotic_at (true, "buzz", n);
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive_chaotic_fizzbuzz (int n)
+	{
+		ss_recursive_chaotic_at (false, "fizzbuzz", n);
+		if (n > 0) {
+			int next = n - 1;
+			ss_recursive_chaotic_fizz (next);
+			ss_recursive_chaotic_buzz (next);
+			ss_recursive_chaotic_fizzbuzz (next);
+		}
+		ss_recursive_chaotic_at (true, "fizzbuzz", n);
+	}
+
+	// Call a complex tree of recursive calls that has tripped up "step out" in the past.
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_recursive_chaotic ()
+	{
+		ss_recursive_chaotic_fizz (5);
+	}
+
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
 	public static void ss_fp_clobber () {
 		double v = ss_fp_clobber_1 (5.0);
@@ -581,6 +706,71 @@ public class Tests : TestsBase, ITest2
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
 	public static void ss_fp_clobber_2 (double d) {
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_no_frames () {
+		Action a = ss_no_frames_2;
+		var ar = a.BeginInvoke (null, null);
+		ar.AsyncWaitHandle.WaitOne ();
+		// Avoid waiting every time this runs
+		if (static_i == 56)
+			Thread.Sleep (200);
+		ss_no_frames_3 ();
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_await ()
+	{
+		ss_await_1 ().Wait ();//in
+		ss_await_1 ().Wait ();//over
+		ss_await_1 ().Wait ();//out before
+		ss_await_1 ().Wait ();//out after
+		ss_await_1_exc (true, true).Wait ();//in
+		ss_await_1_exc (true, true).Wait ();//over
+		ss_await_1_exc (true, true).Wait ();//out
+		try {
+			ss_await_1_exc (true, false).Wait ();//in
+		} catch { }
+		try {
+			ss_await_1_exc (true, false).Wait ();//over
+		} catch { }
+		try {
+			ss_await_1_exc (true, false).Wait ();//out
+		} catch { }
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static async Task<int> ss_await_1 () {
+		var a = 1;
+		await Task.Delay (10);
+		return a + 2;
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static async Task<int> ss_await_1_exc (bool exc, bool handled)
+	{
+		var a = 1;
+		await Task.Delay (10);
+		if (exc) {
+			if (handled) {
+				try {
+					throw new Exception ();
+				} catch {
+				}
+			} else {
+				throw new Exception ();
+			}
+		}
+		return a + 2;
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_no_frames_2 () {
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_no_frames_3 () {
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -733,9 +923,7 @@ public class Tests : TestsBase, ITest2
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
-#if NET_4_5
 	[StateMachine (typeof (int))]
-#endif
 	public static void locals2<T> (string[] args, int arg, T t, ref string rs, ref AStruct astruct) {
 		long i = 42;
 		string s = "AB";
@@ -1088,12 +1276,10 @@ public class Tests : TestsBase, ITest2
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
 	public static void unhandled_exception_user () {
-#if NET_4_5
 		System.Threading.Tasks.Task.Factory.StartNew (() => {
 				Throw ();
 			});
 		Thread.Sleep (10000);
-#endif
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -1210,6 +1396,8 @@ public class Tests : TestsBase, ITest2
 
 		o.invoke_2 ();
 
+		o.assembly_load ();
+
 		AppDomain.Unload (domain);
 
 		domains_3 ();
@@ -1239,6 +1427,11 @@ public class Tests : TestsBase, ITest2
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
 	public static void invoke_in_domain_2 () {
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void assembly_load_in_domain () {
+		Assembly.Load ("System.Transactions");
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -1452,12 +1645,49 @@ public class Tests : TestsBase, ITest2
 	public override string virtual_method () {
 		return "V2";
 	}
-}
 
-class TypeLoadClass {
-}
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void threadpool_bp () { }
 
-class TypeLoadClass2 {
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void threadpool_io () {
+		// Start a threadpool task that blocks on I/O.
+		// Regression test for #42625
+		const int nbytes = 16;
+		var bsOut = new byte[nbytes];
+		for (int i = 0; i < nbytes; i++) {
+			bsOut[i] = (byte)i;
+		}
+		var endPoint = NetworkHelpers.LocalEphemeralEndPoint ();
+		var l = new TcpListener (endPoint);
+		l.Start ();
+		Task<byte[]> t = Task.Run (async () => {
+			var c = new TcpClient ();
+			await c.ConnectAsync (endPoint.Address, endPoint.Port);
+			var streamIn = c.GetStream ();
+			var bs = new byte[nbytes];
+			int nread = 0;
+			int nremain = nbytes;
+			while (nread < nbytes) {
+				int r = await streamIn.ReadAsync (bs, nread, nremain);
+				nread += r;
+				nremain -= r;
+			}
+			streamIn.Close ();
+			return bs;
+			});
+		var s = l.AcceptTcpClient ();
+		l.Stop ();
+		// write bytes in two groups so that the task blocks on the ReadAsync
+		var streamOut = s.GetStream ();
+		var nbytesFirst = nbytes / 2;
+		var nbytesRest = nbytes - nbytesFirst;
+		streamOut.Write (bsOut, 0, nbytesFirst);
+		threadpool_bp ();
+		streamOut.Write (bsOut, nbytesFirst, nbytesRest);
+		streamOut.Close ();
+		var bsIn = t.Result;
+	}
 }
 
 public class SentinelClass : MarshalByRefObject {
@@ -1478,11 +1708,34 @@ public class CrossDomain : MarshalByRefObject
 	public int invoke_3 () {
 		return 42;
 	}
+
+	public void assembly_load () {
+		Tests.assembly_load_in_domain ();
+	}
 }	
 
 public class Foo
 {
 	public ProcessStartInfo info;
+}
+
+class LocalReflectClass
+{
+	public static void RunMe ()
+	{
+		var reflectMe = new someClass ();
+		var temp = reflectMe; // Breakpoint location
+		reflectMe.someMethod ();
+	}
+
+	class someClass : ContextBoundObject
+	{
+		public object someField;
+
+		public void someMethod ()
+		{
+		}
+	}
 }
 
 // Class used for line number info testing, don't change its layout
@@ -1508,22 +1761,5 @@ public class LineNumbers
 	}
 }
 
-class LocalReflectClass
-{
-	public static void RunMe ()
-	{
-		var reflectMe = new someClass ();
-		reflectMe.someMethod ();
-	}
-
-	class someClass : ContextBoundObject
-	{
-		public object someField;
-
-		public void someMethod ()
-		{
-		}
-	}
-}
 
 
