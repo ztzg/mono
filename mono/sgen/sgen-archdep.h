@@ -71,6 +71,10 @@
 
 #define REDZONE_SIZE	0
 
+#elif defined(__SH4__) || defined(__SH4A__)
+
+#define REDZONE_SIZE	0
+
 #endif
 
 #endif /* __MONO_SGENARCHDEP_H__ */
