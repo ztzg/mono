@@ -1962,6 +1962,7 @@ mono_add_patch_info (MonoCompile *cfg, int ip, MonoJumpInfoType type, gconstpoin
 {
 	MonoJumpInfo *ji = (MonoJumpInfo *)mono_mempool_alloc0 (cfg->mempool, sizeof (MonoJumpInfo));
 
+// fprintf(stderr, "ji: %p ip: %p type: %d target: %p\n",ji,ip,type,target);
 	ji->ip.i = ip;
 	ji->type = type;
 	ji->data.target = target;

@@ -217,7 +217,7 @@ static void         sh4_cstpool_add_internal(MonoCompile *cfg,
  * In any cases, allocated memory is cleared.
  *
  */
-static inline void*
+static inline void *
 sh4_cstpool_malloc(MonoMemPool *pool, guint32 size)
 {
 	if(pool==NULL)
@@ -233,12 +233,14 @@ sh4_is_valid_offset(guint32 offset)
 }
 
 /* Access routines for CstPool_Const_Values structure. */
-static inline guint32 sh4_cst_type(CstPool_Const_Values *g)
+static inline guint32 
+sh4_cst_type(CstPool_Const_Values *g)
 {
 	return g->const_type;
 }
 
-static inline CstPool_Const_Values *sh4_build_cst_int(MonoMemPool *pool, guint32 i)
+static inline CstPool_Const_Values *
+sh4_build_cst_int(MonoMemPool *pool, guint32 i)
 {
 	CstPool_Const_Values *g;
 
@@ -249,7 +251,8 @@ static inline CstPool_Const_Values *sh4_build_cst_int(MonoMemPool *pool, guint32
 	return g;
 }
 
-static inline CstPool_Const_Values *sh4_build_cst_float(MonoMemPool *pool, float f)
+static inline CstPool_Const_Values *
+sh4_build_cst_float(MonoMemPool *pool, float f)
 {
 	CstPool_Const_Values *g;
 
@@ -260,7 +263,8 @@ static inline CstPool_Const_Values *sh4_build_cst_float(MonoMemPool *pool, float
 	return g;
 }
 
-static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, double d)
+static inline CstPool_Const_Values *
+sh4_build_cst_double(MonoMemPool *pool, double d)
 {
 	CstPool_Const_Values *g;
 
@@ -271,29 +275,34 @@ static inline CstPool_Const_Values *sh4_build_cst_double(MonoMemPool *pool, doub
 	return g;
 }
 
-static inline gboolean sh4_cst_is_double(CstPool_Const_Values *g)
+static inline gboolean 
+sh4_cst_is_double(CstPool_Const_Values *g)
 {
 	return g->const_type == cstpool_type_double ? TRUE : FALSE;
 }
 
-static inline guint32 sh4_get_int(CstPool_Const_Values* g)
+static inline guint32 
+sh4_get_int(CstPool_Const_Values* g)
 {
 	return g->u1.u2.i;
 }
 
-static inline guint32 sh4_get_int_from_float(CstPool_Const_Values* g)
+static inline guint32 
+sh4_get_int_from_float(CstPool_Const_Values* g)
 {
 	return g->u1.u2.i;
 }
 
 /* Warning, depends on endianness! */
-static inline guint32 sh4_get_32low_from_double(CstPool_Const_Values* g)
+static inline guint32 
+sh4_get_32low_from_double(CstPool_Const_Values* g)
 {
 	return g->u1.u3.tabint[0];
 }
 
 /* Warning, depends on endianness! */
-static inline guint32 sh4_get_32high_from_double(CstPool_Const_Values* g)
+static inline guint32 
+sh4_get_32high_from_double(CstPool_Const_Values* g)
 {
 	return g->u1.u3.tabint[1];
 }
@@ -301,7 +310,8 @@ static inline guint32 sh4_get_32high_from_double(CstPool_Const_Values* g)
 /**
  * Adding a constant pool in the environement
  */
-static inline void sh4_cstpool_addpool(MonoCompile *cfg)
+static inline void 
+sh4_cstpool_addpool(MonoCompile *cfg)
 {
 	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
 	MonoSH4CstPool     *tmp;
@@ -331,7 +341,8 @@ static inline void sh4_cstpool_addpool(MonoCompile *cfg)
 /**
  * Overall initialization.
  */
-void sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode)
+void 
+sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode)
 {
 	MonoSH4CstPool_Env *env ;
 	MonoMemPool        *mempool;
@@ -372,7 +383,8 @@ void sh4_cstpool_init(MonoCompile *cfg, CstPool_Mode mode)
 /**
  * Called at the end of each compilation unit.
  */
-void sh4_cstpool_end(MonoCompile *cfg)
+void 
+sh4_cstpool_end(MonoCompile *cfg)
 {
 	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
 
@@ -535,7 +547,7 @@ sh4_emit_pool(MonoCompile *cfg, gboolean end_bb, guint8 **pcval)
  */
 gboolean
 sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb,
-			MonoBasicBlock *bb, guint32 *size)
+			    MonoBasicBlock *bb, guint32 *size)
 {
 	MonoSH4CstPool_Env *env = (MonoSH4CstPool_Env*)(cfg->arch.poolenv);
 	MonoSH4CstPool *cur_pool = env->last;
@@ -571,7 +583,8 @@ sh4_cstpool_decide_emission(MonoCompile *cfg,gboolean end_bb,
 }
 
 /* API routine for float constants */
-void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f)
+void 
+sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f)
 {
 	MonoSH4CstPool_Env   *env = cfg->arch.poolenv;
 	CstPool_Const_Values *g;
@@ -585,7 +598,8 @@ void sh4_cstpool_addf(MonoCompile *cfg, guint8 **pcval, float f)
 }
 
 /* API routine for double constants */
-void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d)
+void 
+sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d)
 {
 	MonoSH4CstPool_Env   *env = cfg->arch.poolenv;
 	CstPool_Const_Values *g;
@@ -599,7 +613,8 @@ void sh4_cstpool_addd(MonoCompile *cfg, guint8 **pcval, double d)
 	return;
 }
 
-void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval, MonoJumpInfoType type, gconstpointer target, SH4IntRegister reg)
+void 
+sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval, MonoJumpInfoType type, gconstpointer target, SH4IntRegister reg)
 {
 	MonoSH4CstPool_Env 	*env = cfg->arch.poolenv;
 	CstPool_Const_Values 	*g;       /* Default value */
@@ -626,9 +641,10 @@ void sh4_cstpool_add(MonoCompile *cfg, guint8 **pcval, MonoJumpInfoType type, gc
 	return;
 }
 
-static void sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
-				     MonoJumpInfoType type, gconstpointer target,
-				     guint32  reg, CstPool_Const_Values *g)
+static void 
+sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
+			 MonoJumpInfoType type, gconstpointer target,
+			 guint32  reg, CstPool_Const_Values *g)
 {
 	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
 	MonoSH4CstPool     *tmp;
@@ -694,7 +710,8 @@ static void sh4_cstpool_add_internal(MonoCompile *cfg, guint8 **pcval,
 	return;
 }
 
-void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **pcval)
+void 
+sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **pcval)
 {
 	MonoSH4CstPool_Env *env = cfg->arch.poolenv;
 	guint32             bb_id = bb->block_num;
@@ -714,7 +731,8 @@ void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb, guint8 **p
 }
 
 /* Called at the end of a basic block */
-void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb)
+void 
+sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb)
 {
 	guint32 size;
 	guint8 *buffer;

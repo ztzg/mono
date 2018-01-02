@@ -126,6 +126,16 @@
  */
 #define MONO_ARCH_HAVE_DECOMPOSE_OPTS 1
 
+/* 
+ * This macro is set when ahead-of-time compilation is supported
+ */
+#define MONO_ARCH_AOT_SUPPORTED 1
+
+/* 
+ * This macro is set when ahead-of-time compilation requires GOT variable
+ */
+#define MONO_ARCH_NEED_GOT_VAR 1
+
 /*
  * This macro is set when decomposition of long operators is
  * made in target specific parts of the backend.
@@ -262,6 +272,11 @@
 #define MONO_ARCH_RGCTX_REG MONO_ARCH_IMT_REG
 #define MONO_ARCH_VTABLE_REG sh4_r0
 
+/*
+ * This macro defines the GOT register
+ */
+#define MONO_ARCH_GOT_REG	sh4_r12
+
 /* Structure where the arch-specific code can store
  * data during a compilation. */
 typedef struct {
@@ -281,15 +296,23 @@ struct MonoLMF {
 	guint32     fregisters[MONO_MAX_FREGS];
 };
 
-#ifndef NDEBUG
+void
+mono_sh4_throw_exception (mgreg_t *regs, MonoObject *exc, 
+			  mgreg_t eip, gboolean rethrow);
+
+void
+mono_sh4_throw_corlib_exception (mgreg_t *regs, guint32 ex_token_index, 
+				 mgreg_t eip, gint32 pc_offset);
+
+// #ifndef NDEBUG
 #  define SH4_DEBUG(format, ...) fprintf(stdout, "! %s:%d: " format "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
 #  define SH4_CFG_DEBUG(LVL) if (cfg->verbose_level >= LVL)
 #  define SH4_EXTRA_DEBUG(format, ...) if (sh4_extra_debug != 0) SH4_DEBUG(format, __VA_ARGS__)
-#else
-#  define SH4_DEBUG(format, ...) (0)
-#  define SH4_CFG_DEBUG(LVL) if (0)
-#  define SH4_EXTRA_DEBUG(format, ...) (0)
-#endif /* NDEBUG */
+// #else
+// #  define SH4_DEBUG(format, ...) (0)
+// #  define SH4_CFG_DEBUG(LVL) if (0)
+// #  define SH4_EXTRA_DEBUG(format, ...) (0)
+// #endif /* NDEBUG */
 
 #endif /* MONO_SH4_H */
 

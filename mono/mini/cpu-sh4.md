@@ -115,6 +115,15 @@ sh4_loadu2: dest:i src1:b len:4
 sh4_loadi4_membase: dest:i src1:b len:2
 sh4_loadi4: dest:i src1:i len:2
 iconst: dest:i len:12
+load_gotaddr: dest:i len:32
+got_entry: dest:i src1:b len:20
+aot_const:: dest:i len:8
+fcall_membase: src1:b dest:g clob:c len:18
+vcall_membase: src1:b clob:c len:18
+vcall2_membase: src1:b clob:c len:18
+voidcall_membase: src1:b clob:c len:18
+lcall_membase: src1:b dest:o clob:c len:18
+call_membase: src1:b dest:o clob:c len:18
 fcall: dest:y clob:c len:34
 voidcall: clob:c len:30
 vcall: clob:c len:30

@@ -30,19 +30,147 @@
 #include <glib.h>
 
 #include "mini.h"
-#include "mono/arch/sh4/sh4-codegen.h"
+#include <mono/metadata/abi-details.h>
+#include <mono/metadata/appdomain.h>
+#include <mono/metadata/gc-internals.h>
+#include <mono/metadata/marshal.h>
+#include <mono/metadata/profiler-private.h>
+#include <mono/metadata/tabledefs.h>
+#include <mono/arch/sh4/sh4-codegen.h>
 
-gpointer mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot, MonoTrampInfo **info, gboolean aot)
+gpointer 
+mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot, MonoTrampInfo **info, gboolean aot)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	guint8	*tramp, *code, *buf,
+		**rgctx_null_jumps;
+	guint32	code_len;
+	int tramp_size, depth, index, i, njumps;
+	gboolean mrgctx;
+	MonoJumpInfo *ji = NULL;
+	GSList *unwind_ops = NULL;
+
+	mrgctx = MONO_RGCTX_SLOT_IS_MRGCTX (slot);
+	index = MONO_RGCTX_SLOT_INDEX (slot);
+	if (mrgctx)
+		index += MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT / sizeof (gpointer);
+	for (depth = 0; ; ++depth) {
+		int size = mono_class_rgctx_get_array_size (depth, mrgctx);
+
+		if (index < size - 1)
+			break;
+		index -= size - 1;
+	}
+
+	tramp_size = 64 + 16 * depth;
+
+	code = buf = mono_global_codeman_reserve (tramp_size);
+
+	unwind_ops = mono_arch_get_cie_program ();
+
+	rgctx_null_jumps = g_malloc (sizeof (guint8*) * (depth + 2));
+	njumps = 0;
+
+	/* The vtable/mrgctx is in R0 */
+	g_assert (MONO_ARCH_VTABLE_REG == sh4_r0);
+
+	if (mrgctx) {
+		/* get mrgctx ptr */
+		sh4_mov (&code, sh4_r0, sh4_r1);
+ 	} else {
+		/* load rgctx ptr from vtable */
+		sh4_mov_imm (&code, MONO_STRUCT_OFFSET (MonoVTable, runtime_generic_context), sh4_temp);
+		sh4_movl_dispR0Ry (&code, sh4_temp, sh4_r1);
+		/* is the rgctx ptr null? */
+		sh4_tst (&code, sh4_r1, sh4_r1);
+		/* if yes, jump to actual trampoline */
+		rgctx_null_jumps [njumps ++] = code;
+		sh4_bf (&code, 0);
+		sh4_nop (&code);
+	}
+
+	for (i = 0; i < depth; ++i) {
+		/* load ptr to next array */
+		if (mrgctx && i == 0) {
+			sh4_mov_imm (&code, MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT, sh4_r0);
+			sh4_movl_dispR0Rx (&code, sh4_r1, sh4_r1);
+		} else {
+			sh4_movl_indRy (&code, sh4_r1, sh4_r1);
+		}
+		/* is the ptr null? */
+		sh4_tst (&code, sh4_r1, sh4_r1);
+		/* if yes, jump to actual trampoline */
+		rgctx_null_jumps [njumps ++] = code;
+		sh4_bf (&code, 0);
+		sh4_nop (&code);
+	}
+
+	/* fetch slot */
+	sh4_mov_imm (&code, (sizeof (gpointer) * (index  + 1)), sh4_r0);
+	sh4_movl_dispR0Rx (&code, sh4_r1, sh4_r1);
+	/* is the slot null? */
+	sh4_tst (&code, sh4_r1, sh4_r1);
+	/* if yes, jump to actual trampoline */
+	rgctx_null_jumps [njumps ++] = code;
+	sh4_bf (&code, 0);
+	/* otherwise return, result is in R1 */
+	sh4_mov (&code, sh4_r1, sh4_r0);
+	sh4_rts (&code);
+	sh4_nop (&code);
+
+	g_assert (njumps <= depth + 2);
+	for (i = 0; i < njumps; ++i) {
+		guint32 disp;
+
+		disp = code - rgctx_null_jumps [i];
+		sh4_bf (&rgctx_null_jumps [i], disp);
+	}
+	g_free (rgctx_null_jumps);
+
+	/* Slowpath */
+
+	/* The vtable/mrgctx is still in R0 */
+
+	if (aot) {
+		code = mono_arch_emit_load_aotconst (buf, code, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, g_strdup_printf ("specific_trampoline_lazy_fetch_%u", slot));
+		sh4_jmp_indRx (&code, sh4_r0);
+		sh4_nop (&code);
+	} else {
+		guint8  *patch;
+
+		tramp = mono_arch_create_specific_trampoline (GUINT_TO_POINTER (slot), MONO_TRAMPOLINE_RGCTX_LAZY_FETCH, mono_get_root_domain (), &code_len);
+
+		/* Jump to the actual trampoline */
+		
+		patch = code;
+		sh4_die (&code);
+		sh4_jmp_indRx (&code, sh4_r0);
+		sh4_nop (&code);
+		/*
+		 * Align the constant pool
+		 */
+		while (((guint32) code % 4) != 0)
+			sh4_nop (&code);
+		sh4_movl_PCrel (&patch, code, sh4_r0);
+		sh4_emit32 (&code, (guint32) tramp);
+	}
+
+	mono_arch_flush_icache (buf, code - buf);
+	mono_profiler_code_buffer_new (buf, code - buf, MONO_PROFILER_CODE_BUFFER_GENERICS_TRAMPOLINE, NULL);
+
+	g_assert (code - buf <= tramp_size);
+
+	char *name = mono_get_rgctx_fetch_trampoline_name (slot);
+	*info = mono_tramp_info_create (name, buf, code - buf, ji, unwind_ops);
+	g_free (name);
+
+	return buf;
 }
 
 /**
  * Create the stub used to transfer control to a specified trampoline.
  */
-gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTrampolineType trampoline_type, MonoDomain *domain, guint32 *code_length)
+gpointer 
+mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTrampolineType trampoline_type, MonoDomain *domain, guint32 *code_length)
 {
 	int short_branch = 0;
 	guint8 *code   = NULL;
@@ -164,17 +292,18 @@ gpointer mono_arch_create_specific_trampoline(gpointer methode2compile, MonoTram
  * 	goto compiled_methode;
  * }
  */
-guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type, MonoTrampInfo **info, gboolean aot)
+guchar * 
+mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type, MonoTrampInfo **info, gboolean aot)
 {
 	int i = 0;
 	guint8 *code   = NULL;
 	guint8 *buffer = NULL;
 	guint8 *patch1 = NULL;
 	guint8 *patch2 = NULL;
+	MonoJumpInfo *ji = NULL;
 
 	SH4_EXTRA_DEBUG("args => %d", trampoline_type);
 
-	g_assert (!aot);
 	if (info)
 		*info = NULL;
 
@@ -361,10 +490,18 @@ guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type,
 
 	/* Build the constant pool & patch the corresponding instructions. */
 	sh4_movl_PCrel(&patch1, buffer, sh4_r8);
-	sh4_emit32(&buffer, (guint32)mono_get_lmf_addr);
+	if (aot) {
+		buffer = mono_arch_emit_load_aotconst (code, buffer, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, "mono_get_lmf_addr");
+	} else {
+		sh4_emit32(&buffer, (guint32)mono_get_lmf_addr);
+	}
 
 	sh4_movl_PCrel(&patch2, buffer, sh4_r8);
-	sh4_emit32(&buffer, (guint32)mono_get_trampoline_func(trampoline_type));
+	if (aot) {
+		buffer = mono_arch_emit_load_aotconst (code, buffer, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, g_strdup_printf ("trampoline_func_%d", trampoline_type));
+	} else {
+		sh4_emit32(&buffer, (guint32)mono_get_trampoline_func(trampoline_type));
+	}
 
 	/* Sanity checks. */
 	g_assert(buffer - code <= TRAMPOLINE_SIZE);
@@ -383,7 +520,8 @@ guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type,
  * trampoline which does unboxing before calling the method. Remember
  * this trampoline executes in the context of the caller.
  */
-gpointer mono_arch_get_unbox_trampoline(MonoMethod *method, gpointer address)
+gpointer 
+mono_arch_get_unbox_trampoline(MonoMethod *method, gpointer address)
 {
 	guint8 *code   = NULL;
 	guint8 *buffer = NULL;
@@ -427,36 +565,11 @@ gpointer mono_arch_get_unbox_trampoline(MonoMethod *method, gpointer address)
 }
 
 /**
- * Avoid a call to a "class init trampoline".
- */
-void mono_arch_nullify_class_init_trampoline(guint8 *code, gssize *registers)
-{
-	guint8 *call_site = code - 4;
-	guint8 *constant_address = NULL;
-
-	SH4_EXTRA_DEBUG("args => %p, %p", code, registers);
-
-	constant_address = get_imm_sh4_call_site((void *)code);
-	if(constant_address == NULL) {
-		/* Already changed by another thread */
-		return;
-	}
-
-	/* TODO(ddiederen): Fix this to use InterlockedExchange or similar. */
-	/* Patch the call. */
-	sh4_nop(&call_site);
-
-	/* Flush instruction cache, since we've generated code. */
-	mono_arch_flush_icache(call_site - 2, 2);
-
-	return;
-}
-
-/**
  * Search for and patch the calling sequence pointed to by 'code'
  * so it calls 'address'.
  */
-void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
+void 
+mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 {
 	guint8 *constant_address = NULL;
 
@@ -478,9 +591,51 @@ void mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	return;
 }
 
-void mono_arch_patch_plt_entry(guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
+void 
+mono_arch_patch_plt_entry(guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
 	/* TODO - CV */
-	g_assert(0);
-	return;
+}
+
+guint8*
+mono_arch_get_call_target (guint8 *code)
+{
+	guint32 *target = NULL;
+	guint8	opcode;
+	gint8	disp;
+	
+int i;
+for (i=-8; i<12; i++) {
+ if (i==0) fprintf(stderr,"*");
+ fprintf(stderr,"%02x ",code[i]);
+}
+fprintf(stderr, "\n");
+	opcode = code[3] & 0xf0;
+	if (opcode == 0xd0) {			// Direct call
+		disp = (code[2] + 1) * 4;
+		target = code + disp;
+fprintf(stderr,"1. call *target: %p ",target);
+		target = (guint32 *) *target;
+fprintf(stderr,"target: %p\n",target);
+	} else {
+		opcode = code[-4];
+		if (opcode == 0x0b) {		// PLT call
+			target = &code[-8];
+fprintf(stderr,"2. call *target: %p ",target);
+			target = (guint32 *) *target;
+fprintf(stderr,"target: %p\n",target);
+		} else { 
+	fprintf(stderr, "opcode: %02x\n", opcode);
+			g_assert(0);
+		}
+	}
+	return target;
+}
+
+guint32
+mono_arch_get_plt_info_offset (guint8 *plt_entry, mgreg_t *regs, guint8 *code)
+{
+	/* The offset is stored as the 2nd word of the plt entry */
+fprintf (stderr,"plt_off: %08x\n",((guint32*)plt_entry)[4]);
+	return ((guint32*)plt_entry) [4];
 }

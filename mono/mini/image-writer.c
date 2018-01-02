@@ -70,8 +70,14 @@
 #define AS_STRING_DIRECTIVE ".string"
 #endif
 
+#if defined (TARGET_SH4)
+#define AS_INT32_DIRECTIVE ".ualong"
+#define AS_INT64_DIRECTIVE ".uaquad"
+#define AS_POINTER_DIRECTIVE ".ualong"
+#else
 #define AS_INT32_DIRECTIVE ".long"
 #define AS_INT64_DIRECTIVE ".quad"
+#endif
 
 #if (defined(TARGET_AMD64) || defined(TARGET_POWERPC64)) && !defined(__mono_ilp32__)
 #define AS_POINTER_DIRECTIVE ".quad"
@@ -83,7 +89,7 @@
 #define AS_POINTER_DIRECTIVE ".xword"
 #endif
 
-#else
+#elif !defined (AS_POINTER_DIRECTIVE)
 #define AS_POINTER_DIRECTIVE ".long"
 #endif
 
@@ -1707,7 +1713,7 @@ asm_writer_emit_section_change (MonoImageWriter *acfg, const char *section_name,
 		fprintf (acfg->fp, ".section __DWARF, __%s,regular,debug\n", section_name + 1);
 	} else
 		fprintf (acfg->fp, "%s\n", section_name);
-#elif defined(TARGET_ARM) || defined(TARGET_ARM64) || defined(TARGET_POWERPC)
+#elif defined(TARGET_ARM) || defined(TARGET_ARM64) || defined(TARGET_POWERPC) || defined(TARGET_SH4)
 	/* ARM gas doesn't seem to like subsections of .bss */
 	if (!strcmp (section_name, ".text") || !strcmp (section_name, ".data")) {
 		fprintf (acfg->fp, "%s %d\n", section_name, subsection_index);
@@ -1945,7 +1951,14 @@ asm_writer_emit_int32 (MonoImageWriter *acfg, int value)
 		acfg->col_count = 0;
 	}
 	if ((acfg->col_count++ % 8) == 0)
+#if defined (TARGET_SH4)
+	{
+		fprintf (acfg->fp, "\n\t.align 2\n");
 		fprintf (acfg->fp, "\n\t%s ", AS_INT32_DIRECTIVE);
+	}
+#else
+		fprintf (acfg->fp, "\n\t%s ", AS_INT32_DIRECTIVE);
+#endif
 	else
 		fprintf (acfg->fp, ",");
 	fprintf (acfg->fp, "%d", value);
@@ -1983,6 +1996,10 @@ asm_writer_emit_symbol_diff (MonoImageWriter *acfg, const char *end, const char*
 #else
 	start = get_label (start);
 	end = get_label (end);
+
+#if defined (TARGET_SH4)
+	fprintf (acfg->fp, "\n\t.align 2\n");
+#endif
 
 	if (offset == 0 && strcmp (start, ".") != 0) {
 		char symbol [128];

@@ -107,6 +107,15 @@ static int map_hw_reg_to_dwarf_reg [32] = {
 #define NUM_DWARF_REGS 32
 #define DWARF_DATA_ALIGN (-(gint32)sizeof (mgreg_t))
 #define DWARF_PC_REG (mono_hw_reg_to_dwarf_reg (mips_ra))
+#elif defined (TARGET_SH4)
+/* FIXME: */
+static int map_hw_reg_to_dwarf_reg [16] = {
+	0, 1, 2, 3, 4, 5, 6, 7,
+	8, 9, 10, 11, 12, 13, 14, 15
+};
+#define NUM_DWARF_REGS 16
+#define DWARF_DATA_ALIGN (-(gint32)sizeof (mgreg_t))
+#define DWARF_PC_REG 17
 #else
 static int map_hw_reg_to_dwarf_reg [16];
 #define NUM_DWARF_REGS 16

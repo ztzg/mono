@@ -251,13 +251,13 @@ mono_arch_unwind_frame (MonoDomain *domain, MonoJitTlsData *jit_tls,
  * 	return;
  * }
  */
-gpointer mono_arch_get_call_filter (MonoTrampInfo **info, gboolean aot)
+gpointer 
+mono_arch_get_call_filter (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *code = NULL;
 	guint8 *buffer = NULL;
 	int i = 0;
 
-	g_assert (!aot);
 	if (info)
 		*info = NULL;
 
@@ -385,13 +385,13 @@ gpointer mono_arch_get_call_filter (MonoTrampInfo **info, gboolean aot)
  * onto the stack even for a leaf routine. This point is not
  * required by SH4 ABI for a pure C routine (non managed code).
  */
-gpointer mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
+gpointer 
+mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *code = NULL;
 	guint8 *buffer = NULL;
 	int i = 0;
 
-	g_assert (!aot);
 	if (info)
 		*info = NULL;
 
@@ -451,7 +451,8 @@ gpointer mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
 /**
  * Raise an exception based on the passed parameters.
  */
-static void throw_exception(MonoObject *exception, guint32 pc, guint32 *registers, gboolean rethrow)
+static void 
+throw_exception(MonoObject *exception, guint32 pc, guint32 *registers, gboolean rethrow)
 {
 	static void (* restore_context)(MonoContext *) = NULL;
 	MonoContext context;
@@ -508,7 +509,8 @@ static void throw_exception(MonoObject *exception, guint32 pc, guint32 *register
  * 	goto throw_exception(exception, %PC, %SP, rethrow);
  * }
  */
-static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
+static gpointer 
+get_throw_exception(gboolean by_name, gboolean rethrow, gboolean aot)
 {
 	int i = 0;
 	int size = 90;
@@ -631,40 +633,30 @@ static gpointer get_throw_exception(gboolean by_name, gboolean rethrow)
 	return code;
 }
 
-gpointer mono_arch_get_rethrow_exception (MonoTrampInfo **info, gboolean aot)
+gpointer 
+mono_arch_get_rethrow_exception (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *code = NULL;
 
-	g_assert (!aot);
 	if (info)
 		*info = NULL;
 
 	if (code == NULL)
-		code = get_throw_exception(FALSE, TRUE);
+		code = get_throw_exception(FALSE, TRUE, aot);
 
 	return code;
 }
 
-gpointer mono_arch_get_throw_exception (MonoTrampInfo **info, gboolean aot)
+gpointer 
+mono_arch_get_throw_exception (MonoTrampInfo **info, gboolean aot)
 {
 	static guint8 *code = NULL;
 
-	g_assert (!aot);
 	if (info)
 		*info = NULL;
 
 	if (code == NULL)
-		code = get_throw_exception(FALSE, FALSE);
-
-	return code;
-}
-
-gpointer mono_arch_get_throw_exception_by_name(void)
-{
-	static guint8 *code = NULL;
-
-	if (code == NULL)
-		code = get_throw_exception(TRUE, FALSE);
+		code = get_throw_exception(FALSE, FALSE, aot);
 
 	return code;
 }
@@ -691,15 +683,16 @@ gpointer mono_arch_get_throw_exception_by_name(void)
  * caller IP to get the IP of the throw. Passing the offset has the
  * advantage that it needs no relocations in the caller.
  */
-gpointer mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean aot)
+gpointer 
+mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean aot)
 {
 	guint8 *code   = NULL;
 	guint8 *buffer = NULL;
 	guint8 *patch0 = NULL;
 	guint8 *patch1 = NULL;
 	guint8 *patch2 = NULL;
+	MonoJumpInfo *ji = NULL;
 
-	g_assert (!aot);
 	if (info)
 		*info = NULL;
 
@@ -762,8 +755,15 @@ gpointer mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean ao
 	sh4_movl_PCrel(&patch0, buffer, sh4_r4);
 	sh4_emit32(&buffer, (guint32)mono_defaults.exception_class->image);
 	sh4_movl_PCrel(&patch1, buffer, sh4_temp);
-	sh4_emit32(&buffer, (guint32)mono_exception_from_token);
+	if (aot) {
+		buffer = mono_arch_emit_load_aotconst (code, buffer, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, "mono_exception_from_token");
+	} else {
+		sh4_emit32(&buffer, (guint32)mono_exception_from_token);
+	}
 	sh4_movl_PCrel(&patch2, buffer, sh4_temp);
+	if (aot) {
+		buffer = mono_arch_emit_load_got_addr (code, buffer, NULL, &ji);
+	}
 	sh4_emit32(&buffer, (guint32)mono_arch_get_throw_exception(info, aot));
 
 	/* Sanity checks. */
@@ -794,7 +794,8 @@ mono_arch_setup_async_callback (MonoContext *ctx, void (*async_cb)(void *fun), g
 /**
  * This is the function called from the signal handler
  */
-gboolean mono_arch_handle_exception(void *ucontext, gpointer object)
+gboolean 
+mono_arch_handle_exception(void *ucontext, gpointer object)
 {
 	MonoContext mono_context;
 
@@ -809,8 +810,63 @@ gboolean mono_arch_handle_exception(void *ucontext, gpointer object)
 	return TRUE;
 }
 
-gpointer mono_arch_ip_from_context(void *context)
+gpointer 
+mono_arch_ip_from_context(void *context)
 {
 	ucontext_t *ucontext = (ucontext_t *)context;
 	return (gpointer)ucontext->uc_mcontext.pc;
+}
+
+/*
+ * mono_sh4_throw_exception:
+ *
+ *   C function called from the throw trampolines.
+ */
+void
+mono_sh4_throw_exception (mgreg_t *regs, MonoObject *exc, 
+			  mgreg_t eip, gboolean rethrow)
+{
+	MonoError error;
+	MonoContext ctx;
+	int i;
+	
+	for (i=0; i<16; i++) {
+		ctx.registers[i] = regs[i];
+	}
+	ctx.pc = eip;
+
+	if (mono_object_isinst_checked (exc, mono_defaults.exception_class, &error)) {
+		MonoException *mono_ex = (MonoException*)exc;
+		if (!rethrow) {
+			mono_ex->stack_trace = NULL;
+			mono_ex->trace_ips = NULL;
+		}
+	}
+	mono_error_assert_ok (&error);
+
+	/* adjust eip so that it point into the call instruction */
+	ctx.pc -= 2;
+
+	mono_handle_exception (&ctx, exc);
+
+	mono_restore_context (&ctx);
+
+	g_assert_not_reached ();
+}
+
+void
+mono_sh4_throw_corlib_exception (mgreg_t *regs, guint32 ex_token_index, 
+				 mgreg_t eip, gint32 pc_offset)
+{
+	guint32 ex_token = MONO_TOKEN_TYPE_DEF | ex_token_index;
+	MonoException *ex;
+
+	ex = mono_exception_from_token (mono_defaults.exception_class->image, ex_token);
+
+	eip -= pc_offset;
+
+	/* Negate the ip adjustment done in mono_sh4_throw_exception () */
+	eip += 2;
+
+	mono_sh4_throw_exception (regs, (MonoObject*)ex, eip, FALSE);
 }

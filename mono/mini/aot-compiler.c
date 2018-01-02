@@ -885,7 +885,7 @@ emit_code_bytes (MonoAotCompile *acfg, const guint8* buf, int size)
 
 /* ARCHITECTURE SPECIFIC CODE */
 
-#if defined(TARGET_X86) || defined(TARGET_AMD64) || defined(TARGET_ARM) || defined(TARGET_POWERPC) || defined(TARGET_ARM64)
+#if defined(TARGET_X86) || defined(TARGET_AMD64) || defined(TARGET_ARM) || defined(TARGET_POWERPC) || defined(TARGET_ARM64) || defined(TARGET_SH4)
 #define EMIT_DWARF_INFO 1
 #endif
 
@@ -953,6 +953,10 @@ emit_code_bytes (MonoAotCompile *acfg, const guint8* buf, int size)
 #else
 #define AOT_TARGET_STR "X86 (!native client codegen)"
 #endif
+#endif
+
+#ifdef TARGET_SH4
+#define AOT_TARGET_STR "SH4 (native client codegen)"
 #endif
 
 #ifndef AOT_TARGET_STR
@@ -1390,6 +1394,17 @@ arch_emit_direct_call (MonoAotCompile *acfg, const char *target, gboolean extern
 	emit_unset_mode (acfg);
 	fprintf (acfg->fp, "bl %s\n", target);
 	*call_size = 4;
+#elif defined(TARGET_SH4)
+	emit_unset_mode (acfg);
+fprintf (acfg->fp, "# %s\n", __func__);
+fprintf (stderr, "# %s\n", __func__);
+	fprintf (acfg->fp, "\tbra\t1f\n"
+			   "\tmov.l\t0f,r%d\n"
+			   "\t.align\t2\n"
+			   "0:\t.long\t%s\n"
+			   "1:\tjsr\t@r%d\n"
+			   "\tnop\n", sh4_temp, target, sh4_temp);
+	*call_size = 14;
 #else
 	g_assert_not_reached ();
 #endif
@@ -1425,6 +1440,11 @@ arch_emit_direct_call (MonoAotCompile *acfg, const char *target, gboolean extern
 /*
  * X86 design:
  * - similar to the PPC32 design, we reserve EBX to hold the GOT pointer.
+ */
+
+/*
+ * SH4 design:
+ * - similar to the PPC32 design, we reserve R12 to hold the GOT pointer.
  */
 
 #ifdef MONO_ARCH_AOT_SUPPORTED
@@ -1521,6 +1541,12 @@ arch_emit_got_access (MonoAotCompile *acfg, const char *got_symbol, guint8 *code
 		emit_bytes (acfg, buf, code - buf);
 		*code_size = code - buf;
 	}
+#elif defined(TARGET_SH4)
+fprintf(acfg->fp, "\n# GOT ACCESS\n");
+fprintf(stderr, "\n# GOT ACCESS\n");
+	emit_bytes (acfg, code, mono_arch_get_patch_offset (code));
+	emit_symbol_diff (acfg, got_symbol, ".", (unsigned int) ((got_slot * sizeof (gpointer))) - 12);
+	*code_size = mono_arch_get_patch_offset (code) + 4;
 #else
 	g_assert_not_reached ();
 #endif
@@ -1611,6 +1637,19 @@ arch_emit_plt_entry (MonoAotCompile *acfg, const char *got_symbol, int offset, i
 #endif
 		fprintf (acfg->fp, "mtctr 11\n");
 		fprintf (acfg->fp, "bctr\n");
+		emit_int32 (acfg, info_offset);
+#elif defined(TARGET_SH4)
+fprintf (acfg->fp, "# %s\n",__func__);
+		/* The GOT address is guaranteed to be in r12 by OP_LOAD_GOTADDR */
+		emit_unset_mode (acfg);
+		fprintf (acfg->fp, "\tbra\t1f\n");
+		fprintf (acfg->fp, "\tmov.l\t0f,r0\n");
+		fprintf (acfg->fp, "\t.align\t2\n");
+		fprintf (acfg->fp, "0:\t.long\t%d\n",offset);
+		fprintf (acfg->fp, "1:\tadd\tr%d,r0\n",MONO_ARCH_GOT_REG);
+		fprintf (acfg->fp, "\tmov.l\t@r0,r1\n");
+		fprintf (acfg->fp, "\tjmp\t@r1\n");
+		fprintf (acfg->fp, "\tnop\n");
 		emit_int32 (acfg, info_offset);
 #else
 		g_assert_not_reached ();
@@ -2023,6 +2062,23 @@ arch_emit_specific_trampoline (MonoAotCompile *acfg, int offset, int *tramp_size
 
 	*tramp_size = 17;
 	g_assert (code - buf == *tramp_size);
+#elif (TARGET_SH4)
+fprintf (acfg->fp, "# %s\n",__func__);
+fprintf (stderr, "# %s\n", __func__);
+	/* The GOT address is guaranteed to be in r12 by OP_LOAD_GOTADDR */
+	emit_unset_mode (acfg);
+	fprintf (acfg->fp, "\tmov.l\t0f,r0\n");
+	fprintf (acfg->fp, "\tmov.l\t1f,r4\n");
+	fprintf (acfg->fp, "\tbra\t2f\n");
+	fprintf (acfg->fp, "\tnop\n");
+	fprintf (acfg->fp, "\t.align\t2\n");
+	fprintf (acfg->fp, "0:\t.long %d\n",offset);	// Offset to mscorlib got address
+	fprintf (acfg->fp, "1:\t.long %d\n",offset+4);	// Offset to trampoline argument
+	fprintf (acfg->fp, "2:\tadd\tr%d,r0\n",MONO_ARCH_GOT_REG);
+	fprintf (acfg->fp, "\tadd\tr%d,r4\n",MONO_ARCH_GOT_REG);
+	fprintf (acfg->fp, "\tjsr\t@r0\n");
+	fprintf (acfg->fp, "\tnop\n");
+	*tramp_size = 26;
 #else
 	g_assert_not_reached ();
 #endif
@@ -2098,6 +2154,16 @@ arch_emit_unbox_trampoline (MonoAotCompile *acfg, MonoCompile *cfg, MonoMethod *
 
 	fprintf (acfg->fp, "\n\taddi %d, %d, %d\n", this_pos, this_pos, (int)sizeof (MonoObject));
 	fprintf (acfg->fp, "\n\tb %s\n", call_target);
+#elif defined(TARGET_SH4)
+fprintf (acfg->fp, "# %s\n",__func__);
+fprintf (stderr, "# %s\n", __func__);
+	fprintf (acfg->fp, "\tadd\t#%d,r4\n"
+			   "\tbra\t1f\n"
+			   "\tmov.l\t0f,r%d\n"
+			   "\t.align\t2\n"
+			   "0:\t.long\t%s\n"
+			   "1:\tjsr\t@r%d\n"
+			   "\tnop\n", sizeof (MonoObject), sh4_temp, call_target, sh4_temp);
 #else
 	g_assert_not_reached ();
 #endif
@@ -2216,6 +2282,23 @@ arch_emit_static_rgctx_trampoline (MonoAotCompile *acfg, int offset, int *tramp_
 
 	*tramp_size = 15;
 	g_assert (code - buf == *tramp_size);
+#elif defined(TARGET_SH4)
+	/* The GOT address is guaranteed to be in r12 by OP_LOAD_GOTADDR */
+	emit_unset_mode (acfg);
+fprintf (acfg->fp, "# %s\n",__func__);
+fprintf (stderr, "# %s\n", __func__);
+	fprintf (acfg->fp, "\tmov.l\t0f,R0\n");
+	fprintf (acfg->fp, "\tmov.l\t1f,R%d\n",MONO_ARCH_RGCTX_REG);
+	fprintf (acfg->fp, "\tbra\t2f\n");
+	fprintf (acfg->fp, "\tnop\n");
+	fprintf (acfg->fp, "\t.align\t2\n");
+	fprintf (acfg->fp, "0:\t.long\t%d\n",offset);	// Offset to mscorlib got address
+	fprintf (acfg->fp, "1:\t.long\t%d\n",offset+4);	// Offset to rgctx argument
+	fprintf (acfg->fp, "2:\tadd\tr%d,r0\n",MONO_ARCH_GOT_REG);
+	fprintf (acfg->fp, "\tadd\tr%d,r%d\n",MONO_ARCH_GOT_REG,MONO_ARCH_RGCTX_REG);
+	fprintf (acfg->fp, "\tjsr\t@r0\n");
+	fprintf (acfg->fp, "\tnop\n");
+	*tramp_size = 26;
 #else
 	g_assert_not_reached ();
 #endif
@@ -5361,6 +5444,7 @@ emit_and_reloc_code (MonoAotCompile *acfg, MonoMethod *method, guint8 *code, gui
 			case MONO_PATCH_INFO_GOT_OFFSET: {
 				int code_size;
  
+fprintf(stderr,"code: %p i: 0x%08x size: 0x%08xi INST_LEN: %d\n",code,i,code_size,INST_LEN);fflush(stderr);
 				arch_emit_got_offset (acfg, code + i, &code_size);
 				i += code_size - INST_LEN;
 				skip = TRUE;
@@ -6501,6 +6585,7 @@ emit_plt (MonoAotCompile *acfg)
 
 		emit_label (acfg, plt_entry->symbol);
 
+fprintf(stderr, "acfg->got_symbol: %s index: %d offset: 0x%08x\n",acfg->got_symbol,i,acfg->plt_got_info_offsets [i]);fflush(stderr);
 		arch_emit_plt_entry (acfg, acfg->got_symbol, (acfg->plt_got_offset_base + i) * sizeof (gpointer), acfg->plt_got_info_offsets [i]);
 
 		if (debug_sym)
@@ -9980,6 +10065,9 @@ compile_asm (MonoAotCompile *acfg)
 #define LD_OPTIONS "--shared"
 #elif defined(TARGET_POWERPC64)
 #define LD_OPTIONS "-m elf64ppc"
+#elif defined(TARGET_SH4)
+#define LD_NAME "gcc"
+#define LD_OPTIONS "--shared"
 #endif
 
 #ifndef LD_OPTIONS
@@ -10728,8 +10816,8 @@ get_wrapper_type_name (int type)
 	return wrapper_type_names [type];
 }
 
-//#define DUMP_PLT
-//#define DUMP_GOT
+#define DUMP_PLT
+#define DUMP_GOT
 
 static void aot_dump (MonoAotCompile *acfg)
 {

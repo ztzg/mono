@@ -1842,6 +1842,9 @@ get_call_table_entry (void *table, int index)
 #elif defined(TARGET_X86) || defined(TARGET_AMD64)
 	/* The callee expects an ip which points after the call */
 	return mono_arch_get_call_target ((guint8*)table + (index * 5) + 5);
+#elif defined(TARGET_SH4)
+	/* The callee expects an ip which points after the call */
+	return mono_arch_get_call_target ((guint8*)table + (index * 12));
 #else
 	g_assert_not_reached ();
 	return NULL;
@@ -3734,6 +3737,7 @@ decode_patch (MonoAotModule *aot_module, MonoMemPool *mp, MonoJumpInfo *ji, guin
 		break;
 	default:
 		g_warning ("unhandled type %d", ji->type);
+fprintf(stderr, "ji: %p ip: %p type: %d target: %p from: %p\n",ji,ji->ip.i,ji->type,ji->data.target,__builtin_return_address(0));
 		g_assert_not_reached ();
 	}
 
@@ -4890,6 +4894,7 @@ mono_aot_get_plt_entry (guint8 *code)
 
 	return NULL;
 #else
+fprintf (stderr,"target: %p plt_start: %p plt_end: %p\n",target,amodule->plt,amodule->plt_end);fflush(stderr);
 	if ((target >= (guint8*)(amodule->plt)) && (target < (guint8*)(amodule->plt_end)))
 		return target;
 	else
