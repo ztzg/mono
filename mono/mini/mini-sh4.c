@@ -1413,7 +1413,10 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 			sh4_sub(&buffer, sh4_temp, sh4_fp);
 		}
 		else {
-			sh4_load(&buffer, cfg->stack_offset, sh4_temp);
+			int offset = cfg->stack_offset;
+
+			/* Assume the pool doesn't need flushing at this point. */
+			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
 			sh4_sub(&buffer, sh4_temp, sh4_fp);
 		}
 	}
@@ -1436,7 +1439,9 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 		 */
 		sh4_mov(&buffer, sh4_sp, sh4_r0);
 		sh4_add_imm(&buffer, offset, sh4_r0);
-		sh4_base_store(NULL, &buffer, sh4_r0, cfg->sig_cookie, sh4_fp);
+
+		/* Assume the pool doesn't need flushing at this point. */
+		sh4_base_store(cfg, &buffer, sh4_r0, cfg->sig_cookie, sh4_fp);
 	}
 
 	/* At this point, the stack looks like :
@@ -1466,7 +1471,8 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 				  ret_info->size,
 				  mono_arch_regname(ret_info->reg));
 
-		sh4_base_store(NULL, &buffer, ret_info->reg, inst_ret->inst_offset, inst_ret->inst_basereg);
+		/* Assume the pool doesn't need flushing at this point. */
+		sh4_base_store(cfg, &buffer, ret_info->reg, inst_ret->inst_offset, inst_ret->inst_basereg);
 	}
 
 	/* Copy arguments at the expected place : into register or onto the stack. */
@@ -1509,15 +1515,18 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 				offset = saved_regs_size + arg_info->offset;
 				switch (arg_info->type) {
 				case integer32:
-					sh4_base_load(NULL, &buffer, offset, sh4_sp, inst->dreg);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_load(cfg, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
 				case float32:
-					sh4_base_loadf32(NULL, &buffer, offset, sh4_sp, inst->dreg);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_loadf32(cfg, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
 				case float64:
-					sh4_base_loadf64(NULL, &buffer, offset, sh4_sp, inst->dreg);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_loadf64(cfg, &buffer, offset, sh4_sp, inst->dreg);
 					break;
 
 				case integer64:		/* Fall through - handled as 2 x integer32 */
@@ -1544,23 +1553,27 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 					g_assert(inst->inst_basereg == sh4_fp);
-					sh4_base_store(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_store(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
-					sh4_base_store(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
-					sh4_base_store(NULL, &buffer, arg_info->reg + 1, inst->inst_offset + 4, sh4_fp);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_store(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					sh4_base_store(cfg, &buffer, arg_info->reg + 1, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case float64:
-					sh4_base_storef64(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_storef64(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case float32:
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
 					if (signature->pinvoke != 0)
-						sh4_base_storef32_single(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+						sh4_base_storef32_single(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					else
-						sh4_base_storef32(NULL, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
+						sh4_base_storef32(cfg, &buffer, arg_info->reg, inst->inst_offset, sh4_fp);
 					break;
 
 				case typedbyref:	/* Always onto the stack currently */
@@ -1585,17 +1598,19 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 				switch (arg_info->type) {
 				case integer32:
 				case float32:
-					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_r0);
-					sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset, sh4_fp);
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
+					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_r0);
+					sh4_base_store(cfg, &buffer, sh4_r0, inst->inst_offset, sh4_fp);
 					break;
 
 				case integer64:
 				case float64:
+					sh4_cstpool_check_begin_arg (cfg, &buffer);
 					/* TODO - CV: optimize this case. */
-					sh4_base_load(NULL, &buffer, offset, sh4_sp, sh4_r0);
-					sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset, sh4_fp);
-					sh4_base_load(NULL, &buffer, offset + 4, sh4_sp, sh4_r0);
-					sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset + 4, sh4_fp);
+					sh4_base_load(cfg, &buffer, offset, sh4_sp, sh4_r0);
+					sh4_base_store(cfg, &buffer, sh4_r0, inst->inst_offset, sh4_fp);
+					sh4_base_load(cfg, &buffer, offset + 4, sh4_sp, sh4_r0);
+					sh4_base_store(cfg, &buffer, sh4_r0, inst->inst_offset + 4, sh4_fp);
 					break;
 
 				case valuetype:
@@ -1606,8 +1621,9 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 					 * the completion of the VM, not its optimization! */
 					size_struct = ALIGN_TO(arg_info->size, 0x4);
 					for (j=0; j < size_struct; j += 4) {
-						sh4_base_load(NULL, &buffer, offset + j, sh4_sp, sh4_r0);
-						sh4_base_store(NULL, &buffer, sh4_r0, inst->inst_offset + j, sh4_fp);
+						sh4_cstpool_check_begin_arg (cfg, &buffer);
+						sh4_base_load(cfg, &buffer, offset + j, sh4_sp, sh4_r0);
+						sh4_base_store(cfg, &buffer, sh4_r0, inst->inst_offset + j, sh4_fp);
 					}
 					break;
 
