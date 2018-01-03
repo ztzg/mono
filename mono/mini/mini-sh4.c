@@ -43,6 +43,11 @@
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
+guint8*
+mono_sh4_emit_load_aotconst (guint8 *start, guint8 *code,
+			     MonoJumpInfo **ji, MonoJumpInfoType tramp_type,
+			     gconstpointer target, SH4IntRegister dest);
+
 #define ALIGN_TO(value, alignment) (((value) & ~(alignment)) == 0 ?	\
 				    (value) :				\
 				    (((guint32)(value)) + ((alignment) - 1)) & ~((alignment) - 1))
@@ -5171,11 +5176,10 @@ fprintf(stderr,"%s:%s < LOAD GOT ADDR: %p (0x%x)\n",cfg->method->klass->name,cfg
  *
  *   Emit code to load the contents of the GOT slot identified by TRAMP_TYPE and
  * TARGET from the mscorlib GOT in full-aot code.
- * On SH4, the GOT address is assumed to be in r12, and the result is placed into 
- * r0.
+ * On SH4, the GOT address is assumed to be in r12.
  */
 guint8*
-mono_arch_emit_load_aotconst (guint8 *start, guint8 *code, MonoJumpInfo **ji, MonoJumpInfoType tramp_type, gconstpointer target)
+mono_sh4_emit_load_aotconst (guint8 *start, guint8 *code, MonoJumpInfo **ji, MonoJumpInfoType tramp_type, gconstpointer target, SH4IntRegister dest)
 {
 	guint8  *patch1 = NULL,
 		*patch2 = NULL,
@@ -5195,9 +5199,23 @@ fprintf(stderr,"AOTCONST ji: %p tramp_type: %d\n",ji,tramp_type);fflush(stderr);
 	sh4_bra_label (&patch1, code);
 	sh4_movl_PCrel (&patch2, patch3, sh4_temp);
 	sh4_add (&code, MONO_ARCH_GOT_REG, sh4_temp);
-	sh4_movl_indRy (&code, sh4_temp, sh4_r0);
+	sh4_movl_indRy (&code, sh4_temp, dest);
 
 	return code;
+}
+
+/*
+ * mono_arch_emit_load_aotconst:
+ *
+ *   Emit code to load the contents of the GOT slot identified by TRAMP_TYPE and
+ * TARGET from the mscorlib GOT in full-aot code.
+ * On SH4, the GOT address is assumed to be in r12, and the result is placed into 
+ * r0.
+ */
+guint8*
+mono_arch_emit_load_aotconst (guint8 *start, guint8 *code, MonoJumpInfo **ji, MonoJumpInfoType tramp_type, gconstpointer target)
+{
+        return mono_sh4_emit_load_aotconst(start, code, ji, tramp_type, target, sh4_r0);
 }
 
 guint32
