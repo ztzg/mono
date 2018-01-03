@@ -449,7 +449,7 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 	/* We generate a sequence of 6 + n*4 bytes (n beeing the nb of 	*/
 	/* variables emitted). In the following, we track the overall 	*/
 	/* code size allocated (see sz "metavariable"). 		*/
-	if (context == cstpool_context_start_ins ||
+	if (context == cstpool_context_begin_ins ||
 	    context == cstpool_context_end_bb) {
 		patch1 = *pcval;
 
@@ -638,9 +638,9 @@ sh4_cstpool_decide_emission(MonoCompile *cfg, CstPool_Context context,
 
 		guint8 *pcval = get_code_buffer(cfg, 0);
 
-		guint32 next_inst_length = context == cstpool_context_start_ins
+		guint32 next_inst_length = context == cstpool_context_begin_ins
 			? GPOINTER_TO_UINT(data)
-			: 50 /* TODO(ddiederen). */;
+			: 64 /* TODO(ddiederen). */;
 
 		/* We're being pessimistic here; the first instruction
 		 * won't refer to the last pool entry. */
@@ -854,8 +854,23 @@ sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb, guint32 *offset
 	return ret;
 }
 
+/* Called in prolog, before copying each argument */
+void
+sh4_cstpool_check_begin_arg(MonoCompile *cfg, guint8 **code)
+{
+	guint32 size;
+
+	SH4_CFG_DEBUG(4) SH4_DEBUG("arg; ip: %p", *code - cfg->native_code);
+
+	if (sh4_cstpool_decide_emission (cfg, cstpool_context_begin_arg,
+					 NULL, &size)) {
+		sh4_emit_pool (cfg, cstpool_context_begin_arg, code);
+	}
+}
+
 /* Called at emit_exceptions time */
-void sh4_cstpool_check_begin_emit_exceptions(MonoCompile *cfg)
+void
+sh4_cstpool_check_begin_emit_exceptions(MonoCompile *cfg)
 {
 	guint32 size;
 	guint8 *buffer;

@@ -3502,7 +3502,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
 		/* Check if the constant pool has to be emitted right now. */
-		emit_cstpool = sh4_cstpool_decide_emission(cfg, cstpool_context_start_ins, GUINT_TO_POINTER(length_max), &size_cstpool);
+		emit_cstpool = sh4_cstpool_decide_emission(cfg, cstpool_context_begin_ins, GUINT_TO_POINTER(length_max), &size_cstpool);
 		if (emit_cstpool)
 			length_max += size_cstpool;
 
@@ -3510,7 +3510,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		   constant pool) used to implement the current opcode. */
 		buffer = get_code_buffer(cfg, length_max);
 		if (emit_cstpool)
-			sh4_emit_pool(cfg, cstpool_context_start_ins, &buffer);
+			sh4_emit_pool(cfg, cstpool_context_begin_ins, &buffer);
 		code = buffer;
 
 		offset = buffer - cfg->native_code;

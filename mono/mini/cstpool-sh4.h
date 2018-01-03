@@ -47,9 +47,10 @@ typedef enum {
 } CstPool_Mode;
 
 typedef enum {
-	cstpool_context_start_ins,	/* Before instruction.		*/
+	cstpool_context_begin_ins,	/* Before instruction.		*/
+	cstpool_context_begin_arg,	/* Before copying argument.	*/
 	cstpool_context_end_bb,		/* End of basic block.		*/
-	cstpool_context_end_method,	/* End of mentod.		*/
+	cstpool_context_end_method,	/* End of method.		*/
 	cstpool_context_emit_exceptions /* Before emitting exceptions.	*/
 } CstPool_Context;
 
@@ -126,6 +127,7 @@ void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb,
 				guint8 **pcval);
 gboolean sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb,
                                     guint32 *offset);
+void sh4_cstpool_check_begin_arg(MonoCompile *cfg, guint8 **code);
 void sh4_cstpool_check_begin_emit_exceptions(MonoCompile *cfg);
 
 gboolean sh4_cstpool_decide_emission(MonoCompile *cfg, CstPool_Context context,
