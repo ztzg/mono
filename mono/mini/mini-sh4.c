@@ -1599,6 +1599,21 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	if (cfg->stack_offset != 0)
 		sh4_mov(&buffer, sh4_fp, sh4_sp);
 
+	/* store runtime generic context */
+	if (cfg->rgctx_var) {
+		MonoInst *ins = cfg->rgctx_var;
+
+		g_assert (ins->opcode == OP_REGOFFSET &&
+			  ins->inst_basereg == sh4_fp);
+
+		if (SH4_CHECK_RANGE_movl_dispRx (ins->inst_offset)) {
+			sh4_movl_dispRx (&buffer, MONO_ARCH_RGCTX_REG, ins->inst_offset, ins->inst_basereg);
+		} else {
+			sh4_add_offset2base (cfg, &buffer, ins->inst_offset, ins->inst_basereg, sh4_temp);
+			sh4_movl_indRx (&buffer, MONO_ARCH_RGCTX_REG, sh4_temp);
+		}
+	}
+
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -4476,6 +4491,7 @@ void mono_arch_patch_code(MonoCompile *cfg, MonoMethod *method, MonoDomain *doma
 		case MONO_PATCH_INFO_ABS:
 		case MONO_PATCH_INFO_INTERNAL_METHOD:
 		case MONO_PATCH_INFO_JIT_ICALL_ADDR:
+		case MONO_PATCH_INFO_RGCTX_FETCH:
 			/* Absolute. */
 			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors, error);
 			break;

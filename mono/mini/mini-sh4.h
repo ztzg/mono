@@ -158,6 +158,8 @@
 
 #define MONO_ARCH_SOFT_DEBUG_SUPPORTED 1
 
+#define MONO_ARCH_GSHARED_SUPPORTED 1
+
 /*
  * This macro is used to initialize the top LMF entry.
  * The register used to store the frame pointer has to be initialized to -1.

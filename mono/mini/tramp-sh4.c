@@ -29,15 +29,10 @@
 
 #include <glib.h>
 
+#include <mono/metadata/abi-details.h>
+
 #include "mini.h"
 #include "mono/arch/sh4/sh4-codegen.h"
-
-gpointer mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot, MonoTrampInfo **info, gboolean aot)
-{
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
-}
 
 /**
  * Create the stub used to transfer control to a specified trampoline.
@@ -350,9 +345,13 @@ guchar* mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type,
 	 *	:              : Current frame.
 	 */
 
-	/* pseudo-code: goto compiled_methode; */
-	/* Rtemp is the result from the call to trampoline(). */
-	sh4_jmp_indRx(&buffer, sh4_r0);
+	if (MONO_TRAMPOLINE_TYPE_MUST_RETURN (trampoline_type)) {
+		sh4_rts (&buffer);
+	} else {
+		/* pseudo-code: goto compiled_methode; */
+		/* Rtemp is the result from the call to trampoline(). */
+		sh4_jmp_indRx(&buffer, sh4_r0);
+	}
 	sh4_nop(&buffer);
 
 	/* Align the constant pool. */
@@ -424,6 +423,193 @@ gpointer mono_arch_get_unbox_trampoline(MonoMethod *method, gpointer address)
 	mono_arch_flush_icache(code, UNBOX_TRAMPOLINE_SIZE);
 
 	return code;
+}
+
+/*
+ * mono_arch_get_static_rgctx_trampoline:
+ *
+ *   Create a trampoline which sets RGCTX_REG to MRGCTX, then jumps to ADDR.
+ */
+gpointer
+mono_arch_get_static_rgctx_trampoline (MonoMethod *m, MonoMethodRuntimeGenericContext *mrgctx, gpointer addr)
+{
+	guint8 *code, *start, *patch_load_mrgctx, *patch_load_addr;
+	/* TODO(ddiederen): DWARF. */
+	/* GSList *unwind_ops; */
+	int buf_len = 18;
+	MonoDomain *domain = mono_domain_get ();
+
+	start = code = mono_domain_code_reserve (domain, buf_len);
+
+	/* 0: MONO_ARCH_RGCTX_REG <- mrgctx */
+	patch_load_mrgctx = code;
+	sh4_die (&code);
+
+	/* 2: sh4_temp <- addr */
+	patch_load_addr = code;
+	sh4_die (&code);
+
+	/* 4: Jump */
+	sh4_jmp_indRx (&code, sh4_temp);
+	sh4_nop (&code);
+
+	/* 8: Align the constant pool. */
+	while (((guint32)code % 4) != 0)
+		sh4_nop (&code);
+
+	/* 8-10: mrgctx */
+	sh4_movl_PCrel (&patch_load_mrgctx, code, MONO_ARCH_RGCTX_REG);
+	sh4_emit32 (&code, (guint32)mrgctx);
+
+	/* 12-14: addr */
+	sh4_movl_PCrel (&patch_load_addr, code, sh4_temp);
+	sh4_emit32 (&code, (guint32)addr);
+
+	/* 16-18: end */
+	g_assert ((code - start) < buf_len);
+
+	mono_arch_flush_icache (start, code - start);
+
+	mono_profiler_code_buffer_new (start, code - start, MONO_PROFILER_CODE_BUFFER_GENERICS_TRAMPOLINE, NULL);
+
+	mono_tramp_info_register (mono_tramp_info_create (NULL, start, code - start, NULL, NULL), domain);
+
+	return start;
+}
+
+gpointer
+mono_arch_create_rgctx_lazy_fetch_trampoline (guint32 slot, MonoTrampInfo **info, gboolean aot)
+{
+	guint8 *tramp;
+	guint8 *code, *buf;
+	guint8 *patch_load_offset = NULL, *patch_load_tramp = NULL;
+	guint8 **rgctx_null_jumps;
+	int tramp_size;
+	int depth, index;
+	int i, njumps, offset;
+	gboolean mrgctx;
+	MonoJumpInfo *ji = NULL;
+	/* TODO(ddiederen): DWARF. */
+	GSList *unwind_ops = NULL;
+	SH4IntRegister chain_reg;
+
+	mrgctx = MONO_RGCTX_SLOT_IS_MRGCTX (slot);
+	index = MONO_RGCTX_SLOT_INDEX (slot);
+	if (mrgctx)
+		index += MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT / sizeof (gpointer);
+	for (depth = 0; ; ++depth) {
+		int size = mono_class_rgctx_get_array_size (depth, mrgctx);
+
+		if (index < size - 1)
+			break;
+		index -= size - 1;
+	}
+
+	tramp_size = 6 + 6 * depth + 14 + 8 + 2 * 4;
+
+	code = buf = mono_global_codeman_reserve (tramp_size);
+
+	rgctx_null_jumps = g_malloc (sizeof (guint8*) * (depth + 2));
+	njumps = 0;
+
+	if (mrgctx) {
+		/* get mrgctx ptr */
+		chain_reg = MONO_SH4_REG_FIRST_ARG;
+	} else {
+		/* load rgctx ptr from vtable */
+		g_assert (SH4_CHECK_RANGE_movl_dispRy (MONO_STRUCT_OFFSET (MonoVTable, runtime_generic_context)));
+		sh4_movl_dispRy (&code, (MONO_STRUCT_OFFSET (MonoVTable, runtime_generic_context)), MONO_SH4_REG_FIRST_ARG, sh4_r0);
+		chain_reg = sh4_r0;
+		/* is the rgctx ptr null? */
+		sh4_tst (&code, sh4_r0, sh4_r0);
+		/* if yes, jump to actual trampoline */
+		rgctx_null_jumps [njumps ++] = code;
+		sh4_die (&code);
+	}
+
+	for (i = 0; i < depth; ++i) {
+		/* load ptr to next array */
+		if (mrgctx && i == 0) {
+			g_assert (SH4_CHECK_RANGE_movl_dispRy (MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT));
+			sh4_movl_dispRy (&code, (MONO_SIZEOF_METHOD_RUNTIME_GENERIC_CONTEXT), chain_reg, sh4_r0);
+		} else {
+			sh4_movl_indRy (&code, chain_reg, sh4_r0);
+		}
+		chain_reg = sh4_r0;
+		/* is the ptr null? */
+		sh4_tst (&code, sh4_r0, sh4_r0);
+		/* if yes, jump to actual trampoline */
+		rgctx_null_jumps [njumps ++] = code;
+		sh4_die (&code);
+	}
+
+	/* fetch slot */
+	offset = sizeof (gpointer) * (index + 1);
+	if (SH4_CHECK_RANGE_movl_dispRy (offset)) {
+		sh4_movl_dispRy (&code, offset, chain_reg, sh4_r0);
+	} else {
+		patch_load_offset = code;
+		sh4_die (&code);
+		sh4_add (&code, chain_reg, sh4_temp);
+		sh4_movl_indRy (&code, sh4_temp, sh4_r0);
+	}
+	chain_reg = sh4_r0;
+	/* is the slot null? */
+	sh4_tst (&code, sh4_r0, sh4_r0);
+	/* if yes, jump to actual trampoline */
+	rgctx_null_jumps [njumps ++] = code;
+	sh4_die (&code);
+	/* otherwise return, result is in r1 */
+	sh4_rts (&code);
+	sh4_nop (&code); /* Delay slot */
+
+	g_assert (njumps <= depth + 2);
+	for (i = 0; i < njumps; ++i)
+		sh4_bt_label (&rgctx_null_jumps [i], code);
+
+	g_free (rgctx_null_jumps);
+
+	/* move the rgctx pointer to the VTABLE register */
+	sh4_mov (&code, MONO_SH4_REG_FIRST_ARG, MONO_ARCH_VTABLE_REG);
+
+	if (aot) {
+		/* TODO(ddiederen): AOT path */
+		NOT_IMPLEMENTED;
+	} else {
+		tramp = mono_arch_create_specific_trampoline (GUINT_TO_POINTER (slot), MONO_TRAMPOLINE_RGCTX_LAZY_FETCH, mono_get_root_domain (), NULL);
+
+		patch_load_tramp = code;
+		sh4_die (&code);
+		sh4_jmp_indRx (&code, sh4_temp);
+		sh4_nop (&code);
+	}
+
+	if (patch_load_offset || patch_load_tramp) {
+		/* Align the constant pool. */
+		while (((guint32)code % 4) != 0)
+			sh4_nop (&code);
+
+		if (patch_load_offset) {
+			sh4_movl_PCrel (&patch_load_offset, code, sh4_temp);
+			sh4_emit32 (&code, (guint32)mrgctx);
+		}
+
+		if (patch_load_tramp) {
+			sh4_movl_PCrel (&patch_load_tramp, code, sh4_temp);
+			sh4_emit32 (&code, (guint32)tramp);
+		}
+	}
+
+	mono_arch_flush_icache (buf, code - buf);
+	mono_profiler_code_buffer_new (buf, code - buf, MONO_PROFILER_CODE_BUFFER_GENERICS_TRAMPOLINE, NULL);
+
+	g_assert (code - buf <= tramp_size);
+
+	char *name = mono_get_rgctx_fetch_trampoline_name (slot);
+	*info = mono_tramp_info_create (name, buf, code - buf, ji, unwind_ops);
+	g_free (name);
+
+	return buf;
 }
 
 /**
