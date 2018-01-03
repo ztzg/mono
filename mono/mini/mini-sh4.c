@@ -39,6 +39,7 @@
 
 #include "mini.h"
 #include "ir-emit.h"
+#include "trace.h"
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
@@ -884,6 +885,16 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 	/* Spill variables slots are allocated from bottom to top. */
 	cfg->flags |= MONO_CFG_HAS_SPILLUP;
 
+	/*
+	 * TODO(ddiederen): Not implemented, as for most other arches;
+	 * cf. "NULL ebp for now" in mono_arch_instrument_prolog.
+	 */
+#if 0
+	/* allow room for the vararg method args: void* and long/double */
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
+		cfg->param_area = MAX (cfg->param_area, sizeof (gpointer)*8);
+#endif
+
 	signature = mono_method_signature(cfg->method);
 	call_info = get_call_info(cfg, signature);
 
@@ -899,6 +910,10 @@ void mono_arch_allocate_vars(MonoCompile *cfg)
 
 	cfg->frame_reg = sh4_fp;
 	cfg->used_int_regs |= 1 << sh4_fp;
+
+	/* allow room to save the return value */
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
+		locals_padding += 8;
 
 	/* Compute space used by local variables. */
 	locals_offsets = mono_allocate_stack_slots(cfg, FALSE,
@@ -1257,10 +1272,14 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 	int j;
 	guint32 size_struct = 0;
 	guint32 nb_struct_on_stack = 0;
+	int tracing = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
 	sh4_cstpool_init(cfg, cstpool_mode_fullperf);
+
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
+		tracing = 1;
 
 	signature = mono_method_signature(cfg->method);
 
@@ -1695,6 +1714,9 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 		 */
 	}
 
+	if (tracing)
+		buffer = mono_arch_instrument_prolog (cfg, mono_trace_enter_method, buffer, TRUE);
+
 	cfg->code_len = buffer - cfg->native_code;
 
 	/* Sanity checks. */
@@ -1723,16 +1745,22 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 {
 	guint8 *buffer = NULL;
 	guint8 *code   = NULL;
+	/* TODO(ddiederen): Compute this value. */
+	int max_epilog_size = 50U;
 	int i = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	/* TODO(ddiederen): Compute this value. */
-#define EPILOGUE_SIZE 50U
+	if (mono_jit_trace_calls != NULL)
+		max_epilog_size += 50;
 
 	/* Reallocate enough room to store the SH4 instructions
 	   used to implement an epilogue. */
-	code = buffer = get_code_buffer(cfg, EPILOGUE_SIZE);
+	code = buffer = get_code_buffer(cfg, max_epilog_size);
+
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method)) {
+		buffer = mono_arch_instrument_epilog (cfg, mono_trace_leave_method, buffer, TRUE);
+	}
 
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
@@ -1845,7 +1873,7 @@ void mono_arch_emit_epilog(MonoCompile *cfg)
 	cfg->code_len = buffer - cfg->native_code;
 
 	/* Sanity checks. */
-	g_assert(buffer - code <= EPILOGUE_SIZE);
+	g_assert(buffer - code <= max_epilog_size);
 	g_assert(cfg->code_len < cfg->code_size);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
@@ -2067,18 +2095,124 @@ void mono_arch_init(void)
 	mono_mprotect (bp_trigger_page, mono_pagesize (), 0);
 }
 
+enum {
+	SAVE_NONE,
+	SAVE_STRUCT,
+	SAVE_ONE,
+	SAVE_TWO,
+	SAVE_FP
+};
+
 void *mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments, gboolean preserve_argument_registers)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	guchar *code = p;
+	int save_mode = SAVE_NONE;
+	int offset;
+	MonoMethod *method = cfg->method;
+	int rtype = mini_get_underlying_type (mono_method_signature (method)->ret)->type;
+	int save_offset = cfg->param_area;
+	save_offset += 15;
+	save_offset &= ~15;
+
+	offset = code - cfg->native_code;
+
+	switch (rtype) {
+	case MONO_TYPE_VOID:
+		/* special case string .ctor icall */
+		if (strcmp (".ctor", method->name) && method->klass == mono_defaults.string_class)
+			save_mode = SAVE_ONE;
+		else
+			save_mode = SAVE_NONE;
+		break;
+	case MONO_TYPE_I8:
+	case MONO_TYPE_U8:
+		save_mode = SAVE_TWO;
+		break;
+	case MONO_TYPE_R4:
+	case MONO_TYPE_R8:
+		save_mode = SAVE_FP;
+		break;
+	case MONO_TYPE_VALUETYPE:
+		save_mode = SAVE_STRUCT;
+		break;
+	default:
+		save_mode = SAVE_ONE;
+		break;
+	}
+
+	switch (save_mode) {
+	case SAVE_TWO:
+		sh4_movl_dispRx (&code, sh4_r0, save_offset, cfg->frame_reg);
+		sh4_movl_dispRx (&code, sh4_r1, save_offset + 4, cfg->frame_reg);
+		if (enable_arguments) {
+			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
+			sh4_mov (&code, sh4_r1, MONO_SH4_REG_FIRST_ARG + 2);
+		}
+		break;
+	case SAVE_ONE:
+		sh4_movl_dispRx (&code, sh4_r0, save_offset, cfg->frame_reg);
+		if (enable_arguments) {
+			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
+		}
+		break;
+	case SAVE_FP:
+		/*
+		 * TODO(ddiederen): Tracing, bogus FP results due to
+		 * non-interleaved floating point registers (cf. ABI).
+		 */
+		sh4_mov (&code, cfg->frame_reg, sh4_temp);
+		sh4_add_imm (&code, save_offset, sh4_temp);
+		sh4_fmov_indRx (&code, sh4_dr0, sh4_temp);
+		break;
+	case SAVE_STRUCT:
+		if (enable_arguments) {
+			/* FIXME: get the actual address  */
+			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
+		}
+		break;
+	case SAVE_NONE:
+	default:
+		break;
+	}
+
+	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
+	sh4_load (&code, (guint32)func, sh4_temp);
+	sh4_jsr_indRx (&code, sh4_temp);
+	sh4_nop (&code); /* delay slot */
+
+	switch (save_mode) {
+	case SAVE_TWO:
+		sh4_movl_dispRy (&code, save_offset, cfg->frame_reg, sh4_r0);
+		sh4_movl_dispRy (&code, save_offset + 4, cfg->frame_reg, sh4_r1);
+		break;
+	case SAVE_ONE:
+		sh4_movl_dispRy (&code, save_offset, cfg->frame_reg, sh4_r0);
+		break;
+	case SAVE_FP:
+		sh4_mov (&code, cfg->frame_reg, sh4_temp);
+		sh4_add_imm (&code, save_offset, sh4_temp);
+		sh4_fmov_indRy (&code, sh4_temp, sh4_dr0);
+		break;
+	case SAVE_NONE:
+	default:
+		break;
+	}
+
+	return code;
 }
 
 void *mono_arch_instrument_prolog(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	guchar *code = p;
+
+	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
+	/* Note: last arg in delay slot. */
+	sh4_load (&code, (guint32)func, sh4_temp);
+	sh4_jsr_indRx (&code, sh4_temp);
+	/* Delay slot. */
+	sh4_mov_imm (&code, 0, MONO_SH4_REG_FIRST_ARG + 1); /* NULL ebp for now */
+
+	return code;
 }
 
 gboolean mono_arch_is_inst_imm(gint64 imm)
