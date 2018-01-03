@@ -1885,7 +1885,6 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 	for (patch_info = cfg->patch_info; patch_info != NULL; patch_info = patch_info->next) {
 		MonoClass *class = NULL;
 		guint8 *patch0 = NULL;
-		guint8 *patch1 = NULL;
 		guint8 *patch2 = NULL;
 
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
@@ -4633,7 +4632,7 @@ mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain, MonoIMTC
 	int size, i;
 	guint8 *code = NULL, *start = NULL;
 
-	/* TODO(dd): IMT, compute size. */
+	/* TODO(ddiederen): IMT, compute size. */
 	guint max_entry_size = 50;
 	size = count * max_entry_size;
 
