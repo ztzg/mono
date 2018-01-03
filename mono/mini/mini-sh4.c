@@ -4678,9 +4678,12 @@ mono_arch_patch_code(MonoCompile *cfg, MonoMethod *method, MonoDomain *domain, g
 fprintf (stderr,"PATCH_GOT patch: %p (0x%08x) target: 0x%08x\n",patch,(*(guint32 *)patch),target);fflush(stderr);
 			break;
 
-		case MONO_PATCH_INFO_NONE:
 		case MONO_PATCH_INFO_ICALL_ADDR_CALL:
 			break;
+
+		case MONO_PATCH_INFO_NONE:
+                        /* Not break as we don't want to patch with NULL! */
+                        continue;
 
 		default:
 printf("unhandled patch: ");
