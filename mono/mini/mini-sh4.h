@@ -156,6 +156,8 @@
 #define MONO_ARCH_ENABLE_MONO_LMF_VAR 1
 */
 
+#define MONO_ARCH_SOFT_DEBUG_SUPPORTED 1
+
 /*
  * This macro is used to initialize the top LMF entry.
  * The register used to store the frame pointer has to be initialized to -1.
@@ -273,6 +275,10 @@ typedef struct {
  * This wrapper is responsible for saving the machine state into the
  * following arch-specific structure. */
 struct MonoLMF {
+	/*
+	 * If the second lowest bit is set to 1, then this is a MonoLMFExt structure, and
+	 * the other fields are not valid.
+	 */
 	gpointer    previous_lmf;
 	gpointer    lmf_addr;
 	MonoMethod *method;

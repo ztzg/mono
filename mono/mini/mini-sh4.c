@@ -35,6 +35,8 @@
 #include <unistd.h>       /* syscall(2), */
 #include <glib.h>
 
+#include <mono/utils/mono-mmap.h>
+
 #include "mini.h"
 #include "ir-emit.h"
 #include "cpu-sh4.h"
@@ -45,6 +47,17 @@
 				    (((guint32)(value)) + ((alignment) - 1)) & ~((alignment) - 1))
 
 int sh4_extra_debug = 0;
+
+#define BREAKPOINT_SIZE 14
+
+/*
+ * The code generated for sequence points reads from this location, which is
+ * made read-only when single stepping is enabled.
+ */
+static gpointer ss_trigger_page;
+
+/* Enabled breakpoints read from this trigger page */
+static gpointer bp_trigger_page;
 
 struct arg_info {
 	guint32 offset;
@@ -2050,8 +2063,9 @@ MonoInst *mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
  */
 void mono_arch_init(void)
 {
-	/* TODO - CV : InitializeCriticalSection (&mini_arch_mutex); */
-	return;
+	ss_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ|MONO_MMAP_32BIT, MONO_MEM_ACCOUNT_OTHER);
+	bp_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ|MONO_MMAP_32BIT, MONO_MEM_ACCOUNT_OTHER);
+	mono_mprotect (bp_trigger_page, mono_pagesize (), 0);
 }
 
 void *mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments, gboolean preserve_argument_registers)
@@ -3996,6 +4010,40 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			mono_add_seq_point (cfg, basic_block, inst, code - cfg->native_code);
 			break;
 
+		case OP_SEQ_POINT: {	/* MD: seq_point: len:28 */
+			/*
+			 * Current actual size: 24-28, depending on
+			 * alignment.
+			 *
+			 * TODO(ddiederen): Soft debug, compact breakpoint.
+			 */
+			int i;
+
+			if (cfg->compile_aot)
+				NOT_IMPLEMENTED;
+
+			/*
+			 * Read from the single stepping trigger page. This will cause a
+			 * SIGSEGV when single stepping is enabled.
+			 * We do this _before_ the breakpoint, so single stepping after
+			 * a breakpoint is hit will step to the next IL offset.
+			 */
+			if (inst->flags & MONO_INST_SINGLE_STEP_LOC) {
+				sh4_load (&buffer, (guint32)ss_trigger_page, sh4_temp);
+				sh4_movl_indRy (&buffer, sh4_temp, sh4_temp);
+			}
+
+			mono_add_seq_point (cfg, basic_block, inst, buffer - cfg->native_code);
+
+			/*
+			 * A placeholder for a possible breakpoint inserted by
+			 * mono_arch_set_breakpoint ().
+			 */
+			for (i = 0; i < BREAKPOINT_SIZE / 2; ++i)
+				sh4_nop (&buffer);
+			break;
+		}
+
 		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
 			sh4_die(&buffer);
 			break;
@@ -4739,3 +4787,154 @@ mono_arch_get_nullified_class_init_trampoline (MonoTrampInfo **info)
 
 	return buf;
 }
+
+/* Soft Debug support */
+#ifdef MONO_ARCH_SOFT_DEBUG_SUPPORTED
+
+/*
+ * BREAKPOINTS
+ */
+
+/*
+ * mono_arch_set_breakpoint:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_set_breakpoint (MonoJitInfo *ji, guint8 *ip)
+{
+	guint8 *code = ip;
+	guint8 *orig_code = code;
+
+	g_assert (((guint64)(gsize)bp_trigger_page >> 32) == 0);
+
+	/* TODO(ddiederen): Soft debug, compact breakpoint. */
+	sh4_load (&code, (guint32)bp_trigger_page, sh4_temp);
+	sh4_movl_indRy (&code, sh4_temp, sh4_temp);
+
+	g_assert (code - orig_code <= BREAKPOINT_SIZE);
+
+	mono_arch_flush_icache (orig_code, code - orig_code);
+}
+
+/*
+ * mono_arch_clear_breakpoint:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_clear_breakpoint (MonoJitInfo *ji, guint8 *ip)
+{
+	guint8 *code = ip;
+	int i;
+
+	for (i = 0; i < BREAKPOINT_SIZE / 2; ++i)
+		sh4_nop(&code);
+
+	mono_arch_flush_icache (ip, code - ip);
+}
+
+/*
+ * mono_arch_is_breakpoint_event:
+ *
+ *   See mini-amd64.c for docs.
+ */
+gboolean
+mono_arch_is_breakpoint_event (void *info, void *sigctx)
+{
+	siginfo_t* sinfo = (siginfo_t*) info;
+	/* Sometimes the address is off by 4 */
+	if (sinfo->si_addr >= bp_trigger_page && (guint8*)sinfo->si_addr <= (guint8*)bp_trigger_page + 128)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+/*
+ * mono_arch_skip_breakpoint:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_skip_breakpoint (MonoContext *ctx, MonoJitInfo *ji)
+{
+	/* skip the movl */
+	MONO_CONTEXT_SET_IP (ctx, (guint8*)MONO_CONTEXT_GET_IP (ctx) + 2);
+}
+
+/*
+ * SINGLE STEPPING
+ */
+
+/*
+ * mono_arch_start_single_stepping:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_start_single_stepping (void)
+{
+	mono_mprotect (ss_trigger_page, mono_pagesize (), 0);
+}
+
+/*
+ * mono_arch_stop_single_stepping:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_stop_single_stepping (void)
+{
+	mono_mprotect (ss_trigger_page, mono_pagesize (), MONO_MMAP_READ);
+}
+
+/*
+ * mono_arch_is_single_step_event:
+ *
+ *   See mini-amd64.c for docs.
+ */
+gboolean
+mono_arch_is_single_step_event (void *info, void *sigctx)
+{
+	siginfo_t* sinfo = (siginfo_t*) info;
+	/* Sometimes the address is off by 4 */
+	if (sinfo->si_addr >= ss_trigger_page && (guint8*)sinfo->si_addr <= (guint8*)ss_trigger_page + 128)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+/*
+ * mono_arch_skip_single_step:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_skip_single_step (MonoContext *ctx)
+{
+	/* skip the movl */
+	MONO_CONTEXT_SET_IP (ctx, (guint8*)MONO_CONTEXT_GET_IP (ctx) + 2);
+}
+
+/*
+ * mono_arch_create_seq_point_info:
+ *
+ *   See mini-amd64.c for docs.
+ */
+gpointer
+mono_arch_get_seq_point_info (MonoDomain *domain, guint8 *code)
+{
+	NOT_IMPLEMENTED;
+	return NULL;
+}
+
+void
+mono_arch_init_lmf_ext (MonoLMFExt *ext, gpointer prev_lmf)
+{
+	ext->lmf.previous_lmf = prev_lmf;
+	/* Mark that this is a MonoLMFExt */
+	ext->lmf.previous_lmf = (gpointer)(((gssize)ext->lmf.previous_lmf) | 2);
+	ext->lmf.registers [sh4_sp] = (gssize)ext;
+}
+
+#endif
