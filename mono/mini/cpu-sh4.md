@@ -142,8 +142,8 @@ endfilter: src1:z len:12
 endfinally: len:12
 br: len:16
 br_reg: src1:i len:4
-sh4_bt: len:18
-sh4_bf: len:18
+sh4_bt: len:20
+sh4_bf: len:20
 sh4_clrt: len:2
 sh4_negc: dest:i src1:i len:2
 sh4_rotcl: dest:i src1:i len:2 clob:1

@@ -1247,8 +1247,7 @@ guint8 *mono_arch_emit_prolog(MonoCompile *cfg)
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	/* Initialize cst pools - for the moment keep running in low perf mode.*/
-	sh4_cstpool_init(cfg, cstpool_mode_lowperf);
+	sh4_cstpool_init(cfg, cstpool_mode_fullperf);
 
 	signature = mono_method_signature(cfg->method);
 
@@ -1849,14 +1848,17 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 	guint8 *buffer = NULL;
 	guint8 *code   = NULL;
 
-	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("args => %p", cfg);
+
+	sh4_cstpool_check_begin_emit_exceptions(cfg);
 
 	/* Compute the space needed by exceptions infos. */
 	for (patch_info = cfg->patch_info; patch_info != NULL; patch_info = patch_info->next) {
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
 			continue;
 
-		exceptions_size += 26;
+		exceptions_size += 26 - 2 - 4;
 		exceptions_count++;
 	}
 
@@ -1901,8 +1903,8 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		sh4_die(&buffer);
 
 		/* Patch slot for : sh4_r5 <- current PC - throw PC */
-		patch1 = buffer;
-		sh4_die(&buffer);
+		/* patch1 = buffer; */
+		/* sh4_die(&buffer); */
 
 		/* Patch slot for : sh4_temp <- mono_arch_throw_corlib_exception */
 		patch2 = buffer;
@@ -1922,8 +1924,8 @@ void mono_arch_emit_exceptions(MonoCompile *cfg)
 		sh4_movl_PCrel(&patch0, buffer, MONO_SH4_REG_FIRST_ARG);
 		sh4_emit32(&buffer, (guint32)class->type_token);
 
-		sh4_movl_PCrel(&patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1);
-		sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i));
+		/* sh4_movl_PCrel(&patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1); */
+		/* sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i)); */
 
 		sh4_movl_PCrel(&patch2, buffer, sh4_temp);
 		/* Reuse this patch_info to set the jump in mono_arch_patch_code(). */
@@ -3219,8 +3221,10 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	guint8 *patch = NULL;
 	int displace = 0;
 
-	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p", cfg, basic_block);
-	SH4_CFG_DEBUG(4) SH4_DEBUG("method: %s", cfg->method->name);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("args => %p, %p", cfg, basic_block);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("method: %s", cfg->method->name);
 
 	mono_debug_open_block(cfg, basic_block, cfg->code_len);
 
@@ -3237,7 +3241,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
 		/* Check if the constant pool has to be emitted right now. */
-		emit_cstpool = sh4_cstpool_decide_emission(cfg, FALSE, NULL, &size_cstpool);
+		emit_cstpool = sh4_cstpool_decide_emission(cfg, cstpool_context_start_ins, GUINT_TO_POINTER(length_max), &size_cstpool);
 		if (emit_cstpool)
 			length_max += size_cstpool;
 
@@ -3245,7 +3249,7 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		   constant pool) used to implement the current opcode. */
 		buffer = get_code_buffer(cfg, length_max);
 		if (emit_cstpool)
-			sh4_emit_pool(cfg, FALSE, &buffer);
+			sh4_emit_pool(cfg, cstpool_context_start_ins, &buffer);
 		code = buffer;
 
 		mono_debug_record_line_number(cfg, inst, buffer - cfg->native_code);
@@ -3856,9 +3860,9 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			break;
 
 		case OP_SH4_BT:
-			/* MD: sh4_bt: len:18 */
+			/* MD: sh4_bt: len:20 */
 		case OP_SH4_BF:
-			/* MD: sh4_bf: len:18 */
+			/* MD: sh4_bf: len:20 */
 			/* Find which kind of relocation should be used. */
 			if (inst->backend.data == (gpointer)-1) {
 				type = MONO_PATCH_INFO_EXC;
@@ -3888,6 +3892,11 @@ void mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* Reverse the test to skip the unconditional jump. */
 			patch = buffer;
 			sh4_die(&buffer); /* patch slot for : bf/t_label "skip_jump" */
+
+			if (type == MONO_PATCH_INFO_EXC) {
+				/* sh4_mov(&buffer, sh4_pc, MONO_SH4_REG_FIRST_ARG + 1); */
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_IP, (gconstpointer)(buffer - cfg->native_code), MONO_SH4_REG_FIRST_ARG + 1);
+			}
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
