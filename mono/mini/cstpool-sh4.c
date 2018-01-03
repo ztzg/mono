@@ -427,7 +427,7 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 	CstPool_Const_Values *g;
 
 	guint8   *patch0;
-	guint8   *patch1;
+	guint8   *patch1 = NULL;
 	guint8   *dest;
 	guint32   value1, value2;
 	guint32   nb_int_const;
@@ -437,10 +437,13 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 	/* We generate a sequence of 6 + n*4 bytes (n beeing the nb of 	*/
 	/* variables emitted). In the following, we track the overall 	*/
 	/* code size allocated (see sz "metavariable"). 		*/
-	patch1 = *pcval;
+	if (context == cstpool_context_start_ins ||
+	    context == cstpool_context_end_bb) {
+		patch1 = *pcval;
 
-	sh4_bra(pcval, 0x0); /* 0x0 to be patched. sz = 2   */
-	sh4_nop(pcval);      /* delay slot.        sz = 4   */
+		sh4_bra(pcval, 0x0); /* 0x0 to be patched. sz = 2   */
+		sh4_nop(pcval);	     /* delay slot.	   sz = 4   */
+	}
 
 	if(((guint32)*pcval & 0x3)) {                     /* sz<=6   */
 		sh4_nop(pcval);      /* Align constant pool */
@@ -529,7 +532,9 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 	}  /* End while */
 
 	/* patch instruction at patch1 */
-	sh4_bra_label(&patch1, *pcval);
+	if (patch1) {
+		sh4_bra_label(&patch1, *pcval);
+	}
 
 	if(cur_pool->pool_nbcst_emitted > SH4_CSTPOOL_FILL_LIMIT) {
 		cur_pool->state = cstpool_allocated;
