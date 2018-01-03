@@ -1984,20 +1984,31 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 		MonoClass *class = NULL;
 		guint8 *patch0 = NULL;
 		guint8 *patch2 = NULL;
-		gpointer *ip = (gpointer) (patch_info->ip.i + cfg->native_code);
 
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
 			continue;
 
 		i = mini_exception_id_by_name (patch_info->data.target);
+
+		SH4_CFG_DEBUG(4)
+			SH4_DEBUG("emit exc, ip: 0x%x, target: %p, throw_pos: %p",
+				  patch_info->ip.i,
+				  patch_info->data.target,
+				  exc_throw_pos [i]);
+
 		if (exc_throw_pos [i]) {
-			*ip = (gpointer) exc_throw_pos [i];
 			patch_info->type = MONO_PATCH_INFO_NONE;
+
+			/* Patch the constant used to jump to this exception. */
+			mono_add_patch_info(cfg, patch_info->ip.i, MONO_PATCH_INFO_IP, (guint8 *)(exc_throw_pos [i] - cfg->native_code));
+
 			continue;
 		} else {
-			exc_throw_pos [i] = code;
+			exc_throw_pos [i] = buffer;
 		}
-		*ip = (gpointer) code;
+
+		/* Patch the constant used to jump to this exception. */
+		mono_add_patch_info(cfg, patch_info->ip.i, MONO_PATCH_INFO_IP, (guint8 *)(buffer - cfg->native_code));
 
 		class = mono_class_load_from_name(mono_defaults.corlib, "System", patch_info->data.name);
 		g_assert(class != NULL);
