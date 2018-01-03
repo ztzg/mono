@@ -696,13 +696,13 @@ mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean aot)
 	if (info)
 		*info = NULL;
 
-#define THROW_CORLIB_EXCEPTION_SIZE 46
+#define THROW_CORLIB_EXCEPTION_SIZE 42
 
 	code = buffer = mono_global_codeman_reserve(THROW_CORLIB_EXCEPTION_SIZE);
 
 	/* Save the parameter 'offset' and the return address onto the stack. */
 	sh4_movl_decRx(&buffer, sh4_r5, sh4_sp);
-	sh4_stsl_PR_decRx(&buffer, sh4_sp);
+	/* sh4_stsl_PR_decRx(&buffer, sh4_sp); */
 
 	/*
 	 * Get the exception object.
@@ -730,10 +730,13 @@ mono_arch_get_throw_corlib_exception (MonoTrampInfo **info, gboolean aot)
 
 	/* Restore the parameter 'offset' from the stack. */
 	sh4_movl_incRy(&buffer, sh4_sp, sh4_temp);
-	sh4_movl_incRy(&buffer, sh4_sp, sh4_r5);
+	/* sh4_movl_incRy(&buffer, sh4_sp, sh4_r5); */
 
 	/* pseudo-code: %PR = %PR - offset; */
-	sh4_sub(&buffer, sh4_r5, sh4_temp);
+	/* sh4_sub(&buffer, sh4_r5, sh4_temp); */
+	/* sh4_lds_PR(&buffer, sh4_temp); */
+
+	/* Load original IP into %PR. */
 	sh4_lds_PR(&buffer, sh4_temp);
 
 	/* Patch slot for : sh4_temp <- throw_exception */

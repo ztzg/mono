@@ -46,6 +46,13 @@ typedef enum {
 	cstpool_mode_lowperf  = 2,	/* Low perf. mode (debug).	*/
 } CstPool_Mode;
 
+typedef enum {
+	cstpool_context_start_ins,	/* Before instruction.		*/
+	cstpool_context_end_bb,		/* End of basic block.		*/
+	cstpool_context_end_method,	/* End of mentod.		*/
+	cstpool_context_emit_exceptions /* Before emitting exceptions.	*/
+} CstPool_Context;
+
 /* Float and double values add some complexity. */
 enum CstPool_Const_Type {
 	cstpool_type_int     = 0,	/* Integer */
@@ -119,10 +126,11 @@ void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb,
 				guint8 **pcval);
 gboolean sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb,
                                     guint32 *offset);
+void sh4_cstpool_check_begin_emit_exceptions(MonoCompile *cfg);
 
-gboolean sh4_cstpool_decide_emission(MonoCompile *cfg, gboolean end_bb,
-				     MonoBasicBlock *bb, guint32 *size);
-void sh4_emit_pool(MonoCompile *cfg, gboolean end_bb, guint8 **pcval);
+gboolean sh4_cstpool_decide_emission(MonoCompile *cfg, CstPool_Context context,
+				     gpointer data, guint32 *size);
+void sh4_emit_pool(MonoCompile *cfg, CstPool_Context context, guint8 **pcval);
 
 /* Function defined in mini-sh4.c. Not the best place to do this work */
 guint8* get_code_buffer(MonoCompile *cfg, guint32 size);

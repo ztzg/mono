@@ -35,8 +35,11 @@
 #include <unistd.h>       /* syscall(2), */
 #include <glib.h>
 
+#include <mono/utils/mono-mmap.h>
+
 #include "mini.h"
 #include "ir-emit.h"
+#include "trace.h"
 #include "cpu-sh4.h"
 #include "cstpool-sh4.h"
 
@@ -45,6 +48,17 @@
 				    (((guint32)(value)) + ((alignment) - 1)) & ~((alignment) - 1))
 
 int sh4_extra_debug = 0;
+
+#define BREAKPOINT_SIZE 14
+
+/*
+ * The code generated for sequence points reads from this location, which is
+ * made read-only when single stepping is enabled.
+ */
+static gpointer ss_trigger_page;
+
+/* Enabled breakpoints read from this trigger page */
+static gpointer bp_trigger_page;
 
 struct arg_info {
 	guint32 offset;
@@ -883,6 +897,16 @@ mono_arch_allocate_vars(MonoCompile *cfg)
 	/* Spill variables slots are allocated from bottom to top. */
 	cfg->flags |= MONO_CFG_HAS_SPILLUP;
 
+	/*
+	 * TODO(ddiederen): Not implemented, as for most other arches;
+	 * cf. "NULL ebp for now" in mono_arch_instrument_prolog.
+	 */
+#if 0
+	/* allow room for the vararg method args: void* and long/double */
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
+		cfg->param_area = MAX (cfg->param_area, sizeof (gpointer)*8);
+#endif
+
 	signature = mono_method_signature(cfg->method);
 	call_info = get_call_info(cfg, signature);
 
@@ -898,6 +922,10 @@ mono_arch_allocate_vars(MonoCompile *cfg)
 
 	cfg->frame_reg = sh4_fp;
 	cfg->used_int_regs |= 1 << sh4_fp;
+
+	/* allow room to save the return value */
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
+		locals_padding += 8;
 
 	/* Compute space used by local variables. */
 	locals_offsets = mono_allocate_stack_slots(cfg, FALSE,
@@ -1270,11 +1298,14 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 	int j;
 	guint32 size_struct = 0;
 	guint32 nb_struct_on_stack = 0;
+	int tracing = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	/* Initialize cst pools - for the moment keep running in low perf mode.*/
-	sh4_cstpool_init(cfg, cstpool_mode_lowperf);
+	sh4_cstpool_init(cfg, cstpool_mode_fullperf);
+
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
+		tracing = 1;
 
 	signature = mono_method_signature(cfg->method);
 
@@ -1594,6 +1625,21 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 	if (cfg->stack_offset != 0)
 		sh4_mov(&buffer, sh4_fp, sh4_sp);
 
+	/* store runtime generic context */
+	if (cfg->rgctx_var) {
+		MonoInst *ins = cfg->rgctx_var;
+
+		g_assert (ins->opcode == OP_REGOFFSET &&
+			  ins->inst_basereg == sh4_fp);
+
+		if (SH4_CHECK_RANGE_movl_dispRx (ins->inst_offset)) {
+			sh4_movl_dispRx (&buffer, MONO_ARCH_RGCTX_REG, ins->inst_offset, ins->inst_basereg);
+		} else {
+			sh4_add_offset2base (cfg, &buffer, ins->inst_offset, ins->inst_basereg, sh4_temp);
+			sh4_movl_indRx (&buffer, MONO_ARCH_RGCTX_REG, sh4_temp);
+		}
+	}
+
 	/* At this point, the stack looks like :
 	 *	:              :
 	 *	|--------------| Caller's frame.
@@ -1717,6 +1763,9 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 		 */
 	}
 
+	if (tracing)
+		buffer = mono_arch_instrument_prolog (cfg, mono_trace_enter_method, buffer, TRUE);
+
 	cfg->code_len = buffer - cfg->native_code;
 
 	/* Sanity checks. */
@@ -1747,16 +1796,22 @@ mono_arch_emit_epilog(MonoCompile *cfg)
 {
 	guint8 *buffer = NULL;
 	guint8 *code   = NULL;
+	/* TODO(ddiederen): Compute this value. */
+	int max_epilog_size = 50U;
 	int i = 0;
 
 	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
 
-	/* TODO(ddiederen): Compute this value. */
-#define EPILOGUE_SIZE 50U
+	if (mono_jit_trace_calls != NULL)
+		max_epilog_size += 50;
 
 	/* Reallocate enough room to store the SH4 instructions
 	   used to implement an epilogue. */
-	code = buffer = get_code_buffer(cfg, EPILOGUE_SIZE);
+	code = buffer = get_code_buffer(cfg, max_epilog_size);
+
+	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method)) {
+		buffer = mono_arch_instrument_epilog (cfg, mono_trace_leave_method, buffer, TRUE);
+	}
 
 	/* Restore the previous LMF & free the space used by the local one. */
 	if (cfg->method->save_lmf != 0) {
@@ -1869,7 +1924,7 @@ mono_arch_emit_epilog(MonoCompile *cfg)
 	cfg->code_len = buffer - cfg->native_code;
 
 	/* Sanity checks. */
-	g_assert(buffer - code <= EPILOGUE_SIZE);
+	g_assert(buffer - code <= max_epilog_size);
 	g_assert(cfg->code_len < cfg->code_size);
 
 	/* mono_arch_flush_icache() is called into the caller mini.c:mono_codegen(). */
@@ -1889,7 +1944,10 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 	guint8 exc_throw_found [MONO_EXC_INTRINS_NUM];
 	int i;
 
-	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p", cfg);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("args => %p", cfg);
+
+	sh4_cstpool_check_begin_emit_exceptions(cfg);
 
 	for (i = 0; i < MONO_EXC_INTRINS_NUM; i++) {
 		exc_throw_pos [i] = NULL;
@@ -1904,6 +1962,7 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 		i = mini_exception_id_by_name (patch_info->data.target);
 		if (!exc_throw_found [i]) {
 			exc_throw_found [i] = TRUE;
+			/* TODO(ddiederen): Tighten. */
 			exceptions_size += 32;
 			exceptions_count++;
 		}
@@ -1919,7 +1978,6 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 	for (patch_info = cfg->patch_info; patch_info != NULL; patch_info = patch_info->next) {
 		MonoClass *class = NULL;
 		guint8 *patch0 = NULL;
-		guint8 *patch1 = NULL;
 		guint8 *patch2 = NULL;
 		gpointer *ip = (gpointer) (patch_info->ip.i + cfg->native_code);
 
@@ -1958,8 +2016,8 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 		sh4_die(&buffer);
 
 		/* Patch slot for : sh4_r5 <- current PC - throw PC */
-		patch1 = buffer;
-		sh4_die(&buffer);
+		/* patch1 = buffer; */
+		/* sh4_die(&buffer); */
 
 		/* Patch slot for : sh4_temp <- mono_arch_throw_corlib_exception */
 		patch2 = buffer;
@@ -1979,8 +2037,8 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 		sh4_movl_PCrel(&patch0, buffer, MONO_SH4_REG_FIRST_ARG);
 		sh4_emit32(&buffer, (guint32)class->type_token);
 
-		sh4_movl_PCrel(&patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1);
-		sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i));
+		/* sh4_movl_PCrel(&patch1, buffer, MONO_SH4_REG_FIRST_ARG + 1); */
+		/* sh4_emit32(&buffer, (guint32)((buffer - cfg->native_code) - patch_info->ip.i)); */
 
 		sh4_movl_PCrel(&patch2, buffer, sh4_temp);
 		/* Reuse this patch_info to set the jump in mono_arch_patch_code(). */
@@ -2110,30 +2168,138 @@ mono_arch_emit_inst_for_method(MonoCompile *cfg, MonoMethod *method,
 /**
  * Initialize architecture specific code.
  */
-void 
+void
 mono_arch_init(void)
 {
-	/* TODO - CV : InitializeCriticalSection (&mini_arch_mutex); */
+	ss_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ|MONO_MMAP_32BIT, MONO_MEM_ACCOUNT_OTHER);
+	bp_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ|MONO_MMAP_32BIT, MONO_MEM_ACCOUNT_OTHER);
+	mono_mprotect (bp_trigger_page, mono_pagesize (), 0);
+
 /* FIXME */
 	mono_aot_register_jit_icall ("mono_sh4_throw_exception", mono_sh4_throw_exception);
 	mono_aot_register_jit_icall ("mono_sh4_throw_corlib_exception", mono_sh4_throw_corlib_exception);
-	return;
 }
+
+enum {
+	SAVE_NONE,
+	SAVE_STRUCT,
+	SAVE_ONE,
+	SAVE_TWO,
+	SAVE_FP
+};
 
 void *
 mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments, gboolean preserve_argument_registers)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	guchar *code = p;
+	int save_mode = SAVE_NONE;
+	int offset;
+	MonoMethod *method = cfg->method;
+	int rtype = mini_get_underlying_type (mono_method_signature (method)->ret)->type;
+	int save_offset = cfg->param_area;
+	save_offset += 15;
+	save_offset &= ~15;
+
+	offset = code - cfg->native_code;
+
+	switch (rtype) {
+	case MONO_TYPE_VOID:
+		/* special case string .ctor icall */
+		if (strcmp (".ctor", method->name) && method->klass == mono_defaults.string_class)
+			save_mode = SAVE_ONE;
+		else
+			save_mode = SAVE_NONE;
+		break;
+	case MONO_TYPE_I8:
+	case MONO_TYPE_U8:
+		save_mode = SAVE_TWO;
+		break;
+	case MONO_TYPE_R4:
+	case MONO_TYPE_R8:
+		save_mode = SAVE_FP;
+		break;
+	case MONO_TYPE_VALUETYPE:
+		save_mode = SAVE_STRUCT;
+		break;
+	default:
+		save_mode = SAVE_ONE;
+		break;
+	}
+
+	switch (save_mode) {
+	case SAVE_TWO:
+		sh4_movl_dispRx (&code, sh4_r0, save_offset, cfg->frame_reg);
+		sh4_movl_dispRx (&code, sh4_r1, save_offset + 4, cfg->frame_reg);
+		if (enable_arguments) {
+			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
+			sh4_mov (&code, sh4_r1, MONO_SH4_REG_FIRST_ARG + 2);
+		}
+		break;
+	case SAVE_ONE:
+		sh4_movl_dispRx (&code, sh4_r0, save_offset, cfg->frame_reg);
+		if (enable_arguments) {
+			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
+		}
+		break;
+	case SAVE_FP:
+		/*
+		 * TODO(ddiederen): Tracing, bogus FP results due to
+		 * non-interleaved floating point registers (cf. ABI).
+		 */
+		sh4_mov (&code, cfg->frame_reg, sh4_temp);
+		sh4_add_imm (&code, save_offset, sh4_temp);
+		sh4_fmov_indRx (&code, sh4_dr0, sh4_temp);
+		break;
+	case SAVE_STRUCT:
+		if (enable_arguments) {
+			/* FIXME: get the actual address  */
+			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
+		}
+		break;
+	case SAVE_NONE:
+	default:
+		break;
+	}
+
+	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
+	sh4_load (&code, (guint32)func, sh4_temp);
+	sh4_jsr_indRx (&code, sh4_temp);
+	sh4_nop (&code); /* delay slot */
+
+	switch (save_mode) {
+	case SAVE_TWO:
+		sh4_movl_dispRy (&code, save_offset, cfg->frame_reg, sh4_r0);
+		sh4_movl_dispRy (&code, save_offset + 4, cfg->frame_reg, sh4_r1);
+		break;
+	case SAVE_ONE:
+		sh4_movl_dispRy (&code, save_offset, cfg->frame_reg, sh4_r0);
+		break;
+	case SAVE_FP:
+		sh4_mov (&code, cfg->frame_reg, sh4_temp);
+		sh4_add_imm (&code, save_offset, sh4_temp);
+		sh4_fmov_indRy (&code, sh4_temp, sh4_dr0);
+		break;
+	case SAVE_NONE:
+	default:
+		break;
+	}
+
+	return code;
 }
 
 void *
 mono_arch_instrument_prolog(MonoCompile *cfg, void *func, void *p, gboolean enable_arguments)
 {
-	/* TODO - CV */
-	g_assert(0);
-	return NULL;
+	guchar *code = p;
+
+	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
+	/* Note: last arg in delay slot. */
+	sh4_load (&code, (guint32)func, sh4_temp);
+	sh4_jsr_indRx (&code, sh4_temp);
+	/* Delay slot. */
+	sh4_mov_imm (&code, 0, MONO_SH4_REG_FIRST_ARG + 1); /* NULL ebp for now */
+
+	return code;
 }
 
 gboolean 
@@ -3300,8 +3466,10 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 	guint offset;
 	int displace = 0;
 
-	SH4_CFG_DEBUG(4) SH4_DEBUG("args => %p, %p", cfg, basic_block);
-	SH4_CFG_DEBUG(4) SH4_DEBUG("method: %s", cfg->method->name);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("args => %p, %p", cfg, basic_block);
+	SH4_CFG_DEBUG(4)
+		SH4_DEBUG("method: %s", cfg->method->name);
 
 	mono_debug_open_block(cfg, basic_block, cfg->code_len);
 
@@ -3318,7 +3486,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
 		/* Check if the constant pool has to be emitted right now. */
-		emit_cstpool = sh4_cstpool_decide_emission(cfg, FALSE, NULL, &size_cstpool);
+		emit_cstpool = sh4_cstpool_decide_emission(cfg, cstpool_context_start_ins, GUINT_TO_POINTER(length_max), &size_cstpool);
 		if (emit_cstpool)
 			length_max += size_cstpool;
 
@@ -3326,7 +3494,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		   constant pool) used to implement the current opcode. */
 		buffer = get_code_buffer(cfg, length_max);
 		if (emit_cstpool)
-			sh4_emit_pool(cfg, FALSE, &buffer);
+			sh4_emit_pool(cfg, cstpool_context_start_ins, &buffer);
 		code = buffer;
 
 		offset = buffer - cfg->native_code;
@@ -3778,6 +3946,26 @@ fprintf(stderr,"%s:%s < OP_GOT_ENTRY: %p (0x%x)\n",cfg->method->klass->name,cfg-
 fprintf(stderr,"AOTCONST - buffer: %p offset: %0x%x c0: %p reg: %d\n",buffer,(buffer - cfg->native_code),inst->inst_c0, inst->dreg);
 			sh4_cstpool_add (cfg, &buffer, MONO_PATCH_INFO_NONE, &(inst->inst_c0), inst->dreg);
 			break;
+		case OP_FCALL_MEMBASE:
+			/* MD: fcall_membase: src1:b dest:g clob:c len:18 */
+		case OP_VCALL_MEMBASE:
+			/* MD: vcall_membase: src1:b clob:c len:18 */
+		case OP_VCALL2_MEMBASE:
+			/* MD: vcall2_membase: src1:b clob:c len:18 */
+		case OP_VOIDCALL_MEMBASE:
+			/* MD: voidcall_membase: src1:b clob:c len:18 */
+		case OP_LCALL_MEMBASE:
+			/* MD: lcall_membase: src1:b dest:o clob:c len:18 */
+		case OP_CALL_MEMBASE:
+			/* MD: call_membase: src1:b dest:o clob:c len:18 */
+			/*
+			 * We only get here if we are AOT compiling
+			 * The trampoline will destroy this code
+			 */
+fprintf(stderr,"Membase call\n");fflush(stderr);
+			sh4_die (&buffer);
+			sh4_die (&buffer);
+			break;
 		case OP_FCALL:
 			/* MD: fcall: dest:y clob:c len:34 */
 		case OP_VOIDCALL:
@@ -3990,9 +4178,9 @@ fprintf(stderr,"AOTCONST - buffer: %p offset: %0x%x c0: %p reg: %d\n",buffer,(bu
 			break;
 
 		case OP_SH4_BT:
-			/* MD: sh4_bt: len:18 */
+			/* MD: sh4_bt: len:20 */
 		case OP_SH4_BF:
-			/* MD: sh4_bf: len:18 */
+			/* MD: sh4_bf: len:20 */
 			/* Find which kind of relocation should be used. */
 			if (inst->backend.data == (gpointer)-1) {
 				type = MONO_PATCH_INFO_EXC;
@@ -4022,6 +4210,11 @@ fprintf(stderr,"AOTCONST - buffer: %p offset: %0x%x c0: %p reg: %d\n",buffer,(bu
 			/* Reverse the test to skip the unconditional jump. */
 			patch = buffer;
 			sh4_die(&buffer); /* patch slot for : bf/t_label "skip_jump" */
+
+			if (type == MONO_PATCH_INFO_EXC) {
+				/* sh4_mov(&buffer, sh4_pc, MONO_SH4_REG_FIRST_ARG + 1); */
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_IP, (gconstpointer)(buffer - cfg->native_code), MONO_SH4_REG_FIRST_ARG + 1);
+			}
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
@@ -4120,6 +4313,40 @@ fprintf(stderr,"AOTCONST - buffer: %p offset: %0x%x c0: %p reg: %d\n",buffer,(bu
 		case OP_IL_SEQ_POINT:	/* MD: il_seq_point: len:0 */
 			mono_add_seq_point (cfg, basic_block, inst, code - cfg->native_code);
 			break;
+
+		case OP_SEQ_POINT: {	/* MD: seq_point: len:28 */
+			/*
+			 * Current actual size: 24-28, depending on
+			 * alignment.
+			 *
+			 * TODO(ddiederen): Soft debug, compact breakpoint.
+			 */
+			int i;
+
+			if (cfg->compile_aot)
+				NOT_IMPLEMENTED;
+
+			/*
+			 * Read from the single stepping trigger page. This will cause a
+			 * SIGSEGV when single stepping is enabled.
+			 * We do this _before_ the breakpoint, so single stepping after
+			 * a breakpoint is hit will step to the next IL offset.
+			 */
+			if (inst->flags & MONO_INST_SINGLE_STEP_LOC) {
+				sh4_load (&buffer, (guint32)ss_trigger_page, sh4_temp);
+				sh4_movl_indRy (&buffer, sh4_temp, sh4_temp);
+			}
+
+			mono_add_seq_point (cfg, basic_block, inst, buffer - cfg->native_code);
+
+			/*
+			 * A placeholder for a possible breakpoint inserted by
+			 * mono_arch_set_breakpoint ().
+			 */
+			for (i = 0; i < BREAKPOINT_SIZE / 2; ++i)
+				sh4_nop (&buffer);
+			break;
+		}
 
 		case OP_NOT_REACHED:	/* MD: not_reached: len:2 */
 			sh4_die(&buffer);
@@ -4744,7 +4971,7 @@ mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain, MonoIMTC
 	int size, i;
 	guint8 *code = NULL, *start = NULL;
 
-	/* TODO(dd): IMT, compute size. */
+	/* TODO(ddiederen): IMT, compute size. */
 	guint max_entry_size = 50;
 	size = count * max_entry_size;
 
@@ -4988,3 +5215,154 @@ mono_arch_get_cie_program (void)
 
 	return(l);
 }
+
+/* Soft Debug support */
+#ifdef MONO_ARCH_SOFT_DEBUG_SUPPORTED
+
+/*
+ * BREAKPOINTS
+ */
+
+/*
+ * mono_arch_set_breakpoint:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_set_breakpoint (MonoJitInfo *ji, guint8 *ip)
+{
+	guint8 *code = ip;
+	guint8 *orig_code = code;
+
+	g_assert (((guint64)(gsize)bp_trigger_page >> 32) == 0);
+
+	/* TODO(ddiederen): Soft debug, compact breakpoint. */
+	sh4_load (&code, (guint32)bp_trigger_page, sh4_temp);
+	sh4_movl_indRy (&code, sh4_temp, sh4_temp);
+
+	g_assert (code - orig_code <= BREAKPOINT_SIZE);
+
+	mono_arch_flush_icache (orig_code, code - orig_code);
+}
+
+/*
+ * mono_arch_clear_breakpoint:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_clear_breakpoint (MonoJitInfo *ji, guint8 *ip)
+{
+	guint8 *code = ip;
+	int i;
+
+	for (i = 0; i < BREAKPOINT_SIZE / 2; ++i)
+		sh4_nop(&code);
+
+	mono_arch_flush_icache (ip, code - ip);
+}
+
+/*
+ * mono_arch_is_breakpoint_event:
+ *
+ *   See mini-amd64.c for docs.
+ */
+gboolean
+mono_arch_is_breakpoint_event (void *info, void *sigctx)
+{
+	siginfo_t* sinfo = (siginfo_t*) info;
+	/* Sometimes the address is off by 4 */
+	if (sinfo->si_addr >= bp_trigger_page && (guint8*)sinfo->si_addr <= (guint8*)bp_trigger_page + 128)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+/*
+ * mono_arch_skip_breakpoint:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_skip_breakpoint (MonoContext *ctx, MonoJitInfo *ji)
+{
+	/* skip the movl */
+	MONO_CONTEXT_SET_IP (ctx, (guint8*)MONO_CONTEXT_GET_IP (ctx) + 2);
+}
+
+/*
+ * SINGLE STEPPING
+ */
+
+/*
+ * mono_arch_start_single_stepping:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_start_single_stepping (void)
+{
+	mono_mprotect (ss_trigger_page, mono_pagesize (), 0);
+}
+
+/*
+ * mono_arch_stop_single_stepping:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_stop_single_stepping (void)
+{
+	mono_mprotect (ss_trigger_page, mono_pagesize (), MONO_MMAP_READ);
+}
+
+/*
+ * mono_arch_is_single_step_event:
+ *
+ *   See mini-amd64.c for docs.
+ */
+gboolean
+mono_arch_is_single_step_event (void *info, void *sigctx)
+{
+	siginfo_t* sinfo = (siginfo_t*) info;
+	/* Sometimes the address is off by 4 */
+	if (sinfo->si_addr >= ss_trigger_page && (guint8*)sinfo->si_addr <= (guint8*)ss_trigger_page + 128)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+/*
+ * mono_arch_skip_single_step:
+ *
+ *   See mini-amd64.c for docs.
+ */
+void
+mono_arch_skip_single_step (MonoContext *ctx)
+{
+	/* skip the movl */
+	MONO_CONTEXT_SET_IP (ctx, (guint8*)MONO_CONTEXT_GET_IP (ctx) + 2);
+}
+
+/*
+ * mono_arch_create_seq_point_info:
+ *
+ *   See mini-amd64.c for docs.
+ */
+gpointer
+mono_arch_get_seq_point_info (MonoDomain *domain, guint8 *code)
+{
+	NOT_IMPLEMENTED;
+	return NULL;
+}
+
+void
+mono_arch_init_lmf_ext (MonoLMFExt *ext, gpointer prev_lmf)
+{
+	ext->lmf.previous_lmf = prev_lmf;
+	/* Mark that this is a MonoLMFExt */
+	ext->lmf.previous_lmf = (gpointer)(((gssize)ext->lmf.previous_lmf) | 2);
+	ext->lmf.registers [sh4_sp] = (gssize)ext;
+}
+
+#endif

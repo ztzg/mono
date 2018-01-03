@@ -435,6 +435,7 @@ mono_trace_enter_method (MonoMethod *method, char *ebp)
 
 	if (!ebp) {
 		printf (") ip: %p\n", RETURN_ADDRESS_N (1));
+		fflush (stdout);
 		goto unlock;
 	}
 

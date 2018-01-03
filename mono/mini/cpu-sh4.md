@@ -151,8 +151,8 @@ endfilter: src1:z len:12
 endfinally: len:12
 br: len:16
 br_reg: src1:i len:4
-sh4_bt: len:18
-sh4_bf: len:18
+sh4_bt: len:20
+sh4_bf: len:20
 sh4_clrt: len:2
 sh4_negc: dest:i src1:i len:2
 sh4_rotcl: dest:i src1:i len:2 clob:1
@@ -171,6 +171,7 @@ sh4_dummy_fuse: src1:f len:0
 dummy_store: len:0
 not_null: len:0
 il_seq_point: len:0
+seq_point: len:28
 not_reached: len:2
 memory_barrier: len:2
 break: len:2
