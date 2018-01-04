@@ -4071,8 +4071,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		case OP_CALL_HANDLER:
 			/* MD: call_handler: clob:c len:16 */
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_BB, inst->inst_target_bb, sh4_temp);
-
-			sh4_jsr_indRx(&buffer, sh4_temp);
+			sh4_bsrf(&buffer, sh4_temp);
 			sh4_nop(&buffer); /* delay slot */
 			break;
 
@@ -4182,9 +4181,8 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
-
-			sh4_jmp_indRx(&buffer, sh4_temp);
-			sh4_nop(&buffer);
+			sh4_braf(&buffer, sh4_temp);
+			sh4_nop(&buffer); /* delay slot */
 
 			break;
 
@@ -4234,12 +4232,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
-
-			if (type == MONO_PATCH_INFO_EXC)
-				sh4_braf (&buffer, sh4_temp);
-			else
-				/* TODO(ddiederen): Breaks AOT. */
-				sh4_jmp_indRx(&buffer, sh4_temp);
+			sh4_braf (&buffer, sh4_temp);
 			sh4_nop(&buffer);
 
 			/* Back patch the reversed test. */
@@ -4662,10 +4655,30 @@ mono_arch_patch_code(MonoCompile *cfg, MonoMethod *method, MonoDomain *domain, g
 		SH4_EXTRA_DEBUG("type = %d", patch_info->type);
 
 		switch (patch_info->type) {
+		case MONO_PATCH_INFO_BB: {
+			guint32 *cstpool_addr = (guint32 *)patch;
+			/*
+			 * The relative ip of the sh4_braf/sh4_bsrf
+			 * has been stored in the constant pool;
+			 * cf. note in sh4_emit_pool.
+			 */
+			guint32 braf_offset = *cstpool_addr;
+			guint32 target_offset;
+
+			target = mono_resolve_patch_target(method, domain, code, patch_info, run_cctors, error);
+
+			target_offset = target - cfg->native_code;
+			/* TODO(ddiederen): Should we "nop" when 0? */
+			*cstpool_addr = target_offset - (braf_offset + 4);
+
+			SH4_EXTRA_DEBUG("*%p = 0x%x", cstpool_addr, *cstpool_addr);
+
+			/* Not break, as we're done. */
+			continue;
+		}
 
 		case MONO_PATCH_INFO_SWITCH:
 		case MONO_PATCH_INFO_LABEL:
-		case MONO_PATCH_INFO_BB:
 		case MONO_PATCH_INFO_METHOD:
 		case MONO_PATCH_INFO_ABS:
 		case MONO_PATCH_INFO_INTERNAL_METHOD:
