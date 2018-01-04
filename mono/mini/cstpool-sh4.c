@@ -449,7 +449,8 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 	/* We generate a sequence of 6 + n*4 bytes (n beeing the nb of 	*/
 	/* variables emitted). In the following, we track the overall 	*/
 	/* code size allocated (see sz "metavariable"). 		*/
-	if (context == cstpool_context_begin_ins ||
+	if (context == cstpool_context_begin_arg ||
+	    context == cstpool_context_begin_ins ||
 	    context == cstpool_context_end_bb) {
 		patch1 = *pcval;
 
