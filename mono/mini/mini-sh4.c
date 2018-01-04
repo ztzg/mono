@@ -1397,24 +1397,29 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 	 * Keep in sync with mono_arch_find_jit_info(). */
 	sh4_mov(&buffer, sh4_sp, sh4_fp);
 
-	/* The SH4 is a 16-bits instruction length CPU, so "immediate"
+	/*
+	 * The SH4 is a 16-bits instruction length CPU, so "immediate"
 	 * values used for displacement addressing are really-really
-	 * small, that's why we keep SP close to stacked parameters. */
-
-	/* The space needed by local variables is computed into mono_arch_allocate_vars(),
-	 * and the size of the spill area is computed into mini-codegen.c.
-	 * Keep in sync with mono_arch_find_jit_info(). */
+	 * small, that's why we keep SP close to stacked parameters.
+	 *
+	 * The space needed by local variables is computed into
+	 * mono_arch_allocate_vars(), and the size of the spill area
+	 * is computed into mini-codegen.c.
+	 */
 	if (cfg->stack_offset != 0) {
 		if (SH4_CHECK_RANGE_add_imm(-cfg->stack_offset)) {
+			/* Keep in sync with mono_arch_unwind_frame */
 			sh4_add_imm(&buffer, -cfg->stack_offset, sh4_fp);
 		}
 		else if (SH4_CHECK_RANGE_mov_imm(cfg->stack_offset)) {
+			/* Keep in sync with mono_arch_unwind_frame */
 			sh4_mov_imm(&buffer, cfg->stack_offset, sh4_temp);
 			sh4_sub(&buffer, sh4_temp, sh4_fp);
 		}
 		else {
 			int offset = cfg->stack_offset;
 
+			/* Keep in sync with mono_arch_unwind_frame */
 			/* Assume the pool doesn't need flushing at this point. */
 			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_NONE, &offset, sh4_temp);
 			sh4_sub(&buffer, sh4_temp, sh4_fp);

@@ -125,8 +125,7 @@ mono_arch_unwind_frame (MonoDomain *domain, MonoJitTlsData *jit_tls,
 		/* stack_offset is large? */
 		else if (stack_offset = get_imm_sh4_movl_dispPC(code[0]),
 			 is_sh4_movl_dispPC(code[0], stack_offset, sh4_temp) &&
-			 (is_sh4_sub(code[5], sh4_temp, sh4_fp) ||
-			  is_sh4_sub(code[6], sh4_temp, sh4_fp))) {
+			 is_sh4_sub(code[1], sh4_temp, sh4_fp)) {
 			/* The virtual address is formed by calculating PC + 4,
 			   clearing the lowest 2 bits, and adding the immediate. */
 			guint address = (guint)code;
