@@ -1545,7 +1545,7 @@ arch_emit_got_access (MonoAotCompile *acfg, const char *got_symbol, guint8 *code
 fprintf(acfg->fp, "\n# GOT ACCESS\n");
 fprintf(stderr, "\n# GOT ACCESS\n");
 	emit_bytes (acfg, code, mono_arch_get_patch_offset (code));
-	emit_symbol_diff (acfg, got_symbol, ".", (unsigned int) ((got_slot * sizeof (gpointer))) - 12);
+	emit_symbol_diff (acfg, got_symbol, ".", (unsigned int) ((got_slot * sizeof (gpointer))));
 	*code_size = mono_arch_get_patch_offset (code) + 4;
 #else
 	g_assert_not_reached ();
@@ -5838,6 +5838,7 @@ encode_patch (MonoAotCompile *acfg, MonoJumpInfo *patch_info, guint8 *buf, guint
 		guint32 image_index = get_image_index (acfg, patch_info->data.token->image);
 		guint32 token = patch_info->data.token->token;
 		g_assert (mono_metadata_token_code (token) == MONO_TOKEN_STRING);
+fprintf(stderr,"LDSTR - index: 0x%08x p: %p\n",image_index,p);fflush(stderr);
 		encode_value (image_index, p, &p);
 		encode_value (patch_info->data.token->token - MONO_TOKEN_STRING, p, &p);
 		break;
