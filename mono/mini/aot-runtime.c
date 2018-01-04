@@ -3525,6 +3525,7 @@ decode_patch (MonoAotModule *aot_module, MonoMemPool *mp, MonoJumpInfo *ji, guin
 		mono_error_cleanup (&error); /* FIXME don't swallow the error */
 		if (!ji->data.klass)
 			goto cleanup;
+fprintf(stderr,"VTABLE - klass: %s\n",ji->data.klass->name);
 		break;
 	case MONO_PATCH_INFO_DELEGATE_TRAMPOLINE:
 		ji->data.del_tramp = (MonoDelegateClassMethodPair *)mono_mempool_alloc0 (mp, sizeof (MonoDelegateClassMethodPair));
@@ -3587,6 +3588,7 @@ decode_patch (MonoAotModule *aot_module, MonoMemPool *mp, MonoJumpInfo *ji, guin
 		if (!image)
 			goto cleanup;
 		ji->data.token = mono_jump_info_token_new (mp, image, MONO_TOKEN_STRING + decode_value (p, &p));
+fprintf(stderr,"LDSTR - image: %p token: 0x%08x\n",image,ji->data.token);fflush(stderr);
 		break;
 	case MONO_PATCH_INFO_RVA:
 	case MONO_PATCH_INFO_DECLSEC:
@@ -4228,6 +4230,7 @@ init_method (MonoAotModule *amodule, guint32 method_index, MonoMethod *method, M
 					addr = mono_create_ftnptr (domain, addr);
 				mono_memory_barrier ();
 				got [got_slots [pindex]] = addr;
+fprintf(stderr,"GOT: %p got_slots[%d]: 0x%08x got [got_slots [%d]]: 0x%08x\n",got,pindex,got_slots[pindex],pindex,got[got_slots[pindex]]);fflush(stderr);
 				if (ji->type == MONO_PATCH_INFO_METHOD_JUMP)
 					register_jump_target_got_slot (domain, ji->data.method, &(got [got_slots [pindex]]));
 			}
