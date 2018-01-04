@@ -867,7 +867,7 @@ sh4_cstpool_check_begin_arg(MonoCompile *cfg, guint8 **code)
 {
 	guint32 size;
 
-	SH4_CFG_DEBUG(4) SH4_DEBUG("arg; ip: %p", *code - cfg->native_code);
+	SH4_CFG_DEBUG(4) SH4_DEBUG("arg; ip: 0x%x", *code - cfg->native_code);
 
 	if (sh4_cstpool_decide_emission (cfg, cstpool_context_begin_arg,
 					 NULL, &size)) {
