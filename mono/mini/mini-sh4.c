@@ -108,6 +108,13 @@ force_stack(SH4IntRegister *arg_reg)
 	return;
 }
 
+static inline void
+force_fstack(SH4FloatRegister *arg_freg)
+{
+	*arg_freg = MONO_SH4_FREG_LAST_ARG + 2;
+	return;
+}
+
 static inline void 
 add_int32_arg(SH4IntRegister *arg_reg, guint32 *stack_size, struct arg_info *arg_info)
 {
@@ -392,6 +399,7 @@ get_call_info(MonoCompile *cfg, MonoMethodSignature *signature)
 		    signature->sentinelpos == i &&
 		    signature->call_convention == MONO_CALL_VARARG) {
 			force_stack(&arg_reg);
+			force_fstack(&arg_freg);
 			add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
 		}
 
@@ -475,6 +483,7 @@ get_call_info(MonoCompile *cfg, MonoMethodSignature *signature)
 	    signature->sentinelpos == signature->param_count &&
 	    signature->call_convention == MONO_CALL_VARARG) {
 		force_stack(&arg_reg);
+		force_fstack(&arg_freg);
 		add_int32_arg(&arg_reg, &stack_size, &(call_info->sig_cookie));
 	}
 
