@@ -126,12 +126,16 @@ void sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb);
 void sh4_cstpool_check_begin_bb(MonoCompile *cfg, MonoBasicBlock *bb,
 				guint8 **pcval);
 gboolean sh4_cstpool_get_bb_address(MonoCompile *cfg, MonoBasicBlock *bb,
-                                    guint32 *offset);
+				    guint32 *offset);
 void sh4_cstpool_check_begin_arg(MonoCompile *cfg, guint8 **code);
 void sh4_cstpool_check_begin_emit_exceptions(MonoCompile *cfg);
 
-gboolean sh4_cstpool_decide_emission(MonoCompile *cfg, CstPool_Context context,
-				     gpointer data, guint32 *size);
+gboolean sh4_cstpool_decide_emission(MonoCompile *cfg,
+				     CstPool_Context context,
+				     guint8 *code,
+				     gpointer data,
+				     guint32 *size);
+
 void sh4_emit_pool(MonoCompile *cfg, CstPool_Context context, guint8 **pcval);
 
 /* Function defined in mini-sh4.c. Not the best place to do this work */

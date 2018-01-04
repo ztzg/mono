@@ -412,7 +412,7 @@ sh4_cstpool_end(MonoCompile *cfg)
 		guint32 size;
 
 		if(sh4_cstpool_decide_emission(cfg, cstpool_context_end_method,
-					       NULL, &size)) {
+					       NULL, NULL, &size)) {
 			guint8 *buffer;
 
 			buffer = get_code_buffer(cfg, size);
@@ -611,7 +611,7 @@ compute_emit_size(MonoSH4CstPool *cur_pool,
  */
 gboolean
 sh4_cstpool_decide_emission(MonoCompile *cfg, CstPool_Context context,
-			    gpointer data, guint32 *size)
+			    guint8 *code, gpointer data, guint32 *size)
 {
 	MonoSH4CstPool_Env *env = (MonoSH4CstPool_Env*)(cfg->arch.poolenv);
 	MonoSH4CstPool *cur_pool = env->last;
@@ -643,15 +643,17 @@ sh4_cstpool_decide_emission(MonoCompile *cfg, CstPool_Context context,
 		guint32 index = cur_pool->pool_nbcst_emitted;
 		guint32 off_inst_0 = cur_pool->off_inst[index];
 
-		guint8 *pcval = get_code_buffer(cfg, 0);
-
 		guint32 next_inst_length = context == cstpool_context_begin_ins
 			? GPOINTER_TO_UINT(data)
 			: 64 /* TODO(ddiederen). */;
 
+		guint32 code_len = code
+			? code - cfg->native_code
+			: cfg->code_len;
+
 		/* We're being pessimistic here; the first instruction
 		 * won't refer to the last pool entry. */
-		guint32 end_after_next_inst = (pcval - cfg->native_code) +
+		guint32 end_after_next_inst = code_len +
 			next_inst_length +
 			size_if_emit - 4;
 
@@ -827,7 +829,7 @@ sh4_cstpool_check_end_bb(MonoCompile *cfg, MonoBasicBlock *bb)
 	SH4_CFG_DEBUG(4) SH4_DEBUG("bb: %d", bb->block_num);
 
 	if(sh4_cstpool_decide_emission(cfg, cstpool_context_end_bb,
-				       bb, &size)) {
+				       NULL, bb, &size)) {
 		buffer = get_code_buffer(cfg, size);
 		sh4_emit_pool(cfg, cstpool_context_end_bb, &buffer);
 		cfg->code_len = buffer - cfg->native_code;
@@ -870,7 +872,7 @@ sh4_cstpool_check_begin_arg(MonoCompile *cfg, guint8 **code)
 	SH4_CFG_DEBUG(4) SH4_DEBUG("arg; ip: 0x%x", *code - cfg->native_code);
 
 	if (sh4_cstpool_decide_emission (cfg, cstpool_context_begin_arg,
-					 NULL, &size)) {
+					 *code, NULL, &size)) {
 		sh4_emit_pool (cfg, cstpool_context_begin_arg, code);
 	}
 }
@@ -885,7 +887,7 @@ sh4_cstpool_check_begin_emit_exceptions(MonoCompile *cfg)
 	SH4_CFG_DEBUG(4) SH4_DEBUG("%p", cfg);
 
 	if(sh4_cstpool_decide_emission(cfg, cstpool_context_emit_exceptions,
-				       NULL, &size)) {
+				       NULL, NULL, &size)) {
 		buffer = get_code_buffer(cfg, size);
 		sh4_emit_pool(cfg, cstpool_context_emit_exceptions, &buffer);
 		cfg->code_len = buffer - cfg->native_code;

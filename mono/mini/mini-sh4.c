@@ -1481,6 +1481,7 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 	}
 
 	/* Copy arguments at the expected place : into register or onto the stack. */
+	/* TODO(ddiederen): Use memcpy for big things?	Use @Rm+ & friends. */
 	for (i = 0; i < signature->param_count + signature->hasthis; i++) {
 		struct arg_info *arg_info = &call_info->args[i];
 		MonoInst *inst = cfg->args[i];
@@ -3528,7 +3529,10 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		length_max = *((guint8 *)ins_get_spec(inst->opcode) + MONO_INST_LEN);
 
 		/* Check if the constant pool has to be emitted right now. */
-		emit_cstpool = sh4_cstpool_decide_emission(cfg, cstpool_context_begin_ins, GUINT_TO_POINTER(length_max), &size_cstpool);
+		emit_cstpool = sh4_cstpool_decide_emission(
+			cfg, cstpool_context_begin_ins, NULL,
+			GUINT_TO_POINTER(length_max),
+			&size_cstpool);
 		if (emit_cstpool)
 			length_max += size_cstpool;
 
