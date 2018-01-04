@@ -482,7 +482,14 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 					    rel_dest,
 					    cur_pool->type[index],
 					    cur_pool->pool_cst[index]);
-			sh4_emit32(pcval,0U); /* constant pool allocation  - patched later*/
+			/*
+			 * constant pool allocation - patched later,
+			 *
+			 * We use this location to temporarily store
+			 * the relative IP of the sh4_braf, at
+			 * off_inst + 2.
+			 */
+			sh4_emit32(pcval, cur_pool->off_inst[index] + 2);
 						/* sz <= 10 */
 			nb_int_const = 1U;
 		} else {

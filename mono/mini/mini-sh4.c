@@ -2000,6 +2000,13 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 		MonoClass *class = NULL;
 		guint8 *patch0 = NULL;
 		guint8 *patch2 = NULL;
+		guint32 *cstpool_addr = (guint32 *)(cfg->native_code + patch_info->ip.i);
+		/*
+		 * The relative ip of the sh4_braf has been stored in
+		 * the constant pool; cf. note in sh4_emit_pool.
+		 */
+		guint32 braf_offset = *cstpool_addr;
+		guint32 exc_throw_offset;
 
 		if (patch_info->type != MONO_PATCH_INFO_EXC)
 			continue;
@@ -2007,37 +2014,35 @@ mono_arch_emit_exceptions(MonoCompile *cfg)
 		i = mini_exception_id_by_name (patch_info->data.target);
 
 		SH4_CFG_DEBUG(4)
-			SH4_DEBUG("emit exc, ip: 0x%x, target: %p, throw_pos: %p",
+			SH4_DEBUG("emit exc, cstpool_offset: 0x%x, target: %p, throw_pos: %p, braf_offset: 0x%x",
 				  patch_info->ip.i,
 				  patch_info->data.target,
-				  exc_throw_pos [i]);
+				  exc_throw_pos [i],
+				  braf_offset);
 
-		if (exc_throw_pos [i]) {
+		/* Prepare to generate landing pad if not encountered yet. */
+		if (! exc_throw_pos [i])
+			exc_throw_pos [i] = buffer;
+
+		exc_throw_offset = exc_throw_pos [i] - cfg->native_code;
+		g_assert (exc_throw_offset > braf_offset + 4);
+		*cstpool_addr = exc_throw_offset - (braf_offset + 4);
+
+		SH4_CFG_DEBUG(4)
+			SH4_DEBUG("emit exc, exc_throw_offset: 0x%x, cstpool_val: 0x%x (%d)",
+				  exc_throw_offset,
+				  *cstpool_addr,
+				  *cstpool_addr);
+
+		/* Panding pad already exists; we're done. */
+		if (exc_throw_pos [i] != buffer) {
 			patch_info->type = MONO_PATCH_INFO_NONE;
 
-			/* Patch the constant used to jump to this exception. */
-			mono_add_patch_info(cfg, patch_info->ip.i, MONO_PATCH_INFO_IP, (guint8 *)(exc_throw_pos [i] - cfg->native_code));
-
 			continue;
-		} else {
-			exc_throw_pos [i] = buffer;
 		}
-
-		/* Patch the constant used to jump to this exception. */
-		mono_add_patch_info(cfg, patch_info->ip.i, MONO_PATCH_INFO_IP, (guint8 *)(buffer - cfg->native_code));
 
 		class = mono_class_load_from_name(mono_defaults.corlib, "System", patch_info->data.name);
 		g_assert(class != NULL);
-
-#if 0 /* TODO - CV */
-		for (i = 0; i < exceptions_count; i++) {
-			/* Reuse a throw sequence for the same exception class. */
-			if (classes[i] == class) {
-				...
-				goto end_loop;
-			}
-		}
-#endif
 
 		/* Pass parameters to the exception handler:
 		      1. type token
@@ -4229,7 +4234,11 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
 
-			sh4_jmp_indRx(&buffer, sh4_temp);
+			if (type == MONO_PATCH_INFO_EXC)
+				sh4_braf (&buffer, sh4_temp);
+			else
+				/* TODO(ddiederen): Breaks AOT. */
+				sh4_jmp_indRx(&buffer, sh4_temp);
 			sh4_nop(&buffer);
 
 			/* Back patch the reversed test. */
