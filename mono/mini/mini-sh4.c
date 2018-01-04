@@ -3539,7 +3539,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 		mono_debug_record_line_number(cfg, inst, offset);
 
 		SH4_CFG_DEBUG(4)
-			SH4_DEBUG("opcode '%s':\n"
+			SH4_DEBUG("opcode '%s' at 0x%x:\n"
 				  "	length	= %d\n"
 				  "	sreg1	= %d\n"
 				  "	sreg2	= %d\n"
@@ -3547,6 +3547,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				  "	offset	= %d\n"
 				  "	imm	= %d",
 				  mono_inst_name(inst->opcode),
+				  offset,
 				  (int)length_max,
 				  (int)inst->sreg1,
 				  (int)inst->sreg2,
