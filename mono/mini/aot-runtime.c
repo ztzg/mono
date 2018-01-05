@@ -3525,7 +3525,6 @@ decode_patch (MonoAotModule *aot_module, MonoMemPool *mp, MonoJumpInfo *ji, guin
 		mono_error_cleanup (&error); /* FIXME don't swallow the error */
 		if (!ji->data.klass)
 			goto cleanup;
-fprintf(stderr,"VTABLE - klass: %s\n",ji->data.klass->name);
 		break;
 	case MONO_PATCH_INFO_DELEGATE_TRAMPOLINE:
 		ji->data.del_tramp = (MonoDelegateClassMethodPair *)mono_mempool_alloc0 (mp, sizeof (MonoDelegateClassMethodPair));
@@ -3588,7 +3587,6 @@ fprintf(stderr,"VTABLE - klass: %s\n",ji->data.klass->name);
 		if (!image)
 			goto cleanup;
 		ji->data.token = mono_jump_info_token_new (mp, image, MONO_TOKEN_STRING + decode_value (p, &p));
-fprintf(stderr,"LDSTR - image: %p token: 0x%08x\n",image,ji->data.token);fflush(stderr);
 		break;
 	case MONO_PATCH_INFO_RVA:
 	case MONO_PATCH_INFO_DECLSEC:
@@ -3739,7 +3737,7 @@ fprintf(stderr,"LDSTR - image: %p token: 0x%08x\n",image,ji->data.token);fflush(
 		break;
 	default:
 		g_warning ("unhandled type %d", ji->type);
-fprintf(stderr, "ji: %p ip: %p type: %d target: %p from: %p\n",ji,ji->ip.i,ji->type,ji->data.target,__builtin_return_address(0));
+mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "ji: %p ip: %p type: %d target: %p from: %p\n",ji,ji->ip.i,ji->type,ji->data.target,__builtin_return_address(0));
 		g_assert_not_reached ();
 	}
 
@@ -4230,7 +4228,7 @@ init_method (MonoAotModule *amodule, guint32 method_index, MonoMethod *method, M
 					addr = mono_create_ftnptr (domain, addr);
 				mono_memory_barrier ();
 				got [got_slots [pindex]] = addr;
-fprintf(stderr,"GOT: %p got_slots[%d]: 0x%08x got [got_slots [%d]]: 0x%08x\n",got,pindex,got_slots[pindex],pindex,got[got_slots[pindex]]);fflush(stderr);
+mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "GOT: %p got_slots[%d]: 0x%08x got [got_slots [%d]]: 0x%08x\n",got,pindex,got_slots[pindex],pindex,got[got_slots[pindex]]);
 				if (ji->type == MONO_PATCH_INFO_METHOD_JUMP)
 					register_jump_target_got_slot (domain, ji->data.method, &(got [got_slots [pindex]]));
 			}
@@ -4897,7 +4895,7 @@ mono_aot_get_plt_entry (guint8 *code)
 
 	return NULL;
 #else
-fprintf (stderr,"target: %p plt_start: %p plt_end: %p\n",target,amodule->plt,amodule->plt_end);fflush(stderr);
+mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "target: %p plt_start: %p plt_end: %p\n",target,amodule->plt,amodule->plt_end);
 	if ((target >= (guint8*)(amodule->plt)) && (target < (guint8*)(amodule->plt_end)))
 		return target;
 	else

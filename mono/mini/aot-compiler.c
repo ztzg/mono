@@ -5444,7 +5444,6 @@ emit_and_reloc_code (MonoAotCompile *acfg, MonoMethod *method, guint8 *code, gui
 			case MONO_PATCH_INFO_GOT_OFFSET: {
 				int code_size;
  
-fprintf(stderr,"code: %p i: 0x%08x size: 0x%08xi INST_LEN: %d\n",code,i,code_size,INST_LEN);fflush(stderr);
 				arch_emit_got_offset (acfg, code + i, &code_size);
 				i += code_size - INST_LEN;
 				skip = TRUE;
@@ -5838,7 +5837,6 @@ encode_patch (MonoAotCompile *acfg, MonoJumpInfo *patch_info, guint8 *buf, guint
 		guint32 image_index = get_image_index (acfg, patch_info->data.token->image);
 		guint32 token = patch_info->data.token->token;
 		g_assert (mono_metadata_token_code (token) == MONO_TOKEN_STRING);
-fprintf(stderr,"LDSTR - index: 0x%08x p: %p\n",image_index,p);fflush(stderr);
 		encode_value (image_index, p, &p);
 		encode_value (patch_info->data.token->token - MONO_TOKEN_STRING, p, &p);
 		break;

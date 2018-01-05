@@ -457,7 +457,7 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 		sh4_nop(pcval);	     /* delay slot.	   sz = 4   */
 	}
 
-	if(((guint32)*pcval & 0x3)) {                     /* sz<=6   */
+	while (((guint32)*pcval % 4) != 0) {
 		sh4_nop(pcval);      /* Align constant pool */
 	}
 
@@ -555,7 +555,7 @@ sh4_emit_pool_lowperf(MonoCompile *cfg, CstPool_Context context, guint8 **pcval)
 		sh4_bra_label(&patch1, *pcval);
 	}
 
-	if(cur_pool->pool_nbcst_emitted > SH4_CSTPOOL_FILL_LIMIT) {
+	if (cur_pool->pool_nbcst_emitted > SH4_CSTPOOL_FILL_LIMIT) {
 		cur_pool->state = cstpool_allocated;
 	}
 

@@ -1208,7 +1208,7 @@ mono_patch_info_hash (gconstpointer data)
 		return (ji->type << 8) | mono_signature_hash (ji->data.sig);
 	default:
 		printf ("info type: %d\n", ji->type);
-		mono_print_ji (ji); printf ("\n");
+		mono_print_ji (ji); printf (" ji: %p target: %p ip: %p\n",ji,ji->data.target,ji->ip.p);
 		g_assert_not_reached ();
 		return 0;
 	}
@@ -2794,7 +2794,7 @@ MONO_SIG_HANDLER_FUNC (, mono_sigsegv_signal_handler)
 	void *info = NULL;
 #endif
 	MONO_SIG_HANDLER_GET_CONTEXT;
-// fprintf(stderr,"addr: %p\n",info->si_addr);
+mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "addr: %p\n",info->si_addr);
 
 #if defined(MONO_ARCH_SOFT_DEBUG_SUPPORTED) && defined(HAVE_SIG_INFO)
 	if (mono_arch_is_single_step_event (info, ctx)) {
