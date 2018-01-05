@@ -4031,19 +4031,20 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 				while (((guint32) buffer % 4) != 0)	// .align 2
 					sh4_nop (&buffer);	
 				sh4_die (&buffer);	// 0: .long offset
+				sh4_die (&buffer);	//    .....
 				sh4_die (&buffer);	// 1: jsr   @r3
 				sh4_die (&buffer);	//    nop       
-				break;
+			} else {
+				/* Please, update mono_arch_patch_callsite() according
+				   to any changes made on this code-generation. CV */
+
+				/* TODO - CV : optimize with sh4_bsr if possible. */
+
+				sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
+
+				sh4_jsr_indRx(&buffer, sh4_temp);
+				sh4_nop(&buffer); /* delay slot */
 			}
-			/* Please, update mono_arch_patch_callsite() according
-			   to any changes made on this code-generation. CV */
-
-			/* TODO - CV : optimize with sh4_bsr if possible. */
-
-			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);
-
-			sh4_jsr_indRx(&buffer, sh4_temp);
-			sh4_nop(&buffer); /* delay slot */
 
 			if (inst->opcode == OP_FCALL &&
 			    call->signature->pinvoke) {
@@ -4245,8 +4246,10 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			sh4_die(&buffer); /* patch slot for : bf/t_label "skip_jump" */
 
 			if (type == MONO_PATCH_INFO_EXC) {
-				/* sh4_mov(&buffer, sh4_pc, MONO_SH4_REG_FIRST_ARG + 1); */
-				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_IP, (gconstpointer)(buffer - cfg->native_code), MONO_SH4_REG_FIRST_ARG + 1);
+				sh4_mov (&buffer, sh4_r0, sh4_temp);
+				sh4_mova_dispPC_R0 (&buffer, 0);
+				sh4_mov (&buffer, sh4_r0, (MONO_SH4_REG_FIRST_ARG + 1));
+				sh4_mov (&buffer, sh4_temp, sh4_r0);
 			}
 
 			sh4_cstpool_add(cfg, &buffer, type, target, sh4_temp);

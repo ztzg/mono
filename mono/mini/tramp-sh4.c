@@ -30,6 +30,7 @@
 #include <glib.h>
 
 #include <mono/metadata/abi-details.h>
+#include <mono/utils/mono-logger-internals.h>
 
 #include "mini.h"
 
@@ -661,7 +662,13 @@ mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 void 
 mono_arch_patch_plt_entry(guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
-	/* TODO - CV */
+	int i;
+	guint32 *patch;
+	guint32 *offset = (guint32 *) &code[4];
+	patch = (guint32 *) ((intptr_t) got + *offset);
+mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "> PATCHPLT - got: %p = 0x%08x (%p) [0x%08x] addr: %p\n",got,*patch,patch,*offset,addr);
+	*patch = (guint32) addr;
+mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "> PATCHPLT - got: %p = 0x%08x (%p) [0x%08x] addr: %p\n",got,*patch,patch,*offset,addr);
 }
 
 guint8*
@@ -671,28 +678,17 @@ mono_arch_get_call_target (guint8 *code)
 	guint8	opcode;
 	gint8	disp;
 	
-int i;
-for (i=-8; i<12; i++) {
- if (i==0) fprintf(stderr,"*");
- fprintf(stderr,"%02x ",code[i]);
-}
-fprintf(stderr, "\n");
 	opcode = code[3] & 0xf0;
 	if (opcode == 0xd0) {			// Direct call
 		disp = (code[2] + 1) * 4;
 		target = code + disp;
-fprintf(stderr,"1. call *target: %p ",target);
 		target = (guint32 *) *target;
-fprintf(stderr,"target: %p\n",target);
 	} else {
 		opcode = code[-4];
 		if (opcode == 0x0b) {		// PLT call
 			target = &code[-8];
-fprintf(stderr,"2. call *target: %p ",target);
 			target = (guint32 *) *target;
-fprintf(stderr,"target: %p\n",target);
 		} else { 
-	fprintf(stderr, "opcode: %02x\n", opcode);
 			g_assert(0);
 		}
 	}
@@ -703,6 +699,5 @@ guint32
 mono_arch_get_plt_info_offset (guint8 *plt_entry, mgreg_t *regs, guint8 *code)
 {
 	/* The offset is stored as the 2nd word of the plt entry */
-fprintf (stderr,"plt_off: %08x\n",((guint32*)plt_entry)[4]);
 	return ((guint32*)plt_entry) [4];
 }
