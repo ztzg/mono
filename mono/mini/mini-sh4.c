@@ -2280,15 +2280,15 @@ mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean
 
 	switch (save_mode) {
 	case SAVE_TWO:
-		sh4_movl_dispRx (&code, sh4_r0, save_offset, cfg->frame_reg);
-		sh4_movl_dispRx (&code, sh4_r1, save_offset + 4, cfg->frame_reg);
+		sh4_base_store (cfg, &code, sh4_r0, save_offset, cfg->frame_reg);
+		sh4_base_store (cfg, &code, sh4_r1, save_offset + 4, cfg->frame_reg);
 		if (enable_arguments) {
 			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
 			sh4_mov (&code, sh4_r1, MONO_SH4_REG_FIRST_ARG + 2);
 		}
 		break;
 	case SAVE_ONE:
-		sh4_movl_dispRx (&code, sh4_r0, save_offset, cfg->frame_reg);
+		sh4_base_store (cfg, &code, sh4_r0, save_offset, cfg->frame_reg);
 		if (enable_arguments) {
 			sh4_mov (&code, sh4_r0, MONO_SH4_REG_FIRST_ARG + 1);
 		}
@@ -2298,8 +2298,7 @@ mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean
 		 * TODO(ddiederen): Tracing, bogus FP results due to
 		 * non-interleaved floating point registers (cf. ABI).
 		 */
-		sh4_mov (&code, cfg->frame_reg, sh4_temp);
-		sh4_add_imm (&code, save_offset, sh4_temp);
+		sh4_add_offset2base (cfg, &code, save_offset, cfg->frame_reg, sh4_temp);
 		sh4_fmov_indRx (&code, sh4_dr0, sh4_temp);
 		break;
 	case SAVE_STRUCT:
@@ -2315,20 +2314,21 @@ mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean
 
 	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
 	sh4_load (&code, (guint32)func, sh4_temp);
+	/* sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, cfg->method, MONO_SH4_REG_FIRST_ARG); */
+	/* sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, func, sh4_temp); */
 	sh4_jsr_indRx (&code, sh4_temp);
 	sh4_nop (&code); /* delay slot */
 
 	switch (save_mode) {
 	case SAVE_TWO:
-		sh4_movl_dispRy (&code, save_offset, cfg->frame_reg, sh4_r0);
-		sh4_movl_dispRy (&code, save_offset + 4, cfg->frame_reg, sh4_r1);
+		sh4_base_load (cfg, &code, save_offset, cfg->frame_reg, sh4_r0);
+		sh4_base_load (cfg, &code, save_offset + 4, cfg->frame_reg, sh4_r1);
 		break;
 	case SAVE_ONE:
-		sh4_movl_dispRy (&code, save_offset, cfg->frame_reg, sh4_r0);
+		sh4_base_load (cfg, &code, save_offset, cfg->frame_reg, sh4_r0);
 		break;
 	case SAVE_FP:
-		sh4_mov (&code, cfg->frame_reg, sh4_temp);
-		sh4_add_imm (&code, save_offset, sh4_temp);
+		sh4_add_offset2base (cfg, &code, save_offset, cfg->frame_reg, sh4_temp);
 		sh4_fmov_indRy (&code, sh4_temp, sh4_dr0);
 		break;
 	case SAVE_NONE:
