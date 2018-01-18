@@ -1004,7 +1004,6 @@ mono_aot_trampoline (mgreg_t *regs, guint8 *code, guint8 *token_info,
 	g_assert (plt_entry);
 
 	mono_aot_patch_plt_entry (code, plt_entry, NULL, regs, (guint8 *)addr);
-
 	return addr;
 }
 
