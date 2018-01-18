@@ -2477,8 +2477,6 @@ mono_handle_native_crash (const char *signal, void *ctx, MONO_SIG_HANDLER_INFO_T
 #endif
 	MonoJitTlsData *jit_tls = (MonoJitTlsData *)mono_tls_get_jit_tls ();
 
-// DLL20180109 struct sigcontext *sigctx = ctx;
-// mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "addr: %p PC: 0x%08x PR: 0x%08x\n",info->si_addr,sigctx->sc_pc,sigctx->sc_pr);
 	gboolean is_sigsegv = !strcmp ("SIGSEGV", signal);
 
 	if (handling_sigsegv && is_sigsegv)

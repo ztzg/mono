@@ -485,4 +485,17 @@ typedef struct ucontext
 # define UCONTEXT_GREGS(ctx)	(((ucontext_t *)(ctx))->uc_mcontext.gregs)
 #endif
 
+#elif defined(__SH4__)
+
+# if HAVE_UCONTEXT_H
+#  include <ucontext.h>
+# endif
+
+/*
+ * ucontext_t mappings
+ */
+#define UCONTEXT_REG_IP(ctx)	(((ucontext_t *)(ctx))->uc_mcontext.pc)
+#define UCONTEXT_REG_SP(ctx)	(((ucontext_t *)(ctx))->uc_mcontext.gregs[15])
+#define UCONTEXT_Rn(ctx,reg)	(((ucontext_t *)(ctx))->uc_mcontext.gregs[(reg)])
+
 #endif

@@ -1349,6 +1349,9 @@ mono_arch_emit_prolog(MonoCompile *cfg)
 	if(cfg->method->save_lmf != 0)
 		cfg->code_size += 116;
 
+	if (tracing)
+		cfg->code_size += 80;
+
 	buffer = cfg->native_code = g_malloc(cfg->code_size);
 
 	SH4_CFG_DEBUG(4)
@@ -3969,36 +3972,29 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 /* FIXME */
 		case OP_GOT_ENTRY: {
 			/* MD: got_entry: dest:i src1:b len:20 */
-			guint8 *patch1, *patch2, *patch3, *patch4;
+			guint8 *patch1, *patch2;
 
-			if (((guint32)buffer % 4) != 0) 
-				sh4_nop (&buffer);
-			patch4 = buffer;	
-			sh4_die (&buffer);
-			patch1 = buffer;
-			sh4_die (&buffer);
+			if (((guint32)buffer % 4) == 0) 			// Have to align the mov.l
+				sh4_nop (&buffer);				//	.align	1		00
+			patch1 = buffer;			
+			sh4_die (&buffer);					//	bra	1f		00/02
 			patch2 = buffer;
-			sh4_die (&buffer);
-			sh4_nop (&buffer);
-// fprintf(stderr,"%s:%s > OP_GOT_ENTRY: %p (0x%x) jump_type: %d target: %p\n",cfg->method->klass->name,cfg->method->name,buffer,(buffer-cfg->native_code),(MonoJumpInfoType)inst->inst_right->inst_i1,inst->inst_right->inst_p0);
+			sh4_die (&buffer);					//	mov.l	0f,dreg		02/04
+			if (((guint32)buffer % 4) != 0) 
+				sh4_nop (&buffer);				//	.align	2		04/06
+			sh4_movl_PCrel (&patch2, buffer, inst->dreg);
 			mono_add_patch_info (cfg, buffer - cfg->native_code, 
 					     (MonoJumpInfoType)inst->inst_right->inst_i1, 
 					     inst->inst_right->inst_p0);
-			patch3 = buffer;
-			sh4_emit32 (&buffer, 0);
-			sh4_movl_PCrel (&patch2, patch3, sh4_temp);
-			sh4_mova_PCrel_R0 (&patch4, patch3);
-			sh4_bra_label (&patch1, buffer);
-			// sh4_add (&buffer, inst->inst_basereg, sh4_temp);
-			sh4_add (&buffer, sh4_r0, sh4_temp);
-			sh4_movl_indRy (&buffer, sh4_temp, inst->dreg);
-// fprintf(stderr,"%s:%s < OP_GOT_ENTRY: %p (0x%x)\n",cfg->method->klass->name,cfg->method->name,buffer,(buffer-cfg->native_code));
+			sh4_emit32 (&buffer, 0);				// 0:	.long	offset		04/06/08
+			sh4_bra_label (&patch1, buffer);	
+			sh4_add (&buffer, MONO_ARCH_GOT_REG, inst->dreg);	// 1:	add	r12,dreg	08/10/12
+			sh4_movl_indRy (&buffer, inst->dreg, inst->dreg);	//	mov.l	@dreg,dreg	14/16/18
 		}
 			break;
 /* FIXME */
 		case OP_AOTCONST:
 			/* MD: aot_const:: dest:i len:8 */
-// fprintf(stderr,"AOTCONST - buffer: %p offset: %0x%x c0: %p reg: %d\n",buffer,(buffer - cfg->native_code),inst->inst_c0, inst->dreg);
 			sh4_cstpool_add (cfg, &buffer, MONO_PATCH_INFO_NONE, &(inst->inst_c0), inst->dreg);
 			break;
 		case OP_FCALL:
@@ -4025,7 +4021,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			}
 
 			if (cfg->compile_aot) {		// emit direct call will fill this in
-				mono_add_patch_info (cfg, offset, type, target);
+				mono_add_patch_info (cfg, buffer - cfg->native_code, type, target);
 				sh4_die (&buffer);	//    bra   1f
 				sh4_die (&buffer);	//    mov.l 0f,r3
 				while (((guint32) buffer % 4) != 0)	// .align 2
@@ -4099,10 +4095,23 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
 				sh4_mov(&buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
 
-			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_throw_exception", sh4_temp);
+			if (cfg->compile_aot) {
+				mono_add_patch_info (cfg, buffer - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD,
+						     (gpointer) "mono_arch_throw_exception");
+				sh4_die (&buffer);	//    bra   1f
+				sh4_die (&buffer);	//    mov.l 0f,r3
+				while (((guint32) buffer % 4) != 0)	// .align 2
+					sh4_nop (&buffer);	
+				sh4_die (&buffer);	// 0: .long offset
+				sh4_die (&buffer);	//    .....
+				sh4_die (&buffer);	// 1: jsr   @r3
+				sh4_die (&buffer);	//    nop       
+			} else { 
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_throw_exception", sh4_temp);
 
-			sh4_jsr_indRx(&buffer, sh4_temp);
-			sh4_nop(&buffer); /* delay slot */
+				sh4_jsr_indRx(&buffer, sh4_temp);
+				sh4_nop(&buffer); /* delay slot */
+			}
 			break;
 
 		case OP_RETHROW:
@@ -4110,10 +4119,23 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (inst->sreg1 != MONO_SH4_REG_FIRST_ARG)
 				sh4_mov(&buffer, inst->sreg1, MONO_SH4_REG_FIRST_ARG);
 
-			sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_rethrow_exception", sh4_temp);
+			if (cfg->compile_aot) {
+				mono_add_patch_info (cfg, buffer - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD,
+						     (gpointer) "mono_arch_rethrow_exception");
+				sh4_die (&buffer);	//    bra   1f
+				sh4_die (&buffer);	//    mov.l 0f,r3
+				while (((guint32) buffer % 4) != 0)	// .align 2
+					sh4_nop (&buffer);	
+				sh4_die (&buffer);	// 0: .long offset
+				sh4_die (&buffer);	//    .....
+				sh4_die (&buffer);	// 1: jsr   @r3
+				sh4_die (&buffer);	//    nop       
+			} else { 
+				sh4_cstpool_add(cfg, &buffer, MONO_PATCH_INFO_INTERNAL_METHOD, (gpointer)"mono_arch_rethrow_exception", sh4_temp);
 
-			sh4_jsr_indRx(&buffer, sh4_temp);
-			sh4_nop(&buffer); /* delay slot */
+				sh4_jsr_indRx(&buffer, sh4_temp);
+				sh4_nop(&buffer); /* delay slot */
+			}
 			break;
 
 		case OP_ICONV_TO_I4:
@@ -4714,22 +4736,15 @@ mono_arch_patch_code(MonoCompile *cfg, MonoMethod *method, MonoDomain *domain, g
 		case MONO_PATCH_INFO_CLASS:
 		case MONO_PATCH_INFO_IMAGE:
 		case MONO_PATCH_INFO_FIELD:
-		// case MONO_PATCH_INFO_VTABLE:
 		case MONO_PATCH_INFO_IID:
 		case MONO_PATCH_INFO_SFLDA:
-		// case MONO_PATCH_INFO_LDSTR:
 		case MONO_PATCH_INFO_TYPE_FROM_HANDLE:
 		case MONO_PATCH_INFO_LDTOKEN:
 			target = code + (guint32)patch_info->data.target;
-// if (patch_info->type == MONO_PATCH_INFO_VTABLE)
-// fprintf(stderr,"VTABLE - target: %p = code %p + data.target %p\n",target,code,patch_info->data.target);
-// if (patch_info->type == MONO_PATCH_INFO_LDSTR)
-// fprintf(stderr,"LDSTR  - target: %p = code %p + data.target %p\n",target,code,patch_info->data.target);
 			break;
 
 		case MONO_PATCH_INFO_GOT_OFFSET:
 			target = code + (guint32)patch_info->data.target;
-// fprintf (stderr,"PATCH_GOT patch: %p (0x%08x) target: 0x%08x\n",patch,(*(guint32 *)patch),target);fflush(stderr);
 			break;
 
 		case MONO_PATCH_INFO_ICALL_ADDR_CALL:
@@ -4740,9 +4755,6 @@ mono_arch_patch_code(MonoCompile *cfg, MonoMethod *method, MonoDomain *domain, g
                         continue;
 
 		default:
-printf("unhandled patch: ");
-mono_print_ji (patch_info);
-printf("\n");
 			break;
 		}
 
@@ -5199,31 +5211,28 @@ mono_arch_emit_load_got_addr (guint8 *start, guint8 *code, MonoCompile *cfg, Mon
 {
 	guint8  *patch1 = NULL,
 		*patch2 = NULL,
-		*patch3 = NULL,
-		*patch4 = NULL;
+		*patch3 = NULL;
 
-// fprintf(stderr,"%s:%s > LOAD GOT ADDR: %p (0x%x)\n",cfg->method->klass->name,cfg->method->name,code,(code-cfg->native_code));
-	patch4 = code;
-	sh4_die (&code);
-	sh4_mov (&code, sh4_r0, MONO_ARCH_GOT_REG);
-	patch1 = code;
-	sh4_die (&code);
+	sh4_mov (&code, sh4_r0, sh4_temp);		//    mov   r0,r3	0
+	patch1 = code;					
+	sh4_die (&code);				//    mova  0f,r0	2
+	sh4_mov (&code, sh4_r0, MONO_ARCH_GOT_REG);	//    mov   r0,r12	4
 	patch2 = code;
-	sh4_die (&code);
+	sh4_die (&code);				//    bra   1f		6
+	sh4_movl_indRy(&code,MONO_ARCH_GOT_REG,sh4_r0);	//    mov.l @r12,r0	8
 	while (((guint32)code % 4) != 0)
-		sh4_nop (&code);
+		sh4_nop (&code);			//    .align 2		
 	if (cfg)
 		mono_add_patch_info (cfg, code - start, MONO_PATCH_INFO_GOT_OFFSET, NULL);
 	else
 		*ji = mono_patch_info_list_prepend (*ji, code - start, MONO_PATCH_INFO_GOT_OFFSET, NULL);
 	patch3 = code;
-	/* arch_emit_got_address () patches this */
-	sh4_emit32 (&code, 0);
-	sh4_mova_PCrel_R0 (&patch4, patch3);
-	sh4_bra_label (&patch1, code);
-	sh4_movl_PCrel (&patch2, patch3, sh4_temp);
-	sh4_add (&code, sh4_temp, MONO_ARCH_GOT_REG);
-// fprintf(stderr,"%s:%s < LOAD GOT ADDR: %p (0x%x)\n",cfg->method->klass->name,cfg->method->name,code,(code-cfg->native_code));
+	/* arch_emit_got_address () patches this */	
+	sh4_emit32 (&code, 0);				// 0: .long xxxx	10/12
+	sh4_mova_PCrel_R0 (&patch1, patch3);
+	sh4_bra_label (&patch2, code);
+	sh4_add (&code, sh4_r0, MONO_ARCH_GOT_REG);	// 1: add   r0,r12	14/16
+	sh4_mov (&code, sh4_temp, sh4_r0);		//    mov   r3,r0	16/18
 
 	return code;
 }
@@ -5241,22 +5250,21 @@ mono_sh4_emit_load_aotconst (guint8 *start, guint8 *code, MonoJumpInfo **ji, Mon
 	guint8  *patch1 = NULL,
 		*patch2 = NULL,
 		*patch3 = NULL;
-
+	
+	while (((guint32)code % 4) != 0)
+		sh4_nop (&code);
 	patch1 = code;
 	sh4_die (&code);
 	patch2 = code;
 	sh4_die (&code);
-	while (((guint32)code % 4) != 0)
-		sh4_nop (&code);
+	sh4_nop (&code);
+	sh4_nop (&code);
 	*ji = mono_patch_info_list_prepend (*ji, code - start, tramp_type, target);
 	patch3 = code;
 	sh4_emit32 (&code, 0);
-// fprintf(stderr,"AOTCONST ji: %p tramp_type: %d\n",ji,tramp_type);fflush(stderr);
 	/* arch_emit_got_access () patches this */
-	sh4_bra_label (&patch1, code);
-	sh4_movl_PCrel (&patch2, patch3, sh4_temp);
-	sh4_add (&code, MONO_ARCH_GOT_REG, sh4_temp);
-	sh4_movl_indRy (&code, sh4_temp, dest);
+	sh4_movl_PCrel (&patch1, patch3, dest);
+	sh4_bra_label (&patch2, code);
 
 	return code;
 }

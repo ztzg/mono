@@ -370,14 +370,17 @@ mono_arch_create_generic_trampoline (MonoTrampolineType trampoline_type, MonoTra
 	/* Build the constant pool & patch the corresponding instructions. */
 	sh4_movl_PCrel(&patch1, buffer, sh4_r8);
 	if (aot) {
-		buffer = mono_arch_emit_load_aotconst (code, buffer, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, "mono_get_lmf_addr");
+		ji = mono_patch_info_list_prepend (ji, buffer - code, MONO_PATCH_INFO_JIT_ICALL_ADDR, "mono_get_lmf_addr");
+		sh4_emit32 (&buffer, 0);
 	} else {
-		sh4_emit32(&buffer, (guint32)mono_get_lmf_addr);
+		sh4_emit32 (&buffer, (guint32)mono_get_lmf_addr);
 	}
 
 	sh4_movl_PCrel(&patch2, buffer, sh4_r8);
 	if (aot) {
-		buffer = mono_arch_emit_load_aotconst (code, buffer, &ji, MONO_PATCH_INFO_JIT_ICALL_ADDR, g_strdup_printf ("trampoline_func_%d", trampoline_type));
+		ji = mono_patch_info_list_prepend (ji, buffer - code, MONO_PATCH_INFO_JIT_ICALL_ADDR, 
+						   g_strdup_printf("trampoline_func_%d",trampoline_type));
+		sh4_emit32 (&buffer, 0);
 	} else {
 		sh4_emit32(&buffer, (guint32)mono_get_trampoline_func(trampoline_type));
 	}
@@ -644,7 +647,7 @@ mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 	SH4_EXTRA_DEBUG("args => %p, %p, %p", method, code, address);
 
 	constant_address = get_imm_sh4_call_site((void *)code);
-	if(constant_address == NULL) {
+	if (constant_address == NULL) {
 		char name[] = "call site in patch_callsite";
 		mono_disassemble_code(NULL, code - 20, 20, name);
 		g_assert_not_reached();
@@ -666,31 +669,39 @@ mono_arch_patch_plt_entry(guint8 *code, gpointer *got, mgreg_t *regs, guint8 *ad
 	guint32 *patch;
 	guint32 *offset = (guint32 *) &code[4];
 	patch = (guint32 *) ((intptr_t) got + *offset);
-mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "> PATCHPLT - got: %p = 0x%08x (%p) [0x%08x] addr: %p\n",got,*patch,patch,*offset,addr);
 	*patch = (guint32) addr;
-mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_AOT, "> PATCHPLT - got: %p = 0x%08x (%p) [0x%08x] addr: %p\n",got,*patch,patch,*offset,addr);
 }
 
 guint8*
 mono_arch_get_call_target (guint8 *code)
 {
 	guint32 *target = NULL;
-	guint8	opcode;
 	gint8	disp;
+	const guint8 madcall[4] = {0x02, 0xa0, 0x00, 0xd3},
+		     pltcall[4] = {0x0b, 0x43, 0x09, 0x00};
+
+#define MADINS &code[0]
+#define MADLEN sizeof(madcall)
+#define MADTGT &code[4]
+#define PLTINS &code[-4]
+#define PLTLEN sizeof(pltcall)
+#define PLTTGT &code[-8]
+#define DIROPC 0x0d
+#define DIRINS (code[3] & 0xf0)
+#define DIRTGT code[2]
 	
-	opcode = code[3] & 0xf0;
-	if (opcode == 0xd0) {			// Direct call
-		disp = (code[2] + 1) * 4;
-		target = code + disp;
+	if (memcmp(MADINS, madcall, MADLEN) == 0) {		// Method access
+		target = MADTGT;
 		target = (guint32 *) *target;
-	} else {
-		opcode = code[-4];
-		if (opcode == 0x0b) {		// PLT call
-			target = &code[-8];
+	} else if (memcmp(PLTINS, pltcall, PLTLEN) == 0) {	// Call to PLT
+		target = PLTTGT;
+		target = (guint32 *) *target;
+	} else if (DIRINS == DIROPC) { 				// Direct Call
+			disp = (DIRTGT + 1) * 4;
+			target = code + disp;
 			target = (guint32 *) *target;
-		} else { 
-			g_assert(0);
-		}
+	} else { 
+		g_assert(0);
 	}
 	return target;
 }

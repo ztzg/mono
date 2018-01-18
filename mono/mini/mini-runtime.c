@@ -2794,7 +2794,6 @@ MONO_SIG_HANDLER_FUNC (, mono_sigsegv_signal_handler)
 	void *info = NULL;
 #endif
 	MONO_SIG_HANDLER_GET_CONTEXT;
-mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "addr: %p\n",info->si_addr);
 
 #if defined(MONO_ARCH_SOFT_DEBUG_SUPPORTED) && defined(HAVE_SIG_INFO)
 	if (mono_arch_is_single_step_event (info, ctx)) {

@@ -29,7 +29,9 @@
 #ifndef MONO_SH4_H
 #define MONO_SH4_H
 #include <mono/arch/sh4/sh4-codegen.h>
+#include <mono/utils/mono-sigcontext.h>
 #include <mono/utils/mono-context.h>
+#include <signal.h>
 #include <glib.h>
 
 /*
@@ -151,6 +153,11 @@
 #define MONO_ARCH_HAVE_THROW_CORLIB_EXCEPTION 1
 
 /*
+ * Trampolines are built as part of AOT - not required at the moment
+ */
+// #define MONO_ARCH_HAVE_FULL_AOT_TRAMPOLINES 1
+
+/*
  * This macro defines the size of the floating-point stack.
  * Use the value 0 if no floating-point stack is available.
  */
@@ -217,6 +224,16 @@
  * stack. Obviously, this macro is mandatory.
  */
 #define MONO_ARCH_USE_FPSTACK FALSE
+
+/*
+ * Use alternate stack for signal handling
+ */
+#define MONO_ARCH_SIGSEGV_ON_ALTSTACK 1
+
+/*
+ * Size of alternate stack
+ */
+#define MONO_ARCH_SIGNAL_STACK_SIZE (16 * 1024)
 
 /*
  * This macro defines whether the architecture supports POSIX sigactions.

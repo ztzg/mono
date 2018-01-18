@@ -872,3 +872,68 @@ mono_sh4_throw_corlib_exception (mgreg_t *regs, guint32 ex_token_index,
 
 	mono_sh4_throw_exception (regs, (MonoObject*)ex, eip, FALSE);
 }
+
+static void
+altstack_handle_and_restore (MonoContext *ctx, gpointer obj, gboolean stack_ovf)
+{
+	MonoContext mctx;
+
+	mctx = *ctx;
+
+	mono_handle_exception (&mctx, obj);
+	mono_restore_context (&mctx);
+}
+
+void
+mono_arch_handle_altstack_exception (void *sigctx, MONO_SIG_HANDLER_INFO_TYPE *siginfo, gpointer fault_addr, gboolean stack_ovf)
+{
+#ifdef MONO_CROSS_COMPILE
+	g_assert_not_reached ();
+#else
+	ucontext_t *uc = (ucontext_t *) sigctx;
+	MonoException *exc = NULL;
+	MonoJitInfo *ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)UCONTEXT_REG_IP (uc), NULL);
+	gpointer *sp;
+	int frame_size;
+
+	/* If we didn't find a managed method for the ip address and it matches the fault
+	 * address, we assume we followed a broken pointer during an indirect call, so
+	 * we try the lookup again with the return address pushed on the stack
+	 */
+	if (!ji && fault_addr == (gpointer)UCONTEXT_REG_IP (uc)) {
+		glong *sp = (gpointer)UCONTEXT_REG_SP (uc);
+		ji = mini_jit_info_table_find (mono_domain_get (), (gpointer)sp [0], NULL);
+		if (ji)
+			UCONTEXT_REG_IP (uc) = sp [0];
+	}
+
+	if (stack_ovf) 
+		exc = mono_domain_get()->stack_overflow_ex;
+
+	if (!ji)
+		mono_handle_native_crash ("SIGSEGV", sigctx, siginfo);
+
+	/* setup a call frame on the real stack so that control is returned there
+	 * and exception handling can continue.
+	 * The frame looks like:
+	 *   ucontext struct
+	 *   ...
+	 * 224 is the size of the red zone
+	 */
+	frame_size = sizeof (MonoContext) + sizeof (gpointer) * 16 + 224;
+	frame_size += 15;
+	frame_size &= ~15;
+	sp = (gpointer)(UCONTEXT_REG_SP(uc) & ~15);
+	sp = (gpointer)((char*)sp - frame_size);
+	/* may need to adjust pointers in the new struct copy, depending on the OS */
+	/* at the return from the signal handler execution starts in altstack_handle_and_restore() */
+	mono_sigctx_to_monoctx (sigctx, (MonoContext*)(sp + 16));
+	UCONTEXT_REG_IP(uc) = (unsigned long) altstack_handle_and_restore;
+	UCONTEXT_REG_SP(uc) = sp;
+	UCONTEXT_Rn(uc,MONO_SH4_REG_FIRST_ARG) = (sp + 16);
+	UCONTEXT_Rn(uc,MONO_SH4_REG_FIRST_ARG+1) = exc;
+	UCONTEXT_Rn(uc,MONO_SH4_REG_FIRST_ARG+2) = (gpointer) stack_ovf;
+
+#endif /* !MONO_CROSS_COMPILE */
+}
+

@@ -1396,15 +1396,18 @@ arch_emit_direct_call (MonoAotCompile *acfg, const char *target, gboolean extern
 	*call_size = 4;
 #elif defined(TARGET_SH4)
 	emit_unset_mode (acfg);
-fprintf (acfg->fp, "# %s\n", __func__);
-fprintf (stderr, "# %s\n", __func__);
 	fprintf (acfg->fp, "\tbra\t1f\n"
 			   "\tmov.l\t0f,r%d\n"
 			   "\t.align\t2\n"
 			   "0:\t.long\t%s\n"
 			   "1:\tjsr\t@r%d\n"
 			   "\tnop\n", sh4_temp, target, sh4_temp);
-	*call_size = 14;
+
+	if ((ji) && ((ji->ip.i % 4) == 0)) {
+		*call_size = 12;
+	} else {
+		*call_size = 14;
+	}
 #else
 	g_assert_not_reached ();
 #endif
@@ -1542,10 +1545,12 @@ arch_emit_got_access (MonoAotCompile *acfg, const char *got_symbol, guint8 *code
 		*code_size = code - buf;
 	}
 #elif defined(TARGET_SH4)
-fprintf(acfg->fp, "\n# GOT ACCESS\n");
-fprintf(stderr, "\n# GOT ACCESS\n");
+	/*
+	 * SH4 assumes MONO_ARCH_GOT_REG is set up by this point 
+	 */
 	emit_bytes (acfg, code, mono_arch_get_patch_offset (code));
-	emit_symbol_diff (acfg, got_symbol, ".", (unsigned int) ((got_slot * sizeof (gpointer))));
+	emit_int32 (acfg, (got_slot * sizeof (gpointer)));
+	// emit_symbol_diff (acfg, got_symbol, ".", (unsigned int) ((got_slot * sizeof (gpointer))));
 	*code_size = mono_arch_get_patch_offset (code) + 4;
 #else
 	g_assert_not_reached ();
@@ -1639,7 +1644,6 @@ arch_emit_plt_entry (MonoAotCompile *acfg, const char *got_symbol, int offset, i
 		fprintf (acfg->fp, "bctr\n");
 		emit_int32 (acfg, info_offset);
 #elif defined(TARGET_SH4)
-fprintf (acfg->fp, "# %s\n",__func__);
 		/* The GOT address is guaranteed to be in r12 by OP_LOAD_GOTADDR */
 		emit_unset_mode (acfg);
 		fprintf (acfg->fp, "\tbra\t1f\n");
@@ -1647,8 +1651,8 @@ fprintf (acfg->fp, "# %s\n",__func__);
 		fprintf (acfg->fp, "\t.align\t2\n");
 		fprintf (acfg->fp, "0:\t.long\t%d\n",offset);
 		fprintf (acfg->fp, "1:\tadd\tr%d,r0\n",MONO_ARCH_GOT_REG);
-		fprintf (acfg->fp, "\tmov.l\t@r0,r1\n");
-		fprintf (acfg->fp, "\tjmp\t@r1\n");
+		fprintf (acfg->fp, "\tmov.l\t@r0,r0\n");
+		fprintf (acfg->fp, "\tjmp\t@r0\n");
 		fprintf (acfg->fp, "\tnop\n");
 		emit_int32 (acfg, info_offset);
 #else
@@ -2063,8 +2067,6 @@ arch_emit_specific_trampoline (MonoAotCompile *acfg, int offset, int *tramp_size
 	*tramp_size = 17;
 	g_assert (code - buf == *tramp_size);
 #elif (TARGET_SH4)
-fprintf (acfg->fp, "# %s\n",__func__);
-fprintf (stderr, "# %s\n", __func__);
 	/* The GOT address is guaranteed to be in r12 by OP_LOAD_GOTADDR */
 	emit_unset_mode (acfg);
 	fprintf (acfg->fp, "\tmov.l\t0f,r0\n");
@@ -2155,8 +2157,6 @@ arch_emit_unbox_trampoline (MonoAotCompile *acfg, MonoCompile *cfg, MonoMethod *
 	fprintf (acfg->fp, "\n\taddi %d, %d, %d\n", this_pos, this_pos, (int)sizeof (MonoObject));
 	fprintf (acfg->fp, "\n\tb %s\n", call_target);
 #elif defined(TARGET_SH4)
-fprintf (acfg->fp, "# %s\n",__func__);
-fprintf (stderr, "# %s\n", __func__);
 	fprintf (acfg->fp, "\tadd\t#%d,r4\n"
 			   "\tbra\t1f\n"
 			   "\tmov.l\t0f,r%d\n"
@@ -2285,8 +2285,6 @@ arch_emit_static_rgctx_trampoline (MonoAotCompile *acfg, int offset, int *tramp_
 #elif defined(TARGET_SH4)
 	/* The GOT address is guaranteed to be in r12 by OP_LOAD_GOTADDR */
 	emit_unset_mode (acfg);
-fprintf (acfg->fp, "# %s\n",__func__);
-fprintf (stderr, "# %s\n", __func__);
 	fprintf (acfg->fp, "\tmov.l\t0f,R0\n");
 	fprintf (acfg->fp, "\tmov.l\t1f,R%d\n",MONO_ARCH_RGCTX_REG);
 	fprintf (acfg->fp, "\tbra\t2f\n");
@@ -6584,7 +6582,6 @@ emit_plt (MonoAotCompile *acfg)
 
 		emit_label (acfg, plt_entry->symbol);
 
-fprintf(stderr, "acfg->got_symbol: %s index: %d offset: 0x%08x\n",acfg->got_symbol,i,acfg->plt_got_info_offsets [i]);fflush(stderr);
 		arch_emit_plt_entry (acfg, acfg->got_symbol, (acfg->plt_got_offset_base + i) * sizeof (gpointer), acfg->plt_got_info_offsets [i]);
 
 		if (debug_sym)
