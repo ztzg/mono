@@ -426,8 +426,8 @@ mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
 			sh4_movl_dispRy(&buffer, i * 4, sh4_temp, (SH4IntRegister)i);
 
 	/* Rtemp now points to the end of "context.fregisters[]". */
-	sh4_multi_add_imm(&buffer, -offsetof(MonoLMF, registers) +
-			  offsetof(MonoLMF, fregisters) +
+	sh4_multi_add_imm(&buffer, -offsetof(MonoContext, registers) +
+			  offsetof(MonoContext, fregisters) +
 			  MONO_MAX_FREGS * sizeof(guint32), sh4_temp);
 	for (i = MONO_MAX_FREGS - 1; i >= 0; i--)
 		sh4_fmov_decRx(&buffer, (SH4FloatRegister)i, sh4_temp);
