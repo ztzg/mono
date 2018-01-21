@@ -938,6 +938,10 @@ mono_arch_allocate_vars(MonoCompile *cfg)
 	cfg->used_int_regs |= 1 << sh4_fp;
 
 	/* allow room to save the return value */
+	/*
+	 * KLUDGE: The SH-4 backend currently stores this below local
+	 * variables; cf. save_offset in instrument_epilog.
+	 */
 	if (mono_jit_trace_calls != NULL && mono_trace_eval (cfg->method))
 		locals_padding += 8;
 
@@ -2251,9 +2255,11 @@ mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean
 	int offset;
 	MonoMethod *method = cfg->method;
 	int rtype = mini_get_underlying_type (mono_method_signature (method)->ret)->type;
-	int save_offset = cfg->param_area;
-	save_offset += 15;
-	save_offset &= ~15;
+	/*
+	 * KLUDGE: The SH-4 backend currently stores the return value
+	 * below local variables; cf. locals_padding in allocate_vars.
+	 */
+	int save_offset = 0;
 
 	offset = code - cfg->native_code;
 
