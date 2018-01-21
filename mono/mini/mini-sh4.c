@@ -1216,7 +1216,10 @@ sh4_base_store(MonoCompile *cfg, guint8 **buffer, SH4IntRegister src, int offset
 	g_assert(base != sh4_temp);
 	g_assert(src != sh4_temp);
 
-	if (SH4_CHECK_RANGE_movl_dispRx(offset)) {
+	if (offset == 0) {
+		sh4_movl_indRx(buffer, src, base);
+	}
+	else if (SH4_CHECK_RANGE_movl_dispRx(offset)) {
 		sh4_movl_dispRx(buffer, src, offset, base);
 	}
 	else {
@@ -1230,7 +1233,10 @@ sh4_base_load(MonoCompile *cfg, guint8 **buffer, int offset, SH4IntRegister base
 {
 	g_assert(base != sh4_temp);
 
-	if (SH4_CHECK_RANGE_movl_dispRy(offset)) {
+	if (offset == 0) {
+		sh4_movl_indRy(buffer, base, dest);
+	}
+	else if (SH4_CHECK_RANGE_movl_dispRy(offset)) {
 		sh4_movl_dispRy(buffer, offset, base, dest);
 	}
 	else {
