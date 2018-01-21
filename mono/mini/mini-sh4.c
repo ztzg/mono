@@ -2321,10 +2321,9 @@ mono_arch_instrument_epilog_full(MonoCompile *cfg, void *func, void *p, gboolean
 		break;
 	}
 
-	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
-	sh4_load (&code, (guint32)func, sh4_temp);
-	/* sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, cfg->method, MONO_SH4_REG_FIRST_ARG); */
-	/* sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, func, sh4_temp); */
+	/* Attention: cstpool_add takes a pointer to the value. */
+	sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, &method, MONO_SH4_REG_FIRST_ARG);
+	sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, &func, sh4_temp);
 	sh4_jsr_indRx (&code, sh4_temp);
 	sh4_nop (&code); /* delay slot */
 
@@ -2353,9 +2352,10 @@ mono_arch_instrument_prolog(MonoCompile *cfg, void *func, void *p, gboolean enab
 {
 	guchar *code = p;
 
-	sh4_load (&code, (guint32)cfg->method, MONO_SH4_REG_FIRST_ARG);
+	/* Attention: cstpool_add takes a pointer to the value. */
+	sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, &cfg->method, MONO_SH4_REG_FIRST_ARG);
 	/* Note: last arg in delay slot. */
-	sh4_load (&code, (guint32)func, sh4_temp);
+	sh4_cstpool_add (cfg, &code, MONO_PATCH_INFO_NONE, &func, sh4_temp);
 	sh4_jsr_indRx (&code, sh4_temp);
 	/* Delay slot. */
 	sh4_mov_imm (&code, 0, MONO_SH4_REG_FIRST_ARG + 1); /* NULL ebp for now */
