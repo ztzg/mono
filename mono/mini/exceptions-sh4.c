@@ -403,34 +403,33 @@ mono_arch_get_restore_context (MonoTrampInfo **info, gboolean aot)
 
 	code = buffer = mono_global_codeman_reserve(RESTORE_CONTEXT_SIZE);
 
-	/* Rtemp now points to "context.registers[]" (used later). */
-	sh4_mov(&buffer, sh4_r4, sh4_temp);
-	sh4_add_imm(&buffer, offsetof(MonoContext, registers), sh4_temp);
-
 	/*
 	 * Mimic a return from an ordinary routine by setting the
 	 * linkage register PR to the value of the saved PC.
 	 */
 
 	/* pseudo-code: %PR = context.pc; */
-	sh4_movl_dispRy(&buffer, offsetof(MonoContext, pc), sh4_r4, sh4_r4);
-	sh4_lds_PR(&buffer, sh4_r4);
+	g_assert (offsetof (MonoContext, pc) == 0);
+	sh4_movl_indRy (&buffer, sh4_r4, sh4_temp);
+	sh4_lds_PR (&buffer, sh4_temp);
 
 	/*
 	 * Restore all registers.
 	 */
 
+	/* Make Rtemp point to first element of "context.fregisters[]". */
+	sh4_mov (&buffer, sh4_r4, sh4_temp);
+	sh4_add_imm (&buffer, offsetof (MonoContext, fregisters), sh4_temp);
+	for (i = 0; i < MONO_MAX_FREGS; i++)
+		sh4_fmov_incRy (&buffer, sh4_temp, (SH4FloatRegister)i);
+
 	/* pseudo-code: { %R0, ..., %R15 } = context.registers[]; */
+	sh4_mov (&buffer, sh4_r4, sh4_temp);
+	sh4_add_imm (&buffer, offsetof (MonoContext, registers), sh4_temp);
 	for (i = 0; i < MONO_MAX_IREGS; i++)
 		if (i != sh4_temp)
-			sh4_movl_dispRy(&buffer, i * 4, sh4_temp, (SH4IntRegister)i);
-
-	/* Rtemp now points to the first element of "context.fregisters[]". */
-	sh4_multi_add_imm(&buffer, -offsetof(MonoContext, registers) +
-			  offsetof(MonoContext, fregisters),
-			  sh4_temp);
-	for (i = 0; i < MONO_MAX_FREGS; i++)
-		sh4_fmov_incRy(&buffer, sh4_temp, (SH4FloatRegister)i);
+			sh4_movl_dispRy (&buffer, i * 4, sh4_temp, (SH4IntRegister)i);
+	sh4_movl_dispRy (&buffer, sh4_temp * 4, sh4_temp, sh4_temp);
 
 	/* pseudo-code: return; */
 	sh4_rts(&buffer);
