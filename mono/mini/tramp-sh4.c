@@ -665,9 +665,8 @@ mono_arch_patch_callsite(guint8 *method, guint8 *code, guint8 *address)
 void 
 mono_arch_patch_plt_entry(guint8 *code, gpointer *got, mgreg_t *regs, guint8 *addr)
 {
-	int i;
 	guint32 *patch;
-	guint32 *offset = (guint32 *) &code[4];
+	guint32 *offset = (guint32 *) &code[8];
 	patch = (guint32 *) ((intptr_t) got + *offset);
 	*patch = (guint32) addr;
 }
@@ -676,39 +675,44 @@ guint8*
 mono_arch_get_call_target (guint8 *code)
 {
 	guint32 *target = NULL;
-	gint8	disp;
-	const guint8 madcall[4] = {0x02, 0xa0, 0x00, 0xd3},
-		     pltcall[4] = {0x0b, 0x43, 0x09, 0x00};
+	const guint8 madcall[4] = {0x01, 0xd3, 0x03, 0xa0};
 
 #define MADINS &code[0]
 #define MADLEN sizeof(madcall)
-#define MADTGT &code[4]
-#define PLTINS &code[-4]
-#define PLTLEN sizeof(pltcall)
-#define PLTTGT &code[-8]
-#define DIROPC 0x0d
-#define DIRINS (code[3] & 0xf0)
-#define DIRTGT code[2]
+#define MADTGT &code[8]
 	
 	if (memcmp(MADINS, madcall, MADLEN) == 0) {		// Method access
-		target = MADTGT;
+		target = (guint32 *) MADTGT;
 		target = (guint32 *) *target;
+	} else {
+		target = (guint32 *) &code[-8];
+		target = (guint32 *) *target;
+	}
+#if 0
 	} else if (memcmp(PLTINS, pltcall, PLTLEN) == 0) {	// Call to PLT
-		target = PLTTGT;
+		target = (guint32 *) PLTTGT;
 		target = (guint32 *) *target;
 	} else if (DIRINS == DIROPC) { 				// Direct Call
 			disp = (DIRTGT + 1) * 4;
-			target = code + disp;
+			target = (guint32 *) (code + disp);
 			target = (guint32 *) *target;
 	} else { 
+		int i;
+		fprintf(stdout,"%p: ",code-8);
+		for (i=-8;i<16;i++) {
+			if (i==0) fprintf(stdout,"*");
+			fprintf(stdout,"%02x ",code[i]);
+		}
+		fprintf(stdout,"\n");
 		g_assert(0);
 	}
-	return target;
+#endif
+	return (guint8 *) target;
 }
 
 guint32
 mono_arch_get_plt_info_offset (guint8 *plt_entry, mgreg_t *regs, guint8 *code)
 {
-	/* The offset is stored as the 2nd word of the plt entry */
-	return ((guint32*)plt_entry) [4];
+	/* The offset is stored as the 6th word of the plt entry */
+	return ((guint32*)plt_entry) [5];
 }

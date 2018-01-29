@@ -3986,22 +3986,23 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			/* MD: got_entry: dest:i src1:b len:20 */
 			guint8 *patch1, *patch2;
 
-			if (((guint32)buffer % 4) == 0) 			// Have to align the mov.l
-				sh4_nop (&buffer);				//	.align	1		00
+			if (((guint32)buffer % 4) != 0) 			// Have to align the mov.l
+				sh4_nop (&buffer);				//	.align	2		00
 			patch1 = buffer;			
-			sh4_die (&buffer);					//	bra	1f		00/02
+			sh4_die (&buffer);					//	mov.l	0f,dreg		00/02
 			patch2 = buffer;
-			sh4_die (&buffer);					//	mov.l	0f,dreg		02/04
+			sh4_die (&buffer);					//	bra  	1f		02/04
+			sh4_nop (&buffer);					//	nop     		04/06
 			if (((guint32)buffer % 4) != 0) 
-				sh4_nop (&buffer);				//	.align	2		04/06
-			sh4_movl_PCrel (&patch2, buffer, inst->dreg);
+				sh4_nop (&buffer);				//	.align	2		06/08
+			sh4_movl_PCrel (&patch1, buffer, inst->dreg);
 			mono_add_patch_info (cfg, buffer - cfg->native_code, 
 					     (MonoJumpInfoType)inst->inst_right->inst_i1, 
 					     inst->inst_right->inst_p0);
-			sh4_emit32 (&buffer, 0);				// 0:	.long	offset		04/06/08
-			sh4_bra_label (&patch1, buffer);	
-			sh4_add (&buffer, MONO_ARCH_GOT_REG, inst->dreg);	// 1:	add	r12,dreg	08/10/12
-			sh4_movl_indRy (&buffer, inst->dreg, inst->dreg);	//	mov.l	@dreg,dreg	14/16/18
+			sh4_emit32 (&buffer, 0);				// 0:	.long	offset		06/08/10
+			sh4_bra_label (&patch2, buffer);	
+			sh4_add (&buffer, MONO_ARCH_GOT_REG, inst->dreg);	// 1:	add	r12,dreg	10/12/14
+			sh4_movl_indRy (&buffer, inst->dreg, inst->dreg);	//	mov.l	@dreg,dreg	12/14/16
 		}
 			break;
 /* FIXME */
@@ -4034,8 +4035,9 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 
 			if (cfg->compile_aot) {		// emit direct call will fill this in
 				mono_add_patch_info (cfg, buffer - cfg->native_code, type, target);
-				sh4_die (&buffer);	//    bra   1f
 				sh4_die (&buffer);	//    mov.l 0f,r3
+				sh4_die (&buffer);	//    bra   1f
+				sh4_nop (&buffer);	//    nop
 				while (((guint32) buffer % 4) != 0)	// .align 2
 					sh4_nop (&buffer);	
 				sh4_die (&buffer);	// 0: .long offset
@@ -4110,8 +4112,9 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (cfg->compile_aot) {
 				mono_add_patch_info (cfg, buffer - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD,
 						     (gpointer) "mono_arch_throw_exception");
-				sh4_die (&buffer);	//    bra   1f
 				sh4_die (&buffer);	//    mov.l 0f,r3
+				sh4_die (&buffer);	//    bra   1f
+				sh4_nop (&buffer);	//    nop
 				while (((guint32) buffer % 4) != 0)	// .align 2
 					sh4_nop (&buffer);	
 				sh4_die (&buffer);	// 0: .long offset
@@ -4134,8 +4137,9 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			if (cfg->compile_aot) {
 				mono_add_patch_info (cfg, buffer - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD,
 						     (gpointer) "mono_arch_rethrow_exception");
-				sh4_die (&buffer);	//    bra   1f
 				sh4_die (&buffer);	//    mov.l 0f,r3
+				sh4_die (&buffer);	//    bra   1f
+				sh4_nop (&buffer);	//    nop
 				while (((guint32) buffer % 4) != 0)	// .align 2
 					sh4_nop (&buffer);	
 				sh4_die (&buffer);	// 0: .long offset
@@ -4459,7 +4463,7 @@ mono_arch_output_basic_block(MonoCompile *cfg, MonoBasicBlock *basic_block)
 			loop = buffer;
 			sh4_cmphi(&buffer, inst->inst_basereg, inst->dreg);
 			sh4_bf_label(&buffer, buffer + 6); /* dreg > basereg ? */
-				sh4_movl_decRx(&buffer, sh4_temp, inst->dreg);
+			sh4_movl_decRx(&buffer, sh4_temp, inst->dreg);
 			sh4_bra_label(&buffer, loop);
 			sh4_nop(&buffer);
 			break;
@@ -5229,22 +5233,23 @@ mono_arch_emit_load_got_addr (guint8 *start, guint8 *code, MonoCompile *cfg, Mon
 	patch1 = code;					
 	sh4_die (&code);				//    mova  0f,r0	2
 	sh4_mov (&code, sh4_r0, MONO_ARCH_GOT_REG);	//    mov   r0,r12	4
+	sh4_movl_indRy(&code,MONO_ARCH_GOT_REG,sh4_r0);	//    mov.l @r12,r0	6
 	patch2 = code;
-	sh4_die (&code);				//    bra   1f		6
-	sh4_movl_indRy(&code,MONO_ARCH_GOT_REG,sh4_r0);	//    mov.l @r12,r0	8
+	sh4_die (&code);				//    bra   1f		8
+	sh4_nop (&code);				//    nop		10
 	while (((guint32)code % 4) != 0)
-		sh4_nop (&code);			//    .align 2		
+		sh4_nop (&code);			//    .align 2		12
 	if (cfg)
 		mono_add_patch_info (cfg, code - start, MONO_PATCH_INFO_GOT_OFFSET, NULL);
 	else
 		*ji = mono_patch_info_list_prepend (*ji, code - start, MONO_PATCH_INFO_GOT_OFFSET, NULL);
 	patch3 = code;
 	/* arch_emit_got_address () patches this */	
-	sh4_emit32 (&code, 0);				// 0: .long xxxx	10/12
+	sh4_emit32 (&code, 0);				// 0: .long xxxx	12/14
 	sh4_mova_PCrel_R0 (&patch1, patch3);
 	sh4_bra_label (&patch2, code);
-	sh4_add (&code, sh4_r0, MONO_ARCH_GOT_REG);	// 1: add   r0,r12	14/16
-	sh4_mov (&code, sh4_temp, sh4_r0);		//    mov   r3,r0	16/18
+	sh4_add (&code, sh4_r0, MONO_ARCH_GOT_REG);	// 1: add   r0,r12	16/18
+	sh4_mov (&code, sh4_temp, sh4_r0);		//    mov   r3,r0	18/20
 
 	return code;
 }

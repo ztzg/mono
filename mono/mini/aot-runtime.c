@@ -1844,7 +1844,7 @@ get_call_table_entry (void *table, int index)
 	return mono_arch_get_call_target ((guint8*)table + (index * 5) + 5);
 #elif defined(TARGET_SH4)
 	/* The callee expects an ip which points after the call */
-	return mono_arch_get_call_target ((guint8*)table + (index * 12));
+	return mono_arch_get_call_target ((guint8*)table + (index * 16));
 #else
 	g_assert_not_reached ();
 	return NULL;
