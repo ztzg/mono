@@ -94,6 +94,7 @@ gpointer mono_tls_get_jit_tls (void);
 gpointer mono_tls_get_domain (void);
 gpointer mono_tls_get_sgen_thread_info (void);
 gpointer mono_tls_get_lmf_addr (void);
+gpointer mono_tls_get_lmf_addr_and_clean (gpointer);
 
 void mono_tls_set_thread (gpointer value);
 void mono_tls_set_jit_tls (gpointer value);

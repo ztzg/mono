@@ -417,11 +417,16 @@ emit_tls_set (guint8 *code, int sreg, int tls_offset)
  * On arm, this is intermixed with the initialization of other fields of the structure.
  */
 static guint8*
-emit_save_lmf (MonoCompile *cfg, guint8 *code, gint32 lmf_offset)
+emit_save_lmf (MonoCompile *cfg, guint8 *code, gint32 lmf_offset, gboolean force_clean)
 {
 	int i;
 
-	if (mono_arch_have_fast_tls () && mono_tls_get_tls_offset (TLS_KEY_LMF_ADDR) != -1) {
+	if (force_clean) {
+		code = emit_big_add (code, ARMREG_R0, ARMREG_SP, lmf_offset);
+		mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD,
+							 (gpointer)"mono_tls_get_lmf_addr_and_clean");
+		code = emit_call_seq (cfg, code);
+	} else if (mono_arch_have_fast_tls () && mono_tls_get_tls_offset (TLS_KEY_LMF_ADDR) != -1) {
 		code = emit_tls_get (code, ARMREG_R0, mono_tls_get_tls_offset (TLS_KEY_LMF_ADDR));
 	} else {
 		mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_INTERNAL_METHOD,
@@ -6677,8 +6682,16 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 		pos++;
 	}
 
-	if (method->save_lmf)
-		code = emit_save_lmf (cfg, code, alloc_size - lmf_offset);
+	if (method->save_lmf) {
+		const char *ns = m_class_get_name_space (method->klass);
+
+		gboolean force_clean = ns &&
+			strcmp(method->name, "Monitor_wait") == 0 &&
+			strcmp(m_class_get_name(method->klass), "Monitor") == 0 &&
+			strcmp(ns, "System.Threading") == 0;
+
+		code = emit_save_lmf (cfg, code, alloc_size - lmf_offset, force_clean);
+	}
 
 	if (tracing)
 		code = mono_arch_instrument_prolog (cfg, mono_trace_enter_method, code, TRUE);

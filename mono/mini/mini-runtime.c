@@ -756,6 +756,14 @@ mono_get_lmf_addr (void)
 	return (MonoLMF **)mono_tls_get_lmf_addr ();
 }
 
+gpointer
+mono_tls_get_lmf_addr_and_clean (gpointer new_lmf)
+{
+	memset(new_lmf, 0, sizeof (MonoLMF) - (4 * 10));
+
+	return mono_tls_get_lmf_addr ();
+}
+
 void
 mono_set_lmf (MonoLMF *lmf)
 {
@@ -4728,6 +4736,7 @@ register_icalls (void)
 	register_icall_no_wrapper (mono_tls_get_domain, "mono_tls_get_domain", "ptr");  
 	register_icall_no_wrapper (mono_tls_get_sgen_thread_info, "mono_tls_get_sgen_thread_info", "ptr");
 	register_icall_no_wrapper (mono_tls_get_lmf_addr, "mono_tls_get_lmf_addr", "ptr");
+	register_icall_no_wrapper (mono_tls_get_lmf_addr_and_clean, "mono_tls_get_lmf_addr_and_clean", "ptr ptr");
 	register_icall_no_wrapper (mono_tls_set_thread, "mono_tls_set_thread", "void ptr");
 	register_icall_no_wrapper (mono_tls_set_jit_tls, "mono_tls_set_jit_tls", "void ptr");
 	register_icall_no_wrapper (mono_tls_set_domain, "mono_tls_set_domain", "void ptr");
